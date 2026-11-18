@@ -261,6 +261,30 @@
       }
     },
     {
+      "name": "PrecisionMemBench",
+      "task": "Precise retrieval, no answer model",
+      "tag": "official setup",
+      "reason": "Run with the harness's own commands at tenurehq/precisionMemBench 61a712a1: the retrieval and session tests with RESEED=true, the README's provider contract, limit 20 and the belief text setting of the README's providers. There is no answer model and no judge. The published rows are the README's, which regenerate from the committed reports. One gap: the run used Windows with a path preload, and no harness file changed. Tenure is the benchmark author's product.",
+      "hippo": {
+        "value": "9/77",
+        "setting": "embedder, limit 20, harness at 61a712a1",
+        "status": null
+      },
+      "cells": {}
+    },
+    {
+      "name": "PrefEval, MemOS suite setup",
+      "task": "Preference following, gpt-4o-mini answers",
+      "tag": "official setup",
+      "reason": "Run as MemOS's evaluation suite runs every vendor row (MemTensor/MemOS 3a16e5fe): the implicit-persona split with 10 irrelevant turns after each conversation, the top 10 memories, one gpt-4o-mini-2024-07-18 answer per row and the suite's four gpt-4o-mini checks. The score is the Personalized Response share of all rows. The run uses the free daily OpenAI tokens and its checks are still running, so the row has no score yet.",
+      "hippo": {
+        "value": null,
+        "setting": null,
+        "status": "running"
+      },
+      "cells": {}
+    },
+    {
       "name": "HaluMem-Long",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
@@ -1042,6 +1066,3142 @@
         "status": null
       },
       "cells": {}
+    }
+  ],
+  "home": [
+    {
+      "name": "LoCoMo",
+      "slug": "locomo",
+      "task": "Answer accuracy, LLM judge",
+      "columns": [
+        "Mem0",
+        "Zep",
+        "LangMem",
+        "A-Mem",
+        "Backboard",
+        "cachly",
+        "Cognee",
+        "EverOS",
+        "Hindsight",
+        "LCM-X",
+        "Letta",
+        "Maasv",
+        "mem9",
+        "MemMachine",
+        "Memori",
+        "MemoryLake",
+        "MemOS",
+        "OpenAI Memory",
+        "Supermemory",
+        "ThreadAtlas",
+        "Viking"
+      ],
+      "rows": [
+        {
+          "setup": "Mem0 paper setup",
+          "model": "gpt-4o-mini answers and judge",
+          "shared": true,
+          "base": {
+            "name": "Full context",
+            "value": "72.90",
+            "url": "https://arxiv.org/html/2504.19413"
+          },
+          "hippo": {
+            "value": "69.22",
+            "num": 69.22,
+            "status": null,
+            "setting": "embedder, 30 per speaker, all 1,540"
+          },
+          "cells": {
+            "Mem0": {
+              "value": "68.44",
+              "num": 68.44,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": "Mem0g",
+              "tag": "paper author",
+              "url": "https://arxiv.org/html/2504.19413",
+              "quote": "Mem0g 68.44 (Table 2, overall J)"
+            },
+            "Zep": {
+              "value": "65.99",
+              "num": 65.99,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2504.19413",
+              "quote": "Zep 65.99 ± 0.16 (Table 2, overall J)"
+            },
+            "LangMem": {
+              "value": "58.10",
+              "num": 58.1,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2504.19413",
+              "quote": "LangMem 58.10 ± 0.21 (Table 2, overall J)"
+            },
+            "OpenAI Memory": {
+              "value": "52.90",
+              "num": 52.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2504.19413",
+              "quote": "OpenAI 52.90 ± 0.14 (Table 2, overall J)"
+            },
+            "A-Mem": {
+              "value": "48.38",
+              "num": 48.38,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2504.19413",
+              "quote": "A-Mem 48.38 ± 0.15 (Table 2, overall J)"
+            }
+          }
+        },
+        {
+          "setup": "MIRIX paper setup",
+          "model": "gpt-4.1-mini answers, GPT-4.1 judge",
+          "shared": true,
+          "base": {
+            "name": "Full context",
+            "value": "87.52",
+            "url": "https://arxiv.org/html/2507.07957"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Zep": {
+              "value": "79.09",
+              "num": 79.09,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.07957",
+              "quote": "Zep gpt-4.1-mini 79.09"
+            },
+            "LangMem": {
+              "value": "78.05",
+              "num": 78.05,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.07957",
+              "quote": "LangMem gpt-4.1-mini 78.05"
+            },
+            "Mem0": {
+              "value": "62.47",
+              "num": 62.47,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.07957",
+              "quote": "Mem0 gpt-4.1-mini 62.47"
+            }
+          }
+        },
+        {
+          "setup": "OmniMemEval shared setup",
+          "model": "gpt-4.1-mini answers, gpt-4o-mini judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "cachly": {
+              "value": "90.71",
+              "num": 90.71,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L43",
+              "quote": "| cachly | local/self-hosted | 95.01 | 87.94 | 86.29 | 76.04 | 90.71 | 6,673 |"
+            },
+            "ThreadAtlas": {
+              "value": "88.90",
+              "num": 88.9,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L44",
+              "quote": "| ThreadAtlas | local/self-hosted | 93.22 | 85.11 | 86.29 | 70.83 | 88.90 | 6,213 |"
+            },
+            "MemOS": {
+              "value": "88.83",
+              "num": 88.83,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L40",
+              "quote": "| MemOS | cloud | 92.51 | 88.65 | 85.05 | 69.79 | 88.83 | 5,400 |"
+            },
+            "Maasv": {
+              "value": "87.73",
+              "num": 87.73,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L42",
+              "quote": "| Maasv | local/self-hosted | 91.80 | 82.98 | 85.98 | 71.88 | 87.73 | 1,551 |"
+            },
+            "Cognee": {
+              "value": "83.48",
+              "num": 83.48,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L31",
+              "quote": "| Cognee | cloud | 87.99 | 78.84 | 81.83 | 63.19 | 83.48 | 32,532 |"
+            },
+            "EverOS": {
+              "value": "82.75",
+              "num": 82.75,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L35",
+              "quote": "| EverOS | cloud | 86.80 | 77.78 | 84.11 | 57.29 | 82.75 | 8,559 |"
+            },
+            "Hindsight": {
+              "value": "81.99",
+              "num": 81.99,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L33",
+              "quote": "| Hindsight | cloud | 88.98 | 78.84 | 73.52 | 58.33 | 81.99 | 24,683 |"
+            },
+            "LCM-X": {
+              "value": "78.83",
+              "num": 78.83,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "OpenRouter",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L41",
+              "quote": "| LCM-X | local/self-hosted | 84.30 | 66.31 | 79.75 | 64.58 | 78.83 | 1,659 |"
+            },
+            "Mem0": {
+              "value": "77.68",
+              "num": 77.68,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L27",
+              "quote": "| Mem0 | cloud | 81.09 | 76.12 | 77.15 | 54.17 | 77.68 | 17,395 |"
+            },
+            "Letta": {
+              "value": "77.12",
+              "num": 77.12,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L32",
+              "quote": "| Letta | cloud | 87.99 | 76.24 | 53.48 | 63.54 | 77.12 | 14,188 |"
+            },
+            "MemMachine": {
+              "value": "73.90",
+              "num": 73.9,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L36",
+              "quote": "| MemMachine | local/self-hosted | 83.47 | 53.19 | 71.96 | 57.29 | 73.90 | 2,577 |"
+            },
+            "mem9": {
+              "value": "73.64",
+              "num": 73.64,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L37",
+              "quote": "| mem9 | cloud | 79.27 | 62.88 | 73.62 | 55.90 | 73.64 | 1,597 |"
+            },
+            "Supermemory": {
+              "value": "73.53",
+              "num": 73.53,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L29",
+              "quote": "| Supermemory | cloud | 75.39 | 77.07 | 67.60 | 66.67 | 73.53 | 15,238 |"
+            },
+            "MemoryLake": {
+              "value": "72.49",
+              "num": 72.49,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L38",
+              "quote": "| MemoryLake | cloud | 70.87 | 75.30 | 79.75 | 54.17 | 72.49 | 5,202 |"
+            },
+            "Viking": {
+              "value": "69.33",
+              "num": 69.33,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L30",
+              "quote": "| Viking | cloud | 78.04 | 73.29 | 48.81 | 50.00 | 69.33 | 5,964 |"
+            },
+            "Zep": {
+              "value": "63.83",
+              "num": 63.83,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L28",
+              "quote": "| Zep | cloud | 65.36 | 68.79 | 55.56 | 63.54 | 63.83 | 1,862 |"
+            },
+            "Memori": {
+              "value": "41.34",
+              "num": 41.34,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L34",
+              "quote": "| Memori | cloud | 47.32 | 44.09 | 22.53 | 43.75 | 41.34 | 8,139 |"
+            },
+            "Backboard": {
+              "value": "22.40",
+              "num": 22.4,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L39",
+              "quote": "| Backboard.io | cloud | 25.09 | 22.34 | 13.40 | 29.17 | 22.40 | 1,198 |"
+            }
+          }
+        }
+      ],
+      "own": {
+        "Backboard": {
+          "value": "90.00",
+          "num": 90.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L62",
+          "quote": "| Backboard.io | 89.36 | 75.00 | 91.90 | 91.20 | 90.00 | - | [Backboard LoCoMo repo](https://github.com/Backboard-io/Backboard-Locomo-Benchmark) |"
+        },
+        "EverOS": {
+          "value": "93.05",
+          "num": 93.05,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L59",
+          "quote": "| EverOS | 96.67 | 91.84 | 89.72 | 76.04 | 93.05 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
+        },
+        "Hindsight": {
+          "value": "92.0",
+          "num": 92.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L57",
+          "quote": "| Hindsight | - | - | - | - | 92.0 | - | [Hindsight Benchmarks](https://benchmarks.hindsight.vectorize.io/) |"
+        },
+        "Honcho": {
+          "value": "89.9",
+          "num": 89.9,
+          "scale": "0-100",
+          "model": "Claude Haiku 4.5",
+          "detail": null,
+          "tag": null,
+          "url": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho",
+          "quote": "We score 89.9% on the full LoCoMo benchmark. Haiku alone scores 83.9%."
+        },
+        "Letta": {
+          "value": "74.0",
+          "num": 74.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L56",
+          "quote": "| Letta | - | - | - | - | 74.0 | - | [Letta benchmark blog](https://www.letta.com/blog/benchmarking-ai-agent-memory) |"
+        },
+        "Mem0": {
+          "value": "92.5",
+          "num": 92.5,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L53",
+          "quote": "| Mem0 | 94.6 | 95.4 | 92.5 | 82.3 | 92.5 | 6,956 | [mem0.ai research](https://mem0.ai/research) |"
+        },
+        "mem9": {
+          "value": "86.85",
+          "num": 86.85,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L60",
+          "quote": "| mem9 | 89.71 | 83.16 | 89.25 | 64.58 | 86.85 | - | [mem9](https://mem9.ai/) |"
+        },
+        "Memori": {
+          "value": "81.95",
+          "num": 81.95,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L58",
+          "quote": "| Memori | 87.87 | 72.70 | 80.37 | 63.54 | 81.95 | 1,294 | [Memori benchmark](https://memorilabs.ai/docs/memori-cloud/benchmark/results/) |"
+        },
+        "MemoryLake": {
+          "value": "94.03",
+          "num": 94.03,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L61",
+          "quote": "| MemoryLake | 96.79 | 91.84 | 91.28 | 85.42 | 94.03 | - | [MemoryLake benchmark](https://www.memorylake.ai/products/compare/benchmarks) |"
+        },
+        "Supermemory": {
+          "value": "77.1",
+          "num": 77.1,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L55",
+          "quote": "| Supermemory | - | - | - | - | 77.1 | - | [Supermemory issue 795](https://github.com/supermemoryai/supermemory/issues/795) |"
+        },
+        "ThreadAtlas": {
+          "value": "89.22",
+          "num": 89.22,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L67",
+          "quote": "| ThreadAtlas | 94.17 | 83.69 | 86.29 | 71.88 | 89.22 | 6,190 | [ThreadAtlas run records](https://github.com/jhffmn82/threadatlas/tree/dff7388606c3979c410195e28ce0b59cf4faa97a/omnimemeval) (contributor-run, 1,540 non-adversarial questions; memory reading uses `gpt-5.6-luna`, not the shared baseline; [methodology](../threadatlas.md#version-deployment-and-settings-of-the-reported-runs)) |"
+        },
+        "Zep": {
+          "value": "94.7",
+          "num": 94.7,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L54",
+          "quote": "| Zep | 96.4 | 94.0 | 95.6 | 79.2 | 94.7 | 5,760 | [getzep research](https://www.getzep.com/research/) |"
+        }
+      }
+    },
+    {
+      "name": "LongMemEval-S",
+      "slug": "longmemeval-s",
+      "task": "Answer accuracy, LLM judge",
+      "columns": [
+        "Supermemory",
+        "Zep",
+        "cachly",
+        "Cognee",
+        "EmergenceMem",
+        "EverOS",
+        "Hindsight",
+        "LCM-X",
+        "Letta",
+        "Maasv",
+        "Mem0",
+        "mem9",
+        "MemMachine",
+        "Memori",
+        "MemOS",
+        "ThreadAtlas",
+        "Viking"
+      ],
+      "rows": [
+        {
+          "setup": "gpt-4o reader",
+          "model": "gpt-4o answers, official gpt-4o judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": "81.8",
+            "num": 81.8,
+            "status": null,
+            "setting": "reranker, top 10 (embedder 78.2), official gpt-4o judge"
+          },
+          "cells": {
+            "EmergenceMem": {
+              "value": "86.0",
+              "num": 86.0,
+              "scale": "0-100",
+              "model": "gpt-4o-2024-08-06",
+              "detail": "EmergenceMem Internal",
+              "tag": "paper author",
+              "url": "https://www.emergence.ai/blog/sota-on-longmemeval-with-rag",
+              "quote": "we achieved 86% accuracy on LongMemEval, compared to Zep's 71.2%"
+            },
+            "Supermemory": {
+              "value": "81.6",
+              "num": 81.6,
+              "scale": "0-100",
+              "model": "gpt-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2512.12818v1",
+              "quote": "Supermemory | GPT-4o | 81.6"
+            },
+            "Zep": {
+              "value": "71.2",
+              "num": 71.2,
+              "scale": "0-100",
+              "model": "gpt-4o",
+              "detail": null,
+              "tag": "paper author",
+              "url": "https://arxiv.org/html/2501.13956v1",
+              "quote": "Zep gpt-4o 71.2%; Full-context gpt-4o 60.2% (Table 2)"
+            }
+          }
+        },
+        {
+          "setup": "OmniMemEval shared setup",
+          "model": "gpt-4.1-mini answers, gpt-4o-mini judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Maasv": {
+              "value": "91.20",
+              "num": 91.2,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L43",
+              "quote": "| Maasv | local/self-hosted | 98.57 | 98.21 | 93.33 | 89.47 | 86.47 | 89.74 | 91.20 | 3,999 |"
+            },
+            "cachly": {
+              "value": "89.60",
+              "num": 89.6,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L44",
+              "quote": "| cachly | local/self-hosted | 100.00 | 98.21 | 86.67 | 87.97 | 83.46 | 88.46 | 89.60 | 4,564 |"
+            },
+            "MemOS": {
+              "value": "89.20",
+              "num": 89.2,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L41",
+              "quote": "| MemOS | cloud | 100.00 | 100.00 | 100.00 | 89.47 | 78.95 | 84.62 | 89.20 | 4,151 |"
+            },
+            "LCM-X": {
+              "value": "87.00",
+              "num": 87.0,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "OpenRouter",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L42",
+              "quote": "| LCM-X | local/self-hosted | 95.71 | 94.64 | 96.67 | 85.71 | 75.19 | 92.31 | 87.00 | 5,164 |"
+            },
+            "ThreadAtlas": {
+              "value": "87.00",
+              "num": 87.0,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L45",
+              "quote": "| ThreadAtlas | local/self-hosted | 100.00 | 96.43 | 93.33 | 84.21 | 77.44 | 87.18 | 87.00 | 4,351 |"
+            },
+            "EverOS": {
+              "value": "80.40",
+              "num": 80.4,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L38",
+              "quote": "| EverOS | local/self-hosted | 91.43 | 89.29 | 96.67 | 81.95 | 66.17 | 79.49 | 80.40 | 12,379 |"
+            },
+            "Zep": {
+              "value": "79.80",
+              "num": 79.8,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L31",
+              "quote": "| graphiti-zep | local/self-hosted | 94.29 | 100.00 | 86.67 | 74.44 | 67.67 | 79.49 | 79.80 | 117,106 |"
+            },
+            "mem9": {
+              "value": "78.00",
+              "num": 78.0,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L40",
+              "quote": "| mem9 | cloud | 95.71 | 94.64 | 56.67 | 77.44 | 62.41 | 85.90 | 78.00 | 3,805 |"
+            },
+            "Letta": {
+              "value": "77.67",
+              "num": 77.67,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L35",
+              "quote": "| Letta | cloud | 95.71 | 98.21 | 76.67 | 69.42 | 65.41 | 82.05 | 77.67 | 49,431 |"
+            },
+            "Hindsight": {
+              "value": "72.20",
+              "num": 72.2,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L36",
+              "quote": "| Hindsight | local/self-hosted | 82.86 | 14.29 | 96.67 | 82.71 | 71.43 | 78.21 | 72.20 | 29,755 |"
+            },
+            "Supermemory": {
+              "value": "66.07",
+              "num": 66.07,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L32",
+              "quote": "| Supermemory | cloud | 87.14 | 41.07 | 65.56 | 68.42 | 60.15 | 71.37 | 66.07 | 6,635 |"
+            },
+            "MemMachine": {
+              "value": "63.60",
+              "num": 63.6,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L39",
+              "quote": "| MemMachine | local/self-hosted | 75.71 | 96.43 | 83.33 | 55.64 | 39.85 | 75.64 | 63.60 | 2,803 |"
+            },
+            "Viking": {
+              "value": "61.07",
+              "num": 61.07,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L33",
+              "quote": "| Viking | cloud | 75.24 | 46.43 | 96.67 | 55.39 | 57.89 | 60.26 | 61.07 | 2,291 |"
+            },
+            "Mem0": {
+              "value": "56.00",
+              "num": 56.0,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L30",
+              "quote": "| Mem0 | cloud | 8.57 | 85.71 | 96.67 | 51.13 | 50.38 | 79.49 | 56.00 | 856 |"
+            },
+            "Cognee": {
+              "value": "51.80",
+              "num": 51.8,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L34",
+              "quote": "| Cognee | local/self-hosted | 67.14 | 60.71 | 83.33 | 47.37 | 37.59 | 51.28 | 51.80 | 10,305 |"
+            },
+            "Memori": {
+              "value": "20.80",
+              "num": 20.8,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L37",
+              "quote": "| Memori | cloud | 84.14 | 1.79 | 23.33 | 3.76 | 18.80 | 6.41 | 20.80 | 2,779 |"
+            }
+          }
+        }
+      ],
+      "own": {
+        "Backboard": {
+          "value": "93.4",
+          "num": 93.4,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L59",
+          "quote": "| Backboard.io | 97.1 | 98.2 | 90.0 | 91.7 | 91.7 | 93.6 | 93.4 | - | [Backboard LongMemEval repo](https://github.com/Backboard-io/Backboard-longmemEval-results) |"
+        },
+        "EverOS": {
+          "value": "83.0",
+          "num": 83.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L58",
+          "quote": "| EverOS | 97.14 | 85.71 | 93.33 | 77.44 | 73.68 | 89.74 | 83.0 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
+        },
+        "Hindsight": {
+          "value": "94.6",
+          "num": 94.6,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L57",
+          "quote": "| Hindsight | - | - | - | - | - | - | 94.6 | - | [Hindsight Benchmarks](https://benchmarks.hindsight.vectorize.io/) |"
+        },
+        "Honcho": {
+          "value": "90.4",
+          "num": 90.4,
+          "scale": "0-100",
+          "model": "Claude Haiku 4.5",
+          "detail": null,
+          "tag": null,
+          "url": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho",
+          "quote": "With Claude Haiku 4.5 as the chat endpoint model, Honcho scores 90.4% on LongMem S"
+        },
+        "Mastra": {
+          "value": "84.23",
+          "num": 84.23,
+          "scale": "0-100",
+          "model": "gpt-4o",
+          "detail": "Mastra Observational Memory",
+          "tag": null,
+          "url": "https://mastra.ai/research/observational-memory",
+          "quote": "OM with gpt-4o (84.23%) is the highest openly reproducible score that uses the official benchmark model, gpt-4o."
+        },
+        "Mem0": {
+          "value": "94.4",
+          "num": 94.4,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L54",
+          "quote": "| Mem0 | 98.6 | 98.2 | 96.7 | 93.6 | 88.0 | 97.0 | 94.4 | 6,787 | [mem0.ai research](https://mem0.ai/research) |"
+        },
+        "Memoria": {
+          "value": "88.78",
+          "num": 88.78,
+          "scale": "0-100",
+          "model": "claude-opus-4.6",
+          "detail": null,
+          "tag": null,
+          "url": "https://dev.to/origin_matrix_b790e656217/benchmarking-memoria-on-longmemeval-strong-memory-retrieval-clear-reader-separation-435b",
+          "quote": "Memoria retrieval supported up to 88.78% overall accuracy on LongMemEval_s"
+        },
+        "Supermemory": {
+          "value": "95.0",
+          "num": 95.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L56",
+          "quote": "| Supermemory | 97.0 | 100.0 | 90.0 | 91.0 | 93.0 | 99.0 | 95.0 | - | [Supermemory LongMemBench](https://supermemory.ai/research/longmembench/) |"
+        },
+        "ThreadAtlas": {
+          "value": "87.40",
+          "num": 87.4,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L63",
+          "quote": "| ThreadAtlas | 100.00 | 96.43 | 86.67 | 83.46 | 79.70 | 89.74 | 87.40 | 4,332 | [ThreadAtlas run records](https://github.com/jhffmn82/threadatlas/tree/dff7388606c3979c410195e28ce0b59cf4faa97a/omnimemeval) (contributor-run, 500 questions; `gpt-5.6-luna` memory reading and prebuilt sessions from the original dataset; [methodology](../threadatlas.md#version-deployment-and-settings-of-the-reported-runs)) |"
+        },
+        "Zep": {
+          "value": "90.2",
+          "num": 90.2,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "split not stated",
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L55",
+          "quote": "| Zep | 94.3 | 96.4 | 90.0 | 90.2 | 83.5 | 93.6 | 90.2 | 4,408 | [getzep research](https://www.getzep.com/research/) |"
+        }
+      }
+    },
+    {
+      "name": "PrecisionMemBench",
+      "slug": "precisionmembench",
+      "task": "Passes of 77 retrieval cases",
+      "columns": [
+        "A-Mem",
+        "agentmemory",
+        "atomicmemory",
+        "Cognee",
+        "gbrain",
+        "Hindsight",
+        "Mem0",
+        "open-knowledge-format",
+        "Supermemory",
+        "Tenure",
+        "yourmemory",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "README harness at 61a712a1",
+          "model": "Retrieval only, no answer model",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": "9/77",
+            "num": 11.6883,
+            "status": null,
+            "setting": "embedder, limit 20, harness at 61a712a1"
+          },
+          "cells": {
+            "Tenure": {
+              "value": "77/77",
+              "num": 100.0,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L28",
+              "quote": "| `tenure`                | 43/43         | 77/77        | 1              | 1           | 9.25               | 0.80                | 09-16-2026      |"
+            },
+            "open-knowledge-format": {
+              "value": "36/77",
+              "num": 46.7532,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L29",
+              "quote": "| `open-knowledge-format` | 18/43         | 36/77        | 0.47           | 0.91        | 3534.53            | 0.00                | ---             |"
+            },
+            "yourmemory": {
+              "value": "21/77",
+              "num": 27.2727,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L32",
+              "quote": "| `yourmemory`            | 0/43          | 21/77        | 0.17           | 0.88        | 464.08             | 24.80               | 09-12-2026      |"
+            },
+            "atomicmemory": {
+              "value": "16/77",
+              "num": 20.7792,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L30",
+              "quote": "| `atomicmemory`          | 5/43          | 16/77        | 0.23           | 0.54        | 163.85             | 664.80              | 09-15-2026      |"
+            },
+            "Supermemory": {
+              "value": "15/77",
+              "num": 19.4805,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L31",
+              "quote": "| `supermemory`           | 2/43          | 15/77        | 0.18           | 0.82        | 45.77              | 1.70                | 09-17-2026      |"
+            },
+            "gbrain": {
+              "value": "11/77",
+              "num": 14.2857,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L34",
+              "quote": "| `gbrain`                | 0/43          | 11/77        | 0.07           | 1           | 1455.98            | 52.60               | 09-13-2026      |"
+            },
+            "Hindsight": {
+              "value": "11/77",
+              "num": 14.2857,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L35",
+              "quote": "| `hindsight`             | 0/43          | 11/77        | 0.07           | 1           | 610.36             | 173.00              | 09-12-2026      |"
+            },
+            "Zep": {
+              "value": "9/77",
+              "num": 11.6883,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L36",
+              "quote": "| `zep`                   | 0/43          | 9/77         | 0.06           | 0.66        | 146.41             | 485.80              | 09-15-2026      |"
+            },
+            "agentmemory": {
+              "value": "9/77",
+              "num": 11.6883,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L37",
+              "quote": "| `agentmemory`           | 0/43          | 9/77         | 0.06           | 0.99        | 148.30             | 8.50                | 09-15-2026      |"
+            },
+            "Cognee": {
+              "value": "9/77",
+              "num": 11.6883,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L38",
+              "quote": "| `cognee`                | 0/43          | 9/77         | 0.06           | 0.98        | 293.18             | 495.00              | 09-15-2026      |"
+            },
+            "Mem0": {
+              "value": "9/77",
+              "num": 11.6883,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L39",
+              "quote": "| `mem0`                  | 0/43          | 9/77         | 0.06           | 0.99        | 61.15              | 132.80              | 09-15-2026      |"
+            },
+            "A-Mem": {
+              "value": "7/77",
+              "num": 9.0909,
+              "scale": "count",
+              "model": "none",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L40",
+              "quote": "| `a-mem`                 | 0/43          | 7/77         | 0.05           | 0.99        | 12.44              | 46.80               | 09-16-2026      |"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "AMA-Bench",
+      "slug": "ama-bench",
+      "task": "Average accuracy, 0 to 1 scale",
+      "columns": [
+        "A-Mem",
+        "EMem",
+        "HiMem",
+        "HippoRAG",
+        "Letta",
+        "Mem-alpha",
+        "Mem0",
+        "Mem1",
+        "MemAgent",
+        "MemoRAG",
+        "MemoryBank",
+        "SimpleMem"
+      ],
+      "rows": [
+        {
+          "setup": "Paper Table 5, 0 to 1 scale",
+          "model": "Qwen3-32B answers and judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "EMem": {
+              "value": "0.4610",
+              "num": 46.1,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "EMem (Anonymous, 2025) 0.4631 (0.2412) 0.4925 (0.1878) 0.4512 (0.1963) 0.3421 (0.1824) 0.4610 (0.2095)"
+            },
+            "MemoRAG": {
+              "value": "0.4606",
+              "num": 46.06,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "MemoRAG (Qian et al., 2025) 0.4708 (0.1789) 0.5497 (0.1811) 0.4257 (0.1713) 0.3659 (0.2073) 0.4606 (0.1822)"
+            },
+            "HippoRAG": {
+              "value": "0.4480",
+              "num": 44.8,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": "HippoRAG2",
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "HippoRAG2 (Gutierrez et al., 2025) 0.4579 (0.2356) 0.5080 (0.1966) 0.4403 (0.1892) 0.3538 (0.1785) 0.4480 (0.2048)"
+            },
+            "MemoryBank": {
+              "value": "0.3397",
+              "num": 33.97,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "MemoryBank (Zhong et al., 2023) 0.3231 (0.3128) 0.4100 (0.2861) 0.3006 (0.2678) 0.3332 (0.3011) 0.3397 (0.2928)"
+            },
+            "Letta": {
+              "value": "0.3304",
+              "num": 33.04,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "MemGPT (Packer et al., 2023) 0.3289 (0.1318) 0.4404 (0.1475) 0.2809 (0.1259) 0.2526 (0.1431) 0.3304 (0.1359)"
+            },
+            "A-Mem": {
+              "value": "0.3186",
+              "num": 31.86,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "Amem (Xu et al., 2025) 0.3084 (0.2707) 0.3653 (0.2731) 0.3088 (0.2480) 0.2873 (0.2953) 0.3186 (0.2695)"
+            },
+            "Mem-alpha": {
+              "value": "0.3117",
+              "num": 31.17,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "Mem-alpha (Wang et al., 2025a) 0.2876 (0.2325) 0.4172 (0.1993) 0.3064 (0.2000) 0.2171 (0.2135) 0.3117 (0.2130)"
+            },
+            "HiMem": {
+              "value": "0.2995",
+              "num": 29.95,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "HiMem (Anonymous, 2026) 0.2945 (0.2241) 0.4018 (0.2065) 0.3126 (0.1932) 0.2238 (0.2087) 0.2995 (0.2198)"
+            },
+            "MemAgent": {
+              "value": "0.2768",
+              "num": 27.68,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "MemAgent (Yu et al., 2025) 0.2550 (0.1489) 0.3380 (0.1606) 0.2849 (0.1432) 0.2202 (0.1655) 0.2768 (0.1530)"
+            },
+            "Mem0": {
+              "value": "0.2104",
+              "num": 21.04,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "Mem0 (Chhikara et al., 2025) 0.2011 (0.2413) 0.2645 (0.2443) 0.2101 (0.2225) 0.1516 (0.2241) 0.2104 (0.2343)"
+            },
+            "SimpleMem": {
+              "value": "0.1811",
+              "num": 18.11,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "Simple mem (Liu et al., 2026) 0.2012 (0.2039) 0.1884 (0.1612) 0.1764 (0.1594) 0.1373 (0.1689) 0.1811 (0.1764)"
+            },
+            "Mem1": {
+              "value": "0.1229",
+              "num": 12.29,
+              "scale": "0-1",
+              "model": "Qwen3-32B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2602.22769",
+              "quote": "Mem1 (Zhou et al., 2025) 0.1180 (0.1857) 0.1427 (0.1732) 0.1205 (0.1659) 0.1080 (0.2042) 0.1229 (0.1807)"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "BEAM-100K",
+      "slug": "beam-100k",
+      "task": "Nugget score, 400 questions",
+      "columns": [
+        "cachly",
+        "Cognee",
+        "EverOS",
+        "Hindsight",
+        "LCM-X",
+        "Letta",
+        "Maasv",
+        "Mem0",
+        "mem9",
+        "MemMachine",
+        "MemOS",
+        "Supermemory",
+        "ThreadAtlas",
+        "Viking",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "OmniMemEval shared setup",
+          "model": "gpt-4.1-mini answers, gpt-4o-mini judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Maasv": {
+              "value": "76.38",
+              "num": 76.38,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
+              "quote": "| Maasv | local/self-hosted | 76.38 +/- 32.50 | 8,526 | 65.09 +/- 38.85 | 8,656 |"
+            },
+            "ThreadAtlas": {
+              "value": "73.12",
+              "num": 73.12,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L43",
+              "quote": "| ThreadAtlas | local/self-hosted | 73.12 +/- 34.41 | 5,664 | - | - |"
+            },
+            "cachly": {
+              "value": "73.04",
+              "num": 73.04,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L42",
+              "quote": "| cachly | local/self-hosted | 73.04 +/- 34.94 | 5,189 | - | - |"
+            },
+            "LCM-X": {
+              "value": "71.84",
+              "num": 71.84,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "OpenRouter",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40",
+              "quote": "| LCM-X | local/self-hosted | 71.84 +/- 34.86 | 11,926 | 63.32 +/- 40.02 | 9,625 |"
+            },
+            "Viking": {
+              "value": "70.76",
+              "num": 70.76,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32",
+              "quote": "| Viking | cloud | 70.76 +/- 35.23 | 2,023 | 58.14 +/- 39.57 | 2,080 |"
+            },
+            "Mem0": {
+              "value": "70.41",
+              "num": 70.41,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
+              "quote": "| Mem0 | cloud | 70.41 +/- 36.36 | 1,055 | 43.33 +/- 41.99 | 1,086 |"
+            },
+            "Hindsight": {
+              "value": "70.22",
+              "num": 70.22,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
+              "quote": "| Hindsight | local/self-hosted | 70.22 +/- 36.44 | 24,085 | 59.75 +/- 39.63 | 23,815 |"
+            },
+            "Letta": {
+              "value": "69.22",
+              "num": 69.22,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34",
+              "quote": "| Letta | cloud | 69.22 +/- 36.76 | 82,013 | 52.30 +/- 41.06 | 49,786 |"
+            },
+            "Zep": {
+              "value": "68.70",
+              "num": 68.7,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
+              "quote": "| graphiti-zep | local/self-hosted | 68.70 +/- 36.46 | 8,667 | 56.11 +/- 40.70 | 176,211 |"
+            },
+            "MemOS": {
+              "value": "66.87",
+              "num": 66.87,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
+              "quote": "| MemOS | cloud | 66.87 +/- 37.37 | 1,636 | 56.75 +/- 39.17 | 1,558 |"
+            },
+            "Supermemory": {
+              "value": "65.98",
+              "num": 65.98,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
+              "quote": "| Supermemory | cloud | 65.98 +/- 37.10 | 6,294 | 52.49 +/- 40.44 | 6,574 |"
+            },
+            "mem9": {
+              "value": "65.75",
+              "num": 65.75,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38",
+              "quote": "| mem9 | cloud | 65.75 +/- 38.92 | 5,372 | 57.30 +/- 39.03 | 4,947 |"
+            },
+            "MemMachine": {
+              "value": "64.80",
+              "num": 64.8,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37",
+              "quote": "| MemMachine | local/self-hosted | 64.80 +/- 37.62 | 5,413 | 51.90 +/- 40.46 | 5,448 |"
+            },
+            "Cognee": {
+              "value": "59.30",
+              "num": 59.3,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33",
+              "quote": "| Cognee | local/self-hosted | 59.30 +/- 39.44 | 33,065 | 56.02 +/- 41.33 | 40,914 |"
+            },
+            "EverOS": {
+              "value": "58.64",
+              "num": 58.64,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
+              "quote": "| EverOS | local/self-hosted | 58.64 +/- 39.36 | 7,393 | 47.73 +/- 41.66 | 11,657 |"
+            }
+          }
+        }
+      ],
+      "own": {
+        "Cognee": {
+          "value": "79.0",
+          "num": 79.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://www.cognee.ai/benchmarking-cognee-on-beam",
+          "quote": "we reached a score of 0.79 — above the reported SOTA of 0.735"
+        },
+        "Hindsight": {
+          "value": "75.0",
+          "num": 75.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L65",
+          "quote": "| Hindsight | 75.0 | - | 64.1 | - | [Hindsight Benchmarks](https://benchmarks.hindsight.vectorize.io/) |"
+        },
+        "Honcho": {
+          "value": "63.0",
+          "num": 63.0,
+          "scale": "0-100",
+          "model": "claude-haiku-4-5",
+          "detail": null,
+          "tag": null,
+          "url": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho",
+          "quote": "we observe a baseline score of 0.53 from Claude Haiku 4.5, and a Honcho score of 0.63"
+        },
+        "Mem0": {
+          "value": "64.1",
+          "num": 64.1,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L64",
+          "quote": "| Mem0 | 64.1 | 6,719 | 48.6 | 6,914 | [mem0.ai research](https://mem0.ai/research) |"
+        }
+      }
+    },
+    {
+      "name": "BEAM-10M",
+      "slug": "beam-10m",
+      "task": "Nugget score, 200 questions",
+      "columns": [
+        "Cognee",
+        "EverOS",
+        "Hindsight",
+        "LCM-X",
+        "Letta",
+        "Maasv",
+        "Mem0",
+        "mem9",
+        "MemMachine",
+        "MemOS",
+        "Supermemory",
+        "Viking",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "OmniMemEval shared setup",
+          "model": "gpt-4.1-mini answers, gpt-4o-mini judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Maasv": {
+              "value": "65.09",
+              "num": 65.09,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
+              "quote": "| Maasv | local/self-hosted | 76.38 +/- 32.50 | 8,526 | 65.09 +/- 38.85 | 8,656 |"
+            },
+            "LCM-X": {
+              "value": "63.32",
+              "num": 63.32,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "OpenRouter",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40",
+              "quote": "| LCM-X | local/self-hosted | 71.84 +/- 34.86 | 11,926 | 63.32 +/- 40.02 | 9,625 |"
+            },
+            "Hindsight": {
+              "value": "59.75",
+              "num": 59.75,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
+              "quote": "| Hindsight | local/self-hosted | 70.22 +/- 36.44 | 24,085 | 59.75 +/- 39.63 | 23,815 |"
+            },
+            "Viking": {
+              "value": "58.14",
+              "num": 58.14,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32",
+              "quote": "| Viking | cloud | 70.76 +/- 35.23 | 2,023 | 58.14 +/- 39.57 | 2,080 |"
+            },
+            "mem9": {
+              "value": "57.30",
+              "num": 57.3,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38",
+              "quote": "| mem9 | cloud | 65.75 +/- 38.92 | 5,372 | 57.30 +/- 39.03 | 4,947 |"
+            },
+            "MemOS": {
+              "value": "56.75",
+              "num": 56.75,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
+              "quote": "| MemOS | cloud | 66.87 +/- 37.37 | 1,636 | 56.75 +/- 39.17 | 1,558 |"
+            },
+            "Zep": {
+              "value": "56.11",
+              "num": 56.11,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
+              "quote": "| graphiti-zep | local/self-hosted | 68.70 +/- 36.46 | 8,667 | 56.11 +/- 40.70 | 176,211 |"
+            },
+            "Cognee": {
+              "value": "56.02",
+              "num": 56.02,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33",
+              "quote": "| Cognee | local/self-hosted | 59.30 +/- 39.44 | 33,065 | 56.02 +/- 41.33 | 40,914 |"
+            },
+            "Supermemory": {
+              "value": "52.49",
+              "num": 52.49,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
+              "quote": "| Supermemory | cloud | 65.98 +/- 37.10 | 6,294 | 52.49 +/- 40.44 | 6,574 |"
+            },
+            "Letta": {
+              "value": "52.30",
+              "num": 52.3,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34",
+              "quote": "| Letta | cloud | 69.22 +/- 36.76 | 82,013 | 52.30 +/- 41.06 | 49,786 |"
+            },
+            "MemMachine": {
+              "value": "51.90",
+              "num": 51.9,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37",
+              "quote": "| MemMachine | local/self-hosted | 64.80 +/- 37.62 | 5,413 | 51.90 +/- 40.46 | 5,448 |"
+            },
+            "EverOS": {
+              "value": "47.73",
+              "num": 47.73,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
+              "quote": "| EverOS | local/self-hosted | 58.64 +/- 39.36 | 7,393 | 47.73 +/- 41.66 | 11,657 |"
+            },
+            "Mem0": {
+              "value": "43.33",
+              "num": 43.33,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
+              "quote": "| Mem0 | cloud | 70.41 +/- 36.36 | 1,055 | 43.33 +/- 41.99 | 1,086 |"
+            }
+          }
+        }
+      ],
+      "own": {
+        "Cognee": {
+          "value": "67.0",
+          "num": 67.0,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": "up to",
+          "tag": null,
+          "url": "https://www.cognee.ai/benchmarking-cognee-on-beam",
+          "quote": "We reached scores as high as 0.67, against a reported SOTA of 0.641"
+        },
+        "Hindsight": {
+          "value": "64.1",
+          "num": 64.1,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L65",
+          "quote": "| Hindsight | 75.0 | - | 64.1 | - | [Hindsight Benchmarks](https://benchmarks.hindsight.vectorize.io/) |"
+        },
+        "Honcho": {
+          "value": "40.6",
+          "num": 40.6,
+          "scale": "0-100",
+          "model": "claude-haiku-4-5",
+          "detail": null,
+          "tag": null,
+          "url": "https://espirai-blog.pages.dev/research/Benchmarking-Honcho",
+          "quote": "table row: 10M | 0.406 | 0.266 | OFF | 4,096"
+        },
+        "Mem0": {
+          "value": "48.6",
+          "num": 48.6,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L64",
+          "quote": "| Mem0 | 64.1 | 6,719 | 48.6 | 6,914 | [mem0.ai research](https://mem0.ai/research) |"
+        }
+      }
+    },
+    {
+      "name": "PersonaMem v2",
+      "slug": "personamem-v2",
+      "task": "Multiple-choice accuracy",
+      "columns": [
+        "Cognee",
+        "EverOS",
+        "Hindsight",
+        "LCM-X",
+        "Letta",
+        "Maasv",
+        "Mem0",
+        "mem9",
+        "MemMachine",
+        "Memori",
+        "MemOS",
+        "Supermemory",
+        "ThreadAtlas",
+        "Viking",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "OmniMemEval shared setup",
+          "model": "gpt-4.1-mini answers, rule matching",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "40.58",
+              "num": 40.58,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L41",
+              "quote": "| MemOS | cloud | 33.80 | 57.82 | 32.57 | 35.66 | 36.59 | 39.40 | 39.23 | 40.58 | 1,908 |"
+            },
+            "Maasv": {
+              "value": "39.86",
+              "num": 39.86,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L43",
+              "quote": "| Maasv | local/self-hosted | 36.14 | 53.24 | 34.33 | 35.66 | 33.46 | 41.28 | 37.32 | 39.86 | 2,930 |"
+            },
+            "Supermemory": {
+              "value": "39.64",
+              "num": 39.64,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L32",
+              "quote": "| Supermemory | cloud | 42.34 | 31.97 | 42.96 | 42.42 | 30.72 | 49.72 | 40.67 | 39.64 | 4,473 |"
+            },
+            "Hindsight": {
+              "value": "37.98",
+              "num": 37.98,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L36",
+              "quote": "| Hindsight | local/self-hosted | 33.57 | 40.65 | 36.62 | 38.11 | 36.01 | 42.78 | 38.12 | 37.98 | 15,926 |"
+            },
+            "ThreadAtlas": {
+              "value": "36.92",
+              "num": 36.92,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "contributor run",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L44",
+              "quote": "| ThreadAtlas | local/self-hosted | 30.29 | 47.42 | 36.09 | 34.15 | 31.51 | 36.96 | 37.32 | 36.92 | 4,268 |"
+            },
+            "Mem0": {
+              "value": "36.76",
+              "num": 36.76,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L30",
+              "quote": "| Mem0 | cloud | 41.40 | 24.33 | 38.38 | 39.28 | 30.72 | 45.78 | 43.54 | 36.76 | 1,388 |"
+            },
+            "EverOS": {
+              "value": "35.94",
+              "num": 35.94,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L38",
+              "quote": "| EverOS | cloud | 33.57 | 31.49 | 34.68 | 37.76 | 33.27 | 44.47 | 40.19 | 35.94 | 6,572 |"
+            },
+            "Letta": {
+              "value": "35.12",
+              "num": 35.12,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L35",
+              "quote": "| Letta | cloud | 31.46 | 38.93 | 32.39 | 34.85 | 27.40 | 39.40 | 39.23 | 35.12 | 30,903 |"
+            },
+            "MemMachine": {
+              "value": "34.14",
+              "num": 34.14,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L39",
+              "quote": "| MemMachine | local/self-hosted | 28.19 | 45.04 | 32.22 | 28.44 | 29.75 | 32.46 | 38.60 | 34.14 | 1,988 |"
+            },
+            "LCM-X": {
+              "value": "33.96",
+              "num": 33.96,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": "OpenRouter",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L42",
+              "quote": "| LCM-X | local/self-hosted | 32.98 | 32.82 | 34.15 | 31.59 | 32.68 | 39.21 | 36.84 | 33.96 | 3,534 |"
+            },
+            "Memori": {
+              "value": "33.16",
+              "num": 33.16,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L37",
+              "quote": "| Memori | cloud | 30.18 | 27.48 | 32.39 | 37.53 | 33.46 | 36.77 | 38.12 | 33.16 | 3,109 |"
+            },
+            "Zep": {
+              "value": "32.34",
+              "num": 32.34,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L31",
+              "quote": "| graphiti-zep | local/self-hosted | 28.19 | 29.77 | 28.70 | 31.93 | 30.92 | 37.90 | 42.58 | 32.34 | 3,645 |"
+            },
+            "Viking": {
+              "value": "30.80",
+              "num": 30.8,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L33",
+              "quote": "| Viking | cloud | 31.58 | 25.38 | 29.23 | 29.49 | 33.66 | 36.59 | 34.77 | 30.80 | 1,688 |"
+            },
+            "mem9": {
+              "value": "30.76",
+              "num": 30.76,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L40",
+              "quote": "| mem9 | cloud | 32.28 | 22.90 | 32.57 | 34.50 | 25.05 | 38.27 | 33.33 | 30.76 | 2,045 |"
+            },
+            "Cognee": {
+              "value": "26.46",
+              "num": 26.46,
+              "scale": "0-100",
+              "model": "gpt-4.1-mini-2025-04-14",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L34",
+              "quote": "| Cognee | local/self-hosted | 18.83 | 41.13 | 16.90 | 18.65 | 32.88 | 16.51 | 34.93 | 26.46 | 10,189 |"
+            }
+          }
+        }
+      ],
+      "own": {
+        "EverOS": {
+          "value": "53.25",
+          "num": 53.25,
+          "scale": "0-100",
+          "model": "not stated",
+          "detail": null,
+          "tag": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L53",
+          "quote": "| EverOS | 53.25 | - | [EverMemOS paper](https://arxiv.org/abs/2601.02163) |"
+        }
+      }
+    },
+    {
+      "name": "HABIT-Bench",
+      "slug": "habit-bench",
+      "task": "Exact-choice accuracy, four domains",
+      "columns": [
+        "A-Mem",
+        "Letta",
+        "LightMem",
+        "Mem0",
+        "MemOS",
+        "MemRL",
+        "MIRIX",
+        "SeCom"
+      ],
+      "rows": [
+        {
+          "setup": "Table 3, Qwen3-235B-A22B",
+          "model": "Qwen3-235B-A22B, no judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "A-Mem": {
+              "value": "33.06",
+              "num": 33.06,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "A-MEM 42.70 22.44 25.74 41.38 33.06 27.94 28.29 25.15 53.08 33.61"
+            },
+            "Letta": {
+              "value": "32.12",
+              "num": 32.12,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "Letta 41.59 22.73 23.24 40.92 32.12 27.14 25.73 24.12 54.62 32.90"
+            },
+            "MemRL": {
+              "value": "31.85",
+              "num": 31.85,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MemRL 42.70 23.32 23.24 38.15 31.85 27.46 24.93 23.82 49.54 31.44"
+            },
+            "SeCom": {
+              "value": "31.11",
+              "num": 31.11,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "SeCom 41.11 22.08 22.94 38.31 31.11 28.41 24.71 22.50 52.00 31.91"
+            },
+            "MemOS": {
+              "value": "29.60",
+              "num": 29.6,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MemOS 40.32 21.86 21.47 34.77 29.60 36.67 24.05 24.56 47.23 33.13"
+            },
+            "Mem0": {
+              "value": "28.51",
+              "num": 28.51,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "Mem0 32.70 22.95 25.29 33.08 28.51 34.76 25.51 25.44 46.62 33.08"
+            },
+            "MIRIX": {
+              "value": "27.48",
+              "num": 27.48,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MIRIX 26.98 22.73 25.59 34.62 27.48 27.14 24.93 21.76 47.85 30.42"
+            },
+            "LightMem": {
+              "value": "27.01",
+              "num": 27.01,
+              "scale": "0-100",
+              "model": "Qwen3-235B-A22B",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "LightMem 28.25 22.81 25.88 31.08 27.01 33.33 23.68 21.18 44.31 30.63"
+            }
+          }
+        },
+        {
+          "setup": "Table 3, GLM-5.3-Flash",
+          "model": "GLM-5.3-Flash, no judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "A-Mem": {
+              "value": "33.61",
+              "num": 33.61,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "A-MEM 42.70 22.44 25.74 41.38 33.06 27.94 28.29 25.15 53.08 33.61"
+            },
+            "MemOS": {
+              "value": "33.13",
+              "num": 33.13,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MemOS 40.32 21.86 21.47 34.77 29.60 36.67 24.05 24.56 47.23 33.13"
+            },
+            "Mem0": {
+              "value": "33.08",
+              "num": 33.08,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "Mem0 32.70 22.95 25.29 33.08 28.51 34.76 25.51 25.44 46.62 33.08"
+            },
+            "Letta": {
+              "value": "32.90",
+              "num": 32.9,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "Letta 41.59 22.73 23.24 40.92 32.12 27.14 25.73 24.12 54.62 32.90"
+            },
+            "SeCom": {
+              "value": "31.91",
+              "num": 31.91,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "SeCom 41.11 22.08 22.94 38.31 31.11 28.41 24.71 22.50 52.00 31.91"
+            },
+            "MemRL": {
+              "value": "31.44",
+              "num": 31.44,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MemRL 42.70 23.32 23.24 38.15 31.85 27.46 24.93 23.82 49.54 31.44"
+            },
+            "LightMem": {
+              "value": "30.63",
+              "num": 30.63,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "LightMem 28.25 22.81 25.88 31.08 27.01 33.33 23.68 21.18 44.31 30.63"
+            },
+            "MIRIX": {
+              "value": "30.42",
+              "num": 30.42,
+              "scale": "0-100",
+              "model": "GLM-5.3-Flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2610.24520",
+              "quote": "MIRIX 26.98 22.73 25.59 34.62 27.48 27.14 24.93 21.76 47.85 30.42"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "MedMemoryBench",
+      "slug": "medmemorybench",
+      "task": "Response accuracy, LLM judge",
+      "columns": [
+        "A-Mem",
+        "HippoRAG",
+        "Letta",
+        "LightMem",
+        "Mem0",
+        "MemOS",
+        "MemRL",
+        "MIRIX",
+        "ReMem"
+      ],
+      "rows": [
+        {
+          "setup": "Table 2, Efficient setting",
+          "model": "GPT-5.1 answers, Claude-4-Sonnet judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Letta": {
+              "value": "51.21",
+              "num": 51.21,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "Letta 58.95 40.50 40.74 23.00 68.52 52.00 66.97 70.35 52.87 49.50 19.20 13.97 51.21 41.55"
+            },
+            "MemOS": {
+              "value": "48.16",
+              "num": 48.16,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "MemOS 58.50 49.00 43.00 40.50 66.00 58.00 71.10 67.83 35.11 26.25 15.23 4.30 48.16 40.98"
+            },
+            "MemRL": {
+              "value": "46.37",
+              "num": 46.37,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "MemRL 55.00 40.00 43.00 33.50 55.00 50.00 70.10 67.83 43.07 32.00 12.04 13.97 46.37 37.45"
+            },
+            "A-Mem": {
+              "value": "44.84",
+              "num": 44.84,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "A-Mem 46.00 20.50 27.00 26.50 52.00 28.00 71.61 64.32 40.55 25.50 31.93 10.80 44.84 29.27"
+            },
+            "LightMem": {
+              "value": "40.33",
+              "num": 40.33,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "LightMem 49.25 24.00 35.75 23.50 58.00 37.00 67.10 59.29 18.60 14.00 13.25 6.07 40.33 27.31"
+            },
+            "MIRIX": {
+              "value": "40.12",
+              "num": 40.12,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "MIRIX 49.75 42.25 25.25 10.78 44.50 46.00 73.37 54.75 31.49 22.33 16.37 8.10 40.12 30.70"
+            },
+            "Mem0": {
+              "value": "39.20",
+              "num": 39.2,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "Mem0 44.00 43.50 20.50 22.50 53.50 60.00 64.82 63.31 30.98 17.50 21.40 8.14 39.20 35.83"
+            },
+            "ReMem": {
+              "value": "33.93",
+              "num": 33.93,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "ReMem 32.50 30.00 18.00 18.50 56.00 62.00 57.79 55.78 23.80 21.00 15.50 9.37 33.93 32.78"
+            },
+            "HippoRAG": {
+              "value": "33.69",
+              "num": 33.69,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": "HippoRAG-v2",
+              "tag": null,
+              "url": "https://arxiv.org/abs/2605.11814",
+              "quote": "HippoRAG-v2 43.50 40.00 18.70 23.00 31.00 38.00 69.08 57.58 25.44 10.00 14.25 5.20 33.69 28.96"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "IMLogic",
+      "slug": "imlogic",
+      "task": "Multiple-choice accuracy",
+      "columns": [
+        "A-Mem",
+        "EverOS",
+        "LightMem",
+        "Mem0",
+        "MemOS",
+        "T-Mem",
+        "TACITREE"
+      ],
+      "rows": [
+        {
+          "setup": "Table 5, conversation level",
+          "model": "GPT-5.1 answers, no judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "T-Mem": {
+              "value": "44.18",
+              "num": 44.18,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "T-Mem Hybrid 44.18 23.92 31.86 0.05"
+            },
+            "EverOS": {
+              "value": "43.50",
+              "num": 43.5,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "EverMemOS Hybrid 43.50 27.30 29.11 0.09"
+            },
+            "MemOS": {
+              "value": "39.44",
+              "num": 39.44,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "MemOS Hybrid 39.44 28.11 32.31 0.14"
+            },
+            "Mem0": {
+              "value": "38.18",
+              "num": 38.18,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "Mem0 Semantic 38.18 22.11 39.53 0.18"
+            },
+            "LightMem": {
+              "value": "37.55",
+              "num": 37.55,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "LightMem Semantic 37.55 29.69 32.67 0.09"
+            },
+            "A-Mem": {
+              "value": "37.32",
+              "num": 37.32,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "A-Mem Graph 37.32 29.60 32.90 0.18"
+            },
+            "TACITREE": {
+              "value": "30.46",
+              "num": 30.46,
+              "scale": "0-100",
+              "model": "GPT-5.1",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/abs/2606.23283",
+              "quote": "TACITREE Graph 30.46 14.12 55.37 0.05"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "OmniMemEval agent",
+      "slug": "omnimemeval-agent",
+      "task": "Task pass rate, mean of 3 runs",
+      "columns": [
+        "EverOS",
+        "Hindsight",
+        "Mem0",
+        "mem9",
+        "Memori",
+        "MemOS",
+        "Supermemory"
+      ],
+      "rows": [
+        {
+          "setup": "BrowseComp-Plus on OpenClaw",
+          "model": "qwen3.6-flash agent and judge",
+          "shared": true,
+          "base": {
+            "name": "Baseline",
+            "value": "18.46",
+            "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L52"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "23.85",
+              "num": 23.85,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L59",
+              "quote": "| **MemOS** | 23.85 | 43.3 | 61 | 5164.2 | 38.46 | 49.55 | 64.96 | 9.43 | 62.07 | 23.93 |"
+            },
+            "EverOS": {
+              "value": "18.98",
+              "num": 18.98,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L54",
+              "quote": "| **EverOS** | 18.98 | 30.8 | 54.67 | 6085.87 | 32.05 | 54.77 | 59.83 | 7.2 | 38.51 | 16.97 |"
+            },
+            "Hindsight": {
+              "value": "16.92",
+              "num": 16.92,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L56",
+              "quote": "| **Hindsight** | 16.92 | 35.6 | 55 | 6177 | 38.46 | 56.7 | 71.79 | 14.2 | 50.00 | 17.5 |"
+            },
+            "Memori": {
+              "value": "16.92",
+              "num": 16.92,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L58",
+              "quote": "| **Memori**<br>**(Cloud service)** | 16.92 | 36.3 | 52 | 6189.2 | 34.62 | 43.1 | 51.28 | 9.3 | 37.93 | 15.8 |"
+            },
+            "Supermemory": {
+              "value": "14.36",
+              "num": 14.36,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L55",
+              "quote": "| **Supermemory** | 14.36 | 32.03 | 58 | 5632.1 | 30.7 | 51.37 | 59.83 | 6.83 | 43.10 | 16.70 |"
+            },
+            "Mem0": {
+              "value": "13.33",
+              "num": 13.33,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L53",
+              "quote": "| **Mem0** | 13.33 | 36.4 | 53 | 6090.53 | 26.92 | 55.78 | 60.68 | 6.27 | 41.38 | 17.28 |"
+            },
+            "mem9": {
+              "value": "12.31",
+              "num": 12.31,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L57",
+              "quote": "| **mem9**<br>**(Cloud service)** | 12.31 | 31.6 | 54.33 | 5880.9 | 30.77 | 59.1 | 64.1 | 8.23 | 47.7 | 15.8 |"
+            }
+          }
+        },
+        {
+          "setup": "OmniMath on OpenClaw",
+          "model": "qwen3.6-flash agent and judge",
+          "shared": true,
+          "base": {
+            "name": "Baseline",
+            "value": "52",
+            "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L52"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "61",
+              "num": 61.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L59",
+              "quote": "| **MemOS** | 23.85 | 43.3 | 61 | 5164.2 | 38.46 | 49.55 | 64.96 | 9.43 | 62.07 | 23.93 |"
+            },
+            "Supermemory": {
+              "value": "58",
+              "num": 58.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L55",
+              "quote": "| **Supermemory** | 14.36 | 32.03 | 58 | 5632.1 | 30.7 | 51.37 | 59.83 | 6.83 | 43.10 | 16.70 |"
+            },
+            "Hindsight": {
+              "value": "55",
+              "num": 55.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L56",
+              "quote": "| **Hindsight** | 16.92 | 35.6 | 55 | 6177 | 38.46 | 56.7 | 71.79 | 14.2 | 50.00 | 17.5 |"
+            },
+            "EverOS": {
+              "value": "54.67",
+              "num": 54.67,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L54",
+              "quote": "| **EverOS** | 18.98 | 30.8 | 54.67 | 6085.87 | 32.05 | 54.77 | 59.83 | 7.2 | 38.51 | 16.97 |"
+            },
+            "mem9": {
+              "value": "54.33",
+              "num": 54.33,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L57",
+              "quote": "| **mem9**<br>**(Cloud service)** | 12.31 | 31.6 | 54.33 | 5880.9 | 30.77 | 59.1 | 64.1 | 8.23 | 47.7 | 15.8 |"
+            },
+            "Mem0": {
+              "value": "53",
+              "num": 53.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L53",
+              "quote": "| **Mem0** | 13.33 | 36.4 | 53 | 6090.53 | 26.92 | 55.78 | 60.68 | 6.27 | 41.38 | 17.28 |"
+            },
+            "Memori": {
+              "value": "52",
+              "num": 52.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L58",
+              "quote": "| **Memori**<br>**(Cloud service)** | 16.92 | 36.3 | 52 | 6189.2 | 34.62 | 43.1 | 51.28 | 9.3 | 37.93 | 15.8 |"
+            }
+          }
+        },
+        {
+          "setup": "SWE-Bench on OpenClaw",
+          "model": "qwen3.6-flash agent and judge",
+          "shared": true,
+          "base": {
+            "name": "Baseline",
+            "value": "26.92",
+            "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L52"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Hindsight": {
+              "value": "38.46",
+              "num": 38.46,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L56",
+              "quote": "| **Hindsight** | 16.92 | 35.6 | 55 | 6177 | 38.46 | 56.7 | 71.79 | 14.2 | 50.00 | 17.5 |"
+            },
+            "MemOS": {
+              "value": "38.46",
+              "num": 38.46,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L59",
+              "quote": "| **MemOS** | 23.85 | 43.3 | 61 | 5164.2 | 38.46 | 49.55 | 64.96 | 9.43 | 62.07 | 23.93 |"
+            },
+            "Memori": {
+              "value": "34.62",
+              "num": 34.62,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L58",
+              "quote": "| **Memori**<br>**(Cloud service)** | 16.92 | 36.3 | 52 | 6189.2 | 34.62 | 43.1 | 51.28 | 9.3 | 37.93 | 15.8 |"
+            },
+            "EverOS": {
+              "value": "32.05",
+              "num": 32.05,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L54",
+              "quote": "| **EverOS** | 18.98 | 30.8 | 54.67 | 6085.87 | 32.05 | 54.77 | 59.83 | 7.2 | 38.51 | 16.97 |"
+            },
+            "mem9": {
+              "value": "30.77",
+              "num": 30.77,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L57",
+              "quote": "| **mem9**<br>**(Cloud service)** | 12.31 | 31.6 | 54.33 | 5880.9 | 30.77 | 59.1 | 64.1 | 8.23 | 47.7 | 15.8 |"
+            },
+            "Supermemory": {
+              "value": "30.7",
+              "num": 30.7,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L55",
+              "quote": "| **Supermemory** | 14.36 | 32.03 | 58 | 5632.1 | 30.7 | 51.37 | 59.83 | 6.83 | 43.10 | 16.70 |"
+            },
+            "Mem0": {
+              "value": "26.92",
+              "num": 26.92,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L53",
+              "quote": "| **Mem0** | 13.33 | 36.4 | 53 | 6090.53 | 26.92 | 55.78 | 60.68 | 6.27 | 41.38 | 17.28 |"
+            }
+          }
+        },
+        {
+          "setup": "LiveCodeBench on OpenClaw",
+          "model": "qwen3.6-flash agent and judge",
+          "shared": true,
+          "base": {
+            "name": "Baseline",
+            "value": "51.28",
+            "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L52"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "Hindsight": {
+              "value": "71.79",
+              "num": 71.79,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L56",
+              "quote": "| **Hindsight** | 16.92 | 35.6 | 55 | 6177 | 38.46 | 56.7 | 71.79 | 14.2 | 50.00 | 17.5 |"
+            },
+            "MemOS": {
+              "value": "64.96",
+              "num": 64.96,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L59",
+              "quote": "| **MemOS** | 23.85 | 43.3 | 61 | 5164.2 | 38.46 | 49.55 | 64.96 | 9.43 | 62.07 | 23.93 |"
+            },
+            "mem9": {
+              "value": "64.1",
+              "num": 64.1,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L57",
+              "quote": "| **mem9**<br>**(Cloud service)** | 12.31 | 31.6 | 54.33 | 5880.9 | 30.77 | 59.1 | 64.1 | 8.23 | 47.7 | 15.8 |"
+            },
+            "Mem0": {
+              "value": "60.68",
+              "num": 60.68,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L53",
+              "quote": "| **Mem0** | 13.33 | 36.4 | 53 | 6090.53 | 26.92 | 55.78 | 60.68 | 6.27 | 41.38 | 17.28 |"
+            },
+            "EverOS": {
+              "value": "59.83",
+              "num": 59.83,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L54",
+              "quote": "| **EverOS** | 18.98 | 30.8 | 54.67 | 6085.87 | 32.05 | 54.77 | 59.83 | 7.2 | 38.51 | 16.97 |"
+            },
+            "Supermemory": {
+              "value": "59.83",
+              "num": 59.83,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L55",
+              "quote": "| **Supermemory** | 14.36 | 32.03 | 58 | 5632.1 | 30.7 | 51.37 | 59.83 | 6.83 | 43.10 | 16.70 |"
+            },
+            "Memori": {
+              "value": "51.28",
+              "num": 51.28,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L58",
+              "quote": "| **Memori**<br>**(Cloud service)** | 16.92 | 36.3 | 52 | 6189.2 | 34.62 | 43.1 | 51.28 | 9.3 | 37.93 | 15.8 |"
+            }
+          }
+        },
+        {
+          "setup": "GDPVal on OpenClaw",
+          "model": "qwen3.6-flash agent and judge",
+          "shared": true,
+          "base": {
+            "name": "Baseline",
+            "value": "34.48",
+            "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L52"
+          },
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "not run",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "62.07",
+              "num": 62.07,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L59",
+              "quote": "| **MemOS** | 23.85 | 43.3 | 61 | 5164.2 | 38.46 | 49.55 | 64.96 | 9.43 | 62.07 | 23.93 |"
+            },
+            "Hindsight": {
+              "value": "50.00",
+              "num": 50.0,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L56",
+              "quote": "| **Hindsight** | 16.92 | 35.6 | 55 | 6177 | 38.46 | 56.7 | 71.79 | 14.2 | 50.00 | 17.5 |"
+            },
+            "mem9": {
+              "value": "47.7",
+              "num": 47.7,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L57",
+              "quote": "| **mem9**<br>**(Cloud service)** | 12.31 | 31.6 | 54.33 | 5880.9 | 30.77 | 59.1 | 64.1 | 8.23 | 47.7 | 15.8 |"
+            },
+            "Supermemory": {
+              "value": "43.10",
+              "num": 43.1,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L55",
+              "quote": "| **Supermemory** | 14.36 | 32.03 | 58 | 5632.1 | 30.7 | 51.37 | 59.83 | 6.83 | 43.10 | 16.70 |"
+            },
+            "Mem0": {
+              "value": "41.38",
+              "num": 41.38,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L53",
+              "quote": "| **Mem0** | 13.33 | 36.4 | 53 | 6090.53 | 26.92 | 55.78 | 60.68 | 6.27 | 41.38 | 17.28 |"
+            },
+            "EverOS": {
+              "value": "38.51",
+              "num": 38.51,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L54",
+              "quote": "| **EverOS** | 18.98 | 30.8 | 54.67 | 6085.87 | 32.05 | 54.77 | 59.83 | 7.2 | 38.51 | 16.97 |"
+            },
+            "Memori": {
+              "value": "37.93",
+              "num": 37.93,
+              "scale": "0-100",
+              "model": "qwen3.6-flash",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/agent_memory/results.md#L58",
+              "quote": "| **Memori**<br>**(Cloud service)** | 16.92 | 36.3 | 52 | 6189.2 | 34.62 | 43.1 | 51.28 | 9.3 | 37.93 | 15.8 |"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "PersonaMem v1",
+      "slug": "personamem-v1",
+      "task": "Multiple-choice accuracy",
+      "columns": [
+        "Mem0",
+        "Memobase",
+        "MemOS",
+        "MemU",
+        "MIRIX",
+        "Supermemory",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "MemOS suite setup",
+          "model": "gpt-4o-mini answers",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": "61.97",
+            "num": 61.97,
+            "status": null,
+            "setting": "embedder, top 20, mean of 3 runs"
+          },
+          "cells": {
+            "MemOS": {
+              "value": "61.2",
+              "num": 61.2,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": "MemOS-1031",
+              "tag": "paper author",
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: MemOS-1031 61.2; all built upon the same GPT-4o-mini foundation LLM"
+            },
+            "Memobase": {
+              "value": "58.9",
+              "num": 58.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: Memobase 58.9"
+            },
+            "Zep": {
+              "value": "57.8",
+              "num": 57.8,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: Zep 57.8"
+            },
+            "MemU": {
+              "value": "56.8",
+              "num": 56.8,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: MemU 56.8"
+            },
+            "Supermemory": {
+              "value": "53.9",
+              "num": 53.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: Supermemory 53.9"
+            },
+            "Mem0": {
+              "value": "43.1",
+              "num": 43.1,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: Mem0 43.1"
+            },
+            "MIRIX": {
+              "value": "38.4",
+              "num": 38.4,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 6, Precision(1 in 4)↑: MIRIX 38.4"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "PrefEval",
+      "slug": "prefeval",
+      "task": "Personalised response rate",
+      "columns": [
+        "Mem0",
+        "Memobase",
+        "MemOS",
+        "MemU",
+        "MIRIX",
+        "Supermemory",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "MemOS suite setup",
+          "model": "gpt-4o-mini answers and checks",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "running",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "71.9",
+              "num": 71.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": "MemOS-1031",
+              "tag": "paper author",
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: MemOS-1031 71.9"
+            },
+            "Mem0": {
+              "value": "63.7",
+              "num": 63.7,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: Mem0 63.7"
+            },
+            "Supermemory": {
+              "value": "56.7",
+              "num": 56.7,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: Supermemory 56.7"
+            },
+            "MemU": {
+              "value": "51.8",
+              "num": 51.8,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: MemU 51.8"
+            },
+            "Zep": {
+              "value": "39.9",
+              "num": 39.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: Zep 39.9"
+            },
+            "Memobase": {
+              "value": "34.1",
+              "num": 34.1,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: Memobase 34.1"
+            },
+            "MIRIX": {
+              "value": "7.9",
+              "num": 7.9,
+              "scale": "0-100",
+              "model": "gpt-4o-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2507.03724v4",
+              "quote": "Table 5, with 10 turns, Personalized Response↑: MIRIX 7.9"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "EverMemBench",
+      "slug": "evermembench",
+      "task": "Mean over 9 categories",
+      "columns": [
+        "Mem0",
+        "Memobase",
+        "MemOS",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "Paper Table 4",
+          "model": "GPT-4.1-mini answers",
+          "shared": true,
+          "base": {
+            "name": "Full context",
+            "value": "37.44",
+            "url": "https://arxiv.org/html/2602.01313v3"
+          },
+          "hippo": {
+            "value": "44.20",
+            "num": 44.2,
+            "status": null,
+            "setting": "embedder, top 10, mean of 9 categories"
+          },
+          "cells": {
+            "MemOS": {
+              "value": "42.55",
+              "num": 42.55,
+              "scale": "0-100",
+              "model": "GPT-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2602.01313v3",
+              "quote": "+ MemOS: 71.36±6.1 18.88±4.8 15.67±4.0 69.90±4.5 51.99±4.7 45.15±6.0 28.98±6.5 32.54±7.1 48.47±7.1 42.55±1.9 (+5.11)"
+            },
+            "Zep": {
+              "value": "39.97",
+              "num": 39.97,
+              "scale": "0-100",
+              "model": "GPT-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2602.01313v3",
+              "quote": "+ Zep: 73.71±5.9 8.03±3.4 13.00±3.8 67.16±4.6 47.54±4.7 43.66±6.0 26.70±6.5 35.50±7.1 44.39±6.9 39.97±1.9 (+2.52)"
+            },
+            "Mem0": {
+              "value": "37.09",
+              "num": 37.09,
+              "scale": "0-100",
+              "model": "GPT-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2602.01313v3",
+              "quote": "+ Mem0: 55.40±6.6 11.24±3.8 6.33±2.8 66.17±4.6 52.46±4.7 51.87±6.0 22.73±6.3 31.36±7.1 36.22±6.9 37.09±1.9 (-0.36)"
+            },
+            "Memobase": {
+              "value": "34.27",
+              "num": 34.27,
+              "scale": "0-100",
+              "model": "GPT-4.1-mini",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2602.01313v3",
+              "quote": "+ MemoBase: 60.09±6.6 12.85±4.2 18.00±4.3 64.68±4.6 36.77±4.6 30.60±5.6 17.05±5.4 29.59±6.8 38.78±6.9 34.27±1.9 (-3.18)"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "HaluMem-Medium",
+      "slug": "halumem-medium",
+      "task": "Question-answer accuracy",
+      "columns": [
+        "Mem0",
+        "Memobase",
+        "MemOS",
+        "Supermemory",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "HaluMem paper setup",
+          "model": "GPT-4o answers and judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": "70.23",
+            "num": 70.23,
+            "status": null,
+            "setting": "embedder, top 20, GPT-4o answers and judge"
+          },
+          "cells": {
+            "MemOS": {
+              "value": "67.23",
+              "num": 67.23,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: MemOS Medium QA correct 67.23%"
+            },
+            "Zep": {
+              "value": "55.47",
+              "num": 55.47,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Zep Medium QA correct 55.47%"
+            },
+            "Mem0": {
+              "value": "54.66",
+              "num": 54.66,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": "Mem0-Graph",
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Mem0-Graph Medium QA correct 54.66%"
+            },
+            "Supermemory": {
+              "value": "54.07",
+              "num": 54.07,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Supermemory Medium QA correct 54.07%"
+            },
+            "Memobase": {
+              "value": "35.33",
+              "num": 35.33,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Memobase Medium QA correct 35.33%"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "HaluMem-Long",
+      "slug": "halumem-long",
+      "task": "Question-answer accuracy",
+      "columns": [
+        "Mem0",
+        "Memobase",
+        "MemOS",
+        "Supermemory",
+        "Zep"
+      ],
+      "rows": [
+        {
+          "setup": "HaluMem paper setup",
+          "model": "GPT-4o answers and judge",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "running",
+            "setting": null
+          },
+          "cells": {
+            "MemOS": {
+              "value": "64.44",
+              "num": 64.44,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: MemOS Long QA correct 64.44%"
+            },
+            "Supermemory": {
+              "value": "53.77",
+              "num": 53.77,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Supermemory Long QA correct 53.77%"
+            },
+            "Zep": {
+              "value": "50.19",
+              "num": 50.19,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Zep Long QA correct 50.19%"
+            },
+            "Memobase": {
+              "value": "33.60",
+              "num": 33.6,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": null,
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Memobase Long QA correct 33.60%"
+            },
+            "Mem0": {
+              "value": "32.44",
+              "num": 32.44,
+              "scale": "0-100",
+              "model": "GPT-4o",
+              "detail": "Mem0-Graph",
+              "tag": null,
+              "url": "https://arxiv.org/html/2511.03506v3",
+              "quote": "Table 3 cell as extracted: Mem0-Graph Long QA correct 32.44%"
+            }
+          }
+        }
+      ],
+      "own": {}
+    },
+    {
+      "name": "DolphinBench",
+      "slug": "dolphinbench",
+      "task": "Tests passed of 600",
+      "columns": [
+        "Claude built-in memory",
+        "Honcho",
+        "Mem0"
+      ],
+      "rows": [
+        {
+          "setup": "Official Claude Code setup",
+          "model": "Claude Code with Sonnet 5",
+          "shared": true,
+          "base": null,
+          "hippo": {
+            "value": null,
+            "num": null,
+            "status": "running",
+            "setting": null
+          },
+          "cells": {
+            "Honcho": {
+              "value": "215/600",
+              "num": 35.8333,
+              "scale": "count",
+              "model": "Claude Sonnet 5",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md",
+              "quote": "This agent passed 215 of 600 tests. Its complete run cost $1565.82, and its median task latency was 37.9 seconds."
+            },
+            "Mem0": {
+              "value": "194/600",
+              "num": 32.3333,
+              "scale": "count",
+              "model": "Claude Sonnet 5",
+              "detail": null,
+              "tag": "test author",
+              "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/mem0/README.md",
+              "quote": "This agent passed 194 of 600 tests. Its complete run cost $1830.57, and its median task latency was 42.3 seconds."
+            },
+            "Claude built-in memory": {
+              "value": "158/600",
+              "num": 26.3333,
+              "scale": "count",
+              "model": "Claude Sonnet 5",
+              "detail": null,
+              "tag": null,
+              "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/builtin/README.md",
+              "quote": "This agent passed 158 of 600 tests. Its complete run cost $1132.75, and its median task latency was 32.2 seconds."
+            }
+          }
+        }
+      ],
+      "own": {}
     }
   ]
 }

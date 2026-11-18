@@ -1,0 +1,274 @@
+AMA-Bench, Paper Table 5, 0 to 1 scale	A-Mem	0.3186
+AMA-Bench, Paper Table 5, 0 to 1 scale	EMem	0.4610
+AMA-Bench, Paper Table 5, 0 to 1 scale	HiMem	0.2995
+AMA-Bench, Paper Table 5, 0 to 1 scale	HippoRAG	0.4480
+AMA-Bench, Paper Table 5, 0 to 1 scale	Letta	0.3304
+AMA-Bench, Paper Table 5, 0 to 1 scale	Mem-alpha	0.3117
+AMA-Bench, Paper Table 5, 0 to 1 scale	Mem0	0.2104
+AMA-Bench, Paper Table 5, 0 to 1 scale	Mem1	0.1229
+AMA-Bench, Paper Table 5, 0 to 1 scale	MemAgent	0.2768
+AMA-Bench, Paper Table 5, 0 to 1 scale	MemoRAG	0.4606
+AMA-Bench, Paper Table 5, 0 to 1 scale	MemoryBank	0.3397
+AMA-Bench, Paper Table 5, 0 to 1 scale	SimpleMem	0.1811
+AMA-Bench, Paper Table 5, 0 to 1 scale	hippo	not run
+BEAM-100K, OmniMemEval shared setup	Cognee	59.30
+BEAM-100K, OmniMemEval shared setup	EverOS	58.64
+BEAM-100K, OmniMemEval shared setup	Hindsight	70.22
+BEAM-100K, OmniMemEval shared setup	LCM-X	71.84
+BEAM-100K, OmniMemEval shared setup	Letta	69.22
+BEAM-100K, OmniMemEval shared setup	Maasv	76.38
+BEAM-100K, OmniMemEval shared setup	Mem0	70.41
+BEAM-100K, OmniMemEval shared setup	MemMachine	64.80
+BEAM-100K, OmniMemEval shared setup	MemOS	66.87
+BEAM-100K, OmniMemEval shared setup	Supermemory	65.98
+BEAM-100K, OmniMemEval shared setup	ThreadAtlas	73.12
+BEAM-100K, OmniMemEval shared setup	Viking	70.76
+BEAM-100K, OmniMemEval shared setup	Zep	68.70
+BEAM-100K, OmniMemEval shared setup	cachly	73.04
+BEAM-100K, OmniMemEval shared setup	hippo	not run
+BEAM-100K, OmniMemEval shared setup	mem9	65.75
+BEAM-100K, own report	Cognee	79.0
+BEAM-100K, own report	Hindsight	75.0
+BEAM-100K, own report	Honcho	63.0
+BEAM-100K, own report	Mem0	64.1
+BEAM-10M, OmniMemEval shared setup	Cognee	56.02
+BEAM-10M, OmniMemEval shared setup	EverOS	47.73
+BEAM-10M, OmniMemEval shared setup	Hindsight	59.75
+BEAM-10M, OmniMemEval shared setup	LCM-X	63.32
+BEAM-10M, OmniMemEval shared setup	Letta	52.30
+BEAM-10M, OmniMemEval shared setup	Maasv	65.09
+BEAM-10M, OmniMemEval shared setup	Mem0	43.33
+BEAM-10M, OmniMemEval shared setup	MemMachine	51.90
+BEAM-10M, OmniMemEval shared setup	MemOS	56.75
+BEAM-10M, OmniMemEval shared setup	Supermemory	52.49
+BEAM-10M, OmniMemEval shared setup	Viking	58.14
+BEAM-10M, OmniMemEval shared setup	Zep	56.11
+BEAM-10M, OmniMemEval shared setup	hippo	not run
+BEAM-10M, OmniMemEval shared setup	mem9	57.30
+BEAM-10M, own report	Cognee	67.0
+BEAM-10M, own report	Hindsight	64.1
+BEAM-10M, own report	Honcho	40.6
+BEAM-10M, own report	Mem0	48.6
+DolphinBench, Official Claude Code setup	Claude built-in memory	158/600
+DolphinBench, Official Claude Code setup	Honcho	215/600
+DolphinBench, Official Claude Code setup	Mem0	194/600
+DolphinBench, Official Claude Code setup	hippo	running
+EverMemBench, Paper Table 4	Full context	37.44
+EverMemBench, Paper Table 4	Mem0	37.09
+EverMemBench, Paper Table 4	MemOS	42.55
+EverMemBench, Paper Table 4	Memobase	34.27
+EverMemBench, Paper Table 4	Zep	39.97
+EverMemBench, Paper Table 4	hippo	44.20
+HABIT-Bench, Table 3, GLM-5.3-Flash	A-Mem	33.61
+HABIT-Bench, Table 3, GLM-5.3-Flash	Letta	32.90
+HABIT-Bench, Table 3, GLM-5.3-Flash	LightMem	30.63
+HABIT-Bench, Table 3, GLM-5.3-Flash	MIRIX	30.42
+HABIT-Bench, Table 3, GLM-5.3-Flash	Mem0	33.08
+HABIT-Bench, Table 3, GLM-5.3-Flash	MemOS	33.13
+HABIT-Bench, Table 3, GLM-5.3-Flash	MemRL	31.44
+HABIT-Bench, Table 3, GLM-5.3-Flash	SeCom	31.91
+HABIT-Bench, Table 3, GLM-5.3-Flash	hippo	not run
+HABIT-Bench, Table 3, Qwen3-235B-A22B	A-Mem	33.06
+HABIT-Bench, Table 3, Qwen3-235B-A22B	Letta	32.12
+HABIT-Bench, Table 3, Qwen3-235B-A22B	LightMem	27.01
+HABIT-Bench, Table 3, Qwen3-235B-A22B	MIRIX	27.48
+HABIT-Bench, Table 3, Qwen3-235B-A22B	Mem0	28.51
+HABIT-Bench, Table 3, Qwen3-235B-A22B	MemOS	29.60
+HABIT-Bench, Table 3, Qwen3-235B-A22B	MemRL	31.85
+HABIT-Bench, Table 3, Qwen3-235B-A22B	SeCom	31.11
+HABIT-Bench, Table 3, Qwen3-235B-A22B	hippo	not run
+HaluMem-Long, HaluMem paper setup	Mem0	32.44
+HaluMem-Long, HaluMem paper setup	MemOS	64.44
+HaluMem-Long, HaluMem paper setup	Memobase	33.60
+HaluMem-Long, HaluMem paper setup	Supermemory	53.77
+HaluMem-Long, HaluMem paper setup	Zep	50.19
+HaluMem-Long, HaluMem paper setup	hippo	running
+HaluMem-Medium, HaluMem paper setup	Mem0	54.66
+HaluMem-Medium, HaluMem paper setup	MemOS	67.23
+HaluMem-Medium, HaluMem paper setup	Memobase	35.33
+HaluMem-Medium, HaluMem paper setup	Supermemory	54.07
+HaluMem-Medium, HaluMem paper setup	Zep	55.47
+HaluMem-Medium, HaluMem paper setup	hippo	70.23
+IMLogic, Table 5, conversation level	A-Mem	37.32
+IMLogic, Table 5, conversation level	EverOS	43.50
+IMLogic, Table 5, conversation level	LightMem	37.55
+IMLogic, Table 5, conversation level	Mem0	38.18
+IMLogic, Table 5, conversation level	MemOS	39.44
+IMLogic, Table 5, conversation level	T-Mem	44.18
+IMLogic, Table 5, conversation level	TACITREE	30.46
+IMLogic, Table 5, conversation level	hippo	not run
+LoCoMo, MIRIX paper setup	Full context	87.52
+LoCoMo, MIRIX paper setup	LangMem	78.05
+LoCoMo, MIRIX paper setup	Mem0	62.47
+LoCoMo, MIRIX paper setup	Zep	79.09
+LoCoMo, MIRIX paper setup	hippo	not run
+LoCoMo, Mem0 paper setup	A-Mem	48.38
+LoCoMo, Mem0 paper setup	Full context	72.90
+LoCoMo, Mem0 paper setup	LangMem	58.10
+LoCoMo, Mem0 paper setup	Mem0	68.44
+LoCoMo, Mem0 paper setup	OpenAI Memory	52.90
+LoCoMo, Mem0 paper setup	Zep	65.99
+LoCoMo, Mem0 paper setup	hippo	69.22
+LoCoMo, OmniMemEval shared setup	Backboard	22.40
+LoCoMo, OmniMemEval shared setup	Cognee	83.48
+LoCoMo, OmniMemEval shared setup	EverOS	82.75
+LoCoMo, OmniMemEval shared setup	Hindsight	81.99
+LoCoMo, OmniMemEval shared setup	LCM-X	78.83
+LoCoMo, OmniMemEval shared setup	Letta	77.12
+LoCoMo, OmniMemEval shared setup	Maasv	87.73
+LoCoMo, OmniMemEval shared setup	Mem0	77.68
+LoCoMo, OmniMemEval shared setup	MemMachine	73.90
+LoCoMo, OmniMemEval shared setup	MemOS	88.83
+LoCoMo, OmniMemEval shared setup	Memori	41.34
+LoCoMo, OmniMemEval shared setup	MemoryLake	72.49
+LoCoMo, OmniMemEval shared setup	Supermemory	73.53
+LoCoMo, OmniMemEval shared setup	ThreadAtlas	88.90
+LoCoMo, OmniMemEval shared setup	Viking	69.33
+LoCoMo, OmniMemEval shared setup	Zep	63.83
+LoCoMo, OmniMemEval shared setup	cachly	90.71
+LoCoMo, OmniMemEval shared setup	hippo	not run
+LoCoMo, OmniMemEval shared setup	mem9	73.64
+LoCoMo, own report	Backboard	90.00
+LoCoMo, own report	EverOS	93.05
+LoCoMo, own report	Hindsight	92.0
+LoCoMo, own report	Honcho	89.9
+LoCoMo, own report	Letta	74.0
+LoCoMo, own report	Mem0	92.5
+LoCoMo, own report	Memori	81.95
+LoCoMo, own report	MemoryLake	94.03
+LoCoMo, own report	Supermemory	77.1
+LoCoMo, own report	ThreadAtlas	89.22
+LoCoMo, own report	Zep	94.7
+LoCoMo, own report	mem9	86.85
+LongMemEval-S, OmniMemEval shared setup	Cognee	51.80
+LongMemEval-S, OmniMemEval shared setup	EverOS	80.40
+LongMemEval-S, OmniMemEval shared setup	Hindsight	72.20
+LongMemEval-S, OmniMemEval shared setup	LCM-X	87.00
+LongMemEval-S, OmniMemEval shared setup	Letta	77.67
+LongMemEval-S, OmniMemEval shared setup	Maasv	91.20
+LongMemEval-S, OmniMemEval shared setup	Mem0	56.00
+LongMemEval-S, OmniMemEval shared setup	MemMachine	63.60
+LongMemEval-S, OmniMemEval shared setup	MemOS	89.20
+LongMemEval-S, OmniMemEval shared setup	Memori	20.80
+LongMemEval-S, OmniMemEval shared setup	Supermemory	66.07
+LongMemEval-S, OmniMemEval shared setup	ThreadAtlas	87.00
+LongMemEval-S, OmniMemEval shared setup	Viking	61.07
+LongMemEval-S, OmniMemEval shared setup	Zep	79.80
+LongMemEval-S, OmniMemEval shared setup	cachly	89.60
+LongMemEval-S, OmniMemEval shared setup	hippo	not run
+LongMemEval-S, OmniMemEval shared setup	mem9	78.00
+LongMemEval-S, gpt-4o reader	EmergenceMem	86.0
+LongMemEval-S, gpt-4o reader	Supermemory	81.6
+LongMemEval-S, gpt-4o reader	Zep	71.2
+LongMemEval-S, gpt-4o reader	hippo	81.8
+LongMemEval-S, own report	Backboard	93.4
+LongMemEval-S, own report	EverOS	83.0
+LongMemEval-S, own report	Hindsight	94.6
+LongMemEval-S, own report	Honcho	90.4
+LongMemEval-S, own report	Mastra	84.23
+LongMemEval-S, own report	Mem0	94.4
+LongMemEval-S, own report	Memoria	88.78
+LongMemEval-S, own report	Supermemory	95.0
+LongMemEval-S, own report	ThreadAtlas	87.40
+LongMemEval-S, own report	Zep	90.2
+MedMemoryBench, Table 2, Efficient setting	A-Mem	44.84
+MedMemoryBench, Table 2, Efficient setting	HippoRAG	33.69
+MedMemoryBench, Table 2, Efficient setting	Letta	51.21
+MedMemoryBench, Table 2, Efficient setting	LightMem	40.33
+MedMemoryBench, Table 2, Efficient setting	MIRIX	40.12
+MedMemoryBench, Table 2, Efficient setting	Mem0	39.20
+MedMemoryBench, Table 2, Efficient setting	MemOS	48.16
+MedMemoryBench, Table 2, Efficient setting	MemRL	46.37
+MedMemoryBench, Table 2, Efficient setting	ReMem	33.93
+MedMemoryBench, Table 2, Efficient setting	hippo	not run
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	Baseline	18.46
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	EverOS	18.98
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	Hindsight	16.92
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	Mem0	13.33
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	MemOS	23.85
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	Memori	16.92
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	Supermemory	14.36
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	hippo	not run
+OmniMemEval agent, BrowseComp-Plus on OpenClaw	mem9	12.31
+OmniMemEval agent, GDPVal on OpenClaw	Baseline	34.48
+OmniMemEval agent, GDPVal on OpenClaw	EverOS	38.51
+OmniMemEval agent, GDPVal on OpenClaw	Hindsight	50.00
+OmniMemEval agent, GDPVal on OpenClaw	Mem0	41.38
+OmniMemEval agent, GDPVal on OpenClaw	MemOS	62.07
+OmniMemEval agent, GDPVal on OpenClaw	Memori	37.93
+OmniMemEval agent, GDPVal on OpenClaw	Supermemory	43.10
+OmniMemEval agent, GDPVal on OpenClaw	hippo	not run
+OmniMemEval agent, GDPVal on OpenClaw	mem9	47.7
+OmniMemEval agent, LiveCodeBench on OpenClaw	Baseline	51.28
+OmniMemEval agent, LiveCodeBench on OpenClaw	EverOS	59.83
+OmniMemEval agent, LiveCodeBench on OpenClaw	Hindsight	71.79
+OmniMemEval agent, LiveCodeBench on OpenClaw	Mem0	60.68
+OmniMemEval agent, LiveCodeBench on OpenClaw	MemOS	64.96
+OmniMemEval agent, LiveCodeBench on OpenClaw	Memori	51.28
+OmniMemEval agent, LiveCodeBench on OpenClaw	Supermemory	59.83
+OmniMemEval agent, LiveCodeBench on OpenClaw	hippo	not run
+OmniMemEval agent, LiveCodeBench on OpenClaw	mem9	64.1
+OmniMemEval agent, OmniMath on OpenClaw	Baseline	52
+OmniMemEval agent, OmniMath on OpenClaw	EverOS	54.67
+OmniMemEval agent, OmniMath on OpenClaw	Hindsight	55
+OmniMemEval agent, OmniMath on OpenClaw	Mem0	53
+OmniMemEval agent, OmniMath on OpenClaw	MemOS	61
+OmniMemEval agent, OmniMath on OpenClaw	Memori	52
+OmniMemEval agent, OmniMath on OpenClaw	Supermemory	58
+OmniMemEval agent, OmniMath on OpenClaw	hippo	not run
+OmniMemEval agent, OmniMath on OpenClaw	mem9	54.33
+OmniMemEval agent, SWE-Bench on OpenClaw	Baseline	26.92
+OmniMemEval agent, SWE-Bench on OpenClaw	EverOS	32.05
+OmniMemEval agent, SWE-Bench on OpenClaw	Hindsight	38.46
+OmniMemEval agent, SWE-Bench on OpenClaw	Mem0	26.92
+OmniMemEval agent, SWE-Bench on OpenClaw	MemOS	38.46
+OmniMemEval agent, SWE-Bench on OpenClaw	Memori	34.62
+OmniMemEval agent, SWE-Bench on OpenClaw	Supermemory	30.7
+OmniMemEval agent, SWE-Bench on OpenClaw	hippo	not run
+OmniMemEval agent, SWE-Bench on OpenClaw	mem9	30.77
+PersonaMem v1, MemOS suite setup	MIRIX	38.4
+PersonaMem v1, MemOS suite setup	Mem0	43.1
+PersonaMem v1, MemOS suite setup	MemOS	61.2
+PersonaMem v1, MemOS suite setup	MemU	56.8
+PersonaMem v1, MemOS suite setup	Memobase	58.9
+PersonaMem v1, MemOS suite setup	Supermemory	53.9
+PersonaMem v1, MemOS suite setup	Zep	57.8
+PersonaMem v1, MemOS suite setup	hippo	61.97
+PersonaMem v2, OmniMemEval shared setup	Cognee	26.46
+PersonaMem v2, OmniMemEval shared setup	EverOS	35.94
+PersonaMem v2, OmniMemEval shared setup	Hindsight	37.98
+PersonaMem v2, OmniMemEval shared setup	LCM-X	33.96
+PersonaMem v2, OmniMemEval shared setup	Letta	35.12
+PersonaMem v2, OmniMemEval shared setup	Maasv	39.86
+PersonaMem v2, OmniMemEval shared setup	Mem0	36.76
+PersonaMem v2, OmniMemEval shared setup	MemMachine	34.14
+PersonaMem v2, OmniMemEval shared setup	MemOS	40.58
+PersonaMem v2, OmniMemEval shared setup	Memori	33.16
+PersonaMem v2, OmniMemEval shared setup	Supermemory	39.64
+PersonaMem v2, OmniMemEval shared setup	ThreadAtlas	36.92
+PersonaMem v2, OmniMemEval shared setup	Viking	30.80
+PersonaMem v2, OmniMemEval shared setup	Zep	32.34
+PersonaMem v2, OmniMemEval shared setup	hippo	not run
+PersonaMem v2, OmniMemEval shared setup	mem9	30.76
+PersonaMem v2, own report	EverOS	53.25
+PrecisionMemBench, README harness at 61a712a1	A-Mem	7/77
+PrecisionMemBench, README harness at 61a712a1	Cognee	9/77
+PrecisionMemBench, README harness at 61a712a1	Hindsight	11/77
+PrecisionMemBench, README harness at 61a712a1	Mem0	9/77
+PrecisionMemBench, README harness at 61a712a1	Supermemory	15/77
+PrecisionMemBench, README harness at 61a712a1	Tenure	77/77
+PrecisionMemBench, README harness at 61a712a1	Zep	9/77
+PrecisionMemBench, README harness at 61a712a1	agentmemory	9/77
+PrecisionMemBench, README harness at 61a712a1	atomicmemory	16/77
+PrecisionMemBench, README harness at 61a712a1	gbrain	11/77
+PrecisionMemBench, README harness at 61a712a1	hippo	9/77
+PrecisionMemBench, README harness at 61a712a1	open-knowledge-format	36/77
+PrecisionMemBench, README harness at 61a712a1	yourmemory	21/77
+PrefEval, MemOS suite setup	MIRIX	7.9
+PrefEval, MemOS suite setup	Mem0	63.7
+PrefEval, MemOS suite setup	MemOS	71.9
+PrefEval, MemOS suite setup	MemU	51.8
+PrefEval, MemOS suite setup	Memobase	34.1
+PrefEval, MemOS suite setup	Supermemory	56.7
+PrefEval, MemOS suite setup	Zep	39.9
+PrefEval, MemOS suite setup	hippo	running
