@@ -18,7 +18,7 @@ import { site } from '../content/site';
 import board from '../data/all-benchmarks.json';
 
 interface Cell { value: string; num: number; scale: string; model: string; detail: string | null; tag: string | null; url: string; quote: string }
-interface Row { setup: string; model: string; shared: boolean; base: { name: string; value: string; url: string } | null; hippo: { value: string | null; num: number | null; status: string | null; setting: string | null }; cells: Partial<Record<string, Cell>> }
+interface Row { setup: string; model: string; shared: boolean; base: { name: string; value: string; url: string } | null; hippo: { value: string | null; num: number | null; status: string | null; setting: string | null; caveat: boolean }; cells: Partial<Record<string, Cell>> }
 interface Test { name: string; slug: string; task: string; columns: string[]; rows: Row[]; own: Partial<Record<string, Cell>> }
 // One table per test from the file /benchmarks/ reads, so the two pages cannot disagree. Each row is one published setup.
 const tests = board.home as readonly Test[];
@@ -258,7 +258,7 @@ const description = 'hippo writes what you teach a coding agent into a store in 
                   {t.rows.map((r) => (
                     <tr>
                       <th scope="row"><b>{r.setup}</b><small class="dt">{byHyphen(r.model).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small>{r.base && <small>{r.base.name} <a href={r.base.url} target="_blank" rel="noopener noreferrer">{r.base.value}<span class="sr-only"> (opens in a new tab)</span></a></small>}</th>
-                      <td class:list={['hp', isBest(r, r.hippo.num) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span>{r.shared && <small>{rankOf(r)}</small>}<small class="dt">{byHyphen(r.hippo.setting).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
+                      <td class:list={['hp', isBest(r, r.hippo.num) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span>{r.shared && <small>{rankOf(r)}</small>}<small class="dt">{byHyphen(r.hippo.setting).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small></>}{r.hippo.caveat && <span class="kind cav">official setup, with a caveat</span>}</td>
                       {t.columns.map((c) => {
                         const x = r.cells[c];
                         if (!x) return <td class="na">-</td>;

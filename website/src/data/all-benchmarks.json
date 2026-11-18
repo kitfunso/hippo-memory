@@ -1110,7 +1110,8 @@
             "value": "69.22",
             "num": 69.22,
             "status": null,
-            "setting": "embedder, 30 per speaker, all 1,540"
+            "setting": "embedder, 30 per speaker, all 1,540",
+            "caveat": false
           },
           "cells": {
             "Mem0": {
@@ -1178,7 +1179,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Zep": {
@@ -1222,7 +1224,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "cachly": {
@@ -1564,7 +1567,8 @@
             "value": "81.8",
             "num": 81.8,
             "status": null,
-            "setting": "reranker, top 10 (embedder 78.2), official gpt-4o judge"
+            "setting": "reranker, top 10 (embedder 78.2), official gpt-4o judge",
+            "caveat": false
           },
           "cells": {
             "EmergenceMem": {
@@ -1608,7 +1612,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Maasv": {
@@ -1905,7 +1910,8 @@
             "value": "9/77",
             "num": 11.6883,
             "status": null,
-            "setting": "embedder, limit 20, harness at 61a712a1"
+            "setting": "embedder, limit 20, harness at 61a712a1",
+            "caveat": false
           },
           "cells": {
             "Tenure": {
@@ -2061,7 +2067,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "EMem": {
@@ -2220,7 +2227,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Maasv": {
@@ -2448,7 +2456,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Maasv": {
@@ -2658,7 +2667,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -2851,7 +2861,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "A-Mem": {
@@ -2945,7 +2956,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "A-Mem": {
@@ -3058,7 +3070,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Letta": {
@@ -3179,7 +3192,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "T-Mem": {
@@ -3284,7 +3298,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -3372,7 +3387,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -3460,7 +3476,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Hindsight": {
@@ -3548,7 +3565,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Hindsight": {
@@ -3636,7 +3654,8 @@
             "value": null,
             "num": null,
             "status": "not run",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -3737,7 +3756,8 @@
             "value": "61.97",
             "num": 61.97,
             "status": null,
-            "setting": "embedder, top 20, mean of 3 runs"
+            "setting": "embedder, top 20, mean of 3 runs",
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -3838,7 +3858,8 @@
             "value": null,
             "num": null,
             "status": "running",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "MemOS": {
@@ -3940,7 +3961,8 @@
             "value": "44.20",
             "num": 44.2,
             "status": null,
-            "setting": "embedder, top 10, mean of 9 categories"
+            "setting": "embedder, top 10, mean of 9 categories",
+            "caveat": true
           },
           "cells": {
             "MemOS": {
@@ -4009,7 +4031,8 @@
             "value": "70.23",
             "num": 70.23,
             "status": null,
-            "setting": "embedder, top 20, GPT-4o answers and judge"
+            "setting": "embedder, top 20, GPT-4o answers and judge",
+            "caveat": true
           },
           "cells": {
             "MemOS": {
@@ -4088,7 +4111,8 @@
             "value": null,
             "num": null,
             "status": "running",
-            "setting": null
+            "setting": null,
+            "caveat": true
           },
           "cells": {
             "MemOS": {
@@ -4165,7 +4189,8 @@
             "value": null,
             "num": null,
             "status": "running",
-            "setting": null
+            "setting": null,
+            "caveat": false
           },
           "cells": {
             "Honcho": {
