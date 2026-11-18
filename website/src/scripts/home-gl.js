@@ -202,7 +202,9 @@ export function film() {
   items.slice().sort((a, b) => a.p.distanceTo(QP) - b.p.distanceTo(QP)).slice(0, 4).forEach((it) => { it.recall = true; });
 
   // Text faces, drawn on canvases and shown in a second pass so the bloom leaves the type sharp.
-  const MONO = '"Spline Sans Mono", ui-monospace, Consolas, monospace', SANS = '"Instrument Sans", system-ui, sans-serif', DISP = '"Schibsted Grotesk", system-ui, sans-serif';
+  // The Astro font API hashes family names, so the cards read them from its CSS variables.
+  const cssFont = (v, f) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || f;
+  const MONO = cssFont('--font-geist-mono', 'monospace'), SANS = cssFont('--font-geist', 'sans-serif'), DISP = cssFont('--font-newsreader', 'serif');
   const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const redraws = [];
   function rrect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); }
@@ -216,7 +218,8 @@ export function film() {
     const ctx = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
     const api = { tex, state: null, draw: (st) => { api.state = st; ctx.clearRect(0, 0, w, h); ctx.textBaseline = 'top'; draw(ctx, st); tex.needsUpdate = true; } };
-    redraws.push(() => api.draw(api.state));
+    // A face not drawn yet has no state; its first draw already uses the loaded font.
+    redraws.push(() => { if (api.state) api.draw(api.state); });
     return api;
   }
   const FACE = new THREE.PlaneGeometry(4.04, 2.5);
@@ -301,7 +304,7 @@ export function film() {
   const AG = ['Claude Code', 'Codex', 'Cursor'].map((name) => panel(3.9, 1.35, (x) => {
     const w = 1024, h = 354;
     rrect(x, 6, 6, w - 12, h - 12, 30); x.fillStyle = 'rgba(10,12,13,.9)'; x.fill(); x.lineWidth = 3; x.strokeStyle = 'rgba(214,255,250,.2)'; x.stroke();
-    x.fillStyle = '#ebeef1'; x.font = `800 84px ${DISP}`; x.fillText(name, 56, 70);
+    x.fillStyle = '#ebeef1'; x.font = `400 84px ${DISP}`; x.fillText(name, 56, 70);
     x.fillStyle = '#5eead4'; x.font = `500 32px ${MONO}`; x.fillText('reads .hippo/ in this repo', 58, 214);
   }));
   const AGP = narrow ? [V(-0.7, 6.4, -4.5), V(0.8, 4.6, -4.5), V(-0.5, 2.8, -4.5)] : [V(-5.2, 3.9, -7.5), V(7.4, 3.6, -7.5), V(7.0, -3.2, -7)];
@@ -514,7 +517,7 @@ export function film() {
   addEventListener('resize', () => { if (measure(false)) { computeAnchors(); if (ST) ST.refresh(); onScroll(); } });
   addEventListener('pointermove', (e) => { if (Wd >= 760) { tx = e.clientX / Wd - 0.5; ty = e.clientY / innerHeight - 0.5; } }, { passive: true });
   new ResizeObserver(() => { computeAnchors(); onScroll(); }).observe(document.body);
-  Promise.all([document.fonts.load(`500 54px ${SANS}`), document.fonts.load(`500 29px ${MONO}`), document.fonts.load(`800 84px ${DISP}`)])
+  Promise.all([document.fonts.load(`500 54px ${SANS}`), document.fonts.load(`500 29px ${MONO}`), document.fonts.load(`400 84px ${DISP}`)])
     .then(() => { redraws.forEach((f) => f()); computeAnchors(); onScroll(); })
     .catch((err) => console.warn('hippo: fonts did not load, the cards use a fallback face', err));
 
