@@ -1,0 +1,3 @@
+### Changed
+
+- **The home "Public memory tests" table gives each large memory product its own column.** Mem0, Zep, Supermemory, MemOS, MemU, Hindsight, Cognee and Honcho, the products with 5,000+ GitHub stars, replace the "Other" column. The rank and the best-score box still count every published score, and the Detailed view names the 1st place when no column shows it. Each test shows "official setup" under its name; the Detailed view adds "with a caveat" and the caveat itself. PrecisionMemBench and PrefEval (MemOS suite setup) join as official-setup rows, and /benchmarks/ reads the same score list. gbrain no longer appears on the site or in the README, and the site checks now stop a build that names it.

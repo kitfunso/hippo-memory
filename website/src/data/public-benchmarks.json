@@ -90,13 +90,6 @@
      "src": "https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/"
     },
     {
-     "name": "gbrain",
-     "system": "gbrain (gbrain-defaults)",
-     "value": 80.0,
-     "kind": "product",
-     "src": "https://github.com/garrytan/gbrain-evals"
-    },
-    {
      "name": "LangMem",
      "system": "LangMem (re-run in MIRIX paper)",
      "value": 78.05,
@@ -133,7 +126,7 @@
     }
    ],
    "rank": 6,
-   "field": 14
+   "field": 13
   },
   {
    "name": "LongMemEval-S",
@@ -165,13 +158,6 @@
      "value": 94.87,
      "kind": "product",
      "src": "https://mastra.ai/research/observational-memory"
-    },
-    {
-     "name": "gbrain",
-     "system": "gbrain (Opus 5.5 reader)",
-     "value": 94.8,
-     "kind": "product",
-     "src": "https://github.com/garrytan/gbrain-evals"
     },
     {
      "name": "Mem0",
@@ -244,8 +230,8 @@
      "src": "https://arxiv.org/html/2410.10813"
     }
    ],
-   "rank": 8,
-   "field": 12
+   "rank": 7,
+   "field": 11
   },
   {
    "name": "PersonaMem v1",

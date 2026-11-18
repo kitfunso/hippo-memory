@@ -61,6 +61,11 @@ if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push(
 const homeText = withoutComments(home);
 if (!/lesson capture switched off/.test(homeText)) missing.push('theTest: the home lost the Z0 lesson-capture caveat');
 
+// gbrain is never named on the site, in the README or in llms.txt (owner rule, 18 Nov 2026).
+for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
+  if (/gbrain/i.test(text)) missing.push(`gbrain: ${name} names it; take it out`);
+}
+
 if (missing.length) {
   console.error('[readme-sync] DRIFT: website copy no longer matches README.md:');
   for (const m of missing) console.error('  - ' + m);
