@@ -257,8 +257,9 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .limit .st{display:flex;gap:3px;flex:none}.limit .st i{width:5px;border-radius:2px}
 .pub{margin-top:84px}
 .pub h3{font:800 clamp(26px,2.6vw,34px)/1.1 var(--display);letter-spacing:-.025em}
-.view{display:inline-flex;gap:4px;margin-top:20px;padding:3px;border:1px solid var(--line2);border-radius:10px;background:var(--card)}
-.view button{appearance:none;border:0;background:transparent;font:500 13px var(--mono);color:var(--soft);padding:0 14px;min-height:38px;border-radius:7px;cursor:pointer}
+.view{display:inline-flex;gap:4px;margin-top:16px;padding:2px;border:1px solid var(--line2);border-radius:8px;background:var(--card)}
+.view button{position:relative;appearance:none;border:0;background:transparent;font:500 12px var(--mono);color:var(--soft);padding:0 10px;min-height:26px;border-radius:6px;cursor:pointer}
+.view button::after{content:"";position:absolute;inset:-9px -2px}
 .view button:hover{color:var(--fg);background:var(--card2)}
 .view button[aria-pressed="true"]{background:var(--amber);color:#101316}
 .view button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
@@ -266,25 +267,26 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .view+.board{margin-top:12px}
 .board[data-view="simple"] .dt,.board[data-view="detail"] .sm{display:none}
 .board:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.board table{width:100%;min-width:960px;border-collapse:collapse;font-size:14px}
-.board th,.board td{padding:14px 12px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
-.board thead th{border-top:0;padding-top:16px;padding-bottom:12px;font:500 12px var(--mono);color:var(--mute)}
-.board th:first-child{position:sticky;left:0;z-index:1;width:236px;padding-left:20px;background:var(--card);font-weight:400}
+.board table{width:100%;min-width:820px;border-collapse:collapse;font-size:14px}
+.board th,.board td{padding:9px 10px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.board thead th{border-top:0;padding-top:11px;padding-bottom:8px;font:500 12px var(--mono);color:var(--mute)}
+.board th:first-child{position:sticky;left:0;z-index:1;width:250px;padding-left:16px;background:var(--card);font-weight:400}
 .board thead th:first-child{font-weight:500}
-.board tbody th b{display:block;font:700 15px/1.25 var(--display);color:var(--fg)}
-.board small{display:block;margin-top:4px;font-size:12px;line-height:1.3;color:var(--mute)}
+.board tbody th b{display:block;font:700 14px/1.25 var(--display);color:var(--fg)}
+.board small{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:var(--mute)}
 .board thead .hp{color:var(--amber)}
-.board .hp{width:168px}
-.board .v{font:400 15px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
+.board .hp{width:112px}
+.board[data-view="detail"] .hp{width:176px}
+.board .v{font:400 14px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
 .board a.v{text-decoration:none}.board a.v:hover{color:var(--amber);text-decoration:underline}
 .board .hp .v{color:var(--amber)}
 .board td.best{background:color-mix(in srgb,var(--red) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 55%,transparent)}
 .board td.best .v{font-weight:600}.board td.best .v,.board td.best small{color:var(--red)}
 .board .run,.board .kind{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
-.board .kind{display:inline-block;margin-top:8px}.board .kind.cav{border-style:dashed}
+.board .kind{display:inline-block;margin-top:6px}.board .kind.cav{border-style:dashed}
 .board .nw{white-space:nowrap}
 .board .na{color:var(--mute)}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;color:var(--amber);font-weight:600;text-decoration:none}
 .more:hover{text-decoration:underline}
 

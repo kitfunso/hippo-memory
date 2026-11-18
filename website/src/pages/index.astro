@@ -224,7 +224,7 @@ const description = 'hippo writes what you teach a coding agent into a store in 
       <span class="num" aria-hidden="true">04</span>
       <div>
         <h2 class="big" id="h-res">Repeat mistakes per 100 chances</h2>
-        <p class="lede"><a class="link" href={site.links.aiPsychosisBench} target="_blank" rel="noopener noreferrer">AI-PsychosisBench<span class="sr-only"> (opens in new tab)</span></a>: real sessions on 29 repositories, with the plan registered before the run.</p>
+        <p class="lede"><a class="link" href={site.links.aiPsychosisBench} target="_blank" rel="noopener noreferrer">AI-PsychosisBench<span class="sr-only"> (opens in new tab)</span></a>: 997 real coding tasks with built-in memory alone and 996 with hippo added, on 29 repositories, with the plan registered before the run.</p>
       </div>
     </div>
     <figure class="wfig rv" aria-label="Repeat mistakes per 100 chances: no memory 83, built-in memory 21, built-in memory plus hippo 11">
@@ -255,7 +255,7 @@ const description = 'hippo writes what you teach a coding agent into a store in 
                 {boardCols.map((c) => {
                   const x = r.cells[c];
                   if (!x) return <td class="na">-</td>;
-                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small class="sm">{x.system}</small>}<small class="dt">{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
+                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr-only"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small class="sm">{x.system}</small>}<small class="dt">{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
                 })}
               </tr>
             ))}

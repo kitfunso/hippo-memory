@@ -59,7 +59,7 @@ hippo sleep
 Import. Brings in the notes your agents already keep, unchanged.
 hippo import --agents
 N Repeat mistakes per N chances
-AI-PsychosisBench (opens in new tab): real sessions on N repositories, with the plan registered before the run.
+AI-PsychosisBench (opens in new tab): N real coding tasks with built-in memory alone and N with hippo added, on N repositories, with the plan registered before the run.
 No memoryN
 Built-in memoryN
 Built-in plus hippoN
