@@ -270,22 +270,22 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .board table{width:100%;min-width:820px;border-collapse:collapse;font-size:14px}
 .board th,.board td{padding:11px 12px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
 .board th+th,.board td{border-left:1px solid var(--line)}
-.board thead th{border-top:0;padding-top:12px;padding-bottom:10px;font:600 13px/1.3 var(--display);color:var(--fg)}
+.board thead th{border-top:0;padding-top:12px;padding-bottom:10px;font:600 13px/1.3 var(--body);color:var(--fg)}
 .board th:first-child{position:sticky;left:0;z-index:1;width:250px;padding-left:16px;background:var(--card);font-weight:400}
 .board thead th:first-child{font-weight:500}
-.board tbody th b{display:block;font:700 14px/1.25 var(--display);color:var(--fg)}
+.board tbody th b{display:block;font:600 14px/1.3 var(--body);color:var(--fg)}
 .board small{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:var(--mute)}
 .board thead .hp{color:var(--amber)}
 .board .hp{width:112px;box-shadow:inset 1px 0 var(--hpl),inset -1px 0 var(--hpl)}
 .board thead .hp{box-shadow:inset 1px 0 var(--hpl),inset -1px 0 var(--hpl),inset 0 1px var(--hpl)}
 .board tbody tr:last-child .hp{box-shadow:inset 1px 0 var(--hpl),inset -1px 0 var(--hpl),inset 0 -1px var(--hpl)}
 .board[data-view="detail"] .hp{width:176px}
-.board .v{font:500 14px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
+.board .v{font:500 14.5px var(--body);font-variant-numeric:tabular-nums;color:var(--soft)}
 .board a.v{text-decoration:none}.board a.v:hover{color:var(--amber);text-decoration:underline}
 .board .hp .v{color:var(--amber)}
 .board td.best{background:color-mix(in srgb,var(--red) 13%,transparent)}.board td.hp.best{background:color-mix(in srgb,var(--amber) 16%,transparent)}
 .board td.best .v{font-weight:600;color:var(--fg)}.board td.hp.best .v{color:var(--amber)}
-.board .run,.board .kind{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
+.board .run,.board .kind{font:500 12px var(--body);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
 .board .kind{display:inline-block;margin-top:6px}.board thead .kind{margin:0 0 0 8px}.board[data-view="detail"] .kind.cav{border-style:dashed}
 .board small.cv{margin-top:6px;white-space:normal}
 .board .nw{white-space:nowrap}
