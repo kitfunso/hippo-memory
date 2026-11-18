@@ -284,7 +284,7 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .board .kind{display:inline-block;margin-top:8px}.board .kind.cav{border-style:dashed}
 .board .nw{white-space:nowrap}
 .board .na{color:var(--mute)}
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;color:var(--amber);font-weight:600;text-decoration:none}
 .more:hover{text-decoration:underline}
 
