@@ -17,18 +17,20 @@ import Beacon from '../components/Beacon.astro';
 import { site } from '../content/site';
 import board from '../data/all-benchmarks.json';
 
-interface Score { value: string; system: string | null; model: string; detail: string | null; url: string }
-interface BoardRow { name: string; task: string; tag: string; hippo: { value: string | null; setting: string | null; status: string | null }; cells: Partial<Record<string, Score>> }
-// The official-setup rows of /benchmarks/, read from the same file, so the two pages cannot disagree.
-const boardRows: readonly BoardRow[] = board.official;
-const boardCols = board.columns.filter((c) => boardRows.some((r) => r.cells[c]));
-const metaOf = (x: Score) => [x.system, x.model, x.detail].filter(Boolean).join(' · ');
+interface Cell { value: string; num: number; scale: string; model: string; detail: string | null; tag: string | null; url: string; quote: string }
+interface Row { setup: string; model: string; shared: boolean; base: { name: string; value: string; url: string } | null; hippo: { value: string | null; num: number | null; status: string | null; setting: string | null; caveat: boolean }; cells: Partial<Record<string, Cell>> }
+interface Test { name: string; slug: string; task: string; columns: string[]; rows: Row[]; own: Partial<Record<string, Cell>> }
+// One table per test from the file /benchmarks/ reads, so the two pages cannot disagree. Each row is one published setup.
+// SAFETY: hippo-bench grid_home.py writes the home block in this shape, and test_grid_home.py checks it.
+const tests = board.home as readonly Test[];
+const scoresOf = (r: Row) => Object.values(r.cells).filter((x): x is Cell => !!x);
 // Odd items are hyphenated words such as gpt-4o-mini; the template keeps each on one line.
 const byHyphen = (t: string | null) => (t ?? '').split(/(\S+-\S+)/);
-const topOf = (r: BoardRow) => Math.max(...[r.hippo.value, ...Object.values(r.cells).map((x) => x?.value)].filter((v): v is string => !!v).map(Number));
-const rankOf = (r: BoardRow) => {
-  const others = Object.values(r.cells).filter((x): x is Score => !!x).map((x) => Number(x.value));
-  const k = 1 + others.filter((v) => v > Number(r.hippo.value)).length;
+// num is each score on a 0-100 scale; only scores in the same setup row compare, so best and rank never cross rows.
+const isBest = (r: Row, num: number | null) => r.shared && num !== null && num === Math.max(r.hippo.num ?? -1, ...scoresOf(r).map((x) => x.num));
+const rankOf = (r: Row) => {
+  const others = scoresOf(r).map((x) => x.num);
+  const k = 1 + others.filter((v) => v > (r.hippo.num ?? 0)).length;
   return `${['1st', '2nd', '3rd'][k - 1] ?? `${k}th`} of ${others.length + 1}`;
 };
 
@@ -239,38 +241,64 @@ const description = 'hippo writes what you teach a coding agent into a store in 
 
     <div class="pub">
       <h3 class="rv" id="h-pub">Public memory tests</h3>
-      <p class="lede rv">Each test runs in the setup behind its published scores, so hippo's number sits beside theirs.</p>
+      <p class="lede rv">Each row is one published setup, so only scores in the same row compare. hippo has a number where it ran that setup, and each team's own report sits below, unranked.</p>
+      <div class="tests rv" role="group" aria-label="Test">
+        {tests.map((t, i) => <button type="button" aria-pressed={String(i === 0)} aria-controls={`pt-${t.slug}`}>{t.name}</button>)}
+      </div>
       <div class="view rv" role="group" aria-label="Table view">
         <button type="button" data-view="simple" aria-pressed="true">Simple</button>
         <button type="button" data-view="detail" aria-pressed="false">Detailed</button>
       </div>
-      <div class="board rv" id="board" data-view="simple" tabindex="0" role="region" aria-labelledby="h-pub">
-        <table>
-          <thead><tr><th scope="col">Test</th><th scope="col" class="hp">hippo</th>{boardCols.map((c) => <th scope="col">{c}</th>)}</tr></thead>
-          <tbody>
-            {boardRows.map((r) => (
-              <tr>
-                <th scope="row"><b>{r.name}</b><small>{r.task}</small><span class:list={['kind', 'dt', r.tag.includes('caveat') && 'cav']}>{r.tag}</span></th>
-                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small><small class="dt">{byHyphen(r.hippo.setting).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
-                {boardCols.map((c) => {
-                  const x = r.cells[c];
-                  if (!x) return <td class="na">-</td>;
-                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr-only"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small class="sm">{x.system}</small>}<small class="dt">{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div class="boards rv" id="boards" data-view="simple">
+        {tests.map((t, i) => (
+          <div id={`pt-${t.slug}`} hidden={i > 0}>
+            <div class="board" tabindex="0" role="region" aria-label={`${t.name}, published setups`}>
+              <table>
+                <thead><tr><th scope="col">{t.name}<small class="dt">{t.task}</small></th><th scope="col" class="hp">hippo</th>{t.columns.map((c) => <th scope="col">{c}</th>)}</tr></thead>
+                <tbody>
+                  {t.rows.map((r) => (
+                    <tr>
+                      <th scope="row"><b>{r.setup}</b><small class="dt">{byHyphen(r.model).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small>{r.base && <small>{r.base.name} <a href={r.base.url} target="_blank" rel="noopener noreferrer">{r.base.value}<span class="sr-only"> (opens in a new tab)</span></a></small>}</th>
+                      <td class:list={['hp', isBest(r, r.hippo.num) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span>{r.shared && <small>{rankOf(r)}</small>}<small class="dt">{byHyphen(r.hippo.setting).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small></>}{r.hippo.caveat && <span class="kind cav">official setup, with a caveat</span>}</td>
+                      {t.columns.map((c) => {
+                        const x = r.cells[c];
+                        if (!x) return <td class="na">-</td>;
+                        return <td class:list={[isBest(r, x.num) && 'best']}><a class="v" href={x.url} title={x.quote} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr-only"> ({c}, published score, opens in a new tab)</span></a>{x.detail && <small>{x.detail}</small>}{x.tag && <small class="tg">{x.tag}</small>}<small class="dt">{byHyphen(x.model).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {Object.keys(t.own).length > 0 && (
+              <div class="board own" tabindex="0" role="region" aria-label={`${t.name}, each team's own report`}>
+                <table>
+                  <thead><tr><th scope="col">Each team's own report</th>{Object.keys(t.own).map((c) => <th scope="col">{c}</th>)}</tr></thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row"><b>Own setup</b><small class="dt">Models differ by cell</small></th>
+                      {Object.entries(t.own).map(([c, x]) => x && <td><a class="v" href={x.url} title={x.quote} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr-only"> ({c}, own report, opens in a new tab)</span></a>{x.detail && <small>{x.detail}</small>}<small class="dt">{byHyphen(x.model).map((s, j) => (j % 2 ? <span class="nw">{s}</span> : s))}</small></td>)}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
       <a class="more" href="/benchmarks/">How we test &rarr;</a>
       <script is:inline>
-        // The table opens simple; Detailed adds the setup line under each score.
+        // Tables open on LoCoMo in the simple view; Detailed adds the model line under each score.
         (() => {
-          const board = document.getElementById('board'), btns = document.querySelectorAll('.view button');
-          btns.forEach((b) => b.addEventListener('click', () => {
-            board.dataset.view = b.dataset.view;
-            btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          const boards = document.getElementById('boards'), views = document.querySelectorAll('.view button'), tests = document.querySelectorAll('.tests button');
+          views.forEach((b) => b.addEventListener('click', () => {
+            boards.dataset.view = b.dataset.view;
+            views.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
           }));
+          tests.forEach((b) => b.addEventListener('click', () => tests.forEach((x) => {
+            x.setAttribute('aria-pressed', String(x === b));
+            document.getElementById(x.getAttribute('aria-controls')).hidden = x !== b;
+          })));
         })();
       </script>
     </div>

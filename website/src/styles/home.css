@@ -263,27 +263,41 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .view button:hover{color:var(--fg);background:var(--card2)}
 .view button[aria-pressed="true"]{background:var(--amber);color:#101316}
 .view button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-.board{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
-.view+.board{margin-top:12px}
-.board[data-view="simple"] .dt,.board[data-view="detail"] .sm{display:none}
+.tests{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.tests button{position:relative;appearance:none;border:1px solid var(--line2);background:var(--card);font:500 13px var(--mono);color:var(--soft);padding:0 12px;min-height:36px;border-radius:8px;cursor:pointer}
+.tests button::after{content:"";position:absolute;inset:-4px}
+.tests button:hover{color:var(--fg);background:var(--card2)}
+.tests button[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#101316}
+.tests button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+/* relative keeps the absolutely placed sr-only text inside the scroll box, so it cannot widen the page */
+.board{position:relative;margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+.boards .board{margin-top:12px}
+.boards[data-view="simple"] .dt{display:none}
 .board:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .board table{width:100%;min-width:820px;border-collapse:collapse;font-size:14px}
 .board th,.board td{padding:9px 10px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
 .board thead th{border-top:0;padding-top:11px;padding-bottom:8px;font:500 12px var(--mono);color:var(--mute)}
-.board th:first-child{position:sticky;left:0;z-index:1;width:250px;padding-left:16px;background:var(--card);font-weight:400}
+.board th:first-child{position:sticky;left:0;z-index:1;width:250px;min-width:250px;padding-left:16px;background:var(--card);font-weight:400}
 .board thead th:first-child{font-weight:500}
 .board tbody th b{display:block;font:700 14px/1.25 var(--display);color:var(--fg)}
 .board small{display:block;margin-top:2px;font-size:12px;line-height:1.3;color:var(--mute)}
 .board thead .hp{color:var(--amber)}
-.board .hp{width:112px}
-.board[data-view="detail"] .hp{width:176px}
+/* left is the first column's width, so hippo stays beside the setup while the products scroll */
+.board .hp{width:112px;min-width:112px;position:sticky;left:250px;z-index:1;background:var(--card)}
+.boards[data-view="detail"] .hp{width:176px;min-width:176px}
 .board .v{font:400 14px var(--mono);font-variant-numeric:tabular-nums;color:var(--soft)}
 .board a.v{text-decoration:none}.board a.v:hover{color:var(--amber);text-decoration:underline}
 .board .hp .v{color:var(--amber)}
-.board td.best{background:color-mix(in srgb,var(--red) 12%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 55%,transparent)}
+.board td.best{background:linear-gradient(color-mix(in srgb,var(--red) 12%,transparent),color-mix(in srgb,var(--red) 12%,transparent)),var(--card);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--red) 55%,transparent)}
 .board td.best .v{font-weight:600}.board td.best .v,.board td.best small{color:var(--red)}
 .board .run,.board .kind{font:500 12px var(--mono);color:var(--mute);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap}
-.board .kind{display:inline-block;margin-top:6px}.board .kind.cav{border-style:dashed}
+.board .kind{display:block;width:fit-content;margin-top:6px;white-space:normal}.board .kind.cav{border-style:dashed}
+.board .tg{font-family:var(--mono);font-size:11.5px}
+.board th small a{color:inherit}
+.board.own{margin-top:10px;background:transparent;border-style:dashed}
+.board.own table{min-width:0}
+.board.own th:first-child{background:var(--bg2)}
+.board.own .v,.board.own thead th{color:var(--mute)}
 .board .nw{white-space:nowrap}
 .board .na{color:var(--mute)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -473,7 +487,9 @@ footer nav a:hover{color:var(--fg)}
   .g-h span{font-size:12.5px;line-height:1.25;min-height:2.5em}
   .g-h b{font-size:28px}
   .wf-foot .cost{margin-left:0}
-  .board th:first-child{width:168px;padding-left:14px}
+  .board th:first-child{width:168px;min-width:168px;padding-left:14px}
+  .board .hp{position:static}
+  .tests button{font-size:12px;padding:0 9px}
   .cbars{padding:14px 12px}
   .cb-h{display:none}
   .cb{grid-template-columns:minmax(0,1fr) auto;row-gap:6px;padding:10px 10px}
