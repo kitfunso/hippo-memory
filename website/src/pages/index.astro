@@ -18,7 +18,7 @@ import { site } from '../content/site';
 import board from '../data/all-benchmarks.json';
 
 interface Rival { name: string; value: string; num: number; system: string | null; model: string; url: string }
-interface BoardRow { name: string; task: string; tag: string; caveat: string | null; hippo: { value: string | null; num: number | null; setting: string | null; status: string | null }; rivals: readonly Rival[] }
+interface BoardRow { name: string; task: string; caveat: string | null; hippo: { value: string | null; num: number | null; setting: string | null; status: string | null }; rivals: readonly Rival[] }
 // hippo's official-setup rows, then each published setup with 7+ rivals that hippo has not run (hippo-bench MIN_RIVALS).
 const boardRows: readonly BoardRow[] = [...board.official, ...board.published];
 // Only the large products get a column (hippo-bench LARGE); the rank and the best box still count every published score.
@@ -33,7 +33,6 @@ const rankOf = (r: BoardRow) => {
 };
 // The row's top score when no column shows it, so a rank like "2nd of 4" or a "not run" row names who is 1st.
 const leadOf = (r: BoardRow) => r.rivals.find((x) => x.num === topOf(r) && x.num > (r.hippo.num ?? -Infinity) && !boardCols.includes(x.name));
-const tagHead = (t: string) => t.split(', ')[0];
 
 const title = "hippo: one memory for every agent you'll ever use";
 const description = 'hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.';
@@ -249,14 +248,14 @@ const description = 'hippo writes what you teach a coding agent into a store in 
       </div>
       <div class="board rv" id="board" data-view="simple" tabindex="0" role="region" aria-labelledby="h-pub">
         <table>
-          <thead><tr><th scope="col">Test</th><th scope="col" class="hp">hippo</th>{boardCols.map((c) => <th scope="col">{c}</th>)}</tr></thead>
+          <thead><tr><th scope="col">Benchmarks<span class="kind">official setup</span></th><th scope="col" class="hp">hippo</th>{boardCols.map((c) => <th scope="col">{c}</th>)}</tr></thead>
           <tbody>
             {boardRows.map((r) => {
               const lead = leadOf(r);
               const first = lead && <small class="dt">1st is <a href={lead.url} target="_blank" rel="noopener noreferrer">{lead.system ?? lead.name} {lead.value}<span class="sr-only"> (published score, opens in a new tab)</span></a></small>;
               return (
               <tr>
-                <th scope="row"><b>{r.name}</b><small class="dt">{r.task}</small><span class:list={['kind', r.caveat && 'cav']}>{tagHead(r.tag)}<span class="dt">{r.tag.slice(tagHead(r.tag).length)}</span></span>{r.caveat && <small class="dt cv">{r.caveat}</small>}</th>
+                <th scope="row"><b>{r.name}</b><small class="dt">{r.task}</small>{r.caveat && <><span class="kind cav dt">with a caveat</span><small class="dt cv">{r.caveat}</small></>}</th>
                 <td class:list={['hp', !r.hippo.status && r.hippo.num === topOf(r) && 'best']}>{r.hippo.status ? <><span class="run">{r.hippo.status}</span>{first}</> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small>{first}<small class="dt">{byHyphen(r.hippo.setting).map((s, i) => (i % 2 && s.length <= 13 ? <span class="nw">{s}</span> : s))}</small></>}</td>
                 {boardCols.map((c) => {
                   const x = r.rivals.find((y) => y.name === c);
