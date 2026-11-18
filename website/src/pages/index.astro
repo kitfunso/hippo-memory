@@ -240,18 +240,22 @@ const description = 'hippo writes what you teach a coding agent into a store in 
     <div class="pub">
       <h3 class="rv" id="h-pub">Public memory tests</h3>
       <p class="lede rv">Each test runs in the setup behind its published scores, so hippo's number sits beside theirs.</p>
-      <div class="board rv" tabindex="0" role="region" aria-labelledby="h-pub">
+      <div class="view rv" role="group" aria-label="Table view">
+        <button type="button" data-view="simple" aria-pressed="true">Simple</button>
+        <button type="button" data-view="detail" aria-pressed="false">Detailed</button>
+      </div>
+      <div class="board rv" id="board" data-view="simple" tabindex="0" role="region" aria-labelledby="h-pub">
         <table>
           <thead><tr><th scope="col">Test</th><th scope="col" class="hp">hippo</th>{boardCols.map((c) => <th scope="col">{c}</th>)}</tr></thead>
           <tbody>
             {boardRows.map((r) => (
               <tr>
-                <th scope="row"><b>{r.name}</b><small>{r.task}</small><span class:list={['kind', r.tag.includes('caveat') && 'cav']}>{r.tag}</span></th>
-                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small><small>{byHyphen(r.hippo.setting).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
+                <th scope="row"><b>{r.name}</b><small>{r.task}</small><span class:list={['kind', 'dt', r.tag.includes('caveat') && 'cav']}>{r.tag}</span></th>
+                <td class:list={['hp', !r.hippo.status && Number(r.hippo.value) === topOf(r) && 'best']}>{r.hippo.status ? <span class="run">{r.hippo.status}</span> : <><span class="v">{r.hippo.value}</span><small>{rankOf(r)}</small><small class="dt">{byHyphen(r.hippo.setting).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></>}</td>
                 {boardCols.map((c) => {
                   const x = r.cells[c];
                   if (!x) return <td class="na">-</td>;
-                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a><small>{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
+                  return <td class:list={[Number(x.value) === topOf(r) && 'best']}><a class="v" href={x.url} target="_blank" rel="noopener noreferrer">{x.value}<span class="sr"> ({x.system ?? c}, published score, opens in a new tab)</span></a>{x.system && <small class="sm">{x.system}</small>}<small class="dt">{byHyphen(metaOf(x)).map((s, i) => (i % 2 ? <span class="nw">{s}</span> : s))}</small></td>;
                 })}
               </tr>
             ))}
@@ -259,6 +263,16 @@ const description = 'hippo writes what you teach a coding agent into a store in 
         </table>
       </div>
       <a class="more" href="/benchmarks/">How we test &rarr;</a>
+      <script is:inline>
+        // The table opens simple; Detailed adds the setup line under each score.
+        (() => {
+          const board = document.getElementById('board'), btns = document.querySelectorAll('.view button');
+          btns.forEach((b) => b.addEventListener('click', () => {
+            board.dataset.view = b.dataset.view;
+            btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          }));
+        })();
+      </script>
     </div>
   </div>
 </section>

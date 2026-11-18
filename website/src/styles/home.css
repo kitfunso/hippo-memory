@@ -257,7 +257,14 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .limit .st{display:flex;gap:3px;flex:none}.limit .st i{width:5px;border-radius:2px}
 .pub{margin-top:84px}
 .pub h3{font:800 clamp(26px,2.6vw,34px)/1.1 var(--display);letter-spacing:-.025em}
+.view{display:inline-flex;gap:4px;margin-top:20px;padding:3px;border:1px solid var(--line2);border-radius:10px;background:var(--card)}
+.view button{appearance:none;border:0;background:transparent;font:500 13px var(--mono);color:var(--soft);padding:0 14px;min-height:38px;border-radius:7px;cursor:pointer}
+.view button:hover{color:var(--fg);background:var(--card2)}
+.view button[aria-pressed="true"]{background:var(--amber);color:#101316}
+.view button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .board{margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+.view+.board{margin-top:12px}
+.board[data-view="simple"] .dt,.board[data-view="detail"] .sm{display:none}
 .board:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .board table{width:100%;min-width:960px;border-collapse:collapse;font-size:14px}
 .board th,.board td{padding:14px 12px;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
