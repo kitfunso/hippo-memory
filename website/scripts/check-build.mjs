@@ -149,6 +149,7 @@ function main() {
     if (glued.length) fail(`${slug}: ${glued.length} inline tags glued to a word, e.g. "${glued[0]}". Fix: put the tag on the same source line as the word, or keep compressHTML: true in astro.config.mjs.`);
     duplicateIds(html).forEach((id) => fail(`${slug}: id="${id}" appears twice on the page. Fix: give each element a unique id.`));
     const us = americanSpellings(html);
+    if (/gbrain/i.test(html)) fail(`${slug}: the page names gbrain. Fix: take it out; gbrain never goes on the site (owner rule, 18 Nov 2026).`);
     if (us.length) fail(`${slug}: American spelling (${us.join(', ')}). Fix: use the British form, or add a proper name to KEEP in check-build.mjs.`);
   }
   const hexes = designHexes();

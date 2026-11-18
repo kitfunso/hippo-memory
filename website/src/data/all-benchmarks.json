@@ -10,21 +10,33 @@
     "Memobase",
     "Other"
   ],
+  "homeColumns": [
+    "Mem0",
+    "Zep",
+    "Supermemory",
+    "MemOS",
+    "MemU",
+    "Hindsight",
+    "Cognee",
+    "Honcho"
+  ],
   "official": [
     {
       "name": "LoCoMo, Mem0 paper setup",
       "task": "Long chat recall, gpt-4o-mini answers",
       "tag": "official setup",
       "reason": "Run as the Mem0 paper ran it, with Mem0's released evaluation code (mem0ai/mem0 aae5989e78): all 1,540 questions in categories 1 to 4, 30 memories per speaker, gpt-4o-mini answers under the paper's prompt, and the code's gpt-4o-mini judge. The paper itself does not name its judge. One run. The paper's full-context baseline scores 72.9, above every memory row. Compare the overall score only: our category labels follow our own mapping.",
+      "caveat": null,
       "hippo": {
         "value": "69.22",
+        "num": 69.22,
         "setting": "embedder, 30 per speaker, all 1,540",
         "status": null
       },
       "cells": {
         "Mem0": {
-          "value": "66.88",
-          "system": null,
+          "value": "68.44",
+          "system": "Mem0g",
           "model": "gpt-4o-mini",
           "detail": null,
           "url": "https://arxiv.org/html/2504.19413",
@@ -39,40 +51,84 @@
           "muted": false
         },
         "Other": {
-          "value": "68.44",
-          "system": "Mem0g",
+          "value": "58.10",
+          "system": "LangMem",
           "model": "gpt-4o-mini",
           "detail": null,
           "url": "https://arxiv.org/html/2504.19413",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "Mem0",
+          "value": "68.44",
+          "num": 68.44,
+          "system": "Mem0g",
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2504.19413"
+        },
+        {
+          "name": "Zep",
+          "value": "65.99",
+          "num": 65.99,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2504.19413"
+        },
+        {
+          "name": "LangMem",
+          "value": "58.10",
+          "num": 58.1,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2504.19413"
+        },
+        {
+          "name": "OpenAI Memory",
+          "value": "52.90",
+          "num": 52.9,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2504.19413"
+        },
+        {
+          "name": "A-Mem",
+          "value": "48.38",
+          "num": 48.38,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2504.19413"
+        }
+      ]
     },
     {
       "name": "LongMemEval-S, gpt-4o reader",
       "task": "Long chat recall, gpt-4o answers",
       "tag": "official setup",
       "reason": "The answer model and the judge match the published gpt-4o rows: gpt-4o-2024-08-06 reads hippo's top 10 memories, and the official script's prompts on gpt-4o-2024-08-06 judge all 500 questions. Each system keeps its own retrieval, as in the published rows. The cell shows the reranker setup, 81.8; the embedder setup scores 78.2. We chose the reranker after seeing its Sonnet scores and recorded that before its run. EmergenceMem does not name its judge.",
+      "caveat": null,
       "hippo": {
         "value": "81.8",
+        "num": 81.8,
         "setting": "reranker, top 10 (embedder 78.2), official gpt-4o judge",
         "status": null
       },
       "cells": {
-        "Zep": {
-          "value": "71.2",
-          "system": null,
-          "model": "gpt-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2501.13956v1",
-          "muted": false
-        },
         "Supermemory": {
           "value": "81.6",
           "system": null,
           "model": "gpt-4o",
           "detail": null,
           "url": "https://arxiv.org/html/2512.12818v1",
+          "muted": false
+        },
+        "Zep": {
+          "value": "71.2",
+          "system": null,
+          "model": "gpt-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2501.13956v1",
           "muted": false
         },
         "Other": {
@@ -83,21 +139,57 @@
           "url": "https://www.emergence.ai/blog/sota-on-longmemeval-with-rag",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "EmergenceMem",
+          "value": "86.0",
+          "num": 86.0,
+          "system": "EmergenceMem Internal",
+          "model": "gpt-4o-2024-08-06",
+          "url": "https://www.emergence.ai/blog/sota-on-longmemeval-with-rag"
+        },
+        {
+          "name": "Supermemory",
+          "value": "81.6",
+          "num": 81.6,
+          "system": null,
+          "model": "gpt-4o",
+          "url": "https://arxiv.org/html/2512.12818v1"
+        },
+        {
+          "name": "Zep",
+          "value": "71.2",
+          "num": 71.2,
+          "system": null,
+          "model": "gpt-4o",
+          "url": "https://arxiv.org/html/2501.13956v1"
+        }
+      ]
     },
     {
       "name": "PersonaMem v1, MemOS suite setup",
       "task": "Personalisation, gpt-4o-mini answers",
       "tag": "official setup",
       "reason": "Run as MemOS's evaluation suite runs every vendor row (MemTensor/MemOS 3a16e5fe): the same data files and top 20, PM_ANSWER_PROMPT as one system message to gpt-4o-mini-2024-07-18 at temperature 0, 3 runs per question, scored as the mean of the run accuracies over all 589 rows. Each system keeps its own retrieval and memory text.",
+      "caveat": null,
       "hippo": {
         "value": "61.97",
+        "num": 61.97,
         "setting": "embedder, top 20, mean of 3 runs",
         "status": null
       },
       "cells": {
-        "Mem0": {
-          "value": "43.1",
+        "MemOS": {
+          "value": "61.2",
+          "system": "MemOS-1031",
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Memobase": {
+          "value": "58.9",
           "system": null,
           "model": "gpt-4o-mini",
           "detail": null,
@@ -112,14 +204,6 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": false
         },
-        "MemOS": {
-          "value": "61.2",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": false
-        },
         "Supermemory": {
           "value": "53.9",
           "system": null,
@@ -128,8 +212,8 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": false
         },
-        "Memobase": {
-          "value": "58.9",
+        "Mem0": {
+          "value": "43.1",
           "system": null,
           "model": "gpt-4o-mini",
           "detail": null,
@@ -144,21 +228,81 @@
           "url": "https://arxiv.org/html/2507.03724v4",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "61.2",
+          "num": 61.2,
+          "system": "MemOS-1031",
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Memobase",
+          "value": "58.9",
+          "num": 58.9,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Zep",
+          "value": "57.8",
+          "num": 57.8,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "MemU",
+          "value": "56.8",
+          "num": 56.8,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Supermemory",
+          "value": "53.9",
+          "num": 53.9,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Mem0",
+          "value": "43.1",
+          "num": 43.1,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "MIRIX",
+          "value": "38.4",
+          "num": 38.4,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        }
+      ]
     },
     {
       "name": "EverMemBench, GPT-4.1-mini answers",
       "task": "Changing facts, GPT-4.1-mini answers",
       "tag": "official setup, with a caveat",
       "reason": "The answer model, prompts, top 10, multiple-choice scorer and the 9-category mean match the paper's Table 4 (EverMind-AI/EverMemBench e10b3d5): gpt-4.1-mini-2025-04-14 at temperature 0 answers all 2,400 items. One setting differs: open answers are judged by gpt-5.6-sol through codex with the authors' prompts, and the repository's default judge is gemini-3-flash-preview; the paper names no judge. A second judge, gpt-4o-2024-08-06 with the same prompts, agrees with codex on 96.9% of open verdicts and scores hippo 44.75. The default setup scores 41.66 with codex and 42.50 with gpt-4o.",
+      "caveat": "One setting differs: gpt-5.6-sol judges the open answers, and the repository's default judge is gemini-3-flash-preview. The paper names no judge. A second judge, gpt-4o, agrees with it on 96.9% of open verdicts.",
       "hippo": {
         "value": "44.20",
+        "num": 44.2,
         "setting": "embedder, top 10, mean of 9 categories",
         "status": null
       },
       "cells": {
-        "Mem0": {
-          "value": "37.09",
+        "MemOS": {
+          "value": "42.55",
           "system": null,
           "model": "GPT-4.1-mini",
           "detail": null,
@@ -173,8 +317,8 @@
           "url": "https://arxiv.org/html/2602.01313v3",
           "muted": false
         },
-        "MemOS": {
-          "value": "42.55",
+        "Mem0": {
+          "value": "37.09",
           "system": null,
           "model": "GPT-4.1-mini",
           "detail": null,
@@ -188,30 +332,324 @@
           "detail": null,
           "url": "https://arxiv.org/html/2602.01313v3",
           "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "42.55",
+          "num": 42.55,
+          "system": null,
+          "model": "GPT-4.1-mini",
+          "url": "https://arxiv.org/html/2602.01313v3"
+        },
+        {
+          "name": "Zep",
+          "value": "39.97",
+          "num": 39.97,
+          "system": null,
+          "model": "GPT-4.1-mini",
+          "url": "https://arxiv.org/html/2602.01313v3"
+        },
+        {
+          "name": "Mem0",
+          "value": "37.09",
+          "num": 37.09,
+          "system": null,
+          "model": "GPT-4.1-mini",
+          "url": "https://arxiv.org/html/2602.01313v3"
+        },
+        {
+          "name": "Memobase",
+          "value": "34.27",
+          "num": 34.27,
+          "system": null,
+          "model": "GPT-4.1-mini",
+          "url": "https://arxiv.org/html/2602.01313v3"
+        }
+      ]
+    },
+    {
+      "name": "PrecisionMemBench",
+      "task": "Precise retrieval, no answer model",
+      "tag": "official setup",
+      "reason": "Run with the harness's own commands at tenurehq/precisionMemBench 61a712a1: the retrieval and session tests with RESEED=true, the README's provider contract, limit 20 and the belief text setting of the README's providers. There is no answer model and no judge. The published rows are the README's, which regenerate from the committed reports. One gap: the run used Windows with a path preload, and no harness file changed. Tenure is the benchmark author's product.",
+      "caveat": null,
+      "hippo": {
+        "value": "9/77",
+        "num": 11.6883,
+        "setting": "embedder, limit 20, harness at 61a712a1",
+        "status": null
+      },
+      "cells": {
+        "Supermemory": {
+          "value": "15/77",
+          "system": null,
+          "model": "",
+          "detail": null,
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L31",
+          "muted": false
+        },
+        "Hindsight": {
+          "value": "11/77",
+          "system": null,
+          "model": "",
+          "detail": null,
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L35",
+          "muted": false
+        },
+        "Zep": {
+          "value": "9/77",
+          "system": null,
+          "model": "",
+          "detail": null,
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L36",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "9/77",
+          "system": null,
+          "model": "",
+          "detail": null,
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L39",
+          "muted": false
         },
         "Other": {
-          "value": "37.44",
-          "system": "Full Context",
-          "model": "GPT-4.1-mini",
+          "value": "77/77",
+          "system": "Tenure",
+          "model": "",
           "detail": null,
-          "url": "https://arxiv.org/html/2602.01313v3",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L28",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "Tenure",
+          "value": "77/77",
+          "num": 100.0,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L28"
+        },
+        {
+          "name": "open-knowledge-format",
+          "value": "36/77",
+          "num": 46.7532,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L29"
+        },
+        {
+          "name": "yourmemory",
+          "value": "21/77",
+          "num": 27.2727,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L32"
+        },
+        {
+          "name": "atomicmemory",
+          "value": "16/77",
+          "num": 20.7792,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L30"
+        },
+        {
+          "name": "Supermemory",
+          "value": "15/77",
+          "num": 19.4805,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L31"
+        },
+        {
+          "name": "Hindsight",
+          "value": "11/77",
+          "num": 14.2857,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L35"
+        },
+        {
+          "name": "Zep",
+          "value": "9/77",
+          "num": 11.6883,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L36"
+        },
+        {
+          "name": "agentmemory",
+          "value": "9/77",
+          "num": 11.6883,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L37"
+        },
+        {
+          "name": "Cognee",
+          "value": "9/77",
+          "num": 11.6883,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L38"
+        },
+        {
+          "name": "Mem0",
+          "value": "9/77",
+          "num": 11.6883,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L39"
+        },
+        {
+          "name": "A-Mem",
+          "value": "7/77",
+          "num": 9.0909,
+          "system": null,
+          "model": "",
+          "url": "https://github.com/tenurehq/precisionMemBench/blob/61a712a1754e7d27b6dee42da32a2c214b003ece/README.md#L40"
+        }
+      ]
+    },
+    {
+      "name": "PrefEval, MemOS suite setup",
+      "task": "Preference following, gpt-4o-mini answers",
+      "tag": "official setup",
+      "reason": "Run as MemOS's evaluation suite runs every vendor row (MemTensor/MemOS 3a16e5fe): the implicit-persona split with 10 irrelevant turns after each conversation, the top 10 memories, one gpt-4o-mini-2024-07-18 answer per row and the suite's four gpt-4o-mini checks. The score is the Personalized Response share of all rows. The run uses the free daily OpenAI tokens and its checks are still running, so the row has no score yet.",
+      "caveat": null,
+      "hippo": {
+        "value": null,
+        "num": null,
+        "setting": null,
+        "status": "running"
+      },
+      "cells": {
+        "MemOS": {
+          "value": "71.9",
+          "system": "MemOS-1031",
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "63.7",
+          "system": null,
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "56.7",
+          "system": null,
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Zep": {
+          "value": "39.9",
+          "system": null,
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Memobase": {
+          "value": "34.1",
+          "system": null,
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        },
+        "Other": {
+          "value": "51.8",
+          "system": "MemU",
+          "model": "gpt-4o-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2507.03724v4",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "71.9",
+          "num": 71.9,
+          "system": "MemOS-1031",
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Mem0",
+          "value": "63.7",
+          "num": 63.7,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Supermemory",
+          "value": "56.7",
+          "num": 56.7,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "MemU",
+          "value": "51.8",
+          "num": 51.8,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Zep",
+          "value": "39.9",
+          "num": 39.9,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "Memobase",
+          "value": "34.1",
+          "num": 34.1,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        },
+        {
+          "name": "MIRIX",
+          "value": "7.9",
+          "num": 7.9,
+          "system": null,
+          "model": "gpt-4o-mini",
+          "url": "https://arxiv.org/html/2507.03724v4"
+        }
+      ]
     },
     {
       "name": "HaluMem-Medium",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
       "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
       "hippo": {
         "value": "70.23",
+        "num": 70.23,
         "setting": "embedder, top 20, GPT-4o answers and judge",
         "status": null
       },
       "cells": {
-        "Mem0": {
-          "value": "53.02",
+        "MemOS": {
+          "value": "67.23",
           "system": null,
           "model": "GPT-4o",
           "detail": null,
@@ -226,9 +664,9 @@
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
         },
-        "MemOS": {
-          "value": "67.23",
-          "system": null,
+        "Mem0": {
+          "value": "54.66",
+          "system": "Mem0-Graph",
           "model": "GPT-4o",
           "detail": null,
           "url": "https://arxiv.org/html/2511.03506v3",
@@ -249,44 +687,64 @@
           "detail": null,
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "67.23",
+          "num": 67.23,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
         },
-        "Other": {
+        {
+          "name": "Zep",
+          "value": "55.47",
+          "num": 55.47,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Mem0",
           "value": "54.66",
+          "num": 54.66,
           "system": "Mem0-Graph",
           "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": false
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Supermemory",
+          "value": "54.07",
+          "num": 54.07,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Memobase",
+          "value": "35.33",
+          "num": 35.33,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
         }
-      }
+      ]
     },
     {
       "name": "HaluMem-Long",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
       "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. The paid credit ran out on 16 Nov; since 17 Nov the run answers on the free daily OpenAI tokens, so the row has no score yet. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
       "hippo": {
         "value": null,
+        "num": null,
         "setting": null,
         "status": "running"
       },
       "cells": {
-        "Mem0": {
-          "value": "28.11",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": false
-        },
-        "Zep": {
-          "value": "50.19",
-          "system": null,
-          "model": "GPT-4o",
-          "detail": null,
-          "url": "https://arxiv.org/html/2511.03506v3",
-          "muted": false
-        },
         "MemOS": {
           "value": "64.44",
           "system": null,
@@ -303,6 +761,14 @@
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
         },
+        "Zep": {
+          "value": "50.19",
+          "system": null,
+          "model": "GPT-4o",
+          "detail": null,
+          "url": "https://arxiv.org/html/2511.03506v3",
+          "muted": false
+        },
         "Memobase": {
           "value": "33.60",
           "system": null,
@@ -311,7 +777,7 @@
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
         },
-        "Other": {
+        "Mem0": {
           "value": "32.44",
           "system": "Mem0-Graph",
           "model": "GPT-4o",
@@ -319,44 +785,114 @@
           "url": "https://arxiv.org/html/2511.03506v3",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "64.44",
+          "num": 64.44,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Supermemory",
+          "value": "53.77",
+          "num": 53.77,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Zep",
+          "value": "50.19",
+          "num": 50.19,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Memobase",
+          "value": "33.60",
+          "num": 33.6,
+          "system": null,
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        },
+        {
+          "name": "Mem0",
+          "value": "32.44",
+          "num": 32.44,
+          "system": "Mem0-Graph",
+          "model": "GPT-4o",
+          "url": "https://arxiv.org/html/2511.03506v3"
+        }
+      ]
     },
     {
       "name": "DolphinBench, official Claude Code setup",
       "task": "Agent memory, Claude Code with Sonnet 5",
       "tag": "official setup",
       "reason": "The same setup as the published Claude Code rows: one Claude Code turn with the hippo plugin for each of the 13,539 messages, each test in a fresh sandbox with memory writes off, Sonnet 5 and the gpt-5.6-sol judge. The full run on hippo 3.7.0 started on 17 Nov, so there is no score yet.",
+      "caveat": null,
       "hippo": {
         "value": null,
+        "num": null,
         "setting": null,
         "status": "running"
       },
       "cells": {
-        "Mem0": {
-          "value": "32.3",
-          "system": null,
-          "model": "Claude Code, Sonnet 5",
-          "detail": "194/600",
-          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/mem0/README.md",
-          "muted": false
-        },
         "Honcho": {
-          "value": "35.8",
+          "value": "215/600",
           "system": null,
-          "model": "Claude Code, Sonnet 5",
-          "detail": "215/600",
+          "model": "Claude Sonnet 5",
+          "detail": null,
           "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md",
           "muted": false
         },
+        "Mem0": {
+          "value": "194/600",
+          "system": null,
+          "model": "Claude Sonnet 5",
+          "detail": null,
+          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/mem0/README.md",
+          "muted": false
+        },
         "Other": {
-          "value": "26.3",
-          "system": "Built-in",
-          "model": "Claude Code, Sonnet 5",
-          "detail": "158/600",
+          "value": "158/600",
+          "system": "Claude built-in memory",
+          "model": "Claude Sonnet 5",
+          "detail": null,
           "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/builtin/README.md",
           "muted": false
         }
-      }
+      },
+      "rivals": [
+        {
+          "name": "Honcho",
+          "value": "215/600",
+          "num": 35.8333,
+          "system": null,
+          "model": "Claude Sonnet 5",
+          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md"
+        },
+        {
+          "name": "Mem0",
+          "value": "194/600",
+          "num": 32.3333,
+          "system": null,
+          "model": "Claude Sonnet 5",
+          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/mem0/README.md"
+        },
+        {
+          "name": "Claude built-in memory",
+          "value": "158/600",
+          "num": 26.3333,
+          "system": null,
+          "model": "Claude Sonnet 5",
+          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/builtin/README.md"
+        }
+      ]
     }
   ],
   "own": [
@@ -365,8 +901,10 @@
       "task": "Long chat recall, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Judged again with the Mem0 paper's prompt on gpt-4o-mini, the judge in Mem0's released code. This row still scores a 400-question sample with Sonnet 5 answers, and the published rows use all 1,540 questions. The \"LoCoMo, Mem0 paper setup\" row runs that setup in full.",
+      "caveat": null,
       "hippo": {
         "value": "91.5",
+        "num": 91.5,
         "setting": "embedder, top 200, gpt-4o-mini judge, 400 sample",
         "status": null
       },
@@ -434,8 +972,10 @@
       "task": "Long chat recall, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Judged with the official script's prompt for each question type and its judge, gpt-4o-2024-08-06, over all 500 questions. One setting differs: the answer model is Sonnet 5, and each published row uses its own. The Mem0 cell used its runner's lenient judge prompt, so it stays grey. The \"LongMemEval-S, gpt-4o reader\" row uses a gpt-4o reader.",
+      "caveat": null,
       "hippo": {
         "value": "88.4",
+        "num": 88.4,
         "setting": "embedder, top 200, official gpt-4o judge",
         "status": null
       },
@@ -503,8 +1043,10 @@
       "task": "Very long chat recall, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Judged with the official script's prompts and its gpt-4o-2024-08-06 judge, over all 500 questions. The answer model is Sonnet 5. No product publishes an answer score for M.",
+      "caveat": null,
       "hippo": {
         "value": "78.4",
+        "num": 78.4,
         "setting": "default, top 200, official gpt-4o judge",
         "status": null
       },
@@ -515,8 +1057,10 @@
       "task": "Multi-session recall, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Our harness caps the score: the whole chat scores 83.6% here, against 94% to 98% in the Zep paper.",
+      "caveat": null,
       "hippo": {
         "value": "77.6",
+        "num": 77.6,
         "setting": "reranker, top 20",
         "status": null
       },
@@ -544,8 +1088,10 @@
       "task": "Multi-session recall, gpt-4o-mini answers",
       "tag": "our own setup",
       "reason": "gpt-4o-mini answers, as in Zep's rows, and the prompt now says the answerer is Speaker 1. The harness check failed: the whole chat scores 92.4 here, against 98.0 for the paper's full-conversation row with the same model, so our setup still caps the score. Compare each system with the whole chat in its own setup only: Zep +0.2 points, hippo's reranker setup -6.8 points. Neither paper names its judge.",
+      "caveat": null,
       "hippo": {
         "value": "85.60",
+        "num": 85.6,
         "setting": "reranker, top 20, Speaker 1 role",
         "status": null
       },
@@ -573,8 +1119,10 @@
       "task": "Personalisation, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "The vendor rows all answer with gpt-4o-mini under MemOS's prompt, one model for every system. Against the authors' own board of full-context models (best 52%), our score compares with a caveat. A rule that picks the longest option scores 48.9%.",
+      "caveat": null,
       "hippo": {
         "value": "72.4",
+        "num": 72.4,
         "setting": "embedder, top 20",
         "status": null
       },
@@ -634,8 +1182,10 @@
       "task": "Personalisation, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "The paper's row uses the same text split and scorer with another answer model. The MemOS and EverMemOS rows do not say how they ran. A rule that picks the longest option scores 45.0%.",
+      "caveat": null,
       "hippo": {
         "value": "50.1",
+        "num": 50.1,
         "setting": "embedder, top 20",
         "status": null
       },
@@ -645,7 +1195,7 @@
           "system": null,
           "model": "not stated",
           "detail": null,
-          "url": "https://raw.githubusercontent.com/MemTensor/MemOS/main/README.md",
+          "url": "https://raw.githubusercontent.com/MemTensor/MemOS/7f64e49d9af3e2e970104237751e96401792b615/README.md",
           "muted": true
         },
         "EverMemOS": {
@@ -671,8 +1221,10 @@
       "task": "Preference following, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "The paper's RAG rows keep the whole chat in the prompt; ours shows 5 retrieved turns. The vendor rows use another data split, top 10 and gpt-4o-mini.",
+      "caveat": null,
       "hippo": {
         "value": "83.0",
+        "num": 83.0,
         "setting": "default, top 5",
         "status": null
       },
@@ -732,8 +1284,10 @@
       "task": "Changing facts, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Every published row answers with GPT-4.1-mini, one model for every system, and ours answers with Sonnet 5.",
+      "caveat": null,
       "hippo": {
         "value": "56.4",
+        "num": 56.4,
         "setting": "default, top 10, mean of 9 categories",
         "status": null
       },
@@ -785,8 +1339,10 @@
       "task": "Long-horizon memory, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Hindsight uses another answer prompt and Gemini models with a budget it does not state. Honcho scores event ordering another way. cognee ran one conversation. Mem0 publishes no 100K score.",
+      "caveat": null,
       "hippo": {
         "value": "72.4",
+        "num": 72.4,
         "setting": "embedder",
         "status": null
       },
@@ -822,8 +1378,10 @@
       "task": "Long-horizon memory, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Hindsight uses another answer prompt and Gemini models with a budget it does not state. Honcho scores event ordering another way. The LIGHT row comes from the paper's scorer.",
+      "caveat": null,
       "hippo": {
         "value": "70.6",
+        "num": 70.6,
         "setting": "embedder",
         "status": null
       },
@@ -859,8 +1417,10 @@
       "task": "Long-horizon memory, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Mem0's row uses the same runner code, prompts and scorer. Mem0 answered and judged with gpt-5 and showed 200 memories; we use Sonnet 5, gpt-5.6-sol and 100. The other rows use other scorers or setups.",
+      "caveat": null,
       "hippo": {
         "value": "69.9",
+        "num": 69.9,
         "setting": "default",
         "status": null
       },
@@ -904,8 +1464,10 @@
       "task": "Long-horizon memory, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "Mem0's row uses the same runner code, prompts and scorer. Mem0 answered and judged with gpt-5 and showed 200 memories; we use Sonnet 5, gpt-5.6-sol and 100. The other rows use other scorers or setups.",
+      "caveat": null,
       "hippo": {
         "value": "54.3",
+        "num": 54.3,
         "setting": "embedder",
         "status": null
       },
@@ -949,8 +1511,10 @@
       "task": "Conversation memory, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "The sample design is ours, and no published number exists at 50 conversations. The MemPalace row is a 300-item sample with no stated model or judge.",
+      "caveat": null,
       "hippo": {
         "value": "59.6",
+        "num": 59.6,
         "setting": "default, top 20",
         "status": null
       },
@@ -970,8 +1534,10 @@
       "task": "Multi-hop questions, F1, Sonnet 5 answers",
       "tag": "our own setup",
       "reason": "F1 over all 24 questions with Cognee's own scorer, from one run with Sonnet 5 answers. Cognee averages 45 runs and names no answer model, and one question moves the score by about 4 points.",
+      "caveat": null,
       "hippo": {
         "value": "91.0",
+        "num": 90.9722,
         "setting": "reranker, top 15, all 24 questions, one run",
         "status": null
       },
@@ -999,8 +1565,10 @@
       "task": "Agent memory, Claude Code with Sonnet 5",
       "tag": "our own setup",
       "reason": "Our run wrote each message straight to the store with no agent turn, used a recall hook we wrote, and judged through codex, which the official validator rejects.",
+      "caveat": null,
       "hippo": {
         "value": "45.0",
+        "num": 45.0,
         "setting": "270/600 · Claude Code, Sonnet 5",
         "status": null
       },
@@ -1036,8 +1604,10 @@
       "task": "Agent coding tasks, Claude Code with Sonnet 5",
       "tag": "our own setup",
       "reason": "The first 10 of 89 tasks, 1 trial each at medium effort; the rule is 5 trials, and the matching Claude Code row used max effort. The 2.0 board is closed, and the open board is 4.1.",
+      "caveat": null,
       "hippo": {
         "value": "8/10",
+        "num": 80.0,
         "setting": "first 10 of 89 tasks, 1 trial; Claude Code with no memory 9/10",
         "status": null
       },

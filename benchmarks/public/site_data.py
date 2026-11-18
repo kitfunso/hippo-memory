@@ -26,6 +26,7 @@ ARM = {"hippo365": "hippo, embeddings off", "hippo-emb": "hippo, embedder only",
 MEMORY_SYSTEMS_HERE = {"Mem0"}  # rivals run here that are memory products; BM25 and full chat are controls
 SKIP = re.compile(r"recall|R@|not answer accuracy|retrieval|^F1$|DeepEval", re.I)  # measures other than answer accuracy
 FOLD = {"Mem0g": "Mem0", "Mastra RAG": "Mastra", "Mastra Observational Memory": "Mastra"}  # one row per vendor
+NEVER = {"gbrain"}  # never on the site, not even in a rank (Keith, 18 Nov 2026)
 
 
 def value(score: str) -> float | None:
@@ -72,6 +73,8 @@ def published(rows: list[dict], bench: str) -> list[dict]:
         if v is None:
             continue
         name = product(r["system"])
+        if name in NEVER:
+            continue
         if name not in best or v > best[name]["value"]:
             best[name] = {"name": name, "system": r["system"], "value": v, "kind": r["kind"], "src": r["url"]}
     return sorted(best.values(), key=lambda p: -p["value"])

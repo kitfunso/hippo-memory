@@ -1030,27 +1030,27 @@ Full integration details: [integrations/](integrations/)
 
 Hippo is for coding agents on machines you control. [Mem0](https://hippo-memory.com/vs/mem0/) fits better when the memory belongs to your app's end users, [Zep](https://hippo-memory.com/vs/zep/) when you want a managed knowledge graph built from business data, and [Letta Code](https://hippo-memory.com/vs/letta/) when you want an agent that edits its own memory. The table is a feature snapshot, not a verdict, and it holds no scores: [Benchmarks](#benchmarks) has those, split by setup.
 
-| Feature\* | Hippo | [MemPalace](https://github.com/milla-jovovich/mempalace) | [Mem0](https://github.com/mem0ai/mem0) | [Basic Memory](https://github.com/basicmachines-co/basic-memory) | [gbrain](https://hermesatlas.com/projects/garrytan/gbrain) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta-code) | [Cognee](https://www.cognee.ai/) | [Memoria](https://github.com/matrixorigin/Memoria) | [EverMind](https://evermind.ai/) |
-|---------|-------|-----------|------|-------------|--------|-----|-------|--------|---------|----------|
-| Decay by default | Yes | No | No | No | No | No | No | No | No | No |
-| Retrieval strengthening | Yes | No | No | No | No | No | No | Partial (recall tuning) | No | Partial (Skill Memory distills patterns) |
-| Reward-proportional decay | Yes | No | No | No | No | No | No | No | No | No |
-| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Yes (semantic + BM25 + entity) | No | Yes (vec + rerank + graph) | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
-| Schema acceleration / knowledge graph | Yes (schema) | No | Partial (entity linking; graph memory on Pro) | No | Yes (typed KG, self-wiring) | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
-| Conflict detection + resolution | Yes | No | Partial (hosted platform marks superseded facts) | No | Yes (eval-surfaced) | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
-| Multi-agent shared memory | Yes | No | No | No | Yes (brain repo, team mounts) | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
-| Transfer scoring | Yes | No | No | No | No | No | No | No | No | No |
-| Outcome tracking | Yes | No | No | No | No | No | No | No | No | Partial (Cases: agent trajectories) |
-| Confidence tiers | Yes | No | No | No | No (typed facts) | No | No | No | No | No |
-| Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No | No | No |
-| Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No | No |
-| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | Partial (data sources) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
-| Auto-hook install | Yes | No | No | No | No | No | No | No | No | No |
-| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (stdio + HTTP/OAuth) | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
-| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (PGLite or PG+pgvector) | No (managed service) | No (npm deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
-| Git-friendly | Yes | No | No | Yes | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
-| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| License | MIT | (open) | Apache-2.0 | (open) | MIT | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
+| Feature\* | Hippo | [MemPalace](https://github.com/milla-jovovich/mempalace) | [Mem0](https://github.com/mem0ai/mem0) | [Basic Memory](https://github.com/basicmachines-co/basic-memory) | [Zep](https://www.getzep.com/) | [Letta](https://github.com/letta-ai/letta-code) | [Cognee](https://www.cognee.ai/) | [Memoria](https://github.com/matrixorigin/Memoria) | [EverMind](https://evermind.ai/) |
+|---------|-------|-----------|------|-------------|-----|-------|--------|---------|----------|
+| Decay by default | Yes | No | No | No | No | No | No | No | No |
+| Retrieval strengthening | Yes | No | No | No | No | No | Partial (recall tuning) | No | Partial (Skill Memory distills patterns) |
+| Reward-proportional decay | Yes | No | No | No | No | No | No | No | No |
+| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Yes (semantic + BM25 + entity) | No | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
+| Schema acceleration / knowledge graph | Yes (schema) | No | Partial (entity linking; graph memory on Pro) | No | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
+| Conflict detection + resolution | Yes | No | Partial (hosted platform marks superseded facts) | No | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
+| Multi-agent shared memory | Yes | No | No | No | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
+| Transfer scoring | Yes | No | No | No | No | No | No | No | No |
+| Outcome tracking | Yes | No | No | No | No | No | No | No | Partial (Cases: agent trajectories) |
+| Confidence tiers | Yes | No | No | No | No | No | No | No | No |
+| Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No | No |
+| Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No |
+| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
+| Auto-hook install | Yes | No | No | No | No | No | No | No | No |
+| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
+| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (managed service) | No (npm deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
+| Git-friendly | Yes | No | No | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
+| Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes |
+| License | MIT | (open) | Apache-2.0 | (open) | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
 
 \* The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
 
@@ -1152,7 +1152,7 @@ Every other benchmark we ran. Our setup differs from the published rows, so thes
 
 ### Finding the right session
 
-On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for 98.0% of 500 questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score 86.8 to 88.5%, and gbrain is ahead at 95.53% with a paid reranker. The `hippo recall` command on a default install scores 85.6% [82.4, 88.6]. On one store of all 19,195 sessions, recall fell to 47.2% in June 2026.
+On LongMemEval-S, hippo's benchmark scripts put an answer session in the top five for 98.0% of 500 questions with the free local MiniLM embedder. That is the best of five settings, chosen after the run, on a measure close to its ceiling. Requiring every answer session, the same runs score 86.8 to 88.5%. The `hippo recall` command on a default install scores 85.6% [82.4, 88.6]. On one store of all 19,195 sessions, recall fell to 47.2% in June 2026.
 
 ### What the two rerankers bought
 
@@ -1241,7 +1241,7 @@ On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hi
 Issues and PRs welcome. Before contributing, run `hippo status` in the repo root to see the project's own memory.
 
 The interesting problems:
-- **Recall as one store grows.** On LongMemEval-S, `hippo recall` on a default install scores 85.6% [82.4, 88.6] ([result](docs/evals/2026-09-28-recall-cli-longmemeval-result.md)), and on one store of all 19,195 sessions recall fell to 47.2% in June 2026. Requiring every answer session in the top five, the benchmark scripts score 86.8 to 88.5%, and gbrain is ahead at 95.53%. The lifecycle stress eval (ROADMAP Part III) is the next measurement.
+- **Recall as one store grows.** On LongMemEval-S, `hippo recall` on a default install scores 85.6% [82.4, 88.6] ([result](docs/evals/2026-09-28-recall-cli-longmemeval-result.md)), and on one store of all 19,195 sessions recall fell to 47.2% in June 2026. Requiring every answer session in the top five, the benchmark scripts score 86.8 to 88.5%. The lifecycle stress eval (ROADMAP Part III) is the next measurement.
 - Better consolidation heuristics (LLM-powered merge vs current text overlap)
 - Web UI / dashboard for visualizing decay curves and memory health
 - Optimal decay parameter tuning from real usage data
