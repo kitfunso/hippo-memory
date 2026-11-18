@@ -1,5 +1,35 @@
 # Changelog
 
+## 3.8.0 - 2026-11-18
+
+### Changed
+
+- **`hippo init` now installs the local embedder, so a default install recalls by meaning as well as by keyword.** Since 1.28.0 a user had to install `@huggingface/transformers` by hand, and most never did, so they got BM25-only recall. With the embedder on, hippo scored 3.4 to 11.9 points higher on the public answer tests where it made a difference. When hippo is a global npm install and no embedder resolves, init runs the npm that owns hippo's global folder: `install -g --prefix <that folder> --ignore-scripts @huggingface/transformers@4.3.2`, about 480 MB, plus an 87 MB model the first time hippo embeds. The step runs first, before init makes the store, so a stopped install never costs the first-run git seed. package.json still lists no runtime dependencies, but a default init now installs the transformers tree that 1.28.0 took out of default installs. Two things limit that: the version is pinned exactly, and `--ignore-scripts` stops every install script in the tree, onnxruntime's linux-x64 CUDA download included. Under npx, pnpm, yarn, bun or as a project dependency, init prints the command for that setup instead, and `hippo embed` prints the same one. `--no-embeddings` or `HIPPO_SKIP_EMBEDDER_INSTALL=1` skips the step, and a store with embeddings disabled or an API embedder is left alone. When init adds the embedder to a store that already holds memories, it gives their count and says to run `hippo embed`.
+- **hippo-memory.com names the repeat-mistake test AI-PsychosisBench and links its public repo.** The home page, the benchmarks page, the Claude Code page and the built-in memory comparison now point to github.com/kitfunso/AI-PsychosisBench, where any memory can run the same 29-repository tasks. The benchmarks page no longer says the test code is private.
+- **The home "Public memory tests" table adds every comparable published setup that 7 or more competitors ran.** hippo shows "not run" on these 15 rows, and the Detailed view names the 1st place when no column shows it. hippo's own official rows stay first. The columns are now Mem0, MemOS, Supermemory, Zep, Hindsight, EverOS, Letta and Cognee, the 8 large products that hold the most rows.
+- **Model names on the score tables drop the API date suffix**, so gpt-4.1-mini-2025-04-14 shows as gpt-4.1-mini. The linked source keeps the full id.
+- **The home "Public memory tests" table takes a grid style.** Each cell has lines on all sides, the hippo column has an outline from top to bottom, and each row's best score has a tinted fill in place of a box.
+- **"official setup" shows once, in the header, next to "Benchmarks"** (the first column was "Test"). The Detailed view marks a caveat row with "with a caveat" and the caveat text.
+- **The home "Public memory tests" table gives each large memory product its own column.** Mem0, Zep, Supermemory, MemOS, MemU, Hindsight, Cognee and Honcho, the products with 5,000+ GitHub stars, replace the "Other" column. The rank and the best-score box still count every published score, and the Detailed view names the 1st place when no column shows it. Each test shows "official setup" under its name; the Detailed view adds "with a caveat" and the caveat itself. PrecisionMemBench and PrefEval (MemOS suite setup) join as official-setup rows, and /benchmarks/ reads the same score list. gbrain no longer appears on the site or in the README, and the site checks now stop a build that names it.
+- **The home "Public memory tests" table sets its names, numbers and badges in DM Sans**, the closest free face to the Anthropic Sans of the card table it follows. Anthropic Sans is not licensed for reuse.
+- **The benchmark column is narrower (220 px)**, so most names wrap to two lines, and "official setup" sits on its own line under "Benchmarks".
+- **The home "Public memory tests" table shows each test's task line, such as "Long chat recall, gpt-4o-mini answers", only in the Detailed view.** The Simple view keeps the test name and the "official setup" badge.
+- **The home page's "Public memory tests" table opens in a simple view, with a Detailed toggle.** The simple view shows each score with its rank or product name. Detailed adds the setup tag of each test, how hippo ran, and the answer model and settings under each published score.
+- **The home page uses the same fonts as every other page**: Newsreader for headings, the logo and big figures, Geist for text, small labels and the score table, and Geist Mono for code. It loads them with the same Astro font tags as the other pages, so the site ships five fewer font packages.
+- **The repeat-mistake section gives the size of the test.** It now says 997 coding tasks ran with built-in memory alone and 996 with hippo added, on 29 repositories.
+- **The Public memory tests table is more compact.** Cells have less padding, the hippo column is narrower in the Simple view, and the Simple and Detailed buttons are smaller. The Simple table is 500px tall at desktop width, down from 702px.
+- **/teams/ has the home page's look**: the dark theme, the floating nav, numbered section heads with the colour bar, the home buttons and the home footer. Its wording is unchanged.
+- **The home page's head, nav and footer live in `layouts/Lagoon.astro`, `LagoonNav` and `LagoonFooter`**, so the home page and /teams/ share one copy, and any other page can switch to the dark look with the same layout.
+
+### Fixed
+
+- **A new hippo-memory.com icon shows in browser tabs straight away.** The favicon, the 48 px icon and the apple-touch icon were linked at fixed URLs that browsers keep for hours, so the pixel hippo stayed hidden behind the old "h". Each icon link now carries a hash of its file, as the share card already did, so a changed icon gets a new URL.
+- **The 3D memory cards on the home page repaint in the loaded font.** A card with no content yet stopped the repaint, so other cards kept the fallback face.
+- **On a phone, the home page no longer slides sideways after you scroll.** The 119 screen-reader labels in the score table were anchored to the page, so they escaped the table's scroll box once its fade-in ended and widened the page to 881 px. The score table, the shared scroll box of the other tables and the vs table now anchor their own labels.
+- **The big section numbers (01, 02 ...) on the home page and /teams/ pass the 3:1 contrast check for large text.** They were #334554 (1.84:1 on the alternate band); they are now #50677a (3.1:1).
+- **The home page no longer shows "(opens in new tab)" after the AI-PsychosisBench link.** The home stylesheet now uses the same `sr-only` class name as the rest of the site, so text for screen readers stays hidden.
+- **The site shows the real GitHub star count after a deploy from a busy machine.** The build asked GitHub for the count without a token, hit the 60-an-hour anonymous limit and shipped the 9 Aug fallback (725, against 794 live). It now sends GITHUB_TOKEN, GH_TOKEN or the gh CLI login token when one is there.
+
 ## 3.7.1 - 2026-11-17
 
 ### Added
