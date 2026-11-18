@@ -38,7 +38,7 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 
 /* numbered section heads, startup's 01 to 07 in this page's type and colour bar */
 .shead{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:28px;align-items:start}
-.num{position:relative;display:block;font:500 108px/.84 var(--mono);letter-spacing:-.07em;color:#334554;user-select:none;font-variant-numeric:tabular-nums;padding-bottom:20px}
+.num{position:relative;display:block;font:500 108px/.84 var(--mono);letter-spacing:-.07em;color:#50677a;user-select:none;font-variant-numeric:tabular-nums;padding-bottom:20px}
 .num::after{content:"";position:absolute;left:6px;bottom:0;width:54px;height:3px;background:var(--bar)}
 .shead .lede{max-width:56ch}
 .shead .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
