@@ -2,6 +2,7 @@
 
 import { type JsonHookTarget } from './shared.js';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
+import { hookArrayContains } from './hook-handlers.js';
 import type { InstallResult } from './json-hooks.js';
 
 // Hook timeouts by cost: a local read or write, a short store lookup, a pass that may compact.
@@ -28,6 +29,7 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
     migratedFromStop: false,
     migratedLegacySessionEnd: false,
     migratedSplitSessionEnd: false,
+    leftOut: [],
     invalidJson: false,
   };
 }
@@ -45,9 +47,40 @@ export function ensureHooksObject(
   return hooks;
 }
 
-/** What an install does to one settings file: the result to report, and the settings to write,
- * null when the file stays as it is. */
+/** What an install does to one settings file: the result to report, the settings to write (null
+ * when the file stays as it is) and the markers of the hippo hooks the file holds afterwards. */
 export interface HookInstallPlan {
   readonly result: InstallResult;
   readonly write: JsonValue | null;
+  readonly present: readonly string[];
+}
+
+export type AppendHook = (event: string, marker: string, group: JsonObject) => boolean;
+
+interface HookAppender {
+  readonly append: AppendHook;
+  readonly present: readonly string[];
+  readonly leftOut: readonly string[];
+}
+
+/** Adds each hook the file lacks, except one the user removed after an earlier install (its marker
+ * is in `recorded`); `present` and `leftOut` fill as the plan runs. */
+export function hookAppender(hooks: JsonObject, recorded: ReadonlySet<string>): HookAppender {
+  const present: string[] = [];
+  const leftOut: string[] = [];
+  const append: AppendHook = (event, marker, group) => {
+    const groups = hooks[event];
+    if (hookArrayContains(groups, marker)) {
+      present.push(marker);
+      return false;
+    }
+    if (recorded.has(marker)) {
+      leftOut.push(marker);
+      return false;
+    }
+    hooks[event] = [...(Array.isArray(groups) ? groups : []), group];
+    present.push(marker);
+    return true;
+  };
+  return { append, present, leftOut };
 }

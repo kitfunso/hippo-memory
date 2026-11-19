@@ -34,7 +34,9 @@ import {
   HOOK_MEDIUM_TIMEOUT_SECONDS,
   HOOK_SHORT_TIMEOUT_SECONDS,
   ensureHooksObject,
+  hookAppender,
   nothingInstalled,
+  type AppendHook,
   type HookInstallPlan,
 } from './install-plan.js';
 import type { InstallResult } from './json-hooks.js';
@@ -111,18 +113,6 @@ function claudeCommandGroup(command: string, timeout: number, matcher?: string):
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
-function appendHookIfMissing(
-  hooks: ClaudeHooks,
-  event: string,
-  marker: string,
-  group: JsonObject,
-): boolean {
-  if (hookArrayContains(hooks[event], marker)) return false;
-  if (!Array.isArray(hooks[event])) hooks[event] = [];
-  hooks[event].push(group);
-  return true;
-}
-
 /** Every command hippo has written to Claude Code's settings per event, the legacy forms
  * included; uninstall removes only handlers that run one. */
 const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -145,23 +135,20 @@ const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filte
   (event) => event !== 'Stop',
 );
 
-function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
-  const installedSessionEnd = appendHookIfMissing(
-    hooks,
+function appendSessionHooks(hooks: ClaudeHooks, append: AppendHook, logFile: string) {
+  const installedSessionEnd = append(
     'SessionEnd',
     HIPPO_SESSION_END_MARKER,
     claudeCommandGroup(`hippo session-end --log-file "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
-  const installedSessionStart = appendHookIfMissing(
-    hooks,
+  const installedSessionStart = append(
     'SessionStart',
     HIPPO_LAST_SLEEP_MARKER,
     claudeCommandGroup(`hippo last-sleep --path "${logFile}"`, HOOK_SHORT_TIMEOUT_SECONDS),
   );
   // No matcher: a resumed or cleared session and a compaction lose the rules too, so every source
   // sends them again.
-  const installedSessionRules = appendHookIfMissing(
-    hooks,
+  const installedSessionRules = append(
     'SessionStart',
     HIPPO_SESSION_RULES_MARKER,
     claudeCommandGroup(HIPPO_SESSION_RULES_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
@@ -171,8 +158,7 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   // in context; the fresh write tail makes lessons saved earlier in the session visible on the next
   // prompt even before they are pinned.
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
-  const installedUserPromptSubmit = appendHookIfMissing(
-    hooks,
+  const installedUserPromptSubmit = append(
     'UserPromptSubmit',
     HIPPO_PINNED_INJECT_MARKER,
     claudeCommandGroup(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
@@ -186,12 +172,11 @@ function appendSessionHooks(hooks: ClaudeHooks, logFile: string) {
   };
 }
 
-function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
+function appendCompactionHooks(append: AppendHook, compactLog: string) {
   // PreCompact: fires on manual AND auto compaction (no matcher); records it, asks the summarizer
   // for a "Memories for hippo" list and saves a snapshot. The exit-0 contract lives in the verb
   // itself (preCompactHook, src/surface/capture/compact.ts), not in this install-time wiring.
-  const installedPreCompact = appendHookIfMissing(
-    hooks,
+  const installedPreCompact = append(
     'PreCompact',
     HIPPO_PRE_COMPACT_MARKER,
     claudeCommandGroup(`hippo pre-compact --log-file "${compactLog}"`, HOOK_LONG_TIMEOUT_SECONDS),
@@ -200,8 +185,7 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
   // SessionStart(compact): a second SessionStart entry beside the unmatched last-sleep one. The
   // matcher is an optimization, not a dependency: compact-resume checks payload.source itself, and
   // the marker check keys on the command string, so this stays idempotent.
-  const installedCompactResume = appendHookIfMissing(
-    hooks,
+  const installedCompactResume = append(
     'SessionStart',
     HIPPO_COMPACT_RESUME_MARKER,
     claudeCommandGroup('hippo compact-resume', HOOK_MEDIUM_TIMEOUT_SECONDS, 'compact'),
@@ -210,8 +194,7 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
   // PostCompact: saves the memories the summarizer listed and prints one line, which Claude Code
   // only shows. PreCompact stdout, by contrast, is handed to the summarizer as instructions, so
   // pre-compact prints just the request.
-  const installedPostCompact = appendHookIfMissing(
-    hooks,
+  const installedPostCompact = append(
     'PostCompact',
     HIPPO_POST_COMPACT_MARKER,
     claudeCommandGroup(
@@ -233,12 +216,14 @@ interface ClaudeHookPaths {
 export function planClaudeCodeHooks(
   settings: JsonObject,
   { settingsPath, logFile, compactLog, noteLog }: ClaudeHookPaths,
+  recorded: ReadonlySet<string> = new Set(),
 ): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
   if (merge === null) return invalidClaudeSettings(settingsPath);
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
+  const { append, present, leftOut } = hookAppender(merge, recorded);
 
   const {
     installedSessionEnd,
@@ -246,11 +231,11 @@ export function planClaudeCodeHooks(
     installedSessionRules,
     migratedPinnedInjectRecent,
     installedUserPromptSubmit,
-  } = appendSessionHooks(hooks, logFile);
+  } = appendSessionHooks(hooks, append, logFile);
   const { installedPreCompact, installedCompactResume, installedPostCompact } =
-    appendCompactionHooks(hooks, compactLog);
-  const installedCaptureError = appendCaptureErrorHook(hooks);
-  const installedNoteWritten = appendNoteWrittenHook(hooks, noteLog);
+    appendCompactionHooks(append, compactLog);
+  const installedCaptureError = appendCaptureErrorHook(append);
+  const installedNoteWritten = appendNoteWrittenHook(append, noteLog);
 
   const result: InstallResult = {
     target: 'claude-code',
@@ -266,24 +251,29 @@ export function planClaudeCodeHooks(
     installedNoteWritten,
     migratedPinnedInjectRecent,
     ...migration,
+    leftOut,
     invalidJson: false,
   };
-  return { result, write: Object.values(result).some((v) => v === true) ? settings : null };
+  return {
+    result,
+    write: Object.values(result).some((v) => v === true) ? settings : null,
+    present,
+  };
 }
 
 function invalidClaudeSettings(settingsPath: string): HookInstallPlan {
   return {
     result: { ...nothingInstalled('claude-code', settingsPath), invalidJson: true },
     write: null,
+    present: [],
   };
 }
 
-function appendCaptureErrorHook(hooks: ClaudeHooks): boolean {
+function appendCaptureErrorHook(append: AppendHook): boolean {
   // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error`
   // drops routine failures (interrupts, declined permissions, empty searches) and repeats. Same
   // hook the plugin ships.
-  return appendHookIfMissing(
-    hooks,
+  return append(
     'PostToolUseFailure',
     HIPPO_CAPTURE_ERROR_MARKER,
     claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
@@ -297,11 +287,11 @@ const NOTE_WRITTEN_IFS = [
   'Edit(//**/projects/*/memory/*.md)',
 ] as const;
 
-function appendNoteWrittenHook(hooks: ClaudeHooks, noteLog: string): boolean {
+function appendNoteWrittenHook(append: AppendHook, noteLog: string): boolean {
   // PostToolUse: a memory note Claude Code just wrote reaches hippo at once, in a detached worker
   // that `hippo note-written` starts. Versions that ignore `if` still get the hook's own path check.
   const command = `hippo note-written --log-file "${noteLog}"`;
-  return appendHookIfMissing(hooks, 'PostToolUse', HIPPO_NOTE_WRITTEN_MARKER, {
+  return append('PostToolUse', HIPPO_NOTE_WRITTEN_MARKER, {
     matcher: 'Edit|Write|MultiEdit',
     hooks: NOTE_WRITTEN_IFS.map((condition) => ({
       type: 'command',

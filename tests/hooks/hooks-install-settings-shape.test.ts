@@ -136,6 +136,7 @@ describe('installJsonHooks(claude-code) settings shape', () => {
           "installedSessionStart": true,
           "installedUserPromptSubmit": false,
           "invalidJson": false,
+          "leftOut": [],
           "migratedFromStop": true,
           "migratedLegacySessionEnd": true,
           "migratedPinnedInjectRecent": true,

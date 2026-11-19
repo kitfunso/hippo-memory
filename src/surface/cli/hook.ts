@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import {
   checkUninstallable,
+  forgetInstalledHooks,
   installJsonHooks,
   resolveJsonHookPaths,
   uninstallJsonHooks,
@@ -17,8 +18,12 @@ import { installOpencodePlugin, uninstallOpencodePlugin } from '../hooks-install
 import { installCopilot, uninstallCopilot } from '../hooks-install/copilot.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { printError } from './output.js';
-import { type CommandContext } from './flag-values.js';
-import { installCodexMemoryHooks, warnClaudeSettingsUnusable } from './install-steps.js';
+import { boolFlag, type CommandContext } from './flag-values.js';
+import {
+  installCodexMemoryHooks,
+  printLeftOutHooks,
+  warnClaudeSettingsUnusable,
+} from './install-steps.js';
 import {
   appendHookBlock,
   hookBlock,
@@ -32,11 +37,11 @@ import { escapeRegex } from '../../base/util/escape.js';
 import { fail } from './exit.js';
 import { printCopilotInstall, printCopilotUninstall } from './copilot-report.js';
 
-export function handleHook({ args }: CommandContext): void {
+export function handleHook({ args, flags }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
-  if (subcommand === 'install') return hookInstall(target);
+  if (subcommand === 'install') return hookInstall(target, boolFlag(flags, 'force'));
   if (subcommand === 'uninstall') return hookUninstall(target);
 
   fail('Usage: hippo hook <install|uninstall|list> [target]');
@@ -61,7 +66,7 @@ function hookList(): void {
   console.log('       hippo hook uninstall <name>');
 }
 
-function hookInstall(target: string | undefined): void {
+function hookInstall(target: string | undefined, force: boolean): void {
   // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS
   // entry.
   if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
@@ -70,7 +75,10 @@ function hookInstall(target: string | undefined): void {
     fail(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
   }
   const hook = HOOKS[target];
-  patchAgentFile(hook, target);
+  patchAgentFile(hook, target, force);
+
+  // The record of installed hooks is what keeps a removed hook out, so --force forgets it first.
+  if (force && (target === 'claude-code' || target === 'codex')) forgetInstalledHooks(target);
 
   // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
@@ -93,16 +101,22 @@ function hookInstall(target: string | undefined): void {
   }
 }
 
-function patchAgentFile(hook: HookSpec, target: string): void {
+function patchAgentFile(hook: HookSpec, target: string, force: boolean): void {
   const filepath = path.resolve(process.cwd(), hook.file);
 
   const block = hookBlock(hook);
 
   if (fs.existsSync(filepath)) {
     const existing = fs.readFileSync(filepath, 'utf8');
+    const found = hippoBlock(existing);
 
     if (existing.includes(HOOK_MARKERS.start) && othersBlock(target, existing)) {
       console.log(`${hook.file} already has a hippo block, which Cursor reads; left it as is.`);
+    } else if (found && !found.owner && !force) {
+      console.log(
+        `Left the edited hippo block in ${hook.file} as is; ` +
+          `\`hippo hook install ${target} --force\` replaces it.`,
+      );
     } else if (existing.includes(HOOK_MARKERS.start)) {
       const re = new RegExp(
         `${escapeRegex(HOOK_MARKERS.start)}[\\s\\S]*?${escapeRegex(HOOK_MARKERS.end)}`,
@@ -127,6 +141,7 @@ function patchAgentFile(hook: HookSpec, target: string): void {
 
 function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): void {
   warnClaudeSettingsUnusable(result, '');
+  printLeftOutHooks(result, '');
   if (result.installedSessionEnd) {
     console.log(`Installed hippo session-end SessionEnd hook in ${result.target} settings`);
   }

@@ -4,7 +4,11 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { CODEX_TRUST_LINE } from '../../src/surface/hooks-install/rules/shared.js';
-import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import {
+  forgetInstalledHooks,
+  installJsonHooks,
+  uninstallJsonHooks,
+} from '../../src/surface/hooks-install/json-hooks.js';
 import { formatDoctor, runDoctor } from '../../src/surface/cli/doctor.js';
 import { diagnosticsBodies } from '../_helpers/cli-stores.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -202,6 +206,22 @@ describe('installJsonHooks(codex)', () => {
     expect(readJson(hooksFile)).toEqual({
       hooks: { UserPromptSubmit: [alike], SessionStart: [{ matcher: 'compact', hooks: [mine] }] },
     });
+  });
+
+  it('leaves out the per-prompt hook the user removed after an earlier install, until the record is forgotten', () => {
+    installJsonHooks('codex');
+    const removed = { hooks: { SessionStart: [COMPACT_GROUP] } };
+    writeFile(hooksFile, JSON.stringify(removed));
+
+    const again = installJsonHooks('codex');
+
+    expect(again.installedUserPromptSubmit).toBe(false);
+    expect(again.leftOut).toEqual(['hippo context --pinned-only']);
+    expect(readJson(hooksFile)).toEqual(removed);
+
+    forgetInstalledHooks('codex');
+    expect(installJsonHooks('codex')).toMatchObject({ installedUserPromptSubmit: true, leftOut: [] });
+    expect(readJson(hooksFile)).toEqual({ hooks: { SessionStart: [COMPACT_GROUP], UserPromptSubmit: [PROMPT_GROUP] } });
   });
 
   it('reads a hooks.json saved with a UTF-8 byte order mark and writes it back without one', () => {

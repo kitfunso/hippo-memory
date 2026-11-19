@@ -485,6 +485,8 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     delete settings.hooks.PostCompact;
     delete settings.hooks.PostToolUse;
     fs.writeFileSync(settingsPath, JSON.stringify(settings));
+    // An install from before those hooks existed left no record, and a recorded hook that is gone counts as removed by the user.
+    fs.rmSync(path.join(dir, '.hippo', 'installed-hooks.json'));
     expect(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8')).toContain('hippo');
 
     const again = await run(['init', '--no-schedule', '--no-learn'], proj, env);

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`hippo hook install` no longer overwrites what you changed.** It replaced an edited hippo block in `CLAUDE.md` or `AGENTS.md`, and it added back a settings hook you had removed, such as the stock prompt hook you swapped for your own script. Now an edited block stays as it is, with a line that says so. Hippo records the hooks it installs in `~/.hippo/installed-hooks.json`, so a hook you removed stays out, and `hook install`, `init` and `setup` name it. `hippo hook install <agent> --force` replaces the block and adds the hooks back, and `hippo hook uninstall` clears the record. A hook you removed before this version has no record yet, so the first install after the upgrade adds it back once; remove it again and it stays out.

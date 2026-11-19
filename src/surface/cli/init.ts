@@ -36,6 +36,7 @@ import { printAgentImport } from './print.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   installCodexMemoryHooks,
+  printLeftOutHooks,
   setupDailySchedule,
   warnClaudeSettingsUnusable,
 } from './install-steps.js';
@@ -438,7 +439,7 @@ function refreshShippedBlock({ filePath, text, hook }: ShippedBlockOptions): voi
   const name = path.basename(filePath);
   if (!owner) {
     console.log(
-      `   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook}\` replaces it.`,
+      `   Left the edited hippo block in ${name} as is; \`hippo hook install ${hook} --force\` replaces it.`,
     );
     return;
   }
@@ -452,6 +453,7 @@ function refreshShippedBlock({ filePath, text, hook }: ShippedBlockOptions): voi
 function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
   const result = installJsonHooks(hook);
   warnClaudeSettingsUnusable(result, '   ');
+  printLeftOutHooks(result, '   ');
   if (result.installedSessionEnd) {
     console.log(`   Auto-installed hippo session-end SessionEnd hook in ${hook} settings`);
   }

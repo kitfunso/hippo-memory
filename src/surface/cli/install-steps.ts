@@ -33,12 +33,28 @@ export function installCodexMemoryHooks(indent: string): void {
     result.installedUserPromptSubmit ? 'UserPromptSubmit' : '',
     result.installedCompactResume ? 'SessionStart(compact)' : '',
   ].filter(Boolean);
-  console.log(
-    added.length > 0
-      ? `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`
-      : `${indent}hippo's Codex memory hooks already in ${result.settingsPath}`,
-  );
+  if (added.length > 0) {
+    console.log(
+      `${indent}Installed hippo's Codex memory hooks (${added.join(', ')}) in ${result.settingsPath}`,
+    );
+  } else if (result.leftOut.length === 0) {
+    console.log(`${indent}hippo's Codex memory hooks already in ${result.settingsPath}`);
+  }
+  printLeftOutHooks(result, indent);
   console.log(`${indent}${CODEX_TRUST_LINE}`);
+}
+
+/** One line for each hook the user removed after an earlier install, which this install left out. */
+export function printLeftOutHooks(
+  result: Pick<InstallResult, 'target' | 'settingsPath' | 'leftOut'>,
+  indent: string,
+): void {
+  for (const marker of result.leftOut) {
+    console.log(
+      `${indent}Left out the \`${marker}\` hook you removed from ${result.settingsPath}; ` +
+        `\`hippo hook install ${result.target} --force\` adds it back.`,
+    );
+  }
 }
 
 /**

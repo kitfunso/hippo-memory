@@ -6,11 +6,12 @@ import {
   HIPPO_COMPACT_RESUME_MARKER,
 } from './shared.js';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
-import { hookArrayContains, stripHandlers } from './hook-handlers.js';
+import { stripHandlers } from './hook-handlers.js';
 import {
   HOOK_MEDIUM_TIMEOUT_SECONDS,
   HOOK_SHORT_TIMEOUT_SECONDS,
   ensureHooksObject,
+  hookAppender,
   nothingInstalled,
   type HookInstallPlan,
 } from './install-plan.js';
@@ -28,19 +29,17 @@ function codexCommandHook(command: string, timeout: number): JsonObject {
 
 /** Codex keys trust to each hook's position and hash and re-asks for a changed one, so hippo
  * only appends and never edits an entry. */
-export function planCodexHooks(settingsPath: string, settings: JsonValue): HookInstallPlan {
+export function planCodexHooks(
+  settingsPath: string,
+  settings: JsonValue,
+  recorded: ReadonlySet<string> = new Set(),
+): HookInstallPlan {
   const result = nothingInstalled('codex', settingsPath);
-  if (!isJsonObjectLiteral(settings)) {
-    return { result: { ...result, invalidJson: true }, write: null };
-  }
+  const invalid = { result: { ...result, invalidJson: true }, write: null, present: [] };
+  if (!isJsonObjectLiteral(settings)) return invalid;
   const hooks = ensureHooksObject(settings, ['UserPromptSubmit', 'SessionStart']);
-  if (hooks === null) return { result: { ...result, invalidJson: true }, write: null };
-  const append = (event: string, marker: string, group: JsonObject): boolean => {
-    const groups = hooks[event];
-    if (hookArrayContains(groups, marker)) return false;
-    hooks[event] = [...(Array.isArray(groups) ? groups : []), group];
-    return true;
-  };
+  if (hooks === null) return invalid;
+  const { append, present, leftOut } = hookAppender(hooks, recorded);
   const installedUserPromptSubmit = append('UserPromptSubmit', HIPPO_PINNED_INJECT_MARKER, {
     hooks: [codexCommandHook(HIPPO_PINNED_INJECT_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS)],
   });
@@ -49,8 +48,9 @@ export function planCodexHooks(settingsPath: string, settings: JsonValue): HookI
     hooks: [codexCommandHook(HIPPO_COMPACT_RESUME_MARKER, HOOK_MEDIUM_TIMEOUT_SECONDS)],
   });
   return {
-    result: { ...result, installedUserPromptSubmit, installedCompactResume },
+    result: { ...result, installedUserPromptSubmit, installedCompactResume, leftOut },
     write: installedUserPromptSubmit || installedCompactResume ? settings : null,
+    present,
   };
 }
 

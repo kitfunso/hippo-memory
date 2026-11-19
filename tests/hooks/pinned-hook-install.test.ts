@@ -3,7 +3,22 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installJsonHooks, uninstallJsonHooks } from '../../src/surface/hooks-install/json-hooks.js';
+import {
+  forgetInstalledHooks,
+  installJsonHooks,
+  uninstallJsonHooks,
+} from '../../src/surface/hooks-install/json-hooks.js';
+import {
+  HIPPO_CAPTURE_ERROR_MARKER,
+  HIPPO_COMPACT_RESUME_MARKER,
+  HIPPO_LAST_SLEEP_MARKER,
+  HIPPO_NOTE_WRITTEN_MARKER,
+  HIPPO_PINNED_INJECT_MARKER,
+  HIPPO_POST_COMPACT_MARKER,
+  HIPPO_PRE_COMPACT_MARKER,
+  HIPPO_SESSION_END_MARKER,
+  HIPPO_SESSION_RULES_MARKER,
+} from '../../src/surface/hooks-install/rules/shared.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -149,5 +164,135 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     const remaining = settings.hooks?.UserPromptSubmit ?? [];
     expect(remaining).toHaveLength(0);
+  });
+});
+
+describe('installJsonHooks(claude-code) and the record of installed hooks', () => {
+  const settingsFile = () => path.join(tmpHome, '.claude', 'settings.json');
+  const recordFile = () => path.join(tmpHome, '.hippo', 'installed-hooks.json');
+  const readSettings = () => JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+  const ALL_MARKERS = [
+    HIPPO_SESSION_END_MARKER,
+    HIPPO_LAST_SLEEP_MARKER,
+    HIPPO_SESSION_RULES_MARKER,
+    HIPPO_PINNED_INJECT_MARKER,
+    HIPPO_PRE_COMPACT_MARKER,
+    HIPPO_COMPACT_RESUME_MARKER,
+    HIPPO_POST_COMPACT_MARKER,
+    HIPPO_CAPTURE_ERROR_MARKER,
+    HIPPO_NOTE_WRITTEN_MARKER,
+  ];
+  type Handler = { type: string; command: string; args: string[] };
+  // The stock prompt hook is the one users swap for their own wrapper, so it is the hook removed here.
+  function removePinnedInject(wrapper?: Handler): void {
+    const settings = readSettings();
+    if (wrapper) settings.hooks.UserPromptSubmit = [{ hooks: [wrapper] }];
+    else delete settings.hooks.UserPromptSubmit;
+    fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2));
+  }
+
+  it('does not add back a hook the user removed after an earlier install, and names it', () => {
+    installJsonHooks('claude-code');
+    removePinnedInject();
+    const before = readSettings();
+
+    const again = installJsonHooks('claude-code');
+
+    expect(again.installedUserPromptSubmit).toBe(false);
+    expect(again.leftOut).toEqual([HIPPO_PINNED_INJECT_MARKER]);
+    expect(readSettings()).toEqual(before);
+    expect(readSettings().hooks.SessionEnd).toHaveLength(1);
+    expect(readSettings().hooks.SessionStart).toHaveLength(3);
+  });
+
+  it('adds the removed hook back once the record is forgotten', () => {
+    installJsonHooks('claude-code');
+    removePinnedInject();
+    expect(installJsonHooks('claude-code').leftOut).toEqual([HIPPO_PINNED_INJECT_MARKER]);
+
+    forgetInstalledHooks('claude-code');
+    const again = installJsonHooks('claude-code');
+
+    expect(again.installedUserPromptSubmit).toBe(true);
+    expect(again.leftOut).toEqual([]);
+    expect(JSON.stringify(readSettings().hooks.UserPromptSubmit)).toContain(HIPPO_PINNED_INJECT_MARKER);
+  });
+
+  it('uninstall clears the record, so the next install adds every hook', () => {
+    installJsonHooks('claude-code');
+    expect(uninstallJsonHooks('claude-code')).toBe(true);
+
+    const again = installJsonHooks('claude-code');
+
+    expect(again.leftOut).toEqual([]);
+    expect(again).toMatchObject({
+      installedSessionEnd: true,
+      installedSessionStart: true,
+      installedSessionRules: true,
+      installedUserPromptSubmit: true,
+      installedPreCompact: true,
+      installedCompactResume: true,
+      installedPostCompact: true,
+      installedCaptureError: true,
+      installedNoteWritten: true,
+    });
+  });
+
+  it('records every marker of a settings file that had all the hooks before the record existed, and writes no settings change', () => {
+    installJsonHooks('claude-code');
+    fs.rmSync(recordFile());
+    const before = fs.readFileSync(settingsFile(), 'utf8');
+
+    const again = installJsonHooks('claude-code');
+
+    expect(again.leftOut).toEqual([]);
+    expect(Object.values(again).filter((v) => v === true)).toEqual([]);
+    expect(fs.readFileSync(settingsFile(), 'utf8')).toBe(before);
+    const record = JSON.parse(fs.readFileSync(recordFile(), 'utf8'));
+    expect(record).toEqual({ [settingsFile()]: expect.arrayContaining(ALL_MARKERS) });
+    expect(record[settingsFile()]).toHaveLength(ALL_MARKERS.length);
+  });
+
+  it('never removes or edits a wrapper hook the user put in place of the stock one, on install or uninstall', () => {
+    const wrapper = { type: 'command', command: 'python', args: ['/x/my_hippo_wrapper.py'] };
+    installJsonHooks('claude-code');
+    removePinnedInject(wrapper);
+
+    const again = installJsonHooks('claude-code');
+
+    expect(again.leftOut).toEqual([HIPPO_PINNED_INJECT_MARKER]);
+    expect(readSettings().hooks.UserPromptSubmit).toEqual([{ hooks: [wrapper] }]);
+    uninstallJsonHooks('claude-code');
+    expect(readSettings().hooks.UserPromptSubmit).toEqual([{ hooks: [wrapper] }]);
+  });
+
+  it('adds every hook to a settings file the user deleted', () => {
+    installJsonHooks('claude-code');
+    fs.rmSync(settingsFile());
+
+    const again = installJsonHooks('claude-code');
+
+    expect(again.leftOut).toEqual([]);
+    expect(again.installedUserPromptSubmit).toBe(true);
+    expect(JSON.stringify(readSettings().hooks)).toContain(HIPPO_NOTE_WRITTEN_MARKER);
+  });
+
+  it('reads a malformed record as empty and writes it again', () => {
+    fs.mkdirSync(path.dirname(recordFile()), { recursive: true });
+    fs.writeFileSync(recordFile(), '{ not json');
+
+    const result = installJsonHooks('claude-code');
+
+    expect(result.installedUserPromptSubmit).toBe(true);
+    expect(JSON.parse(fs.readFileSync(recordFile(), 'utf8'))[settingsFile()]).toHaveLength(ALL_MARKERS.length);
+  });
+
+  it('still installs when the record cannot be saved', () => {
+    fs.writeFileSync(path.join(tmpHome, '.hippo'), 'a file where the folder should be');
+
+    const result = installJsonHooks('claude-code');
+
+    expect(result.installedUserPromptSubmit).toBe(true);
+    expect(readSettings().hooks.UserPromptSubmit).toHaveLength(1);
   });
 });
