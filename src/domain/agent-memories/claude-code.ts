@@ -205,7 +205,9 @@ const NOTES: FolderRules = {
     if (yaml === null) return null;
     const updatedAt = itemTime(frontmatterField(yaml, 'modified'), mtimeMs);
     const title = frontmatterField(yaml, 'name');
-    return title === null ? { text: body.trim(), updatedAt } : { text: body.trim(), updatedAt, title };
+    return title === null
+      ? { text: body.trim(), updatedAt }
+      : { text: body.trim(), updatedAt, title };
   },
 };
 

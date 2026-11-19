@@ -96,7 +96,9 @@ function flaggedSpans(note: string): SecretSpan[] {
   if (redactSecretsStrict(note) === note) return [];
   const spans = secretSpans(note);
   let rest = note;
-  for (const s of spans) rest = rest.slice(0, s.start) + ' '.repeat(s.end - s.start) + rest.slice(s.end);
+  for (const s of spans) {
+    rest = rest.slice(0, s.start) + ' '.repeat(s.end - s.start) + rest.slice(s.end);
+  }
   return redactSecretsStrict(rest) === rest ? spans : [{ start: 0, end: note.length }];
 }
 
@@ -117,7 +119,7 @@ function sectionParts(whole: Cut, section: Section, title: string): Part[] {
 /** The lines of `note` between two offsets, a CR before each line end left out. */
 function noteLines(note: string, from: number, to: number): Piece[] {
   const lines: Piece[] = [];
-  for (let start = from; start <= to; ) {
+  for (let start = from; start <= to;) {
     const nl = note.indexOf('\n', start);
     const stop = nl < 0 || nl > to ? to : nl;
     const end = stop > start && note[stop - 1] === '\r' ? stop - 1 : stop;
@@ -200,11 +202,7 @@ function keepSpansWhole(cut: Cut, pieces: readonly Piece[]): Piece[] {
 }
 
 /** Whole pieces joined up to the budget; a piece over it goes to `finer` and stands alone. */
-function packPieces(
-  cut: Cut,
-  pieces: readonly Piece[],
-  finer: (piece: Piece) => Piece[],
-): Piece[] {
+function packPieces(cut: Cut, pieces: readonly Piece[], finer: (piece: Piece) => Piece[]): Piece[] {
   const out: Piece[] = [];
   let open: Piece | null = null;
   for (const piece of keepSpansWhole(cut, pieces)) {
@@ -265,7 +263,7 @@ function wordsOf(note: string, line: Piece): Piece[] {
 /** The last resort: cuts at the budget on a code point, a flagged run kept whole even over it. */
 function hardCut(cut: Cut, piece: Piece): Piece[] {
   const out: Piece[] = [];
-  for (let at = piece.start; at < piece.end; ) {
+  for (let at = piece.start; at < piece.end;) {
     const inside = cut.spans.find((s) => s.start <= at && s.end > at);
     let to = inside ? Math.min(piece.end, inside.end) : cutPoint(cut, at, piece.end);
     const next = cut.spans.find((s) => s.start > at && s.start < to && s.end > to);

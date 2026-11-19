@@ -417,7 +417,11 @@ describe('agent memory sync: long notes in parts', () => {
     expect(liveRows(w.local).some((r) => r.content.includes('RESOLVED: the disk reset.'))).toBe(true);
 
     const second = liveRows(w.local).length;
-    note(dir, 'long.md', `## Gamma\n\nThe new section says the cache lives on the D drive.\n\n${body('RESOLVED: the disk reset.')}`);
+    note(
+      dir,
+      'long.md',
+      `## Gamma\n\nThe new section says the cache lives on the D drive.\n\n${body('RESOLVED: the disk reset.')}`,
+    );
     expect(claude(await sync())).toMatchObject({ imported: 1, replaced: 0, setAside: 0, unchanged: second });
     expectWholeParts(liveRows(w.local));
   });
@@ -476,7 +480,10 @@ describe('agent memory sync: long notes in parts', () => {
     ['openclaw', 'openclaw-memory'],
     ['gemini', 'gemini-memory'],
   ] as const)('%s: a bullet over the cap is stored whole in parts', async (tool, tag) => {
-    const lines = Array.from({ length: 24 }, (_, i) => `  sub-line ${i}: the release checklist runs the smoke test first.`);
+    const lines = Array.from(
+      { length: 24 },
+      (_, i) => `  sub-line ${i}: the release checklist runs the smoke test first.`,
+    );
     const bullet = `- The release checklist, step by step:\n${lines.join('\n')}\n  END OF THE CHECKLIST`;
     const file = { openclaw: ['.openclaw', 'workspace', 'MEMORY.md'], gemini: ['.gemini', 'GEMINI.md'] };
     if (tool === 'codex') codexSummary(w, bullet);
@@ -519,20 +526,25 @@ describe('agent memory sync: long notes in parts', () => {
   });
 
   // NTFS has no "::" in a file name, so the on-disk case runs only where the name is valid.
-  it.skipIf(process.platform === 'win32')('a long note whose file name holds "::" splits and pairs by its parts', async () => {
-    const dir = projectNotes(w);
-    const body = (...tail: string[]) => `## Body\n\n${longBody(8, ...tail)}`;
-    note(dir, 'a::b.md', body());
-    note(dir, 'a::c.md', 'A second, short note that shares the file name up to its colons.');
-    await sync();
-    const first = liveRows(w.local);
-    expect(first.length).toBeGreaterThan(2);
+  it.skipIf(process.platform === 'win32')(
+    'a long note whose file name holds "::" splits and pairs by its parts',
+    async () => {
+      const dir = projectNotes(w);
+      const body = (...tail: string[]) => `## Body\n\n${longBody(8, ...tail)}`;
+      note(dir, 'a::b.md', body());
+      note(dir, 'a::c.md', 'A second, short note that shares the file name up to its colons.');
+      await sync();
+      const first = liveRows(w.local);
+      expect(first.length).toBeGreaterThan(2);
 
-    note(dir, 'a::b.md', body('RESOLVED: the disk reset.'));
-    const edited = claude(await sync());
-    expect(edited.setAside).toBe(0);
-    expect(edited.imported + edited.replaced).toBe(1);
-    expect(liveRows(w.local).filter((r) => first.some((f) => f.id === r.id))).toHaveLength(first.length - edited.replaced);
-    expect(liveRows(w.local).some((r) => r.content.includes('RESOLVED: the disk reset.'))).toBe(true);
-  });
+      note(dir, 'a::b.md', body('RESOLVED: the disk reset.'));
+      const edited = claude(await sync());
+      expect(edited.setAside).toBe(0);
+      expect(edited.imported + edited.replaced).toBe(1);
+      expect(liveRows(w.local).filter((r) => first.some((f) => f.id === r.id))).toHaveLength(
+        first.length - edited.replaced,
+      );
+      expect(liveRows(w.local).some((r) => r.content.includes('RESOLVED: the disk reset.'))).toBe(true);
+    },
+  );
 });

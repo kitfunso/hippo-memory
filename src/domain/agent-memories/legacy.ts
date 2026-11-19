@@ -32,7 +32,9 @@ interface LegacyTargets {
 // A long note's old row goes to its first part that will be written, so a secret part is passed.
 function noTarget(item: MemoryItem): boolean {
   if (item.text.trim().length < MIN_ITEM_CHARS) return true;
-  return isPartKey(item.key) && (item.flagged === true || redactSecretsStrict(item.text) !== item.text);
+  return (
+    isPartKey(item.key) && (item.flagged === true || redactSecretsStrict(item.text) !== item.text)
+  );
 }
 
 function legacyTargets(containers: readonly Container[]): LegacyTargets {

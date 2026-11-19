@@ -271,7 +271,10 @@ export function matchLegacy(
     const matches = targetsByFile.get(file) ?? [];
     // Two notes of one name match none: the old row could be either.
     if (new Set(matches.map((t) => t.note)).size !== 1) continue;
-    replace.set(matches[0].ref, left.map((r) => r.id));
+    replace.set(
+      matches[0].ref,
+      left.map((r) => r.id),
+    );
   }
   return { adopt, replace };
 }

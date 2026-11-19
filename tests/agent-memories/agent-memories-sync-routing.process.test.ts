@@ -74,7 +74,9 @@ const opts = () => ({
 
 /** About 340 characters each, so a dozen pass the content cap. */
 const longNote = (n: number): string =>
-  Array.from({ length: n }, (_, i) => `Paragraph ${i}: ${'the build box keeps its cache warm, '.repeat(9)}`).join('\n\n');
+  Array.from({ length: n }, (_, i) => `Paragraph ${i}: ${'the build box keeps its cache warm, '.repeat(9)}`).join(
+    '\n\n',
+  );
 
 function legacyRow(root: string, content: string, file: string): MemoryEntry {
   const entry = createMemory(content, {
@@ -256,7 +258,10 @@ describe('agent memory sync: routing and sharing', () => {
     note(home, 'long.md', longNote(12));
     initTestStore(w.global);
     const same = legacyRow(w.global, DEPLOY, 'deploy.md');
-    const stale = [legacyRow(w.global, 'An old copy of the long note.', 'long.md'), legacyRow(w.global, 'A second old copy.', 'long.md')];
+    const stale = [
+      legacyRow(w.global, 'An old copy of the long note.', 'long.md'),
+      legacyRow(w.global, 'A second old copy.', 'long.md'),
+    ];
 
     expect(claude(await importForStore(w.global, opts()))).toMatchObject({ adopted: 1, replaced: 1, duplicate: 0 });
     expect(readEntry(w.global, same.id)?.source).toMatch(
@@ -287,7 +292,10 @@ describe('agent memory sync: routing and sharing', () => {
 
     note(projectNotes(w, hand), 'long.md', `${longNote(12)}\u0000`);
     initTestStore(join(hand, '.hippo'));
-    expect(claude(await importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({ unread: 1, handedOver: 0 });
+    expect(claude(await importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({
+      unread: 1,
+      handedOver: 0,
+    });
     expect(liveRows(w.global).map((e) => e.id)).toEqual(parts);
   });
 
