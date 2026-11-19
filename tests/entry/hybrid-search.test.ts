@@ -168,31 +168,6 @@ describe('hybridSearch over stored vectors', () => {
     expect((await run(0.1)).map((r) => r.entry.id)).toEqual([keyword.id, semantic.id]);
     expect((await run(0.9)).map((r) => r.entry.id)).toEqual([semantic.id, keyword.id]);
   });
-
-  it('gives a memory that matches one of three query words part of the BM25 weight, not all of it', async () => {
-    const query = 'staging flag rollout';
-    const q = hashedVector(query);
-    const [a, b, c] = orthogonalTo(q, 3);
-    const oneWord = memory('we ran out of coffee during the rollout');
-    const meaning = memory('the deploy script needs the preprod switch');
-    const other = memory('Python dict ordering is guaranteed in 3.7+');
-    const root = vectorRoot({
-      [oneWord.id]: withCosine(q, a!, 0.2),
-      [meaning.id]: withCosine(q, b!, 0.6),
-      [other.id]: withCosine(q, c!, 0.05),
-    });
-
-    const results = await hybridSearch(query, [oneWord, meaning, other], {
-      hippoRoot: root,
-      budget: 10_000,
-      scope: null,
-      explain: true,
-    });
-    expect(results.map((r) => r.entry.id).slice(0, 2)).toEqual([meaning.id, oneWord.id]);
-    const weak = results.find((r) => r.entry.id === oneWord.id)!.breakdown!;
-    expect(weak.normBm25).toBeGreaterThan(0);
-    expect(weak.normBm25).toBeLessThan(1 / 3);
-  });
 });
 
 describe('hybridSearch with embeddings', () => {

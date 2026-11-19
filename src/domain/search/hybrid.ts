@@ -7,7 +7,7 @@ import { pathTagsOf } from './path-context.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { DEFAULT_EMBEDDING_WEIGHT } from '../../base/rank/recall-defaults.js';
 import type { RerankerFn, RerankerOptions } from '../../base/ports/reranker.js';
-import { bm25FullMatch, bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
+import { bm25Score, buildCorpus, entryText, type BM25Corpus } from './bm25.js';
 import { currentEntries } from './as-of.js';
 import { rankAblationOf, rankStrength, summaryScoring, type BoostContext } from './boosts.js';
 import { temporalContext } from './temporal.js';
@@ -171,7 +171,7 @@ export async function hybridSearch(
 
   const { source } = options;
   const arm = await resolveVectorArm(query, pool, source, options);
-  const { bm25Ceiling, ...fusion } = armFusion(arm, queryTerms, options);
+  const fusion = armFusion(arm, queryTerms, options);
   const rrfScores =
     arm.useEmbeddings && options.scoring === 'rrf'
       ? await fuseRanks({
@@ -184,8 +184,7 @@ export async function hybridSearch(
   const scored = scoreHybridPool({
     ...fusion,
     queryTerms,
-    // Divided by the pool's best alone, a lone match on one common word took the full BM25 weight.
-    maxBm25: fusion.bm25Scores.reduce((a, b) => Math.max(a, b), bm25Ceiling),
+    maxBm25: fusion.bm25Scores.reduce((a, b) => Math.max(a, b), 1e-9),
     useEmbeddings: arm.useEmbeddings,
     rrfScores,
     explain: options.explain ?? false,
@@ -194,7 +193,7 @@ export async function hybridSearch(
   return orderAndFit(query, scored, arm, options);
 }
 
-type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'> & { readonly bm25Ceiling: number };
+type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'>;
 
 function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOptions): ArmFusion {
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
@@ -210,7 +209,6 @@ function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOpti
     dense,
     bm25Weight: 1 - embeddingWeight,
     embeddingWeight,
-    bm25Ceiling: Math.max(bm25FullMatch(corpus, queryTerms), 1e-9),
   };
 }
 

@@ -51,22 +51,14 @@ export function bm25Score(corpus: BM25Corpus, docIdx: number, queryTerms: string
     const f = tf.get(term) ?? 0;
     if (f === 0) continue;
 
+    const df = corpus.df.get(term) ?? 0;
+    const idf = Math.log((corpus.N - df + 0.5) / (df + 0.5) + 1);
     const numerator = f * (BM25_K1 + 1);
     const denominator = f + BM25_K1 * (1 - BM25_B + BM25_B * (docLen / corpus.avgLen));
-    score += idf(corpus, term) * (numerator / denominator);
+    score += idf * (numerator / denominator);
   }
 
   return score;
-}
-
-/** The score of a document of average length that holds every query term once. */
-export function bm25FullMatch(corpus: BM25Corpus, queryTerms: string[]): number {
-  return queryTerms.reduce((sum, term) => sum + idf(corpus, term), 0);
-}
-
-function idf(corpus: BM25Corpus, term: string): number {
-  const df = corpus.df.get(term) ?? 0;
-  return Math.log((corpus.N - df + 0.5) / (df + 0.5) + 1);
 }
 
 /** Query terms that appear in the entry's indexed text, in query order. */
