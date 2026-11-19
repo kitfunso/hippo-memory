@@ -428,6 +428,7 @@ describe('JSON hook installer', () => {
       const events = Object.keys(readSettings(result.settingsPath).hooks).sort();
       expect(events).toEqual([
         'PostCompact',
+        'PostToolUse',
         'PostToolUseFailure',
         'PreCompact',
         'SessionEnd',
@@ -438,6 +439,19 @@ describe('JSON hook installer', () => {
       expect(uninstallJsonHooks('claude-code')).toBe(true);
 
       expect(readSettings(result.settingsPath)).toEqual({});
+    });
+
+    it("removes the note-written handler and keeps a user's PostToolUse group", () => {
+      installJsonHooks('claude-code');
+      const { settings: file } = resolveJsonHookPaths('claude-code');
+      const userGroup = { matcher: 'Edit', hooks: [USER_HANDLER] };
+      const settings = readSettings(file);
+      settings.hooks.PostToolUse.push(userGroup);
+      fs.writeFileSync(file, JSON.stringify(settings), 'utf8');
+
+      expect(uninstallJsonHooks('claude-code')).toBe(true);
+
+      expect(readSettings(file)).toEqual({ hooks: { PostToolUse: [userGroup] } });
     });
 
     it("removes the matcher-scoped compact-resume group and keeps a user's SessionStart group", () => {

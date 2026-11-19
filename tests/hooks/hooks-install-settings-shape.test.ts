@@ -82,6 +82,7 @@ describe('first-party hook command lines', () => {
       'compact-resume',
       'context',
       'last-sleep',
+      'note-written',
       'post-compact',
       'pre-compact',
       'recall',
@@ -124,24 +125,25 @@ describe('installJsonHooks(claude-code) settings shape', () => {
     const first = installJsonHooks('claude-code');
     expect({ ...first, settingsPath: path.relative(env.home, first.settingsPath).replace(/\\/g, '/') })
       .toMatchInlineSnapshot(`
-      {
-        "installedCaptureError": true,
-        "installedCompactResume": true,
-        "installedPostCompact": true,
-        "installedPreCompact": true,
-        "installedSessionEnd": true,
-        "installedSessionRules": true,
-        "installedSessionStart": true,
-        "installedUserPromptSubmit": false,
-        "invalidJson": false,
-        "migratedFromStop": true,
-        "migratedLegacySessionEnd": true,
-        "migratedPinnedInjectRecent": true,
-        "migratedSplitSessionEnd": true,
-        "settingsPath": ".claude/settings.json",
-        "target": "claude-code",
-      }
-    `);
+        {
+          "installedCaptureError": true,
+          "installedCompactResume": true,
+          "installedNoteWritten": true,
+          "installedPostCompact": true,
+          "installedPreCompact": true,
+          "installedSessionEnd": true,
+          "installedSessionRules": true,
+          "installedSessionStart": true,
+          "installedUserPromptSubmit": false,
+          "invalidJson": false,
+          "migratedFromStop": true,
+          "migratedLegacySessionEnd": true,
+          "migratedPinnedInjectRecent": true,
+          "migratedSplitSessionEnd": true,
+          "settingsPath": ".claude/settings.json",
+          "target": "claude-code",
+        }
+      `);
     expect(settingsAsWritten(settings)).toMatchInlineSnapshot(`
       "{
         "theme": "dark",
@@ -238,6 +240,19 @@ describe('installJsonHooks(claude-code) settings shape', () => {
                   "type": "command",
                   "command": "hippo capture-error",
                   "timeout": 10
+                }
+              ]
+            }
+          ],
+          "PostToolUse": [
+            {
+              "matcher": "Edit|Write|MultiEdit",
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",
+                  "timeout": 10,
+                  "if": "Edit(//**/projects/*/memory/*.md)"
                 }
               ]
             }
@@ -347,6 +362,19 @@ describe('installJsonHooks(claude-code) settings shape', () => {
                   "type": "command",
                   "command": "hippo capture-error",
                   "timeout": 10
+                }
+              ]
+            }
+          ],
+          "PostToolUse": [
+            {
+              "matcher": "Edit|Write|MultiEdit",
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",
+                  "timeout": 10,
+                  "if": "Edit(//**/projects/*/memory/*.md)"
                 }
               ]
             }

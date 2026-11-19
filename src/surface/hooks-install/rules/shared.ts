@@ -25,6 +25,7 @@ export const HIPPO_PRE_COMPACT_MARKER = 'hippo pre-compact';
 export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
+export const HIPPO_NOTE_WRITTEN_MARKER = 'hippo note-written';
 
 /** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under the profile folder, as the
  * Copilot apps resolve it (a HOME that differs from the profile must not move it). */
@@ -64,4 +65,9 @@ export function sleepLogPathOn(homes: Homes): string {
  * programmatically; overridden by `--log-file`. */
 export function defaultPreCompactLogPath(homes: Homes): string {
   return path.join(userHome(homes), HIPPO_DIR, 'logs', 'pre-compact.log');
+}
+
+/** Where `hippo note-written` logs each import; overridden by `--log-file`. */
+export function defaultNoteWrittenLogPath(homes: Homes): string {
+  return path.join(userHome(homes), HIPPO_DIR, 'logs', 'note-written.log');
 }

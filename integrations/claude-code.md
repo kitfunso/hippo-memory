@@ -93,7 +93,7 @@ hippo init
 
 Hippo auto-detects Claude Code and:
 1. Patches `CLAUDE.md` with hippo's own block, which is shorter than the snippet above
-2. Adds 8 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
+2. Adds 9 hooks to `~/.claude/settings.json`; the `SessionEnd` one runs `hippo sleep` on session exit
 3. Schedules a daily run at 6:15am that stores lessons from the day's commits
 
 To skip the hooks: `hippo init --no-hooks`. To skip the daily run: `hippo init --no-schedule`.

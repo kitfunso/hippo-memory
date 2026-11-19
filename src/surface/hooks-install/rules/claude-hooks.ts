@@ -13,6 +13,7 @@ import {
   HIPPO_COMPACT_RESUME_MARKER,
   HIPPO_CAPTURE_ERROR_MARKER,
   HIPPO_POST_COMPACT_MARKER,
+  HIPPO_NOTE_WRITTEN_MARKER,
 } from './shared.js';
 import {
   type JsonValue,
@@ -105,8 +106,15 @@ function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   return { migratedFromStop, migratedLegacySessionEnd, migratedSplitSessionEnd };
 }
 
-function claudeCommandGroup(command: string, timeout: number, matcher?: string): JsonObject {
-  const hooks = [{ type: 'command', command, timeout }];
+function claudeCommandGroup(
+  command: string,
+  timeout: number,
+  matcher?: string,
+  condition?: string,
+): JsonObject {
+  const handler: JsonObject = { type: 'command', command, timeout };
+  if (condition !== undefined) handler.if = condition;
+  const hooks = [handler];
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
@@ -134,6 +142,7 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
   ['PreCompact', [HIPPO_PRE_COMPACT_MARKER]],
   ['PostCompact', [HIPPO_POST_COMPACT_MARKER]],
   ['PostToolUseFailure', [HIPPO_CAPTURE_ERROR_MARKER]],
+  ['PostToolUse', [HIPPO_NOTE_WRITTEN_MARKER]],
   ['Stop', [HIPPO_SLEEP_MARKER]],
 ];
 
@@ -220,16 +229,17 @@ function appendCompactionHooks(hooks: ClaudeHooks, compactLog: string) {
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
-/** Where Claude Code's settings live and where its session and compaction hooks log. */
+/** Where Claude Code's settings live and where its session, compaction and note hooks log. */
 interface ClaudeHookPaths {
   readonly settingsPath: string;
   readonly logFile: string;
   readonly compactLog: string;
+  readonly noteLog: string;
 }
 
 export function planClaudeCodeHooks(
   settings: JsonObject,
-  { settingsPath, logFile, compactLog }: ClaudeHookPaths,
+  { settingsPath, logFile, compactLog, noteLog }: ClaudeHookPaths,
 ): HookInstallPlan {
   const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
   if (merge === null) return invalidClaudeSettings(settingsPath);
@@ -247,6 +257,7 @@ export function planClaudeCodeHooks(
   const { installedPreCompact, installedCompactResume, installedPostCompact } =
     appendCompactionHooks(hooks, compactLog);
   const installedCaptureError = appendCaptureErrorHook(hooks);
+  const installedNoteWritten = appendNoteWrittenHook(hooks, noteLog);
 
   const result: InstallResult = {
     target: 'claude-code',
@@ -259,6 +270,7 @@ export function planClaudeCodeHooks(
     installedCompactResume,
     installedPostCompact,
     installedCaptureError,
+    installedNoteWritten,
     migratedPinnedInjectRecent,
     ...migration,
     invalidJson: false,
@@ -282,6 +294,26 @@ function appendCaptureErrorHook(hooks: ClaudeHooks): boolean {
     'PostToolUseFailure',
     HIPPO_CAPTURE_ERROR_MARKER,
     claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
+  );
+}
+
+// `Edit` in an `if` covers Write and MultiEdit too, and `//**` reaches any config folder; Claude
+// Code versions that ignore `if` still get the hook's own path check.
+const NOTE_WRITTEN_IF = 'Edit(//**/projects/*/memory/*.md)';
+
+function appendNoteWrittenHook(hooks: ClaudeHooks, noteLog: string): boolean {
+  // PostToolUse: a memory note Claude Code just wrote reaches hippo at once, in a detached worker
+  // that `hippo note-written` starts.
+  return appendHookIfMissing(
+    hooks,
+    'PostToolUse',
+    HIPPO_NOTE_WRITTEN_MARKER,
+    claudeCommandGroup(
+      `hippo note-written --log-file "${noteLog}"`,
+      HOOK_MEDIUM_TIMEOUT_SECONDS,
+      'Edit|Write|MultiEdit',
+      NOTE_WRITTEN_IF,
+    ),
   );
 }
 

@@ -446,6 +446,29 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(settings).toContain('hippo post-compact');
   });
 
+  it('hippo hook install adds the note-written hook once, filtered to memory notes', () => {
+    const userGroup = { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo user-post' }] };
+    const settingsPath = path.join(dir, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify({ hooks: { PostToolUse: [userGroup] } }));
+
+    expect(installJsonHooks('claude-code').installedNoteWritten).toBe(true);
+    expect(installJsonHooks('claude-code').installedNoteWritten).toBe(false);
+
+    const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.PostToolUse;
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toEqual(userGroup);
+    expect(groups[1].matcher).toBe('Edit|Write|MultiEdit');
+    expect(groups[1].hooks).toEqual([
+      {
+        type: 'command',
+        command: `hippo note-written --log-file "${path.join(dir, '.hippo', 'logs', 'note-written.log')}"`,
+        timeout: 10,
+        if: 'Edit(//**/projects/*/memory/*.md)',
+      },
+    ]);
+  });
+
   it('re-running hippo init adds hooks a newer hippo introduced even when CLAUDE.md already has the block', async () => {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
@@ -463,6 +486,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     delete settings.hooks.PreCompact;
     delete settings.hooks.PostToolUseFailure;
     delete settings.hooks.PostCompact;
+    delete settings.hooks.PostToolUse;
     fs.writeFileSync(settingsPath, JSON.stringify(settings));
     expect(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8')).toContain('hippo');
 
@@ -472,6 +496,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(after).toContain('hippo pre-compact');
     expect(after).toContain('hippo capture-error');
     expect(after).toContain('hippo post-compact');
+    expect(after).toContain('hippo note-written');
   });
 
   it('hippo doctor names the missing hooks', async () => {

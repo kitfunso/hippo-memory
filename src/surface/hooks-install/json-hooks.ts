@@ -16,7 +16,12 @@ import {
   type InstallResult,
   type JsonHookPaths,
 } from './rules/json-hooks.js';
-import { defaultPreCompactLogPath, sleepLogPathOn, type JsonHookTarget } from './rules/shared.js';
+import {
+  defaultNoteWrittenLogPath,
+  defaultPreCompactLogPath,
+  sleepLogPathOn,
+  type JsonHookTarget,
+} from './rules/shared.js';
 
 // What a caller of the installer names beside it: the reminder Codex needs before it runs a new hook.
 export { CODEX_TRUST_LINE } from './rules/shared.js';
@@ -59,6 +64,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
           paths,
           readSettings(paths.settings),
           defaultPreCompactLogPath(processHomes()),
+          defaultNoteWrittenLogPath(processHomes()),
         );
   if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
   return plan.result;

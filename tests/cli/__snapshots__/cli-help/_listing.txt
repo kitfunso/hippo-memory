@@ -58,6 +58,8 @@ __session-end-worker, no block
 pre-compact
 compact-resume
 post-compact
+note-written
+__note-import-worker, no block
 codex-run
 __codex-session-end-worker, no block
 hook

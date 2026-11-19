@@ -1,7 +1,6 @@
 // The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker
 // before the host exits.
 import * as fs from 'node:fs';
-import { spawn } from 'node:child_process';
 import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
 import { copilotTranscriptFor } from '../../capture/copilot-transcript.js';
 import { SESSION_ID_RE } from '../../../base/util/session-id.js';
@@ -17,7 +16,13 @@ import type { DeliveryRecorder } from '../../../api/delivery/delivery-recorder.j
 import { normalizeHookPayload, readStdinBounded, type BoundedStdin } from '../stdin.js';
 import { cliApiContext, cliHookRequest } from '../api-context.js';
 import { type CliFlags, type CommandContext, boolFlag, stringFlag } from '../flag-values.js';
-import { hookRuntime, hookStoreRoot, hostSessionId, payloadCwdRoot } from '../hook-runtime.js';
+import {
+  hookRuntime,
+  hookStoreRoot,
+  hostSessionId,
+  payloadCwdRoot,
+  spawnDetachedWorker,
+} from '../hook-runtime.js';
 import { handleSessionEndWorker } from './session-end-worker.js';
 
 /** Copilot's hook command and OpenCode's plugin carry no path, since one quoted into them would
@@ -88,7 +93,7 @@ async function runSessionEndWorker(
   { root, tenantId, flags, rec }: SessionEndRun,
 ): Promise<void> {
   try {
-    spawnSessionEndWorker(sessionEndWorkerArgs(worker));
+    spawnDetachedWorker('session-end', sessionEndWorkerArgs(worker));
   } catch (err) {
     log.debug(
       `session-end: the worker did not spawn, running inline: ${errorMessage(err)}`,
@@ -182,20 +187,6 @@ function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags 
   if (boolFlag(flags, 'no-learn')) out['no-learn'] = true;
   if (boolFlag(flags, 'no-share')) out['no-share'] = true;
   return out;
-}
-
-function spawnSessionEndWorker(workerArgs: readonly string[]): void {
-  const child = spawn(process.execPath, workerArgs, {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-  // An async spawn failure arrives as an 'error' event, which with no listener is an uncaught
-  // exception.
-  child.on('error', (err) =>
-    log.warn(`hippo session-end: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
-  );
-  child.unref();
 }
 
 /** The input of a VS Code Stop payload with a session id that can name the lock file; null makes
