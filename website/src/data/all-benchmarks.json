@@ -900,13 +900,13 @@
       "name": "LoCoMo, OmniMemEval shared setup",
       "task": "Answer accuracy, LLM judge, gpt-4.1-mini answers, gpt-4o-mini judge",
       "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: 1,540 questions without category 5, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo has not run this setup.",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: 1,540 questions without category 5, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
       "caveat": null,
       "hippo": {
         "value": null,
         "num": null,
         "setting": null,
-        "status": "not run"
+        "status": "running"
       },
       "cells": {
         "MemOS": {
@@ -1117,13 +1117,13 @@
       "name": "LongMemEval-S, OmniMemEval shared setup",
       "task": "Answer accuracy, LLM judge, gpt-4.1-mini answers, gpt-4o-mini judge",
       "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the cleaned LongMemEval-S file, 500 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo has not run this setup.",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the cleaned LongMemEval-S file, 500 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
       "caveat": null,
       "hippo": {
         "value": null,
         "num": null,
         "setting": null,
-        "status": "not run"
+        "status": "running"
       },
       "cells": {
         "MemOS": {
@@ -1447,13 +1447,13 @@
       "name": "BEAM-100K, OmniMemEval shared setup",
       "task": "Nugget score, 400 questions, gpt-4.1-mini answers, gpt-4o-mini judge",
       "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 100K scale, 400 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo has not run this setup.",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 100K scale, 400 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
       "caveat": null,
       "hippo": {
         "value": null,
         "num": null,
         "setting": null,
-        "status": "not run"
+        "status": "running"
       },
       "cells": {
         "Mem0": {
@@ -1640,13 +1640,13 @@
       "name": "BEAM-10M, OmniMemEval shared setup",
       "task": "Nugget score, 200 questions, gpt-4.1-mini answers, gpt-4o-mini judge",
       "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 10M scale, 200 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (Maasv and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo has not run this setup.",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 10M scale, 200 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (Maasv and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
       "caveat": null,
       "hippo": {
         "value": null,
         "num": null,
         "setting": null,
-        "status": "not run"
+        "status": "running"
       },
       "cells": {
         "Hindsight": {
@@ -1817,13 +1817,13 @@
       "name": "PersonaMem v2, OmniMemEval shared setup",
       "task": "Multiple-choice accuracy, gpt-4.1-mini answers, rule matching",
       "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: multiple-choice accuracy, repeated runs averaged, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and rule matching in place of an LLM judge. Contributors ran some rows (Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo has not run this setup.",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: multiple-choice accuracy, repeated runs averaged, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and rule matching in place of an LLM judge. Contributors ran some rows (Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
       "caveat": null,
       "hippo": {
         "value": null,
         "num": null,
         "setting": null,
-        "status": "not run"
+        "status": "running"
       },
       "cells": {
         "MemOS": {
