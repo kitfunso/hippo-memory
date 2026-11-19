@@ -12,7 +12,7 @@ export interface AdapterContext extends Machine {
 
 export interface MemoryItem {
   /** A path inside the container with '/' separators, or `<heading slug>/<text hash>` in a
-   * single-file store; a part of a long note adds `::<heading slug>/<text hash>`. */
+   * single-file store; a part is `<path or heading slug>::<heading slug>/<text hash>`. */
   readonly key: string;
   readonly text: string;
   readonly updatedAt: number;

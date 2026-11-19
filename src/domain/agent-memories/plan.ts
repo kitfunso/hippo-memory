@@ -1,4 +1,5 @@
 // What one sync does to one container's rows: a pure function of the items read and the rows found.
+import { headingOfKey } from './keys.js';
 import { fileOfKey, isPartKey } from './source.js';
 
 export interface PlanItem {
@@ -177,10 +178,10 @@ function pairEdits(
   fresh: PlannedWrite[],
   textKey: (key: string) => boolean,
 ): void {
-  const goneBy = groupBy([...gone.keys()].filter(textKey), headingOf);
+  const goneBy = groupBy([...gone.keys()].filter(textKey), headingOfKey);
   const freshBy = groupBy(
     fresh.map((w, i) => ({ w, i })).filter((f) => textKey(f.w.key)),
-    (f) => headingOf(f.w.key),
+    (f) => headingOfKey(f.w.key),
   );
   for (const [heading, keys] of goneBy) {
     const news = freshBy.get(heading) ?? [];
@@ -189,10 +190,6 @@ function pairEdits(
     fresh[i] = { ...w, supersedes: [...w.supersedes, ...(gone.get(keys[0]) ?? [])] };
     gone.delete(keys[0]);
   }
-}
-
-function headingOf(key: string): string {
-  return key.slice(0, Math.max(0, key.lastIndexOf('/')));
 }
 
 // Byte order, as memory.ts's timestamp note asks: localeCompare may skip the ISO punctuation.

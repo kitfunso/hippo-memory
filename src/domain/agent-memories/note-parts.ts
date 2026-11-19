@@ -8,7 +8,7 @@ import {
   secretSpans,
   type SecretSpan,
 } from '../../base/util/secret-detect.js';
-import { sha256Hex, textItemKeys } from './keys.js';
+import { headingOfKey, sha256Hex, textItemKeys } from './keys.js';
 import { closesFence, fenceOf, markdownHeading, slugHeading } from './markdown.js';
 import { CONTENT_CAP, PART_MARK } from './source.js';
 import type { Container, MemoryItem } from './types.js';
@@ -53,23 +53,36 @@ export function splitContainer(container: Container): Container {
   if (!container.items.some(overCap)) return container;
   const fileTitle = (item: MemoryItem): string =>
     container.textKeyed ? path.basename(container.path) : path.posix.basename(item.key);
+  // A text-keyed item's key ends in a hash of its whole text, which any edit changes, so its parts
+  // hang on the heading before the hash; `seen` keeps the keys of two items under one heading apart.
+  const noteOf = (item: MemoryItem): string =>
+    container.textKeyed ? headingOfKey(item.key) : item.key;
+  const seen = new Map<string, number>();
   return {
     ...container,
     items: container.items.flatMap((item) =>
-      overCap(item) ? noteParts(item, item.title ?? fileTitle(item)) : [item],
+      overCap(item) ? noteParts(item, item.title ?? fileTitle(item), noteOf(item), seen) : [item],
     ),
   };
 }
 
-function noteParts(item: MemoryItem, title: string): MemoryItem[] {
+function noteParts(
+  item: MemoryItem,
+  title: string,
+  noteKey: string,
+  seen: Map<string, number>,
+): MemoryItem[] {
   const note = item.text;
   const spans = flaggedSpans(note);
   const parts = sectionsOf(noteLines(note, 0, note.length)).flatMap((section) =>
     sectionParts({ note, budget: CONTENT_CAP, spans }, section, title),
   );
-  const keys = textItemKeys(parts.map((p) => ({ headingSlug: p.slug, text: p.text })));
+  const keys = textItemKeys(
+    parts.map((p) => ({ headingSlug: `${noteKey}${PART_MARK}${p.slug}`, text: p.text })),
+    seen,
+  );
   return parts.map((part, i) => ({
-    key: `${item.key}${PART_MARK}${keys[i]}`,
+    key: keys[i],
     text: part.text,
     updatedAt: item.updatedAt,
     title,

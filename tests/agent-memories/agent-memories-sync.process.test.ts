@@ -493,4 +493,28 @@ describe('agent memory sync: long notes in parts', () => {
     expect(rows.some((r) => r.content.includes('END OF THE CHECKLIST'))).toBe(true);
     expect(toolTally(await sync(), tool)).toMatchObject({ unchanged: rows.length, imported: 0, setAside: 0 });
   });
+
+  it('codex: an edit to the last part of a long bullet leaves the other parts as they are and replaces only that row', async () => {
+    const steps = (last: string): string[] => [
+      ...Array.from({ length: 59 }, (_, i) => `  sub-line ${i}: the release checklist runs the smoke test first.`),
+      `  ${last}`,
+    ];
+    const bullet = (last: string): string => `- The release checklist, step by step:\n${steps(last).join('\n')}`;
+    codexSummary(w, bullet('END OF THE CHECKLIST'));
+    await sync();
+    const before = liveRows(w.global).filter((r) => r.tags.includes('codex-memory'));
+    expect(before).toHaveLength(3);
+    const third = before.find((r) => r.content.includes('END OF THE CHECKLIST'));
+    expect(third).toBeDefined();
+
+    codexSummary(w, bullet('END OF THE NEW CHECKLIST'));
+    expect(toolTally(await sync(), 'codex')).toMatchObject({ unchanged: 2, replaced: 1, setAside: 0 });
+    const after = liveRows(w.global).filter((r) => r.tags.includes('codex-memory'));
+    expect(after).toHaveLength(3);
+    for (const row of before.filter((r) => r.id !== third?.id)) expect(after.map((r) => r.id)).toContain(row.id);
+    const fresh = after.find((r) => r.content.includes('END OF THE NEW CHECKLIST'));
+    expect(fresh).toBeDefined();
+    expect(readEntry(w.global, third?.id ?? '')?.supersededBy).toBe(fresh?.id);
+    expect(dormantRows(w.global)).toEqual([]);
+  });
 });
