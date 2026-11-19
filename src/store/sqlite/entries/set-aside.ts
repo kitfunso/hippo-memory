@@ -8,6 +8,7 @@ import { insertDormantRow } from '../dormant/dormant-rows.js';
 import { calculateStrength } from '../../../base/memory/strength.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { deleteEntryRowInTx, setEntryTagsInTx } from './entry-writes.js';
+import { memoriesBackingAmong } from './delete-and-batch.js';
 import type { SetAsideResult, SetAsideWhy } from '../../../base/ports/store/project-tags.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
@@ -18,8 +19,8 @@ export interface SetAsideRowOptions {
   readonly rules: StoreModel;
 }
 
-/** Design 6's set-aside on the caller's transaction: a pinned row only loses the tag, any other
- * goes dormant, restorable. */
+/** Design 6's set-aside on the caller's transaction: a pinned row, or one an object links to, only
+ * loses the tag; any other goes dormant, restorable. */
 export function setAsideRow(
   db: DatabaseSyncLike,
   { tag, row, why, rules }: SetAsideRowOptions,
@@ -35,7 +36,8 @@ export function setAsideRow(
         metadata,
       },
     ]);
-  if (row.pinned) {
+  // Deleting a row an object links to nulls the link, which no restore repairs.
+  if (row.pinned || memoriesBackingAmong(db, [row.id]).has(row.id)) {
     setEntryTagsInTx(db, untagged);
     audit({ why, untagged: true });
     return { kind: 'untagged', entry: untagged };

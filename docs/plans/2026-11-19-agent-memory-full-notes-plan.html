@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Agent Notes Import Plan</title>
+<link rel="stylesheet" href="C:/Users/skf_s/.claude-alt/plugins/cache/claude-community/html-plan/1.0.0/skills/html-plan/runtime/htmlplan.css">
+<script src="C:/Users/skf_s/.claude-alt/plugins/cache/claude-community/html-plan/1.0.0/skills/html-plan/runtime/htmlplan.js" defer></script>
+<body>
+
+<header>
+  <h1>Importing Whole Agent Notes into Hippo</h1>
+  <doc-changes new="3" changed="15"></doc-changes>
+  <details class="thread"><summary>Why · 4 requests</summary>
+    <doc-quote via="prompt" from="the brief">find why hippo's Claude Code agent-memory import loses facts, and write the fix plan as an html-plan page</doc-quote>
+    <doc-quote via="prompt" from="the brief">The likely fix splits a long note into section items, each under the cap, with stable keys, so an appended paragraph adds one row and leaves the others alone.</doc-quote>
+    <doc-quote via="prompt" from="the coordinator">Keith asked whether this hits every coding agent and whether hippo should ship a "write to hippo too" rule at install.</doc-quote>
+    <doc-quote via="prompt" from="the coordinator">a note reaches hippo only at init, sleep, session end, or (Claude Code only) post-compact. Long sessions wait hours.</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 ═════ -->
+<doc-claim>
+  <p>Recall finds a fact from any part of a long note.</p>
+  <doc-mock frame="terminal" title="rows for one note" w="480" caption="Today the row stops at the cap. After the change, each part has its own row."><template><span class="dim">project_tbench_docker_disk_hang_2026_11_14.md · 4,070 bytes</span>
+
+<b>today</b>
+  mem_f8a8b54f826f   <span class="r">1,512 chars, ends " [truncated]"</span>
+  <span class="dim">line 21 "RESOLVED 19 Nov ..." is in no row</span>
+
+<b>after</b> <span class="dim">(sketch)</span>
+  ...md::top      <span class="g">part 1, under 1,500</span>
+  ...md::top~2    <span class="g">part 2</span>
+  ...md::top~3    <span class="g">part 3, holds "RESOLVED 19 Nov"</span></template></doc-mock>
+
+  <doc-claim>
+    <p>A note over 1,500 characters splits into parts at its headings.</p>
+    <doc-code title="sections.ts · sketch" lang="ts">
+<script type="text/plain">
+/** One part of a note: under the cap, its title and heading in front. */
+export interface NotePart { readonly slug: string; readonly text: string }
+
+export function splitNote(title: string, body: string, cap = CONTENT_CAP): NotePart[] {
+  if (maskEmails(body).length <= cap) return [{ slug: '', text: body }];
+  const parts: NotePart[] = [];
+  for (const section of sectionsByHeading(body)) {        // text before a heading is 'top'
+    const head = `${title} > ${section.heading || title}\n\n`;
+    for (const chunk of packBlocks(section.blocks, cap - head.length)) {
+      parts.push({ slug: section.slug, text: head + chunk });
+    }
+  }
+  return parts;
+}
+// packBlocks: whole paragraphs, bullets and fences first; a block over the cap
+// splits at line ends, then at a code-point-safe cut as the last step.
+</script>
+    </doc-code>
+    <doc-ask id="part-size">
+      <p>How much text goes in one part?</p>
+      <label><input type="radio" name="part-size" value="section" checked> A heading section, packed up to the cap <small>fewer rows, each part keeps context</small></label>
+      <label><input type="radio" name="part-size" value="block"> One paragraph or bullet per row <small>more rows, an edit touches one block</small></label>
+    </doc-ask>
+    <doc-claim at="src/domain/agent-memories/source.ts:58">
+      <p><b>source.ts:58</b> · storedText()</p>
+      <doc-code src="src/domain/agent-memories/source.ts" lines="54-63" hl="60-62">
+        <doc-pin line="61" tone="warn" title="The cut that loses the tail">It stays as a guard. A part never reaches it.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>An appended paragraph changes one part. The other parts stay.</p>
+    <doc-code title="keys for one note · sketch" lang="ts">
+<script type="text/plain">
+// a note under the cap keeps its key as today
+'feedback_never_haiku.md'
+// a note over the cap: <file>::<heading slug>, ~n for the next part of that slug
+// ramsky adds a dated "## STATE" section at the top: one new key
+'project_ramsky.md::state-2026-11-17-elexon-demo-done-8-prs'
+'project_ramsky.md::state-2026-11-13-round-2-prs-open-ready'
+// tbench has no headings: an appended paragraph lands in the last part
+'project_tbench_docker_disk_hang_2026_11_14.md::top~3'
+
+// plan.ts: a gone key and a fresh key of the same file pair up,
+// so the first part supersedes the old whole-note row and keeps its history
+function pairSplits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void
+</script>
+    </doc-code>
+    <doc-ask id="part-keys">
+      <p>Which notes get part keys?</p>
+      <label><input type="radio" name="part-keys" value="over-cap" checked> Only notes over the cap <small>the 78 short imported rows keep their keys</small></label>
+      <label><input type="radio" name="part-keys" value="all"> Every note <small>one shape; all 190 rows get a new row once</small></label>
+    </doc-ask>
+    <doc-claim at="src/domain/agent-memories/plan.ts:100">
+      <p><b>plan.ts:100</b> · pairEdits() gets a sibling, pairSplits()</p>
+      <doc-code src="src/domain/agent-memories/plan.ts" lines="94-104" hl="100">
+        <doc-pin line="100" title="pairSplits() runs beside this line">It pairs by file, for folder stores.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>One split step serves all six adapters.</p>
+    <doc-calls title="Where the split runs" caption="Folder stores split by note. Single-file stores split only an item over the cap.">
+<script type="text/plain">
+~ runPass(pass, opts)                              @ src/domain/agent-memories/sync.ts:151
+~   containerWork(tool, container, options)        @ src/domain/agent-memories/sync.ts:359
++     **splitContainer**(container)                @ src/domain/agent-memories/sync.ts:359   -- every tool goes through here
+    claudeCodeAdapter.list()                       @ src/domain/agent-memories/claude-code.ts:62
+~     NOTES.item() gives the note title            @ src/domain/agent-memories/claude-code.ts:203
+    qwenCodeAdapter.list()                         @ src/domain/agent-memories/qwen-code.ts:50
+    copilotAdapter EVERY_FILE                      @ src/domain/agent-memories/copilot.ts:66
+    geminiAdapter folder notes                     @ src/domain/agent-memories/gemini.ts:153
+    geminiAdapter GEMINI.md bullets                @ src/domain/agent-memories/gemini.ts:51
+    codexAdapter memory_summary.md items          @ src/domain/agent-memories/codex.ts:41
+    openclawAdapter MEMORY.md items               @ src/domain/agent-memories/openclaw.ts:57
+</script>
+    </doc-calls>
+    <doc-claim at="tests/agent-memories/agent-memories-sync.process.test.ts:1">
+      <p><b>agent-memories-sync.process.test.ts</b> · one case per adapter</p>
+      <doc-code title="test · sketch" lang="ts">
+<script type="text/plain">
+// Real store through makeRoot; no mocks.
+const SHAPES = ['claude-code', 'qwen-code', 'copilot',
+  'gemini', 'codex', 'openclaw'];
+for (const shape of SHAPES) {
+  test(`${shape}: an append to a long note moves one row`,
+    async () => {
+      const root = await makeRoot();
+      writeLongNote(shape, home, 4000);   // tests/_helpers
+      await syncOnce(root);
+      appendParagraph(shape, home, 'RESOLVED: disk reset');
+      const t = (await syncOnce(root)).tally;
+      expect(t.imported + t.replaced).toBe(1);
+      expect(await recallText(root, 'RESOLVED'))
+        .toContain('disk reset');
+    });
+}
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Code that matches a row to its file reads the key's file part.</p>
+    <doc-calls title="Readers of the key" caption="Four readers change. The rest read only the prefix or the whole key.">
+<script type="text/plain">
+~ planContainer() read set includes skipped files   @ src/domain/agent-memories/plan.ts:94    -- skipped holds file keys
+~ handOverPlan() unread check                       @ src/domain/agent-memories/handover.ts:102
+~ legacyTargets() file name                         @ src/domain/agent-memories/legacy.ts:40
+~ planSteps() note-changed or note-gone             @ src/domain/agent-memories/container-steps.ts:52
++ **fileOfKey**(key)                                @ src/domain/agent-memories/source.ts:52
+  splitSource() hash after the last #               @ src/domain/agent-memories/source.ts:45  -- unchanged
+  noteKey() keeps all after the first /             @ src/base/memory/agent-memory-tools.ts:48 -- unchanged
+  fold() held notes by noteKey                      @ src/store/sqlite/maintenance/project-tags.ts:105 -- unchanged
+  AUTO_SHARE_SIGNALS prefix only                    @ src/domain/sharing/share.ts:132 -- unchanged
+  KEEP_PAIRS tag and prefix                         @ src/base/memory/keep-rules.ts:14 -- unchanged
+</script>
+    </doc-calls>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The secret veto drops one part, not the whole note.</p>
+    <doc-code src="src/domain/agent-memories/apply.ts" lines="129-140" hl="138">
+      <doc-pin line="138" tone="warn" title="Today this drops a whole note">project_ramsky.md, 106 KB, has no row for this reason.</doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 ═════ -->
+<doc-claim>
+  <p>Old claude-memory rows stop hiding notes in the global store.</p>
+  <doc-mock frame="terminal" title="hippo import --agents --dry-run, from home" w="480" caption="Today the home notes are not listed. The after counts come from the read-only check on 19 Nov."><template><b>today</b>
+  Claude Code: C:\Users\skf_s\.claude <span class="r">(no memory folders found)</span>
+
+<b>after</b> <span class="dim">(sketch)</span>
+  Claude Code: C:\Users\skf_s\.claude
+    project ...\projects\C--Users-skf-s\memory: 372 notes
+    would be <span class="g">61 taken over from the old Claude import</span>,
+    <span class="g">219 replaced</span> <span class="dim">(107 old rows, 112 cut rows)</span>,
+    and new rows for the other parts</template></doc-mock>
+
+  <doc-claim>
+    <p>The global store's import also runs the home folder's project pass.</p>
+    <doc-code diff file="src/api/agent-memories.ts" start="24" lang="ts">
+<script type="text/plain">
+ export async function importForStore(root: string, opts: SyncOptions): Promise<ImportReport> {
+-  if (opts.machine.isGlobalRoot(root)) return importUserMemories(root, opts);
++  if (opts.machine.isGlobalRoot(root)) {
++    // Home notes are user-global (origin ''); no other non-hook pass reads them.
++    // Project pass with projectRoot = home and legacy: true.
++    const report = await importHomeMemories(root, opts);
++    mergeReports(report, await importUserMemories(root, opts));
++    return report;
++  }
+   const report = await importProjectMemories(root, opts);
+   mergeReports(report, await importUserMemories(root, opts));
+   return report;
+ }
+</script>
+    </doc-code>
+    <doc-ask id="adopt-where">
+      <p>Where does legacy adoption run?</p>
+      <label><input type="radio" name="adopt-where" value="import-sleep" checked> Import and sleep in the global store <small>one run adopts all; hooks stay as they are</small></label>
+      <label><input type="radio" name="adopt-where" value="hooks-too"> Also every hook pass <small>adds one read to a 10-second hook</small></label>
+    </doc-ask>
+    <doc-claim at="src/surface/cli/memory-import.ts:291">
+      <p><b>memory-import.ts:291</b> · the call that misses home today</p>
+      <doc-code src="src/surface/cli/memory-import.ts" lines="283-297" hl="292-294">
+        <doc-pin line="293" tone="risk" title="Home resolves to the global store">So only the user pass runs.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A legacy row of a split note gives way to its first part.</p>
+    <doc-code diff file="src/domain/agent-memories/plan.ts" start="244" lang="ts">
+<script type="text/plain">
+   const replace = new Map<string, string>();
+   for (const [file, left] of leftByFile) {
+     const matches = targetsByFile.get(file) ?? [];
+-    if (left.length === 1 && matches.length === 1) replace.set(matches[0].ref, left[0].id);
++    // A split note gives several targets of one note; two notes of one name still match none.
++    const notes = new Set(matches.map((t) => t.note));
++    if (left.length === 1 && notes.size === 1) replace.set(matches[0].ref, left[0].id);
+   }
+   return { adopt, replace };
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>An unchanged note also retires its stale legacy copy.</p>
+    <doc-code diff file="src/domain/agent-memories/plan.ts" start="122" lang="ts">
+<script type="text/plain">
+   const same = rows.filter((r) => r.hash === item.hash);
+   if (same.length > 0) {
+     const kept = newestRow(same.filter((r) => r.tagged)) ?? newestRow(same);
+     if (kept === undefined) return;
+     if (!kept.tagged) draft.retag.push(kept.id);
+     const others = tagged.filter((r) => r.id !== kept.id);
+     draft.collapse.push(...others.map((r) => ({ id: r.id, by: kept.id })));
++    const legacy = input.legacy?.get(item.key) ?? [];
++    draft.collapse.push(...legacy.map((id) => ({ id, by: kept.id })));
+     if (kept.tagged && others.length === 0) draft.unchanged++;
+     return;
+   }
+</script>
+      <doc-pin line="130" title="46 imported notes keep a live legacy copy today"></doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 3 ═════ -->
+<doc-claim>
+  <p>A note reaches hippo seconds after Claude Code writes it.</p>
+  <doc-mock frame="terminal" title="~/.hippo/logs/note-written.log" w="480" caption="Sketch. One line for each memory note that Claude Code writes."><template><span class="dim">[hippo] 2026-11-20T09:12:04Z</span> note-written: Agent memories: <span class="g">1 replaced</span>.
+<span class="dim">[hippo] 2026-11-20T09:40:51Z</span> note-written: Imported <span class="g">1 agent memory</span> (Claude Code 1).</template></doc-mock>
+
+  <doc-claim>
+    <p>A PostToolUse hook runs the session-folder import after a note write.</p>
+    <doc-calls title="hippo note-written" caption="It reuses the post-compact import, which reads the folder with no git call.">
+<script type="text/plain">
++ **handleNoteWritten**(stdin payload)               @ src/surface/cli/hooks/note-written.ts:1
++   exit 0 unless tool_input.file_path is a .md under transcript dir/memory   @ src/surface/cli/hooks/note-written.ts:1
++   importSessionFolder(store, transcript_path, cwd)  @ src/api/agent-memories.ts:105
+      claudeTranscriptListing(ctx, transcriptPath)   @ src/domain/agent-memories/claude-code.ts:80
+      runPass(...)                                   @ src/domain/agent-memories/sync.ts:151
++ 'note-written' verb                                @ src/surface/cli/verbs/sessions.ts:399
+</script>
+    </doc-calls>
+    <doc-claim at="src/surface/cli/hooks/post-compact.ts:28">
+      <p><b>post-compact.ts:28</b> · the call to copy</p>
+      <doc-code src="src/surface/cli/hooks/post-compact.ts" lines="26-36" hl="29-32"></doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>hippo init, setup and hook install add the hook.</p>
+    <doc-code title="claude-hooks.ts · sketch, beside appendCaptureErrorHook()" lang="ts">
+<script type="text/plain">
+function appendNoteWrittenHook(hooks: ClaudeHooks): boolean {
+  // A memory note written in a session reaches hippo at once, not at the next compaction.
+  return appendHookIfMissing(
+    hooks,
+    'PostToolUse',
+    HIPPO_NOTE_WRITTEN_MARKER,
+    claudeCommandGroup('hippo note-written', HOOK_MEDIUM_TIMEOUT_SECONDS, 'Edit|Write'),
+  );
+}
+</script>
+    </doc-code>
+    <doc-claim at="src/surface/hooks-install/rules/claude-hooks.ts:276">
+      <p><b>claude-hooks.ts:276</b> · appendCaptureErrorHook(), the model</p>
+      <doc-code src="src/surface/hooks-install/rules/claude-hooks.ts" lines="276-286"></doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The import fits in the 10-second hook limit.</p>
+    <doc-code title="~/.hippo/logs/pre-compact.log, 19 Nov" lang="text" hl="2">
+<script type="text/plain">
+[hippo] 2026-11-19T13:33:01.120Z post-compact: capped: 6 more kept in the record only
+[hippo] 2026-11-19T13:33:03.133Z post-compact: Imported 1 agent memory (Claude Code 1); 6 replaced, 4 skipped for a secret.
+</script>
+      <doc-pin line="2" title="About 2 s for the whole 372-note folder"></doc-pin>
+    </doc-code>
+    <doc-note tone="risk"><strong>Risk</strong> The matcher fires on every Edit and Write. The build must measure the cost of one hippo start for a path that exits at once. If it is high, add an <code>if</code> path filter.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Other agents keep their session-end and sleep import for now.</p>
+    <doc-code title="after-tool hooks found · from hook-points.md" lang="ts">
+<script type="text/plain">
+const AFTER_TOOL = {
+  'claude-code': { event: 'PostToolUse', path: 'tool_input.file_path', installer: 'yes' },
+  codex:   { event: 'PostToolUse', path: 'not documented (patch in tool_input.command)', installer: 'yes' },
+  copilot: { event: 'postToolUse', path: 'not documented (toolArgs)', installer: 'yes' },
+  gemini:  { event: 'AfterTool',   path: 'not documented', installer: 'no' },
+  'qwen-code': { event: 'PostToolUse', path: 'not documented', installer: 'no' },
+  openclaw: { event: 'not found (before_tool_call only)', path: '-', installer: 'no' },
+} as const;
+</script>
+    </doc-code>
+    <doc-ask id="write-hook-tools">
+      <p>Which agents get a write-time hook in this change?</p>
+      <label><input type="radio" name="write-hook-tools" value="claude" checked> Claude Code only <small>the one agent with a documented path field</small></label>
+      <label><input type="radio" name="write-hook-tools" value="claude-copilot"> Claude Code and Copilot <small>Copilot has an installer; the hook must parse toolArgs</small></label>
+      <label><input type="radio" name="write-hook-tools" value="all"> Every agent with an after-tool hook <small>adds Gemini and Qwen installers</small></label>
+    </doc-ask>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 4 ═════ -->
+<doc-claim>
+  <p>The install text keeps one write path for each agent.</p>
+  <doc-code src="src/surface/hooks-install/rules/hook-blocks.ts" lines="83-98" hl="96-97">
+    <doc-pin line="96" title="Claude Code: nothing to record by hand">The text stays.</doc-pin>
+  </doc-code>
+  <doc-ask id="dual-write">
+    <p>Should the install text ask agents to also write to hippo?</p>
+    <label><input type="radio" name="dual-write" value="no" checked> No. The agent writes its own memory; hippo imports it whole and soon</label>
+    <label><input type="radio" name="dual-write" value="yes"> Yes. Add a "hippo remember too" line <small>claim 4.1 then applies to each fact</small></label>
+  </doc-ask>
+  <div data-if="dual-write=yes"><doc-note tone="warn">Then one fact can land as two rows. Recall then shows it twice.</doc-note></div>
+
+  <doc-claim>
+    <p>A fact that an agent writes twice can land as two rows.</p>
+    <doc-code src="src/base/util/same-text.ts" lines="8-10">
+      <doc-pin line="9" tone="warn" title="Only the same text apart from spacing is a copy">A note and a reworded remember both stay.</doc-pin>
+    </doc-code>
+    <doc-note tone="info">The AGENTS.md blocks keep <code>hippo remember</code>. Cursor, OpenCode and pi have no import adapter.</doc-note>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ shared ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: one key shape for every imported row.</p>
+  <doc-schema id="key-shape" lang="ts" diff title="MemoryItem key and source">
+<script type="text/plain">
+ // source: agent-memory:<tool>:<container>/<key>#<16 hex of the item text>
+ export interface MemoryItem {
+-  /** A path inside the container, or `<heading slug>/<text hash>` in a single-file store. */
++  /** A path inside the container, `<path>::<heading slug>[~n]` for a part of a long note,
++   * or `<heading slug>/<text hash>` in a single-file store. */
+   readonly key: string;
+   readonly text: string;
+   readonly updatedAt: number;
++  /** The note's frontmatter name, else its file name; the head of each part. */
++  readonly title?: string;
+ }
++/** The file a key belongs to: the part before `::`, else the whole key. */
++export function fileOfKey(key: string): string;
+</script>
+  </doc-schema>
+</doc-claim>
+
+<!-- ═════ scope ═════ -->
+<doc-claim aux="scope">
+  <p>Not changing: the cap, the secret rule, the copy rule, compaction memories.</p>
+  <ul>
+    <li><code>CONTENT_CAP = 1500</code>, the size limit of one row.</li>
+    <li>The strict secret veto. It now drops one part.</li>
+    <li>Design 6: text that another path holds word for word stays skipped.</li>
+    <li>The "capped: N more" line. It is the compaction cap, compaction-items.ts:121.</li>
+    <li>The 256 KB read limit, infra/agent-files.ts:9.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body></html>

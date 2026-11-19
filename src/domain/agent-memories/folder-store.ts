@@ -13,7 +13,7 @@ export interface FolderRules {
   readonly item: (
     text: string,
     mtimeMs: number,
-  ) => { readonly text: string; readonly updatedAt: number } | null;
+  ) => { readonly text: string; readonly updatedAt: number; readonly title?: string } | null;
 }
 
 /** Null when the folder is missing; a file that could not be read is `skipped`, so its row is

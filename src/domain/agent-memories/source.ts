@@ -40,6 +40,22 @@ export function itemSource(
   return `${prefix}${key}#${itemHash(text)}`;
 }
 
+/** Joins a long note's key to a part's `<heading slug>/<12 hex>`. */
+export const PART_MARK = '::';
+
+// A file name may hold "::", so only the exact tail the splitter writes, at the key's end, is a part.
+const PART_TAIL = new RegExp(`${PART_MARK}[a-z0-9-]+/[0-9a-f]{${ID_SUFFIX_CHARS}}(?:~\\d+)?$`);
+
+/** The note a key belongs to: the key before its part tail, else the whole key. */
+export function fileOfKey(key: string): string {
+  const tail = PART_TAIL.exec(key);
+  return tail === null ? key : key.slice(0, tail.index);
+}
+
+export function isPartKey(key: string): boolean {
+  return PART_TAIL.test(key);
+}
+
 /** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name
  * may hold one too. */
 export function splitSource(

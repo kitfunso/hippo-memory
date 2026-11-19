@@ -32,6 +32,8 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { sqliteImportStores } from '../../src/store/sqlite/maintenance/agent-import-stores.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { TEST_RUN } from '../_helpers/test-run.js';
+import { objectsAt } from '../_helpers/objects-at.js';
+import { saveDecision } from '../../src/entry/testing.js';
 
 const A = 'Run the schema check before this service deploys.';
 const B = 'Run the schema check and the smoke test before each deploy.';
@@ -164,6 +166,40 @@ describe('agent memory sync: the Added list', () => {
     expect(only()).toMatchObject({ id: row.id, pinned: true });
     expect(only().tags).not.toContain(TAG);
     expect(dormantRows(w.local)).toEqual([]);
+  });
+
+  it('a row a decision links to loses its tag and stays live when its note goes, so the link holds', async () => {
+    const file = note(dir, 'deploy.md', A);
+    await sync();
+    const row = only();
+    const decision = await saveDecision(objectsAt(w.local), 30, 'default', { decisionText: 'We deploy on Fridays.' });
+    // No API links an object to a row it did not write, so the link is made the way a merge leaves it.
+    withDb(w.local, (db) => db.prepare('UPDATE decisions SET memory_id = ? WHERE id = ?').run(row.id, decision.id));
+    unlinkSync(file);
+
+    expect(claude(await sync())).toMatchObject({ untagged: 1, setAside: 0 });
+    expect(liveRows(w.local).find((e) => e.id === row.id)?.tags).not.toContain(TAG);
+    expect(dormantRows(w.local)).toEqual([]);
+    const link = withDb(w.local, (db) => db.prepare('SELECT memory_id FROM decisions WHERE id = ?').get(decision.id));
+    expect(link).toEqual({ memory_id: row.id });
+  });
+
+  it('the parts of a long note that turns unreadable stay', async () => {
+    const long = Array.from({ length: 12 }, (_, i) => `Paragraph ${i}: ${A.repeat(6)}`).join('\n\n');
+    note(dir, 'big.md', long);
+    await sync();
+    const parts = liveRows(w.local)
+      .map((e) => e.id)
+      .sort();
+    expect(parts.length).toBeGreaterThan(1);
+    note(dir, 'big.md', `${long}\u0000`);
+
+    expect(claude(await sync())).toMatchObject({ unread: 1, setAside: 0, replaced: 0, imported: 0 });
+    expect(
+      liveRows(w.local)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(parts);
   });
 
   it('an unread item (over 256 KB, or holding a NUL byte) leaves its row alone', async () => {

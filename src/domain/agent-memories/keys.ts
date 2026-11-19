@@ -14,15 +14,20 @@ export function itemHash(text: string): string {
 }
 
 /** Keys for a single-file store's items: `<heading slug>/<12 hex of the text>`, `~2`, `~3` on
- * repeats. */
+ * repeats; a `seen` shared between calls counts the repeats across them. */
 export function textItemKeys(
   items: readonly { readonly headingSlug: string; readonly text: string }[],
+  seen = new Map<string, number>(),
 ): string[] {
-  const seen = new Map<string, number>();
   return items.map(({ headingSlug, text }) => {
     const base = `${headingSlug}/${sha256Hex(text).slice(0, ID_SUFFIX_CHARS)}`;
     const n = (seen.get(base) ?? 0) + 1;
     seen.set(base, n);
     return n === 1 ? base : `${base}~${n}`;
   });
+}
+
+/** A key's heading: all before its last `/`, so `<heading slug>/<12 hex>` gives the slug. */
+export function headingOfKey(key: string): string {
+  return key.slice(0, Math.max(0, key.lastIndexOf('/')));
 }

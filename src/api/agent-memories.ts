@@ -18,14 +18,34 @@ import type { AdapterContext } from '../domain/agent-memories/types.js';
 export type { SyncOptions };
 
 /**
- * init, sleep, `import --agents` and the daily runner: a local store gets its project pass then the
- * user pass; the global store the user pass only.
+ * init, sleep and `import --agents`: a local store gets its project pass then the user pass; the
+ * global store the home folder's pass then the user pass.
  */
 export async function importForStore(root: string, opts: SyncOptions): Promise<ImportReport> {
-  if (opts.machine.isGlobalRoot(root)) return importUserMemories(root, opts);
-  const report = await importProjectMemories(root, opts);
+  const report = opts.machine.isGlobalRoot(root)
+    ? await importHomeMemories(root, opts)
+    : await importProjectMemories(root, opts);
   mergeReports(report, await importUserMemories(root, opts));
   return report;
+}
+
+/** The home folder's notes, user-global as a session at home files them, with legacy adoption and
+ * no handover: the global store is their own store. */
+async function importHomeMemories(globalRoot: string, opts: SyncOptions): Promise<ImportReport> {
+  const ctx = context(opts.machine, { projectRoot: opts.machine.home });
+  return runPass(
+    {
+      scope: 'project',
+      target: globalRoot,
+      invoking: globalRoot,
+      list: (a) => a.list(ctx, 'project'),
+      legacy: true,
+      originProject: '',
+      legacyOrigins: [],
+      handover: false,
+    },
+    opts,
+  );
 }
 
 /** A local store's project pass with legacy adoption; `init --scan` runs it per repository and

@@ -116,6 +116,11 @@ const keptCases: readonly PlanCase[] = [
     want: { unchanged: 1 },
   },
   {
+    name: 'an unchanged note folds the legacy rows of its key into its row',
+    setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new')], legacy: new Map([['k', ['L1']]]) },
+    want: { unchanged: 1, collapse: [{ id: 'L1', by: 'r1' }] },
+  },
+  {
     name: 'collapses two tagged rows with the item hash into the one created later',
     setup: { items: [note('k', 'new')], live: [tagged('r1', 'k', 'new', DAY2), tagged('r2', 'k', 'new', DAY1)] },
     want: { collapse: [{ id: 'r2', by: 'r1' }] },
@@ -422,6 +427,54 @@ const editCases: readonly PlanCase[] = [
   },
 ];
 
+// A long note's parts: `<file>::<heading slug>/<text hash>`.
+const PART_A = 'n.md::top/aaaaaaaaaaaa';
+const PART_B = 'n.md::top/bbbbbbbbbbbb';
+const PART_C = 'n.md::state/cccccccccccc';
+
+const partCases: readonly PlanCase[] = [
+  {
+    name: 'a note grown past the cap: its first part supersedes the whole row and takes its history',
+    setup: { items: [note(PART_A, 'ha'), note(PART_B, 'hb')], live: [tagged('w1', 'n.md', 'h0')] },
+    want: {
+      writes: [
+        { key: PART_A, hash: 'ha', supersedes: ['w1'], carry: ['w1'] },
+        { key: PART_B, hash: 'hb', supersedes: [] },
+      ],
+    },
+    asked: [PART_A, PART_B],
+  },
+  {
+    name: 'a note cut back under the cap: its whole row supersedes every part and takes their history',
+    setup: { items: [note('n.md', 'h0')], live: [tagged('p1', PART_A, 'ha'), tagged('p2', PART_C, 'hc')] },
+    want: { writes: [{ key: 'n.md', hash: 'h0', supersedes: ['p1', 'p2'], carry: ['p1', 'p2'] }] },
+    asked: ['n.md'],
+  },
+  {
+    name: 'an edited part supersedes the one part gone under its heading; the others stay',
+    setup: {
+      items: [note(PART_A, 'ha'), note(PART_B, 'hb'), note(PART_C, 'hc')],
+      live: [tagged('p1', PART_A, 'ha'), tagged('p2', 'n.md::top/dddddddddddd', 'ho'), tagged('p3', PART_C, 'hc')],
+    },
+    want: { unchanged: 2, writes: [{ key: PART_B, hash: 'hb', supersedes: ['p2'] }] },
+    asked: [PART_B],
+  },
+  {
+    name: 'a folder store never pairs two whole notes in one subfolder',
+    setup: { items: [note('sub/b.md', 'hb')], live: [tagged('g1', 'sub/a.md', 'ha')] },
+    want: { setAside: ['g1'], writes: [{ key: 'sub/b.md', hash: 'hb', supersedes: [] }] },
+    asked: ['sub/b.md'],
+  },
+  {
+    name: 'the parts of a note that was not read stay',
+    setup: { skipped: ['n.md'], live: [tagged('p1', PART_A, 'ha'), tagged('p2', PART_C, 'hc')] },
+  },
+];
+
+describe('planContainer: long notes in parts', () => {
+  it.each(partCases)('$name', (c) => check(c));
+});
+
 describe('planContainer: present item with a live row of its hash', () => {
   it.each(keptCases)('$name', (c) => check(c));
 });
@@ -512,7 +565,12 @@ describe('planContainer: one key across syncs', () => {
 });
 
 const legacyRow = (id: string, file: string, textKey: string): LegacyRow => ({ id, file, textKey });
-const target = (ref: string, file: string, textKey: string): LegacyTarget => ({ ref, file, textKey });
+const target = (ref: string, file: string, textKey: string, note = file): LegacyTarget => ({
+  ref,
+  file,
+  note,
+  textKey,
+});
 
 interface LegacyCase {
   readonly name: string;
@@ -559,14 +617,24 @@ const legacyCases: readonly LegacyCase[] = [
     replace: [['t1', 'L1']],
   },
   {
-    name: 'leaves two legacy rows of one file with different text untouched',
+    name: 'replaces every legacy row of a file one note has',
     rows: [legacyRow('L1', 'a.md', 'x'), legacyRow('L2', 'a.md', 'y')],
     targets: [target('t1', 'a.md', 'z')],
+    replace: [
+      ['t1', 'L1'],
+      ['t1', 'L2'],
+    ],
   },
   {
     name: 'leaves one legacy row untouched when two notes share its file name',
     rows: [legacyRow('L1', 'a.md', 'x')],
+    targets: [target('t1', 'a.md', 'y', 'dirA'), target('t2', 'a.md', 'z', 'dirB')],
+  },
+  {
+    name: "gives a long note's legacy row to its first part",
+    rows: [legacyRow('L1', 'a.md', 'x')],
     targets: [target('t1', 'a.md', 'y'), target('t2', 'a.md', 'z')],
+    replace: [['t1', 'L1']],
   },
   {
     name: 'does not reuse a target adopted in the first round for a replace',
@@ -606,6 +674,7 @@ describe('matchLegacy', () => {
   it.each(legacyCases)('$name', (c) => {
     const match = matchLegacy(c.rows, c.targets);
     expect(byFirst(match.adopt)).toEqual(byFirst(c.adopt ?? []));
-    expect(byFirst(match.replace)).toEqual(byFirst(c.replace ?? []));
+    const replaced = [...match.replace].flatMap(([ref, ids]) => ids.map((id) => [ref, id] as const));
+    expect(byFirst(replaced)).toEqual(byFirst(c.replace ?? []));
   });
 });

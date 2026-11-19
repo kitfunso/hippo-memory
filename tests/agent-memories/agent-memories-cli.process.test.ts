@@ -245,6 +245,18 @@ describe('hippo import --agents', () => {
     expect(imported(local)).toEqual([PROJECT_NOTE]);
   });
 
+  it("--global imports the home folder's notes into the global store as user-global", async () => {
+    const b = box();
+    const HOME_NOTE = 'The home folder note says the laptop backs up at noon.';
+    note(projectNotes(b, b.home), 'backup.md', HOME_NOTE);
+
+    const dry = await hippo(b, b.project, ['import', '--agents', '--global', '--dry-run']);
+    expect(dry.toLowerCase()).toContain(`project ${projectNotes(b, b.home)}: 1 note`.toLowerCase());
+    await hippo(b, b.project, ['import', '--agents', '--global']);
+    expect(imported(b.global)).toEqual([HOME_NOTE]);
+    expect(loadAllEntries(b.global, 'default').find((e) => e.content === HOME_NOTE)?.originProject).toBe('');
+  });
+
   it('in a folder without a store, imports as session end does: the project notes into the global store under its origin', async () => {
     const b = box();
     note(projectNotes(b), 'schema.md', PROJECT_NOTE);

@@ -65,6 +65,11 @@ function isIndented(line: string): boolean {
   return line.startsWith(' ') || line.startsWith('\t');
 }
 
+/** A heading line's text, or null for any other line. */
+export function markdownHeading(line: string): string | null {
+  return HEADING.test(line) ? headingText(line) : null;
+}
+
 function headingText(line: string): string {
   // A closing run of '#' counts only after a space, so `## C#` keeps its name.
   return line
@@ -79,12 +84,13 @@ function startsBlock(line: string): boolean {
   return RULE.test(line) || HEADING.test(line) || BULLET.test(line);
 }
 
-function fenceOf(line: string): string | null {
+/** The backtick or tilde run a line opens a fence with, or null. */
+export function fenceOf(line: string): string | null {
   const match = FENCE.exec(line);
   return match === null ? null : (match[1] ?? match[2] ?? null);
 }
 
-function closesFence(line: string, fence: string): boolean {
+export function closesFence(line: string, fence: string): boolean {
   const trimmed = line.trim();
   return trimmed.length >= fence.length && trimmed.replaceAll(fence[0], '') === '';
 }

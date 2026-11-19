@@ -177,6 +177,7 @@ export function summaryLine(report: ImportReport): string | null {
     total.untagged > 0
       ? `${plural(total.untagged, 'pinned memory', 'pinned memories')} kept with the note gone`
       : '',
+    total.duplicate > 0 ? `${total.duplicate} already stored` : '',
     total.secret > 0 ? `${total.secret} skipped for a secret` : '',
     total.rejected > 0 ? `${total.rejected} skipped as rejected` : '',
   ].filter((p) => p !== '');

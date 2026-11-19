@@ -45,7 +45,7 @@ import {
 import { loadConfig } from '../../src/host/config-file.js';
 import { sharingStores } from '../_helpers/sharing-stores.js';
 import { sqliteImportStores } from '../../src/store/sqlite/maintenance/agent-import-stores.js';
-import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
+import { writeEntry, loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
@@ -71,6 +71,23 @@ const opts = () => ({
   machine: w.machine,
   run: TEST_RUN,
 });
+
+/** About 340 characters each, so a dozen pass the content cap. */
+const longNote = (n: number): string =>
+  Array.from({ length: n }, (_, i) => `Paragraph ${i}: ${'the build box keeps its cache warm, '.repeat(9)}`).join(
+    '\n\n',
+  );
+
+function legacyRow(root: string, content: string, file: string): MemoryEntry {
+  const entry = createMemory(content, {
+    tags: ['claude-code-memory'],
+    source: `claude-memory:${file}`,
+    tenantId: 'default',
+    baseHalfLifeDays: 30,
+  });
+  writeEntry(root, entry);
+  return entry;
+}
 
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
   const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), originProject: origin };
@@ -219,17 +236,67 @@ describe('agent memory sync: routing and sharing', () => {
     expect(dormantRows(w.global).map((d) => d.id)).toEqual([stray.id]);
   });
 
-  it('a global-store sleep runs the user pass only', async () => {
+  it("a global-store sleep runs the home folder's pass and the user pass, and no other folder's", async () => {
+    const HOME_NOTE = 'The home folder note says the laptop backs up at noon.';
     note(
       projectNotes(w, dirname(w.global)),
-      'home.md',
+      'parent.md',
       "A note in the folder Claude keeps for the global store's parent.",
     );
+    note(projectNotes(w, w.home), 'home.md', HOME_NOTE);
     note(userNotes(w), 'u.md', USER_NOTE);
 
     const report = await importForStore(w.global, opts());
-    expect(liveTexts(w.global)).toEqual([USER_NOTE]);
-    expect(report.tools.flatMap((t) => t.containers.map((c) => c.scope))).toEqual(['user']);
+    expect(liveTexts(w.global)).toEqual([HOME_NOTE, USER_NOTE].sort());
+    expect(liveRows(w.global).map((e) => e.originProject)).toEqual(['', '']);
+    expect(report.tools.flatMap((t) => t.containers.map((c) => c.scope))).toEqual(['project', 'user']);
+  });
+
+  it('the home pass takes over the old Claude import in the global store, and a second run keeps every row live', async () => {
+    const home = projectNotes(w, w.home);
+    note(home, 'deploy.md', DEPLOY);
+    note(home, 'long.md', longNote(12));
+    initTestStore(w.global);
+    const same = legacyRow(w.global, DEPLOY, 'deploy.md');
+    const stale = [
+      legacyRow(w.global, 'An old copy of the long note.', 'long.md'),
+      legacyRow(w.global, 'A second old copy.', 'long.md'),
+    ];
+
+    expect(claude(await importForStore(w.global, opts()))).toMatchObject({ adopted: 1, replaced: 1, duplicate: 0 });
+    expect(readEntry(w.global, same.id)?.source).toMatch(
+      new RegExp(`^agent-memory:claude-code:${expectedContainer(home, 'p')}/deploy\\.md#`),
+    );
+    const head = liveRows(w.global).find((e) => e.content.includes('Paragraph 0:'));
+    for (const old of stale) expect(readEntry(w.global, old.id)?.supersededBy).toBe(head?.id);
+    const live = liveRows(w.global)
+      .map((e) => e.id)
+      .sort();
+
+    expect(claude(await importForStore(w.global, opts()))).toMatchObject({ setAside: 0, handedOver: 0, imported: 0 });
+    expect(
+      liveRows(w.global)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(live);
+    expect(dormantRows(w.global)).toEqual([]);
+  });
+
+  it('the handover keeps the global parts of a long note the local pass could not read', async () => {
+    const hand = join(w.dir, 'hand');
+    mkdirSync(join(hand, '.git'), { recursive: true });
+    note(projectNotes(w, hand), 'long.md', longNote(12));
+    await importAtSessionEnd(hand, undefined, opts());
+    const parts = liveRows(w.global).map((e) => e.id);
+    expect(parts.length).toBeGreaterThan(1);
+
+    note(projectNotes(w, hand), 'long.md', `${longNote(12)}\u0000`);
+    initTestStore(join(hand, '.hippo'));
+    expect(claude(await importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({
+      unread: 1,
+      handedOver: 0,
+    });
+    expect(liveRows(w.global).map((e) => e.id)).toEqual(parts);
   });
 
   it("a user container lands in the global store with origin ''", async () => {

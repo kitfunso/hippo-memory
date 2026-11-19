@@ -17,6 +17,7 @@ import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
 import { geminiAdapter } from './gemini.js';
 import { legacyWork, type LegacyWork } from './legacy.js';
+import { splitContainer } from './note-parts.js';
 import { openclawAdapter } from './openclaw.js';
 import { qwenCodeAdapter } from './qwen-code.js';
 import {
@@ -151,9 +152,10 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
 export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
-  const listings = ADAPTERS.filter((a) => allowed.has(a.tool)).flatMap((a) =>
-    listSafely(a, pass, report),
-  );
+  // Long notes split before the legacy match, so an old row is matched to a part.
+  const listings = ADAPTERS.filter((a) => allowed.has(a.tool))
+    .flatMap((a) => listSafely(a, pass, report))
+    .map((l) => ({ ...l, containers: l.containers.map(splitContainer) }));
   const hasItems = listings.some((l) => l.containers.some((c) => c.items.length > 0));
   let store: OpenStore | null = null;
   let synced: ContainerWork[] = [];

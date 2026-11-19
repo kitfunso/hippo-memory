@@ -7,7 +7,7 @@ import type { DormantSnapshot } from '../../base/ports/store/types.js';
 import type { ContainerWork, StoreSession } from './container-view.js';
 import type { ContainerPlan } from './plan.js';
 import type { Tally } from '../../base/memory/agent-memory-report.js';
-import { itemSource, splitSource, storedText } from './source.js';
+import { fileOfKey, itemSource, splitSource, storedText } from './source.js';
 import type { MemoryItem } from './types.js';
 
 /** What a plan's steps read beside the plan: the rows by id as they will stand, and the dormant
@@ -24,6 +24,7 @@ export function planSteps(
   rows: PlanRows,
 ): ImportStep[] {
   const items = new Map(w.container.items.map((item) => [item.key, item]));
+  const notes = new Set(w.container.items.map((i) => fileOfKey(i.key)));
   const item = (key: string): MemoryItem =>
     found(items.get(key), `planned key ${key} was not read`);
   const live = (id: string): MemoryEntry =>
@@ -33,7 +34,7 @@ export function planSteps(
     ...plan.collapse.map(({ id, by }): ImportStep => ({ kind: 'supersede', id, by })),
     ...plan.writes.map((write): ImportStep => ({
       kind: 'write',
-      entry: newRow(s, w, item(write.key)),
+      entry: withHistory(newRow(s, w, item(write.key)), (write.carry ?? []).map(live)),
       supersedes: write.supersedes,
     })),
     ...plan.restores.map(({ key, dormantId }): ImportStep => ({
@@ -49,7 +50,9 @@ export function planSteps(
     ...plan.setAside.map((id): ImportStep => ({
       kind: 'setAside',
       id,
-      why: items.has(splitSource(live(id).source, w.prefix).key) ? 'note-changed' : 'note-gone',
+      why: notes.has(fileOfKey(splitSource(live(id).source, w.prefix).key))
+        ? 'note-changed'
+        : 'note-gone',
     })),
   ];
 }
@@ -80,6 +83,20 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
     : base.created;
   const origin = s.originProject === undefined ? {} : { originProject: s.originProject };
   return { ...base, created, validFrom: created, ...origin };
+}
+
+/** A note that crossed the cap keeps the recall and outcome counts of the rows it replaces. */
+function withHistory(entry: MemoryEntry, from: readonly MemoryEntry[]): MemoryEntry {
+  if (from.length === 0) return entry;
+  const sum = (count: (row: MemoryEntry) => number): number =>
+    from.reduce((total, row) => total + count(row), 0);
+  return {
+    ...entry,
+    retrievalCount: sum((r) => r.retrievalCount),
+    outcomePositive: sum((r) => r.outcomePositive),
+    outcomeNegative: sum((r) => r.outcomeNegative),
+    outcomeScore: from.find((r) => r.outcomeScore !== null)?.outcomeScore ?? null,
+  };
 }
 
 /** The snapshot's row as if just recalled, carrying the tool's tag once. */
