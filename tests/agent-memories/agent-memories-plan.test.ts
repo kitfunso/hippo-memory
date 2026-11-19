@@ -454,7 +454,7 @@ const partCases: readonly PlanCase[] = [
     name: 'an edited part supersedes the one part gone under its heading; the others stay',
     setup: {
       items: [note(PART_A, 'ha'), note(PART_B, 'hb'), note(PART_C, 'hc')],
-      live: [tagged('p1', PART_A, 'ha'), tagged('p2', 'n.md::top/oooooooooooo', 'ho'), tagged('p3', PART_C, 'hc')],
+      live: [tagged('p1', PART_A, 'ha'), tagged('p2', 'n.md::top/dddddddddddd', 'ho'), tagged('p3', PART_C, 'hc')],
     },
     want: { unchanged: 2, writes: [{ key: PART_B, hash: 'hb', supersedes: ['p2'] }] },
     asked: [PART_B],

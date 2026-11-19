@@ -43,14 +43,17 @@ export function itemSource(
 /** Joins a long note's key to a part's `<heading slug>/<12 hex>`. */
 export const PART_MARK = '::';
 
-/** The note a key belongs to: the part before `::`, else the whole key. */
+// A file name may hold "::", so only the exact tail the splitter writes, at the key's end, is a part.
+const PART_TAIL = new RegExp(`${PART_MARK}[a-z0-9-]+/[0-9a-f]{${ID_SUFFIX_CHARS}}(?:~\\d+)?$`);
+
+/** The note a key belongs to: the key before its part tail, else the whole key. */
 export function fileOfKey(key: string): string {
-  const cut = key.indexOf(PART_MARK);
-  return cut < 0 ? key : key.slice(0, cut);
+  const tail = PART_TAIL.exec(key);
+  return tail === null ? key : key.slice(0, tail.index);
 }
 
 export function isPartKey(key: string): boolean {
-  return key.includes(PART_MARK);
+  return PART_TAIL.test(key);
 }
 
 /** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name

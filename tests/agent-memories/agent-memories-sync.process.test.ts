@@ -517,4 +517,22 @@ describe('agent memory sync: long notes in parts', () => {
     expect(readEntry(w.global, third?.id ?? '')?.supersededBy).toBe(fresh?.id);
     expect(dormantRows(w.global)).toEqual([]);
   });
+
+  // NTFS has no "::" in a file name, so the on-disk case runs only where the name is valid.
+  it.skipIf(process.platform === 'win32')('a long note whose file name holds "::" splits and pairs by its parts', async () => {
+    const dir = projectNotes(w);
+    const body = (...tail: string[]) => `## Body\n\n${longBody(8, ...tail)}`;
+    note(dir, 'a::b.md', body());
+    note(dir, 'a::c.md', 'A second, short note that shares the file name up to its colons.');
+    await sync();
+    const first = liveRows(w.local);
+    expect(first.length).toBeGreaterThan(2);
+
+    note(dir, 'a::b.md', body('RESOLVED: the disk reset.'));
+    const edited = claude(await sync());
+    expect(edited.setAside).toBe(0);
+    expect(edited.imported + edited.replaced).toBe(1);
+    expect(liveRows(w.local).filter((r) => first.some((f) => f.id === r.id))).toHaveLength(first.length - edited.replaced);
+    expect(liveRows(w.local).some((r) => r.content.includes('RESOLVED: the disk reset.'))).toBe(true);
+  });
 });
