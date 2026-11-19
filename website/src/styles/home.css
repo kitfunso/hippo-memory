@@ -21,7 +21,7 @@ code,pre,kbd{font-family:var(--mono)}
 .skip:focus{left:8px}
 :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:6px}
 h2.big{font:400 clamp(34px,4.4vw,58px)/1.02 var(--display);letter-spacing:-.015em;text-wrap:balance}
-.lede{margin-top:16px;color:var(--soft);font-size:18px;max-width:52ch}
+.lede{margin-top:16px;color:var(--soft);font-size:18px}
 /* page head of a dark sub-page (/teams/): clears the floating nav, colour bar under the title */
 .ptop{padding:clamp(150px,15vw,200px) 0 clamp(64px,8vw,104px)}
 .ptop h1{font:400 clamp(44px,5.6vw,76px)/1.02 var(--display);letter-spacing:-.015em;max-width:20ch;text-wrap:balance}
@@ -40,7 +40,6 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .shead{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:28px;align-items:start}
 .num{position:relative;display:block;font:500 108px/.84 var(--mono);letter-spacing:-.07em;color:#50677a;user-select:none;font-variant-numeric:tabular-nums;padding-bottom:20px}
 .num::after{content:"";position:absolute;left:6px;bottom:0;width:54px;height:3px;background:var(--bar)}
-.shead .lede{max-width:56ch}
 .shead .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
 
 /* top bar: 10's dotted strip, in the colour bar's three colours */
