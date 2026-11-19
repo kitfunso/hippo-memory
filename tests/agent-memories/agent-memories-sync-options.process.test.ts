@@ -220,6 +220,11 @@ describe('agent memory sync: options, time and reporting', () => {
     if (row !== undefined) writeEntry(w.local, { ...row, pinned: true });
     unlinkSync(bFile);
     expect(summaryLine(await sync())).toBe('Agent memories: 1 pinned memory kept with the note gone.');
+
+    const C = 'The nightly backup runs at two and keeps seven copies.';
+    writeEntry(w.local, createMemory(C, { tenantId: 'default', baseHalfLifeDays: 30 }));
+    note(dir, 'c.md', C);
+    expect(summaryLine(await sync())).toBe('Agent memories: 1 already stored.');
   });
 
   it("created carries the item's time as a 24-character Z timestamp, from an offset modified too, capped at now", async () => {
