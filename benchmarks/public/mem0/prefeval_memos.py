@@ -235,7 +235,7 @@ def setup(stage: str, out: Path, arm: str, limit: int) -> list[dict]:
         if qfile.exists() and json.loads(qfile.read_text(encoding="utf-8"))["qids"] != [q["qid"] for q in qs]:
             sys.exit(f"{qfile} holds another question set; use a new folder")
         repo = HERE.parents[2]
-        cfg = {"lane": "prefeval-memos, prereg dated notes 30", "name": NAME, "arm": arm, "topk": TOPK, "limit": limit,
+        cfg = {"lane": "prefeval-memos, prereg dated notes 30" + (", amendment dated notes 32" if arm == "hippo-cap" else ""), "name": NAME, "arm": arm, "topk": TOPK, "limit": limit,
                "memos_commit": "3a16e5fe", "data": {PARQUET.name: PARQUET_SHA, ROWS.name: sha_bytes(ROWS.read_bytes())},
                "hippo_memory": json.loads((repo / "package.json").read_text(encoding="utf-8"))["version"],
                "repo_head": subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True,
@@ -254,7 +254,7 @@ def setup(stage: str, out: Path, arm: str, limit: int) -> list[dict]:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("stage", choices=("prepare", "ingest", "retrieve", "answer", "judge", "score"))
-    ap.add_argument("--arm", choices=("hippo-emb", "bm25"), default="hippo-emb")
+    ap.add_argument("--arm", choices=("hippo-emb", "hippo-cap", "bm25"), default="hippo-emb")
     ap.add_argument("--limit", type=int, default=0, help="smoke: this many rows, spread over the set, into OUT/smoke/ARM")
     ap.add_argument("--slots", type=int, default=8)
     ap.add_argument("--shards", type=int, default=2, help="ingest and retrieve: servers, each on its own rows")

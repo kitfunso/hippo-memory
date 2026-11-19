@@ -5,17 +5,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25", "hippo-emb": "hippo", "hippo-best": "hippo", "hippo-rank": "hippo"}
+SERVER_ARM = {"hippo365": "hippo", "bm25": "bm25", "hippo-emb": "hippo", "hippo-best": "hippo", "hippo-rank": "hippo", "hippo-cap": "hippo"}
 FLAGS = {"hippo-emb": ["--embeddings", "1"],
          "hippo-best": ["--embeddings", "1", "--reranker-top-k", "50", "--rank-score"],
-         "hippo-rank": ["--embeddings", "1", "--rank-score"]}  # retrieval only: hippo-best without the cross-encoder
+         "hippo-rank": ["--embeddings", "1", "--rank-score"],  # retrieval only: hippo-best without the cross-encoder
+         "hippo-cap": ["--embeddings", "1", "--capture", "1"]}  # hippo-emb plus hippo capture's extractor at ingest
 
 
 def want_health(arm: str, read_only: bool = False) -> dict:
     """What /health must report for the arm, so no arm is searched with another arm's settings."""
     f = FLAGS.get(arm, [])
     return {"arm": SERVER_ARM[arm], "embeddings": "--embeddings" in f, "readOnly": read_only,
-            "rankScore": "--rank-score" in f,
+            "rankScore": "--rank-score" in f, "capture": "--capture" in f,
             "rerankerTopK": int(f[f.index("--reranker-top-k") + 1]) if "--reranker-top-k" in f else 0}
 
 

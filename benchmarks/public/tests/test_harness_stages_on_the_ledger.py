@@ -261,9 +261,9 @@ def test_the_hippo_best_arm_adds_the_reranker_and_rank_score_to_the_embeddings()
     best = harness.server_args("hippo-best", 1, Path("d"), read_only=True)
     assert best[-6:] == ["--embeddings", "1", "--reranker-top-k", "50", "--rank-score", "--read-only"]
     assert harness.want_health("hippo-best", True) == {"arm": "hippo", "embeddings": True, "readOnly": True,
-                                                       "rankScore": True, "rerankerTopK": 50}
+                                                       "rankScore": True, "rerankerTopK": 50, "capture": False}
     assert harness.want_health("hippo-emb", False) == {"arm": "hippo", "embeddings": True, "readOnly": False,
-                                                       "rankScore": False, "rerankerTopK": 0}
+                                                       "rankScore": False, "rerankerTopK": 0, "capture": False}
 
 
 class Fixed:
@@ -344,3 +344,9 @@ def test_a_replay_refuses_a_benchmark_that_asks_mid_history(bench, tmp_path, mon
                            bonferroni=None, arm="hippo-best", pairs_with=[a.out], store_from=a.out)
     with pytest.raises(SystemExit, match="mid-history"):
         harness.setup(r)
+
+
+def test_the_hippo_cap_arm_is_hippo_emb_plus_capture():
+    assert harness.server_args("hippo-cap", 1, Path("d"))[-4:] == ["--embeddings", "1", "--capture", "1"]
+    assert harness.want_health("hippo-cap", False) == {"arm": "hippo", "embeddings": True, "readOnly": False,
+                                                      "rankScore": False, "rerankerTopK": 0, "capture": True}

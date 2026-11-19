@@ -51,6 +51,7 @@ const { isEmbeddingAvailable } = await distImport('base/embeddings/local.js');
 const { getEmbedding } = await distImport('infra/local-embedder.js');
 const { createCrossEncoderReranker } = await distImport('domain/rerankers/cross-encoder.js');
 const { transformersCrossEncoder } = await distImport('infra/cross-encoder.js');
+const { extractFromTexts } = await distImport('surface/capture/extract.js');
 
 const ARM = arg('arm', 'hippo');
 const PORT = Number(arg('port', '8888'));
@@ -65,6 +66,9 @@ if (!['hippo', 'bm25'].includes(ARM)) throw new Error(`--arm must be hippo or bm
 const EMBED = ARM === 'hippo' && isEmbeddingAvailable() && arg('embeddings', '0') === '1';
 const RERANK_K = Number(arg('reranker-top-k', '0'));
 const RANK_SCORE = args.includes('--rank-score');
+// hippo capture's extractor over each chunk: the user's own stated preferences and rules become memories too.
+const CAPTURE = arg('capture', '0') === '1';
+if (CAPTURE && ARM !== 'hippo') throw new Error('--capture 1 needs --arm hippo');
 if (!Number.isInteger(RERANK_K) || RERANK_K < 0) throw new Error(`--reranker-top-k must be a whole number, got ${RERANK_K}`);
 if (RERANK_K > 0 && ARM !== 'hippo') throw new Error('--reranker-top-k needs --arm hippo');
 // A cold model can outlast the 5 s query-embedding deadline, and that search then runs on BM25 alone.
@@ -115,8 +119,15 @@ async function addChunk(body) {
     entry.created = iso;
     entry.last_retrieved = iso;
   }
-  batchWriteAndDelete(root, [entry], []);
-  if (EMBED) await embedMemory(root, entry);
+  const users = messages.filter((m) => (m.role ?? 'user') === 'user').map((m) => String(m.content ?? ''));
+  const captured = CAPTURE ? extractFromTexts(users, users.length).map((item) => {
+    const e = createMemory(item.content, { ...opts, tags: ['benchmark', 'captured', item.category, ...(item.fromUser ? ['from-user'] : [])] });
+    e.created = entry.created;
+    e.last_retrieved = entry.last_retrieved;
+    return e;
+  }) : [];
+  batchWriteAndDelete(root, [entry, ...captured], []);
+  if (EMBED) for (const e of [entry, ...captured]) await embedMemory(root, e);
   cache.delete(root);
   return { results: [{ id: entry.id, memory: text, event: 'ADD' }] };
 }
@@ -187,7 +198,7 @@ const server = http.createServer((req, res) => {
       if (req.method === 'POST' && url.pathname === '/memories') out = await addChunk(await readBody(req));
       else if (req.method === 'POST' && url.pathname === '/search') out = await search(await readBody(req));
       else if (req.method === 'DELETE' && url.pathname === '/memories') out = deleteUser(url.searchParams.get('user_id') ?? '');
-      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null, readOnly: READ_ONLY, rerankerTopK: RERANK_K, rankScore: RANK_SCORE };
+      else if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) out = { status: 'ok', arm: ARM, embeddings: EMBED, halfLifeDays: HALF_LIFE_DAYS ?? null, readOnly: READ_ONLY, rerankerTopK: RERANK_K, rankScore: RANK_SCORE, capture: CAPTURE };
       else { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(out));
