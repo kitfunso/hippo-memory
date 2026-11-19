@@ -390,6 +390,18 @@ describe('agent memory sync: long notes in parts', () => {
     expect(hits.some((h) => h.content.includes(TAIL))).toBe(true);
   });
 
+  it('a section under a non-Latin heading pairs only with itself, so a new one never supersedes a gone one', async () => {
+    const dir = projectNotes(w);
+    const body = `## Body\n\n${longBody(6)}`;
+    note(dir, 'long.md', `## 日本語\n\nThe Japanese section says the cache lives on the D drive.\n\n${body}`);
+    await sync();
+    const gone = liveRows(w.local).find((r) => r.content.includes('Japanese section'));
+
+    note(dir, 'long.md', `## Русский\n\nThe Russian section says the deploy runs on Fridays.\n\n${body}`);
+    expect(claude(await sync())).toMatchObject({ imported: 1, replaced: 0, setAside: 1 });
+    expect(dormantRows(w.local).map((d) => d.id)).toEqual([gone?.id]);
+  });
+
   it('a paragraph appended to a long note moves one part, and a new section above moves none', async () => {
     const dir = projectNotes(w);
     const body = (...tail: string[]) => `## Alpha\n\n${longBody(6)}\n\n## Beta\n\n${longBody(6, ...tail)}`;

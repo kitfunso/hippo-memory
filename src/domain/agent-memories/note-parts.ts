@@ -8,7 +8,7 @@ import {
   secretSpans,
   type SecretSpan,
 } from '../../base/util/secret-detect.js';
-import { textItemKeys } from './keys.js';
+import { sha256Hex, textItemKeys } from './keys.js';
 import { closesFence, fenceOf, markdownHeading, slugHeading } from './markdown.js';
 import { CONTENT_CAP, PART_MARK } from './source.js';
 import type { Container, MemoryItem } from './types.js';
@@ -131,14 +131,21 @@ function sectionsOf(lines: readonly Piece[]): Section[] {
     else if (last.heading !== '' && !last.lines.some((l) => l.text.trim() !== '')) {
       sections[sections.length - 1] = {
         heading: `${last.heading} > ${heading}`,
-        slug: slugHeading(heading),
+        slug: partSlug(heading),
         headingLines: [...last.headingLines, line],
         lines: [],
       };
-    } else sections.push({ heading, slug: slugHeading(heading), headingLines: [line], lines: [] });
+    } else sections.push({ heading, slug: partSlug(heading), headingLines: [line], lines: [] });
     fence = fenceAfter(fence, line.text);
   }
   return sections.filter((s) => s.lines.some((l) => l.text.trim() !== ''));
+}
+
+/** A heading with no Latin letter or digit slugs to 'top', so it takes a hash and pairs only with
+ * itself. */
+function partSlug(heading: string): string {
+  const slug = slugHeading(heading);
+  return slug === 'top' ? `h-${sha256Hex(heading).slice(0, 8)}` : slug;
 }
 
 /** Paragraphs, lists and fences, a fence always a block of its own, blank lines inside it kept. */
