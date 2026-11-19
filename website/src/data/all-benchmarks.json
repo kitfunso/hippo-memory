@@ -3190,9 +3190,9 @@
       "reason": "Judged with the official script's prompts and its gpt-4o-2024-08-06 judge, over all 500 questions. The answer model is Sonnet 5. No product publishes an answer score for M.",
       "caveat": null,
       "hippo": {
-        "value": "78.4",
-        "num": 78.4,
-        "setting": "default, top 200, official gpt-4o judge",
+        "value": "78.2",
+        "num": 78.2,
+        "setting": "embedder, top 200, official gpt-4o judge",
         "status": null
       },
       "cells": {}
@@ -3368,9 +3368,9 @@
       "reason": "The paper's RAG rows keep the whole chat in the prompt; ours shows 5 retrieved turns. The vendor rows use another data split, top 10 and gpt-4o-mini.",
       "caveat": null,
       "hippo": {
-        "value": "83.0",
-        "num": 83.0,
-        "setting": "default, top 5",
+        "value": "95.8",
+        "num": 95.8,
+        "setting": "embedder, top 5",
         "status": null
       },
       "cells": {
@@ -3431,9 +3431,9 @@
       "reason": "Every published row answers with GPT-4.1-mini, one model for every system, and ours answers with Sonnet 5.",
       "caveat": null,
       "hippo": {
-        "value": "56.4",
-        "num": 56.4,
-        "setting": "default, top 10, mean of 9 categories",
+        "value": "56.5",
+        "num": 56.5,
+        "setting": "embedder, top 10, mean of 9 categories",
         "status": null
       },
       "cells": {
@@ -3564,9 +3564,9 @@
       "reason": "Mem0's row uses the same runner code, prompts and scorer. Mem0 answered and judged with gpt-5 and showed 200 memories; we use Sonnet 5, gpt-5.6-sol and 100. The other rows use other scorers or setups.",
       "caveat": null,
       "hippo": {
-        "value": "69.9",
-        "num": 69.9,
-        "setting": "default",
+        "value": "69.3",
+        "num": 69.3,
+        "setting": "embedder",
         "status": null
       },
       "cells": {
@@ -3658,9 +3658,9 @@
       "reason": "The sample design is ours, and no published number exists at 50 conversations. The MemPalace row is a 300-item sample with no stated model or judge.",
       "caveat": null,
       "hippo": {
-        "value": "59.6",
-        "num": 59.6,
-        "setting": "default, top 20",
+        "value": "69.6",
+        "num": 69.6,
+        "setting": "embedder, top 20",
         "status": null
       },
       "cells": {
