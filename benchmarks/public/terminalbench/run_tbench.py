@@ -29,7 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[2]
+REPO = Path(os.environ.get("TBENCH_HIPPO_REPO") or HERE.parents[2])  # the hippo checkout whose bin and dist are bundled
 HARBOR = os.environ.get("HARBOR_EXE", "harbor")
 TASKS = Path(os.environ.get("TBENCH_TASKS", Path.home() / "hippo-bench/tbench/data/terminal-bench"))
 MODEL = "anthropic/claude-sonnet-5"
@@ -45,6 +45,7 @@ DOCKER_DISK = Path(os.environ.get("LOCALAPPDATA") or Path.home())  # Docker Desk
 SEED = 1
 # hippo runs from a docker volume: from a Windows bind mount each call took 40 s to load, against 0.3 s.
 BUNDLE_VOL = "hippo-tbench-bundle"
+WARM = "/opt/hippo/pkg/node_modules/@huggingface/transformers/.cache"  # the package's own model cache
 ARMS = ("none", "hippo")
 AUTH_RE = re.compile(r"invalid api key|authentication|oauth token|not logged in|/login", re.I)
 LOCK = threading.Lock()
@@ -75,7 +76,31 @@ def task_digest(name: str) -> str:
 
 # ---------- bundle: a linux hippo every task container can run, mounted read-only ----------
 
-def bundle(out: Path) -> None:
+def add_embedder(pkg: Path) -> dict:
+    """The embedder hippo init installs, built for linux into the bundle volume's pkg/node_modules, and its model
+    cached there by one `hippo embed`, so tasks recall by meaning with no download. The 484 MB tree goes straight
+    into the volume: copied through a Windows folder it hung for 20 minutes (19 Nov)."""
+    js = (pkg / "dist" / "surface" / "cli" / "embedder-install.js").read_text(encoding="utf-8")
+    spec = re.search(r"@huggingface/transformers@[\w.-]+", js)
+    if not spec:
+        sys.exit("no @huggingface/transformers@VERSION in the bundled embedder-install.js")
+    cli = "HIPPO_HOME=/tmp/s /opt/hippo/node /opt/hippo/pkg/bin/hippo.js"
+    r = sh(["docker", "run", "--rm", "-v", f"{BUNDLE_VOL}:/opt/hippo", "-e", "HIPPO_SKIP_AUTO_INTEGRATIONS=1",
+            HELPER_IMAGE, "sh", "-c",
+            f"cd /tmp && npm install --ignore-scripts --no-save --no-audit --no-fund {spec.group()} >&2"
+            " && mv /tmp/node_modules /opt/hippo/pkg/node_modules"
+            f" && {cli} init --global --no-hooks --no-schedule --no-learn >&2 && {cli} remember --global 'warm-up' >&2"
+            # embed reads a project store, so the global one is reached through a .hippo link
+            f" && mkdir -p /w && ln -s /tmp/s /w/.hippo && cd /w && {cli} embed >&2 && {cli} embed --status"
+            f" && echo '--- onnx' && cd {WARM} && find . -name '*.onnx' -exec sha256sum {{}} +"], timeout=HELPER_SEC)
+    status, _, sums = r.stdout.partition("--- onnx")
+    onnx = dict(line.split()[::-1] for line in sums.strip().splitlines())
+    if r.returncode or not onnx:
+        sys.exit(f"installing or warming {spec.group()} failed: {r.stdout[-400:]}{r.stderr[-600:]}")
+    return {"package": spec.group(), "status": status.strip()[-300:], "onnx_sha256": onnx}
+
+
+def bundle(out: Path, embedder: bool) -> None:
     out.mkdir(parents=True, exist_ok=True)
     pkg = out / "pkg"
     if pkg.exists():
@@ -108,13 +133,14 @@ def bundle(out: Path) -> None:
             "hippo_cli_version": ver.stdout.strip(), "git_head": sh(["git", "-C", str(REPO), "rev-parse", "HEAD"]).stdout.strip(),
             "node": sh(["docker", "run", "--rm", *mount, HELPER_IMAGE, "/opt/hippo/node", "--version"]).stdout.strip(),
             "hooks": {k: [h["command"] for g in v for h in g["hooks"]] for k, v in settings["hooks"].items()}}
-    (out / "bundle.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     sh(["docker", "volume", "rm", BUNDLE_VOL])
     sh(["docker", "volume", "create", BUNDLE_VOL])
     r = sh(["docker", "run", "--rm", "-v", f"{out.as_posix()}:/src:ro", "-v", f"{BUNDLE_VOL}:/opt/hippo", HELPER_IMAGE,
             "sh", "-c", "cp -a /src/. /opt/hippo/ && chmod 755 /opt/hippo/hippo /opt/hippo/node"])
     if r.returncode:
         sys.exit(f"filling volume {BUNDLE_VOL} failed: {r.stderr}")
+    meta["embedder"] = add_embedder(pkg) if embedder else None
+    (out / "bundle.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(json.dumps(meta, indent=2))
 
 
@@ -363,9 +389,10 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--seed-memory", default="", help="smoke only: one memory stored before the first task")
     ap.add_argument("--tasks", default="", help="comma-separated task names (smoke); idx stays the full order's")
+    ap.add_argument("--embedder", action="store_true", help="bundle: add transformers and the default model, offline")
     a = ap.parse_args()
     if a.cmd == "bundle":
-        bundle(a.out.resolve())
+        bundle(a.out.resolve(), a.embedder)
     elif a.cmd == "run":
         arms = [x for x in a.arms.split(",") if x]
         if not set(arms) <= set(ARMS):

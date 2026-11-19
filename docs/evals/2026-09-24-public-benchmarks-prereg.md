@@ -893,3 +893,16 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **Order.** `ingest` and `retrieve` for all 1,000 rows now (free). Then, after the 00:00 UTC reset of the free daily tokens, `answer`, `judge` and `score`. The five smoke rows of dated notes 30 stay out of the primary.
 
 **Read before this note.** `src/surface/capture/extract.ts` (`extractFromTexts`, `PREFERENCE_PATTERNS`) and `command.ts`, the server's `addChunk`, dated notes 30, and the answerer-test output.
+
+### Amendment 7, dated notes 2 (2026-11-19, before any task of `tbench-r1-emb`): the `hippo` arm again on tasks 0 to 9, with hippo 3.9.0 and its embedder
+
+**Why.** The `hippo` arm of `tbench-r1` ran hippo-memory 3.5.1 with no embedder: the bundle carried only `bin` and `dist`, and `@huggingface/transformers` is an optional package. On tasks 0 to 9 it passed 8 and `none` passed 9. Since 3.8.0, `hippo init` installs the local embedder, so the board's row should show the hippo that users get. The 2.0 board is archived and this row is our own setup: it reads hippo against no memory on the same tasks, and no leaderboard row (`comparability/agent-benchmarks.md`, verdict NOT COMPARABLE).
+
+**What changes.**
+1. Bundle: `run_tbench.py bundle --embedder` with `TBENCH_HIPPO_REPO` set to a master checkout at `63cd148c1` (hippo-memory 3.9.0). It installs, for linux, the package that hippo's own `init` installs (read from the bundled `embedder-install.js`: `@huggingface/transformers@4.3.2`, `--ignore-scripts`) into `pkg/node_modules`. One `hippo embed` then caches the default model (`Xenova/all-MiniLM-L6-v2`) in that package's cache, so no task downloads it. `bundle.json` records the package, the embed status and each ONNX file's SHA-256.
+2. Run: `run --arms hippo --limit 10 --out runs/tbench-r1-emb`. The same first 10 tasks in the same order, a fresh store, and everything else as Amendment 7 and its dated notes 1: Claude Code 2.1.321, Sonnet 5 at effort medium, 1 trial, the Debian 11 agent and the setup timeout.
+3. The `none` arm does not run again. hippo's version cannot change it, so the pair reads `none` from `tbench-r1` (9 of 10).
+
+**Read.** The paired difference over the 10 tasks, by task. A one-task difference is inside the noise of 10 tasks and 1 trial. The board's hippo cell changes only after Keith approves it.
+
+**Read before this note.** The `tbench-r1` rewards for tasks 0 to 9. No trial of `tbench-r1-emb`.
