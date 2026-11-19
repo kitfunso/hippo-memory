@@ -14,7 +14,8 @@ export const CARRY_ARMS = new Set(['A1', 'A2', 'A5', ...X_ARMS]);
 export const armSet = (arm) => (X_ARMS.includes(arm) ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
-const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure'];
+// PostToolUse holds `hippo note-written`, which imports the notes a session writes: a capture hook too.
+const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure', 'PostToolUse'];
 // OPENAI_: an operator API key would turn a plan-login Codex session into a paid one.
 const STRIP_PREFIXES = ['ANTHROPIC_', 'CLAUDE_', 'AWS_', 'CODEX_', 'HIPPO_', 'OPENAI_'];
 const STRIP_EXACT = new Set(['CLAUDECODE', ...STRIP_ENV].map((k) => k.toUpperCase()));
