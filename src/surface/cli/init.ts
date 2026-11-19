@@ -480,6 +480,9 @@ function installClaudeCodeSettingsHooks(hook: 'claude-code'): void {
       `   Auto-installed hippo capture-error PostToolUseFailure hook in ${hook} settings`,
     );
   }
+  if (result.installedNoteWritten) {
+    console.log(`   Auto-installed hippo note-written PostToolUse hook in ${hook} settings`);
+  }
   if (result.migratedFromStop) {
     console.log(`   Migrated legacy Stop hook → SessionEnd (no longer runs every turn)`);
   }

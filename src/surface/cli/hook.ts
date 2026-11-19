@@ -155,6 +155,9 @@ function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): vo
       `Installed hippo capture-error PostToolUseFailure hook in ${result.target} settings`,
     );
   }
+  if (result.installedNoteWritten) {
+    console.log(`Installed hippo note-written PostToolUse hook in ${result.target} settings`);
+  }
   if (result.migratedFromStop) {
     console.log(
       `Migrated legacy Stop hook → SessionEnd (was running every turn; now fires once on session exit)`,

@@ -134,6 +134,7 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   if (result.installedCompactResume) bits.push('SessionStart(compact) (compact-resume)');
   if (result.installedPostCompact) bits.push('PostCompact (post-compact)');
   if (result.installedCaptureError) bits.push('PostToolUseFailure (capture-error)');
+  if (result.installedNoteWritten) bits.push('PostToolUse (note-written)');
   if (result.migratedFromStop) bits.push('migrated legacy Stop');
   if (result.migratedSplitSessionEnd) bits.push('migrated split SessionEnd → session-end');
   else if (result.migratedLegacySessionEnd) bits.push('migrated legacy SessionEnd');

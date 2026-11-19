@@ -415,11 +415,7 @@ export interface PostCompactOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
-  afterSave?: (
-    transcriptPath: string,
-    cwd: string | null,
-    log: (message: string) => void,
-  ) => Promise<void>;
+  afterSave?: (transcriptPath: string, cwd: string | null) => void | Promise<void>;
 }
 
 /** A PostCompact hook has 10 s in all; replay stops starting new records after this. */
@@ -455,7 +451,7 @@ export async function postCompactHook(
       storeBusy = saved.deferred;
       if (!storeBusy && receipt.input.transcriptPath !== null && options.afterSave) {
         try {
-          await options.afterSave(receipt.input.transcriptPath, receipt.input.cwd, log);
+          await options.afterSave(receipt.input.transcriptPath, receipt.input.cwd);
         } catch (err) {
           log(`agent memory import failed: ${errorMessage(err)}`, errorFields(err));
         }

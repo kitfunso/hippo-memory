@@ -4,6 +4,7 @@
 import { envClaudeCodeSessionId, envHippoSessionId } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
@@ -83,6 +84,21 @@ export function appendSessionEndCloseLog(
     // A log-write failure must never fail the hook, but a log that never fills is told.
     log.warn(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
   }
+}
+
+/** Starts `workerArgs` as a detached child that outlives the host's teardown; `name` labels a
+ * failed start. */
+export function spawnDetachedWorker(name: string, workerArgs: readonly string[]): void {
+  const child = spawn(process.execPath, workerArgs, {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  // With no 'error' listener an async spawn failure is an uncaught exception.
+  child.on('error', (err) =>
+    log.warn(`hippo ${name}: the worker did not start: ${errorMessage(err)}`, errorFields(err)),
+  );
+  child.unref();
 }
 
 /** Runs `run` with the held lines written on exit too, as sleep may end the process before the

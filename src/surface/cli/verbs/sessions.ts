@@ -309,7 +309,7 @@ export const SESSION_VERBS = {
     usage: [
       `
   setup                    One-shot: detect installed AI tools and install their hooks:
-                           claude-code gets 8 hooks in $CLAUDE_CONFIG_DIR/settings.json
+                           claude-code gets 9 hooks in $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
                            its hooks.json plus a launcher wrapper, copilot 4 hooks, the
                            MCP server and an instructions block under $COPILOT_HOME
@@ -406,6 +406,24 @@ export const SESSION_VERBS = {
     --log-file <p>         Same log path as pre-compact (default: ~/.hippo/logs/pre-compact.log)`,
     ],
   }),
+  'note-written': verb(() => import('../hooks/note-written.js'), 'handleNoteWritten', {
+    readOnly: 'skip',
+    flags: { values: ['log-file'] },
+    usage: [
+      `
+  note-written             PostToolUse hook: when Claude Code writes a memory note, import it in a
+                           detached worker (any other write exits at once)
+    --log-file <p>         Where the worker logs (default: ~/.hippo/logs/note-written.log)`,
+    ],
+  }),
+  '__note-import-worker': verb(
+    () => import('../hooks/note-import-worker.js'),
+    'handleNoteImportWorker',
+    {
+      readOnly: 'skip',
+      flags: { values: ['cwd', 'from', 'log-file', 'transcript'] },
+    },
+  ),
   'codex-run': verb(() => import('../hooks/codex-run.js'), 'handleCodexRun', {
     flags: {},
     usage: [
@@ -428,7 +446,7 @@ export const SESSION_VERBS = {
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
     hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
-                           claude-code adds 8 hooks to $CLAUDE_CONFIG_DIR/settings.json
+                           claude-code adds 9 hooks to $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default); opencode installs a plugin; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; copilot writes

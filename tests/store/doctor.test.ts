@@ -91,6 +91,9 @@ describe('hippo doctor', () => {
           SessionStart: [{ matcher: 'compact', hooks: [{ type: 'command', command: 'hippo compact-resume' }] }],
           PostCompact: [{ hooks: [{ type: 'command', command: 'hippo post-compact' }] }],
           PostToolUseFailure: [{ matcher: '.*', hooks: [{ type: 'command', command: 'hippo capture-error' }] }],
+          PostToolUse: [
+            { matcher: 'Edit|Write|MultiEdit', hooks: [{ type: 'command', command: 'hippo note-written' }] },
+          ],
         },
       }),
     );
@@ -325,6 +328,7 @@ describe('hippo doctor', () => {
       'hippo compact-resume',
       'hippo post-compact',
       'hippo capture-error',
+      'hippo note-written',
     ];
     const hooks = { Mixed: commands.map((command) => ({ hooks: [{ type: 'command', command }] })) };
     writeFileSync(join(cwd, '.claude', 'settings.json'), String.fromCodePoint(0xfeff) + JSON.stringify({ hooks }));

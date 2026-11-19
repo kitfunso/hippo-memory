@@ -45,6 +45,8 @@ export interface InstallResult {
   installedPostCompact: boolean;
   /** PostToolUseFailure -> `hippo capture-error` (failed tool calls become error memories). */
   installedCaptureError: boolean;
+  /** PostToolUse -> `hippo note-written` (a memory note Claude Code writes is imported at once). */
+  installedNoteWritten: boolean;
   migratedPinnedInjectRecent: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
@@ -105,12 +107,13 @@ export function planCopilotHooks(settingsPath: string, current: string | null): 
 
 /** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo
  * entries; `settings` is undefined for a file that is not JSON, which stays untouched.
- * `compactLog` is where the compaction hooks log. */
+ * `compactLog` is where the compaction hooks log, `noteLog` where the note hook does. */
 export function planJsonHooks(
   target: 'claude-code' | 'codex',
   paths: Pick<JsonHookPaths, 'settings' | 'logFile'>,
   settings: JsonValue | undefined,
   compactLog: string,
+  noteLog: string,
 ): HookInstallPlan {
   const invalid = {
     result: { ...nothingInstalled(target, paths.settings), invalidJson: true },
@@ -123,6 +126,7 @@ export function planJsonHooks(
     settingsPath: paths.settings,
     logFile: paths.logFile,
     compactLog,
+    noteLog,
   });
 }
 

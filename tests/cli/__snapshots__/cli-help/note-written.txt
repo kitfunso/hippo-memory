@@ -1,0 +1,3 @@
+  note-written             PostToolUse hook: when Claude Code writes a memory note, import it in a
+                           detached worker (any other write exits at once)
+    --log-file <p>         Where the worker logs (default: ~/.hippo/logs/note-written.log)

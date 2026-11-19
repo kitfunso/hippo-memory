@@ -23,6 +23,7 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
     installedCompactResume: false,
     installedPostCompact: false,
     installedCaptureError: false,
+    installedNoteWritten: false,
     migratedPinnedInjectRecent: false,
     migratedFromStop: false,
     migratedLegacySessionEnd: false,

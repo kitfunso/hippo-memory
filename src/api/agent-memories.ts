@@ -16,6 +16,7 @@ import { runPass, type Pass, type SyncOptions } from '../domain/agent-memories/s
 import type { AdapterContext } from '../domain/agent-memories/types.js';
 
 export type { SyncOptions };
+export { isClaudeMemoryNote } from '../domain/agent-memories/claude-code.js';
 
 /**
  * init, sleep and `import --agents`: a local store gets its project pass then the user pass; the

@@ -1,19 +1,22 @@
 // Every command that imports agent memories, run through the built CLI in a scratch home (plan design 11).
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { claudeFolderName } from '../../src/domain/agent-memories/claude-code.js';
 import { deriveOriginProject, isInitialized } from '../../src/host/project-identity.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
+import { removeDirOfWorker } from '../_helpers/remove-dir.js';
+import { waitFor } from '../_helpers/wait-for.js';
 
 const HIPPO_BIN = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  // A detached import worker that post-compact started may still hold its folder as its cwd.
+  for (const dir of dirs.splice(0)) removeDirOfWorker(dir);
 });
 
 function tmp(): string {
@@ -296,7 +299,13 @@ describe('hooks in a folder without a store', () => {
     const payload = JSON.stringify({ session_id: 's1', transcript_path: transcript, cwd: sub, trigger: 'auto' });
     await hippo(b, sub, ['post-compact'], { input: payload });
 
-    const rows = loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
+    const importedRows = () => loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
+    await waitFor(() => importedRows().length > 0, {
+      timeoutMs: 20_000,
+      what: 'the detached worker imports the folder',
+      retryOnThrow: true,
+    });
+    const rows = importedRows();
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
     const origin = deriveOriginProject(b.project);
     expect(origin).not.toBe('');

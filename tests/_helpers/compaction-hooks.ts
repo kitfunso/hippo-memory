@@ -6,7 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { COMPACTION_MEMORY_TAG } from '../../src/base/memory/entry.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
-import { removeDir } from './remove-dir.js';
+import { removeDirOfWorker } from './remove-dir.js';
 const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-compact-payloads.jsonl');
 
 export interface Scratch {
@@ -30,7 +30,8 @@ export function scratch(): Scratch {
 }
 
 export function removeScratch(s: Scratch): void {
-  removeDir(s.dir);
+  // A post-compact case leaves a detached import worker that holds the folder until it exits.
+  removeDirOfWorker(s.dir);
 }
 
 export function runHippo(

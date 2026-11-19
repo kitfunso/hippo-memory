@@ -88,6 +88,32 @@ export function claudeTranscriptListing(ctx: AdapterContext, transcriptPath: str
   };
 }
 
+/** Whether `file` is a note in Claude Code's auto memory: a `.md` directly in
+ * `<config>/projects/<name>/memory`, the MEMORY.md index left out. A hook runs this on every write,
+ * so it reads nothing but the paths. */
+export function isClaudeMemoryNote(
+  file: string,
+  machine: Pick<AdapterContext, 'home' | 'env' | 'platform' | 'files'>,
+): boolean {
+  const fold = (name: string): string => (machine.platform === 'win32' ? name.toLowerCase() : name);
+  const forms = (p: string): string[] => [path.resolve(p), machine.files.realPath(p)].map(fold);
+  const projects = path.join(claudeConfigDir(machine.home, machine.env), 'projects');
+  return forms(projects).some((root) =>
+    forms(file).some((candidate) => {
+      const rel = path.relative(root, candidate);
+      if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) return false;
+      const [, folder, name, ...deeper] = rel.split(path.sep);
+      return (
+        folder === 'memory' &&
+        name !== undefined &&
+        deeper.length === 0 &&
+        markdownNotes(name) &&
+        name !== fold('MEMORY.md')
+      );
+    }),
+  );
+}
+
 /** The project a session folder's notes belong to: the one Claude named the folder for, the
  * session's start folder, else cwd or a parent; null when none matches. */
 export function transcriptNotesProject(
