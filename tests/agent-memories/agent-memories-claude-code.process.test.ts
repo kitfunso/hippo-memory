@@ -435,7 +435,7 @@ describe('claudeCodeAdapter items', () => {
   };
   const memoryDir = () => path.join(tmp(), 'projects', 'p', 'memory');
 
-  it('reads top-level .md notes with frontmatter, except MEMORY.md, and trims the body', () => {
+  it('reads top-level .md notes with frontmatter, except MEMORY.md, trims the body and takes the name as the title', () => {
     const dir = memoryDir();
     writeIn(dir, 'a.md', note('  Body of the first note.  ', 'modified: "2026-03-01T10:00:00Z"'));
     writeIn(dir, 'b.md', '---\r\nname: b\r\n---\r\nBody of the second note.\r\n');
@@ -450,8 +450,8 @@ describe('claudeCodeAdapter items', () => {
     const container = containerIn(dir);
     expect(container).toMatchObject({ scope: 'project', readable: true, skipped: [], warnings: [], textKeyed: false });
     expect(container.items).toEqual([
-      { key: 'a.md', text: 'Body of the first note.', updatedAt: Date.parse('2026-03-01T10:00:00Z') },
-      { key: 'b.md', text: 'Body of the second note.', updatedAt: mtime.getTime() },
+      { key: 'a.md', text: 'Body of the first note.', updatedAt: Date.parse('2026-03-01T10:00:00Z'), title: 'n' },
+      { key: 'b.md', text: 'Body of the second note.', updatedAt: mtime.getTime(), title: 'b' },
     ]);
   });
 

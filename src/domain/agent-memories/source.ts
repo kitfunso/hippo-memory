@@ -40,6 +40,19 @@ export function itemSource(
   return `${prefix}${key}#${itemHash(text)}`;
 }
 
+/** Joins a long note's key to a part's `<heading slug>/<12 hex>`. */
+export const PART_MARK = '::';
+
+/** The note a key belongs to: the part before `::`, else the whole key. */
+export function fileOfKey(key: string): string {
+  const cut = key.indexOf(PART_MARK);
+  return cut < 0 ? key : key.slice(0, cut);
+}
+
+export function isPartKey(key: string): boolean {
+  return key.includes(PART_MARK);
+}
+
 /** The key and hash of a source under `prefix`; the hash follows the last `#`, since a file name
  * may hold one too. */
 export function splitSource(

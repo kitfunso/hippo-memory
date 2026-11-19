@@ -12,10 +12,14 @@ export interface AdapterContext extends Machine {
 
 export interface MemoryItem {
   /** A path inside the container with '/' separators, or `<heading slug>/<text hash>` in a
-   * single-file store. */
+   * single-file store; a part of a long note adds `::<heading slug>/<text hash>`. */
   readonly key: string;
   readonly text: string;
   readonly updatedAt: number;
+  /** The note's frontmatter name, else its file name; the head of each part of a long note. */
+  readonly title?: string;
+  /** A part of a long note that overlaps text the strict secret check flags in the whole note. */
+  readonly flagged?: boolean;
 }
 
 /** A folder, or one file's memory section, that exists on disk. */

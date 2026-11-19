@@ -3,11 +3,11 @@
 import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';
-import { maskEmails } from '../../base/util/secret-detect.js';
+import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { liveUnder } from './container-view.js';
 import { matchLegacy, type LegacyTarget } from './plan.js';
-import { MIN_ITEM_CHARS, storedText } from './source.js';
-import type { Container, ImportStore, Listing } from './types.js';
+import { fileOfKey, isPartKey, MIN_ITEM_CHARS, storedText } from './source.js';
+import type { Container, ImportStore, Listing, MemoryItem } from './types.js';
 
 export const LEGACY_SOURCE_PREFIX = 'claude-memory:';
 const LEGACY_TAG = 'claude-code-memory';
@@ -29,15 +29,22 @@ interface LegacyTargets {
   readonly targets: readonly LegacyTarget[];
 }
 
+// A long note's old row goes to its first part that will be written, so a secret part is passed.
+function noTarget(item: MemoryItem): boolean {
+  if (item.text.trim().length < MIN_ITEM_CHARS) return true;
+  return isPartKey(item.key) && (item.flagged === true || redactSecretsStrict(item.text) !== item.text);
+}
+
 function legacyTargets(containers: readonly Container[]): LegacyTargets {
   const refs: { readonly dir: string; readonly key: string }[] = [];
   const targets: LegacyTarget[] = [];
   for (const container of containers) {
-    for (const item of container.items) {
-      if (item.text.trim().length < MIN_ITEM_CHARS) continue;
+    for (const item of container.items.filter((i) => !noTarget(i))) {
+      const note = fileOfKey(item.key);
       targets.push({
         ref: String(refs.length),
-        file: path.posix.basename(item.key),
+        file: path.posix.basename(note),
+        note: `${container.path}\n${note}`,
         textKey: duplicateKey(storedText(item.text)),
       });
       refs.push({ dir: container.path, key: item.key });
@@ -92,6 +99,6 @@ export async function legacyWork(
     found[pick].set(key, [...(found[pick].get(key) ?? []), row]);
   };
   for (const [id, ref] of match.adopt) add('adopt', ref, id);
-  for (const [ref, id] of match.replace) add('replace', ref, id);
+  for (const [ref, ids] of match.replace) for (const id of ids) add('replace', ref, id);
   return { byContainer, adopted: new Set(match.adopt.keys()) };
 }

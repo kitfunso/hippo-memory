@@ -1,4 +1,5 @@
 // What one sync does to one container's rows: a pure function of the items read and the rows found.
+import { fileOfKey, isPartKey } from './source.js';
 
 export interface PlanItem {
   readonly key: string;
@@ -40,6 +41,8 @@ export interface PlannedWrite {
   readonly key: string;
   readonly hash: string;
   readonly supersedes: readonly string[];
+  /** Rows whose recall and outcome counts the new row takes: a note that crossed the cap. */
+  readonly carry?: readonly string[];
 }
 
 export interface ContainerPlan {
@@ -91,13 +94,16 @@ export function planContainer(input: PlanInput): ContainerPlan {
     });
   }
 
-  const read = new Set([...input.items.map((i) => i.key), ...input.skipped]);
+  const read = new Set(input.items.map((i) => i.key));
+  // Skipped holds file keys, so the parts of a note that was not read stay too.
+  const unread = new Set(input.skipped);
   const gone = new Map<string, string[]>();
   for (const [key, rows] of live) {
     const tagged = rows.filter((r) => r.tagged).map((r) => r.id);
-    if (!read.has(key) && tagged.length > 0) gone.set(key, tagged);
+    if (!read.has(key) && !unread.has(fileOfKey(key)) && tagged.length > 0) gone.set(key, tagged);
   }
-  if (input.textKeyed) pairEdits(gone, draft.fresh);
+  pairCapCrossings(gone, draft.fresh);
+  pairEdits(gone, draft.fresh, input.textKeyed ? () => true : isPartKey);
   for (const ids of gone.values()) draft.setAside.push(...ids);
 
   const { fresh, ...plan } = draft;
@@ -126,6 +132,9 @@ function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
     if (!kept.tagged) draft.retag.push(kept.id);
     const others = tagged.filter((r) => r.id !== kept.id);
     draft.collapse.push(...others.map((r) => ({ id: r.id, by: kept.id })));
+    // An unchanged note retires its old Claude import's copy too.
+    const stale = input.legacy?.get(item.key) ?? [];
+    draft.collapse.push(...stale.map((id) => ({ id, by: kept.id })));
     if (kept.tagged && others.length === 0) draft.unchanged++;
     return;
   }
@@ -149,12 +158,28 @@ function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
   else draft.fresh.push({ key: item.key, hash: item.hash, supersedes: legacy });
 }
 
-/** A single-file store keys items by text, so an edit reads as one key gone and one new under
- * the same heading. */
-function pairEdits(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
-  const goneBy = groupBy([...gone.keys()], headingOf);
+/** A note that crossed the cap either way: its first new row, whole or part, supersedes every
+ * row of the other shape and takes their history, so nothing goes dormant. */
+function pairCapCrossings(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
+  for (const [file, keys] of groupBy([...gone.keys()], fileOfKey)) {
+    const i = fresh.findIndex((w) => fileOfKey(w.key) === file);
+    if (i < 0 || (!keys.includes(file) && fresh[i].key !== file)) continue;
+    const ids = keys.flatMap((key) => gone.get(key) ?? []);
+    fresh[i] = { ...fresh[i], supersedes: [...fresh[i].supersedes, ...ids], carry: ids };
+    for (const key of keys) gone.delete(key);
+  }
+}
+
+/** Text keys, a single-file store's or a long note's parts, read an edit as one key gone and one
+ * new under the same heading. */
+function pairEdits(
+  gone: Map<string, string[]>,
+  fresh: PlannedWrite[],
+  textKey: (key: string) => boolean,
+): void {
+  const goneBy = groupBy([...gone.keys()].filter(textKey), headingOf);
   const freshBy = groupBy(
-    fresh.map((w, i) => ({ w, i })),
+    fresh.map((w, i) => ({ w, i })).filter((f) => textKey(f.w.key)),
     (f) => headingOf(f.w.key),
   );
   for (const [heading, keys] of goneBy) {
@@ -208,6 +233,8 @@ export interface LegacyTarget {
   /** Opaque to this function: the sync's handle on one container's item. */
   readonly ref: string;
   readonly file: string;
+  /** The note it is, or a part of: the parts of one long note share it. */
+  readonly note: string;
   readonly textKey: string;
 }
 
@@ -215,12 +242,13 @@ export interface LegacyMatch {
   /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a
    * renamed note too). */
   readonly adopt: ReadonlyMap<string, string>;
-  /** Target ref to the legacy row a new row of that target replaces (different text, one legacy
-   * row of that file). */
-  readonly replace: ReadonlyMap<string, string>;
+  /** Target ref to the legacy rows a new row of that target replaces (different text, a file name
+   * only one note has). */
+  readonly replace: ReadonlyMap<string, readonly string[]>;
 }
 
-/** Same text first, then one legacy row per file name; anything else is left to decay. */
+/** Same text first, then every row of a file name only one note has, given to its first target;
+ * anything else is left to decay. */
 export function matchLegacy(
   rows: readonly LegacyRow[],
   targets: readonly LegacyTarget[],
@@ -241,10 +269,12 @@ export function matchLegacy(
     targets.filter((t) => !adoptedRefs.has(t.ref)),
     (t) => t.file,
   );
-  const replace = new Map<string, string>();
+  const replace = new Map<string, string[]>();
   for (const [file, left] of leftByFile) {
     const matches = targetsByFile.get(file) ?? [];
-    if (left.length === 1 && matches.length === 1) replace.set(matches[0].ref, left[0].id);
+    // Two notes of one name match none: the old row could be either.
+    if (new Set(matches.map((t) => t.note)).size !== 1) continue;
+    replace.set(matches[0].ref, left.map((r) => r.id));
   }
   return { adopt, replace };
 }

@@ -11,7 +11,13 @@ import type {
 import { liveUnder, type ContainerWork } from './container-view.js';
 import { namesFoldedInto } from './project-folds.js';
 import { toolReport, type ImportReport } from '../../base/memory/agent-memory-report.js';
-import { containerId, containerPrefix, splitSource, type ContainerMachine } from './source.js';
+import {
+  containerId,
+  containerPrefix,
+  fileOfKey,
+  splitSource,
+  type ContainerMachine,
+} from './source.js';
 import type { SyncOptions } from './sync.js';
 import type { ImportStore } from './types.js';
 
@@ -99,7 +105,7 @@ async function handOverPlan(
   for (const prefix of prefixes) {
     for (const row of await liveUnder(store, tenantId, prefix)) {
       rows.push(row);
-      if (row.tags.includes(tag) && !unread.has(splitSource(row.source, prefix).key)) {
+      if (row.tags.includes(tag) && !unread.has(fileOfKey(splitSource(row.source, prefix).key))) {
         steps.push({ kind: 'setAside', id: row.id, why: 'handover' });
       }
     }

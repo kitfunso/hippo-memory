@@ -184,6 +184,24 @@ describe('agent memory sync: the Added list', () => {
     expect(link).toEqual({ memory_id: row.id });
   });
 
+  it('the parts of a long note that turns unreadable stay', async () => {
+    const long = Array.from({ length: 12 }, (_, i) => `Paragraph ${i}: ${A.repeat(6)}`).join('\n\n');
+    note(dir, 'big.md', long);
+    await sync();
+    const parts = liveRows(w.local)
+      .map((e) => e.id)
+      .sort();
+    expect(parts.length).toBeGreaterThan(1);
+    note(dir, 'big.md', `${long}\u0000`);
+
+    expect(claude(await sync())).toMatchObject({ unread: 1, setAside: 0, replaced: 0, imported: 0 });
+    expect(
+      liveRows(w.local)
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(parts);
+  });
+
   it('an unread item (over 256 KB, or holding a NUL byte) leaves its row alone', async () => {
     note(dir, 'big.md', A);
     note(dir, 'nul.md', B);

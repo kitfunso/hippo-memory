@@ -135,8 +135,9 @@ async function refusalsOf(
   for (const item of items) {
     if (item.text.trim().length < MIN_ITEM_CHARS) out.set(item.key, 'short');
     // Imported rows reach prompts, so the bar is text leaving the machine: Bearer headers and JWTs count too.
-    else if (redactSecretsStrict(item.text) !== item.text) out.set(item.key, 'secret');
-    else asked.push(item);
+    else if (item.flagged === true || redactSecretsStrict(item.text) !== item.text) {
+      out.set(item.key, 'secret');
+    } else asked.push(item);
   }
   if (asked.length === 0) return out;
   // A new row's id: no stored row holds the empty id, so the tombstone alone decides.

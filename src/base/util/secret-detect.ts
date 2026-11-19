@@ -151,21 +151,44 @@ export function redactPayload(raw: string): string {
 const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
 const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
 
+/** Where a text's secret-shaped run starts and ends, as offsets into it. */
+export interface SecretSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
 /** Each PEM/OpenSSH block through its END line, or to the end of a truncated block; one forward
  * scan, so no ReDoS. */
-function redactPemBlocks(text: string): string {
-  let out = '';
-  let from = 0;
+function pemBlocks(text: string): SecretSpan[] {
+  const blocks: SecretSpan[] = [];
   PEM_BEGIN.lastIndex = 0;
   for (let begin = PEM_BEGIN.exec(text); begin; begin = PEM_BEGIN.exec(text)) {
     PEM_END.lastIndex = PEM_BEGIN.lastIndex;
     const end = PEM_END.exec(text);
-    out += `${text.slice(from, begin.index)}[REDACTED]`;
-    from = end ? PEM_END.lastIndex : text.length;
-    PEM_BEGIN.lastIndex = from;
+    const to = end ? PEM_END.lastIndex : text.length;
+    blocks.push({ start: begin.index, end: to });
+    PEM_BEGIN.lastIndex = to;
+  }
+  return blocks;
+}
+
+function redactPemBlocks(text: string): string {
+  let out = '';
+  let from = 0;
+  for (const block of pemBlocks(text)) {
+    out += `${text.slice(from, block.start)}[REDACTED]`;
+    from = block.end;
   }
   return out + text.slice(from);
 }
+
+// Global copies, so replace and matchAll see every match.
+const STRICT_PATTERNS: readonly RegExp[] = [
+  ...SECRET_PATTERNS.map(
+    ({ re }) => new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`),
+  ),
+  ...STRICT_ONLY_PATTERNS,
+];
 
 /**
  * Stricter redaction for text that leaves the machine: no co-occurrence guard, plus Bearer and
@@ -175,10 +198,18 @@ export function redactSecretsStrict(text: string): string {
   if (!text) return text;
   // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
   let result = redactPemBlocks(text);
-  for (const { re } of SECRET_PATTERNS) {
-    const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
-    result = result.replace(new RegExp(re.source, flags), '[REDACTED]');
-  }
-  for (const re of STRICT_ONLY_PATTERNS) result = result.replace(re, '[REDACTED]');
+  for (const re of STRICT_PATTERNS) result = result.replace(re, '[REDACTED]');
   return result;
+}
+
+/** The runs redactSecretsStrict would hide, found on the raw text, so a caller cutting the text can
+ * keep each run whole. */
+export function secretSpans(text: string): SecretSpan[] {
+  const spans = pemBlocks(text);
+  for (const re of STRICT_PATTERNS) {
+    for (const m of text.matchAll(re)) {
+      spans.push({ start: m.index, end: m.index + m[0].length });
+    }
+  }
+  return spans;
 }

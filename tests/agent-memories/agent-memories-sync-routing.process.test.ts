@@ -72,6 +72,10 @@ const opts = () => ({
   run: TEST_RUN,
 });
 
+/** About 340 characters each, so a dozen pass the content cap. */
+const longNote = (n: number): string =>
+  Array.from({ length: n }, (_, i) => `Paragraph ${i}: ${'the build box keeps its cache warm, '.repeat(9)}`).join('\n\n');
+
 function plainRow(root: string, content: string, origin: string): MemoryEntry {
   const entry = { ...createMemory(content, { tenantId: 'default', baseHalfLifeDays: 30 }), originProject: origin };
   writeEntry(root, entry);
@@ -230,6 +234,20 @@ describe('agent memory sync: routing and sharing', () => {
     const report = await importForStore(w.global, opts());
     expect(liveTexts(w.global)).toEqual([USER_NOTE]);
     expect(report.tools.flatMap((t) => t.containers.map((c) => c.scope))).toEqual(['user']);
+  });
+
+  it('the handover keeps the global parts of a long note the local pass could not read', async () => {
+    const hand = join(w.dir, 'hand');
+    mkdirSync(join(hand, '.git'), { recursive: true });
+    note(projectNotes(w, hand), 'long.md', longNote(12));
+    await importAtSessionEnd(hand, undefined, opts());
+    const parts = liveRows(w.global).map((e) => e.id);
+    expect(parts.length).toBeGreaterThan(1);
+
+    note(projectNotes(w, hand), 'long.md', `${longNote(12)}\u0000`);
+    initTestStore(join(hand, '.hippo'));
+    expect(claude(await importProjectMemories(join(hand, '.hippo'), opts()))).toMatchObject({ unread: 1, handedOver: 0 });
+    expect(liveRows(w.global).map((e) => e.id)).toEqual(parts);
   });
 
   it("a user container lands in the global store with origin ''", async () => {
