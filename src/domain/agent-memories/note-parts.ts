@@ -248,6 +248,8 @@ function fenceParts(cut: Cut, lines: readonly Piece[], fence: string): Piece[] {
   const inner = lines.slice(1, closed ? -1 : undefined);
   if (inner.length === 0) return packLines(cut, lines);
   const room: Cut = { ...cut, budget: cut.budget - size(open) - size(close) - 2 };
+  // Under half a part left for code, and the cuts would be scraps inside a fence: plain lines.
+  if (room.budget < cut.budget / 2) return packLines(cut, lines);
   return packLines(room, inner).map((p) => ({ ...p, text: `${open}\n${p.text}\n${close}` }));
 }
 
