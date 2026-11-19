@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 interface HookGroup {
   readonly matcher?: string;
-  readonly hooks: readonly { readonly command: string }[];
+  readonly hooks: readonly { readonly command: string; readonly if?: string }[];
 }
 
 // SAFETY: the plugin's hooks.json is a checked-in file; the tests below fail if its shape differs.
@@ -49,5 +49,14 @@ describe('Claude Code plugin hook manifest', () => {
   it('extracts after compaction and resumes on the compact SessionStart', () => {
     expect(commands('PostCompact').some((c) => c.startsWith('hippo post-compact'))).toBe(true);
     expect(commands('SessionStart', 'compact').some((c) => c.startsWith('hippo compact-resume'))).toBe(true);
+  });
+
+  it('imports a memory note on a Write and on an Edit, each with its own if rule', () => {
+    const group = (manifest.hooks.PostToolUse ?? []).find((g) => g.matcher === 'Edit|Write|MultiEdit');
+    expect(group?.hooks.map((h) => h.command.startsWith('hippo note-written'))).toEqual([true, true]);
+    expect(group?.hooks.map((h) => h.if)).toEqual([
+      'Write(//**/projects/*/memory/*.md)',
+      'Edit(//**/projects/*/memory/*.md)',
+    ]);
   });
 });

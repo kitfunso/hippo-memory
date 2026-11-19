@@ -47,7 +47,12 @@ export async function handleNoteImportWorker({
   if (transcript === undefined || !isInitialized(store)) return;
   try {
     const sync = cliSyncOptions(tenantId, currentMachine());
-    const report = await importSessionFolder(store, transcript, stringFlag(flags, 'cwd') ?? null, sync);
+    const report = await importSessionFolder(
+      store,
+      transcript,
+      stringFlag(flags, 'cwd') ?? null,
+      sync,
+    );
     const summary = summaryLine(report);
     if (summary !== null) say(summary);
     for (const warning of report.warnings) say(`agent memories: ${warning}`);

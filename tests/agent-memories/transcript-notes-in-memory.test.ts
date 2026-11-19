@@ -1,7 +1,11 @@
 // transcriptNotesProject walked the disk for the project; it now asks the machine, so a machine held in memory answers.
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { claudeFolderName, isClaudeMemoryNote, transcriptNotesProject } from '../../src/domain/agent-memories/claude-code.js';
+import {
+  claudeFolderName,
+  isClaudeMemoryNote,
+  transcriptNotesProject,
+} from '../../src/domain/agent-memories/claude-code.js';
 import type { ProjectIdentity } from '../../src/base/scope/project-identity.js';
 import type { AgentFiles } from '../../src/base/util/agent-files.js';
 
@@ -52,7 +56,11 @@ describe('isClaudeMemoryNote on a machine held in memory', () => {
   const linked = path.resolve('/hippo-in-memory/linked');
   const memory = path.join(config, 'projects', 'proj-a', 'memory');
 
-  function machineOn(platform: NodeJS.Platform, env: Record<string, string>, links: ReadonlyMap<string, string> = new Map()) {
+  function machineOn(
+    platform: NodeJS.Platform,
+    env: Record<string, string>,
+    links: ReadonlyMap<string, string> = new Map(),
+  ) {
     const { machine } = memoryMachine(new Map(), new Set());
     const realPath = (p: string): string => {
       const prefix = [...links.keys()].find((from) => p === from || p.startsWith(`${from}${path.sep}`));
@@ -91,7 +99,9 @@ describe('isClaudeMemoryNote on a machine held in memory', () => {
     const links = new Map([[linked, config]]);
     const viaLink = path.join(linked, 'projects', 'proj-a', 'memory', 'queue.md');
     expect(isClaudeMemoryNote(viaLink, machineOn('linux', { CLAUDE_CONFIG_DIR: config }, links))).toBe(true);
-    expect(isClaudeMemoryNote(path.join(memory, 'queue.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: linked }, links))).toBe(true);
+    expect(
+      isClaudeMemoryNote(path.join(memory, 'queue.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: linked }, links)),
+    ).toBe(true);
   });
 
   it('folds case on win32 only, MEMORY.md included', () => {
@@ -99,7 +109,11 @@ describe('isClaudeMemoryNote on a machine held in memory', () => {
     const win = machineOn('win32', { CLAUDE_CONFIG_DIR: config });
     expect(isClaudeMemoryNote(path.join(upper, 'Queue.md'), win)).toBe(true);
     expect(isClaudeMemoryNote(path.join(upper, 'memory.md'), win)).toBe(false);
-    expect(isClaudeMemoryNote(path.join(upper, 'Queue.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: config }))).toBe(false);
-    expect(isClaudeMemoryNote(path.join(memory, 'memory.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: config }))).toBe(true);
+    expect(isClaudeMemoryNote(path.join(upper, 'Queue.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: config }))).toBe(
+      false,
+    );
+    expect(isClaudeMemoryNote(path.join(memory, 'memory.md'), machineOn('linux', { CLAUDE_CONFIG_DIR: config }))).toBe(
+      true,
+    );
   });
 });

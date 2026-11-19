@@ -192,6 +192,7 @@ const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
   ['hippo compact-resume', 'resume after compaction'],
   ['hippo post-compact', 'saving the memories a compaction lists'],
   ['hippo capture-error', 'failed-tool capture'],
+  ['hippo note-written', 'importing memory notes when Claude Code writes them'],
 ];
 
 function claudeCodeCheck(home: string): DoctorCheck {

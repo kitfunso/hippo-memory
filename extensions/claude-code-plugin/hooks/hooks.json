@@ -75,6 +75,25 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "hippo note-written 2>/dev/null || true",
+            "timeout": 10,
+            "if": "Write(//**/projects/*/memory/*.md)"
+          },
+          {
+            "type": "command",
+            "command": "hippo note-written 2>/dev/null || true",
+            "timeout": 10,
+            "if": "Edit(//**/projects/*/memory/*.md)"
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "hooks": [

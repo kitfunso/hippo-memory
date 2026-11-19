@@ -459,13 +459,10 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(groups).toHaveLength(2);
     expect(groups[0]).toEqual(userGroup);
     expect(groups[1].matcher).toBe('Edit|Write|MultiEdit');
+    const command = `hippo note-written --log-file "${path.join(dir, '.hippo', 'logs', 'note-written.log')}"`;
     expect(groups[1].hooks).toEqual([
-      {
-        type: 'command',
-        command: `hippo note-written --log-file "${path.join(dir, '.hippo', 'logs', 'note-written.log')}"`,
-        timeout: 10,
-        if: 'Edit(//**/projects/*/memory/*.md)',
-      },
+      { type: 'command', command, timeout: 10, if: 'Write(//**/projects/*/memory/*.md)' },
+      { type: 'command', command, timeout: 10, if: 'Edit(//**/projects/*/memory/*.md)' },
     ]);
   });
 
@@ -516,6 +513,7 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     expect(check.status).toBe('warn');
     expect(check.detail).toMatch(/compaction snapshot and memories request/);
     expect(check.detail).toMatch(/failed-tool capture/);
+    expect(check.detail).toMatch(/importing memory notes/);
     installJsonHooks('claude-code');
     expect(
       (await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd: dir, home: dir, version: 't' })).checks.find(

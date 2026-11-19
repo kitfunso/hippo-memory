@@ -106,15 +106,8 @@ function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   return { migratedFromStop, migratedLegacySessionEnd, migratedSplitSessionEnd };
 }
 
-function claudeCommandGroup(
-  command: string,
-  timeout: number,
-  matcher?: string,
-  condition?: string,
-): JsonObject {
-  const handler: JsonObject = { type: 'command', command, timeout };
-  if (condition !== undefined) handler.if = condition;
-  const hooks = [handler];
+function claudeCommandGroup(command: string, timeout: number, matcher?: string): JsonObject {
+  const hooks = [{ type: 'command', command, timeout }];
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
@@ -297,24 +290,26 @@ function appendCaptureErrorHook(hooks: ClaudeHooks): boolean {
   );
 }
 
-// `Edit` in an `if` covers Write and MultiEdit too, and `//**` reaches any config folder; Claude
-// Code versions that ignore `if` still get the hook's own path check.
-const NOTE_WRITTEN_IF = 'Edit(//**/projects/*/memory/*.md)';
+// Measured on Claude Code 2.1.326: an `Edit(...)` rule does not fire for a Write call, so each tool
+// gets its own rule; `//**` reaches any config folder.
+const NOTE_WRITTEN_IFS = [
+  'Write(//**/projects/*/memory/*.md)',
+  'Edit(//**/projects/*/memory/*.md)',
+] as const;
 
 function appendNoteWrittenHook(hooks: ClaudeHooks, noteLog: string): boolean {
   // PostToolUse: a memory note Claude Code just wrote reaches hippo at once, in a detached worker
-  // that `hippo note-written` starts.
-  return appendHookIfMissing(
-    hooks,
-    'PostToolUse',
-    HIPPO_NOTE_WRITTEN_MARKER,
-    claudeCommandGroup(
-      `hippo note-written --log-file "${noteLog}"`,
-      HOOK_MEDIUM_TIMEOUT_SECONDS,
-      'Edit|Write|MultiEdit',
-      NOTE_WRITTEN_IF,
-    ),
-  );
+  // that `hippo note-written` starts. Versions that ignore `if` still get the hook's own path check.
+  const command = `hippo note-written --log-file "${noteLog}"`;
+  return appendHookIfMissing(hooks, 'PostToolUse', HIPPO_NOTE_WRITTEN_MARKER, {
+    matcher: 'Edit|Write|MultiEdit',
+    hooks: NOTE_WRITTEN_IFS.map((condition) => ({
+      type: 'command',
+      command,
+      timeout: HOOK_MEDIUM_TIMEOUT_SECONDS,
+      if: condition,
+    })),
+  });
 }
 
 /** The Claude Code handlers uninstall kept that still mention a hippo command (`nice hippo

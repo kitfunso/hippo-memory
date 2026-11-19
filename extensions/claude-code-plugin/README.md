@@ -86,7 +86,7 @@ claude-code-plugin/
     memory/
       SKILL.md           # Memory skill (auto-invoked)
   hooks/
-    hooks.json           # SessionStart, UserPromptSubmit, PreCompact, PostCompact, PostToolUseFailure, SessionEnd
+    hooks.json           # SessionStart, UserPromptSubmit, PreCompact, PostCompact, PostToolUseFailure, PostToolUse, SessionEnd
   .mcp.json              # Starts hippo mcp as the hippo-memory MCP server
   README.md
 ```

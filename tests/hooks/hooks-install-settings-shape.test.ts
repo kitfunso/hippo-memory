@@ -252,6 +252,12 @@ describe('installJsonHooks(claude-code) settings shape', () => {
                   "type": "command",
                   "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",
                   "timeout": 10,
+                  "if": "Write(//**/projects/*/memory/*.md)"
+                },
+                {
+                  "type": "command",
+                  "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",
+                  "timeout": 10,
                   "if": "Edit(//**/projects/*/memory/*.md)"
                 }
               ]
@@ -370,6 +376,12 @@ describe('installJsonHooks(claude-code) settings shape', () => {
             {
               "matcher": "Edit|Write|MultiEdit",
               "hooks": [
+                {
+                  "type": "command",
+                  "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",
+                  "timeout": 10,
+                  "if": "Write(//**/projects/*/memory/*.md)"
+                },
                 {
                   "type": "command",
                   "command": "hippo note-written --log-file \\"~/.hippo/logs/note-written.log\\"",

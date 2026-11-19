@@ -300,7 +300,11 @@ describe('hooks in a folder without a store', () => {
     await hippo(b, sub, ['post-compact'], { input: payload });
 
     const importedRows = () => loadAllEntries(b.global, 'default').filter((e) => e.source?.startsWith('agent-memory:'));
-    await waitFor(() => importedRows().length > 0, { timeoutMs: 20_000, what: 'the detached worker imports the folder', retryOnThrow: true });
+    await waitFor(() => importedRows().length > 0, {
+      timeoutMs: 20_000,
+      what: 'the detached worker imports the folder',
+      retryOnThrow: true,
+    });
     const rows = importedRows();
     expect(rows.map((e) => e.content)).toEqual([transcriptNote]);
     const origin = deriveOriginProject(b.project);

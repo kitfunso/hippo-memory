@@ -201,10 +201,15 @@ describe('hippo post-compact', () => {
       what: 'the worker imports the session folder',
       retryOnThrow: true,
     });
-    await waitFor(() => fs.existsSync(compactLog()) && fs.readFileSync(compactLog(), 'utf8').includes('post-compact: Imported 1 agent memory'), {
-      timeoutMs: 20_000,
-      what: 'the worker logs the import',
-    });
+    await waitFor(
+      () =>
+        fs.existsSync(compactLog()) &&
+        fs.readFileSync(compactLog(), 'utf8').includes('post-compact: Imported 1 agent memory'),
+      {
+        timeoutMs: 20_000,
+        what: 'the worker logs the import',
+      },
+    );
     expect(importedRows()).toEqual([QUEUE_NOTE]);
   });
 });
