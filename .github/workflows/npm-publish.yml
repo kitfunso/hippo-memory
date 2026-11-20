@@ -77,3 +77,11 @@ jobs:
       - run: npm publish --provenance --access public --tag "$DIST_TAG"
         env:
           DIST_TAG: ${{ steps.disttag.outputs.tag }}
+
+  # After npm has the version: the registry checks that the package exists and carries mcpName.
+  mcp-registry:
+    needs: [publish]
+    uses: ./.github/workflows/mcp-registry.yml
+    permissions:
+      contents: read
+      id-token: write

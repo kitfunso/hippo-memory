@@ -141,6 +141,8 @@ You, your team and your platform lead read the same store.
 | Pi | reads `AGENTS.md` |
 | OpenClaw | plugin |
 | OpenCode | plugin |
+| Gemini CLI | extension: `gemini extensions install https://github.com/kitfunso/hippo-memory` |
+| Kiro | power: import `https://github.com/kitfunso/hippo-memory/tree/master/extensions/kiro-power` |
 | Any MCP client | `hippo mcp`, 13 tools |
 
 `hippo dashboard` opens a local page with each project's memory health.

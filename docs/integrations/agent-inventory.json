@@ -379,23 +379,43 @@
     },
     {
       "id": "gemini-cli",
-      "checked": "2026-10-03",
+      "checked": "2026-11-20",
       "names": ["Gemini CLI"],
-      "integration": ["none"],
-      "sources": [],
-      "claims": ["ROADMAP.md"],
-      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "integration": ["mcp-recipe"],
+      "sources": ["gemini-extension.json"],
+      "claims": ["ROADMAP.md", "README.md"],
+      "routes": { "promptContext": "MCP tools from the extension; hippo_context and hippo_recall say to call them at session start", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
       "upstream": { "preLossEvent": "PreCompress, advisory and asynchronous", "beforeTrimOrReset": null },
-      "setup": null,
+      "setup": "gemini extensions install https://github.com/kitfunso/hippo-memory",
       "store": null,
       "maxSaveDelay": null,
-      "interface": null,
+      "interface": "MCP, from the gemini-extension.json extension",
       "modes": [
         { "name": "terminal and headless", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] },
         { "name": "approved cloud execution", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
       ],
       "owner": "maintainer",
       "nextAction": "Add a native adapter on PreCompress with durable incremental checkpoints, since the host does not wait for the save; test the race.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "kiro",
+      "checked": "2026-11-20",
+      "names": ["Kiro"],
+      "integration": ["mcp-recipe"],
+      "sources": ["extensions/kiro-power"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "MCP tools from the power; hippo_context and hippo_recall say to call them at session start", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "Kiro: Add Custom Power, then import https://github.com/kitfunso/hippo-memory/tree/master/extensions/kiro-power",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the power's mcp.json",
+      "modes": [
+        { "name": "IDE agent", "checkpointBeforeLoss": "unknown", "lessonsBeforeLoss": "unknown", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Install the power in Kiro and confirm the MCP tools load; the power docs do not say outright that mcp.json may start a stdio server.",
       "roadmap": "AZ4"
     },
     {

@@ -12,6 +12,8 @@ const JSON_MANIFESTS = [
   'extensions/openclaw-plugin/package.json',
   'extensions/openclaw-plugin/openclaw.plugin.json',
   'server.json',
+  'gemini-extension.json',
+  'extensions/kiro-power/plugin.json',
 ];
 
 for (const path of JSON_MANIFESTS) {
