@@ -3,7 +3,7 @@
 import { COMPACTION_MEMORY_TAG, isRecallOnly, type MemoryEntry } from '../memory/entry.js';
 import { isWorthSurfacing } from '../memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
-import { passesScopeFilterForRecall } from './recall-scope.js';
+import { passesScopeFilterForRecall, scopeGranted } from './recall-scope.js';
 import { isSessionDigestRow } from '../session/session-digest-row.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSuperseded } from '../memory/liveness.js';
@@ -35,11 +35,13 @@ export interface AmbientAdmission {
  */
 export type AmbientRefusalReason = 'admission' | 'quality';
 
-/** The rows a summary drill-down reads: recall's scope rule, and with `project` set, no row of
- * another project. */
+/** The rows a summary drill-down reads: recall's scope rule plus an exact grant, and with `project`
+ * set, no row of another project. */
 export interface DescendantAdmission {
   /** The reader's personal scope, which the default deny admits. */
   readonly ownScope?: string;
+  /** Restricted scopes the reader holds a grant on; a personal scope never opens by grant. */
+  readonly grants?: readonly string[];
   readonly project?: ProjectRef;
 }
 
@@ -88,8 +90,9 @@ export function descendantAdmits(
   row: Pick<MemoryEntry, 'scope' | 'originProject'>,
   a: DescendantAdmission,
 ): boolean {
+  const scope = row.scope ?? null;
   return (
-    passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
+    (scopeGranted(a.grants, scope) || passesScopeFilterForRecall(scope, undefined, a.ownScope)) &&
     (!a.project || classifyOriginProject(row.originProject, a.project) !== 'cross-project')
   );
 }

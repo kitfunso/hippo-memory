@@ -2,8 +2,7 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
-import { remember, conflictListOpen, type Actor } from '../../src/api/index.js';
-import { memoryGetTouchable } from '../../src/api/memories/memories.js';
+import { remember, conflictListOpen, forget, type Actor } from '../../src/api/index.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -33,7 +32,7 @@ describe('api admin reads', () => {
     expect(status.openConflicts).toBe(1);
     expect((await conflictListOpen(ctxFor(actorA))).conflicts).toHaveLength(1);
     expect((await conflictListOpen(ctxFor(actorB))).conflicts).toHaveLength(0);
-    await expect(memoryGetTouchable(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
-    expect((await memoryGetTouchable(ctxFor(actorA), personal))?.id).toBe(personal);
+    await expect(forget(ctxFor(actorB), personal)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await forget(ctxFor(actorA), personal)).id).toBe(personal);
   });
 });

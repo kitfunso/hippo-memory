@@ -24,7 +24,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadEmbeddingIndex } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 // docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
 // store by promote/share/autoShare/sync/import must enter that store's
@@ -114,6 +114,7 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
 
     const shared = sharedEntry(
       await shareMemory(...sharingStores(localRoot), entry.id, {
+        actor: TEST_ACTOR,
         embed: TEST_RUN,
         detached: TEST_DETACHED,
         tenantId: 'default',

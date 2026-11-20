@@ -9,3 +9,6 @@ export const TEST_RUN: EmbedRun = { clock: evalNow, failureNotices: new FailureN
 /** Takes the embeds a domain call detaches, as a root's runtime does. Nothing settles it, so a test
  * that reads a vector reads one from an embed it awaited itself. */
 export const TEST_DETACHED = new DetachedSet();
+
+/** The caller a domain share names: an admin key, which reaches and copies any row. */
+export const TEST_ACTOR = { role: 'admin', subject: 'test' } as const;

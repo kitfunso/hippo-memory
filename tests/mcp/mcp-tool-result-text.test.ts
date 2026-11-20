@@ -207,7 +207,7 @@ describe('MCP tool reply text', () => {
       `"isError: Invalid arguments for hippo_share: id is required"`,
     );
     expect(await settle('hippo_share', { id: 'mem_missing' })).toMatchInlineSnapshot(
-      `"throws: Memory not found: mem_missing"`,
+      `"throws: memory not found: mem_missing"`,
     );
   });
 

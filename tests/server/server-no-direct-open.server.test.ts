@@ -86,6 +86,8 @@ const SENDS = {
   'POST /v1/sleep': { body: { dry_run: true } },
   'POST /v1/auth/keys': { body: { label: 'probe' } },
   'GET /v1/auth/keys': {},
+  'POST /v1/auth/keys/:keyId/grants': { path: '/v1/auth/keys/$key/grants', body: { scope: 'slack:private:c1' } },
+  'DELETE /v1/auth/keys/:keyId/grants': { path: '/v1/auth/keys/$key/grants?scope=slack%3Aprivate%3Ac1' },
   'DELETE /v1/auth/keys/:keyId': { path: '/v1/auth/keys/$key' },
   'GET /v1/quarantine': {},
   'POST /v1/quarantine/:id/approve': { path: '/v1/quarantine/mem_000000000000/approve' },

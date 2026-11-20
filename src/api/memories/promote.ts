@@ -4,7 +4,6 @@ import {
   BadRequestError,
   ConflictError,
   memoryNotFoundText,
-  NotFoundError,
 } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
 import {
@@ -19,8 +18,8 @@ import { globalTargetOf } from '../infra.js';
 import { withDetached } from '../detached.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
+  assertCopyRight,
   assertWriteRight,
-  canReadScope,
   isPersonalScope,
   isQuarantineScope,
   scopeReaderOf,
@@ -39,9 +38,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  if (!entry || !canReadScope(ctx.actor, entry.scope ?? null)) {
-    throw new NotFoundError(memoryNotFoundText(id));
-  }
+  assertCopyRight(scopeReaderOf(ctx.actor), entry, id, memoryNotFoundText(id));
   // A root's reach sets it for a store kept in a folder, so only a context built without a reach
   // lacks it.
   const target = globalTargetOf(ctx);

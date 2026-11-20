@@ -108,7 +108,8 @@ function formatKeyRow(item: ApiKeyListItem): string {
   const created = item.createdAt;
   const expires = item.expiresAt ?? '-';
   const revoked = item.revokedAt ?? '-';
-  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}`;
+  const scopes = item.scopes.length > 0 ? item.scopes.join(',') : '-';
+  return `${item.keyId}  ${item.tenantId}  ${item.role}  ${label}  ${created}  ${expires}  ${revoked}  ${scopes}`;
 }
 
 async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
@@ -132,7 +133,7 @@ async function listApiKeys(hippoRoot: string, tenantId: string, flags: CliFlags)
     return;
   }
 
-  console.log('key_id  tenant  role  label  created  expires  revoked');
+  console.log('key_id  tenant  role  label  created  expires  revoked  scopes');
   for (const item of items) {
     console.log(formatKeyRow(item));
   }

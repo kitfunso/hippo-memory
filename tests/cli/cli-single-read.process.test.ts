@@ -272,8 +272,8 @@ describe('hippo share (built CLI, no server)', () => {
     });
     s.settle();
     const before = held(s);
-    expect(await s.run('share', MISSING)).toEqual(refused(`Error: Memory not found: ${MISSING}`));
-    expect(await s.run('share', other)).toEqual(refused(`Error: Memory not found: ${other}`));
+    expect(await s.run('share', MISSING)).toEqual(refused(`Error: memory not found: ${MISSING}`));
+    expect(await s.run('share', other)).toEqual(refused(`Error: memory not found: ${other}`));
     expect(await s.run('share')).toEqual(
       refused('Usage: hippo share <memory_id> [--force] or hippo share --auto [--dry-run]'),
     );

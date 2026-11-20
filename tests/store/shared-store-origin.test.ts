@@ -27,7 +27,7 @@ import {
   batchWriteAndDeleteInFolder,
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -126,6 +126,7 @@ describe('shared store origin stamp', () => {
       writeEntry(store, toShare);
       const shared = sharedEntry(
         await shareMemory(...sharingStores(store), toShare.id, {
+          actor: TEST_ACTOR,
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',
@@ -150,6 +151,7 @@ describe('shared store origin stamp', () => {
       writeEntry(store, toShare);
       const shared = sharedEntry(
         await shareMemory(...sharingStores(store), toShare.id, {
+          actor: TEST_ACTOR,
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',

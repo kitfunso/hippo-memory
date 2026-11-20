@@ -372,6 +372,10 @@ async function changeGrant(
       `${scope} is a personal scope: only its owner reads it, and no grant can change that`,
     );
   }
+  // Ungrant takes the text as stored, so a grant written before this rule can still be removed.
+  if (op === 'auth_grant' && scope !== scope.trim()) {
+    throw new BadRequestError('scope must not start or end with a space');
+  }
   if (!isRestrictedScope(scope)) {
     throw new BadRequestError(
       `${scope} is not a restricted scope; it is already readable by default`,

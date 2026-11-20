@@ -12,7 +12,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -66,6 +66,7 @@ describe('share and promote refuse personal rows', () => {
   it('share refuses a personal row with a 400 and the exact text; a team row still shares', async () => {
     const err = await refusal(() =>
       shareMemory(...sharingStores(hippoRoot), mine.id, {
+        actor: { ...TEST_ACTOR, owner: 'alice' },
         embed: TEST_RUN,
         detached: TEST_DETACHED,
         tenantId: 'default',
@@ -78,6 +79,7 @@ describe('share and promote refuse personal rows', () => {
     expect(
       sharedEntry(
         await shareMemory(...sharingStores(hippoRoot), team.id, {
+          actor: TEST_ACTOR,
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',

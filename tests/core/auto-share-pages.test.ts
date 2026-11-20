@@ -15,7 +15,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries, loadEveryTenantEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
@@ -143,6 +143,8 @@ describe('shareMemory of a text the global store already holds', () => {
 
   const share = (id: string, { force = false, tenantId = 'default' } = {}): Promise<ShareOutcome> =>
     shareMemory(...sharingStores(root), id, {
+      // Alice owns the personal row below, so its refusal reaches her as the 400 it asserts.
+      actor: { ...TEST_ACTOR, owner: 'alice' },
       embed: TEST_RUN,
       detached: TEST_DETACHED,
       skipEmbed: true,

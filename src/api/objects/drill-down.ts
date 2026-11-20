@@ -78,6 +78,7 @@ export async function drillDown(
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), MAX_DRILL_DOWN_DEPTH));
   const admit: DescendantAdmission = {
     ownScope: personalScopeOf(ctx.actor) ?? undefined,
+    grants: ctx.actor.scopes,
     project: opts.project,
   };
   const pastLimit = Math.floor(limit) + 1;

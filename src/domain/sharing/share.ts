@@ -1,6 +1,6 @@
 // Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
 
-import { BadRequestError, NotFoundError } from '../../base/errors/api-errors.js';
+import { BadRequestError, memoryNotFoundText } from '../../base/errors/api-errors.js';
 import * as path from 'node:path';
 import {
   MemoryEntry,
@@ -17,7 +17,13 @@ import {
   AGENT_MEMORY_SOURCE_PREFIX,
   AGENT_MEMORY_TAGS,
 } from '../../base/memory/agent-memory-tools.js';
-import { isPersonalScope, isQuarantineScope } from '../../base/scope/recall-scope.js';
+import {
+  assertCopyRight,
+  isPersonalScope,
+  isQuarantineScope,
+  scopeReaderOf,
+  type ScopeActor,
+} from '../../base/scope/recall-scope.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import {
   embedMemoryDetached,
@@ -179,11 +185,14 @@ export async function shareMemory(
     skipEmbed?: boolean;
     embed: EmbedRun;
     detached: DetachedWork;
+    actor: ScopeActor & { readonly subject: string };
   },
 ): Promise<ShareOutcome> {
   // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
-  if (!entry) throw new NotFoundError(`Memory not found: ${id}`);
+  // Before toGlobalEntry, whose personal-row refusal would tell another person the id exists; a
+  // missing id and an unreachable one answer alike.
+  assertCopyRight(scopeReaderOf(options.actor), entry, id, memoryNotFoundText(id));
 
   // Built first because it throws for a row that may not be shared, ahead of the held-text answer.
   const globalEntry = toGlobalEntry(
@@ -201,23 +210,29 @@ export async function shareMemory(
   const lowScore = transferScore(entry) < SHARE_MIN_SCORE && options.force !== true;
   if (lowScore) return { kind: 'low-score' };
 
-  await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: CLI_ACTOR });
+  await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: options.actor.subject });
 
   // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since
   // embedMemory rewrites the whole index per call.
-  if (!options.skipEmbed) {
-    const target = {
-      groups: { vectors: global.store.vectors, vectorWrites: global.store.vectorWrites },
-      embeddings: global.config.embeddings,
-      embedderFor: global.embedderFor,
-      failureNotices: options.embed.failureNotices,
-      strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
-      clock: options.embed.clock,
-    };
-    embedMemoryDetached(target, globalEntry, options.detached);
-  }
+  if (!options.skipEmbed) embedSharedCopy(global, globalEntry, options);
 
   return { kind: 'shared', entry: globalEntry };
+}
+
+function embedSharedCopy(
+  global: ConfiguredFolder<StoreWith<'vectors' | 'vectorWrites'>>,
+  entry: MemoryEntry,
+  options: { readonly embed: EmbedRun; readonly detached: DetachedWork },
+): void {
+  const target = {
+    groups: { vectors: global.store.vectors, vectorWrites: global.store.vectorWrites },
+    embeddings: global.config.embeddings,
+    embedderFor: global.embedderFor,
+    failureNotices: options.embed.failureNotices,
+    strength: strengthModelFor(options.embed.evalSwitches, global.config.runtime),
+    clock: options.embed.clock,
+  };
+  embedMemoryDetached(target, entry, options.detached);
 }
 
 /** The global copy of a local row; throws when the row may not be shared. */

@@ -29,6 +29,8 @@ const NO_CREDENTIAL = {
   'POST /v1/auth/keys': 401,
   'GET /v1/auth/keys': 401,
   'DELETE /v1/auth/keys/:keyId': 401,
+  'POST /v1/auth/keys/:keyId/grants': 401,
+  'DELETE /v1/auth/keys/:keyId/grants': 401,
   'GET /v1/quarantine': 401,
   'POST /v1/quarantine/:id/approve': 401,
   'POST /v1/quarantine/:id/reject': 401,

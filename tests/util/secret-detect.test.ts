@@ -21,7 +21,7 @@ import { copyToGlobal, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { ASSIGNED_SECRET_LINES, ORDINARY_CONFIG_LINES, runtimeJoin } from '../_helpers/secret-shapes.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, apiCtx } = sessionPerTest();
@@ -233,6 +233,7 @@ describe('producer + sync vetoes (real stores)', () => {
     const [row] = loadAllEntries(projA, 'default');
     await expect(
       shareMemory(...sharingStores(projA), row.id, {
+        actor: TEST_ACTOR,
         embed: TEST_RUN,
         detached: TEST_DETACHED,
         tenantId: 'default',
@@ -306,6 +307,7 @@ describe('producer + sync vetoes (real stores)', () => {
     const [row] = loadAllEntries(projA, 'default');
     const globalCopy = sharedEntry(
       await shareMemory(...sharingStores(projA), row.id, {
+        actor: TEST_ACTOR,
         embed: TEST_RUN,
         detached: TEST_DETACHED,
         tenantId: 'default',

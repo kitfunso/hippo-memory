@@ -17,6 +17,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import type { Actor } from '../../src/api/types.js';
 
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   return apiCtx(root, tenantId, { subject: 'test:drill', role: 'admin' });
@@ -119,5 +120,24 @@ describe('drillDown', () => {
     expect(r.children.length).toBe(5);
     expect(r.truncated).toBe(true);
     expect(r.totalChildren).toBe(30);
+  });
+});
+
+const SECRET_SCOPE = 'slack:private:CSEC';
+
+describe('drillDown on a restricted summary', () => {
+  let root: string;
+  beforeEach(() => {
+    root = makeRoot('drill-grant');
+  });
+  afterEach(() => removeDir(root));
+
+  it('an admin key reads a restricted summary only on the exact grant, as a member does', async () => {
+    const s = makeSummary('secret topic', { scope: SECRET_SCOPE });
+    writeEntry(root, s);
+    const ungranted: Actor = { subject: 'api_key:admin', role: 'admin', scopes: [] };
+    const granted: Actor = { ...ungranted, scopes: [SECRET_SCOPE] };
+    expect(await drillDown(apiCtx(root, 'default', ungranted), s.id)).toEqual({ failure: 'not_found' });
+    expect('failure' in (await drillDown(apiCtx(root, 'default', granted), s.id))).toBe(false);
   });
 });

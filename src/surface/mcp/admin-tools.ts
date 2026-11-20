@@ -3,7 +3,6 @@
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
-import { memoryGetTouchable } from '../../api/memories/memories.js';
 import { mcpApiContext, type GroupToolCall, type LocalToolCall } from './protocol.js';
 import { sharePeers, shareToGlobal } from '../../api/sharing.js';
 import { MAX_ID_LEN, MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -113,8 +112,6 @@ export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = boolArg(args, 'force');
   const apiCtx = mcpApiContext(ctx);
-  // Checked before the share, whose personal-row refusal would tell another person the id exists.
-  await memoryGetTouchable(apiCtx, shareId);
   // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
   // the global store.
   const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });

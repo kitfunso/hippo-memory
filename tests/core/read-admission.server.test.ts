@@ -374,3 +374,70 @@ describe('descendant admission as data', () => {
     },
   );
 });
+
+describe('descendant admission by exact grant', () => {
+  const S = 'slack:private:C1';
+  const QUARANTINE = 'quarantine:private:q1';
+  const at = (scope: string | null, originProject: string | null = 'proj') => ({ scope, originProject });
+
+  it.each([
+    ['a member with the exact grant reads the granted row', at(S), { grants: [S] }, true],
+    ['a member with no grant does not', at(S), {}, false],
+    ['a grant on another scope does not open it', at(S), { grants: ['slack:private:C2'] }, false],
+    ['an open row reads with or without grants', at('team:eng'), { grants: [S] }, true],
+    ['a personal row opens for its owner', at('personal:private:alice'), { ownScope: 'personal:private:alice' }, true],
+    [
+      'a personal scope in the grants list opens nothing for another person',
+      at('personal:private:alice'),
+      { ownScope: 'personal:private:bob', grants: ['personal:private:alice'] },
+      false,
+    ],
+    ['no grant reads no quarantine row', at(QUARANTINE), {}, false],
+    ['no grant reads no unknown:legacy row', at('unknown:legacy'), {}, false],
+    ['a quarantine row opens only on its own exact grant', at(QUARANTINE), { grants: [S] }, false],
+    ['a granted scope in another project stays out', at(S, 'other'), { grants: [S], project: 'proj' }, false],
+    ['a granted scope in the same project reads', at(S, 'proj'), { grants: [S], project: 'proj' }, true],
+  ] as const)('%s', (_, candidate, admission, want) => {
+    expect(descendantAdmits(candidate, admission)).toBe(want);
+  });
+
+  describe('walked on a store, in process and on a worker', () => {
+    let walkRoot = '';
+    let walkInProcess: HippoStore & StoreGroups;
+    let walkOnWorkers: HippoStore & StoreGroups;
+
+    beforeAll(() => {
+      walkRoot = makeRoot('read-admission-grants');
+      writeEntry(walkRoot, row(ACME, 'g_sum', 'summary of the escalation', { dagLevel: 2, scope: S }));
+      for (const [id, scope] of [
+        ['g_c_s', S],
+        ['g_c_q', QUARANTINE],
+        ['g_c_open', null],
+        ['g_c_other', 'slack:private:C2'],
+      ] as const) {
+        writeEntry(walkRoot, row(ACME, id, `fact ${id} under the escalation`, under('g_sum', 1, { scope })));
+      }
+      walkInProcess = sqliteStore(walkRoot);
+      walkOnWorkers = workerSqliteStore(walkRoot);
+    });
+
+    afterAll(async () => {
+      await walkOnWorkers?.close();
+      await walkInProcess?.close();
+    });
+
+    it.each([
+      ['the exact grant reads the granted child and the open one', { grants: [S] }, [['g_c_s', 'g_c_open']]],
+      ['no grant refuses the summary, so nothing is read', {}, []],
+    ])('%s', async (_, admit, want) => {
+      for (const store of [walkInProcess, walkOnWorkers]) {
+        const walked = await store.dagReads.summaryWithDescendants(ACME, 'g_sum', {
+          depth: 1,
+          admit,
+          minSummaryLevel: DAG_LEVEL.topic,
+        });
+        expect(levelIds(walked)).toEqual(want);
+      }
+    });
+  });
+});
