@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { createApiKey, revokeApiKey } from '../../src/store/sqlite/keys/auth.js';
+import { createApiKey, grantScope, revokeApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { MAX_ID_LEN } from '../../src/base/util/limits.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -112,18 +112,32 @@ describe('grant routes', () => {
     expect((await call('DELETE', member.keyId, admin, 'team:eng')).status).toBe(400);
   });
 
-  it('refuses a missing, blank, padded or over-long scope with a 400', async () => {
+  it('refuses a missing, blank or over-long scope with a 400', async () => {
     const member = mint('member');
     for (const method of ['POST', 'DELETE'] as const) {
       expect((await call(method, member.keyId, admin)).status).toBe(400);
       expect((await call(method, member.keyId, admin, '  ')).status).toBe(400);
-      for (const padded of [` ${S2}`, `${S2} `]) {
-        const reply = await call(method, member.keyId, admin, padded);
-        expect(reply.status).toBe(400);
-        expect(reply.body.error).toBe('scope must not start or end with a space');
-      }
       expect((await call(method, member.keyId, admin, 'x'.repeat(MAX_ID_LEN + 1))).status).toBe(400);
     }
+  });
+
+  it('refuses a padded grant with a 400 and still revokes a padded grant stored before that rule', async () => {
+    const member = mint('member');
+    const padded = `${S2} `;
+    const refused = await call('POST', member.keyId, admin, padded);
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toBe('scope must not start or end with a space');
+
+    const db = openHippoDb(home);
+    try {
+      grantScope(db, member.keyId, padded);
+    } finally {
+      closeHippoDb(db);
+    }
+    expect(await call('DELETE', member.keyId, admin, padded)).toEqual({
+      status: 200,
+      body: { keyId: member.keyId, scope: padded, granted: false },
+    });
   });
 
   it('refuses a grant on a revoked key with a 409', async () => {

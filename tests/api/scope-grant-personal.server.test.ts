@@ -1,4 +1,4 @@
-// No grant opens a personal scope: granting one is a 400, a grant row already stored opens nothing, and ungrant still clears it (F8).
+// No grant opens a personal scope: granting one is a 400, a grant row already stored opens nothing, and ungrant still clears it (F8); a padded scope is refused on grant and removable as stored.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -14,6 +14,8 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 const A_SCOPE = 'personal:private:oid-a';
 const CONNECTOR_SCOPE = 'slack:private:C1';
 const A_TEXT = 'quartzlamp is the alias for my deploy script';
+const PADDED_SCOPE = 'slack:private:C2 ';
+const PADDED_TEXT = 'quartzlamp lives in the padded channel';
 
 let root: string;
 let handle: ServerHandle;
@@ -87,6 +89,33 @@ describe('scope grants and personal scopes', () => {
 
     expect(await api.authUngrant(adminCtx, keyB.keyId, A_SCOPE)).toEqual({ ok: true });
     expect(grantsOfB()).toEqual([CONNECTOR_SCOPE]);
+  });
+
+  it.each([` ${CONNECTOR_SCOPE}`, `${CONNECTOR_SCOPE} `])(
+    'granting the padded scope %j is a 400 and stores no grant',
+    async (scope) => {
+      let refusal: { status: number; message: string } | undefined;
+      try {
+        await api.authGrant(adminCtx, keyB.keyId, scope);
+      } catch (err) {
+        refusal = mapApiError(err);
+      }
+      expect(refusal).toEqual({ status: 400, message: 'scope must not start or end with a space' });
+      expect(grantsOfB()).toEqual([]);
+    },
+  );
+
+  it('a padded grant stored before the refusal is revoked as stored, and the member stops reading its scope', async () => {
+    withDb((db) => grantScope(db, keyB.keyId, PADDED_SCOPE));
+    const holder: api.Actor = { subject: 'api_key:hk_h', role: 'member', owner: 'oid-h', scopes: [PADDED_SCOPE] };
+    await api.remember(apiCtx(root, 'default', holder), { content: PADDED_TEXT, scope: PADDED_SCOPE });
+    const before = await recallAs(keyB.plaintext, PADDED_SCOPE);
+    expect(before.status).toBe(200);
+    expect(await before.text()).toContain('padded channel');
+
+    expect(await api.authUngrant(adminCtx, keyB.keyId, PADDED_SCOPE)).toEqual({ ok: true });
+    expect(grantsOfB()).toEqual([]);
+    expect((await recallAs(keyB.plaintext, PADDED_SCOPE)).status).toBe(403);
   });
 
   it('a resolver scope list naming a personal scope opens it for nobody but its owner', () => {

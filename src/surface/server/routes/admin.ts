@@ -31,11 +31,11 @@ import type { AuditOp } from '../../../base/records/audit-ops.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
-// A key mint is a few short fields, so even an authenticated caller gets a small cap and a short
+// A key mint or grant is a few short fields, so even an authenticated caller gets a small cap and a short
 // wait. ServeOptions.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not
 // sit through it.
-const MINT_BODY_MAX_BYTES = 4 * 1024;
-const MINT_BODY_DEADLINE_MS = 10_000;
+const KEY_BODY_MAX_BYTES = 4 * 1024;
+const KEY_BODY_DEADLINE_MS = 10_000;
 
 // GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees
 // no change.
@@ -47,8 +47,8 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   // The dispatch gate authenticated before the body, so an unknown caller costs no read; this
   // recheck runs the resolver right before the mint.
   const raw = await readBody(req, {
-    maxBytes: MINT_BODY_MAX_BYTES,
-    deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
+    maxBytes: KEY_BODY_MAX_BYTES,
+    deadlineMs: opts.mintBodyDeadlineMs ?? KEY_BODY_DEADLINE_MS,
   });
   const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
@@ -125,12 +125,6 @@ export async function handleRevokeAuthKey(
   return;
 }
 
-// A padded scope would store a grant no row matches, so it is a 400 like any other bad scope.
-function unpaddedScope(scope: string): string {
-  if (scope !== scope.trim()) throw new HttpError(400, 'scope must not start or end with a space');
-  return scope;
-}
-
 // POST /v1/auth/keys/:keyId/grants {"scope"}: the scope rides in the body, since it holds ':' and
 // so cannot sit in the path. authGrant answers the tenant, role and scope-shape errors.
 export async function handleGrantAuthKeyScope(
@@ -138,14 +132,12 @@ export async function handleGrantAuthKeyScope(
   { keyId }: RouteParams,
 ): Promise<void> {
   const raw = await readBody(req, {
-    maxBytes: MINT_BODY_MAX_BYTES,
-    deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
+    maxBytes: KEY_BODY_MAX_BYTES,
+    deadlineMs: opts.mintBodyDeadlineMs ?? KEY_BODY_DEADLINE_MS,
   });
   const ctx = await recheckContextWithAuth(req, opts);
   validateIdSegment(keyId, 'key id');
-  const scope = unpaddedScope(
-    requiredString(parseJsonObjectText(raw), 'scope', { max: MAX_ID_LEN }),
-  );
+  const scope = requiredString(parseJsonObjectText(raw), 'scope', { max: MAX_ID_LEN });
   await authGrant(ctx, keyId, scope);
   sendJson(res, 200, { keyId, scope, granted: true });
   return;
@@ -157,9 +149,7 @@ export async function handleUngrantAuthKeyScope(
   { keyId }: RouteParams,
 ): Promise<void> {
   validateIdSegment(keyId, 'key id');
-  const scope = unpaddedScope(
-    requiredString({ scope: query.get('scope') }, 'scope', { max: MAX_ID_LEN }),
-  );
+  const scope = requiredString({ scope: query.get('scope') }, 'scope', { max: MAX_ID_LEN });
   await authUngrant(ctx, keyId, scope);
   sendJson(res, 200, { keyId, scope, granted: false });
   return;
