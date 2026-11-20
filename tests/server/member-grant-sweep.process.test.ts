@@ -107,7 +107,7 @@ async function http(who: Who, method: string, path: string, body?: JsonValue): P
 
 /** A JSON-RPC reply: a result, or the error a refused call becomes. */
 interface RpcBody {
-  result?: { content: Array<{ text: string }> };
+  result?: { content: Array<{ text: string }>; isError?: boolean };
   error?: { message: string };
 }
 
@@ -123,7 +123,10 @@ async function mcpCall(who: Who, name: string, args: Record<string, JsonValue>):
   expect(res.status).toBe(200);
   // SAFETY: /mcp answers a JSON-RPC envelope, whose result and error are the two fields read here.
   const body = (await res.json()) as RpcBody;
-  return { text: body.result?.content[0]?.text ?? body.error?.message ?? '', failed: body.error !== undefined };
+  return {
+    text: body.result?.content[0]?.text ?? body.error?.message ?? '',
+    failed: body.error !== undefined || body.result?.isError === true,
+  };
 }
 
 const mcp = async (who: Who, name: string, args: Record<string, JsonValue>): Promise<string> =>
@@ -158,7 +161,10 @@ const readCell = (reply: Reply, found: (json: Body) => boolean): string =>
 const textCell = (call: ToolReply, marker: string): string =>
   refusal(0, call.text) ?? (call.failed ? `error: ${call.text}` : seenIn(call.text.includes(marker)));
 const writeCell = (reply: Reply): string => (reply.status === 200 ? '200' : (refused(reply) ?? `${reply.status}`));
-const mcpWriteCell = (text: string): string => refusal(0, text) ?? (/^(Shared|Resolved)/.test(text) ? '200' : text);
+const OK_TEXT = /^(Shared|Resolved)/;
+const mcpWriteCell = (text: string, ok: RegExp = OK_TEXT): string => refusal(0, text) ?? (ok.test(text) ? '200' : text);
+// The reply names the fate the store applied, so a reject that fell back to a plain forget does not read as 200.
+const REJECTED_TEXT = /^Resolved conflict \d+: kept \S+, rejected \(tombstoned\) and removed /;
 
 async function outcomeDelta(run: () => Promise<void>): Promise<string> {
   const before = readEntry(store, ids.r)?.outcomePositive ?? 0;
@@ -301,7 +307,8 @@ const TABLE: readonly SurfaceRow[] = [
     expected: WRITE_CELLS,
     run: async (who) => {
       const { conflict, keep } = pairs.reject[who];
-      return mcpWriteCell(await mcp(who, 'hippo_resolve', { conflict_id: conflict, keep, rejectLoser: true }));
+      const reply = await mcp(who, 'hippo_resolve', { conflict_id: conflict, keep, rejectLoser: true });
+      return mcpWriteCell(reply, REJECTED_TEXT);
     },
   },
   {
