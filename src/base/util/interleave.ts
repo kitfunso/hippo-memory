@@ -1,5 +1,6 @@
-/** `a` and `b` taken in turn, each id once, up to `limit`. With one list empty it returns a copy of
- * the other whole, so `limit` and the one-id rule do not apply to it. */
+/** `a` and `b` taken in turn, each id once, up to `limit`. A repeated id keeps its first place and
+ * the row object seen last. With one list empty it returns a copy of the other whole, so `limit`
+ * and the one-id rule do not apply to it. */
 export function interleaveRows<R extends { readonly id: string }>(
   a: readonly R[],
   b: readonly R[],

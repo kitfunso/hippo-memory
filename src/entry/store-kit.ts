@@ -130,6 +130,8 @@ export {
 } from '../base/ports/store-index.js';
 // An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as
 // hippo.db does.
+/** `entry` after one good or bad outcome, scored at `rules.now` (default: the eval clock), so a
+ * second store with its own clock scores as hippo.db does. */
 export function entryAfterOutcome(
   entry: MemoryEntry,
   good: boolean,
@@ -147,7 +149,7 @@ export { normalizeValueForRejection, rejectionDigest } from '../base/records/rej
 // writes keep hippo.db's duplicate hash.
 export { duplicateHash, heldTexts } from '../base/util/same-text.js';
 // An add-on store stamps, searches and windows its rows as hippo.db does, so both return the same
-// rows in the same order.
+// rows in the same order. hippo.db stores `created` as `isoInstant(stamp) ?? stamp`.
 export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';
 export { cjkIndexTerms, partitionCjkTerms } from '../base/util/tokenize.js';
 export { interleaveRows } from '../base/util/interleave.js';
@@ -161,7 +163,7 @@ export { auditRowsRead } from '../base/ports/store/audit.js';
 export { RawAppendOnlyError } from '../base/errors/raw-append-only.js';
 /** The tags that keep an unpinned row out of ambient context; a list, so a new tag changes no
  * public type. */
-export const RECALL_ONLY_TAGS: readonly string[] = recallOnlyTags;
+export const RECALL_ONLY_TAGS: readonly string[] = Object.freeze([...recallOnlyTags]);
 // An add-on's quality repair keeps the rows hippo.db's does.
 export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memory/memory-audit.js';
 export { RejectedValueError } from '../base/errors/api-errors.js';

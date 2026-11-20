@@ -1,7 +1,7 @@
 // What hippo-enterprise imports from the server and store-kit entries gives the answers the core code does, called by package name from a child against the build.
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { readdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeRoot, makeStore, openStoreAt } from '../_helpers/make-root.js';
@@ -52,15 +52,24 @@ describe('hippo-memory/store-kit initStore', () => {
   it('makes hippo.db in a folder that is no store yet, with no rows', () => {
     const root = makeRoot('server-tier-init', { init: false });
     const script = `
+      import { existsSync, readdirSync } from 'node:fs';
+      import { join } from 'node:path';
       import { ALL_TENANTS, initStore, sqliteStore } from 'hippo-memory/store-kit';
-      initStore(process.argv[1]);
-      const store = sqliteStore(process.argv[1]);
+      const root = process.argv[1];
+      const before = readdirSync(root);
+      initStore(root);
+      // Read before sqliteStore opens the folder, because that open makes the same files.
+      const made = { db: existsSync(join(root, 'hippo.db')), files: readdirSync(root).sort() };
+      const store = sqliteStore(root);
       const page = await store.entriesWhere({ tenantId: ALL_TENANTS }, { limit: 10 });
       await store.close();
-      console.log(JSON.stringify({ rows: page.entries }));
+      console.log(JSON.stringify({ before, made, rows: page.entries }));
     `;
-    expect(inChild<{ rows: unknown[] }>(script, root).rows).toEqual([]);
-    expect(existsSync(join(root, 'hippo.db'))).toBe(true);
+    const answer = inChild<{ before: string[]; made: { db: boolean; files: string[] }; rows: unknown[] }>(script, root);
+    expect(answer.before).not.toContain('hippo.db');
+    expect(answer.made.db).toBe(true);
+    expect(answer.made.files).toEqual(readdirSync(root).sort());
+    expect(answer.rows).toEqual([]);
   });
 });
 
@@ -281,6 +290,9 @@ describe('store-kit pure helpers', () => {
       splitUnindexed: ['splitLikeTerms', ['ab', 'abc', '数据库'], false],
       interleaveEmptyB: ['interleaveRows', rows('a', 'a', 'b'), [], 1],
       interleaveEmptyA: ['interleaveRows', [], rows('c', 'c'), 1],
+      interleaveRepeat: ['interleaveRows', rows('a', 'b', 'c'), rows('b', 'd'), 3],
+      interleaveMidPair: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 3],
+      interleaveLongTail: ['interleaveRows', rows('a'), rows('b', 'c', 'd'), 10],
       likeRows: ['LIKE_WINDOW_ROWS'],
       likeTerms: ['LIKE_WINDOW_TERMS'],
       schemaFitRows: ['SCHEMA_FIT_WINDOW_ROWS'],
@@ -298,6 +310,12 @@ describe('store-kit pure helpers', () => {
     // The Han Extension B pair is 2 code points and 4 UTF-16 units, which a .length split would index.
     expect(out['splitIndexed']).toEqual({ indexed: ['abc', '数据库'], windowed: ['ab', '数据', '𠀀𠀀'] });
     expect(out['splitUnindexed']).toEqual({ indexed: [], windowed: ['ab', 'abc', '数据库'] });
+  });
+
+  it('interleaveRows takes the lists in turn, keeps each id once and stops at the limit, even inside a pair', () => {
+    expect(out['interleaveRepeat']).toEqual(rows('a', 'b', 'd'));
+    expect(out['interleaveMidPair']).toEqual(rows('a', 'b', 'c'));
+    expect(out['interleaveLongTail']).toEqual(rows('a', 'b', 'c', 'd'));
   });
 
   it('interleaveRows returns the other list whole when one is empty, whatever the limit and repeats', () => {

@@ -29,6 +29,7 @@ No name changed and none was deleted; each moved once. Two tests pin both surfac
 ## Consequences
 - An add-on that imported a moved name from `hippo-memory/server` fails to build until its import changes. `docs/UPGRADING-2.0.md` lists each moved name.
 - A name added for a second store goes on `store-kit`, never on `server`. The export tests fail if `server` grows.
+  Amended in part: a name the server tier itself runs (a worker, an embed pass) goes on `server`; see `docs/decisions/2026-11-20-server-tier-exports.md`.
 
 ## Reconsider when
 - A second store needs a helper that is not on `store-kit`: add it there, with its test.

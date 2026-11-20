@@ -25,6 +25,7 @@ hippo-enterprise serves hippo from a Postgres store and imports 122 core names. 
 
 ## Consequences
 - Each name is a semver promise. A change to one needs a major version or a new name.
+- `interleaveRows` returns the other list whole, with no limit and no one-id rule, when one list is empty. No core caller needs that branch, because each SQL arm has its own limit and unique ids. It is a promise now, so a later uniform rule is a break.
 - Left off the entries, on purpose: `DEFAULT_LIST_LIMIT` and `MAX_AUDIT_LIMIT` (`auditRowsRead` holds both), `isRecallOnly`, `CrossTenantIdError`, `fallbackOrigin`, `memoryNotFoundText`, the model-taking forms of `entryAfterOutcome`, `markRetrieved` and `tallyAmbientEntries`, and `rewardFactorSql`.
 
 ## Reconsider when
