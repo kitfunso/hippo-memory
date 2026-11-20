@@ -67,6 +67,8 @@ describe('capture keeps what a person says in reply', () => {
     'stop, delete everything related to this project.',
     'continue dude, submit if you need. do not hold back.',
     'check https://example.com/page for me.',
+    'make sure there are no mistakes in the draft.',
+    'we must aim high on this, the plan sounds good, go.',
   ])('never pins the one-off reply %s', async (reply) => {
     await capture([user(REQUEST), done, user(reply)]);
     expect(rows().filter((e) => e.pinned || e.tags.includes(USER_RULE_TAG))).toEqual([]);

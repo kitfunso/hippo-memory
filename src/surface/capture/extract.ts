@@ -46,10 +46,25 @@ const DECISION_PATTERNS = [
   /\b(?:going|went)\s+with\b/i,
   /\b(?:the plan is|plan:|decision:)\s/i,
 ];
+const RULE_LABEL = /\b(?:the rule is|rule:|important:|critical:|remember:)\s/i;
 const RULE_PATTERNS = [
   /\b(?:never|always|must(?:\s+not)?|do(?:n't| not)\s+ever)\s/i,
-  /\b(?:the rule is|rule:|important:|critical:|remember:)\s/i,
+  RULE_LABEL,
   /\b(?:make sure|ensure)\s/i,
+];
+// The lead words sit in a lookbehind so the match starts on the keyword, where the bracket check reads.
+const DIRECTING_NEVER = new RegExp(
+  String.raw`(?<=^|[,;:.!]\s*|\b(?:and|but|so|or|then|please|pls|just|you|we|must|should|shall)\s+)` +
+    String.raw`(?:never|always|do(?:n't| not)\s+ever)\s+(?!(?:has|have|had|was|were|been|is|are|did|does|got)\b)`,
+  'i',
+);
+// A person's rule pins into every later session, so it needs words that outlast the task: "must" or
+// "make sure" alone orders the work at hand, and "she has never used it" describes.
+const PERSON_RULE_PATTERNS = [
+  DIRECTING_NEVER,
+  RULE_LABEL,
+  /\b(?:from now on|going forward|from here on|in future)\b/i,
+  /\bi(?:'ve| have)?\s+told you\b/i,
 ];
 const ERROR_PATTERNS = [
   /\b(?:error|bug|gotcha|watch out|careful|warning|caveat|trap):\s/i,
@@ -62,12 +77,15 @@ const PREFERENCE_PATTERNS = [
   /\b(?:prefer|don't use|avoid|skip)\s/i,
   /\b(?:we(?:'re| are)\s+using|the stack is|we use)\s/i,
 ];
-const CATEGORIES = [
-  ['decision', DECISION_PATTERNS],
-  ['rule', RULE_PATTERNS],
-  [ERROR_TAG, ERROR_PATTERNS],
-  ['preference', PREFERENCE_PATTERNS],
-] as const;
+const categories = (rulePatterns: readonly RegExp[]) =>
+  [
+    ['decision', DECISION_PATTERNS],
+    ['rule', rulePatterns],
+    [ERROR_TAG, ERROR_PATTERNS],
+    ['preference', PREFERENCE_PATTERNS],
+  ] as const;
+const CATEGORIES = categories(RULE_PATTERNS);
+const PERSON_CATEGORIES = categories(PERSON_RULE_PATTERNS);
 const MAX_CHARS = 500;
 const BULLET = /^(?:[-*]|\d+\.)\s+(?:\[[ xX]\]\s+)?(.+)/;
 const LABEL = /^(?:decision|rule|error|bug|gotcha|important|critical|remember|plan):/i;
@@ -464,17 +482,27 @@ function followUpItem(sentence: string, category: string): ExtractedItem | null 
 
 /** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. A
  *  statement with no such word stays a note: most replies are one-off orders, and a rule pins. */
-function sentenceItem(sentence: string, followUp: boolean): ExtractedItem | null {
+function sentenceItem(
+  sentence: string,
+  followUp: boolean,
+  fromUser: boolean,
+): ExtractedItem | null {
   const hit =
-    CATEGORIES.map(([category, patterns]) =>
-      extractFromPatterns(sentence, patterns, category),
-    ).find((found) => found !== null) ?? null;
-  if (!followUp || (hit !== null && hit.category !== 'preference')) return hit;
-  return followUpItem(sentence, hit === null ? CAPTURED_NOTE_TAG : 'rule') ?? hit;
+    (fromUser ? PERSON_CATEGORIES : CATEGORIES)
+      .map(([category, patterns]) => extractFromPatterns(sentence, patterns, category))
+      .find((found) => found !== null) ?? null;
+  const item =
+    !followUp || (hit !== null && hit.category !== 'preference')
+      ? hit
+      : (followUpItem(sentence, hit === null ? CAPTURED_NOTE_TAG : 'rule') ?? hit);
+  // A person's rule word that does not outlast the task stays a note, which a matching prompt recalls.
+  return (
+    item ?? (fromUser ? extractFromPatterns(sentence, RULE_PATTERNS, CAPTURED_NOTE_TAG) : null)
+  );
 }
 
 // The items of the spec bullets first, then those of each prose block.
-function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[] {
+function extractSourced(text: string, cuts: Cutter, followUp = false, fromUser = false): Sourced[] {
   const prose = proseOnly(text);
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
@@ -483,7 +511,7 @@ function extractSourced(text: string, cuts: Cutter, followUp = false): Sourced[]
       // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
-      const item = sentenceItem(sentence, followUp);
+      const item = sentenceItem(sentence, followUp, fromUser);
       if (item) {
         const [from, to] = block.sourceOf(at, at + sentence.length);
         found.push({ item, from, to });
@@ -503,8 +531,8 @@ export function extractFromTexts(
   firstFollowUp = userTexts,
 ): ExtractedItem[] {
   const items = texts.flatMap((text, i) =>
-    extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts).map(({ item }) =>
-      i < userTexts ? { ...item, fromUser: true } : item,
+    extractSourced(text, boldPairs, i >= firstFollowUp && i < userTexts, i < userTexts).map(
+      ({ item }) => (i < userTexts ? { ...item, fromUser: true } : item),
     ),
   );
   return oncePerText(items, (item) => assessAutomaticMemory(item.content).accepted);
