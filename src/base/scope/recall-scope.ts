@@ -192,12 +192,17 @@ export function scopeReaderOf(actor: ScopeActor): ScopeReader {
   return actor.owner ? { ...withGrants, owner: actor.owner } : withGrants;
 }
 
+/** A member's read grant on a scope: exact, and never on a personal scope. */
+export function scopeGranted(grants: readonly string[] | undefined, scope: string | null): boolean {
+  return scope !== null && !isPersonalScope(scope) && (grants ?? []).includes(scope);
+}
+
 /** Personal rows answer to their owner alone: role and grants never open one. Else admin reads
  * all; a member needs an exact grant on a restricted scope. A null scope reads. */
 export function readerReaches(reader: ScopeReader, scope: string | null): boolean {
   if (isPersonalScope(scope)) return scope === reader.ownScope;
   if (reader.role === 'admin' || !isRestrictedScope(scope)) return true;
-  return scope !== null && (reader.grants ?? []).includes(scope);
+  return scopeGranted(reader.grants, scope);
 }
 
 /** Where a row sits and who it records as its writer: the owner remember stamped, which a member
@@ -218,39 +223,44 @@ export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
 
 /** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row
  * the reader may not change throws a 403 naming the key that can: the caller already sees the
- * row, so saying so leaks nothing. */
+ * row, so saying so leaks nothing. `restrictedOnly` lets a row outside a restricted scope pass. */
+function assertRowRight(
+  reader: ScopeReader,
+  row: WrittenRow | undefined,
+  id: string,
+  missing: string,
+  rule: { readonly verb: 'change' | 'copy'; readonly restrictedOnly: boolean },
+): asserts row is WrittenRow {
+  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
+  const outsideRule = rule.restrictedOnly && !isRestrictedScope(row.scope);
+  if (outsideRule || readerMayChange(reader, row)) return;
+  const fix =
+    row.owner === null
+      ? `records no writer: ${rule.verb} it with an admin key`
+      : `was written by someone else: ${rule.verb} it with the key that wrote it or an admin key`;
+  throw new ForbiddenError(`memory ${id} ${fix}`);
+}
+
+/** The right to forget, archive, supersede or pin a row; see assertRowRight. */
 export function assertWriteRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
   id: string,
   missing: string,
 ): asserts row is WrittenRow {
-  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
-  if (readerMayChange(reader, row)) return;
-  const fix =
-    row.owner === null ? 'records no writer: change it with an admin key' : WRITTEN_BY_ANOTHER;
-  throw new ForbiddenError(`memory ${id} ${fix}`);
+  assertRowRight(reader, row, id, missing, { verb: 'change', restrictedOnly: false });
 }
 
-const WRITTEN_BY_ANOTHER =
-  'was written by someone else: change it with the key that wrote it or an admin key';
-
 /** Promote and share keep a restricted row's scope on the global copy, so a read grant is not
- * enough to copy one: only an admin or the member who owns the row. Out of reach reads as missing;
- * any other row copies as before. */
+ * enough to copy one: only an admin or the member who owns the row. Any other row copies as
+ * before. */
 export function assertCopyRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
   id: string,
   missing: string,
 ): asserts row is WrittenRow {
-  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
-  if (!isRestrictedScope(row.scope) || readerMayChange(reader, row)) return;
-  const fix =
-    row.owner === null
-      ? 'records no writer: copy it with an admin key'
-      : 'was written by someone else: copy it with the key that wrote it or an admin key';
-  throw new ForbiddenError(`memory ${id} ${fix}`);
+  assertRowRight(reader, row, id, missing, { verb: 'copy', restrictedOnly: true });
 }
 
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed

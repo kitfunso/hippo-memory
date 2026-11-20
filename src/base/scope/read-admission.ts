@@ -3,7 +3,7 @@
 import { COMPACTION_MEMORY_TAG, isRecallOnly, type MemoryEntry } from '../memory/entry.js';
 import { isWorthSurfacing } from '../memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
-import { isPersonalScope, passesScopeFilterForRecall } from './recall-scope.js';
+import { passesScopeFilterForRecall, scopeGranted } from './recall-scope.js';
 import { isSessionDigestRow } from '../session/session-digest-row.js';
 import { detectSecret } from '../util/secret-detect.js';
 import { isSuperseded } from '../memory/liveness.js';
@@ -91,9 +91,8 @@ export function descendantAdmits(
   a: DescendantAdmission,
 ): boolean {
   const scope = row.scope ?? null;
-  const granted = scope !== null && !isPersonalScope(scope) && (a.grants ?? []).includes(scope);
   return (
-    (granted || passesScopeFilterForRecall(scope, undefined, a.ownScope)) &&
+    (scopeGranted(a.grants, scope) || passesScopeFilterForRecall(scope, undefined, a.ownScope)) &&
     (!a.project || classifyOriginProject(row.originProject, a.project) !== 'cross-project')
   );
 }
