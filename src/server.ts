@@ -37,6 +37,9 @@ export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResul
 }
 
 export { serve } from './surface/server/boot.js';
+// A worker process embeds the store's memories: folderIndex builds the target embedAll takes.
+export { embedAll } from './domain/search/embed-memories.js';
+export { folderIndex } from './surface/folder-index.js';
 export { promptHookContext } from './surface/server/prompt-hook-context.js';
 
 // Add-on packages mint and revoke keys through these without importing the whole api surface.

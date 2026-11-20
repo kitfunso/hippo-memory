@@ -8,11 +8,7 @@ import type { OriginFilter } from '../base/ports/store/types.js';
 import { defaultStore } from '../surface/open-store.js';
 import { listRecallEntriesInFolder } from '../surface/testing-kit.js';
 import type { TenantId } from '../base/util/tenant.js';
-import {
-  embedMemoryInto,
-  folderEmbedTarget,
-  type EmbedOutcome,
-} from '../domain/search/embed-memories.js';
+import { embedMemoryInto, type EmbedOutcome } from '../domain/search/embed-memories.js';
 import {
   hybridSearch as rankHybrid,
   vectorSourceOf,
@@ -23,7 +19,7 @@ import { resolveEmbeddingProvider } from '../infra/embedding-provider.js';
 import { rankPhysics, type PhysicsSearchOptions } from '../domain/search/physics-search.js';
 import type { VectorSource } from '../domain/search/vector.js';
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
-import { entryInfra } from '../surface/entry-infra.js';
+import { folderIndex } from '../surface/folder-index.js';
 import type { EvalSwitches } from '../base/memory/eval-switches.js';
 
 /** A published ranker's options under the environment's eval switches and clock, unless the
@@ -97,11 +93,7 @@ export async function embedMemory(hippoRoot: string, entry: MemoryEntry): Promis
   const store = defaultStore(hippoRoot);
   try {
     const config = loadConfig(hippoRoot);
-    const target = folderEmbedTarget(
-      { store, config, embedderFor: resolveEmbeddingProvider },
-      entryInfra(),
-    );
-    return await embedMemoryInto(target, entry);
+    return await embedMemoryInto(folderIndex({ store, config }), entry);
   } finally {
     await store.close();
   }

@@ -1,8 +1,8 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { runModuleScript } from '../_helpers/run-module-script.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -15,6 +15,8 @@ const SERVER_VALUES = [
   'captureSessionTexts',
   'clientIpForRateLimit',
   'compactResumeForCaller',
+  'embedAll',
+  'folderIndex',
   'isCrossSite',
   'isLoopback',
   'isReservedActor',
@@ -69,10 +71,13 @@ const STORE_KIT_VALUES = [
   'ALL_TENANTS',
   'ambientRefusal',
   'assertWriteRight',
+  'auditRowsRead',
   'bufferToFloat32',
+  'cjkIndexTerms',
   'decodeVector',
   'descendantAdmits',
   'diffGraph',
+  'duplicateHash',
   'EMBEDDING_MODEL_META_KEY',
   'encodeVector',
   'entryAfterOutcome',
@@ -80,27 +85,38 @@ const STORE_KIT_VALUES = [
   'ftsTermParts',
   'hasGroup',
   'heldTexts',
+  'initStore',
+  'interleaveRows',
+  'isoInstant',
   'isSharedStore',
+  'LIKE_WINDOW_ROWS',
+  'LIKE_WINDOW_TERMS',
   'loadConfig',
   'normalizeValueForRejection',
   'OPTIONAL_GROUPS',
   'OTHER_STORE_MARKER',
   'ownScopeTouches',
+  'partitionCjkTerms',
   'passesScopeFilterForRecall',
   'physicsSearch',
   'PROTECTED_ROWS',
   'rankVectorRows',
   'rarestFtsQuery',
+  'RawAppendOnlyError',
   'readerMayChange',
   'readerReaches',
   'repairKeeps',
   'RECALL_DEFAULT_DENY_SCOPES',
+  'RECALL_ONLY_TAGS',
   'RejectedValueError',
   'rejectionDigest',
   'replacesIndex',
   'requireGroup',
   'runStoreConformance',
+  'SCHEMA_FIT_WINDOW_ROWS',
   'SECRET_TAGS',
+  'sortableStamp',
+  'splitLikeTerms',
   'sqliteStore',
   'StoreBusyError',
   'tallyAmbientEntries',
@@ -260,18 +276,7 @@ function runtimeNames(): Record<string, string[]> {
     "for (const sub of ['server', 'store-kit']) names[sub] = Object.keys(await import('hippo-memory/' + sub));",
     'console.log(JSON.stringify(names));',
   ].join('\n');
-  // cwd is the checkout because self-reference resolves from the nearest package.json.
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: root,
-    encoding: 'utf-8',
-    timeout: 30_000,
-  });
-  if (child.status !== 0) {
-    throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
-  }
-  const lines = child.stdout.trim().split('\n');
-  // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-  return JSON.parse(lines[lines.length - 1]!) as Record<string, string[]>;
+  return runModuleScript<Record<string, string[]>>(script);
 }
 
 /** Every name the built .d.ts file exports, type-only ones included. */
@@ -325,17 +330,7 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
       '  authCreate: typeof authCreate,',
       '}));',
     ].join('\n');
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: root,
-      encoding: 'utf-8',
-      timeout: 30_000,
-    });
-    if (child.status !== 0) {
-      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
-    }
-    const lines = child.stdout.trim().split('\n');
-    // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-    const out = JSON.parse(lines[lines.length - 1]!) as Record<string, boolean | string>;
+    const out = runModuleScript<Record<string, boolean | string>>(script);
     expect(out).toEqual({
       localHost: true,
       rebound: false,

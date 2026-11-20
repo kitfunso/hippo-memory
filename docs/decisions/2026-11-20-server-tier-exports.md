@@ -1,0 +1,32 @@
+# Server tier exports: the worker embed on server, the row rules on store-kit
+
+Date: 2026-11-20
+Status: accepted
+Links: `changelog.d/feat-server-entry-enterprise.md`; `docs/decisions/2026-10-11-store-kit-subpath.md`; `src/server.ts`; `src/entry/store-kit.ts`; `tests/server/server-tier-entry.process.test.ts`; `tests/server/server-subpath-exports.process.test.ts`
+
+## Context
+hippo-enterprise serves hippo from a Postgres store and imports 122 core names. On 3.9.0 two were on no public entry: `embedAll` (only on the unexported `src/entry/eval-scripts.ts`) and `initStore` (only on `hippo-memory/testing`). Its Postgres store must also write and read rows as hippo.db does, which needs helpers that no entry exports, such as `duplicateHash`.
+
+## Constraints and evidence
+- `docs/decisions/2026-10-11-store-kit-subpath.md` keeps `server` to the add-on API, and says a helper a second store needs goes on `store-kit` with its test.
+- `embedAll` and `folderIndex` are a worker operation that a server process runs, not part of a store's contract.
+- The rule `adapter-entrances` (`.dependency-cruiser.cjs`) lets only `src/surface/open-store.ts` and `src/surface/testing-kit.ts` import `src/store/sqlite`, so `initStore` reaches `store-kit` through `open-store.ts`.
+
+## Decision
+- `hippo-memory/server` adds the worker embed: `embedAll` and `folderIndex`. This amends the 2026-10-11 record, which listed the add-on API alone.
+- `hippo-memory/store-kit` adds `initStore` (with no runtime or session option) and the write and search helpers a store on another database needs to match core rows: `duplicateHash`, `isoInstant`, `sortableStamp`, `partitionCjkTerms`, `cjkIndexTerms`, `interleaveRows`, `splitLikeTerms`, the three window constants, `RECALL_ONLY_TAGS`, `auditRowsRead` and `RawAppendOnlyError`.
+- `entryAfterOutcome` takes an optional `now`, so a store scores an outcome at its own clock.
+- `folderIndex` moves to `src/surface/folder-index.ts`, so one module builds the embed target for `eval-scripts`, the eval kit and `server`. `server` never imports `eval-scripts.ts`, which builds rerankers at load.
+- Each new `store-kit` name has a test through the package entry. `duplicateHash`, `isoInstant`, `entryAfterOutcome`, `auditRowsRead`, `RawAppendOnlyError` and `interleaveRows` are checked against what core itself writes or returns. `initStore` is checked to make hippo.db in a folder that has none, with no rows. The window constants, `RECALL_ONLY_TAGS`, `splitLikeTerms`, `partitionCjkTerms` and `cjkIndexTerms` are checked against literal values, and `sortableStamp` against literal values and `Date`. Each name also sits in the three export gates: the exact-set test, the inline snapshot and `check:dts`.
+
+## Alternatives considered
+- **Put the helpers on `server`:** the add-on API stays smaller, but it breaks the 2026-10-11 split.
+- **Let the enterprise store copy the helpers:** no new promise here, but the copies drift from core and a row then differs by store.
+
+## Consequences
+- Each name is a semver promise. A change to one needs a major version or a new name.
+- `interleaveRows` has one rule for every input, an empty list included: take the lists in turn and keep each id once, at its first place, with the last row object for that id in either list; then return the first `limit`, a fraction rounded up and none at 0 or below, as the loop it replaced returned. It reads every row of both lists, so the row object never depends on `limit`. The JSDoc and a test pin both parts of the one-id rule. The SQLite search gives each arm its own SQL limit and unique ids, so the old empty-list shortcut returned the same rows.
+- Left off the entries, on purpose: `DEFAULT_LIST_LIMIT` and `MAX_AUDIT_LIMIT` (`auditRowsRead` holds both), `isRecallOnly`, `CrossTenantIdError`, `fallbackOrigin`, `memoryNotFoundText`, the model-taking forms of `entryAfterOutcome`, `markRetrieved` and `tallyAmbientEntries`, and `rewardFactorSql`.
+
+## Reconsider when
+- The term plan of `listSearchRows` moves into one module: it would replace `partitionCjkTerms`, `cjkIndexTerms` and `splitLikeTerms` with one export.

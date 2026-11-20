@@ -91,7 +91,7 @@ const SCHEMA_STEP = 'schema';
 // Connections behind the read-only gate, so a read can still make the temp tables it needs.
 const gated = new WeakSet<DatabaseSyncLike>();
 
-/** Whether `db` was opened under a read-only runtime, so it refuses every write. */
+/** Whether `db` is behind the write gate, so it refuses every write. */
 export function isReadOnlyHandle(db: DatabaseSyncLike): boolean {
   return gated.has(db);
 }
@@ -131,10 +131,15 @@ function settleSchema(db: DatabaseSyncLike, at: StoreAt, busyWaitMs: number): Op
   return facts;
 }
 
-// Shut after the schema step; only withTempTables opens it again, and only for a temp table.
-function closeGate(db: DatabaseSyncLike, facts: OpenFacts | null): OpenedDb {
+/** Refuses every write on `db`; only withTempTables opens it again, and only for a temp table. */
+export function shutWriteGate(db: DatabaseSyncLike): void {
   db.exec('PRAGMA query_only = ON');
   gated.add(db);
+}
+
+// Shut after the schema step.
+function closeGate(db: DatabaseSyncLike, facts: OpenFacts | null): OpenedDb {
+  shutWriteGate(db);
   return { db, facts };
 }
 

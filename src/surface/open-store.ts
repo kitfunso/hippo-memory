@@ -5,6 +5,7 @@
 import type { StoreRules } from '../base/ports/infra.js';
 import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
 import {
+  initStore,
   sqliteServerRuntime,
   sqliteStore as sqliteStoreWith,
   StoreRuntime,
@@ -52,6 +53,10 @@ export const publishedDefaultStore: (
   hippoRoot: string,
   rules?: StoreRules,
 ) => HippoStore & StoreGroups = sqliteStoreWith;
+
+/** initStore as ./store-kit publishes it: the folder's own setup, with no runtime or session
+ * option, which belong to a composition root. */
+export const publishedInitStore: (hippoRoot: string) => void = (root) => initStore(root);
 
 /** Runs `fn` on a store runtime of its own, disposed with the work `fn` detached on it once `fn`
  * settles, or closed by its exit hook if the process exits first. */

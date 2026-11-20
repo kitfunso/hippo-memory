@@ -16,6 +16,7 @@ A reader of the package could not tell the add-on API from internals, and every 
 ## Decision
 Split the old surface three ways:
 - `hippo-memory/server` keeps the server add-on API: `serve`, `authCreate`, `authCreateSelf`, `authRevoke`, the error classes, the caller hook functions and the `HippoStore` type.
+  Amended in part: `server` also holds the worker embed, `embedAll` and `folderIndex`; see `docs/decisions/2026-11-20-server-tier-exports.md`.
 - `hippo-memory/store-kit` (`src/entry/store-kit.ts`) holds the contract for a second store: port types, row types, `sqliteStore`, `hasGroup` and the rule helpers.
 - `hippo-memory/testing` holds the test reset hooks, with no semver promise beyond the major version.
 
@@ -29,6 +30,7 @@ No name changed and none was deleted; each moved once. Two tests pin both surfac
 ## Consequences
 - An add-on that imported a moved name from `hippo-memory/server` fails to build until its import changes. `docs/UPGRADING-2.0.md` lists each moved name.
 - A name added for a second store goes on `store-kit`, never on `server`. The export tests fail if `server` grows.
+  Amended in part: a name the server tier itself runs (a worker, an embed pass) goes on `server`; see `docs/decisions/2026-11-20-server-tier-exports.md`.
 
 ## Reconsider when
 - A second store needs a helper that is not on `store-kit`: add it there, with its test.
