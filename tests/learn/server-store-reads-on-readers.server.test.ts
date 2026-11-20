@@ -340,6 +340,16 @@ const READS: readonly Read[] = [
     'mem_p_pinned',
   ),
   read(
+    'contextReads.ambientCandidates recall',
+    (s) =>
+      s.contextReads.ambientCandidates(TENANT, {
+        recentNeeded: 3,
+        admit: { currentProject: '', includeCrossProject: true },
+        recall: { terms: ['rollout'], limit: 5 },
+      }),
+    'mem_p_pinned',
+  ),
+  read(
     'contextReads.contextCandidates',
     (s) => s.contextReads.contextCandidates(TENANT, { cap: 5, now: NOW }),
     'mem_p_pinned',

@@ -1,3 +1,7 @@
 ### Added
 
 - **`hippo-memory/server` and `hippo-memory/store-kit` publish what a second store and a worker process call.** `server` adds `embedAll` and `folderIndex`, so a worker embeds a store's memories with the provider its config names. `store-kit` adds `initStore`, `duplicateHash`, `isoInstant`, `sortableStamp`, `partitionCjkTerms`, `cjkIndexTerms`, `interleaveRows`, `splitLikeTerms`, `LIKE_WINDOW_ROWS`, `LIKE_WINDOW_TERMS`, `SCHEMA_FIT_WINDOW_ROWS`, `RECALL_ONLY_TAGS`, `auditRowsRead` and `RawAppendOnlyError`, so a store on another database writes and searches rows as hippo.db does. `entryAfterOutcome` also takes an optional `now` in its rules.
+
+### Fixed
+
+- **A reader thread can make the temp tables prompt recall needs.** The worker store set its readers read-only by a path the temp-table gate did not know, so prompt recall through `serve()` failed with "attempt to write a readonly database".

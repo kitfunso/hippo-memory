@@ -4,7 +4,7 @@ import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../../db/index.js';
 import { SESSION_OPEN } from '../../../db/request-stores.js';
-import type { OpenedDb } from '../../../db/connect.js';
+import { type OpenedDb, shutWriteGate } from '../../../db/connect.js';
 import { VectorGraphs } from '../../../db/vector-graph-index.js';
 import { errorFields, log } from '../../../base/util/log.js';
 import { postReply } from '../../../base/util/thread-reply.js';
@@ -76,7 +76,7 @@ class WorkerStores extends RequestStores {
       this.#prepared.add(db);
       // A reader that could write would let a method wrongly tagged 'read' take the write lock off
       // the writer thread.
-      if (this.#init.mode === 'read') db.exec('PRAGMA query_only = ON');
+      if (this.#init.mode === 'read') shutWriteGate(db);
       const flag = this.#commitFlag;
       if (flag) watchCommits(db, () => Atomics.store(flag, 0, this.jobId));
     }
