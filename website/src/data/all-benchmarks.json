@@ -103,6 +103,223 @@
       ]
     },
     {
+      "name": "LoCoMo, OmniMemEval shared setup",
+      "task": "Long chat recall, gpt-4.1-mini answers",
+      "tag": "official setup",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: 1,540 questions without category 5, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo ran this setup with its embedder on 20 Nov 2026. 5 smoke-test items are never scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "74.72",
+        "num": 74.72,
+        "setting": "embedder, top 20, 1,535 of 1,540 (5 test items never scored)",
+        "status": null
+      },
+      "cells": {
+        "MemOS": {
+          "value": "88.83",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L40",
+          "muted": false
+        },
+        "EverMemOS": {
+          "value": "82.75",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L35",
+          "muted": false
+        },
+        "Hindsight": {
+          "value": "81.99",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L33",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "77.68",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L27",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "73.53",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L29",
+          "muted": false
+        },
+        "Zep": {
+          "value": "63.83",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L28",
+          "muted": false
+        },
+        "Other": {
+          "value": "90.71",
+          "system": "cachly",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L43",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "cachly",
+          "value": "90.71",
+          "num": 90.71,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L43"
+        },
+        {
+          "name": "ThreadAtlas",
+          "value": "88.90",
+          "num": 88.9,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L44"
+        },
+        {
+          "name": "MemOS",
+          "value": "88.83",
+          "num": 88.83,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L40"
+        },
+        {
+          "name": "Maasv",
+          "value": "87.73",
+          "num": 87.73,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L42"
+        },
+        {
+          "name": "Cognee",
+          "value": "83.48",
+          "num": 83.48,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L31"
+        },
+        {
+          "name": "EverOS",
+          "value": "82.75",
+          "num": 82.75,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L35"
+        },
+        {
+          "name": "Hindsight",
+          "value": "81.99",
+          "num": 81.99,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L33"
+        },
+        {
+          "name": "LCM-X",
+          "value": "78.83",
+          "num": 78.83,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L41"
+        },
+        {
+          "name": "Mem0",
+          "value": "77.68",
+          "num": 77.68,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L27"
+        },
+        {
+          "name": "Letta",
+          "value": "77.12",
+          "num": 77.12,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L32"
+        },
+        {
+          "name": "MemMachine",
+          "value": "73.90",
+          "num": 73.9,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L36"
+        },
+        {
+          "name": "mem9",
+          "value": "73.64",
+          "num": 73.64,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L37"
+        },
+        {
+          "name": "Supermemory",
+          "value": "73.53",
+          "num": 73.53,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L29"
+        },
+        {
+          "name": "MemoryLake",
+          "value": "72.49",
+          "num": 72.49,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L38"
+        },
+        {
+          "name": "Viking",
+          "value": "69.33",
+          "num": 69.33,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L30"
+        },
+        {
+          "name": "Zep",
+          "value": "63.83",
+          "num": 63.83,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L28"
+        },
+        {
+          "name": "Memori",
+          "value": "41.34",
+          "num": 41.34,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L34"
+        },
+        {
+          "name": "Backboard",
+          "value": "22.40",
+          "num": 22.4,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L39"
+        }
+      ]
+    },
+    {
       "name": "LongMemEval-S, gpt-4o reader",
       "task": "Long chat recall, gpt-4o answers",
       "tag": "official setup",
@@ -164,6 +381,207 @@
           "system": null,
           "model": "gpt-4o",
           "url": "https://arxiv.org/html/2501.13956v1"
+        }
+      ]
+    },
+    {
+      "name": "LongMemEval-S, OmniMemEval shared setup",
+      "task": "Long chat recall, gpt-4.1-mini answers",
+      "tag": "official setup",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the cleaned LongMemEval-S file, 500 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo ran this setup with its embedder on 20 Nov 2026. 5 smoke-test items are never scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "83.84",
+        "num": 83.84,
+        "setting": "embedder, top 20, 495 of 500 (5 test items never scored)",
+        "status": null
+      },
+      "cells": {
+        "MemOS": {
+          "value": "89.20",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L41",
+          "muted": false
+        },
+        "EverMemOS": {
+          "value": "80.40",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L38",
+          "muted": false
+        },
+        "Zep": {
+          "value": "79.80",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L31",
+          "muted": false
+        },
+        "Hindsight": {
+          "value": "72.20",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L36",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "66.07",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L32",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "56.00",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L30",
+          "muted": false
+        },
+        "Other": {
+          "value": "91.20",
+          "system": "Maasv",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L43",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Maasv",
+          "value": "91.20",
+          "num": 91.2,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L43"
+        },
+        {
+          "name": "cachly",
+          "value": "89.60",
+          "num": 89.6,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L44"
+        },
+        {
+          "name": "MemOS",
+          "value": "89.20",
+          "num": 89.2,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L41"
+        },
+        {
+          "name": "LCM-X",
+          "value": "87.00",
+          "num": 87.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L42"
+        },
+        {
+          "name": "ThreadAtlas",
+          "value": "87.00",
+          "num": 87.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L45"
+        },
+        {
+          "name": "EverOS",
+          "value": "80.40",
+          "num": 80.4,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L38"
+        },
+        {
+          "name": "Zep",
+          "value": "79.80",
+          "num": 79.8,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L31"
+        },
+        {
+          "name": "mem9",
+          "value": "78.00",
+          "num": 78.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L40"
+        },
+        {
+          "name": "Letta",
+          "value": "77.67",
+          "num": 77.67,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L35"
+        },
+        {
+          "name": "Hindsight",
+          "value": "72.20",
+          "num": 72.2,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L36"
+        },
+        {
+          "name": "Supermemory",
+          "value": "66.07",
+          "num": 66.07,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L32"
+        },
+        {
+          "name": "MemMachine",
+          "value": "63.60",
+          "num": 63.6,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L39"
+        },
+        {
+          "name": "Viking",
+          "value": "61.07",
+          "num": 61.07,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L33"
+        },
+        {
+          "name": "Mem0",
+          "value": "56.00",
+          "num": 56.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L30"
+        },
+        {
+          "name": "Cognee",
+          "value": "51.80",
+          "num": 51.8,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L34"
+        },
+        {
+          "name": "Memori",
+          "value": "20.80",
+          "num": 20.8,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L37"
         }
       ]
     },
@@ -289,6 +707,199 @@
       ]
     },
     {
+      "name": "PersonaMem v2, OmniMemEval shared setup",
+      "task": "Personalisation, gpt-4.1-mini answers",
+      "tag": "official setup, with a caveat",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: multiple-choice accuracy, repeated runs averaged, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and rule matching in place of an LLM judge. Contributors ran some rows (Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo ran this setup with its embedder on 20 Nov 2026. 5 smoke-test items are never scored.",
+      "caveat": "The published rows average repeated runs and do not state how many; hippo's score is one run, the default of run_pmv2_eval.sh.",
+      "hippo": {
+        "value": "35.10",
+        "num": 35.1,
+        "setting": "embedder, top 20, one run, 4,995 of 5,000 (5 test items never scored)",
+        "status": null
+      },
+      "cells": {
+        "MemOS": {
+          "value": "40.58",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L41",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "39.64",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L32",
+          "muted": false
+        },
+        "Hindsight": {
+          "value": "37.98",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L36",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "36.76",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L30",
+          "muted": false
+        },
+        "EverMemOS": {
+          "value": "35.94",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L38",
+          "muted": false
+        },
+        "Zep": {
+          "value": "32.34",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L31",
+          "muted": false
+        },
+        "Other": {
+          "value": "39.86",
+          "system": "Maasv",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L43",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "MemOS",
+          "value": "40.58",
+          "num": 40.58,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L41"
+        },
+        {
+          "name": "Maasv",
+          "value": "39.86",
+          "num": 39.86,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L43"
+        },
+        {
+          "name": "Supermemory",
+          "value": "39.64",
+          "num": 39.64,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L32"
+        },
+        {
+          "name": "Hindsight",
+          "value": "37.98",
+          "num": 37.98,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L36"
+        },
+        {
+          "name": "ThreadAtlas",
+          "value": "36.92",
+          "num": 36.92,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L44"
+        },
+        {
+          "name": "Mem0",
+          "value": "36.76",
+          "num": 36.76,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L30"
+        },
+        {
+          "name": "EverOS",
+          "value": "35.94",
+          "num": 35.94,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L38"
+        },
+        {
+          "name": "Letta",
+          "value": "35.12",
+          "num": 35.12,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L35"
+        },
+        {
+          "name": "MemMachine",
+          "value": "34.14",
+          "num": 34.14,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L39"
+        },
+        {
+          "name": "LCM-X",
+          "value": "33.96",
+          "num": 33.96,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L42"
+        },
+        {
+          "name": "Memori",
+          "value": "33.16",
+          "num": 33.16,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L37"
+        },
+        {
+          "name": "Zep",
+          "value": "32.34",
+          "num": 32.34,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L31"
+        },
+        {
+          "name": "Viking",
+          "value": "30.80",
+          "num": 30.8,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L33"
+        },
+        {
+          "name": "mem9",
+          "value": "30.76",
+          "num": 30.76,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L40"
+        },
+        {
+          "name": "Cognee",
+          "value": "26.46",
+          "num": 26.46,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L34"
+        }
+      ]
+    },
+    {
       "name": "EverMemBench, GPT-4.1-mini answers",
       "task": "Changing facts, GPT-4.1-mini answers",
       "tag": "official setup, with a caveat",
@@ -366,6 +977,376 @@
           "system": null,
           "model": "GPT-4.1-mini",
           "url": "https://arxiv.org/html/2602.01313v3"
+        }
+      ]
+    },
+    {
+      "name": "BEAM-100K, OmniMemEval shared setup",
+      "task": "Long-horizon memory, gpt-4.1-mini answers",
+      "tag": "official setup",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 100K scale, 400 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo ran this setup with its embedder on 20 Nov 2026. 5 smoke-test items are never scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "67.98",
+        "num": 67.98,
+        "setting": "embedder, top 20, 395 of 400 (5 test items never scored)",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "70.41",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
+          "muted": false
+        },
+        "Hindsight": {
+          "value": "70.22",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
+          "muted": false
+        },
+        "Zep": {
+          "value": "68.70",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
+          "muted": false
+        },
+        "MemOS": {
+          "value": "66.87",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "65.98",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
+          "muted": false
+        },
+        "EverMemOS": {
+          "value": "58.64",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
+          "muted": false
+        },
+        "Other": {
+          "value": "76.38",
+          "system": "Maasv",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Maasv",
+          "value": "76.38",
+          "num": 76.38,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41"
+        },
+        {
+          "name": "ThreadAtlas",
+          "value": "73.12",
+          "num": 73.12,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L43"
+        },
+        {
+          "name": "cachly",
+          "value": "73.04",
+          "num": 73.04,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L42"
+        },
+        {
+          "name": "LCM-X",
+          "value": "71.84",
+          "num": 71.84,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40"
+        },
+        {
+          "name": "Viking",
+          "value": "70.76",
+          "num": 70.76,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32"
+        },
+        {
+          "name": "Mem0",
+          "value": "70.41",
+          "num": 70.41,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29"
+        },
+        {
+          "name": "Hindsight",
+          "value": "70.22",
+          "num": 70.22,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35"
+        },
+        {
+          "name": "Letta",
+          "value": "69.22",
+          "num": 69.22,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34"
+        },
+        {
+          "name": "Zep",
+          "value": "68.70",
+          "num": 68.7,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30"
+        },
+        {
+          "name": "MemOS",
+          "value": "66.87",
+          "num": 66.87,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39"
+        },
+        {
+          "name": "Supermemory",
+          "value": "65.98",
+          "num": 65.98,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31"
+        },
+        {
+          "name": "mem9",
+          "value": "65.75",
+          "num": 65.75,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38"
+        },
+        {
+          "name": "MemMachine",
+          "value": "64.80",
+          "num": 64.8,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37"
+        },
+        {
+          "name": "Cognee",
+          "value": "59.30",
+          "num": 59.3,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33"
+        },
+        {
+          "name": "EverOS",
+          "value": "58.64",
+          "num": 58.64,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36"
+        }
+      ]
+    },
+    {
+      "name": "BEAM-10M, OmniMemEval shared setup",
+      "task": "Long-horizon memory, gpt-4.1-mini answers",
+      "tag": "official setup",
+      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 10M scale, 200 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (Maasv and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo ran this setup with its embedder on 20 Nov 2026. All 200 questions are scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "56.84",
+        "num": 56.84,
+        "setting": "embedder, top 20, all 200",
+        "status": null
+      },
+      "cells": {
+        "Hindsight": {
+          "value": "59.75",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
+          "muted": false
+        },
+        "MemOS": {
+          "value": "56.75",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
+          "muted": false
+        },
+        "Zep": {
+          "value": "56.11",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
+          "muted": false
+        },
+        "Supermemory": {
+          "value": "52.49",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
+          "muted": false
+        },
+        "EverMemOS": {
+          "value": "47.73",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "43.33",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
+          "muted": false
+        },
+        "Other": {
+          "value": "65.09",
+          "system": "Maasv",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Maasv",
+          "value": "65.09",
+          "num": 65.09,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41"
+        },
+        {
+          "name": "LCM-X",
+          "value": "63.32",
+          "num": 63.32,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40"
+        },
+        {
+          "name": "Hindsight",
+          "value": "59.75",
+          "num": 59.75,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35"
+        },
+        {
+          "name": "Viking",
+          "value": "58.14",
+          "num": 58.14,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32"
+        },
+        {
+          "name": "mem9",
+          "value": "57.30",
+          "num": 57.3,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38"
+        },
+        {
+          "name": "MemOS",
+          "value": "56.75",
+          "num": 56.75,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39"
+        },
+        {
+          "name": "Zep",
+          "value": "56.11",
+          "num": 56.11,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30"
+        },
+        {
+          "name": "Cognee",
+          "value": "56.02",
+          "num": 56.02,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33"
+        },
+        {
+          "name": "Supermemory",
+          "value": "52.49",
+          "num": 52.49,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31"
+        },
+        {
+          "name": "Letta",
+          "value": "52.30",
+          "num": 52.3,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34"
+        },
+        {
+          "name": "MemMachine",
+          "value": "51.90",
+          "num": 51.9,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37"
+        },
+        {
+          "name": "EverOS",
+          "value": "47.73",
+          "num": 47.73,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36"
+        },
+        {
+          "name": "Mem0",
+          "value": "43.33",
+          "num": 43.33,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29"
         }
       ]
     },
@@ -896,987 +1877,6 @@
     }
   ],
   "published": [
-    {
-      "name": "LoCoMo, OmniMemEval shared setup",
-      "task": "Answer accuracy, LLM judge, gpt-4.1-mini answers, gpt-4o-mini judge",
-      "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: 1,540 questions without category 5, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "running"
-      },
-      "cells": {
-        "MemOS": {
-          "value": "88.83",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L40",
-          "muted": false
-        },
-        "EverMemOS": {
-          "value": "82.75",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L35",
-          "muted": false
-        },
-        "Hindsight": {
-          "value": "81.99",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L33",
-          "muted": false
-        },
-        "Mem0": {
-          "value": "77.68",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L27",
-          "muted": false
-        },
-        "Supermemory": {
-          "value": "73.53",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L29",
-          "muted": false
-        },
-        "Zep": {
-          "value": "63.83",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L28",
-          "muted": false
-        },
-        "Other": {
-          "value": "90.71",
-          "system": "cachly",
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L43",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "cachly",
-          "value": "90.71",
-          "num": 90.71,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L43"
-        },
-        {
-          "name": "ThreadAtlas",
-          "value": "88.90",
-          "num": 88.9,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L44"
-        },
-        {
-          "name": "MemOS",
-          "value": "88.83",
-          "num": 88.83,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L40"
-        },
-        {
-          "name": "Maasv",
-          "value": "87.73",
-          "num": 87.73,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L42"
-        },
-        {
-          "name": "Cognee",
-          "value": "83.48",
-          "num": 83.48,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L31"
-        },
-        {
-          "name": "EverOS",
-          "value": "82.75",
-          "num": 82.75,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L35"
-        },
-        {
-          "name": "Hindsight",
-          "value": "81.99",
-          "num": 81.99,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L33"
-        },
-        {
-          "name": "LCM-X",
-          "value": "78.83",
-          "num": 78.83,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L41"
-        },
-        {
-          "name": "Mem0",
-          "value": "77.68",
-          "num": 77.68,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L27"
-        },
-        {
-          "name": "Letta",
-          "value": "77.12",
-          "num": 77.12,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L32"
-        },
-        {
-          "name": "MemMachine",
-          "value": "73.90",
-          "num": 73.9,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L36"
-        },
-        {
-          "name": "mem9",
-          "value": "73.64",
-          "num": 73.64,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L37"
-        },
-        {
-          "name": "Supermemory",
-          "value": "73.53",
-          "num": 73.53,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L29"
-        },
-        {
-          "name": "MemoryLake",
-          "value": "72.49",
-          "num": 72.49,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L38"
-        },
-        {
-          "name": "Viking",
-          "value": "69.33",
-          "num": 69.33,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L30"
-        },
-        {
-          "name": "Zep",
-          "value": "63.83",
-          "num": 63.83,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L28"
-        },
-        {
-          "name": "Memori",
-          "value": "41.34",
-          "num": 41.34,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L34"
-        },
-        {
-          "name": "Backboard",
-          "value": "22.40",
-          "num": 22.4,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/locomo.md#L39"
-        }
-      ]
-    },
-    {
-      "name": "LongMemEval-S, OmniMemEval shared setup",
-      "task": "Answer accuracy, LLM judge, gpt-4.1-mini answers, gpt-4o-mini judge",
-      "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the cleaned LongMemEval-S file, 500 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "running"
-      },
-      "cells": {
-        "MemOS": {
-          "value": "89.20",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L41",
-          "muted": false
-        },
-        "EverMemOS": {
-          "value": "80.40",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L38",
-          "muted": false
-        },
-        "Zep": {
-          "value": "79.80",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L31",
-          "muted": false
-        },
-        "Hindsight": {
-          "value": "72.20",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L36",
-          "muted": false
-        },
-        "Supermemory": {
-          "value": "66.07",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L32",
-          "muted": false
-        },
-        "Mem0": {
-          "value": "56.00",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L30",
-          "muted": false
-        },
-        "Other": {
-          "value": "91.20",
-          "system": "Maasv",
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L43",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "Maasv",
-          "value": "91.20",
-          "num": 91.2,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L43"
-        },
-        {
-          "name": "cachly",
-          "value": "89.60",
-          "num": 89.6,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L44"
-        },
-        {
-          "name": "MemOS",
-          "value": "89.20",
-          "num": 89.2,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L41"
-        },
-        {
-          "name": "LCM-X",
-          "value": "87.00",
-          "num": 87.0,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L42"
-        },
-        {
-          "name": "ThreadAtlas",
-          "value": "87.00",
-          "num": 87.0,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L45"
-        },
-        {
-          "name": "EverOS",
-          "value": "80.40",
-          "num": 80.4,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L38"
-        },
-        {
-          "name": "Zep",
-          "value": "79.80",
-          "num": 79.8,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L31"
-        },
-        {
-          "name": "mem9",
-          "value": "78.00",
-          "num": 78.0,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L40"
-        },
-        {
-          "name": "Letta",
-          "value": "77.67",
-          "num": 77.67,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L35"
-        },
-        {
-          "name": "Hindsight",
-          "value": "72.20",
-          "num": 72.2,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L36"
-        },
-        {
-          "name": "Supermemory",
-          "value": "66.07",
-          "num": 66.07,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L32"
-        },
-        {
-          "name": "MemMachine",
-          "value": "63.60",
-          "num": 63.6,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L39"
-        },
-        {
-          "name": "Viking",
-          "value": "61.07",
-          "num": 61.07,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L33"
-        },
-        {
-          "name": "Mem0",
-          "value": "56.00",
-          "num": 56.0,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L30"
-        },
-        {
-          "name": "Cognee",
-          "value": "51.80",
-          "num": 51.8,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L34"
-        },
-        {
-          "name": "Memori",
-          "value": "20.80",
-          "num": 20.8,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/longmemeval.md#L37"
-        }
-      ]
-    },
-    {
-      "name": "BEAM-100K, OmniMemEval shared setup",
-      "task": "Nugget score, 400 questions, gpt-4.1-mini answers, gpt-4o-mini judge",
-      "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 100K scale, 400 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (cachly, Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "running"
-      },
-      "cells": {
-        "Mem0": {
-          "value": "70.41",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
-          "muted": false
-        },
-        "Hindsight": {
-          "value": "70.22",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
-          "muted": false
-        },
-        "Zep": {
-          "value": "68.70",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
-          "muted": false
-        },
-        "MemOS": {
-          "value": "66.87",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
-          "muted": false
-        },
-        "Supermemory": {
-          "value": "65.98",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
-          "muted": false
-        },
-        "EverMemOS": {
-          "value": "58.64",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
-          "muted": false
-        },
-        "Other": {
-          "value": "76.38",
-          "system": "Maasv",
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "Maasv",
-          "value": "76.38",
-          "num": 76.38,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41"
-        },
-        {
-          "name": "ThreadAtlas",
-          "value": "73.12",
-          "num": 73.12,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L43"
-        },
-        {
-          "name": "cachly",
-          "value": "73.04",
-          "num": 73.04,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L42"
-        },
-        {
-          "name": "LCM-X",
-          "value": "71.84",
-          "num": 71.84,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40"
-        },
-        {
-          "name": "Viking",
-          "value": "70.76",
-          "num": 70.76,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32"
-        },
-        {
-          "name": "Mem0",
-          "value": "70.41",
-          "num": 70.41,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29"
-        },
-        {
-          "name": "Hindsight",
-          "value": "70.22",
-          "num": 70.22,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35"
-        },
-        {
-          "name": "Letta",
-          "value": "69.22",
-          "num": 69.22,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34"
-        },
-        {
-          "name": "Zep",
-          "value": "68.70",
-          "num": 68.7,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30"
-        },
-        {
-          "name": "MemOS",
-          "value": "66.87",
-          "num": 66.87,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39"
-        },
-        {
-          "name": "Supermemory",
-          "value": "65.98",
-          "num": 65.98,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31"
-        },
-        {
-          "name": "mem9",
-          "value": "65.75",
-          "num": 65.75,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38"
-        },
-        {
-          "name": "MemMachine",
-          "value": "64.80",
-          "num": 64.8,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37"
-        },
-        {
-          "name": "Cognee",
-          "value": "59.30",
-          "num": 59.3,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33"
-        },
-        {
-          "name": "EverOS",
-          "value": "58.64",
-          "num": 58.64,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36"
-        }
-      ]
-    },
-    {
-      "name": "BEAM-10M, OmniMemEval shared setup",
-      "task": "Nugget score, 200 questions, gpt-4.1-mini answers, gpt-4o-mini judge",
-      "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: the nugget score at the 10M scale, 200 questions, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and the gpt-4o-mini-2024-07-18 judge. Contributors ran some rows (Maasv and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "running"
-      },
-      "cells": {
-        "Hindsight": {
-          "value": "59.75",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35",
-          "muted": false
-        },
-        "MemOS": {
-          "value": "56.75",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39",
-          "muted": false
-        },
-        "Zep": {
-          "value": "56.11",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30",
-          "muted": false
-        },
-        "Supermemory": {
-          "value": "52.49",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31",
-          "muted": false
-        },
-        "EverMemOS": {
-          "value": "47.73",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36",
-          "muted": false
-        },
-        "Mem0": {
-          "value": "43.33",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29",
-          "muted": false
-        },
-        "Other": {
-          "value": "65.09",
-          "system": "Maasv",
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "Maasv",
-          "value": "65.09",
-          "num": 65.09,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L41"
-        },
-        {
-          "name": "LCM-X",
-          "value": "63.32",
-          "num": 63.32,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L40"
-        },
-        {
-          "name": "Hindsight",
-          "value": "59.75",
-          "num": 59.75,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L35"
-        },
-        {
-          "name": "Viking",
-          "value": "58.14",
-          "num": 58.14,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L32"
-        },
-        {
-          "name": "mem9",
-          "value": "57.30",
-          "num": 57.3,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L38"
-        },
-        {
-          "name": "MemOS",
-          "value": "56.75",
-          "num": 56.75,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L39"
-        },
-        {
-          "name": "Zep",
-          "value": "56.11",
-          "num": 56.11,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L30"
-        },
-        {
-          "name": "Cognee",
-          "value": "56.02",
-          "num": 56.02,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L33"
-        },
-        {
-          "name": "Supermemory",
-          "value": "52.49",
-          "num": 52.49,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L31"
-        },
-        {
-          "name": "Letta",
-          "value": "52.30",
-          "num": 52.3,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L34"
-        },
-        {
-          "name": "MemMachine",
-          "value": "51.90",
-          "num": 51.9,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L37"
-        },
-        {
-          "name": "EverOS",
-          "value": "47.73",
-          "num": 47.73,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L36"
-        },
-        {
-          "name": "Mem0",
-          "value": "43.33",
-          "num": 43.33,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/beam.md#L29"
-        }
-      ]
-    },
-    {
-      "name": "PersonaMem v2, OmniMemEval shared setup",
-      "task": "Multiple-choice accuracy, gpt-4.1-mini answers, rule matching",
-      "tag": "official setup",
-      "reason": "OmniMemEval's Reproduced Results at MemTensor/OmniMemEval ff13e4a5: multiple-choice accuracy, repeated runs averaged, gpt-4.1-mini-2025-04-14 as memory-service and answer model, and rule matching in place of an LLM judge. Contributors ran some rows (Maasv, ThreadAtlas and LCM-X), and LCM-X answered through OpenRouter. MemOS comes from the same GitHub organisation as OmniMemEval. The page calls itself a public result snapshot. hippo's run of this setup is in progress.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "running"
-      },
-      "cells": {
-        "MemOS": {
-          "value": "40.58",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L41",
-          "muted": false
-        },
-        "Supermemory": {
-          "value": "39.64",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L32",
-          "muted": false
-        },
-        "Hindsight": {
-          "value": "37.98",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L36",
-          "muted": false
-        },
-        "Mem0": {
-          "value": "36.76",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L30",
-          "muted": false
-        },
-        "EverMemOS": {
-          "value": "35.94",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L38",
-          "muted": false
-        },
-        "Zep": {
-          "value": "32.34",
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L31",
-          "muted": false
-        },
-        "Other": {
-          "value": "39.86",
-          "system": "Maasv",
-          "model": "gpt-4.1-mini",
-          "detail": null,
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L43",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "MemOS",
-          "value": "40.58",
-          "num": 40.58,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L41"
-        },
-        {
-          "name": "Maasv",
-          "value": "39.86",
-          "num": 39.86,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L43"
-        },
-        {
-          "name": "Supermemory",
-          "value": "39.64",
-          "num": 39.64,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L32"
-        },
-        {
-          "name": "Hindsight",
-          "value": "37.98",
-          "num": 37.98,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L36"
-        },
-        {
-          "name": "ThreadAtlas",
-          "value": "36.92",
-          "num": 36.92,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L44"
-        },
-        {
-          "name": "Mem0",
-          "value": "36.76",
-          "num": 36.76,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L30"
-        },
-        {
-          "name": "EverOS",
-          "value": "35.94",
-          "num": 35.94,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L38"
-        },
-        {
-          "name": "Letta",
-          "value": "35.12",
-          "num": 35.12,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L35"
-        },
-        {
-          "name": "MemMachine",
-          "value": "34.14",
-          "num": 34.14,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L39"
-        },
-        {
-          "name": "LCM-X",
-          "value": "33.96",
-          "num": 33.96,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L42"
-        },
-        {
-          "name": "Memori",
-          "value": "33.16",
-          "num": 33.16,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L37"
-        },
-        {
-          "name": "Zep",
-          "value": "32.34",
-          "num": 32.34,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L31"
-        },
-        {
-          "name": "Viking",
-          "value": "30.80",
-          "num": 30.8,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L33"
-        },
-        {
-          "name": "mem9",
-          "value": "30.76",
-          "num": 30.76,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L40"
-        },
-        {
-          "name": "Cognee",
-          "value": "26.46",
-          "num": 26.46,
-          "system": null,
-          "model": "gpt-4.1-mini",
-          "url": "https://github.com/MemTensor/OmniMemEval/blob/ff13e4a5b12e3c406a81c32bb0834c7e8d73f38e/docs/user_memory/benchmark_results/personamem-v2.md#L34"
-        }
-      ]
-    },
     {
       "name": "MedMemoryBench, Table 2",
       "task": "Response accuracy, LLM judge, GPT-5.1 answers, Claude-4-Sonnet judge",
