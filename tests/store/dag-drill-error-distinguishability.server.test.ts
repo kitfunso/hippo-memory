@@ -266,15 +266,7 @@ describe('drillDown for a member key on a restricted summary', () => {
   const drill = (key: string): Promise<Response> =>
     fetch(`${handle.url}/v1/recall/drill/${summaryId}`, { headers: { authorization: `Bearer ${key}` } });
 
-  it('404 with no grant, as for an admin', async () => {
-    expect((await drill(memberKey([]))).status).toBe(404);
-  });
-
   it('404 with a grant on another restricted scope', async () => {
     expect((await drill(memberKey(['slack:private:COTHER']))).status).toBe(404);
-  });
-
-  it('200 with the exact grant', async () => {
-    expect((await drill(memberKey([SCOPE]))).status).toBe(200);
   });
 });

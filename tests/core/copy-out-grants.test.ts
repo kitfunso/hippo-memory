@@ -1,4 +1,5 @@
-// Promote and share copy a restricted row only for an admin or its owner; a read grant is not enough. Real stores.
+// Promote and share refuse a granted member without a trace and answer an unreachable row as a missing id. Real stores.
+// The owner, admin and audit cells of the same rule live in the member-grant sweep, over HTTP and MCP.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -8,12 +9,10 @@ import { promote } from '../../src/api/memories/promote.js';
 import { ForbiddenError, memoryNotFoundText, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
-import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, writeEntry } from '../_helpers/root-forms.js';
-import { sharedEntry, sharingStores } from '../_helpers/sharing-stores.js';
+import { sharingStores } from '../_helpers/sharing-stores.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
@@ -30,10 +29,8 @@ const member = (subject: string, owner: string, scopes: readonly string[]): Acto
   owner,
   scopes,
 });
-const OWNER = member('api_key:owner', 'oid-o', [S]);
 const GRANTED = member('api_key:granted', 'oid-m', [S]);
 const UNGRANTED = member('api_key:none', 'oid-n', []);
-const ADMIN: Actor = { subject: 'api_key:admin', role: 'admin' };
 
 describe('promote and share on a restricted row', () => {
   let root: string;
@@ -57,7 +54,7 @@ describe('promote and share on a restricted row', () => {
     });
   const globalRows = () => loadAllEntries(getGlobalRoot(), 'default');
 
-  it('refuses a granted member who did not write the row, over promote and share, and copies nothing', async () => {
+  it('copies nothing when a granted member who did not write the row is refused, over promote and share', async () => {
     await expect(promote(apiCtx(root, 'default', GRANTED), row.id)).rejects.toBeInstanceOf(ForbiddenError);
     await expect(share(GRANTED)).rejects.toBeInstanceOf(ForbiddenError);
     expect(globalRows()).toEqual([]);
@@ -68,21 +65,5 @@ describe('promote and share on a restricted row', () => {
     await expect(share(UNGRANTED)).rejects.toThrow(memoryNotFoundText(row.id));
     await expect(share(UNGRANTED)).rejects.toBeInstanceOf(NotFoundError);
     await expect(promote(apiCtx(root, 'default', UNGRANTED), row.id)).rejects.toBeInstanceOf(NotFoundError);
-  });
-
-  it('lets the owner and an admin copy it', async () => {
-    expect(sharedEntry(await share(OWNER)).scope).toBe(S);
-    expect((await promote(apiCtx(root, 'default', ADMIN), row.id)).ok).toBe(true);
-  });
-
-  it("names the sharing caller in the global row's remember audit event, not the CLI", async () => {
-    await share(OWNER);
-    const db = openHippoDb(getGlobalRoot());
-    try {
-      const actors = listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map((e) => e.actor);
-      expect(actors).toEqual(['api_key:owner']);
-    } finally {
-      closeHippoDb(db);
-    }
   });
 });

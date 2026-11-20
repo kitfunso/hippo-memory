@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { createApiKey, grantScope } from '../../src/store/sqlite/keys/auth.js';
+import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { routeLabel, V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
@@ -67,6 +68,7 @@ interface Reply {
 }
 
 let store = '';
+let globalHome = '';
 let handle: ServerHandle;
 let keys: Keys;
 let counter = 0;
@@ -166,10 +168,34 @@ const mcpWriteCell = (text: string, ok: RegExp = OK_TEXT): string => refusal(0, 
 // The reply names the fate the store applied, so a reject that fell back to a plain forget does not read as 200.
 const REJECTED_TEXT = /^Resolved conflict \d+: kept \S+, rejected \(tombstoned\) and removed /;
 
-async function outcomeDelta(run: () => Promise<void>): Promise<string> {
+// 'skipped' is a 200 that left the strength alone, so a refusal or a failure is its own cell.
+async function outcomeDelta(run: () => Promise<number>): Promise<string> {
   const before = readEntry(store, ids.r)?.outcomePositive ?? 0;
-  await run();
+  const status = await run();
+  if (status !== 200) return `status ${status}`;
   return (readEntry(store, ids.r)?.outcomePositive ?? 0) > before ? 'applied' : 'skipped';
+}
+
+const rememberEvents = (): Array<{ id: number; actor: string }> => {
+  const db = openHippoDb(globalHome);
+  try {
+    return listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map(({ id, actor }) => ({ id, actor }));
+  } finally {
+    closeHippoDb(db);
+  }
+};
+
+/** O's copy also leaves one 'remember' audit event in the global store that names O's key, never the CLI. */
+async function auditedCopy(who: Who, run: () => Promise<string>): Promise<string> {
+  const before = new Set(rememberEvents().map((event) => event.id));
+  const cell = await run();
+  if (who !== 'O') return cell;
+  const actors = rememberEvents()
+    .filter((event) => !before.has(event.id))
+    .map((event) => event.actor);
+  return actors.length === 1 && actors[0] === `api_key:${keys.O.keyId}`
+    ? cell
+    : `${cell}, audited as ${actors.join(',')}`;
 }
 
 function drillCell(children: readonly string[], refusedAs: string | null): string {
@@ -255,22 +281,22 @@ const TABLE: readonly SurfaceRow[] = [
     name: 'promote a row to the global store',
     covers: ['POST /v1/memories/:id/promote'],
     expected: WRITE_CELLS,
-    run: async (who) => writeCell(await http(who, 'POST', `/v1/memories/${fresh()}/promote`, {})),
+    run: (who) =>
+      auditedCopy(who, async () => writeCell(await http(who, 'POST', `/v1/memories/${fresh()}/promote`, {}))),
   },
   {
     name: 'hippo_share a row to the global store',
     covers: ['hippo_share'],
     expected: WRITE_CELLS,
-    run: async (who) => mcpWriteCell(await mcp(who, 'hippo_share', { id: fresh(), force: true })),
+    run: (who) =>
+      auditedCopy(who, async () => mcpWriteCell(await mcp(who, 'hippo_share', { id: fresh(), force: true }))),
   },
   {
     name: 'POST /v1/outcome with the row id',
     covers: ['POST /v1/outcome'],
     expected: { O: 'applied', M: 'applied', N: 'skipped', A: 'applied' },
     run: (who) =>
-      outcomeDelta(async () => {
-        await http(who, 'POST', '/v1/outcome', { ids: [ids.r], good: true });
-      }),
+      outcomeDelta(async () => (await http(who, 'POST', '/v1/outcome', { ids: [ids.r], good: true })).status),
   },
   {
     name: 'hippo_outcome on the ids of the last recall',
@@ -280,7 +306,7 @@ const TABLE: readonly SurfaceRow[] = [
     run: (who) =>
       outcomeDelta(async () => {
         await mcp(who, 'hippo_recall', { query: 'sweepquartz', scope: S });
-        await mcp(who, 'hippo_outcome', { good: true });
+        return (await mcpCall(who, 'hippo_outcome', { good: true })).failed ? 500 : 200;
       }),
   },
   {
@@ -370,7 +396,33 @@ const TABLE: readonly SurfaceRow[] = [
 ];
 
 // Routes and tools that take an id and are not memory surfaces, each with its reason.
+const INTEGER_ID_ROUTES = [
+  'POST /v1/predictions/:id/close',
+  'GET /v1/predictions/:id',
+  'POST /v1/decisions/:id/supersede',
+  'POST /v1/decisions/:id/close',
+  'GET /v1/decisions/:id',
+  'POST /v1/incidents/:id/resolve',
+  'POST /v1/incidents/:id/close',
+  'GET /v1/incidents/:id',
+  'POST /v1/processes/:id/supersede',
+  'POST /v1/processes/:id/close',
+  'GET /v1/processes/:id',
+  'POST /v1/policies/:id/supersede',
+  'POST /v1/policies/:id/close',
+  'GET /v1/policies/:id',
+  'POST /v1/skills/:id/supersede',
+  'POST /v1/skills/:id/close',
+  'GET /v1/skills/:id',
+  'POST /v1/project-briefs/:id/supersede',
+  'POST /v1/project-briefs/:id/close',
+  'GET /v1/project-briefs/:id',
+  'POST /v1/customer-notes/:id/supersede',
+  'POST /v1/customer-notes/:id/close',
+  'GET /v1/customer-notes/:id',
+];
 const EXEMPT_ROUTES: ReadonlyMap<string, string> = new Map([
+  ...INTEGER_ID_ROUTES.map((label): [string, string] => [label, 'an integer object id, not a memory id']),
   ['DELETE /v1/auth/keys/:keyId', 'a key id, tested with the grant routes'],
   ['POST /v1/auth/keys/:keyId/grants', 'a key id, tested in auth-grant-routes.server.test.ts'],
   ['DELETE /v1/auth/keys/:keyId/grants', 'a key id, tested in auth-grant-routes.server.test.ts'],
@@ -443,10 +495,10 @@ async function seedRows(): Promise<void> {
 }
 
 beforeAll(async () => {
-  const home = makeRoot('member-grant-sweep-global');
-  vi.stubEnv('HIPPO_HOME', home);
+  globalHome = makeRoot('member-grant-sweep-global');
+  vi.stubEnv('HIPPO_HOME', globalHome);
   // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
-  vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
+  vi.stubEnv('GIT_DIR', join(globalHome, 'no-repo'));
   vi.stubEnv('HIPPO_V1_RPS', '0');
   store = makeRoot('member-grant-sweep', {
     config: { contextProjectIsolation: false, embeddings: { enabled: false } },
@@ -481,16 +533,17 @@ describe('every by-id surface of a member grant', () => {
 describe('the sweep covers every surface that takes an id', () => {
   const covered = new Set(TABLE.flatMap((surface) => surface.covers));
 
-  it('lists a route with a path parameter in the table, or exempts it with a reason', () => {
-    const missing = V1_ROUTES.filter((route) => !('pattern' in route && route.pattern.includes('(int)')))
+  it('lists a route with a path parameter or a regex in the table, or exempts it with a reason', () => {
+    // A regex route's label holds no ':', yet it captures a value, so it counts as a by-id route.
+    const missing = V1_ROUTES.filter((route) => 'regex' in route || routeLabel(route).includes(':'))
       .map((route) => `${route.method} ${routeLabel(route)}`)
-      .filter((label) => label.includes(':') && !covered.has(label) && !EXEMPT_ROUTES.has(label));
+      .filter((label) => !covered.has(label) && !EXEMPT_ROUTES.has(label));
     expect(missing).toEqual([]);
   });
 
   it('lists a tool with an id argument in the table, or exempts it with a reason', () => {
     const idTools = TOOLS.filter((tool) =>
-      Object.keys(tool.inputSchema.properties ?? {}).some((key) => /[iI]d$/.test(key)),
+      Object.keys(tool.inputSchema.properties ?? {}).some((key) => /[iI]ds?$/.test(key)),
     );
     const missing = idTools.map((tool) => tool.name).filter((name) => !covered.has(name) && !EXEMPT_TOOLS.has(name));
     expect(missing).toEqual([]);

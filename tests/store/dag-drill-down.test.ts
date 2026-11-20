@@ -124,50 +124,13 @@ describe('drillDown', () => {
 });
 
 const SECRET_SCOPE = 'slack:private:CSEC';
-const member = (scopes: readonly string[]): Actor => ({
-  subject: 'api_key:member',
-  role: 'member',
-  owner: 'oid-m',
-  scopes,
-});
 
-describe('drillDown as a member key', () => {
+describe('drillDown on a restricted summary', () => {
   let root: string;
   beforeEach(() => {
-    root = makeRoot('drill-member');
+    root = makeRoot('drill-grant');
   });
   afterEach(() => removeDir(root));
-
-  it('with no grant, filters out a rogue private child as it does for an admin', async () => {
-    const s = makeSummary('public topic', { scope: 'slack:public:CGEN' });
-    writeEntry(root, s);
-    writeEntry(root, makeChild('public child', s.id, { scope: 'slack:public:CGEN' }));
-    writeEntry(root, makeChild('rogue private', s.id, { scope: SECRET_SCOPE }));
-    const r = await drillDown(apiCtx(root, 'default', member([])), s.id);
-    expect('failure' in r).toBe(false);
-    if ('failure' in r) return;
-    expect(r.children.map((c) => c.content)).toEqual(['public child']);
-    expect(r.totalChildren).toBe(1);
-  });
-
-  it('with no grant, gets not_found on a restricted summary', async () => {
-    const s = makeSummary('secret topic', { scope: SECRET_SCOPE });
-    writeEntry(root, s);
-    expect(await drillDown(apiCtx(root, 'default', member([])), s.id)).toEqual({ failure: 'not_found' });
-  });
-
-  it('with the exact grant, reads the granted summary and its granted child, and no other restricted child', async () => {
-    const s = makeSummary('secret topic', { scope: SECRET_SCOPE });
-    writeEntry(root, s);
-    writeEntry(root, makeChild('granted child', s.id, { scope: SECRET_SCOPE }));
-    writeEntry(root, makeChild('other private child', s.id, { scope: 'slack:private:COTHER' }));
-    writeEntry(root, makeChild('quarantined child', s.id, { scope: 'quarantine:private:q1' }));
-    const r = await drillDown(apiCtx(root, 'default', member([SECRET_SCOPE])), s.id);
-    expect('failure' in r).toBe(false);
-    if ('failure' in r) return;
-    expect(r.summary.id).toBe(s.id);
-    expect(r.children.map((c) => c.content)).toEqual(['granted child']);
-  });
 
   it('an admin key reads a restricted summary only on the exact grant, as a member does', async () => {
     const s = makeSummary('secret topic', { scope: SECRET_SCOPE });
