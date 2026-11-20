@@ -25,7 +25,7 @@ hippo-enterprise serves hippo from a Postgres store and imports 122 core names. 
 
 ## Consequences
 - Each name is a semver promise. A change to one needs a major version or a new name.
-- `interleaveRows` has one rule for every input, an empty list included: take the lists in turn and keep each id once, at its first place, with the last row object for that id in either list; then return the first `limit`. It reads every row of both lists, so the row object never depends on `limit`. The JSDoc and a test pin both parts of the one-id rule. The SQLite search gives each arm its own SQL limit and unique ids, so the old empty-list shortcut returned the same rows.
+- `interleaveRows` has one rule for every input, an empty list included: take the lists in turn and keep each id once, at its first place, with the last row object for that id in either list; then return the first `limit`, a fraction rounded up and none at 0 or below, as the loop it replaced returned. It reads every row of both lists, so the row object never depends on `limit`. The JSDoc and a test pin both parts of the one-id rule. The SQLite search gives each arm its own SQL limit and unique ids, so the old empty-list shortcut returned the same rows.
 - Left off the entries, on purpose: `DEFAULT_LIST_LIMIT` and `MAX_AUDIT_LIMIT` (`auditRowsRead` holds both), `isRecallOnly`, `CrossTenantIdError`, `fallbackOrigin`, `memoryNotFoundText`, the model-taking forms of `entryAfterOutcome`, `markRetrieved` and `tallyAmbientEntries`, and `rewardFactorSql`.
 
 ## Reconsider when

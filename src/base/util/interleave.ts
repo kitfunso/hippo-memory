@@ -1,5 +1,6 @@
 /** `a` and `b` taken in turn, each id once: at its first place, with the last row object for that
- * id in either list. Then the first `limit` of those. */
+ * id in either list. Then the first `limit` of those, a fraction rounded up and none at 0 or below,
+ * as the loop this replaced returned. */
 export function interleaveRows<R extends { readonly id: string }>(
   a: readonly R[],
   b: readonly R[],
@@ -11,5 +12,5 @@ export function interleaveRows<R extends { readonly id: string }>(
       if (row !== undefined) byId.set(row.id, row);
     }
   }
-  return [...byId.values()].slice(0, limit);
+  return [...byId.values()].slice(0, Math.max(0, Math.ceil(limit)));
 }

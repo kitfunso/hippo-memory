@@ -282,13 +282,16 @@ describe('store-kit pure helpers', () => {
       interleaveMidPair: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 3],
       interleaveLongTail: ['interleaveRows', rows('a'), rows('b', 'c', 'd'), 10],
       interleaveLastRowFull: ['interleaveRows', [{ id: 'a', n: 1 }], [{ id: 'a', n: 2 }], 1],
-      interleaveLastRowLater2: [
+      interleaveLimitZero: ['interleaveRows', rows('a'), rows('b'), 0],
+      interleaveLimitNegative: ['interleaveRows', rows('a', 'c'), rows('b'), -1],
+      interleaveLimitFraction: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 2.5],
+      interleaveRepeatInLaterPairAtLimit2: [
         'interleaveRows',
         [{ id: 'x', n: 1 }, { id: 'y' }],
         [{ id: 'z' }, { id: 'x', n: 2 }],
         2,
       ],
-      interleaveLastRowLater3: [
+      interleaveRepeatInLaterPairAtLimit3: [
         'interleaveRows',
         [{ id: 'x', n: 1 }, { id: 'y' }],
         [{ id: 'z' }, { id: 'x', n: 2 }],
@@ -334,8 +337,14 @@ describe('store-kit pure helpers', () => {
       { id: 'b', n: 3 },
     ]);
     expect(out['interleaveLastRowFull']).toEqual([{ id: 'a', n: 2 }]);
-    expect(out['interleaveLastRowLater2']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }]);
-    expect(out['interleaveLastRowLater3']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }, { id: 'y' }]);
+    expect(out['interleaveRepeatInLaterPairAtLimit2']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }]);
+    expect(out['interleaveRepeatInLaterPairAtLimit3']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }, { id: 'y' }]);
+  });
+
+  it('interleaveRows returns no row at a limit of 0 or below, and rounds a fraction up', () => {
+    expect(out['interleaveLimitZero']).toEqual([]);
+    expect(out['interleaveLimitNegative']).toEqual([]);
+    expect(out['interleaveLimitFraction']).toEqual(rows('a', 'b', 'c'));
   });
 
   it('interleaveRows keeps the limit and the one-id rule when one list is empty', () => {
