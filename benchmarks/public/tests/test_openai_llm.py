@@ -3,6 +3,7 @@ stop calls."""
 from __future__ import annotations
 
 import email.message
+import http.client
 import io
 import json
 import os
@@ -126,6 +127,19 @@ def test_each_process_writes_its_own_file_and_sees_the_others_spend(tmp_path, wi
     with pytest.raises(RuntimeError, match="openai spend cap"):
         a.ask("", "r", effort=ol.EFFORT, tag="v")
     assert len(sent) == 2
+
+
+def test_a_reply_cut_off_after_sending_is_retried_and_counted_at_its_worst_case(tmp_path, wire):
+    sent, queue = wire
+    llm = client(tmp_path, ol.Settings(MODEL, max_tokens=100))
+    queue += [http.client.IncompleteRead(b"x"), ok()]
+    llm.ask("", "p", effort=ol.EFFORT, tag="t")
+    spend = [json.loads(x) for x in llm.spend_path.read_text().splitlines()]
+    assert len(sent) == 2
+    assert [(s["prompt_tokens"], s["completion_tokens"]) for s in spend] == [(ol.worst_case(sent[0])[0], 100), (1000, 10)]
+    queue += [urllib.error.URLError("refused"), ok()]  # no connection, so nothing ran and nothing counts
+    llm.ask("", "q", effort=ol.EFFORT, tag="u")
+    assert len(llm.spend_path.read_text().splitlines()) == 3
 
 
 def test_retry_after_reads_the_header_then_the_message():

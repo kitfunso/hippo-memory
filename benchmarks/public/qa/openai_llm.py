@@ -9,6 +9,7 @@ Usage: OpenAIChat(log, Settings("gpt-4o-2024-08-06", max_tokens=10)).ask("", pro
 """
 from __future__ import annotations
 
+import http.client
 import itertools
 import json
 import os
@@ -355,8 +356,10 @@ class OpenAIChat(Claude):
                     return None, {"is_error": True, "api_error_status": 429, "result": detail}
                 self._log({"event": "limit-wait", "delay_s": round(wait, 1), "detail": detail[:200]})
                 time.sleep(wait)
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            except urllib.error.URLError as e:  # no connection, so the call never ran
                 return None, {"is_error": True, "result": f"{type(e).__name__}: {e}"[:300]}
+            except (http.client.HTTPException, OSError, ValueError) as e:  # cut off after sending: it may have run
+                return None, {"is_error": True, "result": f"{type(e).__name__}: {e}"[:300], "maybe_billed": True}
 
     def _run(self, sys_file: Path, user: str, effort: str, deadline: float,
              account: str | None = None) -> tuple[dict, str] | None:
@@ -370,6 +373,9 @@ class OpenAIChat(Claude):
                 if resp is not None:
                     usage, model = resp.get("usage") or {}, resp.get("model", "")
                     usd = self._charge(model, usage)
+                elif err.pop("maybe_billed", False):  # its tokens are unknown, so the free count takes the most it could use
+                    prompt, out = worst_case(json.loads(body))
+                    self._charge(self.model, {"prompt_tokens": prompt, "completion_tokens": out})
         finally:
             self.slots.release()
         if resp is None:

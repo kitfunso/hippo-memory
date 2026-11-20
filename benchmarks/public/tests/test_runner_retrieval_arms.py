@@ -20,8 +20,8 @@ class Proc:
         pass
 
 
-OFF = {"readOnly": False, "rankScore": False, "rerankerTopK": 0}
-BEST = {"arm": "hippo", "embeddings": True, "readOnly": False, "rankScore": True, "rerankerTopK": 50}
+OFF = {"readOnly": False, "rankScore": False, "rerankerTopK": 0, "capture": False}
+BEST = {"arm": "hippo", "embeddings": True, "readOnly": False, "rankScore": True, "rerankerTopK": 50, "capture": False}
 
 
 @pytest.mark.parametrize("arm, health, ok", [
@@ -34,6 +34,7 @@ BEST = {"arm": "hippo", "embeddings": True, "readOnly": False, "rankScore": True
     ("hippo-best", {**BEST, "embeddings": False}, False),  # the cross-encoder over a store with no vectors
     ("hippo-best", {**BEST, "rerankerTopK": 0}, False),
     ("hippo-best", {**BEST, "rankScore": False}, False),  # the runner's sort by score would undo the reranker
+    ("hippo-emb", {"arm": "hippo", "embeddings": True, **OFF, "capture": True}, False),  # the hippo-cap server
     ("hippo-emb", {"arm": "hippo", "embeddings": True, "readOnly": False}, False),  # a server too old to report them
 ])
 def test_the_health_check_matches_the_arm_and_its_embeddings(monkeypatch, arm, health, ok):
