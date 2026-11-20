@@ -1,25 +1,8 @@
 // What hippo-enterprise imports from the server and store-kit entries gives the answers the core code does, called by package name from a child against the build.
-import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeRoot, makeStore, openStoreAt } from '../_helpers/make-root.js';
-
-const checkout = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-/** Runs `script` as a module in a child at the checkout, since self-reference resolves from the nearest package.json; `args` reach it as process.argv[1...]. */
-function inChild<T>(script: string, ...args: string[]): T {
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script, ...args], {
-    cwd: checkout,
-    encoding: 'utf-8',
-    timeout: 25_000,
-  });
-  if (child.status !== 0) throw new Error(`child failed (run \`npm run build\` first):\n${child.stderr}`);
-  const lines = child.stdout.trim().split('\n');
-  // SAFETY: each script below prints its result as JSON on its last stdout line.
-  return JSON.parse(lines[lines.length - 1]!) as T;
-}
+import { runModuleScript } from '../_helpers/run-module-script.js';
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type KitAnswers = { [label: string]: Json };
@@ -34,7 +17,7 @@ function callKit(calls: { [label: string]: readonly [name: string, ...args: Json
     }
     console.log(JSON.stringify(out));
   `;
-  return inChild<KitAnswers>(script, JSON.stringify(calls));
+  return runModuleScript<KitAnswers>(script, JSON.stringify(calls));
 }
 
 /** One column of the row `id` on the store at `root`, which the SQL names `value`; read through the helper that check-test-stores allows. */
@@ -65,7 +48,10 @@ describe('hippo-memory/store-kit initStore', () => {
       await store.close();
       console.log(JSON.stringify({ before, made, rows: page.entries }));
     `;
-    const answer = inChild<{ before: string[]; made: { db: boolean; files: string[] }; rows: unknown[] }>(script, root);
+    const answer = runModuleScript<{ before: string[]; made: { db: boolean; files: string[] }; rows: unknown[] }>(
+      script,
+      root,
+    );
     expect(answer.before).not.toContain('hippo.db');
     expect(answer.made.db).toBe(true);
     expect(answer.made.files).toEqual(readdirSync(root).sort());
@@ -96,7 +82,7 @@ describe('hippo-memory/server embedAll', () => {
       await store.close();
       console.log(JSON.stringify({ reached: 'groups' in target ? 'store' : 'index', first, second }));
     `;
-    expect(inChild(script, root, branch)).toEqual({ reached: branch, first: 3, second: 0 });
+    expect(runModuleScript(script, root, branch)).toEqual({ reached: branch, first: 3, second: 0 });
   });
 });
 
@@ -115,7 +101,7 @@ describe('store-kit row rules answer as core does', () => {
         spaced: duplicateHash('Rotate the API keys every month'),
       }));
     `;
-    const { id, hash, spaced } = inChild<{ id: string; hash: number; spaced: number }>(script, root);
+    const { id, hash, spaced } = runModuleScript<{ id: string; hash: number; spaced: number }>(script, root);
     expect(stored<number>(root, 'SELECT duplicate_hash AS value FROM memories WHERE id = ?', id)).toBe(hash);
     expect(spaced).toBe(hash);
   });
@@ -135,7 +121,7 @@ describe('store-kit row rules answer as core does', () => {
       console.log(JSON.stringify(rows));
     `;
     const stamps = ['2026-03-05T10:00:00+02:00', 'not a date'];
-    const rows = inChild<Array<{ id: string; stamp: string; iso: string | null }>>(
+    const rows = runModuleScript<Array<{ id: string; stamp: string; iso: string | null }>>(
       script,
       root,
       JSON.stringify(stamps),
@@ -167,7 +153,7 @@ describe('store-kit row rules answer as core does', () => {
       await store.close();
       console.log(JSON.stringify({ stored: after.strength, atNow: atNow.strength, atWallClock: atWallClock.strength }));
     `;
-    const { stored, atNow, atWallClock } = inChild<{ stored: number; atNow: number; atWallClock: number }>(
+    const { stored, atNow, atWallClock } = runModuleScript<{ stored: number; atNow: number; atWallClock: number }>(
       script,
       root,
     );
@@ -193,7 +179,7 @@ describe('store-kit row rules answer as core does', () => {
       await store.close();
       console.log(JSON.stringify(rows));
     `;
-    const rows = inChild<Array<{ limit: number | null; expected: number; actual: number }>>(script, root);
+    const rows = runModuleScript<Array<{ limit: number | null; expected: number; actual: number }>>(script, root);
     expect(rows.map((r) => r.actual)).toEqual(rows.map((r) => r.expected));
     // The default, the floor of 1, a plain limit, then the cap of 10,000 plus the one row read ahead.
     expect(rows.map((r) => r.expected)).toEqual([100, 1, 5, 10_000, 10_001, 10_001]);
@@ -217,7 +203,9 @@ describe('store-kit row rules answer as core does', () => {
       await store.close();
       console.log(JSON.stringify({ outcome }));
     `;
-    expect(inChild(script, root)).toEqual({ outcome: { isRawAppendOnly: true, message: 'raw is append-only' } });
+    expect(runModuleScript(script, root)).toEqual({
+      outcome: { isRawAppendOnly: true, message: 'raw is append-only' },
+    });
   });
 });
 
@@ -253,7 +241,7 @@ describe('store-kit search helpers answer as the SQLite search does', () => {
     `;
     // The first text holds both terms, so it lands in both lists and must come out once.
     const texts = ['cache 数据库 shared row', 'cache note one', 'cache note two', '数据库 note one', '数据库 note two'];
-    const { shared, runs } = inChild<{
+    const { shared, runs } = runModuleScript<{
       shared: string;
       runs: Array<{ limit: number; words: string[]; cjk: string[]; both: string[]; expected: string[] }>;
     }>(
@@ -293,6 +281,15 @@ describe('store-kit pure helpers', () => {
       interleaveRepeat: ['interleaveRows', rows('a', 'b', 'c'), rows('b', 'd'), 3],
       interleaveMidPair: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 3],
       interleaveLongTail: ['interleaveRows', rows('a'), rows('b', 'c', 'd'), 10],
+      interleaveLastRow: [
+        'interleaveRows',
+        [{ id: 'a', n: 1 }],
+        [
+          { id: 'a', n: 2 },
+          { id: 'b', n: 3 },
+        ],
+        3,
+      ],
       likeRows: ['LIKE_WINDOW_ROWS'],
       likeTerms: ['LIKE_WINDOW_TERMS'],
       schemaFitRows: ['SCHEMA_FIT_WINDOW_ROWS'],
@@ -318,9 +315,16 @@ describe('store-kit pure helpers', () => {
     expect(out['interleaveLongTail']).toEqual(rows('a', 'b', 'c', 'd'));
   });
 
-  it('interleaveRows returns the other list whole when one is empty, whatever the limit and repeats', () => {
-    expect(out['interleaveEmptyB']).toEqual(rows('a', 'a', 'b'));
-    expect(out['interleaveEmptyA']).toEqual(rows('c', 'c'));
+  it('interleaveRows keeps a repeated id at its first place with the row object seen last', () => {
+    expect(out['interleaveLastRow']).toEqual([
+      { id: 'a', n: 2 },
+      { id: 'b', n: 3 },
+    ]);
+  });
+
+  it('interleaveRows keeps the limit and the one-id rule when one list is empty', () => {
+    expect(out['interleaveEmptyB']).toEqual(rows('a'));
+    expect(out['interleaveEmptyA']).toEqual(rows('c'));
   });
 
   it('publishes the window sizes and the recall-only tags', () => {
@@ -338,7 +342,7 @@ describe('store-kit pure helpers', () => {
       });
       console.log(JSON.stringify(answers));
     `;
-    expect(inChild(script, JSON.stringify(['cache 数据库', '数据库系统']))).toEqual([
+    expect(runModuleScript(script, JSON.stringify(['cache 数据库', '数据库系统']))).toEqual([
       {
         terms: ['cache', '数据', '据库'],
         parts: { words: ['cache'], cjk: ['数据', '据库'] },

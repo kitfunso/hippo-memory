@@ -148,8 +148,8 @@ export { normalizeValueForRejection, rejectionDigest } from '../base/records/rej
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule, and its row
 // writes keep hippo.db's duplicate hash.
 export { duplicateHash, heldTexts } from '../base/util/same-text.js';
-// An add-on store stamps, searches and windows its rows as hippo.db does, so both return the same
-// rows in the same order. hippo.db stores `created` as `isoInstant(stamp) ?? stamp`.
+// An add-on store stamps (`isoInstant(stamp) ?? stamp`), searches and windows its rows as hippo.db
+// does, so both return the same rows in the same order.
 export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';
 export { cjkIndexTerms, partitionCjkTerms } from '../base/util/tokenize.js';
 export { interleaveRows } from '../base/util/interleave.js';

@@ -17,7 +17,7 @@ hippo-enterprise serves hippo from a Postgres store and imports 122 core names. 
 - `hippo-memory/store-kit` adds `initStore` (with no runtime or session option) and the write and search helpers a store on another database needs to match core rows: `duplicateHash`, `isoInstant`, `sortableStamp`, `partitionCjkTerms`, `cjkIndexTerms`, `interleaveRows`, `splitLikeTerms`, the three window constants, `RECALL_ONLY_TAGS`, `auditRowsRead` and `RawAppendOnlyError`.
 - `entryAfterOutcome` takes an optional `now`, so a store scores an outcome at its own clock.
 - `folderIndex` moves to `src/surface/folder-index.ts`, so one module builds the embed target for `eval-scripts`, the eval kit and `server`. `server` never imports `eval-scripts.ts`, which builds rerankers at load.
-- Each new name has a test against the core result it must match, and sits in the three export gates: the exact-set test, the inline snapshot and `check:dts`.
+- Each new name has a test through the package entry: a helper that core's own search or write path calls is checked against core's answer, and a constant or pure helper against literal values. Each name also sits in the three export gates: the exact-set test, the inline snapshot and `check:dts`.
 
 ## Alternatives considered
 - **Put the helpers on `server`:** the add-on API stays smaller, but it breaks the 2026-10-11 split.
@@ -25,7 +25,7 @@ hippo-enterprise serves hippo from a Postgres store and imports 122 core names. 
 
 ## Consequences
 - Each name is a semver promise. A change to one needs a major version or a new name.
-- `interleaveRows` returns the other list whole, with no limit and no one-id rule, when one list is empty. No core caller needs that branch, because each SQL arm has its own limit and unique ids. It is a promise now, so a later uniform rule is a break.
+- `interleaveRows` has one rule for every input, an empty list included: take the lists in turn, keep each id once (its first place, the row object seen last), stop at `limit`. The JSDoc and a test pin both parts of the one-id rule. The SQLite search gives each arm its own SQL limit and unique ids, so the old empty-list shortcut returned the same rows.
 - Left off the entries, on purpose: `DEFAULT_LIST_LIMIT` and `MAX_AUDIT_LIMIT` (`auditRowsRead` holds both), `isRecallOnly`, `CrossTenantIdError`, `fallbackOrigin`, `memoryNotFoundText`, the model-taking forms of `entryAfterOutcome`, `markRetrieved` and `tallyAmbientEntries`, and `rewardFactorSql`.
 
 ## Reconsider when

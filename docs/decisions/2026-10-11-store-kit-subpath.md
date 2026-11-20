@@ -16,6 +16,7 @@ A reader of the package could not tell the add-on API from internals, and every 
 ## Decision
 Split the old surface three ways:
 - `hippo-memory/server` keeps the server add-on API: `serve`, `authCreate`, `authCreateSelf`, `authRevoke`, the error classes, the caller hook functions and the `HippoStore` type.
+  Amended in part: `server` also holds the worker embed, `embedAll` and `folderIndex`; see `docs/decisions/2026-11-20-server-tier-exports.md`.
 - `hippo-memory/store-kit` (`src/entry/store-kit.ts`) holds the contract for a second store: port types, row types, `sqliteStore`, `hasGroup` and the rule helpers.
 - `hippo-memory/testing` holds the test reset hooks, with no semver promise beyond the major version.
 

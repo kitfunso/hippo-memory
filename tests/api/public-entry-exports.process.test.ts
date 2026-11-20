@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,30 +8,13 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { initTestStore } from '../_helpers/store-template.js';
+import { runModuleScript } from '../_helpers/run-module-script.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-
-/** Runs `script` in a child and returns the JSON on its last stdout line. */
-function importBuiltEntry<T>(script: string): T {
-  // cwd is the checkout, not a temp dir, because self-reference resolves from the nearest package.json; the children only import and call pure functions.
-  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-    cwd: REPO_ROOT,
-    encoding: 'utf-8',
-    timeout: 30_000,
-  });
-  if (child.status !== 0) {
-    throw new Error(
-      `self-reference import failed (run \`npm run build\` first):\n${child.error?.message ?? ''}${child.stderr}`,
-    );
-  }
-  const lines = child.stdout.trim().split('\n');
-  // SAFETY: each caller's script is the only writer of the last stdout line and always emits the keys of T.
-  return JSON.parse(lines[lines.length - 1]) as T;
-}
 
 // Announced public in CHANGELOG 1.26.3; guards the entry surface, which no other test imports through.
 describe('package entry re-exports strengthBucket', () => {
@@ -47,7 +29,7 @@ describe('package entry re-exports strengthBucket', () => {
       "const m = await import('hippo-memory');",
       'console.log(JSON.stringify({ url, type: typeof m.strengthBucket, one: m.strengthBucket?.(1) }));',
     ].join('\n');
-    const out = importBuiltEntry<{ url: string; type: string; one: number }>(script);
+    const out = runModuleScript<{ url: string; type: string; one: number }>(script);
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
@@ -89,7 +71,7 @@ describe('package entry re-exports sleep', () => {
       "const m = await import('hippo-memory');",
       "console.log(JSON.stringify({ type: typeof m.sleep, admin: 'adminActor' in m }));",
     ].join('\n');
-    const out = importBuiltEntry<{ type: string; admin: boolean }>(script);
+    const out = runModuleScript<{ type: string; admin: boolean }>(script);
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
     // The published d.ts text is what consumers compile against, so text is the contract.
@@ -149,7 +131,7 @@ describe('hippo-memory/testing', () => {
       "const server = await import('hippo-memory/server');",
       'console.log(JSON.stringify({ url, names: Object.keys(m).sort(), onServer: Object.keys(server).some((n) => /^_+reset|ForTests$/.test(n)) }));',
     ].join('\n');
-    const out = importBuiltEntry<{ url: string; names: string[]; onServer: boolean }>(script);
+    const out = runModuleScript<{ url: string; names: string[]; onServer: boolean }>(script);
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'entry', 'testing.js')));
     expect(out.names).toEqual([...EVAL_KIT].sort());
     expect(out.onServer).toBe(false);
@@ -224,7 +206,7 @@ describe('published runtime exports', () => {
       "for (const subpath of subpaths) names[subpath] = Object.keys(await import('hippo-memory' + subpath.slice(1)));",
       'console.log(JSON.stringify(names));',
     ].join('\n');
-    const names = importBuiltEntry<Record<string, string[]>>(script);
+    const names = runModuleScript<Record<string, string[]>>(script);
     expect(Object.fromEntries(Object.entries(names).map(([subpath, list]) => [subpath, byInitial(list)])))
       .toMatchInlineSnapshot(`
         {

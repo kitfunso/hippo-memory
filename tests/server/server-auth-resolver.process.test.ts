@@ -5,7 +5,6 @@ import { mkdtempSync, rmSync, existsSync, realpathSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
 import { ServerResponse } from 'node:http';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -29,6 +28,7 @@ import { waitFor } from '../_helpers/wait-for.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { runModuleScript } from '../_helpers/run-module-script.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -700,18 +700,8 @@ describe('package surface', () => {
       "const names = ['appendAuditEvent','listAuditEvents','AUDIT_OPS'];",
       'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, leaked: names.filter((n) => idx[n] !== undefined), indexServe: "serve" in idx }));',
     ].join('\n');
-    // cwd is the checkout because self-reference resolves from the nearest package.json.
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: root,
-      encoding: 'utf-8',
-      timeout: 30_000,
-    });
-    if (child.status !== 0) {
-      throw new Error(`self-reference import failed (run \`npm run build\` first):\n${child.stderr}`);
-    }
-    const lines = child.stdout.trim().split('\n');
     // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-    const out = JSON.parse(lines[lines.length - 1]!) as {
+    const out = runModuleScript(script) as {
       url: string;
       serve: string;
       authRevoke: string;
