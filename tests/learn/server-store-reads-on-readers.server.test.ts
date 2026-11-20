@@ -347,7 +347,8 @@ const READS: readonly Read[] = [
         admit: { currentProject: '', includeCrossProject: true },
         recall: { terms: ['rollout'], limit: 5 },
       }),
-    'mem_p_pinned',
+    // The id must follow the recall key: the entries list holds mem_p_plain too.
+    /recall: \[ \{[\s\S]*?id: 'mem_p_plain'/,
   ),
   read(
     'contextReads.contextCandidates',

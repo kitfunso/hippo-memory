@@ -91,7 +91,7 @@ const SCHEMA_STEP = 'schema';
 // Connections behind the read-only gate, so a read can still make the temp tables it needs.
 const gated = new WeakSet<DatabaseSyncLike>();
 
-/** Whether `db` was opened under a read-only runtime, so it refuses every write. */
+/** Whether `db` is behind the write gate, so it refuses every write. */
 export function isReadOnlyHandle(db: DatabaseSyncLike): boolean {
   return gated.has(db);
 }
