@@ -112,6 +112,23 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
     }
   });
 
+  it('fails when a server.json package entry has no version or an old one', () => {
+    for (const pkg of [{ identifier: 'fixture' }, { identifier: 'fixture', version: '1.9.9' }]) {
+      const root = makeRepo('2.0.0');
+      try {
+        writeFileSync(
+          join(root, 'server.json'),
+          JSON.stringify({ name: 'fixture', version: '2.0.0', packages: [pkg] }),
+        );
+        const r = runGate(root);
+        expect(r.status).toBe(1);
+        expect(r.stderr).toContain(`server.json packages[0]: ${pkg.version ?? '(no version field)'} (expected 2.0.0)`);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  });
+
   it('fails when the lockfile is absent or has no version field', () => {
     const cases: Overrides[] = [{ omitLockfile: true }, { lockVersion: null }];
     for (const overrides of cases) {
