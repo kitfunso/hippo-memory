@@ -22,7 +22,7 @@ import { sharingStores } from '../_helpers/sharing-stores.js';
 import { copyToGlobal, listMemoryConflicts, writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { FIXED_NOW, pinClock } from '../_helpers/fixed-clock.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 pinClock();
 
@@ -219,6 +219,7 @@ describe('recall visibility and the approve/reject lifecycle', () => {
   it('shareMemory refuses a quarantined row even with force', async () => {
     await expect(
       shareMemory(...sharingStores(home), id, {
+        actor: TEST_ACTOR,
         embed: TEST_RUN,
         detached: TEST_DETACHED,
         tenantId: 'default',

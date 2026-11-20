@@ -24,7 +24,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { copyToGlobal, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
-import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
+import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 const SEED = 'fix: retry the upload when the storage token expires mid-transfer';
 const ORDINARY = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
@@ -86,6 +86,7 @@ describe('git-learned rows and the global store', () => {
     expect(
       sharedEntry(
         await shareMemory(...sharingStores(hippoRoot), seed.id, {
+          actor: TEST_ACTOR,
           embed: TEST_RUN,
           detached: TEST_DETACHED,
           tenantId: 'default',

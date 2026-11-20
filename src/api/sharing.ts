@@ -40,7 +40,12 @@ export async function shareToGlobal(
   opts: { readonly force: boolean },
 ): Promise<ShareOutcome> {
   const target = requireGlobalTarget(ctx, 'share');
-  const options = { force: opts.force, tenantId: ctx.tenantId, embed: ctx.infra };
+  const options = {
+    force: opts.force,
+    tenantId: ctx.tenantId,
+    embed: ctx.infra,
+    actor: ctx.actor,
+  };
   return withDetached(ctx, (detached) => shareMemory(ctx, target, id, { ...options, detached }));
 }
 
