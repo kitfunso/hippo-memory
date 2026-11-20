@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '../base/memory/entry.js';
+import { RECALL_ONLY_TAGS as recallOnlyTags, type MemoryEntry } from '../base/memory/entry.js';
 import { entryAfterOutcome as outcomeAt } from '../base/memory/keep-rules.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../base/memory/strength.js';
 import {
@@ -65,9 +65,11 @@ export type {
 // hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
 
 // An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
-// hippo.db's, which the composition roots open as their default store.
+// hippo.db's, which the composition roots open as their default store, and initStore sets up a
+// hippo.db folder.
 export {
   publishedDefaultStore as sqliteStore,
+  publishedInitStore as initStore,
   decodeVector,
   EMBEDDING_MODEL_META_KEY,
   encodeVector,
@@ -131,18 +133,35 @@ export {
 export function entryAfterOutcome(
   entry: MemoryEntry,
   good: boolean,
-  rules: { lossAversionRatio?: number } = {},
+  rules: { lossAversionRatio?: number; now?: Date } = {},
 ): MemoryEntry {
   return outcomeAt(
     entry,
     good,
-    evalNow(),
+    rules.now ?? evalNow(),
     withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio),
   );
 }
 export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
-// An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule.
-export { heldTexts } from '../base/util/same-text.js';
+// An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule, and its row
+// writes keep hippo.db's duplicate hash.
+export { duplicateHash, heldTexts } from '../base/util/same-text.js';
+// An add-on store stamps, searches and windows its rows as hippo.db does, so both return the same
+// rows in the same order.
+export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';
+export { cjkIndexTerms, partitionCjkTerms } from '../base/util/tokenize.js';
+export { interleaveRows } from '../base/util/interleave.js';
+export { splitLikeTerms } from '../store/rules/like-terms.js';
+export {
+  LIKE_WINDOW_ROWS,
+  LIKE_WINDOW_TERMS,
+  SCHEMA_FIT_WINDOW_ROWS,
+} from '../store/rules/windows.js';
+export { auditRowsRead } from '../base/ports/store/audit.js';
+export { RawAppendOnlyError } from '../base/errors/raw-append-only.js';
+/** The tags that keep an unpinned row out of ambient context; a list, so a new tag changes no
+ * public type. */
+export const RECALL_ONLY_TAGS: readonly string[] = recallOnlyTags;
 // An add-on's quality repair keeps the rows hippo.db's does.
 export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memory/memory-audit.js';
 export { RejectedValueError } from '../base/errors/api-errors.js';

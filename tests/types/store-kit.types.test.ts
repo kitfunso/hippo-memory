@@ -18,7 +18,7 @@ import {
 } from '../../src/entry/store-kit.js';
 import type { DecayOptions } from '../../src/entry/memory.js';
 import type { StoreRules } from '../../src/base/ports/infra.js';
-type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
+type OutcomeRules = { lossAversionRatio?: number; now?: Date };
 
 declare const store: HippoStore;
 
@@ -95,8 +95,10 @@ describe('hippo-memory/store-kit entry types', () => {
     expect(sqliteStore).toBeTypeOf('function');
   });
 
-  it('entryAfterOutcome takes the entry, a boolean and the root ratio, and returns an entry', () => {
-    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, LossAversion?]>();
+  it('entryAfterOutcome takes the entry, a boolean and the root ratio and clock, and returns an entry', () => {
+    expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, OutcomeRules?]>();
+    // The ratio stays the type the root's DecayOptions gives it.
+    expectTypeOf<OutcomeRules['lossAversionRatio']>().toEqualTypeOf<DecayOptions['lossAversionRatio']>();
     expectTypeOf(entryAfterOutcome).returns.toEqualTypeOf<MemoryEntry>();
     expectTypeOf<InstanceType<typeof RejectedValueError>>().toMatchTypeOf<Error>();
   });

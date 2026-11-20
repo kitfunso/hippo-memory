@@ -15,6 +15,8 @@ const SERVER_VALUES = [
   'captureSessionTexts',
   'clientIpForRateLimit',
   'compactResumeForCaller',
+  'embedAll', // hippo-enterprise imports this
+  'folderIndex', // hippo-enterprise imports this
   'isCrossSite',
   'isLoopback',
   'isReservedActor',
@@ -69,10 +71,13 @@ const STORE_KIT_VALUES = [
   'ALL_TENANTS',
   'ambientRefusal',
   'assertWriteRight',
+  'auditRowsRead', // hippo-enterprise imports this
   'bufferToFloat32',
+  'cjkIndexTerms', // hippo-enterprise imports this
   'decodeVector',
   'descendantAdmits',
   'diffGraph',
+  'duplicateHash', // hippo-enterprise imports this
   'EMBEDDING_MODEL_META_KEY',
   'encodeVector',
   'entryAfterOutcome',
@@ -80,27 +85,38 @@ const STORE_KIT_VALUES = [
   'ftsTermParts',
   'hasGroup',
   'heldTexts',
+  'initStore', // hippo-enterprise imports this
+  'interleaveRows', // hippo-enterprise imports this
+  'isoInstant', // hippo-enterprise imports this
   'isSharedStore',
+  'LIKE_WINDOW_ROWS', // hippo-enterprise imports this
+  'LIKE_WINDOW_TERMS', // hippo-enterprise imports this
   'loadConfig',
   'normalizeValueForRejection',
   'OPTIONAL_GROUPS',
   'OTHER_STORE_MARKER',
   'ownScopeTouches',
+  'partitionCjkTerms', // hippo-enterprise imports this
   'passesScopeFilterForRecall',
   'physicsSearch',
   'PROTECTED_ROWS',
   'rankVectorRows',
   'rarestFtsQuery',
+  'RawAppendOnlyError', // hippo-enterprise imports this
   'readerMayChange',
   'readerReaches',
   'repairKeeps',
   'RECALL_DEFAULT_DENY_SCOPES',
+  'RECALL_ONLY_TAGS', // hippo-enterprise imports this
   'RejectedValueError',
   'rejectionDigest',
   'replacesIndex',
   'requireGroup',
   'runStoreConformance',
+  'SCHEMA_FIT_WINDOW_ROWS', // hippo-enterprise imports this
   'SECRET_TAGS',
+  'sortableStamp', // hippo-enterprise imports this
+  'splitLikeTerms', // hippo-enterprise imports this
   'sqliteStore',
   'StoreBusyError',
   'tallyAmbientEntries',

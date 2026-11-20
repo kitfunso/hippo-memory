@@ -34,6 +34,8 @@ import {
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from '../runtime/tenant.js';
 import { LIKE_WINDOW_ROWS, LIKE_WINDOW_TERMS } from '../../rules/windows.js';
+import { splitLikeTerms } from '../../rules/like-terms.js';
+import { interleaveRows } from '../../../base/util/interleave.js';
 
 /** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
  * in recall-scope.ts is its JS twin. */
@@ -162,19 +164,6 @@ function listWordCandidates(
   return listLikeCandidates(db, terms, p, limit);
 }
 
-/** `a` and `b` taken in turn, each row once, up to `limit`; with one list empty, the other as it
- * is. */
-function interleaveRows(a: MemoryRow[], b: MemoryRow[], limit: number): MemoryRow[] {
-  if (a.length === 0 || b.length === 0) return a.length === 0 ? b : a;
-  const out = new Map<string, MemoryRow>();
-  for (let i = 0; out.size < limit && i < Math.max(a.length, b.length); i++) {
-    for (const row of [a[i], b[i]]) {
-      if (row !== undefined && out.size < limit) out.set(row.id, row);
-    }
-  }
-  return [...out.values()];
-}
-
 function searchPredicates(
   tenantId: TenantId,
   scopeFilter: RecallScopeFilter | undefined,
@@ -272,12 +261,8 @@ function listLikeCandidates(
   p: SearchPredicates,
   limit: number,
 ): MemoryRow[] {
-  // A trigram holds 3 characters, so FTS5 cannot look up a shorter term; a store without FTS5 has
-  // no index at all.
-  const indexed = isFtsAvailable(db)
-    ? terms.filter((term) => [...term].length >= MIN_TRIGRAM_CHARS)
-    : [];
-  const windowed = terms.filter((term) => !indexed.includes(term));
+  // A store without FTS5 has no trigram index at all.
+  const { indexed, windowed } = splitLikeTerms(terms, isFtsAvailable(db));
   const arms = [
     ...(indexed.length > 0 ? [trigramArm(indexed, p)] : []),
     ...(windowed.length > 0 ? [windowArm(windowed, p, limit)] : []),
@@ -294,8 +279,6 @@ function listLikeCandidates(
     return unionByRecency(db, [windowArm(terms, p, limit)], limit);
   }
 }
-
-const MIN_TRIGRAM_CHARS = 3;
 
 /** Matches through the trigram index, which leads the join, so only the matching rows are read. */
 function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment {

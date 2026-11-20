@@ -271,6 +271,8 @@ describe('published runtime exports', () => {
         authCreate authCreateSelf authRevoke
         bindSessionOwner
         captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
+        embedAll
+        folderIndex
         isCrossSite isLoopback isReservedActor
         ownerOrSubject
         preCompactForCaller promptHookContext
@@ -285,23 +287,25 @@ describe('published runtime exports', () => {
         transcriptWorkingState",
           "./store-kit": "ALL_TENANTS
         EMBEDDING_MODEL_META_KEY
+        LIKE_WINDOW_ROWS LIKE_WINDOW_TERMS
         OPTIONAL_GROUPS OTHER_STORE_MARKER
         PROTECTED_ROWS
-        RECALL_DEFAULT_DENY_SCOPES RejectedValueError
-        SECRET_TAGS StoreBusyError
-        ambientRefusal assertWriteRight
+        RECALL_DEFAULT_DENY_SCOPES RECALL_ONLY_TAGS RawAppendOnlyError RejectedValueError
+        SCHEMA_FIT_WINDOW_ROWS SECRET_TAGS StoreBusyError
+        ambientRefusal assertWriteRight auditRowsRead
         bufferToFloat32
-        decodeVector descendantAdmits diffGraph
+        cjkIndexTerms
+        decodeVector descendantAdmits diffGraph duplicateHash
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts
         hasGroup heldTexts
-        isSharedStore
+        initStore interleaveRows isSharedStore isoInstant
         loadConfig
         normalizeValueForRejection
         ownScopeTouches
-        passesScopeFilterForRecall physicsSearch
+        partitionCjkTerms passesScopeFilterForRecall physicsSearch
         rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup runStoreConformance
-        sqliteStore
+        sortableStamp splitLikeTerms sqliteStore
         tallyAmbientEntries targetReader",
           "./testing": "ambientSecretAdmit ambientSecretAdmitWire
         batchWriteAndDeleteWire buildIndexFromDb
