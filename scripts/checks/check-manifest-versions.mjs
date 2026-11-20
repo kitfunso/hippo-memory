@@ -62,6 +62,19 @@ for (const path of LOCKSTEP_MANIFESTS) {
     drifts.push({ path, found: '(parse error: ' + e.message + ')', expected: expectedVersion });
     continue;
   }
+  if (path === 'server.json') {
+    // The MCP Registry rejects an npm package entry without its own version.
+    for (const [i, pkg] of (parsed?.packages ?? []).entries()) {
+      const found = manifestVersion(pkg);
+      if (found !== expectedVersion) {
+        drifts.push({
+          path: `server.json packages[${i}]`,
+          found: found ?? '(no version field)',
+          expected: expectedVersion,
+        });
+      }
+    }
+  }
   const version = manifestVersion(parsed);
   if (version === null) {
     drifts.push({ path, found: '(no version field)', expected: expectedVersion });

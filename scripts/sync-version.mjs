@@ -17,10 +17,18 @@ const JSON_MANIFESTS = [
   'extensions/vscode/package.json',
 ];
 
+// server.json also pins each package's version, which the MCP Registry requires for npm packages.
+const EVERY_VERSION = new Set(['server.json']);
+
 for (const path of JSON_MANIFESTS) {
   // Replace in place so each file keeps its own layout; the parse catches a nested "version" listed first.
-  const next = readFileSync(path, 'utf8').replace(/("version"\s*:\s*")[^"]*"/, `$1${version}"`);
-  if (JSON.parse(next).version !== version) throw new Error(`${path}: top-level "version" not found`);
+  const pattern = EVERY_VERSION.has(path) ? /("version"\s*:\s*")[^"]*"/g : /("version"\s*:\s*")[^"]*"/;
+  const next = readFileSync(path, 'utf8').replace(pattern, `$1${version}"`);
+  const parsed = JSON.parse(next);
+  if (parsed.version !== version) throw new Error(`${path}: top-level "version" not found`);
+  if (EVERY_VERSION.has(path) && !(parsed.packages ?? []).every((p) => p.version === version)) {
+    throw new Error(`${path}: a package has no "version"`);
+  }
   writeFileSync(path, next);
 }
 
