@@ -3412,8 +3412,8 @@
       "reason": "The first 10 of 89 tasks, 1 trial each at medium effort; the rule is 5 trials, and the matching Claude Code row used max effort. The 2.0 board is closed, and the open board is 4.1.",
       "caveat": null,
       "hippo": {
-        "value": "8/10",
-        "num": 80.0,
+        "value": "9/10",
+        "num": 90.0,
         "setting": "first 10 of 89 tasks, 1 trial; Claude Code with no memory 9/10",
         "status": null
       },
