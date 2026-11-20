@@ -289,12 +289,18 @@ def trial_outcome(job_dir: Path) -> dict:
     api_err = bool(last and last.get("is_error") and (last.get("terminal_reason") == "api_error" or last.get("api_error_status")))
     limit = bool(rejected) or bool(last and last.get("api_error_status") == 429)
     auth = bool(AUTH_RE.search(tail[-3000:])) and not (last and last.get("num_turns", 0) > 1)
-    return {"reward": reward, "infra": (not ran) or api_err or limit, "limit": limit, "auth": auth,
+    lost = graded_never(exc.get("exception_type")) and not res.get("verifier_result")
+    return {"reward": reward, "infra": (not ran) or api_err or limit or lost, "limit": limit, "auth": auth,
             "resets_at": max((r for r in rejected if r), default=None), "api_error": (last or {}).get("api_error"),
             "exception": exc.get("exception_type"), "trial": trial.as_posix(),
             "agent_sec": _secs(res.get("agent_execution")), "cost_usd": (last or {}).get("total_cost_usd"),
             "turns": (last or {}).get("num_turns"),
-            "why": (exc.get("exception_message") or "")[:300] if not ran else str((last or {}).get("result", ""))[:200] if api_err else ""}
+            "why": (exc.get("exception_message") or "")[:300] if not ran or lost else str((last or {}).get("result", ""))[:200] if api_err else ""}
+
+
+def graded_never(exception_type: str | None) -> bool:
+    """A grader that timed out wrote no score: its downloads crawled on a busy line on 20 Nov (dated notes 4)."""
+    return exception_type == "VerifierTimeoutError"
 
 
 def _secs(t: dict | None) -> float | None:
@@ -309,7 +315,8 @@ def done(run: Path) -> dict[tuple[str, str], dict]:
     if not p.exists():
         return {}
     recs = [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
-    return {(r["task"], r["arm"]): r for r in recs if not r.get("infra")}
+    # records logged before dated notes 4 carry infra False for a grader timeout
+    return {(r["task"], r["arm"]): r for r in recs if not r.get("infra") and not graded_never(r.get("exception"))}
 
 
 def run_one(run: Path, bdir: Path, arm: str, idx: int, name: str, env: dict) -> dict:

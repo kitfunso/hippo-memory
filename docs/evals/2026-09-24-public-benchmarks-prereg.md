@@ -914,3 +914,13 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **What changes.** `SETUP_SEC` in `run_tbench.py` goes from 1,800 to 7,200. A hung setup still ends; a slow one now finishes. Setup runs before the agent, so the agent's time, its tools and its score do not change. A setup timeout stays infrastructure and is retried, as before.
 
 **Read before this note.** `tbench-r1-emb` tasks 0 to 2 (pass, pass, fail) and task 3's setup timeouts. No change follows from a score.
+
+### Amendment 7, dated notes 4 (2026-11-20, during `tbench-r1-emb`, after task 6): a grader timeout is infrastructure
+
+**Why.** Task 6 (`pytorch-model-cli`) try 2: the agent ended its session normally in 245 s, then the grader timed out at its 900 s limit and wrote no score (`verifier_result` null, `VerifierTimeoutError`, an empty `verifier/` folder). The task's `tests/test.sh` first downloads apt packages, uv, CPU torch 2.7.1, torchvision and opencv; the line gave 30 to 116 KB/s that night. In `tbench-r1` this grader took 74 to 136 s. The driver read the missing score as reward 0.
+
+**What changes.** `trial_outcome` marks a trial whose grader timed out with no score as infrastructure, and `done` applies the same rule to records logged before this note. Task 6 runs again (try 3) from the store copy taken before task 6; the store copy taken before task 7 under the old reading moves aside, so task 7 starts from the store after the new task 6.
+
+**Effect on the pair.** In `tbench-r1` no trial of either arm had a grader timeout, so its reading does not change (`none` 9 of 10 on tasks 0 to 9). The rule reopens one `hippo` result that was a 0, so it can only help the `hippo` arm; the report gives both readings, with task 6 as 0 and as its try-3 result.
+
+**Read before this note.** `tbench-r1-emb` tasks 0 to 6 and task 7's unfinished try 1 (stopped at 09:25Z).
