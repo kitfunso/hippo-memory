@@ -906,3 +906,11 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **Read.** The paired difference over the 10 tasks, by task. A one-task difference is inside the noise of 10 tasks and 1 trial. The board's hippo cell changes only after Keith approves it.
 
 **Read before this note.** The `tbench-r1` rewards for tasks 0 to 9. No trial of `tbench-r1-emb`.
+
+### Amendment 7, dated notes 3 (2026-11-20, during `tbench-r1-emb`, after task 3's third setup try): the agent setup limit is 7,200 s
+
+**Why.** Each trial's agent setup downloads the apt packages for nodejs and npm and the Claude Code binary, about 300 MB, before the agent starts. On 20 Nov other programs on the box used most of the line: apt in the task container got about 30 KB/s and a 5 MB test download got 41 to 116 KB/s. Task 3 (`fix-ocaml-gc`) reached the 1,800 s setup limit on tries 1 and 2 (apt alone took 20 minutes on try 3), so the run could retry it many times and never move on. In `tbench-r1` the same setup took 255 s.
+
+**What changes.** `SETUP_SEC` in `run_tbench.py` goes from 1,800 to 7,200. A hung setup still ends; a slow one now finishes. Setup runs before the agent, so the agent's time, its tools and its score do not change. A setup timeout stays infrastructure and is retried, as before.
+
+**Read before this note.** `tbench-r1-emb` tasks 0 to 2 (pass, pass, fail) and task 3's setup timeouts. No change follows from a score.
