@@ -1,15 +1,15 @@
-/** `a` and `b` taken in turn, each id once, up to `limit`. A repeated id keeps its first place and
- * the row object seen last. */
+/** `a` and `b` taken in turn, each id once: at its first place, with the last row object for that
+ * id in either list. Then the first `limit` of those. */
 export function interleaveRows<R extends { readonly id: string }>(
   a: readonly R[],
   b: readonly R[],
   limit: number,
 ): R[] {
-  const out = new Map<string, R>();
-  for (let i = 0; out.size < limit && i < Math.max(a.length, b.length); i++) {
+  const byId = new Map<string, R>();
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
     for (const row of [a[i], b[i]]) {
-      if (row !== undefined && (out.size < limit || out.has(row.id))) out.set(row.id, row);
+      if (row !== undefined) byId.set(row.id, row);
     }
   }
-  return [...out.values()];
+  return [...byId.values()].slice(0, limit);
 }

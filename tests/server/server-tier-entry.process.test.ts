@@ -282,6 +282,18 @@ describe('store-kit pure helpers', () => {
       interleaveMidPair: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 3],
       interleaveLongTail: ['interleaveRows', rows('a'), rows('b', 'c', 'd'), 10],
       interleaveLastRowFull: ['interleaveRows', [{ id: 'a', n: 1 }], [{ id: 'a', n: 2 }], 1],
+      interleaveLastRowLater2: [
+        'interleaveRows',
+        [{ id: 'x', n: 1 }, { id: 'y' }],
+        [{ id: 'z' }, { id: 'x', n: 2 }],
+        2,
+      ],
+      interleaveLastRowLater3: [
+        'interleaveRows',
+        [{ id: 'x', n: 1 }, { id: 'y' }],
+        [{ id: 'z' }, { id: 'x', n: 2 }],
+        3,
+      ],
       interleaveLastRow: [
         'interleaveRows',
         [{ id: 'a', n: 1 }],
@@ -322,6 +334,8 @@ describe('store-kit pure helpers', () => {
       { id: 'b', n: 3 },
     ]);
     expect(out['interleaveLastRowFull']).toEqual([{ id: 'a', n: 2 }]);
+    expect(out['interleaveLastRowLater2']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }]);
+    expect(out['interleaveLastRowLater3']).toEqual([{ id: 'x', n: 2 }, { id: 'z' }, { id: 'y' }]);
   });
 
   it('interleaveRows keeps the limit and the one-id rule when one list is empty', () => {
