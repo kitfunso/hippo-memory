@@ -1,5 +1,6 @@
 // Sweep: every by-id or by-scope surface of a member read grant, asked as four keys on one real server over HTTP and MCP.
 // A new route or tool that takes an id must join the table below or be exempted, so a surface cannot skip the rule.
+import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
@@ -76,7 +77,7 @@ const emptyPairs = (): PairSet => ({
   N: { conflict: 0, keep: '' },
   A: { conflict: 0, keep: '' },
 });
-const pairs = { weaken: emptyPairs(), forget: emptyPairs() };
+const pairs = { weaken: emptyPairs(), forget: emptyPairs(), reject: emptyPairs() };
 
 function mint(label: string, role: 'admin' | 'member', owner: string | undefined, grants: readonly string[]): Key {
   const db = openHippoDb(store);
@@ -110,15 +111,23 @@ interface RpcBody {
   error?: { message: string };
 }
 
-/** A tools/call reply as text: the tool's own text, or the message of the error a refused call becomes. */
-async function mcp(who: Who, name: string, args: Record<string, JsonValue>): Promise<string> {
+/** A tools/call reply: the tool's own text, or the message of the error a refused or failed call becomes. */
+interface ToolReply {
+  readonly text: string;
+  readonly failed: boolean;
+}
+
+async function mcpCall(who: Who, name: string, args: Record<string, JsonValue>): Promise<ToolReply> {
   const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
   const res = await send(who, 'POST', '/mcp', call);
   expect(res.status).toBe(200);
   // SAFETY: /mcp answers a JSON-RPC envelope, whose result and error are the two fields read here.
   const body = (await res.json()) as RpcBody;
-  return body.result?.content[0]?.text ?? body.error?.message ?? '';
+  return { text: body.result?.content[0]?.text ?? body.error?.message ?? '', failed: body.error !== undefined };
 }
+
+const mcp = async (who: Who, name: string, args: Record<string, JsonValue>): Promise<string> =>
+  (await mcpCall(who, name, args)).text;
 
 /** A refusal as the status it stands for, so an HTTP cell and an MCP cell read alike. */
 function refusal(status: number, message: string): string | null {
@@ -143,7 +152,11 @@ const fresh = (extra: Partial<CreateMemoryOptions> = {}): string => row(extra, `
 
 const seenIn = (found: boolean): string => (found ? 'R' : 'hidden');
 const refused = (reply: Reply): string | null => refusal(reply.status, reply.json.error ?? '');
-const textCell = (text: string, marker: string): string => refusal(0, text) ?? seenIn(text.includes(marker));
+// A cell reads 'hidden' only after a 200, so a 400 or 500 for every key cannot pass as a hidden row.
+const readCell = (reply: Reply, found: (json: Body) => boolean): string =>
+  refused(reply) ?? (reply.status === 200 ? seenIn(found(reply.json)) : `status ${reply.status}`);
+const textCell = (call: ToolReply, marker: string): string =>
+  refusal(0, call.text) ?? (call.failed ? `error: ${call.text}` : seenIn(call.text.includes(marker)));
 const writeCell = (reply: Reply): string => (reply.status === 200 ? '200' : (refused(reply) ?? `${reply.status}`));
 const mcpWriteCell = (text: string): string => refusal(0, text) ?? (/^(Shared|Resolved)/.test(text) ? '200' : text);
 
@@ -177,14 +190,14 @@ const TABLE: readonly SurfaceRow[] = [
     expected: READ_CELLS,
     run: async (who) => {
       const reply = await http(who, 'GET', `/v1/memories?q=sweepquartz&scope=${encodeURIComponent(S)}`);
-      return refused(reply) ?? seenIn((reply.json.results ?? []).some((x) => x.id === ids.r));
+      return readCell(reply, (json) => (json.results ?? []).some((x) => x.id === ids.r));
     },
   },
   {
     name: 'hippo_recall in a named scope',
     covers: ['hippo_recall'],
     expected: READ_CELLS,
-    run: async (who) => textCell(await mcp(who, 'hippo_recall', { query: 'sweepquartz', scope: S }), 'sweepquartz'),
+    run: async (who) => textCell(await mcpCall(who, 'hippo_recall', { query: 'sweepquartz', scope: S }), 'sweepquartz'),
   },
   {
     name: 'drill into the summary, over HTTP',
@@ -283,13 +296,22 @@ const TABLE: readonly SurfaceRow[] = [
     },
   },
   {
+    name: 'hippo_resolve, fate reject',
+    covers: ['hippo_resolve'],
+    expected: WRITE_CELLS,
+    run: async (who) => {
+      const { conflict, keep } = pairs.reject[who];
+      return mcpWriteCell(await mcp(who, 'hippo_resolve', { conflict_id: conflict, keep, rejectLoser: true }));
+    },
+  },
+  {
     name: 'nearest vectors in a named scope',
     covers: ['POST /v1/vectors/nearest'],
     expected: READ_CELLS,
     run: async (who) => {
       const spec = { tenantId: 'default', includeSuperseded: false, scope: { mode: 'exact', value: S } };
       const reply = await http(who, 'POST', '/v1/vectors/nearest', { vector: VECTOR, spec });
-      return refused(reply) ?? seenIn((reply.json.ids ?? []).includes(ids.r));
+      return readCell(reply, (json) => (json.ids ?? []).includes(ids.r));
     },
   },
   {
@@ -299,15 +321,14 @@ const TABLE: readonly SurfaceRow[] = [
     expected: { O: 'hidden', M: 'hidden', N: 'hidden', A: 'hidden' },
     run: async (who) => {
       const reply = await http(who, 'GET', `/v1/context?scope=${encodeURIComponent(S)}`);
-      return refused(reply) ?? seenIn((reply.json.entries ?? []).some((x) => x.entry.id === ids.r));
+      return readCell(reply, (json) => (json.entries ?? []).some((x) => x.entry.id === ids.r));
     },
   },
   {
     name: 'hippo_context in a named scope',
     covers: ['hippo_context'],
-    // A host admin key ranks by the server's own git state, not the scope, so A reads nothing of S here; recall shows A's reach.
-    expected: { ...READ_CELLS, A: 'hidden' },
-    run: async (who) => textCell(await mcp(who, 'hippo_context', { scope: S, budget: 4000 }), 'sweepquartz'),
+    expected: READ_CELLS,
+    run: async (who) => textCell(await mcpCall(who, 'hippo_context', { scope: S, budget: 4000 }), 'sweepquartz'),
   },
   {
     name: 'assemble the session in a named scope, over HTTP',
@@ -315,14 +336,14 @@ const TABLE: readonly SurfaceRow[] = [
     expected: READ_CELLS,
     run: async (who) => {
       const reply = await http(who, 'GET', `/v1/sessions/${SESSION}/assemble?scope=${encodeURIComponent(S)}`);
-      return refused(reply) ?? seenIn((reply.json.items ?? []).some((x) => x.id === ids.raw));
+      return readCell(reply, (json) => (json.items ?? []).some((x) => x.id === ids.raw));
     },
   },
   {
     name: 'hippo_assemble the session in a named scope',
     covers: ['hippo_assemble'],
     expected: READ_CELLS,
-    run: async (who) => textCell(await mcp(who, 'hippo_assemble', { session_id: SESSION, scope: S }), 'sweepraw'),
+    run: async (who) => textCell(await mcpCall(who, 'hippo_assemble', { session_id: SESSION, scope: S }), 'sweepraw'),
   },
   {
     name: 'the graph',
@@ -330,14 +351,14 @@ const TABLE: readonly SurfaceRow[] = [
     expected: HIDDEN_CELLS,
     run: async (who) => {
       const reply = await http(who, 'GET', '/v1/graph');
-      return refused(reply) ?? seenIn((reply.json.edges ?? []).some((e) => e.relType === 'depends-on'));
+      return readCell(reply, (json) => (json.edges ?? []).some((e) => e.relType === 'depends-on'));
     },
   },
   {
     name: 'hippo_conflicts',
     covers: ['hippo_conflicts'],
     expected: HIDDEN_CELLS,
-    run: async (who) => seenIn((await mcp(who, 'hippo_conflicts', {})).includes(`conflict_${ids.pairList}:`)),
+    run: async (who) => textCell(await mcpCall(who, 'hippo_conflicts', {}), `conflict_${ids.pairList}:`),
   },
 ];
 
@@ -369,6 +390,12 @@ async function seedConflicts(): Promise<void> {
       N: pair('sweep forget N'),
       A: pair('sweep forget A'),
     },
+    reject: {
+      O: pair('sweep reject O'),
+      M: pair('sweep reject M'),
+      N: pair('sweep reject N'),
+      A: pair('sweep reject A'),
+    },
   };
   replaceDetectedConflicts(store, made);
   const open = await listMemoryConflicts(store, 'open', 'default');
@@ -380,6 +407,7 @@ async function seedConflicts(): Promise<void> {
   for (const who of WHO) {
     pairs.weaken[who] = found(at.weaken[who]);
     pairs.forget[who] = found(at.forget[who]);
+    pairs.reject[who] = found(at.reject[who]);
   }
 }
 
@@ -408,7 +436,10 @@ async function seedRows(): Promise<void> {
 }
 
 beforeAll(async () => {
-  vi.stubEnv('HIPPO_HOME', makeRoot('member-grant-sweep-global'));
+  const home = makeRoot('member-grant-sweep-global');
+  vi.stubEnv('HIPPO_HOME', home);
+  // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
+  vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
   vi.stubEnv('HIPPO_V1_RPS', '0');
   store = makeRoot('member-grant-sweep', {
     config: { contextProjectIsolation: false, embeddings: { enabled: false } },
