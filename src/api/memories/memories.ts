@@ -1,8 +1,6 @@
 // Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every
 // tenant's.
 import type { MemoryEntry } from '../../base/memory/entry.js';
-import { NotFoundError } from '../../base/errors/api-errors.js';
-import { canReadScope } from '../../base/scope/recall-scope.js';
 import type { RequiredStore } from '../../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
@@ -12,16 +10,6 @@ import type { EntryCursor } from '../../base/ports/store/types.js';
 export async function memoryGet(ctx: Context, id: string): Promise<MemoryEntry | null> {
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   return entry ?? null;
-}
-
-/** memoryGet, but NotFound when the caller could not read the row, so the reply does not reveal
- * that the id exists. */
-export async function memoryGetTouchable(ctx: Context, id: string): Promise<MemoryEntry | null> {
-  const entry = await memoryGet(ctx, id);
-  if (!canReadScope(ctx.actor, entry?.scope ?? null)) {
-    throw new NotFoundError(`Memory not found: ${id}`);
-  }
-  return entry;
 }
 
 /** Which rows a read covers: the caller's tenant, or with `everyTenant` the whole store. */
