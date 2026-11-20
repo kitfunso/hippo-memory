@@ -221,23 +221,22 @@ export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
   return Boolean(reader.owner) && row.owner === reader.owner;
 }
 
-/** Absent or out of reach throws NotFoundError(`missing`), as for a missing id. A reached row
- * the reader may not change throws a 403 naming the key that can: the caller already sees the
- * row, so saying so leaks nothing. `restrictedOnly` lets a row outside a restricted scope pass. */
+/** A row the reader reaches but may not act on is a 403 naming the key that can, since the caller
+ * already sees the row; absent and out of reach share one 404 so neither leaks. */
 function assertRowRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
   id: string,
   missing: string,
-  rule: { readonly verb: 'change' | 'copy'; readonly restrictedOnly: boolean },
+  verb: 'change' | 'copy',
 ): asserts row is WrittenRow {
   if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
-  const outsideRule = rule.restrictedOnly && !isRestrictedScope(row.scope);
-  if (outsideRule || readerMayChange(reader, row)) return;
+  const openRowCopy = verb === 'copy' && !isRestrictedScope(row.scope);
+  if (openRowCopy || readerMayChange(reader, row)) return;
   const fix =
     row.owner === null
-      ? `records no writer: ${rule.verb} it with an admin key`
-      : `was written by someone else: ${rule.verb} it with the key that wrote it or an admin key`;
+      ? `records no writer: ${verb} it with an admin key`
+      : `was written by someone else: ${verb} it with the key that wrote it or an admin key`;
   throw new ForbiddenError(`memory ${id} ${fix}`);
 }
 
@@ -248,19 +247,18 @@ export function assertWriteRight(
   id: string,
   missing: string,
 ): asserts row is WrittenRow {
-  assertRowRight(reader, row, id, missing, { verb: 'change', restrictedOnly: false });
+  assertRowRight(reader, row, id, missing, 'change');
 }
 
 /** Promote and share keep a restricted row's scope on the global copy, so a read grant is not
- * enough to copy one: only an admin or the member who owns the row. Any other row copies as
- * before. */
+ * enough to copy one: only an admin or the member who owns the row. */
 export function assertCopyRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
   id: string,
   missing: string,
 ): asserts row is WrittenRow {
-  assertRowRight(reader, row, id, missing, { verb: 'copy', restrictedOnly: true });
+  assertRowRight(reader, row, id, missing, 'copy');
 }
 
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed

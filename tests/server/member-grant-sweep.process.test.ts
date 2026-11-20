@@ -26,12 +26,8 @@ type Who = (typeof WHO)[number];
 
 /** What each of the four keys sees on one surface: O owns the row and holds the grant, M holds the grant only, N holds
  * none, A is an admin with none. */
-interface Cells {
-  readonly O: string;
-  readonly M: string;
-  readonly N: string;
-  readonly A: string;
-}
+type PerKey<T> = Readonly<Record<Who, T>>;
+type Cells = PerKey<string>;
 interface Key {
   readonly plaintext: string;
   readonly keyId: string;
@@ -169,33 +165,36 @@ const mcpWriteCell = (text: string, ok: RegExp = OK_TEXT): string => refusal(0, 
 const REJECTED_TEXT = /^Resolved conflict \d+: kept \S+, rejected \(tombstoned\) and removed /;
 
 // 'skipped' is a 200 that left the strength alone, so a refusal or a failure is its own cell.
-async function outcomeDelta(run: () => Promise<number>): Promise<string> {
+async function outcomeDelta(run: () => Promise<string | null>): Promise<string> {
   const before = readEntry(store, ids.r)?.outcomePositive ?? 0;
-  const status = await run();
-  if (status !== 200) return `status ${status}`;
+  const failure = await run();
+  if (failure !== null) return failure;
   return (readEntry(store, ids.r)?.outcomePositive ?? 0) > before ? 'applied' : 'skipped';
 }
 
-const rememberEvents = (): Array<{ id: number; actor: string }> => {
+const rememberEvents = (): Array<{ id: number; actor: string; targetId: string | null }> => {
   const db = openHippoDb(globalHome);
   try {
-    return listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map(({ id, actor }) => ({ id, actor }));
+    return listAuditEvents(db, { tenantId: 'default', op: 'remember' }).map(({ id, actor, targetId }) => ({
+      id,
+      actor,
+      targetId,
+    }));
   } finally {
     closeHippoDb(db);
   }
 };
 
-/** O's copy also leaves one 'remember' audit event in the global store that names O's key, never the CLI. */
+/** O's copy leaves one global 'remember' event naming O's key, never the CLI, on a row that keeps S. */
 async function auditedCopy(who: Who, run: () => Promise<string>): Promise<string> {
   const before = new Set(rememberEvents().map((event) => event.id));
   const cell = await run();
   if (who !== 'O') return cell;
-  const actors = rememberEvents()
-    .filter((event) => !before.has(event.id))
-    .map((event) => event.actor);
-  return actors.length === 1 && actors[0] === `api_key:${keys.O.keyId}`
-    ? cell
-    : `${cell}, audited as ${actors.join(',')}`;
+  const events = rememberEvents().filter((event) => !before.has(event.id));
+  const actors = events.map((event) => event.actor);
+  if (actors.length !== 1 || actors[0] !== `api_key:${keys.O.keyId}`) return `${cell}, audited as ${actors.join(',')}`;
+  const copied = events[0]?.targetId ? readEntry(globalHome, events[0].targetId) : undefined;
+  return copied?.scope === S ? cell : `${cell}, copy scope ${copied?.scope ?? 'missing'}`;
 }
 
 function drillCell(children: readonly string[], refusedAs: string | null): string {
@@ -296,7 +295,10 @@ const TABLE: readonly SurfaceRow[] = [
     covers: ['POST /v1/outcome'],
     expected: { O: 'applied', M: 'applied', N: 'skipped', A: 'applied' },
     run: (who) =>
-      outcomeDelta(async () => (await http(who, 'POST', '/v1/outcome', { ids: [ids.r], good: true })).status),
+      outcomeDelta(async () => {
+        const { status } = await http(who, 'POST', '/v1/outcome', { ids: [ids.r], good: true });
+        return status === 200 ? null : `status ${status}`;
+      }),
   },
   {
     name: 'hippo_outcome on the ids of the last recall',
@@ -306,7 +308,8 @@ const TABLE: readonly SurfaceRow[] = [
     run: (who) =>
       outcomeDelta(async () => {
         await mcp(who, 'hippo_recall', { query: 'sweepquartz', scope: S });
-        return (await mcpCall(who, 'hippo_outcome', { good: true })).failed ? 500 : 200;
+        const call = await mcpCall(who, 'hippo_outcome', { good: true });
+        return call.failed ? `error: ${call.text}` : null;
       }),
   },
   {

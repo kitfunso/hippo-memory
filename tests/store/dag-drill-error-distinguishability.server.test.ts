@@ -241,7 +241,7 @@ describe('drillDown for a member key on a restricted summary', () => {
   let handle: ServerHandle;
   let summaryId: string;
   beforeEach(async () => {
-    home = makeRoot('v164-member');
+    home = makeRoot('drill-member');
     handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
     const s = makeSummary('private topic', { scope: SCOPE });
     writeEntry(home, s);
