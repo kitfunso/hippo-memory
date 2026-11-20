@@ -51,6 +51,8 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'POST', pattern: '/v1/auth/keys', body: '{"label":"x"}' },
   { method: 'GET', pattern: '/v1/auth/keys' },
   { method: 'DELETE', pattern: '/v1/auth/keys/:keyId' },
+  { method: 'POST', pattern: '/v1/auth/keys/:keyId/grants', body: '{"scope":"slack:private:c1"}' },
+  { method: 'DELETE', pattern: '/v1/auth/keys/:keyId/grants', query: '?scope=slack:private:c1' },
   { method: 'GET', pattern: '/v1/audit' },
   { method: 'POST', pattern: '/v1/predictions', body: '{"claim":"x","classTag":"y"}' },
   { method: 'GET', pattern: '/v1/predictions' },

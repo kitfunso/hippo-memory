@@ -27,6 +27,8 @@ const ROWS = [
   'POST /v1/auth/keys',
   'GET /v1/auth/keys',
   'DELETE /v1/auth/keys/:keyId',
+  'POST /v1/auth/keys/:keyId/grants',
+  'DELETE /v1/auth/keys/:keyId/grants',
   'GET /v1/quarantine',
   'POST /v1/quarantine/:id/approve',
   'POST /v1/quarantine/:id/reject',

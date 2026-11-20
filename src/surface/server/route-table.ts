@@ -22,11 +22,13 @@ import { routeLookup, type RouteLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
+  handleGrantAuthKeyScope,
   handleListAudit,
   handleListAuthKeys,
   handleListQuarantine,
   handleRejectQuarantine,
   handleRevokeAuthKey,
+  handleUngrantAuthKeyScope,
 } from './routes/admin.js';
 import {
   handleApplyOutcome,
@@ -188,6 +190,18 @@ export const V1_ROUTES: readonly Route[] = [
     pattern: '/v1/auth/keys/:keyId',
     auth: 'caller',
     handler: handleRevokeAuthKey,
+  },
+  {
+    method: 'POST',
+    pattern: '/v1/auth/keys/:keyId/grants',
+    auth: 'admin',
+    handler: handleGrantAuthKeyScope,
+  },
+  {
+    method: 'DELETE',
+    pattern: '/v1/auth/keys/:keyId/grants',
+    auth: 'admin',
+    handler: handleUngrantAuthKeyScope,
   },
   {
     method: 'GET',

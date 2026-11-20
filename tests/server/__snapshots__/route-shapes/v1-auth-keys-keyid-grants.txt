@@ -1,0 +1,28 @@
+GET /v1/auth/keys/1/grants -> 404 not found
+POST /v1/auth/keys/1/grants -> 400 scope is required (non-empty string)
+DELETE /v1/auth/keys/1/grants -> 400 scope is required (non-empty string)
+PUT /v1/auth/keys/1/grants -> 404 not found
+GET /v1/auth/keys/007/grants -> 404 not found
+POST /v1/auth/keys/007/grants -> 400 scope is required (non-empty string)
+DELETE /v1/auth/keys/007/grants -> 400 scope is required (non-empty string)
+PUT /v1/auth/keys/007/grants -> 404 not found
+GET /v1/auth/keys/abc/grants -> 404 not found
+POST /v1/auth/keys/abc/grants -> 400 scope is required (non-empty string)
+DELETE /v1/auth/keys/abc/grants -> 400 scope is required (non-empty string)
+PUT /v1/auth/keys/abc/grants -> 404 not found
+GET /v1/auth/keys/-1/grants -> 404 not found
+POST /v1/auth/keys/-1/grants -> 400 scope is required (non-empty string)
+DELETE /v1/auth/keys/-1/grants -> 400 scope is required (non-empty string)
+PUT /v1/auth/keys/-1/grants -> 404 not found
+GET /v1/auth/keys/%31/grants -> 404 not found
+POST /v1/auth/keys/%31/grants -> 400 scope is required (non-empty string)
+DELETE /v1/auth/keys/%31/grants -> 400 scope is required (non-empty string)
+PUT /v1/auth/keys/%31/grants -> 404 not found
+GET /v1/auth/keys//grants -> 404 not found
+POST /v1/auth/keys//grants -> 404 not found
+DELETE /v1/auth/keys//grants -> 404 not found
+PUT /v1/auth/keys//grants -> 404 not found
+GET /v1/auth/keys/1/grants/ -> 404 not found
+POST /v1/auth/keys/1/grants/ -> 404 not found
+DELETE /v1/auth/keys/1/grants/ -> 404 not found
+PUT /v1/auth/keys/1/grants/ -> 404 not found

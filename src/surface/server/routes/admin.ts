@@ -3,8 +3,10 @@ import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT, MAX_ID_LEN } from '../../../base/u
 import {
   auditList,
   authCreate,
+  authGrant,
   authListRows,
   authRevoke,
+  authUngrant,
   quarantineApprove,
   quarantineList,
   quarantineReject,
@@ -20,6 +22,7 @@ import {
   isSetMember,
   parseJsonObjectText,
   parseLimitParam,
+  requiredString,
   validateIdSegment,
 } from '../validation.js';
 import { isJsonBoolean, isJsonNumber } from '../../../base/util/json.js';
@@ -119,6 +122,36 @@ export async function handleRevokeAuthKey(
   validateIdSegment(keyId, 'key id');
   const result = await authRevoke(ctx, keyId);
   sendJson(res, 200, result);
+  return;
+}
+
+// POST /v1/auth/keys/:keyId/grants {"scope"}: the scope rides in the body, since it holds ':' and
+// so cannot sit in the path. authGrant answers the tenant, role and scope-shape errors.
+export async function handleGrantAuthKeyScope(
+  { req, res, opts }: AuthedRouteRequest,
+  { keyId }: RouteParams,
+): Promise<void> {
+  const raw = await readBody(req, {
+    maxBytes: MINT_BODY_MAX_BYTES,
+    deadlineMs: opts.mintBodyDeadlineMs ?? MINT_BODY_DEADLINE_MS,
+  });
+  const ctx = await recheckContextWithAuth(req, opts);
+  validateIdSegment(keyId, 'key id');
+  const scope = requiredString(parseJsonObjectText(raw), 'scope', { max: MAX_ID_LEN });
+  await authGrant(ctx, keyId, scope);
+  sendJson(res, 200, { keyId, scope, granted: true });
+  return;
+}
+
+// DELETE /v1/auth/keys/:keyId/grants?scope=: removes one grant; the same errors as the grant.
+export async function handleUngrantAuthKeyScope(
+  { res, ctx, query }: AuthedRouteRequest,
+  { keyId }: RouteParams,
+): Promise<void> {
+  validateIdSegment(keyId, 'key id');
+  const scope = requiredString({ scope: query.get('scope') }, 'scope', { max: MAX_ID_LEN });
+  await authUngrant(ctx, keyId, scope);
+  sendJson(res, 200, { keyId, scope, granted: false });
   return;
 }
 
