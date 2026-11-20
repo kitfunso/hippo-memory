@@ -14,6 +14,7 @@ const JSON_MANIFESTS = [
   'server.json',
   'gemini-extension.json',
   'extensions/kiro-power/plugin.json',
+  'extensions/vscode/package.json',
 ];
 
 for (const path of JSON_MANIFESTS) {

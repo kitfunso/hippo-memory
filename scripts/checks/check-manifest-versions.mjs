@@ -34,6 +34,7 @@ const LOCKSTEP_MANIFESTS = [
   'server.json',
   'gemini-extension.json',
   'extensions/kiro-power/plugin.json',
+  'extensions/vscode/package.json',
 ];
 
 /**

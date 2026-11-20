@@ -29,6 +29,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
   mkdirSync(join(root, 'extensions', 'openclaw-plugin'), { recursive: true });
   mkdirSync(join(root, 'extensions', 'kiro-power'), { recursive: true });
+  mkdirSync(join(root, 'extensions', 'vscode'), { recursive: true });
   mkdirSync(join(root, 'src', 'base', 'util'), { recursive: true });
   for (const path of [
     'package.json',
@@ -38,6 +39,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
     'server.json',
     'gemini-extension.json',
     'extensions/kiro-power/plugin.json',
+    'extensions/vscode/package.json',
   ]) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
   }
