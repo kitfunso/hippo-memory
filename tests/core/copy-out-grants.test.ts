@@ -5,7 +5,7 @@ import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { Actor } from '../../src/api/types.js';
 import { promote } from '../../src/api/memories/promote.js';
-import { ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
+import { ForbiddenError, memoryNotFoundText, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -64,8 +64,8 @@ describe('promote and share on a restricted row', () => {
   });
 
   it('answers a member with no grant as it answers a missing id', async () => {
-    await expect(share(UNGRANTED, 'mem_absent')).rejects.toThrow('Memory not found: mem_absent');
-    await expect(share(UNGRANTED)).rejects.toThrow(`Memory not found: ${row.id}`);
+    await expect(share(UNGRANTED, 'mem_absent')).rejects.toThrow(memoryNotFoundText('mem_absent'));
+    await expect(share(UNGRANTED)).rejects.toThrow(memoryNotFoundText(row.id));
     await expect(share(UNGRANTED)).rejects.toBeInstanceOf(NotFoundError);
     await expect(promote(apiCtx(root, 'default', UNGRANTED), row.id)).rejects.toBeInstanceOf(NotFoundError);
   });

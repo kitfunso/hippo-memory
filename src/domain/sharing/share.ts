@@ -1,6 +1,6 @@
 // Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
 
-import { BadRequestError } from '../../base/errors/api-errors.js';
+import { BadRequestError, memoryNotFoundText } from '../../base/errors/api-errors.js';
 import * as path from 'node:path';
 import {
   MemoryEntry,
@@ -192,7 +192,7 @@ export async function shareMemory(
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
   // Before toGlobalEntry, whose personal-row refusal would tell another person the id exists; a
   // missing id and an unreachable one answer alike.
-  assertCopyRight(scopeReaderOf(options.actor), entry, id, `Memory not found: ${id}`);
+  assertCopyRight(scopeReaderOf(options.actor), entry, id, memoryNotFoundText(id));
 
   // Built first because it throws for a row that may not be shared, ahead of the held-text answer.
   const globalEntry = toGlobalEntry(
