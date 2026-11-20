@@ -276,8 +276,7 @@ function runtimeNames(): Record<string, string[]> {
     "for (const sub of ['server', 'store-kit']) names[sub] = Object.keys(await import('hippo-memory/' + sub));",
     'console.log(JSON.stringify(names));',
   ].join('\n');
-  // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-  return runModuleScript(script) as Record<string, string[]>;
+  return runModuleScript<Record<string, string[]>>(script);
 }
 
 /** Every name the built .d.ts file exports, type-only ones included. */
@@ -331,8 +330,7 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
       '  authCreate: typeof authCreate,',
       '}));',
     ].join('\n');
-    // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-    const out = runModuleScript(script) as Record<string, boolean | string>;
+    const out = runModuleScript<Record<string, boolean | string>>(script);
     expect(out).toEqual({
       localHost: true,
       rebound: false,

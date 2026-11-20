@@ -8,7 +8,7 @@ export function interleaveRows<R extends { readonly id: string }>(
   const out = new Map<string, R>();
   for (let i = 0; out.size < limit && i < Math.max(a.length, b.length); i++) {
     for (const row of [a[i], b[i]]) {
-      if (row !== undefined && out.size < limit) out.set(row.id, row);
+      if (row !== undefined && (out.size < limit || out.has(row.id))) out.set(row.id, row);
     }
   }
   return [...out.values()];

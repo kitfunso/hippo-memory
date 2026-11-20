@@ -17,7 +17,7 @@ hippo-enterprise serves hippo from a Postgres store and imports 122 core names. 
 - `hippo-memory/store-kit` adds `initStore` (with no runtime or session option) and the write and search helpers a store on another database needs to match core rows: `duplicateHash`, `isoInstant`, `sortableStamp`, `partitionCjkTerms`, `cjkIndexTerms`, `interleaveRows`, `splitLikeTerms`, the three window constants, `RECALL_ONLY_TAGS`, `auditRowsRead` and `RawAppendOnlyError`.
 - `entryAfterOutcome` takes an optional `now`, so a store scores an outcome at its own clock.
 - `folderIndex` moves to `src/surface/folder-index.ts`, so one module builds the embed target for `eval-scripts`, the eval kit and `server`. `server` never imports `eval-scripts.ts`, which builds rerankers at load.
-- Each new name has a test through the package entry: a helper that core's own search or write path calls is checked against core's answer, and a constant or pure helper against literal values. Each name also sits in the three export gates: the exact-set test, the inline snapshot and `check:dts`.
+- Each new `store-kit` name has a test through the package entry. `initStore`, `duplicateHash`, `isoInstant`, `entryAfterOutcome`, `auditRowsRead`, `RawAppendOnlyError` and `interleaveRows` are checked against what core itself writes or returns. The window constants, `RECALL_ONLY_TAGS`, `sortableStamp`, `splitLikeTerms`, `partitionCjkTerms` and `cjkIndexTerms` are checked against literal values. Each name also sits in the three export gates: the exact-set test, the inline snapshot and `check:dts`.
 
 ## Alternatives considered
 - **Put the helpers on `server`:** the add-on API stays smaller, but it breaks the 2026-10-11 split.

@@ -700,8 +700,7 @@ describe('package surface', () => {
       "const names = ['appendAuditEvent','listAuditEvents','AUDIT_OPS'];",
       'console.log(JSON.stringify({ url, serve: typeof srv.serve, authRevoke: typeof srv.authRevoke, authCreateSelf: typeof srv.authCreateSelf, isReservedActor: typeof srv.isReservedActor, forbidden: typeof srv.ForbiddenError, leaked: names.filter((n) => idx[n] !== undefined), indexServe: "serve" in idx }));',
     ].join('\n');
-    // SAFETY: the child script above is the only writer of the last stdout line and always emits these keys.
-    const out = runModuleScript(script) as {
+    const out = runModuleScript<{
       url: string;
       serve: string;
       authRevoke: string;
@@ -710,7 +709,7 @@ describe('package surface', () => {
       forbidden: string;
       leaked: string[];
       indexServe: boolean;
-    };
+    }>(script);
     expect(out.authRevoke).toBe('function');
     expect(out.authCreateSelf).toBe('function');
     expect(out.isReservedActor).toBe('function');

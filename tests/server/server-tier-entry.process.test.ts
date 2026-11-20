@@ -276,11 +276,12 @@ describe('store-kit pure helpers', () => {
       sortableUnreadable: ['sortableStamp', 'not a date'],
       splitIndexed: ['splitLikeTerms', ['ab', 'abc', '数据', '数据库', '𠀀𠀀'], true],
       splitUnindexed: ['splitLikeTerms', ['ab', 'abc', '数据库'], false],
-      interleaveEmptyB: ['interleaveRows', rows('a', 'a', 'b'), [], 1],
-      interleaveEmptyA: ['interleaveRows', [], rows('c', 'c'), 1],
+      interleaveEmptyB: ['interleaveRows', rows('a', 'a', 'b'), [], 5],
+      interleaveEmptyA: ['interleaveRows', [], rows('c', 'c', 'd', 'e'), 2],
       interleaveRepeat: ['interleaveRows', rows('a', 'b', 'c'), rows('b', 'd'), 3],
       interleaveMidPair: ['interleaveRows', rows('a', 'c'), rows('b', 'd'), 3],
       interleaveLongTail: ['interleaveRows', rows('a'), rows('b', 'c', 'd'), 10],
+      interleaveLastRowFull: ['interleaveRows', [{ id: 'a', n: 1 }], [{ id: 'a', n: 2 }], 1],
       interleaveLastRow: [
         'interleaveRows',
         [{ id: 'a', n: 1 }],
@@ -320,11 +321,12 @@ describe('store-kit pure helpers', () => {
       { id: 'a', n: 2 },
       { id: 'b', n: 3 },
     ]);
+    expect(out['interleaveLastRowFull']).toEqual([{ id: 'a', n: 2 }]);
   });
 
   it('interleaveRows keeps the limit and the one-id rule when one list is empty', () => {
-    expect(out['interleaveEmptyB']).toEqual(rows('a'));
-    expect(out['interleaveEmptyA']).toEqual(rows('c'));
+    expect(out['interleaveEmptyB']).toEqual(rows('a', 'b'));
+    expect(out['interleaveEmptyA']).toEqual(rows('c', 'd'));
   });
 
   it('publishes the window sizes and the recall-only tags', () => {
