@@ -112,11 +112,16 @@ describe('grant routes', () => {
     expect((await call('DELETE', member.keyId, admin, 'team:eng')).status).toBe(400);
   });
 
-  it('refuses a missing, blank or over-long scope with a 400', async () => {
+  it('refuses a missing, blank, padded or over-long scope with a 400', async () => {
     const member = mint('member');
     for (const method of ['POST', 'DELETE'] as const) {
       expect((await call(method, member.keyId, admin)).status).toBe(400);
       expect((await call(method, member.keyId, admin, '  ')).status).toBe(400);
+      for (const padded of [` ${S2}`, `${S2} `]) {
+        const reply = await call(method, member.keyId, admin, padded);
+        expect(reply.status).toBe(400);
+        expect(reply.body.error).toBe('scope must not start or end with a space');
+      }
       expect((await call(method, member.keyId, admin, 'x'.repeat(MAX_ID_LEN + 1))).status).toBe(400);
     }
   });

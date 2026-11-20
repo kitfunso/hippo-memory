@@ -125,6 +125,12 @@ export async function handleRevokeAuthKey(
   return;
 }
 
+// A padded scope would store a grant no row matches, so it is a 400 like any other bad scope.
+function unpaddedScope(scope: string): string {
+  if (scope !== scope.trim()) throw new HttpError(400, 'scope must not start or end with a space');
+  return scope;
+}
+
 // POST /v1/auth/keys/:keyId/grants {"scope"}: the scope rides in the body, since it holds ':' and
 // so cannot sit in the path. authGrant answers the tenant, role and scope-shape errors.
 export async function handleGrantAuthKeyScope(
@@ -137,7 +143,9 @@ export async function handleGrantAuthKeyScope(
   });
   const ctx = await recheckContextWithAuth(req, opts);
   validateIdSegment(keyId, 'key id');
-  const scope = requiredString(parseJsonObjectText(raw), 'scope', { max: MAX_ID_LEN });
+  const scope = unpaddedScope(
+    requiredString(parseJsonObjectText(raw), 'scope', { max: MAX_ID_LEN }),
+  );
   await authGrant(ctx, keyId, scope);
   sendJson(res, 200, { keyId, scope, granted: true });
   return;
@@ -149,7 +157,9 @@ export async function handleUngrantAuthKeyScope(
   { keyId }: RouteParams,
 ): Promise<void> {
   validateIdSegment(keyId, 'key id');
-  const scope = requiredString({ scope: query.get('scope') }, 'scope', { max: MAX_ID_LEN });
+  const scope = unpaddedScope(
+    requiredString({ scope: query.get('scope') }, 'scope', { max: MAX_ID_LEN }),
+  );
   await authUngrant(ctx, keyId, scope);
   sendJson(res, 200, { keyId, scope, granted: false });
   return;
