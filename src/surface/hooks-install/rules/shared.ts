@@ -67,6 +67,12 @@ export function defaultPreCompactLogPath(homes: Homes): string {
   return path.join(userHome(homes), HIPPO_DIR, 'logs', 'pre-compact.log');
 }
 
+/** The record of the hooks hippo has put in each settings file, so an install can tell a hook the
+ * user removed from one it never added. */
+export function installedHooksPathOn(homes: Homes): string {
+  return path.join(userHome(homes), HIPPO_DIR, 'installed-hooks.json');
+}
+
 /** Where `hippo note-written` logs each import; overridden by `--log-file`. */
 export function defaultNoteWrittenLogPath(homes: Homes): string {
   return path.join(userHome(homes), HIPPO_DIR, 'logs', 'note-written.log');

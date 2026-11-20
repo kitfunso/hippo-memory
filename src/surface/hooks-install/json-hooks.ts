@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
-import { type JsonValue } from '../../base/util/json.js';
+import { type JsonValue, isJsonObjectLiteral, isJsonString } from '../../base/util/json.js';
 import { readJsonFile, tryReadJsonFile } from '../../host/json-file.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { processHomes } from '../../host/agent-homes.js';
@@ -19,6 +19,7 @@ import {
 import {
   defaultNoteWrittenLogPath,
   defaultPreCompactLogPath,
+  installedHooksPathOn,
   sleepLogPathOn,
   type JsonHookTarget,
 } from './rules/shared.js';
@@ -47,26 +48,74 @@ function readSettings(file: string): JsonValue | undefined {
   return fs.existsSync(file) ? tryReadJsonFile(file) : {};
 }
 
+/** Each settings file path with the markers of the hippo hooks installed there. */
+type InstalledHooks = Map<string, string[]>;
+
+/** The record of installed hooks; a missing or malformed file reads as empty. */
+function readInstalledHooks(): InstalledHooks {
+  const file = installedHooksPathOn(processHomes());
+  if (!fs.existsSync(file)) return new Map();
+  const parsed = tryReadJsonFile(file);
+  if (!isJsonObjectLiteral(parsed)) {
+    log.warn(`${file} is not a JSON object, so hippo reads it as empty`);
+    return new Map();
+  }
+  return new Map(
+    Object.entries(parsed).flatMap(([settingsPath, markers]) =>
+      Array.isArray(markers) ? [[settingsPath, markers.filter(isJsonString)]] : [],
+    ),
+  );
+}
+
+/** A record that cannot be saved costs only a hook the user removed coming back, so it warns. */
+function saveInstalledHooks(record: InstalledHooks): void {
+  const file = installedHooksPathOn(processHomes());
+  try {
+    writeFileAtomic(file, `${JSON.stringify(Object.fromEntries(record), null, 2)}\n`);
+  } catch (err) {
+    log.warn(
+      `could not save the record of installed hooks in ${file}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+  }
+}
+
+/** Drops the record of the hooks installed in `target`'s settings file, so the next install adds
+ * back every hook the file lacks. */
+export function forgetInstalledHooks(target: 'claude-code' | 'codex'): void {
+  const { settings } = resolveJsonHookPaths(target);
+  const record = readInstalledHooks();
+  if (record.delete(settings)) saveInstalledHooks(record);
+}
+
 /** Adds hippo's hooks to `target`'s settings file and migrates older hippo entries; a file that
- * is not JSON stays untouched. */
+ * is not JSON stays untouched. A hook the user removed after an earlier install is not added back
+ * until `forgetInstalledHooks`. */
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
   const paths = resolveJsonHookPaths(target);
   const dir = path.dirname(paths.settings);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const plan =
-    target === 'copilot'
-      ? planCopilotHooks(
-          paths.settings,
-          fs.existsSync(paths.settings) ? fs.readFileSync(paths.settings, 'utf8') : null,
-        )
-      : planJsonHooks(
-          target,
-          paths,
-          readSettings(paths.settings),
-          defaultPreCompactLogPath(processHomes()),
-          defaultNoteWrittenLogPath(processHomes()),
-        );
+  if (target === 'copilot') {
+    const current = fs.existsSync(paths.settings) ? fs.readFileSync(paths.settings, 'utf8') : null;
+    const plan = planCopilotHooks(paths.settings, current);
+    if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
+    return plan.result;
+  }
+  const record = readInstalledHooks();
+  // A deleted settings file took every hook with it, which is a fresh start rather than removals.
+  const recorded = new Set(fs.existsSync(paths.settings) ? record.get(paths.settings) : []);
+  const logs = {
+    ...paths,
+    compactLog: defaultPreCompactLogPath(processHomes()),
+    noteLog: defaultNoteWrittenLogPath(processHomes()),
+  };
+  const plan = planJsonHooks(target, logs, readSettings(paths.settings), recorded);
   if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
+  const installed = new Set([...recorded, ...plan.present]);
+  if (installed.size > recorded.size) {
+    record.set(paths.settings, [...installed]);
+    saveInstalledHooks(record);
+  }
   return plan.result;
 }
 
@@ -91,6 +140,9 @@ function readForRemoval(settingsPath: string): JsonValue | undefined {
  * handler; true when the file changed. */
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
+  // After uninstall the next install starts fresh, so it must not leave out a hook the user once
+  // removed.
+  if (target !== 'copilot') forgetInstalledHooks(target);
   if (!fs.existsSync(settingsPath)) return false;
   if (target === 'copilot') {
     // Copilot reads every file in its hooks folder, so hippo's own file goes whole and the user's

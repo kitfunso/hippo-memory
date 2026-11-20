@@ -440,7 +440,7 @@ export const SESSION_VERBS = {
     },
   ),
   hook: verb(() => import('../hook.js'), 'handleHook', {
-    flags: {},
+    flags: { switches: ['force'] },
     usage: [
       `
   hook <sub> [target]      Manage framework integrations
@@ -453,6 +453,7 @@ export const SESSION_VERBS = {
                            hooks/hippo.json, the "hippo" MCP server and an instructions
                            block under $COPILOT_HOME (~/.copilot by default); all but
                            claude-code and copilot also patch an existing AGENTS.md
+    hook install <target> --force  Also replace an edited hippo block and add back hooks you removed
     hook uninstall <target> Remove hook; for copilot, only what hippo wrote`,
     ],
   }),

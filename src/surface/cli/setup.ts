@@ -14,6 +14,7 @@ import { boolFlag, type CommandContext } from './flag-values.js';
 import { printAgentImport } from './print.js';
 import {
   installCodexMemoryHooks,
+  printLeftOutHooks,
   setupDailySchedule,
   warnClaudeSettingsUnusable,
 } from './install-steps.js';
@@ -143,6 +144,7 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   } else {
     console.log(`  ${tool.name.padEnd(14)} ${bits.join(', ')} -> ${result.settingsPath}`);
   }
+  printLeftOutHooks(result, `  ${tool.name.padEnd(14)} `);
 }
 
 function setupWrapperTool(tool: ToolDetection, dryRun: boolean): void {

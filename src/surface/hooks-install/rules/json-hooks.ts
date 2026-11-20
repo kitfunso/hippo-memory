@@ -51,6 +51,8 @@ export interface InstallResult {
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
   migratedSplitSessionEnd: boolean;
+  /** Hippo hooks the user removed after an earlier install, which this install did not add back. */
+  leftOut: readonly string[];
   /** The file exists but is not JSON hippo can merge into, so it was left untouched. */
   invalidJson: boolean;
 }
@@ -92,7 +94,7 @@ export function settingsText(settings: JsonValue): string {
 export function planCopilotHooks(settingsPath: string, current: string | null): HookInstallPlan {
   const result = nothingInstalled('copilot', settingsPath);
   const table = copilotHooksTable();
-  if (current === settingsText(table)) return { result, write: null };
+  if (current === settingsText(table)) return { result, write: null, present: [] };
   return {
     result: {
       ...result,
@@ -102,32 +104,40 @@ export function planCopilotHooks(settingsPath: string, current: string | null): 
       installedSessionEnd: true,
     },
     write: table,
+    present: [],
   };
 }
 
+/** A target's paths plus where the compaction hooks log (`compactLog`) and where the note hook does
+ * (`noteLog`). */
+type JsonHookLogs = Pick<JsonHookPaths, 'settings' | 'logFile'> & {
+  readonly compactLog: string;
+  readonly noteLog: string;
+};
+
 /** Adds hippo's hooks to parsed settings, which it edits in place, and migrates older hippo
- * entries; `settings` is undefined for a file that is not JSON, which stays untouched.
- * `compactLog` is where the compaction hooks log, `noteLog` where the note hook does. */
+ * entries; `settings` is undefined for a file that is not JSON, which stays untouched. A hook
+ * whose marker is in `recorded` and that the file lacks was removed by the user, so it stays out. */
 export function planJsonHooks(
   target: 'claude-code' | 'codex',
-  paths: Pick<JsonHookPaths, 'settings' | 'logFile'>,
+  paths: JsonHookLogs,
   settings: JsonValue | undefined,
-  compactLog: string,
-  noteLog: string,
+  recorded: ReadonlySet<string>,
 ): HookInstallPlan {
   const invalid = {
     result: { ...nothingInstalled(target, paths.settings), invalidJson: true },
     write: null,
+    present: [],
   };
   if (settings === undefined) return invalid;
-  if (target === 'codex') return planCodexHooks(paths.settings, settings);
+  if (target === 'codex') return planCodexHooks(paths.settings, settings, recorded);
   if (!isJsonObjectLiteral(settings)) return invalid;
-  return planClaudeCodeHooks(settings, {
-    settingsPath: paths.settings,
-    logFile: paths.logFile,
-    compactLog,
-    noteLog,
-  });
+  const { compactLog, noteLog } = paths;
+  return planClaudeCodeHooks(
+    settings,
+    { settingsPath: paths.settings, logFile: paths.logFile, compactLog, noteLog },
+    recorded,
+  );
 }
 
 /** What uninstall does to parsed settings, edited in place: the settings to write (null when

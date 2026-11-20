@@ -378,7 +378,9 @@ describe('hippo init on a file that already has a hippo block', () => {
     write('CLAUDE.md', edited);
     const out = await init();
     expect(read('CLAUDE.md')).toBe(edited);
-    expect(out).toContain('Left the edited hippo block in CLAUDE.md as is');
+    expect(out).toContain(
+      'Left the edited hippo block in CLAUDE.md as is; `hippo hook install claude-code --force` replaces it.',
+    );
     expect(out).not.toContain('Refreshed');
   });
 
@@ -479,5 +481,52 @@ describe('hippo init on a file that already has a hippo block', () => {
     const out = await init();
     expect(read('CLAUDE.md')).toBe(once);
     expect(out).not.toMatch(/Refreshed|Left the edited/);
+  });
+});
+
+describe('hippo hook install claude-code on a file that already has a hippo block', () => {
+  const settings = () => path.join(home, '.claude', 'settings.json');
+  const edited = `# Rules\n\n${START}\n${OLD_CLAUDE}\nAlso run the linter.\n${END}\n\nKeep this line.\n`;
+
+  it('keeps an edited block byte for byte and says --force replaces it', async () => {
+    write('CLAUDE.md', edited);
+    const out = await hippo(proj, 'hook', 'install', 'claude-code');
+    expect(read('CLAUDE.md')).toBe(edited);
+    expect(out).toContain(
+      'Left the edited hippo block in CLAUDE.md as is; `hippo hook install claude-code --force` replaces it.',
+    );
+    expect(out).not.toContain('Updated Hippo hook');
+  });
+
+  it('with --force replaces the edited block and adds back a hook the user removed', async () => {
+    write('CLAUDE.md', edited);
+    await hippo(proj, 'hook', 'install', 'claude-code');
+    const removed = JSON.parse(fs.readFileSync(settings(), 'utf8'));
+    delete removed.hooks.UserPromptSubmit;
+    fs.writeFileSync(settings(), JSON.stringify(removed));
+    expect(await hippo(proj, 'hook', 'install', 'claude-code')).toContain(
+      'Left out the `hippo context --pinned-only` hook you removed from ' +
+        `${settings()}; \`hippo hook install claude-code --force\` adds it back.`,
+    );
+    expect(JSON.parse(fs.readFileSync(settings(), 'utf8')).hooks.UserPromptSubmit).toBeUndefined();
+
+    const out = await hippo(proj, 'hook', 'install', 'claude-code', '--force');
+
+    const after = read('CLAUDE.md');
+    expect(out).toContain('Updated Hippo hook in CLAUDE.md');
+    expect(inner(after)).toBe(HOOKS['claude-code'].content);
+    expect(outside(after)[0]).toBe(outside(edited)[0]);
+    expect(after).toContain('Keep this line.');
+    expect(out).toContain('Installed hippo pinned-inject UserPromptSubmit hook');
+    expect(JSON.parse(fs.readFileSync(settings(), 'utf8')).hooks.UserPromptSubmit).toHaveLength(1);
+  });
+
+  it('still refreshes an unedited block from an earlier hippo without --force', async () => {
+    write('CLAUDE.md', `# Rules\n\n${START}\n${OLD_CLAUDE}\n${END}\n\nKeep this line.\n`);
+    const out = await hippo(proj, 'hook', 'install', 'claude-code');
+    expect(inner(read('CLAUDE.md'))).toBe(HOOKS['claude-code'].content);
+    expect(read('CLAUDE.md')).toContain('Keep this line.');
+    expect(out).toContain('Updated Hippo hook in CLAUDE.md');
+    expect(out).not.toContain('Left the edited');
   });
 });
