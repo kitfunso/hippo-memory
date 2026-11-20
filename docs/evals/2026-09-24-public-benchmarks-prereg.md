@@ -950,3 +950,11 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **Board.** The board's hippo cell changes only after Keith approves it.
 
 **Command.** `python -c "import json;[print(r['idx'],r['task'],r.get('reward'),r['infra'],r.get('exception')) for r in map(json.loads,open('runs/tbench-r1-emb/progress.jsonl'))]"` from `hippo-bench`.
+
+### Amendment 6, dated notes 33 (2026-11-20, at 22:28Z, before any call past the free daily tokens): the OpenAI API credit grant pays past the free tokens, capped at $90
+
+**Why.** Keith received a $100 OpenAI API credit grant, which expires on 20 Dec 2026, and said "use the credit". On the free daily tokens of dated notes 30 alone, HaluMem-Long needs months, and the OmniMemEval queue and PrefEval `hippo-cap` need weeks.
+
+**What changes.** Only who pays for a call past the free daily tokens. The wait for the next free day is off: `results-r2/openai-credit.env`, which the PrefEval `hippo-cap`, OmniMemEval queue and HaluMem-Long wrappers read, sets `OPENAI_FREE_DAILY_BIG` and `_SMALL` to 1,000,000,000. The spend cap `OPENAI_BENCH_CAP_USD` is the list-price USD logged in `logs/openai-spend.d` at the switch (102.17) plus 90, so 192.17: the three jobs together can log at most $90 more. Calls inside the free tokens count against the cap too, so the cap errs high. Models, prompts, data, top-k, judges and seeds do not change, so no score changes because of this note.
+
+**Read before this note.** The answer counts of PrefEval `hippo-cap` (100 of 1,000), HaluMem-Long `hippo-emb` (500 of 3,467) and OmniMemEval BEAM-10M. No score of these runs.
