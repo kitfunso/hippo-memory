@@ -235,6 +235,24 @@ export function assertWriteRight(
 const WRITTEN_BY_ANOTHER =
   'was written by someone else: change it with the key that wrote it or an admin key';
 
+/** Promote and share keep a restricted row's scope on the global copy, so a read grant is not
+ * enough to copy one: only an admin or the member who owns the row. Out of reach reads as missing;
+ * any other row copies as before. */
+export function assertCopyRight(
+  reader: ScopeReader,
+  row: WrittenRow | undefined,
+  id: string,
+  missing: string,
+): asserts row is WrittenRow {
+  if (!row || !readerReaches(reader, row.scope)) throw new NotFoundError(missing);
+  if (!isRestrictedScope(row.scope) || readerMayChange(reader, row)) return;
+  const fix =
+    row.owner === null
+      ? 'records no writer: copy it with an admin key'
+      : 'was written by someone else: copy it with the key that wrote it or an admin key';
+  throw new ForbiddenError(`memory ${id} ${fix}`);
+}
+
 /** A by-id write's target as a reader: with no role it reads as a member key, so it fails closed
  * on restricted rows. */
 export function targetReader(
