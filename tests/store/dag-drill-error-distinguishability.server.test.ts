@@ -20,6 +20,8 @@ import { serveKeyed } from '../_helpers/keyed-server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry } from '../_helpers/root-forms.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { createApiKey, grantScope } from '../../src/store/sqlite/keys/auth.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -230,5 +232,49 @@ describe('HTTP path-segment validation', () => {
     // on the first `?` confines the check to the pathname.
     const res = await fetch(`${handle.url}/v1/memories?q=https%3A%2F%2Fexample.com`);
     expect(res.status).toBe(200);
+  });
+});
+
+describe('drillDown for a member key on a restricted summary', () => {
+  const SCOPE = 'slack:private:CSEC';
+  let home: string;
+  let handle: ServerHandle;
+  let summaryId: string;
+  beforeEach(async () => {
+    home = makeRoot('v164-member');
+    handle = await serveKeyed({ hippoRoot: home, port: 0 }, serve);
+    const s = makeSummary('private topic', { scope: SCOPE });
+    writeEntry(home, s);
+    summaryId = s.id;
+  });
+  afterEach(async () => {
+    await handle.stop();
+    safeRmSync(home);
+  });
+
+  function memberKey(grants: readonly string[]): string {
+    const db = openHippoDb(home);
+    try {
+      const { plaintext, keyId } = createApiKey(db, { tenantId: 'default', label: 'member-test', role: 'member' });
+      for (const scope of grants) grantScope(db, keyId, scope);
+      return plaintext;
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  const drill = (key: string): Promise<Response> =>
+    fetch(`${handle.url}/v1/recall/drill/${summaryId}`, { headers: { authorization: `Bearer ${key}` } });
+
+  it('404 with no grant, as for an admin', async () => {
+    expect((await drill(memberKey([]))).status).toBe(404);
+  });
+
+  it('404 with a grant on another restricted scope', async () => {
+    expect((await drill(memberKey(['slack:private:COTHER']))).status).toBe(404);
+  });
+
+  it('200 with the exact grant', async () => {
+    expect((await drill(memberKey([SCOPE]))).status).toBe(200);
   });
 });
