@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hippo-memory": {
+      "command": "npx",
+      "args": ["-y", "hippo-memory", "mcp"]
+    }
+  }
+}
