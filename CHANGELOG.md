@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.10.0 - 2026-11-20
+
+### Added
+
+- **Admins can grant and revoke a member key's read of a private scope over HTTP.** `POST /v1/auth/keys/:keyId/grants` takes `{"scope": "..."}` and `DELETE /v1/auth/keys/:keyId/grants?scope=...` removes it. Both need an admin key.
+- **`hippo auth list` shows each key's grant scopes.** A key with none shows `-`.
+- **`hippo-memory/server` and `hippo-memory/store-kit` publish what a second store and a worker process call.** `server` adds `embedAll` and `folderIndex`, so a worker embeds a store's memories with the provider its config names. `store-kit` adds `initStore`, `duplicateHash`, `isoInstant`, `sortableStamp`, `partitionCjkTerms`, `cjkIndexTerms`, `interleaveRows`, `splitLikeTerms`, `LIKE_WINDOW_ROWS`, `LIKE_WINDOW_TERMS`, `SCHEMA_FIT_WINDOW_ROWS`, `RECALL_ONLY_TAGS`, `auditRowsRead` and `RawAppendOnlyError`, so a store on another database writes and searches rows as hippo.db does. `entryAfterOutcome` also takes an optional `now` in its rules.
+
+### Changed
+
+- **`hippo share` and MCP `hippo_share` now answer a missing id with `memory not found: <id>`.** It was `Memory not found: <id>`; promote already used the new text.
+- **`hippo auth grant` and the grant route refuse a scope with a leading or trailing space.** A padded scope is almost always a typing slip, and it would not reach the rows the admin meant. A grant stored that way before can still be removed as stored. A row whose scope was stored with a space cannot get a new grant.
+
+### Fixed
+
+- **A member key with a read grant could copy a private row it did not write.** Promote and share now need the owning key or an admin key. A key that only holds a read grant gets 403, and a row it cannot read still gets 404.
+- **A shared copy now names who made it.** The audit log shows the caller's subject, not `cli`.
+- **Drill-down hid a granted member's private summary.** It now opens the summary and shows the children in scopes the key may read. An admin key follows the same rule: it opens a restricted summary only with the exact grant.
+- **A reader thread can make the temp tables prompt recall needs.** The worker store set its readers read-only by a path the temp-table gate did not know, so prompt recall through `serve()` failed with "attempt to write a readonly database".
+- **Capture no longer pins a one-off order as your rule.** "Make sure", "ensure" or "must" on their own now keep the sentence as an unpinned note, which a matching prompt still brings back. A pinned rule needs words that outlast the task: an "always" or "never" that tells the agent what to do, a rule label such as "Important:", "from now on", "going forward", "in future" or "I have told you". A "never" that describes, as in "she has never used it", pins nothing. Before, "make sure there are no mistakes in the draft" was pinned and printed in every later session. A replay of 2,065 typed messages from 106 real sessions pinned 45 rules on 3.9.0 and 15 with this fix. Every message 3.9.0 pinned is still stored. The agent's own text is captured as before.
+- **`hippo hook install` no longer overwrites what you changed.** It replaced an edited hippo block in `CLAUDE.md` or `AGENTS.md`, and it added back a settings hook you had removed, such as the stock prompt hook you swapped for your own script. Now an edited block stays as it is, with a line that says so. Hippo records the hooks it installs in `~/.hippo/installed-hooks.json`, so a hook you removed stays out, and `hook install`, `init` and `setup` name it. `hippo hook install <agent> --force` replaces the block and adds the hooks back, and `hippo hook uninstall` clears the record. A hook you removed before this version has no record yet, so the first install after the upgrade adds it back once; remove it again and it stays out.
+
 ## 3.9.0 - 2026-11-19
 
 ### Added

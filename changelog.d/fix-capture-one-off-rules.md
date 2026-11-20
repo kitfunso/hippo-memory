@@ -1,3 +1,0 @@
-### Fixed
-
-- **Capture no longer pins a one-off order as your rule.** "Make sure", "ensure" or "must" on their own now keep the sentence as an unpinned note, which a matching prompt still brings back. A pinned rule needs words that outlast the task: an "always" or "never" that tells the agent what to do, a rule label such as "Important:", "from now on", "going forward", "in future" or "I have told you". A "never" that describes, as in "she has never used it", pins nothing. Before, "make sure there are no mistakes in the draft" was pinned and printed in every later session. A replay of 2,065 typed messages from 106 real sessions pinned 45 rules on 3.9.0 and 15 with this fix. Every message 3.9.0 pinned is still stored. The agent's own text is captured as before.
