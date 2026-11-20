@@ -82,7 +82,7 @@ describe('POST /mcp error replies', () => {
   it.skipIf(needsHippoDb('team'))('a typed NotFoundError keeps its message', async () => {
     const { body } = await callTool('hippo_share', { id: 'mem_does_not_exist' });
     expect(body.error?.code).toBe(-32603);
-    expect(body.error?.message).toBe('Memory not found: mem_does_not_exist');
+    expect(body.error?.message).toBe('memory not found: mem_does_not_exist');
     expect(body.error?.data).toBeUndefined();
   });
 });
