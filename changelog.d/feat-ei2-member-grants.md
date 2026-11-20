@@ -12,4 +12,4 @@
 ### Changed
 
 - **`hippo share` and MCP `hippo_share` now answer a missing id with `memory not found: <id>`.** It was `Memory not found: <id>`; promote already used the new text.
-- **`hippo auth grant` and the grant route refuse a scope with a leading or trailing space.** Such a grant matched no row. A grant stored that way before can still be removed as stored.
+- **`hippo auth grant` and the grant route refuse a scope with a leading or trailing space.** A padded scope is almost always a typing slip, and it would not reach the rows the admin meant. A grant stored that way before can still be removed as stored. A row whose scope was stored with a space cannot get a new grant.
