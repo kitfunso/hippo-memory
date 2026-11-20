@@ -924,3 +924,29 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **Effect on the pair.** In `tbench-r1` no trial of either arm had a grader timeout, so its reading does not change (`none` 9 of 10 on tasks 0 to 9). The rule reopens one `hippo` result that was a 0, so it can only help the `hippo` arm; the report gives both readings, with task 6 as 0 and as its try-3 result.
 
 **Read before this note.** `tbench-r1-emb` tasks 0 to 6 and task 7's unfinished try 1 (stopped at 09:25Z).
+
+### Result of Amendment 7, dated notes 2 to 4 (2026-11-20): `tbench-r1-emb`, the `hippo` arm with hippo 3.9.0 and its embedder
+
+**Run.** All 10 tasks ended at 10:17:05Z on 20 Nov (`runs/tbench-r1-emb/progress.jsonl`, 19 trial records; the wrapper logged `exit 0`). Infrastructure trials ran again by the rules above: task 3 (setup timeouts and one agent exit, try 5), task 5 (agent exit, try 2), task 6 (agent exit, then the grader timeout of dated notes 4, try 3), task 7 (stopped for the task 6 rerun, try 2) and task 8 (agent timeout, try 2). Task 8 try 1 got reward 1 but counts as infrastructure because the agent ran out of time, the same rule `tbench-r1` used for both arms; try 2 also passed.
+
+**Paired by task, tasks 0 to 9.**
+
+| Task | `hippo` 3.9.0 (`tbench-r1-emb`) | `none` (`tbench-r1`) | `hippo` 3.5.1 (`tbench-r1`) |
+|---|---|---|---|
+| 0 nginx-request-logging | 1 | 1 | 1 |
+| 1 rstan-to-pystan | 1 | 1 | 1 |
+| 2 build-pmars | 0 | 0 | 0 |
+| 3 fix-ocaml-gc | 1 | 1 | 1 |
+| 4 reshard-c4-data | 1 | 1 | 1 |
+| 5 merge-diff-arc-agi-task | 1 | 1 | 1 |
+| 6 pytorch-model-cli | 1 (try 3) | 1 | 1 |
+| 7 feal-differential-cryptanalysis | 1 | 1 | 1 |
+| 8 qemu-startup | 1 | 1 | 1 |
+| 9 dna-assembly | 1 | 1 | 0 |
+| **Total** | **9 of 10** | **9 of 10** | **8 of 10** |
+
+**Both readings of task 6.** With dated notes 4, `hippo` 3.9.0 passes 9 of 10 and ties `none` (9 of 10): no task differs. With task 6 read as 0 (the grader timeout before dated notes 4), `hippo` passes 8 of 10, one task under `none`. Each gap is one task or none, inside the noise of 10 tasks and 1 trial, so this run shows no difference between hippo and no memory on these tasks.
+
+**Board.** The board's hippo cell changes only after Keith approves it.
+
+**Command.** `python -c "import json;[print(r['idx'],r['task'],r.get('reward'),r['infra'],r.get('exception')) for r in map(json.loads,open('runs/tbench-r1-emb/progress.jsonl'))]"` from `hippo-bench`.
