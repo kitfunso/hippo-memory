@@ -83,10 +83,16 @@ def cost(model: str, usage: dict) -> float:
     return ((usage.get("prompt_tokens") or 0) * pin + (usage.get("completion_tokens") or 0) * pout) / 1e6
 
 
+def spend_dirs(folder: Path) -> set[Path]:
+    """Every spend folder of the account: gpt-5 logs to a folder of its own beside the shared one."""
+    return {folder, *folder.parent.glob("openai-spend*.d")}
+
+
 def spent(folder: Path, skip: Path | None = None) -> float:
-    """USD logged by every process's spend file but `skip`; a last line a kill cut short is not counted."""
+    """USD logged by every process's spend file in every spend folder but `skip`, so one cap covers the account;
+    a last line a kill cut short is not counted."""
     total = 0.0
-    for f in folder.glob("*.jsonl"):
+    for f in (f for d in spend_dirs(folder) for f in d.glob("*.jsonl")):
         if f != skip:
             raw = f.read_bytes()
             total += sum(json.loads(line)["usd"] for line in raw[:raw.rfind(b"\n") + 1].split(b"\n") if line.strip())
@@ -155,11 +161,8 @@ class FreeTokens:
         self.used: Counter = Counter()  # (UTC day, pool) -> tokens logged
         self.held: Counter = Counter()  # pool -> this client's worst cases in flight
 
-    def _dirs(self) -> set[Path]:
-        return {self.spend, *self.spend.parent.glob("openai-spend*.d")}  # gpt-5 logs to a folder of its own
-
     def _read(self) -> None:
-        for f in (f for d in self._dirs() for f in d.glob("*.jsonl")):
+        for f in (f for d in spend_dirs(self.spend) for f in d.glob("*.jsonl")):
             start = self.offsets.get(f, 0)
             if f.stat().st_size <= start:
                 continue
@@ -176,7 +179,7 @@ class FreeTokens:
     def _in_flight(self) -> Counter:
         """A killed client's file is dropped: its pid is gone, or it is older than any call can run."""
         total: Counter = Counter()
-        for f in (f for d in self._dirs() for f in d.glob("*.inflight")):
+        for f in (f for d in spend_dirs(self.spend) for f in d.glob("*.inflight")):
             try:
                 r = json.loads(f.read_bytes())
             except ValueError:  # cut short by a kill mid-write
@@ -304,7 +307,8 @@ class OpenAIChat(Claude):
             if time.monotonic() - self.summed_at > RESUM_S:
                 self.others, self.summed_at = spent(self.spend_dir, skip=self.spend_path), time.monotonic()
             if self.others + self.mine >= self.cap:
-                raise RuntimeError(f"openai spend cap: {self.others + self.mine:.2f} USD logged in {self.spend_dir}, "
+                raise RuntimeError(f"openai spend cap: {self.others + self.mine:.2f} USD logged in the spend folders of "
+                                   f"{self.spend_dir.parent}, "
                                    f"cap {self.cap:.2f} (OPENAI_BENCH_CAP_USD)")
 
     def _charge(self, model: str, usage: dict) -> float:

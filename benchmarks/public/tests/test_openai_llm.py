@@ -102,6 +102,17 @@ def test_no_call_starts_once_the_logged_spend_reaches_the_cap(tmp_path, wire):
     assert sent == []
 
 
+def test_the_cap_counts_the_gpt5_spend_folder_beside_the_shared_one(tmp_path, wire):
+    sent, queue = wire
+    (tmp_path / "openai-spend-gpt5.d").mkdir()
+    (tmp_path / "openai-spend-gpt5.d" / "gpt5.jsonl").write_text(json.dumps({"usd": 5.0}) + "\n")
+    llm = client(tmp_path, ol.Settings(MODEL), cap=5.0)
+    queue.append(ok())
+    with pytest.raises(RuntimeError, match="openai spend cap"):
+        llm.ask("", "p", effort=ol.EFFORT, tag="t")
+    assert sent == []
+
+
 def test_a_rate_limit_waits_and_is_no_ask_but_a_spent_quota_stops(tmp_path, wire):
     sent, queue = wire
     llm = client(tmp_path, ol.Settings(MODEL))
