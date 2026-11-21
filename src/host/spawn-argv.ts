@@ -4,7 +4,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
-import { envPath, envPathExt } from '../base/util/env.js';
+import { envPathDirs, envPathExt } from '../base/util/env.js';
 import { isFile } from './real-path.js';
 
 /** Quotes one cmd.exe argument; each `%` leaves the quotes as `^%`, so no %NAME% pair can
@@ -22,10 +22,15 @@ export function quoteCmdArg(arg: string): string {
   return `"${quoted.replace(/%/g, '"^%"')}"`;
 }
 
+// Always quoted, since `,` `;` `=` end an unquoted first token; `%` escaped as in quoteCmdArg.
+function quoteCmdProgram(shimPath: string): string {
+  return `"${shimPath.replace(/%/g, '"^%"')}"`;
+}
+
 /** cmd.exe arguments that run a .cmd or .bat shim with every forwarded argument delivered
  * verbatim. */
 export function cmdShimArgs(shimPath: string, forwardArgs: readonly string[]): string[] {
-  const command = `"${shimPath}"${forwardArgs.length > 0 ? ` ${forwardArgs.map(quoteCmdArg).join(' ')}` : ''}`;
+  const command = [quoteCmdProgram(shimPath), ...forwardArgs.map(quoteCmdArg)].join(' ');
   // The line is already quoted for cmd.exe, so Node must not quote it again; /s strips the outer
   // pair.
   return ['/d', '/v:off', '/s', '/c', `"${command}"`];
@@ -63,9 +68,7 @@ const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
  */
 function resolveWindowsCommand(command: string): string | null {
   const exts = (envPathExt() ?? DEFAULT_PATHEXT).split(';').filter((ext) => ext.length > 0);
-  const dirs = /[\\/]/.test(command)
-    ? ['']
-    : (envPath() ?? '').split(path.delimiter).filter((dir) => dir.length > 0);
+  const dirs = /[\\/]/.test(command) ? [''] : envPathDirs();
   for (const dir of dirs) {
     const base = dir === '' ? command : path.join(dir, command);
     const candidates =

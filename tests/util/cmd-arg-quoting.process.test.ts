@@ -2,7 +2,7 @@
 // %VAR% even inside double quotes, so an argument must reach the program byte for byte.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -76,6 +76,19 @@ describe('quoteCmdArg', () => {
       expect(r.stderr).toBe('');
       expect(JSON.parse(r.stdout.trim())).toEqual(TRICKY_ARGS);
     });
+
+    it('runs a shim whose folder name holds a set %NAME% pair', () => {
+      const pct = join(dir, 'pct %HIPPO_PCT_PROBE%');
+      mkdirSync(pct);
+      writeFileSync(join(pct, 'shim.cmd'), `@node "${join(dir, 'print.js')}" %*\r\n`);
+      const r = spawnSync('cmd.exe', cmdShimArgs(join(pct, 'shim.cmd'), ['x']), {
+        env: { ...process.env, HIPPO_PCT_PROBE: 'gone' },
+        windowsVerbatimArguments: true,
+        encoding: 'utf8',
+      });
+      expect(r.stderr).toBe('');
+      expect(JSON.parse(r.stdout.trim())).toEqual(['x']);
+    });
   });
 });
 
@@ -96,6 +109,27 @@ describe.skipIf(process.platform !== 'win32')('spawnArgv command lookup', () => 
       expect(existsSync(marker)).toBe(false);
     } finally {
       cwd.mockRestore();
+      vi.unstubAllEnvs();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('finds a shim on a quoted PATH entry, as cmd.exe does', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hippo-quoted-path-'));
+    writeFileSync(join(dir, 'print.js'), 'console.log(JSON.stringify(process.argv.slice(2)));\n');
+    writeFileSync(join(dir, 'quotedtool.cmd'), '@node "%~dp0print.js" %*\r\n');
+    vi.stubEnv('PATH', `"${dir}";${process.env.PATH ?? ''}`);
+    try {
+      const child = spawnArgv(['quotedtool', 'a'], { stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout?.on('data', (d: Buffer) => (out += d.toString()));
+      const exit = await new Promise<number | string>((resolve) => {
+        child.on('error', (e: NodeJS.ErrnoException) => resolve(e.code ?? 'error'));
+        child.on('exit', (code) => resolve(code ?? -1));
+      });
+      expect(exit).toBe(0);
+      expect(JSON.parse(out.trim())).toEqual(['a']);
+    } finally {
       vi.unstubAllEnvs();
       rmSync(dir, { recursive: true, force: true });
     }
