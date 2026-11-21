@@ -12,7 +12,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write   # OIDC login proves the io.github.kitfunso namespace; no secret needed
@@ -21,10 +21,17 @@ jobs:
       MCP_PUBLISHER_SHA256: 32d287ed6fb7dc04eddd2621097784c06a355b2348b35ccc630a1643aa75ff4a
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # npm shows a new version some minutes after the publish job ends, so wait for it.
       - name: server.json version is on npm
         run: |
           version="$(jq -r .version server.json)"
-          npm view "hippo-memory@$version" version > /dev/null || { echo "hippo-memory@$version is not on npm yet"; exit 1; }
+          for try in $(seq 1 30); do
+            npm view "hippo-memory@$version" version --prefer-online > /dev/null 2>&1 && exit 0
+            echo "hippo-memory@$version is not on npm yet (check $try of 30), next check in 20 s"
+            sleep 20
+          done
+          echo "hippo-memory@$version is still not on npm after 10 minutes. Re-run this job when npm shows it."
+          exit 1
       - name: Download mcp-publisher
         run: |
           curl -fsSL -o mcp-publisher.tar.gz \
