@@ -91,7 +91,8 @@ describe('server HTTP routes — memories', () => {
     const { id } = await apiRemember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'promote-canary-payload',
     });
-    const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST' });
+    // A laptop server ignores the body, so a non-JSON one still promotes.
+    const res = await fetch(`${handle.url}/v1/memories/${id}/promote`, { method: 'POST', body: 'not json' });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ ok: boolean; sourceId: string; globalId: string }>(res);
     expect(body.ok).toBe(true);

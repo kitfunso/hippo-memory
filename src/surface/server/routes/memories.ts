@@ -5,7 +5,7 @@ import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/entry.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
 import { sendJson } from '../../http/http-util.js';
 import { keptShownIds } from '../../../api/recall/last-recalled.js';
-import type { ContextWith } from '../../../api/types.js';
+import { sharedStoreOf } from '../../../api/types.js';
 import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js';
 import {
   getCallerProject,
@@ -112,11 +112,13 @@ export async function handleSupersedeMemory(
 }
 
 export async function handlePromoteMemory(
-  { res, ctx }: AuthedRouteRequest & { ctx: ContextWith<'folderFiles'> },
+  { req, res, ctx }: AuthedRouteRequest,
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');
-  const result = await promote(ctx, id);
+  // Only a shared store reads the body; a laptop server keeps ignoring it.
+  const project = sharedStoreOf(ctx) ? getCallerProject(await parseJsonBody(req, ctx)) : undefined;
+  const result = await promote(ctx, id, { project });
   sendJson(res, 200, result);
   return;
 }

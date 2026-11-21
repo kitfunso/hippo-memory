@@ -122,8 +122,8 @@ interface FallbackGroups {
   readonly lastRecall: LastRecall;
 }
 
-/** A store kept as files in a folder; without these, init, share, sync down and promote answer
- * 501. */
+/** A store kept as files in a folder; without these, init, share, sync down and promote off a
+ * shared store answer 501. */
 export interface FolderGroups {
   readonly folderFiles: FolderFiles;
   /** The rows a folder store shares with the operator's global store. */

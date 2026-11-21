@@ -165,7 +165,7 @@ const TOOL_ARGS = {
   hippo_predict_baserate: { class_tag: 'cutover' },
 } satisfies Record<string, JsonValue>;
 
-// The two routes and two tools that need hippo.db's local files answer 501 by design under any other store.
+// The one route and two tools that need hippo.db's local files answer 501 by design under any other store.
 const LOCAL_FILE_TOOLS = new Set(['hippo_share', 'hippo_peers']);
 // Every group but the folder ones, so a 501 here comes only from a direct open, not from a group the store lacks.
 const FOLDER: ReadonlySet<string> = new Set(FOLDER_GROUPS);

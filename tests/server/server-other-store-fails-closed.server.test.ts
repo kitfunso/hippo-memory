@@ -122,7 +122,7 @@ describe('serve() under a store that is not hippo.db', () => {
 
   it('answers 501 on the /v1 routes that need local files, and never runs the handler', async () => {
     const routes = localFileRoutes();
-    expect(routes).toEqual(['POST /v1/memories/1/promote', 'POST /v1/sleep']);
+    expect(routes).toEqual(['POST /v1/sleep']);
     for (const route of routes) {
       const res = await post(route.split(' ')[1]!, valid);
       expect({ route, status: res.status, body: await res.json() }).toEqual({

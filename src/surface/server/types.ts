@@ -1,7 +1,7 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
+import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
@@ -109,6 +109,19 @@ export interface ServeOptions {
     perAddress?: RateLimitSpec | 'off';
     failedAuthPerAddress?: RateLimitSpec;
   };
+  /**
+   * Asked before a write under a caller's project: null lets it run, a string refuses it as 403
+   * with that text. Statuses: 400 for a bad project name (the gate is not asked), 403 for a
+   * refusal, 500 for any other throw or rejection (the gate's text stays in the server log),
+   * 503 for a busy store or past the deadline. The local CLI key (subject localhost:cli, no owner)
+   * reaches the gate too, so a gate that should let it through must allow it. Add-on routes that
+   * call the exported captureSessionTexts, preCompactForCaller, saveCompactionItemsForCaller,
+   * captureFailureForCaller or sessionEndHandoffForCaller must call admitProjectWrite first: those
+   * never ask the gate.
+   */
+  projectWriteGate?: ProjectWriteGate;
+  /** Deadline for one projectWriteGate call; defaults to 5000 ms. */
+  projectWriteGateTimeoutMs?: number;
 }
 
 /** Counts this server's /health reports, since it started. */

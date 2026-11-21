@@ -29,6 +29,7 @@ import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { Context, ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
 import { markedTags, reviewerOf, screenWrite, type ReviewGroup } from './write-screen.js';
+import { admitProjectWrite } from '../project-write-gate.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience
  * gate. */
@@ -265,6 +266,8 @@ export async function remember(
   ctx: Context,
   opts: RememberOptions | GatedRememberOptions,
 ): Promise<RememberResult | RememberSkipped> {
+  // First, so a refused write reads no salience rows and never reaches the screen or a review hold.
+  if (!opts.personal) await admitProjectWrite(ctx, opts.project ?? null);
   const verdict =
     'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
   if (verdict?.decision === 'skip') {
