@@ -220,9 +220,9 @@ interface GraphSource {
   readonly tenantId: string;
 }
 
-/** The items whose source memory `canRead` admits: a NULL memoryId has no scope to hide, and a
- * missing memory fails closed. */
-function readableOnly<T extends { memoryId: string | null }>(
+/** The items whose source memory `canRead` admits; a row with no memory shows only through its source
+ * object, and a missing memory fails closed. */
+function readableOnly<T extends { memoryId: string | null; sourceObjectId?: number }>(
   db: DatabaseSyncLike,
   tenantId: string,
   items: T[],
@@ -238,7 +238,9 @@ function readableOnly<T extends { memoryId: string | null }>(
     ).all(tenantId, JSON.stringify(slice)) as Array<{ id: string; scope: string | null }>;
     for (const r of rows) if (canRead(r.scope)) readable.add(r.id);
   }
-  return items.filter((i) => i.memoryId === null || readable.has(i.memoryId));
+  return items.filter((i) =>
+    i.memoryId === null ? i.sourceObjectId !== undefined : readable.has(i.memoryId),
+  );
 }
 
 function wholeGraphRows({ db, tenantId }: GraphSource, limit: number): GraphRows {

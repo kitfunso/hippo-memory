@@ -27,6 +27,7 @@ import type {
   Relation,
 } from '../../../base/ports/store/graph.js';
 import { handleStamp } from '../runtime/handle-clock.js';
+import type { SqlFragment } from '../../../db/sql.js';
 
 /** source_object_type -> its object table, for the object-path validation 4-way branch.
  *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
@@ -405,6 +406,19 @@ export function deleteEntityRow(db: DatabaseSyncLike, tenantId: string, id: numb
 
 export function deleteRelationRow(db: DatabaseSyncLike, tenantId: string, id: number): void {
   cachedStatement(db, `DELETE FROM relations WHERE id = ? AND tenant_id = ?`).run(id, tenantId);
+}
+
+/** Deletes the graph rows that only the memories `memories` selects back, before those memories go: the
+ * FK's SET NULL would leave each with no provenance, and readableOnly would show it to every reader. */
+export function deleteMemoryOnlyGraphRows(db: DatabaseSyncLike, memories: SqlFragment): void {
+  cachedStatement(
+    db,
+    `DELETE FROM relations WHERE source_object_id IS NULL AND memory_id IN (${memories.sql})`,
+  ).run(...memories.params);
+  cachedStatement(
+    db,
+    `DELETE FROM entities WHERE source_object_id IS NULL AND memory_id IN (${memories.sql})`,
+  ).run(...memories.params);
 }
 
 /** Runs one tenant's graph writes in `fn` on `db` under one BEGIN IMMEDIATE, so two rebuilds
