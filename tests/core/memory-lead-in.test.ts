@@ -88,6 +88,18 @@ describe('remember with a lead-in', () => {
     expect(whole.warnings).toBeUndefined();
   });
 
+  it('redacts a secret that straddles the cut before it cuts, so no piece of it is stored', async () => {
+    const ctx = newCtx();
+    // Cut first, the window would start 20 characters into the token and keep its last 20.
+    const leadIn = `${'x'.repeat(20)} ${TOKEN} ${'z'.repeat(MAX_LEAD_IN_CHARS - 21)}`;
+    expect(leadIn.length - MAX_LEAD_IN_CHARS).toBe(leadIn.indexOf(TOKEN) + 20);
+    const result = await remember(ctx, { content: REPLY, leadIn });
+    const stored = storedLeadIn(ctx, result.id) ?? '';
+    expect(stored).toContain('[REDACTED]');
+    expect(stored).toHaveLength(MAX_LEAD_IN_CHARS);
+    for (let i = 0; i + 8 <= TOKEN.length; i++) expect(stored).not.toContain(TOKEN.slice(i, i + 8));
+  });
+
   it('never starts the cut inside a character', async () => {
     const ctx = newCtx();
     // 2402 characters, so the last 2000 start on the second half of an emoji.

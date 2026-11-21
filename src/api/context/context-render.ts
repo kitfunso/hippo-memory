@@ -23,11 +23,7 @@ import type {
   DrillDownSummary,
 } from '../objects/drill-down.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import {
-  CONNECTOR_SOURCE_TAGS,
-  INSTRUCTION_LIKE_TAG,
-  UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
+import { INSTRUCTION_LIKE_TAG, isUntrustedSource } from '../instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */
@@ -39,10 +35,11 @@ const UNTRUSTED_CLOSE = '»';
 const FULL_STRENGTH_PCT = 100;
 
 function frameOpen(tags: readonly string[]): string | null {
-  if (tags.includes(UNTRUSTED_ORIGIN_TAG) || tags.some((t) => CONNECTOR_SOURCE_TAGS.includes(t))) {
-    return CONNECTOR_OPEN;
-  }
-  return tags.includes(INSTRUCTION_LIKE_TAG) ? MEMBER_OPEN : null;
+  if (!isUntrustedSource(tags)) return null;
+  // The member flag alone gets the member frame; a connector row flagged too keeps the connector one.
+  return isUntrustedSource(tags.filter((t) => t !== INSTRUCTION_LIKE_TAG))
+    ? CONNECTOR_OPEN
+    : MEMBER_OPEN;
 }
 
 /** Backslash-escapes each » in `text`, and the backslashes before it, so only the frame's own »

@@ -10,7 +10,8 @@
 ### Changed
 
 - **A lead-in is part of a row's identity.** The duplicate check and the tombstone that a rejection or a lost conflict writes key on the content plus the lead-in, so "Yes." after two different questions stays two rows. `hippo reject <id>` on a row with a lead-in refuses the text under that lead-in only, while `hippo reject --value` refuses the text everywhere. Sleep never merges a row with a lead-in into another row.
-- **Schema v64 adds the nullable `lead_in` column, and the first lead-in row raises the store floor to 3.13.0.** An older binary would fold two lead-in rows into one, so it refuses a store from then on. A store with no lead-in row stays open to older binaries.
+- **Schema v64 adds the nullable `lead_in` column, and the first lead-in row raises the store floor to 3.13.0.** An older binary would fold two lead-in rows into one, so it refuses a store from then on. The floor also reaches the global store once a lead-in row is shared there (`shareMemory` and auto-share on sleep copy `leadIn`, and auto-share is on by default), so an older binary then refuses the global store too. A store with no lead-in row stays open to older binaries.
+- **Store-kit adapters key tombstones and `duplicate_hash` on the content plus the lead-in.** If you write a store-kit adapter, compute both the way `hippo.db` does: store-kit now exports `identityText`, `tombstoneDigest` and `rowDigests` for it. A row with no lead-in keeps its old keys.
 - **Fact extraction (`hippo remember --extract`) sends the lead-in to the model as marked context.** The model can then tell who and what a short memory is about. A connector row, or a row flagged as instruction-like, sends its content alone.
 
 ## 3.12.0 - 2026-11-21

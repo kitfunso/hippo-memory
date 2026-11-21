@@ -206,7 +206,7 @@ function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResul
   let overlapSum = 0;
   for (let i = 0; i < slice.length; i++) {
     for (let j = i + 1; j < slice.length; j++) {
-      overlapSum += textOverlap(slice[i].entry.content, slice[j].entry.content);
+      overlapSum += textOverlap(findableText(slice[i].entry), findableText(slice[j].entry));
       pairs++;
     }
   }
