@@ -205,6 +205,32 @@ export function envHomeDir(): string | undefined {
 export const envPath = text('PATH');
 /** The extensions win32 tries on a bare command name, in order. */
 export const envPathExt = text('PATHEXT');
+
+/** PATH's folders in order with empty entries dropped. On win32 it reads PATH as cmd.exe does: a
+ * `;` inside quotes stays in its folder and the quotes go, so `"C:\Program Files\x"` is found. */
+export function splitPathList(
+  value: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  if (platform !== 'win32') return value.split(':').filter((dir) => dir.length > 0);
+  const dirs: string[] = [];
+  let dir = '';
+  let quoted = false;
+  for (const ch of value) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === ';' && !quoted) {
+      dirs.push(dir);
+      dir = '';
+    } else dir += ch;
+  }
+  dirs.push(dir);
+  return dirs.filter((entry) => entry.length > 0);
+}
+
+/** The folders of this process's PATH, read by {@link splitPathList}. */
+export function envPathDirs(): string[] {
+  return splitPathList(envPath() ?? '');
+}
 /** The Windows folder; its System32 holds the tools hippo starts by full path. */
 export const envSystemRoot = text('SystemRoot');
 export const envModelCache = trimmedText('HIPPO_MODEL_CACHE');

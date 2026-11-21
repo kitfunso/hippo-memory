@@ -1,21 +1,30 @@
 # CodeQL static analysis, gitleaks secret scanning and a weekly npm audit; all run free on this public repo.
+# Each gitleaks run reads only the commits its event owns, so a hit lands on the branch that holds it.
 name: Security scan
 
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: ['**']
   schedule:
     - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      log_opts:
+        description: 'git log range for gitleaks; --all sweeps every branch'
+        required: true
+        default: '--all'
+        type: string
 
 permissions: {}
 
 concurrency:
   group: security-scan-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/master') }}
 
 jobs:
   codeql:
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -71,6 +80,15 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner -v --log-opts="${BASE_SHA}..${HEAD_SHA}"'
-      - name: Scan the full history
-        if: github.event_name != 'pull_request'
-        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner -v'
+      # A bare `gitleaks git` reads every branch, so a fixture on any side branch would fail master.
+      - name: Scan master's history
+        if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/master')
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner -v --log-opts="HEAD"'
+      - name: Scan the commits this branch adds to master
+        if: github.event_name == 'push' && github.ref != 'refs/heads/master'
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner -v --log-opts="origin/master..HEAD"'
+      - name: Scan the range asked for
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          LOG_OPTS: ${{ inputs.log_opts }}
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --no-banner -v --log-opts="$LOG_OPTS"'

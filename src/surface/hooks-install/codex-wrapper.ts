@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
-import { envPath } from '../../base/util/env.js';
+import { envPathDirs } from '../../base/util/env.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
@@ -146,8 +146,7 @@ interface LauncherSlot {
  * install plans. */
 function pathLauncherFolders(): LauncherSlot[][] {
   const { wrapperDir } = resolveCodexWrapperPaths();
-  const folders = (envPath() ?? '')
-    .split(path.delimiter)
+  const folders = envPathDirs()
     .map((entry) => entry.trim())
     .filter(Boolean)
     .filter((entry) => !pathEquals(entry, wrapperDir));
