@@ -528,7 +528,7 @@ function installCopilotForCli(): void {
   } catch (err) {
     if (!isFileSystemError(err)) throw err;
     log.warn(
-      `init left out the Copilot files: ${errorMessage(err)}. ` +
+      `init did not finish the Copilot files, so some may be missing: ${errorMessage(err)}. ` +
         'Fix that, then run `hippo hook install copilot`.',
       errorFields(err),
     );
