@@ -162,10 +162,7 @@ export function parseParkedPayload(rawPayload: string): JsonValue {
   }
 }
 
-function reingestParkedDelivery(
-  site: GitHubSite,
-  trustedUserIds: ReadonlySet<number>,
-): IngestHook {
+function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<number>): IngestHook {
   const { host, ownsBareRefs } = site;
   return async (innerCtx, args) => {
     const parsed = parseParkedPayload(args.rawPayload);
