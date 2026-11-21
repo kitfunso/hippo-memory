@@ -5,6 +5,7 @@
 ### Added
 
 - **Hippo is a Cursor plugin.** `extensions/cursor-plugin` holds a `.cursor-plugin/plugin.json`, an `mcp.json` that starts `npx -y hippo-memory mcp`, and an always-on rule that tells the agent when to call `hippo_context`, `hippo_remember` and `hippo_outcome`. `.cursor-plugin/marketplace.json` at the repo root points Cursor's marketplace and cursor.directory at it. The plugin manifest follows the package version, like the Kiro power.
+- **Each `latest` release now publishes the VS Code extension.** A new `vscode-publish.yml` job runs after the npm publish. It packages `extensions/vscode` and publishes it to Open VSX and the VS Code Marketplace, so both stores get each release without a hand upload. A store whose token secret (`OVSX_PAT` or `VSCE_PAT`) is not set is skipped with a warning. Backport releases skip this job, so they never replace a newer listing.
 
 ### Fixed
 
