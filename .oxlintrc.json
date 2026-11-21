@@ -15,7 +15,6 @@
     ".roo/**",
     ".windsurf/**",
     "dist/**",
-    "docs/brand/**",
     "dist-bench/**",
     "dist-ui/**",
     "ui/dist/**",
