@@ -126,7 +126,11 @@ beforeAll(async () => {
   plainStore = path.join(tmp, 'srv-plain', 'hippo-team');
   fs.mkdirSync(plainStore, { recursive: true });
   initTestStore(plainStore);
-  fs.writeFileSync(path.join(plainStore, 'config.json'), JSON.stringify({ sharedStore: true }));
+  // Salience on, so case 17 has a write the gate-less path skips.
+  fs.writeFileSync(
+    path.join(plainStore, 'config.json'),
+    JSON.stringify({ sharedStore: true, salience: { enabled: true } }),
+  );
   keyP = mint('plain-m', 'member', undefined, plainStore);
   const base = { host: '127.0.0.1', port: 0, authResolver: resolver };
   gated = await serve({
@@ -204,7 +208,8 @@ describe('project write gate', () => {
 
   it('6. a key with an owner reaches the gate with that owner', async () => {
     set(() => null);
-    await write(gated.url, keyO.plaintext, 'case6');
+    const r = await write(gated.url, keyO.plaintext, 'case6');
+    expect(r.status, r.text).toBe(200);
     expect(calls.at(-1)?.actor).toMatchObject({ subject: `api_key:${keyO.keyId}`, owner: 'oid-a' });
   });
 
@@ -227,6 +232,7 @@ describe('project write gate', () => {
     const r = await write(gated.url, keyM.plaintext, 'case9');
     expect(r.status).toBe(403);
     expect(errorOf(r)).toBe(DEFAULT_TEXT);
+    expect(rows('case9')).toEqual([]);
   });
 
   it('10. an undefined answer refuses with the default text', async () => {
@@ -235,6 +241,7 @@ describe('project write gate', () => {
     const r = await write(gated.url, keyM.plaintext, 'case10');
     expect(r.status).toBe(403);
     expect(errorOf(r)).toBe(DEFAULT_TEXT);
+    expect(rows('case10')).toEqual([]);
   });
 
   it('11. a gate that throws fails the write with 500 and no row', async () => {
@@ -254,6 +261,7 @@ describe('project write gate', () => {
     const r = await write(gated.url, keyM.plaintext, 'case12');
     expect(r.status).toBe(403);
     expect(errorOf(r)).toBe('later no');
+    expect(rows('case12')).toEqual([]);
   });
 
   it('13. an add-on route can ask the gate through admitProjectWrite', async () => {
@@ -280,5 +288,25 @@ describe('project write gate', () => {
     expect(r.status).toBe(400);
     expect(errorOf(r)).toBe('project names: lowercase, not padded, with no colon or control character');
     expect(calls).toHaveLength(0);
+  });
+
+  it.each([
+    ['true', true],
+    ['42', 42],
+    ['an object', { reason: 'x' }],
+  ])('16. a non-string answer (%s) refuses with the default text and stores no row', async (label, value) => {
+    // SAFETY: a JS gate may return any value; the cast is the case under test.
+    set(() => value as never);
+    const content = `case16 ${label}`;
+    const r = await write(gated.url, keyM.plaintext, content);
+    expect(r.status).toBe(403);
+    expect(errorOf(r)).toBe(DEFAULT_TEXT);
+    expect(rows(content)).toEqual([]);
+  });
+
+  it('17. no gate: a skipped write with a malformed project name answers skipped, not 400', async () => {
+    const r = await write(plain.url, keyP.plaintext, 'hi', { force: false }, { name: 'Alpha' });
+    expect(r.status, r.text).toBe(200);
+    expect(JSON.parse(r.text)).toHaveProperty('skipped');
   });
 });
