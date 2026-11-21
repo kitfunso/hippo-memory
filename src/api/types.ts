@@ -76,6 +76,15 @@ export type GlobalTargetInReach = Omit<
 > &
   Partial<Pick<ConfiguredFolder<StoreWith<GlobalTargetGroup>>, 'embedderFor'>>;
 
+export interface ProjectWriteCall {
+  readonly tenantId: string;
+  readonly actor: Readonly<Actor>;
+  /** The caller's project name, already checked by assertCallerProject; null when the write names none. */
+  readonly project: string | null;
+}
+/** null lets the write run; a string refuses it with 403 and that text. */
+export type ProjectWriteGate = (call: ProjectWriteCall) => string | null | Promise<string | null>;
+
 export interface Context {
   tenantId: string;
   actor: Actor;
@@ -103,6 +112,8 @@ export interface Context {
   /** Where the root keeps work a call starts and does not wait on, such as an embed, and settles it
    * before closing its stores. Unset, the call waits for that work itself before it returns. */
   readonly detached?: DetachedWork | undefined;
+  /** Set by a server root from serve's projectWriteGate; unset, every project is accepted. */
+  readonly projectWriteGate?: ProjectWriteGate | undefined;
 }
 
 /** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion

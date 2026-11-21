@@ -102,6 +102,7 @@ function mcpContextFor(
     callers: ctx.callers,
     infra: ctx.infra,
     detached: ctx.detached,
+    projectWriteGate: ctx.projectWriteGate,
   };
   if (project !== undefined) mcpCtx.project = project;
   return mcpCtx;

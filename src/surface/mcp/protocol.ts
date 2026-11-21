@@ -23,7 +23,7 @@ import type {
   RequiredStore,
   StoreWith,
 } from '../../base/ports/store.js';
-import type { ContextWith } from '../../api/types.js';
+import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { CallerState } from '../../api/callers.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
@@ -119,6 +119,8 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   signal?: AbortSignal;
   /** The transport root's keeper of work a call does not wait on; unset, each call waits for it. */
   detached?: DetachedWork;
+  /** The server's gate on a write under a caller's project; unset, none is asked. */
+  projectWriteGate?: ProjectWriteGate;
 }
 
 /** A tool's run for one call's arguments. */
@@ -166,6 +168,7 @@ export function mcpApiContext(ctx: McpCaller): ApiContext {
     infra: ctx.infra,
     signal: ctx.signal,
     detached: ctx.detached,
+    projectWriteGate: ctx.projectWriteGate,
   };
 }
 

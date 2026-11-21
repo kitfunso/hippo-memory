@@ -1,7 +1,7 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context, EntryContext } from '../../api/index.js';
-import type { ContextWith } from '../../api/types.js';
+import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
@@ -109,6 +109,8 @@ export interface ServeOptions {
     perAddress?: RateLimitSpec | 'off';
     failedAuthPerAddress?: RateLimitSpec;
   };
+  /** Asked before a write under a caller's project: null lets it run, a string refuses it as 403 with that text. */
+  projectWriteGate?: ProjectWriteGate;
 }
 
 /** Counts this server's /health reports, since it started. */

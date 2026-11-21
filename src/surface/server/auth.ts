@@ -103,7 +103,7 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra' | 'detached'> &
+  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra' | 'detached' | 'projectWriteGate'> &
   Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
@@ -392,7 +392,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const reach = contextReach(opts.reachOf(team), opts.configAt, infra.embedderFor, ledger);
   const callers = opts.callers;
   const actor = bearerActor(id);
-  const { store, signal, detached } = opts;
+  const { store, signal, detached, projectWriteGate } = opts;
   return {
     tenantId: id.tenantId,
     actor,
@@ -404,6 +404,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
     infra,
     signal,
     detached,
+    projectWriteGate,
   };
 }
 
