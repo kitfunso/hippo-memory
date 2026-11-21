@@ -85,7 +85,10 @@ function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   return kindFlag;
 }
 
-type RememberEnvelope = Pick<RememberRequest, 'kind' | 'owner' | 'artifactRef' | 'scope' | 'leadIn'>;
+type RememberEnvelope = Pick<
+  RememberRequest,
+  'kind' | 'owner' | 'artifactRef' | 'scope' | 'leadIn'
+>;
 
 function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
   const kind = parseKindFlag(flags);

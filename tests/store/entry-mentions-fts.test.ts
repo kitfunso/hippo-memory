@@ -61,7 +61,9 @@ describe('listEntriesMentioning on the FTS path', () => {
     const led = createMemory('Plain sentence', { leadIn: 'user: ask about the zephyrline', tenantId: 'default' });
     writeEntry(root, led);
     const ids = async (): Promise<string[]> =>
-      (await sqliteStore(root).learning.entriesMentioning(['zephyrline'], 'zephyrline', 'default', { limit: 100 })).entries
+      (
+        await sqliteStore(root).learning.entriesMentioning(['zephyrline'], 'zephyrline', 'default', { limit: 100 })
+      ).entries
         .filter((e) => e.leadIn)
         .map((e) => e.id);
     expect(await ids()).toEqual([led.id]);

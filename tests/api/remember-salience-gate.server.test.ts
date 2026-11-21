@@ -57,7 +57,8 @@ describe('api.remember with salienceGate and a lead-in', () => {
 
   it('keeps a short reply under a new lead-in, and skips it only under the lead-in it already has', async () => {
     const ctx = store(true);
-    const gated = (content: string, leadIn?: string) => remember(ctx, { content, leadIn, tags: [], salienceGate: true });
+    const gated = (content: string, leadIn?: string) =>
+      remember(ctx, { content, leadIn, tags: [], salienceGate: true });
     expect(await gated('Yes.')).toEqual({ skipped: { reason: 'content_too_short', score: 0 } });
     expect('id' in (await gated('Yes.', FLIGHT))).toBe(true);
     expect('id' in (await gated('Yes.', JOB))).toBe(true);

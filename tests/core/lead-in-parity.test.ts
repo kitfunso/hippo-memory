@@ -49,22 +49,27 @@ const ftsHits = (db: DatabaseSyncLike, word: string): string[] =>
 const words = (text: string): string[] => text.toLowerCase().split(/\s+/).filter(Boolean).sort();
 
 describe('the findable text, by copy', () => {
-  it.each(CASES)('the FTS text from syncFtsRow equals FINDABLE_TEXT_SQL after a forced drift repair: %s', (_name, leadIn) => {
-    const { root, entry } = seed(leadIn);
-    withDb(root, (db) => {
-      const written = ftsRow(db, entry.id).content;
-      // SAFETY: the SELECT names one computed TEXT column.
-      const sql = db.prepare(`SELECT ${FINDABLE_TEXT_SQL('m')} AS t FROM memories m WHERE m.id = ?`).get(entry.id) as {
-        t: string;
-      };
-      expect(written).toBe(findableText({ content: CONTENT, leadIn }));
-      expect(sql.t).toBe(written);
+  it.each(CASES)(
+    'the FTS text from syncFtsRow equals FINDABLE_TEXT_SQL after a forced drift repair: %s',
+    (_name, leadIn) => {
+      const { root, entry } = seed(leadIn);
+      withDb(root, (db) => {
+        const written = ftsRow(db, entry.id).content;
+        // SAFETY: the SELECT names one computed TEXT column.
+        const sql = db
+          .prepare(`SELECT ${FINDABLE_TEXT_SQL('m')} AS t FROM memories m WHERE m.id = ?`)
+          .get(entry.id) as {
+          t: string;
+        };
+        expect(written).toBe(findableText({ content: CONTENT, leadIn }));
+        expect(sql.t).toBe(written);
 
-      db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
-      expect(repairFtsDrift(db)).toBe(true);
-      expect(ftsRow(db, entry.id).content).toBe(written);
-    });
-  });
+        db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
+        expect(repairFtsDrift(db)).toBe(true);
+        expect(ftsRow(db, entry.id).content).toBe(written);
+      });
+    },
+  );
 
   it.each(CASES)('a batch write indexes the same text as a single write: %s', (_name, leadIn) => {
     const root = makeRoot('lead-in-parity-batch');
@@ -73,31 +78,40 @@ describe('the findable text, by copy', () => {
     expect(withDb(root, (db) => ftsRow(db, entry.id).content)).toBe(findableText({ content: CONTENT, leadIn }));
   });
 
-  it.each(CASES)('a repaired row is still found by a content word, and by a lead-in word only if it has one: %s', (_name, leadIn) => {
-    const { root, entry } = seed(leadIn);
-    withDb(root, (db) => {
-      db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
-      expect(repairFtsDrift(db)).toBe(true);
-      expect(ftsHits(db, 'track')).toEqual([entry.id]);
-      expect(ftsHits(db, 'zephyrline')).toEqual(leadIn ? [entry.id] : []);
-    });
-    expect(loadSearchEntries(root, 'track', 10, 'default').map((e) => e.id)).toEqual([entry.id]);
-  });
+  it.each(CASES)(
+    'a repaired row is still found by a content word, and by a lead-in word only if it has one: %s',
+    (_name, leadIn) => {
+      const { root, entry } = seed(leadIn);
+      withDb(root, (db) => {
+        db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
+        expect(repairFtsDrift(db)).toBe(true);
+        expect(ftsHits(db, 'track')).toEqual([entry.id]);
+        expect(ftsHits(db, 'zephyrline')).toEqual(leadIn ? [entry.id] : []);
+      });
+      expect(loadSearchEntries(root, 'track', 10, 'default').map((e) => e.id)).toEqual([entry.id]);
+    },
+  );
 
-  it.each(CASES)('the write-time embed text equals the rebuild-time embed text read through entriesByIds: %s', async (_name, leadIn) => {
-    const { root, entry } = seed(leadIn);
-    const [read] = await sqliteStore(root).entriesByIds([entry.id], 'default');
-    expect(embeddingInputText(read!)).toBe(embeddingInputText(entry));
-    expect(embeddingInputText(entry)).toBe(`${findableText({ content: CONTENT, leadIn })} ops cache`);
-  });
+  it.each(CASES)(
+    'the write-time embed text equals the rebuild-time embed text read through entriesByIds: %s',
+    async (_name, leadIn) => {
+      const { root, entry } = seed(leadIn);
+      const [read] = await sqliteStore(root).entriesByIds([entry.id], 'default');
+      expect(embeddingInputText(read!)).toBe(embeddingInputText(entry));
+      expect(embeddingInputText(entry)).toBe(`${findableText({ content: CONTENT, leadIn })} ops cache`);
+    },
+  );
 
-  it.each(CASES)('the BM25 document, the FTS text and the embed text hold the same words: %s', async (_name, leadIn) => {
-    const { root, entry } = seed(leadIn);
-    const [read] = await sqliteStore(root).entriesByIds([entry.id], 'default');
-    const fts = withDb(root, (db) => ftsRow(db, entry.id));
-    const forFts = words(`${fts.content} ${fts.tags}`);
-    expect(words(entryText(read!))).toEqual(forFts);
-    expect(words(embeddingInputText(read!))).toEqual(forFts);
-    expect(forFts.includes('zephyrline')).toBe(Boolean(leadIn));
-  });
+  it.each(CASES)(
+    'the BM25 document, the FTS text and the embed text hold the same words: %s',
+    async (_name, leadIn) => {
+      const { root, entry } = seed(leadIn);
+      const [read] = await sqliteStore(root).entriesByIds([entry.id], 'default');
+      const fts = withDb(root, (db) => ftsRow(db, entry.id));
+      const forFts = words(`${fts.content} ${fts.tags}`);
+      expect(words(entryText(read!))).toEqual(forFts);
+      expect(words(embeddingInputText(read!))).toEqual(forFts);
+      expect(forFts.includes('zephyrline')).toBe(Boolean(leadIn));
+    },
+  );
 });

@@ -1,6 +1,13 @@
 // Schema v64 adds the lead_in column and never raises the floor; the first row written with a lead-in does.
 import { describe, expect, it } from 'vitest';
-import { closeHippoDb, getMeta, getSchemaVersion, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
+import {
+  closeHippoDb,
+  getMeta,
+  getSchemaVersion,
+  openHippoDb,
+  setMeta,
+  type DatabaseSyncLike,
+} from '../../src/db/index.js';
 import { v64 } from '../../src/db/migrations/v64.js';
 import { tableColumns, tableHasColumn } from '../../src/db/tables.js';
 import { LEAD_IN_MIN_BINARY } from '../../src/base/util/version.js';
@@ -115,7 +122,9 @@ describe('the lead-in floor', () => {
         string | number | null
       >;
       const set = v63Columns.slice(1).map((column) => `${column} = ?`);
-      const values = v63Columns.slice(1).map((column) => (column === 'content' ? 'rewritten' : (stored[column] ?? null)));
+      const values = v63Columns
+        .slice(1)
+        .map((column) => (column === 'content' ? 'rewritten' : (stored[column] ?? null)));
 
       db.prepare(`UPDATE memories SET ${set.join(', ')} WHERE id = ?`).run(...values, row.id);
 

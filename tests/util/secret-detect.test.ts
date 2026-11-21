@@ -70,7 +70,9 @@ describe('detectSecret patterns', () => {
       flagged: true,
       reason: 'pattern:sk-underscore-key',
     });
-    expect(detectSecret({ content: 'the deploy key was rotated', tags: [], leadIn: 'sk_vendor_deadbeef123456' }).flagged).toBe(true);
+    expect(
+      detectSecret({ content: 'the deploy key was rotated', tags: [], leadIn: 'sk_vendor_deadbeef123456' }).flagged,
+    ).toBe(true);
     for (const clean of [undefined, null, '', 'Did the release go out?']) {
       expect(detectSecret({ content: 'rotate quarterly', tags: [], leadIn: clean }).flagged).toBe(false);
     }

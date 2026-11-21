@@ -238,7 +238,9 @@ describe('api.assemble', () => {
     expect(item && assembleLine(item)).toContain(`- ${led.leadIn}
 ${led.content}`);
     expect(Object.hasOwn(r.items.find((it) => it.id === plain.id) ?? {}, 'leadIn')).toBe(false);
-    expect(r.tokens).toBe(estimateTokens(`${led.leadIn}
-${led.content}`) + estimateTokens(plain.content));
+    expect(r.tokens).toBe(
+      estimateTokens(`${led.leadIn}
+${led.content}`) + estimateTokens(plain.content),
+    );
   });
 });
