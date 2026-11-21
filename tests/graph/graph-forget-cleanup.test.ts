@@ -155,6 +155,25 @@ describe('deleting a memory deletes the graph rows only it backs', () => {
     expect(rels.has(s.rX)).toBe(true);
   });
 
+  it('T2b an admitted automatic delete clears the rows only the memory backed', async () => {
+    const s = await seed(home);
+    const out = onDb(home, (db) =>
+      deleteEntriesInBatches(db, storeFilesOf(home), [{ id: s.m.id, reason: 'test' }], {
+        actor: 'test',
+        automatic: true,
+      }),
+    );
+    expect(out).toEqual([true]);
+    const ents = table(home, 'entities');
+    const rels = table(home, 'relations');
+    expect(ents.has(s.eM)).toBe(false);
+    expect(rels.has(s.rM)).toBe(false);
+    expect(rels.has(s.rX)).toBe(false);
+    expect(ents.get(s.eP)).toMatchObject({ memory_id: null });
+    expect(rels.get(s.rP)).toMatchObject({ memory_id: null });
+    expect(rels.get(s.rN)).toMatchObject({ memory_id: s.n.id });
+  });
+
   it('T3 rows left all-null before the fix stay hidden from scoped readers', async () => {
     const t = memory(home, 'graph orphan memory T');
     const kept = insertEntityAt(home, T, { entityType: 'system', name: 'KEPT', memoryId: t.id }).id;
@@ -197,6 +216,8 @@ describe('deleting a memory deletes the graph rows only it backs', () => {
   });
 });
 
+const DELETE_SITE = /DELETE\s+FROM\s+memories\b/gi;
+
 function countIn(pattern: RegExp, skip: string) {
   const src = join(__dirname, '..', '..', 'src');
   const out = new Map<string, number>();
@@ -217,7 +238,7 @@ function countIn(pattern: RegExp, skip: string) {
 
 describe('every memory delete site clears graph rows first', () => {
   it('a new DELETE FROM memories must call deleteMemoryOnlyGraphRows first (raw rows excepted)', () => {
-    expect(countIn(/DELETE FROM memories\b/g, '')).toEqual({
+    expect(countIn(DELETE_SITE, '')).toEqual({
       'store/sqlite/entries/delete-and-batch.ts': 2,
       'store/sqlite/entries/entry-writes.ts': 1,
       'store/sqlite/entries/raw-archive.ts': 1,
@@ -226,5 +247,17 @@ describe('every memory delete site clears graph rows first', () => {
       'store/sqlite/entries/delete-and-batch.ts': 2,
       'store/sqlite/entries/entry-writes.ts': 1,
     });
+  });
+
+  it('each DELETE FROM memories has its helper call after the previous DELETE', () => {
+    const src = join(__dirname, '..', '..', 'src', 'store', 'sqlite', 'entries');
+    for (const file of ['delete-and-batch.ts', 'entry-writes.ts']) {
+      const text = readFileSync(join(src, file), 'utf8');
+      let from = 0;
+      for (const del of text.matchAll(DELETE_SITE)) {
+        expect(text.slice(from, del.index)).toContain('deleteMemoryOnlyGraphRows(');
+        from = del.index + del[0].length;
+      }
+    }
   });
 });
