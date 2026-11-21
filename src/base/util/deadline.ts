@@ -26,9 +26,23 @@ export async function withDeadline<T>(
       Math.min(deadlineMs, MAX_TIMER_MS),
     );
   });
+  // A callback that blocks the thread never lets the timer fire, so the clock is read once it settles.
+  const start = performance.now();
+  const failIfLate = (): void => {
+    if (performance.now() - start < deadlineMs) return;
+    const late = new DeadlineError(deadlineMs);
+    if (!abort.signal.aborted) abort.abort(late);
+    throw late;
+  };
+  let result: T;
   try {
-    return await Promise.race([(async () => run(abort.signal))(), deadline]);
+    result = await Promise.race([(async () => run(abort.signal))(), deadline]);
+  } catch (err) {
+    failIfLate();
+    throw err;
   } finally {
     clearTimeout(timer);
   }
+  failIfLate();
+  return result;
 }
