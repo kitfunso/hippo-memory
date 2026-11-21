@@ -1,6 +1,6 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { BadRequestError, ConflictError } from '../../src/base/errors/api-errors.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -178,6 +178,27 @@ describe('api domain — recall/forget/promote/supersede', () => {
       }
     },
   );
+
+  it('promote refuses a superseded row with a 409 naming its successor, writing no copy and no promote row', async () => {
+    const admin = apiCtx(home, 'default', { subject: 'api_key:hk_promote', role: 'admin' });
+    const { id: oldId } = await remember(admin, { content: 'promote-superseded-original' });
+    const { newId } = await supersede(admin, oldId, 'promote-superseded-successor');
+
+    const err = await promote(admin, oldId).catch((e: Error) => e);
+
+    expect(err).toBeInstanceOf(ConflictError);
+    expect(err).toMatchObject({
+      status: 409,
+      message: `Refusing to promote ${oldId}: it is superseded by ${newId}; promote that one instead.`,
+    });
+    const db = openHippoDb(globalHome);
+    try {
+      expect(listAuditEvents(db, { tenantId: 'default', op: 'promote' })).toEqual([]);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM memories').get()).toEqual({ n: 0 });
+    } finally {
+      closeHippoDb(db);
+    }
+  });
 
   it('supersede chains old -> new and audits with the supplied actor', async () => {
     const { id: oldId } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {

@@ -233,6 +233,7 @@ describe('published runtime exports', () => {
         uninstallJsonHooks
         writeSettingsFile",
           "./project-identity": "MAX_PROJECT_ALIASES MCP_PROJECT_SCOPED_HEADER
+        assertCallerProject
         resolveProjectIdentity",
           "./search": "DEFAULT_MAX_NEIGHBORS
         MAX_HOPS
@@ -250,7 +251,7 @@ describe('published runtime exports', () => {
         HttpError
         LOOPBACK_HOST_HEADER
         NotFoundError
-        authCreate authCreateSelf authRevoke
+        admitProjectWrite authCreate authCreateSelf authRevoke
         bindSessionOwner
         captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
         embedAll

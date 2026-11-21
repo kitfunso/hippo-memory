@@ -449,7 +449,7 @@ describe('personal memories walk (plan lane T)', () => {
         kind: 'distilled',
         aStatus: 400,
         othersStatus: 404,
-        call: (t, id) => http(t, 'POST', `/v1/memories/${id}/promote`, {}),
+        call: (t, id) => http(t, 'POST', `/v1/memories/${id}/promote`, { project: { name: 'alpha' } }),
       },
       {
         name: 'outcome',
@@ -476,8 +476,13 @@ describe('personal memories walk (plan lane T)', () => {
       if (p.name === 'outcome') expect(json<{ applied: number }>(mine).applied).toBe(1);
     }
 
-    const teamRow = await post(keys.B.plaintext, { content: 'walk team promote control row' });
-    const promoted = await http(keys.B.plaintext, 'POST', `/v1/memories/${teamRow}/promote`, {});
+    const teamRow = await post(keys.B.plaintext, {
+      content: 'walk team promote control row',
+      project: { name: 'alpha' },
+    });
+    const promoted = await http(keys.B.plaintext, 'POST', `/v1/memories/${teamRow}/promote`, {
+      project: { name: 'alpha' },
+    });
     expect(promoted.status, promoted.text).toBe(200);
 
     expect(await contextIds(keys.A.plaintext, 'project=alpha&q=zircon')).toContain(ids.aZircon);

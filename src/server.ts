@@ -66,6 +66,8 @@ export type {
   ServeOptions,
   ServerHandle,
 } from './surface/server/types.js';
+export { admitProjectWrite } from './api/project-write-gate.js';
+export type { ProjectWriteCall, ProjectWriteGate } from './api/types.js';
 // ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './base/ports/store-index.js';
 // What a caller sets as Context.detached to keep the embeds a call hands off.

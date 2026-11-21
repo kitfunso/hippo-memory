@@ -15,6 +15,7 @@ import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types
 import { isJsonString } from '../../base/util/json.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import { isLoopbackAddress } from '../../base/util/net.js';
+import { withDeadline } from '../../base/util/deadline.js';
 
 /** Kept under its old name because src/server.ts publishes it. */
 export const isLoopback = isLoopbackAddress;
@@ -103,7 +104,15 @@ type AuthOptions = Pick<
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
 type ContextOptions = AuthOptions &
-  Pick<ResolvedServeOptions, 'configAt' | 'onHippoDb' | 'infra' | 'detached'> &
+  Pick<
+    ResolvedServeOptions,
+    | 'configAt'
+    | 'onHippoDb'
+    | 'infra'
+    | 'detached'
+    | 'projectWriteGate'
+    | 'projectWriteGateTimeoutMs'
+  > &
   Partial<Pick<ResolvedServeOptions, 'callers' | 'signal' | 'ledgerStore'>>;
 
 // Built-in actors are the bare names below or `<name>:<detail>`; a plain prefix would also reject
@@ -189,23 +198,12 @@ async function askResolver(
   token: string,
   deadlineMs: number,
 ): Promise<ResolvedBearer> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const abort = new AbortController();
-  const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => {
-      const late = new Error(`no answer within ${deadlineMs} ms`);
-      abort.abort(late);
-      reject(late);
-    }, deadlineMs);
-  });
   let resolved: ResolvedBearer | null;
   try {
-    resolved = await Promise.race([(async () => resolver(token, abort.signal))(), deadline]);
+    resolved = await withDeadline(deadlineMs, (signal) => resolver(token, signal));
   } catch (err) {
     logResolverFailure('threw', err, token);
     throw new HttpError(503, 'auth provider unavailable');
-  } finally {
-    clearTimeout(timer);
   }
   let clean: ResolvedBearer | null = null;
   try {
@@ -392,7 +390,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
   const reach = contextReach(opts.reachOf(team), opts.configAt, infra.embedderFor, ledger);
   const callers = opts.callers;
   const actor = bearerActor(id);
-  const { store, signal, detached } = opts;
+  const { store, signal, detached, projectWriteGate, projectWriteGateTimeoutMs } = opts;
   return {
     tenantId: id.tenantId,
     actor,
@@ -404,6 +402,8 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
     infra,
     signal,
     detached,
+    projectWriteGate,
+    projectWriteGateTimeoutMs,
   };
 }
 
