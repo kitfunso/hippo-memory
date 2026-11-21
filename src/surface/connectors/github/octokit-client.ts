@@ -45,6 +45,12 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
   return Object.fromEntries(entries);
 }
 
+/** Host and path only: the query string can carry a cursor or filter that is not ours to print. */
+function hostAndPath(url: string): string {
+  const { origin, pathname } = new URL(url);
+  return origin + pathname;
+}
+
 const GITHUB_TIMEOUT_MS = 30_000;
 const ERROR_BODY_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;
@@ -82,7 +88,12 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       },
     },
     { timeoutMs: GITHUB_TIMEOUT_MS },
-  );
+  ).catch((err) => {
+    // A GHES host that never answers must name itself; a bare "fetch failed" leaves the operator guessing.
+    throw new Error(`GitHub request to ${hostAndPath(url)} failed: ${errorMessage(err)}`, {
+      cause: err,
+    });
+  });
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 
@@ -99,12 +110,10 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       );
       return '';
     });
-    // Host and path only: the query string can carry a cursor or filter that is not ours to print.
-    const { origin, pathname } = new URL(url);
     throw new GitHubFetchError(
       res.status,
       body.slice(0, ERROR_BODY_SNIPPET_CHARS),
-      origin + pathname,
+      hostAndPath(url),
     );
   }
 

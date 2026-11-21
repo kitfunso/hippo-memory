@@ -245,7 +245,8 @@ async function parkedForHost(d: SignedDelivery): Promise<boolean> {
     if (sent !== undefined && d.site.host === undefined && !warnedEnterpriseUnset) {
       warnedEnterpriseUnset = true;
       log.warn(
-        `GitHub Enterprise delivery from ${sent}, but GITHUB_ENTERPRISE_URL is unset; its refs, tags and scope carry no host`,
+        `GitHub Enterprise delivery from ${sent}, but GITHUB_ENTERPRISE_URL is unset; ` +
+          'its refs, tags and scope carry no host',
       );
     }
     return false;
