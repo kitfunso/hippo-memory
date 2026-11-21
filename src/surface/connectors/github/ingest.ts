@@ -38,6 +38,8 @@ export interface IngestInput {
   deliveryId: string;
   /** GITHUB_ENTERPRISE_URL's host, which the ref, tags and scope carry; undefined on github.com. */
   host?: string;
+  /** The site's ownsBareRefs: only then is a seen github.com-form key a duplicate of a GHES event. */
+  ownsBareRefs?: boolean;
 }
 
 function transformEvent(event: IngestEvent, host: string | undefined): RememberOptions | null {
@@ -111,8 +113,8 @@ export async function ingestEvent(
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
-  // A GHES webhook logged its items under github.com-form refs while the setting was unset.
-  if (input.host !== undefined) {
+  // Only the operator can say the github.com-form keys were this server's; a bare ref proves nothing.
+  if (input.host !== undefined && input.ownsBareRefs === true) {
     const legacyKey = computeIdempotencyKey(githubEventRef(input.event, undefined), updatedAt);
     const legacy = await events.eventRecord({ ...event, idempotencyKey: legacyKey });
     if (legacy.seen) return { status: 'duplicate', memoryId: legacy.memoryId };

@@ -77,6 +77,18 @@ export function parseGitHubArtifactRef(ref: string): ParsedGitHubRef | null {
   return { host, repoFullName: m[2], item };
 }
 
+const OWNER_RE = /^[A-Za-z0-9-]+$/;
+const REPO_NAME_RE = /^[A-Za-z0-9._-]+$/;
+
+/** True for exactly owner/name; the names '.' and '..' are refused because a URL path resolves
+ * them away. */
+export function isGitHubRepoFullName(value: string): boolean {
+  const parts = value.split('/');
+  if (parts.length !== 2) return false;
+  const [owner, name] = parts;
+  return OWNER_RE.test(owner) && REPO_NAME_RE.test(name) && name !== '.' && name !== '..';
+}
+
 /** The github.com-form twin of a GHES ref: the ref a GHES webhook stored before refs carried the
  * host. undefined for a github.com ref or a string that is not a ref. */
 export function legacyGitHubRef(ref: string): string | undefined {

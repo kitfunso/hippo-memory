@@ -16,6 +16,7 @@ import { hostMismatch, parseGitHubEnterpriseUrl } from '../../src/surface/connec
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -155,6 +156,35 @@ describe('hippo github CLI', () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
+  it('A25. --repo with a host or a path exits 2 with usage and writes no cursor', async () => {
+    stubGitHubIssues([]);
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghes.example.com');
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      for (const repo of ['ghes.example.com/acme/w', 'acme/w/extra', '/w', 'acme/', 'ac me/w']) {
+        await expect(
+          handleGitHub({
+            hippoRoot,
+            tenantId: 'default',
+            args: ['backfill'],
+            flags: { repo, since: '2026-01-01T00:00:00Z' },
+          }),
+        ).rejects.toMatchObject({ code: 2 });
+      }
+      expect(printed.mock.calls.map((c) => String(c[0])).join(' ')).toContain('hippo github backfill --repo');
+    } finally {
+      printed.mockRestore();
+    }
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    const db = openHippoDb(hippoRoot);
+    try {
+      expect(db.prepare('SELECT COUNT(*) AS n FROM github_cursors').get()).toEqual({ n: 0 });
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+
   it('dlq list on empty DLQ prints "no entries"', async () => {
     const r = await runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
@@ -235,12 +265,17 @@ describe('hippo github CLI', () => {
   }
 
   /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
-  function parkDelivery(eventName: string, body: string, secret: string = SECRET): Promise<number> {
+  function parkDelivery(
+    eventName: string,
+    body: string,
+    secret: string = SECRET,
+    bucket: 'unroutable' | 'parse_error' = 'unroutable',
+  ): Promise<number> {
     return parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',
       rawPayload: body,
       error: 'unroutable: installation_id=99 repo=acme/repo',
-      bucket: 'unroutable',
+      bucket,
       eventName,
       deliveryId: `delivery-${eventName}`,
       signature: `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`,
@@ -296,6 +331,13 @@ describe('hippo github CLI', () => {
   );
 
   const GHES_ENV = { GITHUB_ENTERPRISE_URL: 'https://ghes.example.com' };
+
+  /** The body with repository.html_url set; the fixtures carry none, so undefined leaves it as is. */
+  function withRepoUrl(body: string, htmlUrl: string | undefined): string {
+    if (htmlUrl === undefined) return body;
+    return body.replace('"repository":{', `"repository":{"html_url":"${htmlUrl}",`);
+  }
+
   const replayWith = (id: number, extraEnv: Record<string, string>, ...flags: string[]) =>
     runCli(root, ['github', 'dlq', 'replay', String(id), ...flags], {
       GITHUB_WEBHOOK_SECRET: SECRET,
@@ -313,8 +355,14 @@ describe('hippo github CLI', () => {
   ] as const)(
     'A18. under GITHUB_ENTERPRISE_URL a replayed %s is stored under the host ref and its deletion archives it',
     async (eventName, parent, hostRef) => {
-      const created = await parkDelivery(eventName, commentBody(parent, 'created'));
-      const deleted = await parkDelivery(eventName, commentBody(parent, 'deleted'));
+      const created = await parkDelivery(
+        eventName,
+        withRepoUrl(commentBody(parent, 'created'), 'https://ghes.example.com/acme/repo'),
+      );
+      const deleted = await parkDelivery(
+        eventName,
+        withRepoUrl(commentBody(parent, 'deleted'), 'https://ghes.example.com/acme/repo'),
+      );
 
       expect((await replayWith(created, GHES_ENV)).status).toBe(0);
       expect(liveRaws(hostRef)).toHaveLength(1);
@@ -347,6 +395,43 @@ describe('hippo github CLI', () => {
 
     const agreed = await replayWith(parkedForHost, { GITHUB_ENTERPRISE_URL: '' });
     expect(agreed.status).toBe(0);
+    expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
+  });
+
+  it.each([
+    ['a github.com payload', 'https://github.com/acme/repo', 'payload names github.com'],
+    ['another GHES server', 'https://other.example.com/acme/repo', 'payload names other.example.com'],
+    ['a payload with no repository URL', undefined, 'payload names no repository URL'],
+  ] as const)(
+    'A22. under GHES a parse_error row from %s is unroutable, even with --force',
+    async (_label, htmlUrl, reason) => {
+      const body = withRepoUrl(issueOpenedBody, htmlUrl);
+      const id = await parkDelivery('issues', body, SECRET, 'parse_error');
+      for (const flags of [[], ['--force']]) {
+        const refused = await replayWith(id, GHES_ENV, ...flags);
+        expect(refused.status).toBe(1);
+        expect(refused.stderr).toContain('status=unroutable');
+        expect(refused.stderr).toContain(reason);
+        expect(refused.stderr).toContain('GITHUB_ENTERPRISE_URL names ghes.example.com');
+        expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+      }
+    },
+  );
+
+  it('A23. under GHES a parse_error row whose payload names the site host replays under the host ref', async () => {
+    const body = withRepoUrl(issueOpenedBody, 'https://ghes.example.com/acme/repo');
+    const id = await parkDelivery('issues', body, SECRET, 'parse_error');
+    expect((await replayWith(id, GHES_ENV)).status).toBe(0);
+    expect(liveRaws('github://ghes.example.com/acme/repo/issue/42')).toHaveLength(1);
+  });
+
+  it.each([
+    ['github.com', 'https://github.com/acme/repo'],
+    ['another server', 'https://other.example.com/acme/repo'],
+    ['no URL', undefined],
+  ] as const)('A24. with GITHUB_ENTERPRISE_URL unset a row naming %s still replays', async (_label, htmlUrl) => {
+    const id = await parkDelivery('issues', withRepoUrl(issueOpenedBody, htmlUrl), SECRET, 'parse_error');
+    expect((await replay(id)).status).toBe(0);
     expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
   });
 

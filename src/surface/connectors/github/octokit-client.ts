@@ -8,6 +8,7 @@ import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { tryParseUrl } from '../../../base/util/net.js';
 
 export class GitHubFetchError extends Error {
   constructor(
@@ -94,6 +95,11 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       cause: err,
     });
   });
+  // A redirect to another origin would feed that server's body into this server's refs.
+  const finalOrigin = res.url ? tryParseUrl(res.url)?.origin : undefined;
+  if (finalOrigin !== undefined && finalOrigin !== new URL(url).origin) {
+    throw new Error(`GitHub request to ${hostAndPath(url)} was redirected to ${finalOrigin}`);
+  }
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 

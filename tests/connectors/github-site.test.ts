@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { JsonValue } from '../../src/base/util/json.js';
 import {
   GITHUB_COM,
   headerHost,
   hostMismatch,
   mismatchSender,
   parseGitHubEnterpriseUrl,
+  payloadHost,
+  payloadHostRefusal,
 } from '../../src/surface/connectors/github/site.js';
 
 const GHES = parseGitHubEnterpriseUrl('https://ghes.example.com');
@@ -12,13 +15,14 @@ const GHES = parseGitHubEnterpriseUrl('https://ghes.example.com');
 describe('parseGitHubEnterpriseUrl', () => {
   it('reads unset as github.com', () => {
     expect(parseGitHubEnterpriseUrl(undefined)).toBe(GITHUB_COM);
-    expect(GITHUB_COM).toEqual({ host: undefined, apiBase: 'https://api.github.com' });
+    expect(GITHUB_COM).toEqual({ host: undefined, apiBase: 'https://api.github.com', ownsBareRefs: false });
   });
 
   it.each(['https://ghes.example.com', 'https://ghes.example.com/'])('accepts %s', (raw) => {
     expect(parseGitHubEnterpriseUrl(raw)).toEqual({
       host: 'ghes.example.com',
       apiBase: 'https://ghes.example.com/api/v3',
+      ownsBareRefs: false,
     });
   });
 
@@ -26,6 +30,7 @@ describe('parseGitHubEnterpriseUrl', () => {
     expect(parseGitHubEnterpriseUrl('https://GHES.Example.com:8443')).toEqual({
       host: 'ghes.example.com',
       apiBase: 'https://ghes.example.com:8443/api/v3',
+      ownsBareRefs: false,
     });
   });
 
@@ -33,6 +38,7 @@ describe('parseGitHubEnterpriseUrl', () => {
     expect(parseGitHubEnterpriseUrl('http://127.0.0.1:8080')).toEqual({
       host: '127.0.0.1',
       apiBase: 'http://127.0.0.1:8080/api/v3',
+      ownsBareRefs: false,
     });
   });
 
@@ -48,8 +54,68 @@ describe('parseGitHubEnterpriseUrl', () => {
     'https://localhost:8443',
     'https://github.com',
     'https://api.github.com',
+    'https://github.com.',
+    'https://ghes.example.com.',
   ])('refuses %s', (raw) => {
     expect(() => parseGitHubEnterpriseUrl(raw)).toThrow(/GITHUB_ENTERPRISE_URL/);
+  });
+});
+
+describe('the bare-refs host', () => {
+  it.each(['ghes.example.com', ' GHES.Example.COM '])('owns bare refs when %j names the same host', (mapped) => {
+    expect(parseGitHubEnterpriseUrl('https://ghes.example.com', mapped).ownsBareRefs).toBe(true);
+  });
+
+  it('is off by default, and an empty mapping stays off', () => {
+    expect(parseGitHubEnterpriseUrl('https://ghes.example.com').ownsBareRefs).toBe(false);
+    expect(parseGitHubEnterpriseUrl(undefined, undefined).ownsBareRefs).toBe(false);
+  });
+
+  it('needs GITHUB_ENTERPRISE_URL', () => {
+    expect(() => parseGitHubEnterpriseUrl(undefined, 'ghes.example.com')).toThrow(
+      /GITHUB_ENTERPRISE_BARE_REFS_HOST.*GITHUB_ENTERPRISE_URL/,
+    );
+  });
+
+  it('names both values when the hosts differ', () => {
+    expect(() => parseGitHubEnterpriseUrl('https://ghes.example.com', 'other.example.com')).toThrow(
+      /GITHUB_ENTERPRISE_BARE_REFS_HOST.*other\.example\.com.*ghes\.example\.com/,
+    );
+  });
+});
+
+describe('payloadHost', () => {
+  it.each<[JsonValue | undefined, string | undefined]>([
+    [{ repository: { html_url: 'https://github.com/o/r' } }, 'github.com'],
+    [{ repository: { html_url: 'https://GHES.example.com/o/r' } }, 'ghes.example.com'],
+    [{ repository: { html_url: 'not a url' } }, undefined],
+    [{ repository: { html_url: 5 } }, undefined],
+    [{ repository: {} }, undefined],
+    [{}, undefined],
+    [[], undefined],
+    [undefined, undefined],
+  ])('reads %j as %s', (payload, host) => {
+    expect(payloadHost(payload)).toBe(host);
+  });
+});
+
+describe('payloadHostRefusal', () => {
+  it('takes any server while the site is github.com, and its own host on GHES', () => {
+    expect(payloadHostRefusal('github.com', GITHUB_COM)).toBeNull();
+    expect(payloadHostRefusal(undefined, GITHUB_COM)).toBeNull();
+    expect(payloadHostRefusal('ghes.example.com', GHES)).toBeNull();
+  });
+
+  it('names what the payload names and what GITHUB_ENTERPRISE_URL names', () => {
+    expect(payloadHostRefusal('github.com', GHES)).toBe(
+      'payload names github.com; GITHUB_ENTERPRISE_URL names ghes.example.com',
+    );
+    expect(payloadHostRefusal('other.example.com', GHES)).toBe(
+      'payload names other.example.com; GITHUB_ENTERPRISE_URL names ghes.example.com',
+    );
+    expect(payloadHostRefusal(undefined, GHES)).toBe(
+      'payload names no repository URL; GITHUB_ENTERPRISE_URL names ghes.example.com',
+    );
   });
 });
 

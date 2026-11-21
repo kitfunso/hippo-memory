@@ -1,5 +1,6 @@
 import {
   envGitHubAllowUnknownInstallationFallback,
+  envGitHubEnterpriseBareRefsHost,
   envGitHubEnterpriseUrl,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
@@ -23,7 +24,14 @@ import {
   ingestEvent as ingestGitHubEvent,
   type IngestEvent as GitHubIngestEvent,
 } from './ingest.js';
-import { headerHost, hostMismatch, parseGitHubEnterpriseUrl, type GitHubSite } from './site.js';
+import {
+  headerHost,
+  hostMismatch,
+  parseGitHubEnterpriseUrl,
+  payloadHost,
+  payloadMismatch,
+  type GitHubSite,
+} from './site.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -55,7 +63,7 @@ export function githubPreviousSecret(): string | undefined {
 /** The GitHub site GITHUB_ENTERPRISE_URL names, for the webhook, the backfill and the DLQ replay
  * alike; throws on a value that is not a GHES root URL. */
 export function githubSiteFromEnv(): GitHubSite {
-  return parseGitHubEnterpriseUrl(envGitHubEnterpriseUrl());
+  return parseGitHubEnterpriseUrl(envGitHubEnterpriseUrl(), envGitHubEnterpriseBareRefsHost());
 }
 
 export function warnGitHubPreviousSecretOpen(): void {
@@ -235,12 +243,17 @@ function routingOf(body: SignedEnvelope): DlqRouting {
 
 let warnedEnterpriseUnset = false;
 
-/** Parks a delivery from a server the set GITHUB_ENTERPRISE_URL does not name; true when it did.
- * With the setting unset, a GHES delivery gets through and one warning per process says its keys
- * carry no host. */
+/** Parks a delivery from a server the set GITHUB_ENTERPRISE_URL does not name, by its header or by
+ * the repository URL its signed payload carries; true when it did. With the setting unset, a GHES
+ * delivery gets through and one warning per process says its keys carry no host. */
 async function parkedForHost(d: SignedDelivery): Promise<boolean> {
   const sent = headerHost(d.enterpriseHost);
-  const error = hostMismatch(sent, d.site);
+  const parsed = tryParseJson(d.rawBody);
+  // A payload with no repository URL passes: the header it matched already names the server.
+  const payloadSays = payloadHost(parsed);
+  const error =
+    hostMismatch(sent, d.site) ??
+    (payloadSays === undefined ? null : payloadMismatch(sent, payloadSays, d.site));
   if (error === null) {
     if (sent !== undefined && d.site.host === undefined && !warnedEnterpriseUnset) {
       warnedEnterpriseUnset = true;
@@ -253,7 +266,6 @@ async function parkedForHost(d: SignedDelivery): Promise<boolean> {
   }
   // A parked delivery still answers 200, so this line is how an operator sees intake stop.
   log.warn(`github webhook: parked delivery ${d.deliveryId ?? '-'} as host_mismatch: ${error}`);
-  const parsed = tryParseJson(d.rawBody);
   const body = parsed !== undefined && isGitHubWebhookEnvelope(parsed) ? parsed : null;
   const routing: DlqRouting =
     body === null ? { installationId: null, repoFullName: null } : routingOf(body);
@@ -396,6 +408,7 @@ async function dispatchGitHubEvent({
       idempotencyKey,
       deliveryId,
       eventName: action.eventName,
+      ownsBareRefs: d.site.ownsBareRefs,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
   } else {
@@ -404,6 +417,7 @@ async function dispatchGitHubEvent({
       rawBody: d.rawBody,
       deliveryId,
       host: d.site.host,
+      ownsBareRefs: d.site.ownsBareRefs,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }

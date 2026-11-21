@@ -6,7 +6,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
 import { log } from '../../src/base/util/log.js';
-import { hostMismatch, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
+import { hostMismatch, mismatchSender, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -683,6 +683,32 @@ describe('POST /v1/connectors/github/events on GHES', () => {
       }
     },
   );
+
+  it('G4. a delivery whose header names the site but whose payload names github.com parks as host_mismatch', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    try {
+      const body = issueBody().replace('"repository":{', '"repository":{"html_url":"https://github.com/acme/repo",');
+      const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g4'));
+      expect(await jsonAs<{ ok: boolean; status: string }>(res)).toEqual({ ok: true, status: 'dlq' });
+      const rows = dlqRows();
+      expect(rows.map((r) => r.bucket)).toEqual(['host_mismatch']);
+      expect(rows[0]?.error).toContain('ghes.example.com');
+      expect(mismatchSender(rows[0]?.error ?? '')).toEqual({ sent: 'ghes.example.com' });
+      expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
+      expect(warn.mock.calls.filter(([m]) => String(m).includes('host_mismatch'))).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('G4b. a payload naming the site host is ingested', async () => {
+    const body = issueBody().replace(
+      '"repository":{',
+      '"repository":{"html_url":"https://ghes.example.com/acme/repo",',
+    );
+    const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g4b'));
+    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
+  });
 
   it('G5. an unmapped github.com delivery parks as host_mismatch, not unroutable, when a routing row exists', async () => {
     const db = openHippoDb(root);

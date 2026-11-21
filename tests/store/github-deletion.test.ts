@@ -247,7 +247,7 @@ describe('handleCommentDeleted', () => {
     expect(remaining).toHaveLength(0);
   });
 
-  it('9. a GHES ref also archives the github.com-form row stored before the host was set', async () => {
+  it('9. a GHES ref also archives the github.com-form row when the operator owns bare refs', async () => {
     const hostRef = 'github://ghes.example.com/acme/repo/issue/42/comment/123';
     const legacy = await seedMemory(root, { content: 'stored before the setting' });
     const hosted = await seedMemory(root, { content: 'stored after the setting', artifactRef: hostRef });
@@ -257,10 +257,28 @@ describe('handleCommentDeleted', () => {
       idempotencyKey: 'idem-ghes',
       deliveryId: 'd-ghes',
       eventName: 'issue_comment',
+      ownsBareRefs: true,
     });
 
     expect(result).toEqual({ status: 'archived', archivedCount: 2 });
     expect(rawRowExists(root, legacy)).toBe(false);
+    expect(rawRowExists(root, hosted)).toBe(false);
+  });
+
+  it('9b. without the bare-refs host a GHES deletion leaves the github.com-form row active', async () => {
+    const hostRef = 'github://ghes.example.com/acme/repo/issue/42/comment/123';
+    const cloud = await seedMemory(root, { content: 'a github.com comment' });
+    const hosted = await seedMemory(root, { content: 'a GHES comment', artifactRef: hostRef });
+
+    const result = await handleCommentDeleted(ctxFor(root), {
+      artifactRef: hostRef,
+      idempotencyKey: 'idem-ghes-b',
+      deliveryId: 'd-ghes-b',
+      eventName: 'issue_comment',
+    });
+
+    expect(result).toEqual({ status: 'archived', archivedCount: 1 });
+    expect(rawRowExists(root, cloud)).toBe(true);
     expect(rawRowExists(root, hosted)).toBe(false);
   });
 

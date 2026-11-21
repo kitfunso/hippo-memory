@@ -46,6 +46,7 @@ describe('scopeFromRepository', () => {
     };
     expect(scopeFromRepository(secret, 'ghes.example.com')).toBe('github:private:ghes.example.com/acme/secret');
     expect(scopeFromRepository(open, 'ghes.example.com')).toBe('github:public:ghes.example.com/acme/open');
-    expect(scopeFromRepository(undefined, 'ghes.example.com')).toBe('github:private:unknown');
+    expect(scopeFromRepository(undefined, 'ghes.example.com')).toBe('github:private:ghes.example.com/unknown');
+    expect(scopeFromRepository(undefined)).toBe('github:private:unknown');
   });
 });

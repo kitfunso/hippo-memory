@@ -426,7 +426,7 @@ describe('ingestEvent', () => {
     },
   );
 
-  it('10. a GHES ingest finds an item stored under the github.com-form ref, and stores new items under the host ref', async () => {
+  it('10a. a GHES ingest without the bare-refs host ignores a github.com-form row and stores its own', async () => {
     const payload = makeIssueEvent();
     const rawBody = JSON.stringify(payload);
     const event: IngestEvent = { eventName: 'issues', payload };
@@ -435,6 +435,29 @@ describe('ingestEvent', () => {
     expect(first.status).toBe('ingested');
 
     const again = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-b', host: 'ghes.example.com' });
+    expect(again.status).toBe('ingested');
+    const refs = loadAllEntries(root, 'default')
+      .filter((e) => e.tags.includes('source:github'))
+      .map((e) => e.artifactRef)
+      .sort();
+    expect(refs).toEqual(['github://acme/demo/issue/42', 'github://ghes.example.com/acme/demo/issue/42']);
+  });
+
+  it('10. a GHES ingest that owns bare refs finds an item stored under the github.com-form ref, and stores new items under the host ref', async () => {
+    const payload = makeIssueEvent();
+    const rawBody = JSON.stringify(payload);
+    const event: IngestEvent = { eventName: 'issues', payload };
+
+    const first = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-a' });
+    expect(first.status).toBe('ingested');
+
+    const again = await ingestEvent(ctx(root), {
+      event,
+      rawBody,
+      deliveryId: 'd-b',
+      host: 'ghes.example.com',
+      ownsBareRefs: true,
+    });
     expect(again).toEqual({ status: 'duplicate', memoryId: first.memoryId });
     expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
 
@@ -444,6 +467,7 @@ describe('ingestEvent', () => {
       rawBody: JSON.stringify(next),
       deliveryId: 'd-c',
       host: 'ghes.example.com',
+      ownsBareRefs: true,
     });
     expect(fresh.status).toBe('ingested');
     const refs = loadAllEntries(root, 'default')

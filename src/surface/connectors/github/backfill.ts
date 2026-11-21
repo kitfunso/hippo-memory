@@ -118,13 +118,18 @@ interface DrainStreamOptions {
   readonly sleep: (ms: number) => Promise<void>;
   readonly maxItems?: number;
   readonly host: string | undefined;
+  readonly ownsBareRefs: boolean;
 }
 
-/** The next page's URL. A link to another origin throws, so the token never leaves the server
- * the backfill started on. */
+/** The next page's URL. A link to another origin or with credentials throws, so the token never
+ * leaves the server the backfill started on and no link text is printed. */
 function sameOriginNext(next: string | null, origin: string): string | null {
   if (next === null) return null;
-  const nextOrigin = tryParseUrl(next)?.origin ?? '(not a URL)';
+  const link = tryParseUrl(next);
+  if (link !== undefined && (link.username !== '' || link.password !== '')) {
+    throw new Error('GitHub next-page link carries credentials; backfill stopped');
+  }
+  const nextOrigin = link?.origin ?? '(not a URL)';
   if (nextOrigin !== origin) {
     throw new Error(`GitHub next-page link leaves ${origin} for ${nextOrigin}; backfill stopped`);
   }
@@ -157,7 +162,7 @@ async function drainStream(
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      if (await ingestBackfillItem(ctx, item, evt, updatedAt, options.host)) ingested++;
+      if (await ingestBackfillItem(ctx, item, evt, updatedAt, options)) ingested++;
 
       if (maxItems && ingested >= maxItems) {
         // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
@@ -182,13 +187,14 @@ async function ingestBackfillItem(
   item: JsonValue,
   evt: IngestEvent,
   updatedAt: string | null,
-  host: string | undefined,
+  site: Pick<DrainStreamOptions, 'host' | 'ownsBareRefs'>,
 ): Promise<boolean> {
   const r = await ingestEvent(ctx, {
     event: evt,
     rawBody: JSON.stringify(item),
     deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
-    host,
+    host: site.host,
+    ownsBareRefs: site.ownsBareRefs,
   });
   return r.status === 'ingested' || r.status === 'skipped';
 }
@@ -339,6 +345,7 @@ async function backfillStream(
     sleep,
     maxItems: opts.maxPerStream,
     host: site.host,
+    ownsBareRefs: site.ownsBareRefs,
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.

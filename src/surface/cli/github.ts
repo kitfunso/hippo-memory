@@ -11,6 +11,7 @@ import { ingestEvent, githubEventRef, type IngestEvent } from '../connectors/git
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
 import { githubPreviousSecret, githubSiteFromEnv } from '../connectors/github/webhook.js';
+import { isGitHubRepoFullName } from '../connectors/github/ref.js';
 import type { GitHubSite } from '../connectors/github/site.js';
 import {
   isGitHubIssueEvent,
@@ -57,6 +58,9 @@ export function printGitHubBackfillUsage(): void {
   console.log(
     '  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.',
   );
+  console.log(
+    '  Also set GITHUB_ENTERPRISE_BARE_REFS_HOST=<host> if that server sent webhooks before you set the URL.',
+  );
 }
 
 /** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
@@ -79,7 +83,7 @@ function githubSiteOrExit(): GitHubSite {
 
 async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const repo = stringFlag(flags, 'repo');
-  if (repo === undefined || !repo.includes('/')) {
+  if (repo === undefined || !isGitHubRepoFullName(repo)) {
     printGitHubBackfillUsage();
     throw new CliExit(2);
   }
@@ -151,7 +155,8 @@ export function parseParkedPayload(rawPayload: string): JsonValue {
   }
 }
 
-function reingestParkedDelivery(host: string | undefined): IngestHook {
+function reingestParkedDelivery(site: GitHubSite): IngestHook {
+  const { host, ownsBareRefs } = site;
   return async (innerCtx, args) => {
     const parsed = parseParkedPayload(args.rawPayload);
     const event = parsedToIngestEvent(parsed, args.eventName);
@@ -174,6 +179,7 @@ function reingestParkedDelivery(host: string | undefined): IngestHook {
         idempotencyKey,
         deliveryId: args.deliveryId,
         eventName: event.eventName,
+        ownsBareRefs,
       });
       // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return
       // null; the replay audit trail is github_dlq.retry_count + retried_at.
@@ -184,6 +190,7 @@ function reingestParkedDelivery(host: string | undefined): IngestHook {
       rawBody: args.rawPayload,
       deliveryId: args.deliveryId,
       host,
+      ownsBareRefs,
     });
     return { memoryId: r.memoryId };
   };
@@ -204,7 +211,7 @@ export async function replayGitHubDlq(
       force,
       webhookSecret: envGitHubWebhookSecret(),
       previousSecret: githubPreviousSecret(),
-      ingestHook: reingestParkedDelivery(site.host),
+      ingestHook: reingestParkedDelivery(site),
       site,
     }),
   );

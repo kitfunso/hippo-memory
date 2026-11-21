@@ -6,9 +6,16 @@ import {
   type SignatureRefusal,
 } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
-import { GITHUB_COM, hostMismatch, mismatchSender, type GitHubSite } from './site.js';
+import {
+  GITHUB_COM,
+  hostMismatch,
+  mismatchSender,
+  payloadHost,
+  payloadHostRefusal,
+  type GitHubSite,
+} from './site.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
-import type { JsonValue } from '../../../base/util/json.js';
+import { tryParseJson, type JsonValue } from '../../../base/util/json.js';
 import type {
   GitHubDlqBucket as DlqBucket,
   GitHubDlqItem as DlqItem,
@@ -37,8 +44,9 @@ export interface ReplayDlqOptions {
   previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
-  /** Today's GITHUB_ENTERPRISE_URL site. A host_mismatch row replays only when the webhook's host
-   * check would take its sender now; --force does not skip this. */
+  /** Today's GITHUB_ENTERPRISE_URL site. A row replays only when the server its signed payload
+   * names is the site's, and a host_mismatch row also when the webhook's header check would take
+   * its sender now; --force skips neither. */
   site?: GitHubSite;
 }
 
@@ -53,16 +61,18 @@ export type IngestHook = (
   },
 ) => Promise<{ memoryId: string | null }>;
 
-/** Why a host_mismatch row may not replay under today's setting: the webhook's own host check,
- * run on the sender the park recorded. */
+/** Why a row may not replay under today's setting: for a host_mismatch row the webhook's header
+ * check on the sender the park recorded, then for every row the server its signed payload names. */
 function hostRefusal(row: DlqItem, site: GitHubSite): string | null {
-  if (row.bucket !== 'host_mismatch') return null;
-  const parked = mismatchSender(row.error);
-  if (parked === null) return 'host_mismatch row names no sender, so it cannot be replayed';
-  const still = hostMismatch(parked.sent, site);
-  return still === null
-    ? null
-    : `${still}; set GITHUB_ENTERPRISE_URL to the sending server, then replay`;
+  if (row.bucket === 'host_mismatch') {
+    const parked = mismatchSender(row.error);
+    if (parked === null) return 'host_mismatch row names no sender, so it cannot be replayed';
+    const still = hostMismatch(parked.sent, site);
+    if (still !== null) {
+      return `${still}; set GITHUB_ENTERPRISE_URL to the sending server, then replay`;
+    }
+  }
+  return payloadHostRefusal(payloadHost(tryParseJson(row.rawPayload)), site);
 }
 
 /** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check
