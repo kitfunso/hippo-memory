@@ -984,3 +984,5 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 8. Board: a row goes up only with Keith's go, beside the published Table 5 rows of the same setting.
 
 **Read before this note.** The authors' `evaluate_common.py`, paper sections 5.1.2 and C.2.2, the dry-run prompt of `u00-q0000`, the smoke reply (a smoke item only) and the count of answers sent. No score of the full run.
+
+**Correction (2026-11-21, before any score).** The "Late note" paragraph above is wrong. The stop ended only the shell that started the answer stage; its Python process ran on. That process answered all 2,216 questions from 08:24:04Z to 08:29:27Z: 2,125 answers before the commit that added this note (08:29:04Z) and 91 after it. So the whole answer stage ran before this note, with the setup this note gives. The score stage still had not run, `score.txt` did not exist, and no score was read before this correction.
