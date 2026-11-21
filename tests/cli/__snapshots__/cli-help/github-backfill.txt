@@ -3,3 +3,6 @@ hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
   --since  Initial high-water-mark for first run (optional, ISO 8601)
   --max    Cap items per stream (optional, integer)
   Requires GITHUB_TOKEN env var with repo read scope.
+  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.
+  Also set GITHUB_ENTERPRISE_BARE_REFS_HOST=<host> only if the store took webhooks from that server
+  before you set the URL and never took github.com ones.

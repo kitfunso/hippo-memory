@@ -66,6 +66,19 @@ describe('realGitHubFetcher: non-200 must throw', () => {
     );
   });
 
+  it('names the host and path when the request never gets a reply', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('fetch failed');
+      }),
+    );
+    const call = realGitHubFetcher({ url: 'https://ghe.example.com/api/v3/repos/acme/app/issues?page=2', token: 't' });
+    await expect(call).rejects.toThrow(
+      'GitHub request to https://ghe.example.com/api/v3/repos/acme/app/issues failed: fetch failed',
+    );
+  });
+
   it('throws GitHubFetchError on 404 Not Found', async () => {
     vi.stubGlobal(
       'fetch',

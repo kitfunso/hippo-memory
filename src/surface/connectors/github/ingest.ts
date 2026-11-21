@@ -6,6 +6,7 @@
 import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
+import { githubArtifactRef, type GitHubItem } from './ref.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
   issueEventToRememberOpts,
@@ -35,35 +36,50 @@ export interface IngestInput {
   rawBody: string;
   /** X-GitHub-Delivery header value, audit metadata only. */
   deliveryId: string;
+  /** GITHUB_ENTERPRISE_URL's host, which the ref, tags and scope carry; undefined on github.com. */
+  host?: string;
+  /** The site's ownsBareRefs: only then is a seen github.com-form key a duplicate of a GHES event. */
+  ownsBareRefs?: boolean;
 }
 
-function transformEvent(event: IngestEvent): RememberOptions | null {
+function transformEvent(event: IngestEvent, host: string | undefined): RememberOptions | null {
   switch (event.eventName) {
     case 'issues':
-      return issueEventToRememberOpts(event.payload);
+      return issueEventToRememberOpts(event.payload, host);
     case 'issue_comment':
-      return issueCommentEventToRememberOpts(event.payload);
+      return issueCommentEventToRememberOpts(event.payload, host);
     case 'pull_request':
-      return pullRequestEventToRememberOpts(event.payload);
+      return pullRequestEventToRememberOpts(event.payload, host);
     case 'pull_request_review_comment':
-      return prReviewCommentEventToRememberOpts(event.payload);
+      return prReviewCommentEventToRememberOpts(event.payload, host);
   }
 }
 
-/** Extract the source-normalized identifier the idempotency key needs, so backfill and webhook deliveries of the same
- *  source revision collapse onto one dedupe row. Mirrors the artifactRef strings in transform.ts. */
-function eventArtifactRef(event: IngestEvent): string {
-  const repo = event.payload.repository?.full_name ?? 'unknown/unknown';
+function eventItem(event: IngestEvent): GitHubItem {
   switch (event.eventName) {
     case 'issues':
-      return `github://${repo}/issue/${event.payload.issue.number}`;
+      return { kind: 'issue', number: event.payload.issue.number };
     case 'issue_comment':
-      return `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`;
+      return {
+        kind: 'issue_comment',
+        number: event.payload.issue.number,
+        commentId: event.payload.comment.id,
+      };
     case 'pull_request':
-      return `github://${repo}/pull/${event.payload.pull_request.number}`;
+      return { kind: 'pull', number: event.payload.pull_request.number };
     case 'pull_request_review_comment':
-      return `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
+      return {
+        kind: 'review_comment',
+        number: event.payload.pull_request.number,
+        commentId: event.payload.comment.id,
+      };
   }
+}
+
+/** The event's artifact_ref: the one transform.ts stores, the dedupe key hashes and a comment
+ * deletion looks up, so backfill and webhook deliveries of one revision collapse onto one row. */
+export function githubEventRef(event: IngestEvent, host: string | undefined): string {
+  return githubArtifactRef(event.payload.repository?.full_name, eventItem(event), host);
 }
 
 function eventUpdatedAt(event: IngestEvent): string | null {
@@ -84,13 +100,10 @@ export async function ingestEvent(
   input: IngestInput,
 ): Promise<IngestResult> {
   const events = ctx.store.connectorEvents;
-  const idempotencyKey = computeIdempotencyKey(
-    eventArtifactRef(input.event),
-    eventUpdatedAt(input.event),
-  );
+  const updatedAt = eventUpdatedAt(input.event);
   const event: ConnectorEvent = {
     connector: 'github',
-    idempotencyKey,
+    idempotencyKey: computeIdempotencyKey(githubEventRef(input.event, input.host), updatedAt),
     deliveryId: input.deliveryId,
     eventName: input.event.eventName,
   };
@@ -100,7 +113,14 @@ export async function ingestEvent(
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
+  // Only the operator can say the github.com-form keys were this server's; a bare ref proves nothing.
+  if (input.host !== undefined && input.ownsBareRefs === true) {
+    const legacyKey = computeIdempotencyKey(githubEventRef(input.event, undefined), updatedAt);
+    const legacy = await events.eventRecord({ ...event, idempotencyKey: legacyKey });
+    if (legacy.seen) return { status: 'duplicate', memoryId: legacy.memoryId };
+  }
+
   // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
   // transform.
-  return rememberWithEventLog(ctx, event, transformEvent(input.event));
+  return rememberWithEventLog(ctx, event, transformEvent(input.event, input.host));
 }

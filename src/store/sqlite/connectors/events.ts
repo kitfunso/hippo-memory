@@ -20,7 +20,7 @@ import {
 import { markSlackEventSeen, slackEventMemory, slackEventRecord, slackEventSeen } from './slack.js';
 
 // The tenant filter keeps one tenant's deletion from reaching another's row under the same ref.
-const RAW_ROWS = `SELECT id FROM memories WHERE artifact_ref = ? AND tenant_id = ? AND kind = 'raw'`;
+const RAW_ROWS = `SELECT id FROM memories WHERE artifact_ref IN (?, ?) AND tenant_id = ? AND kind = 'raw'`;
 
 function eventSeen(db: DatabaseSyncLike, event: ConnectorEvent): boolean {
   return event.connector === 'slack'
@@ -56,9 +56,11 @@ export function eventRecord(
       ? slackEventRecord(db, event.eventId)
       : githubEventRecord(db, event.idempotencyKey);
   if (record.seen || artifact === undefined) return record;
-  const row = cachedStatement(db, RAW_ROWS).get(artifact.artifactRef, artifact.tenantId) as
-    | { id?: string }
-    | undefined;
+  const row = cachedStatement(db, RAW_ROWS).get(
+    artifact.artifactRef,
+    artifact.legacyArtifactRef ?? artifact.artifactRef,
+    artifact.tenantId,
+  ) as { id?: string } | undefined;
   return { seen: false, memoryId: row?.id ?? null };
 }
 
@@ -71,9 +73,11 @@ export function markEventSeen(
 ): EventMarked {
   if (deleted === undefined) return { duplicate: !logEvent(db, event, null), archived: 0 };
   if (eventSeen(db, event)) return { duplicate: true, archived: 0 };
-  const rows = cachedStatement(db, RAW_ROWS).all(deleted.artifactRef, deleted.tenantId) as Array<{
-    id: string;
-  }>;
+  const rows = cachedStatement(db, RAW_ROWS).all(
+    deleted.artifactRef,
+    deleted.legacyArtifactRef ?? deleted.artifactRef,
+    deleted.tenantId,
+  ) as Array<{ id: string }>;
   const ids = rows.map((r) => r.id);
   if (ids.length === 0) {
     // Still logged, so a retry of the same delete answers 'duplicate'.

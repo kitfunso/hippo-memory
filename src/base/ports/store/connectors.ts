@@ -98,6 +98,8 @@ export type ConnectorEventRecord =
 /** The artifact a deletion event names, in the tenant whose rows it may archive. */
 export interface ArtifactLookup {
   readonly artifactRef: string;
+  /** The github.com-form ref a GHES item was stored under before refs carried the host; also matched. */
+  readonly legacyArtifactRef?: string;
   readonly tenantId: string;
 }
 
@@ -165,7 +167,12 @@ export interface GitHubDlqInsert {
   bucket: GitHubDlqBucket;
 }
 
-export type GitHubDlqBucket = 'parse_error' | 'unroutable' | 'signature_failed' | 'unhandled';
+export type GitHubDlqBucket =
+  | 'parse_error'
+  | 'unroutable'
+  | 'signature_failed'
+  | 'unhandled'
+  | 'host_mismatch';
 
 export type DeadLetterConnector = keyof DeadLetterRows;
 

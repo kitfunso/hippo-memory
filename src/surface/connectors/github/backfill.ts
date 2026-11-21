@@ -4,6 +4,8 @@
 
 import type { ConnectorContext } from '../ingest.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
+import { githubRepoKey } from './ref.js';
+import { GITHUB_COM, type GitHubSite } from './site.js';
 import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
 import type {
   GitHubIssueEvent,
@@ -13,10 +15,9 @@ import type {
   GitHubSender,
 } from './types.js';
 import { type JsonValue, isJsonObject } from '../../../base/util/json.js';
+import { tryParseUrl } from '../../../base/util/net.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
 import type { CursorKey, GitHubStream } from '../../../base/ports/store/connectors.js';
-
-const API = 'https://api.github.com';
 
 export interface BackfillOptions {
   /** e.g. 'acme/repo'. */
@@ -29,6 +30,8 @@ export interface BackfillOptions {
   sinceIso?: string;
   /** sleep ms — injectable so tests don't actually wait. */
   sleepMs?: (ms: number) => Promise<void>;
+  /** github.com unless the caller passes GITHUB_ENTERPRISE_URL's site. */
+  site?: GitHubSite;
 }
 
 export interface BackfillStreamCounts {
@@ -114,6 +117,23 @@ interface DrainStreamOptions {
   readonly token: string;
   readonly sleep: (ms: number) => Promise<void>;
   readonly maxItems?: number;
+  readonly host: string | undefined;
+  readonly ownsBareRefs: boolean;
+}
+
+/** The next page's URL. A link to another origin or with credentials throws, so the token never
+ * leaves the server the backfill started on and no link text is printed. */
+function sameOriginNext(next: string | null, origin: string): string | null {
+  if (next === null) return null;
+  const link = tryParseUrl(next);
+  if (link !== undefined && (link.username !== '' || link.password !== '')) {
+    throw new Error('GitHub next-page link carries credentials; backfill stopped');
+  }
+  const nextOrigin = link?.origin ?? '(not a URL)';
+  if (nextOrigin !== origin) {
+    throw new Error(`GitHub next-page link leaves ${origin} for ${nextOrigin}; backfill stopped`);
+  }
+  return next;
 }
 
 async function drainStream(
@@ -122,6 +142,7 @@ async function drainStream(
   options: DrainStreamOptions,
 ): Promise<{ ingested: number; pages: number; maxUpdatedAt: string | null; drained: boolean }> {
   const { toIngestEvent, maxItems } = options;
+  const origin = new URL(url0).origin;
   let url: string | null = url0;
   let ingested = 0;
   let pages = 0;
@@ -141,7 +162,7 @@ async function drainStream(
 
       const evt = toIngestEvent(item);
       if (!evt) continue;
-      if (await ingestBackfillItem(ctx, item, evt, updatedAt)) ingested++;
+      if (await ingestBackfillItem(ctx, item, evt, updatedAt, options)) ingested++;
 
       if (maxItems && ingested >= maxItems) {
         // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
@@ -149,7 +170,7 @@ async function drainStream(
       }
     }
 
-    url = page.next;
+    url = sameOriginNext(page.next, origin);
   }
 
   return { ingested, pages, maxUpdatedAt, drained: true };
@@ -166,11 +187,14 @@ async function ingestBackfillItem(
   item: JsonValue,
   evt: IngestEvent,
   updatedAt: string | null,
+  site: Pick<DrainStreamOptions, 'host' | 'ownsBareRefs'>,
 ): Promise<boolean> {
   const r = await ingestEvent(ctx, {
     event: evt,
     rawBody: JSON.stringify(item),
     deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
+    host: site.host,
+    ownsBareRefs: site.ownsBareRefs,
   });
   return r.status === 'ingested' || r.status === 'skipped';
 }
@@ -269,10 +293,15 @@ function prReviewCommentItemToEvent(
 
 const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
 
-const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
+const hwmOf = (
+  ctx: ConnectorContext,
+  opts: BackfillOptions,
+  site: GitHubSite,
+  stream: GitHubStream,
+): CursorKey => ({
   connector: 'github',
   tenantId: ctx.tenantId,
-  repo: opts.repoFullName,
+  repo: githubRepoKey(opts.repoFullName, site.host),
   stream,
 });
 
@@ -280,15 +309,16 @@ const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStrea
 async function resumeFrom(
   ctx: ConnectorContext,
   opts: BackfillOptions,
+  site: GitHubSite,
 ): Promise<Record<GitHubStream, string | null>> {
   const events = ctx.store.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
     for (const stream of GITHUB_STREAMS) {
-      await events.saveCursor(hwmOf(ctx, opts, stream), sinceIso, { keepSaved: true });
+      await events.saveCursor(hwmOf(ctx, opts, site, stream), sinceIso, { keepSaved: true });
     }
   }
-  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, stream));
+  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, site, stream));
   return {
     issues: await since('issues'),
     issueComments: await since('issueComments'),
@@ -300,6 +330,7 @@ async function resumeFrom(
 async function backfillStream(
   ctx: ConnectorContext,
   opts: BackfillOptions,
+  site: GitHubSite,
   sleep: (ms: number) => Promise<void>,
   stream: {
     url: string;
@@ -313,11 +344,16 @@ async function backfillStream(
     token: opts.token,
     sleep,
     maxItems: opts.maxPerStream,
+    host: site.host,
+    ownsBareRefs: site.ownsBareRefs,
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
+    await ctx.store.connectorEvents.saveCursor(
+      hwmOf(ctx, opts, site, stream.name),
+      res.maxUpdatedAt,
+    );
   }
   return { ingested: res.ingested, pages: res.pages };
 }
@@ -327,17 +363,19 @@ export async function backfillRepo(
   opts: BackfillOptions,
 ): Promise<BackfillResult> {
   const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const cursors = await resumeFrom(ctx, opts);
+  const site = opts.site ?? GITHUB_COM;
+  const cursors = await resumeFrom(ctx, opts, site);
   const repository = syntheticRepository(opts.repoFullName);
+  const { apiBase } = site;
 
   const result: BackfillResult = {
     ingested: { issues: 0, issueComments: 0, prReviewComments: 0 },
     pages: { issues: 0, issueComments: 0, prReviewComments: 0 },
   };
 
-  const issuesRes = await backfillStream(ctx, opts, sleep, {
+  const issuesRes = await backfillStream(ctx, opts, site, sleep, {
     url:
-      `${API}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
+      `${apiBase}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
       (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : ''),
     name: 'issues',
     toIngestEvent: (item) => issueItemToEvent(item, repository),
@@ -345,9 +383,9 @@ export async function backfillRepo(
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
 
-  const commentsRes = await backfillStream(ctx, opts, sleep, {
+  const commentsRes = await backfillStream(ctx, opts, site, sleep, {
     url:
-      `${API}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
+      `${apiBase}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
       (cursors.issueComments ? `&since=${encodeURIComponent(cursors.issueComments)}` : ''),
     name: 'issueComments',
     toIngestEvent: (item) => issueCommentItemToEvent(item, repository),
@@ -355,9 +393,9 @@ export async function backfillRepo(
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
 
-  const prCommentsRes = await backfillStream(ctx, opts, sleep, {
+  const prCommentsRes = await backfillStream(ctx, opts, site, sleep, {
     url:
-      `${API}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
+      `${apiBase}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
       (cursors.prReviewComments ? `&since=${encodeURIComponent(cursors.prReviewComments)}` : ''),
     name: 'prReviewComments',
     toIngestEvent: (item) => prReviewCommentItemToEvent(item, repository),

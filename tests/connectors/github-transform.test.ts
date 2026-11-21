@@ -314,3 +314,63 @@ describe('the shape all four transforms share', () => {
     });
   });
 });
+
+describe('with a GHES host', () => {
+  const GHES = 'ghes.example.com';
+  const user = { login: 'octocat', id: 1 };
+  const cases = [
+    {
+      name: 'issues',
+      opts: () =>
+        issueEventToRememberOpts(
+          { action: 'opened', repository: publicRepo, issue: { number: 42, title: 'T', body: 'B', user } },
+          GHES,
+        ),
+      ref: 'github://ghes.example.com/acme/widgets/issue/42',
+    },
+    {
+      name: 'issue_comment',
+      opts: () =>
+        issueCommentEventToRememberOpts(
+          {
+            action: 'created',
+            repository: publicRepo,
+            issue: { number: 42 },
+            comment: { id: 999, body: 'C', user },
+          },
+          GHES,
+        ),
+      ref: 'github://ghes.example.com/acme/widgets/issue/42/comment/999',
+    },
+    {
+      name: 'pull_request',
+      opts: () =>
+        pullRequestEventToRememberOpts(
+          { action: 'opened', repository: publicRepo, pull_request: { number: 7, title: 'T', body: 'B', user } },
+          GHES,
+        ),
+      ref: 'github://ghes.example.com/acme/widgets/pull/7',
+    },
+    {
+      name: 'pull_request_review_comment',
+      opts: () =>
+        prReviewCommentEventToRememberOpts(
+          {
+            action: 'created',
+            repository: publicRepo,
+            pull_request: { number: 7 },
+            comment: { id: 12345, body: 'R', user },
+          },
+          GHES,
+        ),
+      ref: 'github://ghes.example.com/acme/widgets/pull/7/review_comment/12345',
+    },
+  ];
+
+  it.each(cases)('$name carries the host in ref, repo tag and scope', ({ opts, ref }) => {
+    const o = opts();
+    expect(o?.artifactRef).toBe(ref);
+    expect(o?.tags?.[1]).toBe('repo:ghes.example.com/acme/widgets');
+    expect(o?.scope).toBe('github:public:ghes.example.com/acme/widgets');
+  });
+});
