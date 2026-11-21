@@ -148,6 +148,7 @@ async function supersedeScreened(
   const reviewer = reviewerOf(ctx);
   const verdict = screenWrite(ctx.actor, {
     content: newContent,
+    tags: overrides.tags,
     scope: target.scope ?? null,
     untrusted: false,
     holds: reviewer !== undefined,

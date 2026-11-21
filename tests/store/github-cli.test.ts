@@ -121,6 +121,7 @@ describe('hippo github CLI', () => {
             title: 'hello',
             body: 'world',
             user: { login: 'alice', id: 1 },
+            author_association: 'MEMBER',
             updated_at: '2026-01-01T00:00:00Z',
           },
         ];
@@ -139,6 +140,7 @@ describe('hippo github CLI', () => {
     for (const url of urls) expect(url.startsWith('https://ghes.example.com/api/v3/repos/acme/widgets/')).toBe(true);
     const raws = loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw');
     expect(raws.map((e) => e.artifactRef)).toEqual(['github://ghes.example.com/acme/widgets/issue/1']);
+    expect(raws.map((e) => e.scope)).toEqual(['github:private:ghes.example.com/acme/widgets']);
   });
 
   it('A17. a bad GITHUB_ENTERPRISE_URL exits 2 naming the setting, before any fetch', async () => {
@@ -490,12 +492,17 @@ describe('hippo github CLI', () => {
     expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
   });
 
-  const contributorComment = (id: number, text: string, user: { login: string; id: number }): string =>
+  const contributorComment = (
+    id: number,
+    text: string,
+    user: { login: string; id: number },
+    repoUrl = 'https://github.com/acme/repo',
+  ): string =>
     JSON.stringify({
       action: 'created',
       issue: { number: 42 },
       comment: { id, body: text, user, author_association: 'CONTRIBUTOR' },
-      repository: REPOSITORY,
+      repository: { ...REPOSITORY, html_url: repoUrl },
       sender: user,
       installation: { id: 99 },
     });
@@ -523,6 +530,19 @@ describe('hippo github CLI', () => {
     expect(liveRaws('github://acme/repo/issue/42/comment/3002')[0].scope).toMatch(/^quarantine:private:/);
   });
 
+  it('A27. a replayed GHES payload from a listed id is held while the URL is unset', async () => {
+    const id = await parkDelivery(
+      'issue_comment',
+      contributorComment(3005, 'I can repro on arm64', { login: 'bob', id: 2 }, 'https://ghes.example.com/acme/repo'),
+    );
+
+    expect((await replayWithTrusted(id, '2')).status).toBe(0);
+
+    const rows = liveRaws('github://acme/repo/issue/42/comment/3005');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].scope).toMatch(/^quarantine:private:/);
+  });
+
   it('dlq replay refuses a login in GITHUB_TRUSTED_USER_IDS, stores nothing and leaves the retry count at 0', async () => {
     const id = await parkDelivery(
       'issue_comment',
@@ -540,8 +560,10 @@ describe('hippo github CLI', () => {
   it('A26. under GHES a replayed outside-author comment is stored under the host ref and held', async () => {
     const id = await parkDelivery(
       'issue_comment',
-      withRepoUrl(
-        contributorComment(3004, 'I can repro on arm64', { login: 'mallory', id: 9 }),
+      contributorComment(
+        3004,
+        'I can repro on arm64',
+        { login: 'mallory', id: 9 },
         'https://ghes.example.com/acme/repo',
       ),
     );

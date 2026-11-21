@@ -474,7 +474,13 @@ describe('POST /v1/connectors/github/events', () => {
           user: { login: 'erin', id: 5 },
           author_association: 'CONTRIBUTOR',
         },
-        repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
+        repository: {
+          full_name: 'acme/repo',
+          html_url: 'https://github.com/acme/repo',
+          private: false,
+          owner: { login: 'acme' },
+          name: 'repo',
+        },
         sender: { login: 'erin', id: 5 },
         installation: { id: 99 },
       });

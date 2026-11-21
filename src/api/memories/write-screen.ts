@@ -23,6 +23,8 @@ export function reviewerOf(ctx: ContextWith<never, ReviewGroup>): ConnectorWrite
 export interface ScreenInput {
   /** The text the row stores. */
   readonly content: string;
+  /** The caller's own tags, screened like the content; never the marks or system tags code adds. */
+  readonly tags?: readonly string[];
   /** The scope the caller asked for. */
   readonly scope: string | null;
   /** Connector content an agent doesn't control: always screened, and tagged with its origin. */
@@ -46,7 +48,7 @@ const NOT_FLAGGED: InstructionDetection = { flagged: false, reason: null };
 
 export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
   const screened = input.untrusted || sharesAsMember(actor, input.scope);
-  const detection = screened ? detectInstruction(input.content) : NOT_FLAGGED;
+  const detection = screened ? firstFlagged([input.content, ...(input.tags ?? [])]) : NOT_FLAGGED;
   // Only a connector's rule may hold a write; a client body never reaches `rule`.
   const reason = holdReason(detection, input.untrusted ? input.rule : undefined);
   const quarantine =
@@ -56,6 +58,14 @@ export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
     ...(!input.untrusted && detection.flagged ? [INSTRUCTION_LIKE_TAG] : []),
   ];
   return { scope: quarantine ? quarantineScopeFor(input.scope) : input.scope, marks, quarantine };
+}
+
+function firstFlagged(texts: readonly string[]): InstructionDetection {
+  for (const text of texts) {
+    const found = detectInstruction(text);
+    if (found.flagged) return found;
+  }
+  return NOT_FLAGGED;
 }
 
 /** `tags` plus each mark it lacks. */

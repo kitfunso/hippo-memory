@@ -8,6 +8,7 @@ import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
 import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, githubEventRef, type IngestEvent } from '../connectors/github/ingest.js';
+import { NO_TRUSTED_USER_IDS } from '../connectors/github/transform.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
 import {
@@ -16,7 +17,7 @@ import {
   githubTrustedUserIds,
 } from '../connectors/github/webhook.js';
 import { isGitHubRepoFullName } from '../connectors/github/ref.js';
-import type { GitHubSite } from '../connectors/github/site.js';
+import { payloadHost, type GitHubSite } from '../connectors/github/site.js';
 import {
   isGitHubIssueEvent,
   isGitHubIssueCommentEvent,
@@ -102,6 +103,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   const site = githubSiteOrExit();
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
+  // Backfill fetches from site.apiBase, so every item is from the configured site.
   const trustedUserIds = githubTrustedUserIds();
 
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
@@ -198,7 +200,9 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
       deliveryId: args.deliveryId,
       host,
       ownsBareRefs,
-      trustedUserIds,
+      // The parked row keeps no header, so the payload's repository host alone says the server.
+      trustedUserIds:
+        payloadHost(parsed) === (host ?? 'github.com') ? trustedUserIds : NO_TRUSTED_USER_IDS,
     });
     return { memoryId: r.memoryId };
   };

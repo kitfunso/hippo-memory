@@ -27,12 +27,14 @@ import {
 } from './ingest.js';
 import {
   headerHost,
+  fromSite,
   hostMismatch,
   parseGitHubEnterpriseUrl,
   payloadHost,
   payloadMismatch,
   type GitHubSite,
 } from './site.js';
+import { NO_TRUSTED_USER_IDS } from './transform.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -442,7 +444,10 @@ async function dispatchGitHubEvent({
       deliveryId,
       host: d.site.host,
       ownsBareRefs: d.site.ownsBareRefs,
-      trustedUserIds: githubTrustedUserIds(),
+      // GitHub user ids are unique per server: the list holds only for items from the configured one.
+      trustedUserIds: fromSite(d.site, headerHost(d.enterpriseHost), payloadHost(body))
+        ? githubTrustedUserIds()
+        : NO_TRUSTED_USER_IDS,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }

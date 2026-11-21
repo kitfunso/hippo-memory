@@ -226,3 +226,58 @@ describe('POST /v1/connectors/github/events with GITHUB_ENTERPRISE_BARE_REFS_HOS
     expect(live()).toHaveLength(0);
   });
 });
+
+describe('GITHUB_TRUSTED_USER_IDS applies only to items from the configured server', () => {
+  let handle: ServerHandle | undefined;
+  let root: string;
+
+  afterEach(async () => {
+    await handle?.stop();
+    handle = undefined;
+  });
+
+  const start = async (enterpriseUrl: string | undefined) => {
+    root = makeRoot('gh-route-trusted-site');
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '5');
+    if (enterpriseUrl !== undefined) vi.stubEnv('GITHUB_ENTERPRISE_URL', enterpriseUrl);
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  };
+
+  // Author id 5, association NONE: only the trusted-id list can keep this issue live.
+  const outsideIssue = (htmlUrl: string): string =>
+    issueBody()
+      .replace('"user":{"login":"alice","id":1}', '"user":{"login":"erin","id":5}')
+      .replace('"author_association":"MEMBER"', '"author_association":"NONE"')
+      .replace('"repository":{', `"repository":{"html_url":"${htmlUrl}",`);
+
+  const scopeOf = () => loadAllEntries(root, 'default').find((e) => e.kind === 'raw')?.scope;
+
+  const send = async (body: string, deliveryId: string, ghesHost?: string) => {
+    const headers = defaultHeaders(body, 'issues', deliveryId);
+    const res = await postWebhook(
+      handle?.port ?? 0,
+      body,
+      ghesHost === undefined ? headers : { ...headers, 'x-github-enterprise-host': ghesHost },
+    );
+    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
+  };
+
+  it('T1. with the setting unset, a GHES delivery from a listed id is held', async () => {
+    await start(undefined);
+    await send(outsideIssue('https://ghes.example.com/acme/repo'), 't1', 'ghes.example.com');
+    expect(scopeOf()).toMatch(/^quarantine:private:/);
+  });
+
+  it('T2. with the setting unset, a github.com delivery from a listed id stays live', async () => {
+    await start(undefined);
+    await send(outsideIssue('https://github.com/acme/repo'), 't2');
+    expect(scopeOf()).toBe('github:public:acme/repo');
+  });
+
+  it('T3. with the setting on the GHES host, a GHES delivery from a listed id stays live', async () => {
+    await start('https://ghes.example.com');
+    await send(outsideIssue('https://ghes.example.com/acme/repo'), 't3', 'ghes.example.com');
+    expect(scopeOf()).toBe('github:public:ghes.example.com/acme/repo');
+  });
+});

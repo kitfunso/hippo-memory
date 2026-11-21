@@ -50,9 +50,17 @@ function escapeFrameClose(text: string): string {
   return text.replace(/(\\*)»/g, (_match, slashes: string) => `${slashes}${slashes}\\»`);
 }
 
-function shownContent(e: MemoryEntry): string {
+function shownContent(e: MemoryEntry, tagStr = ''): string {
   const open = frameOpen(e.tags);
-  return open === null ? e.content : `${open}${escapeFrameClose(e.content)}${UNTRUSTED_CLOSE}`;
+  return open === null
+    ? e.content
+    : `${open}${escapeFrameClose(e.content + tagStr)}${UNTRUSTED_CLOSE}`;
+}
+
+/** A framed row's tags go inside the frame with its content, since a member writes them too; the
+ * tag text printed after the row is '' then. */
+function tagsOutsideFrame(e: MemoryEntry, tagStr: string): string {
+  return frameOpen(e.tags) === null ? tagStr : '';
 }
 
 export function snapshotText(s: TaskSnapshot): string {
@@ -178,8 +186,9 @@ export function contextLine({
   strengthPct,
 }: ContextLineOptions): string {
   const e = item.entry;
-  const content = shownContent(e);
-  const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
+  const tagText = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
+  const content = shownContent(e, tagText);
+  const tagStr = tagsOutsideFrame(e, tagText);
   const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
   const globalPrefix = item.isGlobal ? '[global] ' : '';
   const label = confidenceLabel(e, now);
@@ -241,8 +250,9 @@ export function crossProjectHeading(entries: number): string {
 
 export function crossProjectLine(item: Pick<ContextResultEntry, 'entry' | 'origin'>): string {
   const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
-  const tagStr = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
-  return `- **[${originLabel}]** ${shownContent(item.entry)}${tagStr}`;
+  const tagText = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
+  const tagStr = tagsOutsideFrame(item.entry, tagText);
+  return `- **[${originLabel}]** ${shownContent(item.entry, tagText)}${tagStr}`;
 }
 
 /** An explicit header lets agents and humans tell borrowed context from project memory; no items

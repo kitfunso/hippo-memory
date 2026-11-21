@@ -15,6 +15,7 @@ import type { GitHubIssueEvent, GitHubIssueCommentEvent } from '../../src/surfac
 import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { isQuarantineScope } from '../../src/domain/trust/quarantine.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { rawProvenanceAt } from '../_helpers/report-reads.js';
 
@@ -37,7 +38,8 @@ function makeIssue(i: number): IngestEvent {
       number: 100 + i,
       title: `prov-issue-${i}`,
       body: `body ${i}`,
-      user: { login: `user${i}, author_association: 'MEMBER'`, id: i + 1 },
+      user: { login: `user${i}`, id: i + 1 },
+      author_association: 'MEMBER',
     },
   };
   return { eventName: 'issues', payload };
@@ -51,7 +53,8 @@ function makeIssueComment(i: number): IngestEvent {
     comment: {
       id: 7000 + i,
       body: `prov-comment-${i}`,
-      user: { login: `user${i}, author_association: 'MEMBER'`, id: i + 1 },
+      user: { login: `user${i}`, id: i + 1 },
+      author_association: 'MEMBER',
     },
   };
   return { eventName: 'issue_comment', payload };
@@ -101,6 +104,7 @@ describe('GitHub connector — provenance coverage parity', () => {
       expect(e.owner).toMatch(/^user:github:/);
       expect(e.artifactRef).not.toBeNull();
       expect(e.artifactRef?.startsWith('github://')).toBe(true);
+      expect(isQuarantineScope(e.scope)).toBe(false);
     }
   });
 });

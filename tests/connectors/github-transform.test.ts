@@ -324,12 +324,17 @@ describe('the shape all four transforms share', () => {
 describe('with a GHES host', () => {
   const GHES = 'ghes.example.com';
   const user = { login: 'octocat', id: 1 };
+  const author_association = 'MEMBER';
   const cases = [
     {
       name: 'issues',
       opts: () =>
         issueEventToRememberOpts(
-          { action: 'opened', repository: publicRepo, issue: { number: 42, title: 'T', body: 'B', user } },
+          {
+            action: 'opened',
+            repository: publicRepo,
+            issue: { number: 42, title: 'T', body: 'B', user, author_association },
+          },
           GHES,
         ),
       ref: 'github://ghes.example.com/acme/widgets/issue/42',
@@ -342,7 +347,7 @@ describe('with a GHES host', () => {
             action: 'created',
             repository: publicRepo,
             issue: { number: 42 },
-            comment: { id: 999, body: 'C', user },
+            comment: { id: 999, body: 'C', user, author_association },
           },
           GHES,
         ),
@@ -352,7 +357,11 @@ describe('with a GHES host', () => {
       name: 'pull_request',
       opts: () =>
         pullRequestEventToRememberOpts(
-          { action: 'opened', repository: publicRepo, pull_request: { number: 7, title: 'T', body: 'B', user } },
+          {
+            action: 'opened',
+            repository: publicRepo,
+            pull_request: { number: 7, title: 'T', body: 'B', user, author_association },
+          },
           GHES,
         ),
       ref: 'github://ghes.example.com/acme/widgets/pull/7',
@@ -365,7 +374,7 @@ describe('with a GHES host', () => {
             action: 'created',
             repository: publicRepo,
             pull_request: { number: 7 },
-            comment: { id: 12345, body: 'R', user },
+            comment: { id: 12345, body: 'R', user, author_association },
           },
           GHES,
         ),
@@ -378,6 +387,7 @@ describe('with a GHES host', () => {
     expect(o?.artifactRef).toBe(ref);
     expect(o?.tags?.[1]).toBe('repo:ghes.example.com/acme/widgets');
     expect(o?.scope).toBe('github:public:ghes.example.com/acme/widgets');
+    expect(o).not.toHaveProperty('hold');
   });
 
   it('holds an outside author on a GHES host and keeps the host in ref, repo tag and scope', () => {

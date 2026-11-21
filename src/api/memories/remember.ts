@@ -157,6 +157,7 @@ function prepareRemember(
   const vetted = vetSecrets(opts.content);
   const verdict = screenWrite(ctx.actor, {
     content: vetted.content,
+    tags: opts.tags,
     scope: requestedScope,
     untrusted: screen.untrusted,
     rule: opts.hold,
@@ -242,7 +243,9 @@ async function salienceVerdict(
     { tenantId: ctx.tenantId },
     { limit: rows, newest: true },
   );
-  return computeSalience(opts.content, [...(opts.tags ?? [])], newest.entries.reverse(), {
+  // A held or rejected row is not a memory anyone can recall, so it is no duplicate of this write.
+  const live = newest.entries.filter((e) => !isQuarantineScope(e.scope ?? null));
+  return computeSalience(opts.content, [...(opts.tags ?? [])], live.reverse(), {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,
     minContentLength: salience.minContentLength,
