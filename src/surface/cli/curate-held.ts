@@ -172,6 +172,7 @@ function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>
   );
   for (const row of rows) {
     console.log(`--- ${row.id} [${row.status}]`);
+    if (row.leadInPreview) console.log(`    ${row.leadInPreview}`);
     console.log(`    ${row.contentPreview}`);
     console.log(
       `    ${row.reason}, original scope ${row.originalScope ?? '(none)'}, ` +

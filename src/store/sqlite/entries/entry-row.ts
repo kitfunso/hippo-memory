@@ -18,7 +18,10 @@ import type { StoreFiles } from '../runtime/open.js';
 import { chunked } from '../../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from '../runtime/rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../../db/sql.js';
-import { duplicateHash } from '../../../base/util/same-text.js';
+import { raiseMinBinary } from '../../../db/meta.js';
+import { duplicateHash, identityText } from '../../../base/util/same-text.js';
+import { LEAD_IN_MIN_BINARY } from '../../../base/util/version.js';
+import { findableText } from '../../../base/memory/lead-in.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -31,7 +34,12 @@ function rejectLegacyTenantKey(entry: MemoryEntry): void {
 export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
   const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
-  checkRejectionGuard(db, { tenantId, entryId: entry.id, content: entry.content });
+  checkRejectionGuard(db, {
+    tenantId,
+    entryId: entry.id,
+    content: entry.content,
+    leadIn: entry.leadIn,
+  });
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -46,6 +54,7 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   if (holder !== undefined && holder.tenant_id !== (entry.tenantId ?? DEFAULT_TENANT_ID)) {
     throw new CrossTenantIdError(entry.id);
   }
+  raiseFloorForLeadIn(db, [entry]);
   db.prepare(UPSERT_MEMORY_SQL).run(...memoryRowValues(entry));
   return holder === undefined;
 }
@@ -64,6 +73,7 @@ const UPSERT_MEMORY_SQL =
 /** Rewrites rows already in `memories` as the upsert's update arm does, one UPDATE per chunk of
  * rows. The caller owns the transaction, the rejection guard and the full-text rows. */
 export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
+  raiseFloorForLeadIn(db, entries);
   const set = UPDATED_COLUMNS.map((c) => `${c} = v.${c}`).join(', ');
   for (const chunk of chunked(entries, rowsPerStatement(WRITTEN_COLUMNS.length))) {
     cachedStatement(
@@ -72,6 +82,12 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
         `UPDATE memories SET ${set}, updated_at = datetime('now') FROM v WHERE memories.id = v.id`,
     ).run(...chunk.flatMap(memoryRowValues));
   }
+}
+
+// An older sleep groups rows by content alone and would fold two lead-in rows, so the first one
+// shuts it out.
+function raiseFloorForLeadIn(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
+  if (entries.some((entry) => entry.leadIn)) raiseMinBinary(db, LEAD_IN_MIN_BINARY);
 }
 
 // Storage spells "no successor" one way: a blank link is stored as none. Whitespace stays a link.
@@ -103,6 +119,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.pinned ? 1 : 0,
     entry.confidence,
     entry.content,
+    entry.leadIn || null,
     JSON.stringify(entry.parents ?? []),
     entry.starred ? 1 : 0,
     entry.traceOutcome ?? null,
@@ -122,7 +139,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.earliestAt ?? null,
     entry.latestAt ?? null,
     entry.dagLevel3BuiltAt ?? null,
-    duplicateHash(entry.content),
+    duplicateHash(identityText(entry)),
   ];
 }
 
@@ -142,7 +159,7 @@ function markFtsDrifted(db: DatabaseSyncLike): void {
 
 export function syncFtsRow(
   db: DatabaseSyncLike,
-  entry: Pick<MemoryEntry, 'id' | 'content' | 'tags'>,
+  entry: Pick<MemoryEntry, 'id' | 'content' | 'tags' | 'leadIn'>,
   isNewRow = false,
 ): void {
   if (!isFtsAvailable(db)) return;
@@ -150,7 +167,7 @@ export function syncFtsRow(
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
-      entry.content,
+      findableText(entry),
       entry.tags.join(' '),
     );
   } catch (err) {
@@ -214,7 +231,7 @@ export function replaceFtsRows(
   const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
   for (const row of toInsert) {
     try {
-      insert.run(row.id, row.content, row.tags.join(' '));
+      insert.run(row.id, findableText(row), row.tags.join(' '));
     } catch (err) {
       markFtsDrifted(db);
       log.warnThenSample(

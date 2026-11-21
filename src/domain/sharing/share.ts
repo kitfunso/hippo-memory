@@ -32,7 +32,7 @@ import {
   type EmbedRun,
 } from '../search/embed-memories.js';
 import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
-import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
+import { duplicateKey, heldTextKeys, identityText } from '../../base/util/same-text.js';
 import { chunked } from '../../base/util/chunked.js';
 import { ALL_TENANTS, type TenantId } from '../../base/util/tenant.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
@@ -203,8 +203,12 @@ export async function shareMemory(
 
   // The caller's tenant and the default scope filter, not autoShare's whole-store view: a copy
   // carries its row's tenant, so another tenant's twin is no copy of this row and must stay unnamed.
-  const held = await heldGlobalTexts(global.store.captures, [entry.content], options.tenantId);
-  const twin = held.get(duplicateKey(entry.content));
+  const held = await heldGlobalTexts(
+    global.store.captures,
+    [identityText(entry)],
+    options.tenantId,
+  );
+  const twin = held.get(duplicateKey(identityText(entry)));
   if (twin?.id !== undefined) return { kind: 'already-shared', existingId: twin.id };
 
   const lowScore = transferScore(entry) < SHARE_MIN_SCORE && options.force !== true;
@@ -359,7 +363,7 @@ function isNewAndClean(
   stats: AutoShareStats | undefined,
 ): boolean {
   // Skip if already shared (same text apart from spacing)
-  if (globalKeys.has(duplicateKey(entry.content))) return false;
+  if (globalKeys.has(duplicateKey(identityText(entry)))) return false;
 
   // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the
   // score or dedupe gate was never going to share). shareMemory would throw here; filtering keeps
@@ -421,12 +425,9 @@ async function pageCandidates(
 ): Promise<MemoryEntry[]> {
   const scored = page.filter((entry) => clearsShareRules(entry, minScore, stats));
   if (scored.length === 0) return [];
-  const held = await heldGlobalTexts(
-    to,
-    scored.map((entry) => entry.content),
-    ALL_TENANTS,
-    { everyScope: true },
-  );
+  const held = await heldGlobalTexts(to, scored.map(identityText), ALL_TENANTS, {
+    everyScope: true,
+  });
   return scored.filter((entry) => isNewAndClean(entry, held, stats));
 }
 

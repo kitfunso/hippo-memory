@@ -9,6 +9,7 @@ import {
   type StrengthModel,
 } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../../base/memory/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
@@ -22,11 +23,7 @@ import type {
   DrillDownSummary,
 } from '../objects/drill-down.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import {
-  CONNECTOR_SOURCE_TAGS,
-  INSTRUCTION_LIKE_TAG,
-  UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
+import { INSTRUCTION_LIKE_TAG, isUntrustedSource } from '../instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */
@@ -38,10 +35,11 @@ const UNTRUSTED_CLOSE = '»';
 const FULL_STRENGTH_PCT = 100;
 
 function frameOpen(tags: readonly string[]): string | null {
-  if (tags.includes(UNTRUSTED_ORIGIN_TAG) || tags.some((t) => CONNECTOR_SOURCE_TAGS.includes(t))) {
-    return CONNECTOR_OPEN;
-  }
-  return tags.includes(INSTRUCTION_LIKE_TAG) ? MEMBER_OPEN : null;
+  if (!isUntrustedSource(tags)) return null;
+  // The member flag alone gets the member frame; a connector row flagged too keeps the connector one.
+  return isUntrustedSource(tags.filter((t) => t !== INSTRUCTION_LIKE_TAG))
+    ? CONNECTOR_OPEN
+    : MEMBER_OPEN;
 }
 
 /** Backslash-escapes each » in `text`, and the backslashes before it, so only the frame's own »
@@ -52,7 +50,8 @@ function escapeFrameClose(text: string): string {
 
 function shownContent(e: MemoryEntry): string {
   const open = frameOpen(e.tags);
-  return open === null ? e.content : `${open}${escapeFrameClose(e.content)}${UNTRUSTED_CLOSE}`;
+  const text = shownText(e);
+  return open === null ? text : `${open}${escapeFrameClose(text)}${UNTRUSTED_CLOSE}`;
 }
 
 export function snapshotText(s: TaskSnapshot): string {
@@ -309,7 +308,7 @@ export function assembleHeading(c: AssembleHeadingCounts): string {
 
 export function assembleLine(it: AssembledContextItem): string {
   const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-  return `  ${prefix} ${it.createdAt} ${it.id} - ${it.content}`;
+  return `  ${prefix} ${it.createdAt} ${it.id} - ${shownText(it)}`;
 }
 
 /** The window in full, as the MCP tool returns it; the header counts the whole block. */
@@ -343,7 +342,7 @@ function drillHead(s: DrillDownSummary, shown: number, total: number, truncated:
 }
 
 export function drillLine(c: DrillDownChild): string {
-  return `  [L${c.dagLevel}] ${c.id} - ${c.content}`;
+  return `  [L${c.dagLevel}] ${c.id} - ${shownText(c)}`;
 }
 
 export function drillText(r: DrillDownResult): string {

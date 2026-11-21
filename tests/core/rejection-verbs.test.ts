@@ -14,6 +14,7 @@ import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import * as api from '../../src/api/index.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
+import { rejectionDigest, rowDigests, tombstoneDigest } from '../../src/base/records/rejection-digest.js';
 import { listRejectionsForTenant } from '../../src/domain/trust/reject-flow.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts, readEntry } from '../_helpers/root-forms.js';
@@ -405,5 +406,111 @@ describe('supersedeMemory write-order contract', () => {
     expect(oldAfter!.supersededBy).toBeNull();
     // And the successor id must not exist.
     expect(readEntry(tmpDir, newEntry.id)).toBeNull();
+  });
+});
+
+describe('tombstones of rows with a lead-in', () => {
+  const L1 = 'user: Is the flight booked?';
+  const L2 = 'user: Did Mel get the job?';
+  const L3 = 'user: Is the hotel paid?';
+  const host = (): FullContext => apiCtx(tmpDir, 'default', api.adminActor('cli'));
+
+  const put = (content: string, leadIn?: string): string => {
+    const entry = createMemory(content, { tags: ['x'], leadIn });
+    writeEntry(tmpDir, entry);
+    return entry.id;
+  };
+  const refused = (content: string, leadIn?: string): boolean => {
+    try {
+      writeEntry(tmpDir, createMemory(content, { tags: ['x'], leadIn }));
+      return false;
+    } catch (err) {
+      if (err instanceof RejectedValueError) return true;
+      throw err;
+    }
+  };
+
+  it('rejecting "Yes."+L1 by id removes it, keeps "Yes."+L2, and refuses only a new "Yes."+L1', async () => {
+    const one = put('Yes.', L1);
+    const two = put('Yes.', L2);
+    const bare = put('Yes.');
+
+    const result = await api.rejectOnHost(host(), { memoryId: one, reason: 'wrong answer' });
+
+    expect(result.removedIds).toEqual([one]);
+    expect(result.leadInOnly).toBe(true);
+    expect(result.digest).toBe(tombstoneDigest({ content: 'Yes.', leadIn: L1 }));
+    expect([readEntry(tmpDir, one), readEntry(tmpDir, two)?.id, readEntry(tmpDir, bare)?.id]).toEqual([
+      null,
+      two,
+      bare,
+    ]);
+    expect(refused('Yes.', L1)).toBe(true);
+    expect(refused('Yes.', `  ${L1.replace(/ /g, '   ')}`)).toBe(true);
+    expect(refused('Yes.', L3)).toBe(false);
+    expect(refused('Yes.')).toBe(false);
+  });
+
+  it('a value rejection of "Yes." removes "Yes."+L1 and "Yes."+L2, and refuses "Yes."+L3', async () => {
+    const one = put('Yes.', L1);
+    const two = put('Yes.', L2);
+
+    const result = await api.rejectOnHost(host(), { value: 'yes.', reason: 'never say it' });
+
+    expect(result.removedIds.slice().sort()).toEqual([one, two].sort());
+    expect(result.leadInOnly).toBe(false);
+    expect(result.digest).toBe(rejectionDigest('Yes.'));
+    expect(refused('Yes.', L3)).toBe(true);
+    expect(refused('Yes.')).toBe(true);
+  });
+
+  it('rejecting a row with no lead-in by id keeps its one digest and still removes every "Yes."', async () => {
+    const bare = put('Yes.');
+    const one = put('Yes.', L1);
+
+    const result = await api.rejectOnHost(host(), { memoryId: bare, reason: 'bare reply' });
+
+    expect(rowDigests({ content: 'Yes.', leadIn: null })).toEqual([rejectionDigest('Yes.')]);
+    expect(result.digest).toBe(rejectionDigest('Yes.'));
+    expect(result.leadInOnly).toBe(false);
+    expect(result.removedIds.slice().sort()).toEqual([bare, one].sort());
+    expect(await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).toHaveLength(1);
+  });
+
+  it('after a lost conflict on "Yes."+L1, a new "Yes."+L1 is refused; "Yes." and "Yes."+L2 stay', async () => {
+    const keep = put('Yes, the flight is booked for Friday', L3);
+    const loser = put('Yes.', L1);
+    const two = put('Yes.', L2);
+    const bare = put('Yes.');
+    replaceDetectedConflicts(tmpDir, [
+      { memoryAId: keep, memoryBId: loser, reason: 'contradicting answers', score: 0.85 },
+    ]);
+    const conflictId = (await listMemoryConflicts(tmpDir, 'open'))[0]!.id;
+
+    await api.conflictResolve(ctx(), conflictId, { keepId: keep, rejectLoser: true, reason: 'wrong answer' });
+
+    expect([readEntry(tmpDir, loser), readEntry(tmpDir, two)?.id, readEntry(tmpDir, bare)?.id]).toEqual([
+      null,
+      two,
+      bare,
+    ]);
+    expect(refused('Yes.', L1)).toBe(true);
+    expect(refused('Yes.', L3)).toBe(false);
+    const rows = await listRejectionsForTenant(sqliteStore(tmpDir), 'default');
+    expect(rows.map((r) => r.digest)).toEqual([tombstoneDigest({ content: 'Yes.', leadIn: L1 })]);
+  });
+
+  it('a conflict loser with no lead-in writes the content digest, as before', async () => {
+    const keep = put('Always use semicolons in PowerShell');
+    const loser = put('Use && to chain commands in PowerShell');
+    replaceDetectedConflicts(tmpDir, [
+      { memoryAId: keep, memoryBId: loser, reason: 'contradictory chaining advice', score: 0.85 },
+    ]);
+    const conflictId = (await listMemoryConflicts(tmpDir, 'open'))[0]!.id;
+
+    await api.conflictResolve(ctx(), conflictId, { keepId: keep, rejectLoser: true, reason: 'wrong' });
+
+    const rows = await listRejectionsForTenant(sqliteStore(tmpDir), 'default');
+    expect(rows.map((r) => r.digest)).toEqual([rejectionDigest('Use && to chain commands in PowerShell')]);
   });
 });

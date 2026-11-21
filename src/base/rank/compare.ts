@@ -8,6 +8,7 @@
  *  optional so `{ content, id }` callers still fit. */
 export interface EntryIdentity {
   content: string;
+  leadIn?: string | null;
   id: string;
   layer?: string;
   tags?: readonly string[];
@@ -15,7 +16,7 @@ export interface EntryIdentity {
 }
 
 /**
- * Order: content, layer rank (semantic first, keeping the promotion), tag count desc, sorted tags,
+ * Order: content, lead-in, layer rank (semantic first, keeping the promotion), tag count desc, sorted tags,
  * source, id; plain `<`/`>`, never `localeCompare`. `content` is the cross-ingest-stable key; `id`
  * is random per instance, so it is only the terminal key. Metadata keys are computed only on a
  * content tie.
@@ -23,6 +24,7 @@ export interface EntryIdentity {
 export function compareEntryIdentity(a: EntryIdentity, b: EntryIdentity): number {
   return (
     compareStrings(a.content, b.content) ||
+    compareStrings(a.leadIn ?? '', b.leadIn ?? '') ||
     layerRank(a.layer) - layerRank(b.layer) ||
     compareStrings(a.layer ?? '', b.layer ?? '') ||
     compareTags(a.tags, b.tags) ||

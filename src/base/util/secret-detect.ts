@@ -81,17 +81,23 @@ const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /(?<=[A-Za-z0-9]:\/\/)[^\s/:@?#]*:[^\s/@?#]+(?=@)/g,
 ];
 
-/** Scan a memory's tags + content for secret material; pure and deterministic, no filesystem or
- * store access. */
-export function detectSecret(entry: { content: string; tags: string[] }): SecretDetection {
+/** Scan a memory's tags, content and lead-in for secret material; pure and deterministic, no
+ * filesystem or store access. */
+export function detectSecret(entry: {
+  content: string;
+  tags: string[];
+  leadIn?: string | null;
+}): SecretDetection {
   for (const tag of entry.tags) {
     if (SECRET_TAGS.has(tag.toLowerCase())) {
       return { flagged: true, reason: `tag:${tag.toLowerCase()}` };
     }
   }
+  // Recall shows the two together, so a key-ish word in either one counts for the guard.
+  const text = entry.leadIn ? `${entry.content}\n${entry.leadIn}` : entry.content;
   for (const { name, re } of SECRET_PATTERNS) {
-    if (!re.test(entry.content)) continue;
-    if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(entry.content)) continue;
+    if (!re.test(text)) continue;
+    if (CO_OCCURRENCE_GUARDED.has(name) && !KEYISH_CONTEXT_RE.test(text)) continue;
     return { flagged: true, reason: `pattern:${name}` };
   }
   return { flagged: false, reason: null };

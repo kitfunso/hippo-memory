@@ -1,7 +1,7 @@
 // The scans sleep runs over every memory: object-backed rows and duplicate candidates.
 
 import { CURRENT_DISTILLED } from '../../../db/sql-predicates.js';
-import { duplicateHash } from '../../../base/util/same-text.js';
+import { duplicateHash, identityText } from '../../../base/util/same-text.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { MEMORY_SELECT_COLUMNS, type MemoryRow, rowToEntry } from '../runtime/rows.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -56,7 +56,9 @@ export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
       db,
       `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE ${CURRENT_DISTILLED} AND duplicate_hash IS NULL`,
     ).all() as MemoryRow[];
-    const unread = new Set(rows.map((row) => duplicateHash(row.content)));
+    const unread = new Set(
+      rows.map((row) => duplicateHash(identityText({ content: row.content, leadIn: row.lead_in }))),
+    );
     for (let after = -1; ;) {
       // SAFETY: the SELECT names one INTEGER column, k.
       const keys = cachedStatement(

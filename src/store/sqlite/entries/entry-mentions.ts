@@ -86,8 +86,11 @@ export function listEntriesMentioning(
  * cannot answer. */
 function likeMentionFilter(tokens: readonly string[], tag: string, plainTag: boolean): SqlFragment {
   const likes = [...new Set(tokens)].map((t) => `%${escapeLike(t)}%`);
-  const clauses = likes.map(() => `content LIKE ? ESCAPE '\\'`);
-  const params: string[] = [...likes];
+  const clauses = [
+    ...likes.map(() => `content LIKE ? ESCAPE '\\'`),
+    ...likes.map(() => `lead_in LIKE ? ESCAPE '\\'`),
+  ];
+  const params: string[] = [...likes, ...likes];
   if (plainTag) {
     clauses.push(`tags_json LIKE ? ESCAPE '\\'`);
     params.push(`%${escapeLike(tag)}%`);

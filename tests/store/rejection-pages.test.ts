@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 // The walk's page read: a write that lands as it is first prepared lands while the rows are walked with no lock held.
-const WALK_PAGE = 'SELECT id, content, source, scope, created FROM memories ';
+const WALK_PAGE = 'SELECT id, content, lead_in, source, scope, created FROM memories ';
 
 /** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
 function rejectionsWalking(onWalk: () => void) {

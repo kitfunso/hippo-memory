@@ -115,6 +115,7 @@ const SHARED = {
   retrieval_count: 0,
   strength: 1,
   layer: 'semantic',
+  lead_in: null,
   schema_fit: 0.5,
   outcome_score: null,
   conflicts_with_json: '[]',

@@ -7,6 +7,7 @@ import type { ProjectRef } from '../../base/scope/project-identity.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextCost, ContextOptions } from './context-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { log } from '../../base/util/log.js';
 import {
@@ -125,7 +126,7 @@ function entryPricer(
           category: classifyOriginProject(entry.originProject, currentProject),
           userRule: userRule(entry, isGlobal),
         })
-      : estimateTokens(entry.content);
+      : estimateTokens(shownText(entry));
 }
 
 type StoreReach = ReturnType<typeof storesInReach>;

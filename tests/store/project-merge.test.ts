@@ -220,6 +220,21 @@ describe('hippo projects repair', () => {
     expect(mirror(copy.id)).toBeNull();
   });
 
+  it('sets aside only the import whose lead-in matches the user-global one, not the same text under another', async () => {
+    const [L1, L2] = ['user: Is the flight booked?', 'user: Did Mel get the job?'];
+    note('Yes.', '', { leadIn: L1 });
+    const copy = note('Yes.', 'repo-wt-a', { leadIn: L1 });
+    const other = note('Yes.', 'repo-wt-a', { leadIn: L2 });
+    const bare = note('Yes.', 'repo-wt-a');
+    open();
+
+    const r = await projectNameRepair(ctx(), { dryRun: false });
+
+    expect(r.copies).toEqual([copy.id]);
+    const rows = byId();
+    expect([rows.has(copy.id), rows.has(other.id), rows.has(bare.id)]).toEqual([false, true, true]);
+  });
+
   it('in the global store, folds a name whose every recorded folder still on disk resolves to one other project', async () => {
     vi.stubEnv('HIPPO_HOME', home);
     const repo = join(home, 'work', 'repo');
@@ -291,6 +306,18 @@ describe('hippo projects list', () => {
       imported: 2,
       copiesElsewhere: 1,
     });
+  });
+
+  it('counts an imported note as a copy only when its lead-in matches the one held under another name', async () => {
+    const [L1, L2] = ['user: Is the flight booked?', 'user: Did Mel get the job?'];
+    note('Yes.', '', { leadIn: L1 });
+    note('Yes.', 'repo-wt-a', { leadIn: L1 });
+    note('Yes.', 'repo-wt-b', { leadIn: L2 });
+    open();
+
+    const projects = await projectNameList(ctx());
+    expect(projects.find((p) => p.origin === 'repo-wt-a')?.copiesElsewhere).toBe(1);
+    expect(projects.find((p) => p.origin === 'repo-wt-b')?.copiesElsewhere).toBe(0);
   });
 
   it('migrates a store at an older schema before it reads, as every other command does', async () => {

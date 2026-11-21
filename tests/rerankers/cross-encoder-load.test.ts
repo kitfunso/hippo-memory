@@ -57,6 +57,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('the cross-encoder input', () => {
+  it('scores a row with a lead-in on its content, then the lead-in', async () => {
+    const pairs: string[] = [];
+    const rerank = createCrossEncoderReranker(
+      transformersCrossEncoder(async () => ({
+        name: '@huggingface/transformers',
+        mod: {
+          AutoTokenizer: {
+            from_pretrained: async () => async (_query: string, opts: { text_pair: string }) => {
+              pairs.push(opts.text_pair);
+              return { input_ids: {}, attention_mask: {} };
+            },
+          },
+          AutoModelForSequenceClassification: {
+            from_pretrained: async () => async () => ({ logits: { data: [1] } }),
+          },
+        },
+      })),
+    );
+    const led = { ...createMemory('Three times a week'), leadIn: 'user: how often do you run' };
+
+    await rerank('q', [{ ...asResult('placeholder', 1.0), entry: led }, asResult('alpha', 0.5)]);
+
+    expect(pairs.sort()).toEqual(['Three times a week\nuser: how often do you run', 'alpha'].sort());
+  });
+});
+
 describe('the cross-encoder model load', () => {
   it('gives up on a load that hangs at the timeout and keeps the input order', async () => {
     const rerank = rerankerFetching(() => new Promise(() => {}));

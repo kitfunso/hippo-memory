@@ -2,7 +2,7 @@
  * Single source of truth for the package version, written by scripts/sync-version.mjs; never
  * edit by hand. Read by the db rollback guard, /health, MCP. A constant, not a runtime
  * package.json read: the published bundle may lack package.json on a path ESM can resolve. */
-export const PACKAGE_VERSION = '3.12.0';
+export const PACKAGE_VERSION = '3.13.0';
 
 /** The floor a store takes on its first expiring key: the first release with schema v53, set by
  * hand in that release; scripts/checks/check-expiring-keys-floor.mjs gates it. */
@@ -13,6 +13,8 @@ export const EXPIRING_KEYS_MIN_BINARY = '1.64.0';
  * by hand in that release.
  */
 export const TASK_OWNER_MIN_BINARY = '1.64.0';
+/** The floor of a store's first lead-in row: first release with v64, set by hand in that release. */
+export const LEAD_IN_MIN_BINARY = '3.13.0';
 
 /** Compares plain x.y.z versions, positive if a > b; tags throw so the rollback guard never
  * misfires silently. */

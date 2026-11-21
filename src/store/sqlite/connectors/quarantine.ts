@@ -183,7 +183,11 @@ function listQuarantined(
     rows.map((row) => row.memoryId),
     tenantId,
   );
-  return rows.map((row) => ({ ...row, content: entries.get(row.memoryId)?.content ?? null }));
+  return rows.map((row) => {
+    const entry = entries.get(row.memoryId);
+    const held: QuarantinedMemory = { ...row, content: entry?.content ?? null };
+    return entry?.leadIn ? { ...held, leadIn: entry.leadIn } : held;
+  });
 }
 
 /** The pending record, or why a decision on `id` is refused. */

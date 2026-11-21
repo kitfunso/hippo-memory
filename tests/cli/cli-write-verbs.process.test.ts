@@ -27,6 +27,7 @@ interface WrittenRow {
   scope: string | null;
   owner: string | null;
   artifact_ref: string | null;
+  lead_in: string | null;
   origin_project: string;
   source_session_id: string | null;
 }
@@ -46,6 +47,7 @@ const PLAIN_ROW: Omit<WrittenRow, 'source_session_id'> = {
   scope: null,
   owner: null,
   artifact_ref: null,
+  lead_in: null,
   origin_project: 'app',
 };
 
@@ -60,6 +62,7 @@ const REMEMBER_FLAGS: ReadonlyArray<[string, string[], Partial<WrittenRow>]> = [
   ['--scope', ['--scope', 'team:eng'], { scope: 'team:eng', tags: [...PATH_TAGS, 'scope:team:eng'] }],
   ['--owner', ['--owner', 'user:alice'], { owner: 'user:alice' }],
   ['--artifact-ref', ['--artifact-ref', 'gh://acme/billing/pull/12'], { artifact_ref: 'gh://acme/billing/pull/12' }],
+  ['--lead-in', ['--lead-in', ' user: How often do you run? '], { lead_in: 'user: How often do you run?' }],
   ['--kind superseded', ['--kind', 'superseded'], { kind: 'superseded' }],
   [
     'every row flag at once',

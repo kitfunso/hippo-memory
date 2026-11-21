@@ -13,6 +13,8 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { drillDown } from '../../src/api/index.js';
+import { drillLine } from '../../src/api/context/context-render.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { writeEntry, writeEntriesTogether } from '../_helpers/root-forms.js';
@@ -120,6 +122,31 @@ describe('drillDown', () => {
     expect(r.children.length).toBe(5);
     expect(r.truncated).toBe(true);
     expect(r.totalChildren).toBe(30);
+  });
+
+  it('a child with a lead-in carries it, and the default budget prices the text shown', async () => {
+    const s = makeSummary('topic lead-in');
+    writeEntry(root, s);
+    const led = makeChild('Three times a week', s.id);
+    led.leadIn = 'user: How often do you and Mel run? '.repeat(10);
+    led.created = '2026-01-01T00:00:00.000Z';
+    const plain = makeChild('Mel signed up for the spring run', s.id);
+    plain.created = '2026-01-02T00:00:00.000Z';
+    writeEntriesTogether(root, [led, plain]);
+    // Priced by content alone both would fit; priced by the shown text the second no longer does.
+    const budget = estimateTokens(led.content) + estimateTokens(plain.content);
+    const r = await drillDown(ctxFor(root), s.id, { budget });
+    expect('failure' in r).toBe(false);
+    if ('failure' in r) return;
+    expect(r.children.map((c) => c.id)).toEqual([led.id]);
+    expect(r.truncated).toBe(true);
+    expect(r.children[0].leadIn).toBe(led.leadIn);
+    expect(drillLine(r.children[0])).toContain(`${led.leadIn}
+${led.content}`);
+
+    const whole = await drillDown(ctxFor(root), s.id);
+    if ('failure' in whole) return;
+    expect(Object.hasOwn(whole.children.find((c) => c.id === plain.id) ?? {}, 'leadIn')).toBe(false);
   });
 });
 

@@ -73,7 +73,7 @@ describe('listEntryTextKeysPage', () => {
     const selects = statements.filter((sql) => sql.startsWith('SELECT id, tenant_id'));
     expect(selects).toHaveLength(3);
     for (const select of selects) {
-      expect(select).toContain('SELECT id, tenant_id, content, source, created FROM memories');
+      expect(select).toContain('SELECT id, tenant_id, content, lead_in, source, created FROM memories');
       expect(select).toMatch(/LIMIT \?$/);
       expect(select).not.toContain('tags_json');
     }
@@ -171,7 +171,9 @@ describe('rejections.apply', () => {
     expect(result.removedIds).toEqual([target.id]);
     expect(readEntry(root, target.id)).toBeNull();
     expect(loadAllEntries(root, 'default')).toHaveLength(5);
-    expect(countMatching(statements, /^SELECT id, content, source, scope, created FROM memories .*LIMIT \?$/)).toBe(1);
+    expect(
+      countMatching(statements, /^SELECT id, content, lead_in, source, scope, created FROM memories .*LIMIT \?$/),
+    ).toBe(1);
     expect(
       countMatching(statements, /SELECT .*tags_json.* FROM memories WHERE tenant_id = \? ORDER BY created ASC/),
     ).toBe(0);

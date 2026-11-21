@@ -793,6 +793,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo remember "<text>" --observed` | Set confidence: observed |
 | `hippo remember "<text>" --inferred` | Set confidence: inferred |
 | `hippo remember "<text>" --global` | Store in global `~/.hippo/` store |
+| `hippo remember "<text>" --lead-in "<text>"` | Save the conversation text just before the memory; recall shows it above the memory |
 | `hippo supersede <id> "<text>"` | Replace a memory with a new version; the old one leaves recall and points at it |
 | `hippo recall "<query>"` | Retrieve relevant memories (local + global) |
 | `hippo recall "<query>" --budget <n>` | Recall within token limit (default: 4000) |

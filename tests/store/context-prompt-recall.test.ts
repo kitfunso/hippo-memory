@@ -95,6 +95,50 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(hit?.promptRecall).toBe(true);
   });
 
+  it('admits a row whose prompt words sit only in its lead-in', async () => {
+    enablePromptRecall(local);
+    const relevant = seed(local, 'Yes, do that first.', {
+      leadIn: 'user: the postgres migration script needs a rollback plan before deploy',
+    });
+    seed(local, 'unrelated note about coffee and lunch scheduling for the office');
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
+  describe('two replies with one text under different lead-ins', () => {
+    // "Yes." alone fails the quality floor that context applies to a row's content.
+    const REPLY = 'Yes, do that first.';
+    const PROMPT = 'how should the postgres migration rollback plan work';
+    const LEAD_A = 'user: the postgres migration script needs a rollback plan before deploy';
+    const LEAD_B = 'user: the postgres migration rollback plan waits for the dba to sign off';
+
+    it('keeps the local row and the global row, since one copy is per identity and not per content', async () => {
+      enablePromptRecall(local);
+      const mine = seed(local, REPLY, { leadIn: LEAD_A });
+      const shared = seed(path.join(tmpRoot, 'global'), REPLY, { leadIn: LEAD_B });
+
+      const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: PROMPT });
+
+      expect(ids(result).sort()).toEqual([mine.id, shared.id].sort());
+    });
+
+    it('admits an unpinned row whose content a pinned row shares under another lead-in', async () => {
+      enablePromptRecall(local);
+      seed(local, REPLY, { leadIn: 'user: is the staging deploy frozen this week?', pinned: true });
+      const other = seed(local, REPLY, { leadIn: LEAD_A });
+
+      const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt: PROMPT });
+
+      expect(result.entries.find((e) => e.entry.id === other.id)?.promptRecall).toBe(true);
+    });
+  });
+
   it('recalls from a store with no pins and no include-recent', async () => {
     enablePromptRecall(local);
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');

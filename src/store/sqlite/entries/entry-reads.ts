@@ -307,13 +307,15 @@ export function listEntryTextKeysPage(
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT id, tenant_id, content, source, created FROM memories WHERE ${within.match('1')} ${within.order}`,
+        `SELECT id, tenant_id, content, lead_in, source, created FROM memories ` +
+          `WHERE ${within.match('1')} ${within.order}`,
       ).all(...within.params, limit) as EntryTextKeyPageRow[],
   );
   const keys = rows.map((row) => ({
     id: row.id,
     tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     content: row.content,
+    leadIn: row.lead_in,
     source: row.source,
   }));
   return { keys, next };
@@ -324,6 +326,7 @@ interface EntryTextKeyPageRow {
   id: string;
   tenant_id: string | null;
   content: string;
+  lead_in: string | null;
   source: string;
   created: string;
 }
@@ -340,6 +343,7 @@ export function iterateEveryTenantEntries(db: DatabaseSyncLike): Generator<Memor
 interface TenantText {
   readonly id: string;
   readonly content: string;
+  readonly lead_in: string | null;
   readonly source: string;
   readonly scope: string | null;
 }
@@ -363,7 +367,8 @@ export function listTenantTextsPage(
     (within, limit) =>
       cachedStatement(
         db,
-        `SELECT id, content, source, scope, created FROM memories WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
+        `SELECT id, content, lead_in, source, scope, created FROM memories ` +
+          `WHERE ${within.match('1')} ${ENTRY_PAGE_ORDER}`,
       ).all(...within.params, limit) as Array<TenantText & { created: string }>,
   );
   return { texts: rows, next };
@@ -465,14 +470,20 @@ export function entryIdTaken(db: DatabaseSyncLike, id: string): boolean {
   return cachedStatement(db, `SELECT 1 FROM memories WHERE id = ?`).get(id) !== undefined;
 }
 
-/** The text, tenant and scope of memory `id`, or undefined when no row holds it. */
-export function entryRejectRow(
-  db: DatabaseSyncLike,
-  id: string,
-): { content: string; tenant_id: string; scope: string | null } | undefined {
-  return cachedStatement(db, `SELECT content, tenant_id, scope FROM memories WHERE id = ?`).get(
-    id,
-  ) as { content: string; tenant_id: string; scope: string | null } | undefined;
+/** The text, lead-in, tenant and scope of memory `id`, or undefined when no row holds it. */
+export function entryRejectRow(db: DatabaseSyncLike, id: string): EntryRejectRow | undefined {
+  return cachedStatement(
+    db,
+    `SELECT content, lead_in, tenant_id, scope FROM memories WHERE id = ?`,
+  ).get(id) as EntryRejectRow | undefined;
+}
+
+// SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
+interface EntryRejectRow {
+  content: string;
+  lead_in: string | null;
+  tenant_id: string;
+  scope: string | null;
 }
 
 /** A page of the rows holding at least one signal, in loadAllEntries' order. A superset: callers

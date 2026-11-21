@@ -138,7 +138,7 @@ export interface AuditEvent {
 }
 
 /** A stored text the capture dedup reads; `pinned` and `tags` are optional so an adapter that omits them still fits. */
-export type HeldText = Pick<MemoryEntry, 'content' | 'source' | 'originProject'> &
+export type HeldText = Pick<MemoryEntry, 'content' | 'leadIn' | 'source' | 'originProject'> &
   Partial<Pick<MemoryEntry, 'pinned' | 'tags' | 'id' | 'supersededBy'>> & { confidence?: string };
 
 /** One project name, or every name a project's rows carry. */

@@ -6,7 +6,7 @@
 import type { MemoryEntry } from './entry.js';
 import { isErrorTagged } from './ambient.js';
 import { textOverlap } from '../util/tokenize.js';
-import { duplicateKey, heldTextKeys } from '../util/same-text.js';
+import { duplicateKey, heldTextKeys, identityText } from '../util/same-text.js';
 
 export type SalienceDecision = 'store' | 'skip' | 'start_weak';
 
@@ -140,7 +140,7 @@ function findBestOverlap(content: string, memories: MemoryEntry[]) {
   let best = 0;
   let matchId: string | null = null;
   for (const m of memories) {
-    const overlap = textOverlap(content, m.content);
+    const overlap = textOverlap(content, identityText(m));
     if (overlap > best) {
       best = overlap;
       matchId = m.id;

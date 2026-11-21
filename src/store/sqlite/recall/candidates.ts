@@ -475,6 +475,7 @@ export function listTextsHolding(
     byId.set(row.id, {
       id: row.id,
       content: row.content,
+      leadIn: row.lead_in,
       source: row.source,
       originProject: row.origin_project,
       pinned: row.pinned === 1,

@@ -147,9 +147,13 @@ class Hippo:
         scope: str | None = None,
         owner: str | None = None,
         artifact_ref: str | None = None,
+        lead_in: str | None = None,
         tags: list[str] | None = None,
     ) -> MemoryEnvelope:
-        """POST /v1/memories. Persist a new memory; returns the envelope."""
+        """POST /v1/memories. Persist a new memory; returns the envelope.
+
+        ``lead_in`` is the conversation text just before the memory; recall shows it above the memory.
+        """
         body: dict[str, Any] = {"content": content}
         if kind is not None:
             body["kind"] = kind
@@ -159,6 +163,8 @@ class Hippo:
             body["owner"] = owner
         if artifact_ref is not None:
             body["artifactRef"] = artifact_ref
+        if lead_in is not None:
+            body["leadIn"] = lead_in
         if tags is not None:
             body["tags"] = tags
         data = await self._request("POST", "/v1/memories", json=body)

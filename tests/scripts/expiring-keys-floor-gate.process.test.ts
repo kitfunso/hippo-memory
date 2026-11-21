@@ -1,4 +1,4 @@
-// Each binary floor must name the first release that ships its schema (v53 expiring keys, v54 task owners), or an older binary can open a store it misreads.
+// Each binary floor must name the first release that ships its schema (v53 expiring keys, v54 task owners, v64 lead-in), or an older binary can open a store it misreads.
 import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +11,8 @@ const repos = new Map<string, string>();
 interface Floors {
   expiring: string;
   owner: string;
+  /** Defaults to the package version, the one untagged floor that always passes, so older cases stay about their own floor. */
+  leadIn?: string;
 }
 
 function git(cwd: string, ...args: string[]): void {
@@ -35,7 +37,7 @@ function writeTree(root: string, version: string, floors: Floors, schema: number
   writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version }));
   writeFileSync(
     join(root, 'src', 'base', 'util', 'version.ts'),
-    `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\n`,
+    `export const PACKAGE_VERSION = '${version}';\nexport const EXPIRING_KEYS_MIN_BINARY = '${floors.expiring}';\nexport const TASK_OWNER_MIN_BINARY = '${floors.owner}';\nexport const LEAD_IN_MIN_BINARY = '${floors.leadIn ?? version}';\n`,
   );
   const list = Array.from({ length: schema - 50 }, (_, i) => `v${51 + i}`).join(', ');
   writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
@@ -125,5 +127,21 @@ describe('check-expiring-keys-floor.mjs', () => {
     const r = runGate(makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0' }, { name: '1.1.0', schema: 54 }));
     expect(r.status, r.stderr).toBe(0);
     expect(r.stdout).toContain('TASK_OWNER_MIN_BINARY 1.1.0');
+  });
+
+  it('LEAD_IN_MIN_BINARY naming a tag without v64 fails', () => {
+    const r = runGate(
+      makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0', leadIn: '1.1.0' }, { name: '1.1.0', schema: 63 }),
+    );
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('v1.1.0 does not ship schema v64');
+  });
+
+  it('LEAD_IN_MIN_BINARY equal to the untagged package version passes', () => {
+    const r = runGate(
+      makeRepo('1.2.0', { expiring: '1.1.0', owner: '1.1.0', leadIn: '1.2.0' }, { name: '1.1.0', schema: 64 }),
+    );
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('LEAD_IN_MIN_BINARY 1.2.0');
   });
 });

@@ -95,3 +95,32 @@ describe('hippo context output (in process)', () => {
     expect(transcript.join('\n')).toMatchSnapshot();
   });
 });
+
+describe('hippo context with a lead-in row', () => {
+  const LEAD = 'user: does the canaryline roll out region by region?';
+  const REPLY = 'Yes, one region at a time.';
+  interface Row {
+    readonly id: string;
+    readonly leadIn?: string;
+  }
+
+  async function contextOut(args: string[], flags: Flags): Promise<string> {
+    const r = await runInProcess(() => handleContext({ hippoRoot: store, tenantId: 'default', args, flags }));
+    expect(r.status, r.stderr).toBe(0);
+    return r.stdout;
+  }
+
+  it('prints the lead-in above the content in the block, and keys it after content in json', async () => {
+    writeEntry(store, seeded(REPLY, 'mem_ctx_leadin', { leadIn: LEAD }));
+    expect(await contextOut(['canaryline'], {})).toContain(`${LEAD}\n${REPLY}`);
+    const json: { memories: Row[] } = JSON.parse(await contextOut(['canaryline'], { format: 'json' }));
+    const keys = Object.keys(json.memories.find((m) => m.id === 'mem_ctx_leadin') ?? {});
+    expect(keys.slice(keys.indexOf('content'), keys.indexOf('content') + 3)).toEqual(['content', 'leadIn', 'global']);
+  });
+
+  it('leaves the key off a row with no lead-in', async () => {
+    const json: { memories: Row[] } = JSON.parse(await contextOut(['deploy'], { format: 'json' }));
+    expect(json.memories.length).toBeGreaterThan(0);
+    for (const m of json.memories) expect(Object.hasOwn(m, 'leadIn')).toBe(false);
+  });
+});

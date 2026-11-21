@@ -30,6 +30,8 @@ export interface RememberRequest {
   readonly scope: string | undefined;
   readonly owner: string | undefined;
   readonly artifactRef: string | undefined;
+  /** The conversation text that led into the memory. */
+  readonly leadIn: string | undefined;
   // Only a write on the store honours the fields below, as the server sets its own; the verb writes
   // locally for them.
   readonly pinned: boolean;
@@ -159,6 +161,7 @@ async function rememberHere(ctx: CliContext, request: RememberRequest): Promise<
     scope: request.scope,
     owner: request.owner,
     artifactRef: request.artifactRef,
+    leadIn: request.leadIn,
     tags: request.tags,
     fitTags: request.fitTags,
     layer: Layer.Episodic,
@@ -266,8 +269,8 @@ function callerProjectOf(
 }
 
 function relayedRequest(request: RememberRequest): api.RememberOptions {
-  const { content, kind, scope, owner, artifactRef } = request;
-  return { content, kind, scope, owner, artifactRef, tags: [...request.tags] };
+  const { content, kind, scope, owner, artifactRef, leadIn } = request;
+  return { content, kind, scope, owner, artifactRef, leadIn, tags: [...request.tags] };
 }
 
 function relayed(server: ServerInfo, reply: api.RememberResult | api.RememberSkipped): Remembered {

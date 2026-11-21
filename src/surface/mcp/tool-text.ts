@@ -4,6 +4,7 @@ import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { confidenceLabel } from '../../base/memory/strength.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import type { ContextCost } from '../../api/context/context-types.js';
 import type { ContinuityBlock, RecallResult, RecallResultItem } from '../../api/recall/types.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
@@ -72,7 +73,7 @@ function memoriesHeading(count: number): string {
 function formatMemory(r: Pick<SearchResult, 'entry'>, now: Date): string {
   const conf = confidenceLabel(r.entry, now).text;
   const tags = r.entry.tags.length > 0 ? ` tags: ${r.entry.tags.join(', ')}` : '';
-  return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${r.entry.content}\n`;
+  return `[${conf}]${tags} (strength=${r.entry.strength.toFixed(2)})\n${shownText(r.entry)}\n`;
 }
 
 export function formatMemories(
@@ -151,6 +152,7 @@ export function tailSection(rows: RecallResultItem[]): string {
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
   for (const r of rows) {
     const tag = r.isSummary ? '[summary]' : '[tail]';
+    // A preview shows the memory itself: a lead-in first would fill the cut.
     const head = truncateWithEllipsis(r.content, MCP_PREVIEW_CHARS, '…');
     if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
       lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);

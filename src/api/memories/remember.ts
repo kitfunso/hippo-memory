@@ -21,7 +21,10 @@ import {
   type TraceOutcome,
   withoutCaptureTags,
 } from '../../base/memory/entry.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
+import { MAX_LEAD_IN_CHARS } from '../../base/util/limits.js';
+import { identityText } from '../../base/util/same-text.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import { assertCallerProject } from '../../base/scope/project-identity.js';
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
@@ -58,6 +61,9 @@ export interface RememberOptions {
   scope?: string;
   owner?: string;
   artifactRef?: string;
+  /** The conversation text that led into `content`. It is trimmed, redacted and cut to its last
+   * MAX_LEAD_IN_CHARS characters, and the instruction check reads it with the content. */
+  leadIn?: string;
   tags?: string[];
   /** The caller's project: its name becomes the row's origin. Without it the store's fallback
    * applies (NULL on a shared store). */
@@ -151,6 +157,29 @@ interface PreparedRemember {
   readonly warnings: readonly string[];
 }
 
+interface NormalizedLeadIn {
+  readonly leadIn: string | null;
+  readonly warnings: readonly string[];
+}
+
+/** Pure and idempotent: the gate and prepareRemember each call it and get one lead-in. It redacts
+ * before it cuts, so a cut never leaves the tail of a secret. */
+function normalizeLeadIn(raw: string | null | undefined): NormalizedLeadIn {
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return { leadIn: null, warnings: [] };
+  const vetted = vetSecrets(trimmed);
+  const warnings = vetted.warnings.map((w) => `lead-in: ${w}`);
+  if (vetted.content.length <= MAX_LEAD_IN_CHARS) return { leadIn: vetted.content, warnings };
+  warnings.push(`lead-in: cut to its last ${MAX_LEAD_IN_CHARS} characters`);
+  return { leadIn: lastChars(vetted.content, MAX_LEAD_IN_CHARS), warnings };
+}
+
+function lastChars(text: string, count: number): string {
+  const tail = text.slice(-count);
+  // A cut inside an emoji leaves a lone surrogate, which a stored string does not keep.
+  return (/^[\uDC00-\uDFFF]/.test(tail) ? tail.slice(1) : tail).trim();
+}
+
 /** `untrusted` marks connector content an agent doesn't control, which the instruction check
  * gates. */
 function prepareRemember(
@@ -162,11 +191,11 @@ function prepareRemember(
   assertOwnerIsCallers(ctx, opts.owner);
   const requestedScope = rememberScope(ctx, opts, untrusted);
   const vetted = vetSecrets(opts.content);
-  const detection = untrusted
-    ? detectInstruction(vetted.content)
-    : { flagged: false, reason: null };
-  const flagged =
-    !untrusted && memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
+  const lead = normalizeLeadIn(opts.leadIn);
+  // Recall shows the lead-in to an agent, so the check reads it with the content.
+  const checked = shownText({ content: vetted.content, leadIn: lead.leadIn });
+  const detection = untrusted ? detectInstruction(checked) : { flagged: false, reason: null };
+  const flagged = !untrusted && memberShares(ctx, opts) && detectInstruction(checked).flagged;
   const tags = trustTagged(opts.tags && withoutCaptureTags(opts.tags), untrusted, flagged);
   const local = opts.local ?? {};
   const created = createMemory(
@@ -183,6 +212,7 @@ function prepareRemember(
       scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
       owner: opts.owner ?? null,
       artifactRef: opts.artifactRef ?? null,
+      leadIn: lead.leadIn,
       tags,
       tenantId: ctx.tenantId,
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
@@ -194,7 +224,12 @@ function prepareRemember(
   // A personal row's '' follows its owner into every project.
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, originProject: origin } : entry;
-  return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
+  return {
+    entry: stamped,
+    requestedScope,
+    detection,
+    warnings: [...vetted.warnings, ...lead.warnings],
+  };
 }
 
 /** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row
@@ -277,7 +312,10 @@ async function salienceVerdict(
     { tenantId: ctx.tenantId },
     { limit: rows, newest: true },
   );
-  return computeSalience(opts.content, [...(opts.tags ?? [])], newest.entries.reverse(), {
+  // The gate keys on the lead-in the row stores, so "Yes." under a new lead-in is not a copy.
+  const leadIn = normalizeLeadIn(opts.leadIn).leadIn;
+  const text = identityText({ content: opts.content, leadIn });
+  return computeSalience(text, [...(opts.tags ?? [])], newest.entries.reverse(), {
     recentWindow: salience.recentWindow,
     overlapThreshold: salience.overlapThreshold,
     minContentLength: salience.minContentLength,

@@ -66,7 +66,7 @@ from hippo_memory.models import (
     HippoError,
 )
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 __all__ = [
     "Hippo",

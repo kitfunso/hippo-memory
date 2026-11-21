@@ -13,6 +13,7 @@ import * as api from '../../api/index.js';
 import { DEFAULT_CONTEXT_BUDGET } from '../../api/context/context.js';
 import { cliApiContext, cliHookRequest, type CliContext } from './api-context.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import { strengthOf } from '../../api/types.js';
 import {
   contextBlockLines,
@@ -319,6 +320,7 @@ async function renderContextJson(view: ContextView, query: string): Promise<void
     tags: r.entry.tags,
     confidence: r.entry.confidence,
     content: r.entry.content,
+    ...leadInField(r.entry),
     global: r.isGlobal ?? false,
     origin: r.origin ?? null,
     category: r.category ?? null,

@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { handleRemember } from '../../src/surface/cli/remember.js';
+import type { CliFlags } from '../../src/surface/cli/flag-values.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';
@@ -41,12 +42,12 @@ async function directRemember(store: string, text: string): Promise<string> {
 }
 
 /** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
-async function thinRemember(store: string, text: string): Promise<string> {
+async function thinRemember(store: string, text: string, flags: CliFlags = {}): Promise<string> {
   handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   let printed = '';
   try {
-    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags: {} });
+    await handleRemember({ hippoRoot: store, tenantId: 'default', args: [text], flags });
   } finally {
     printed = log.mock.calls.map((c) => String(c[0])).join(' ');
     log.mockRestore();
@@ -80,5 +81,15 @@ describe('remember origin: direct path and thin client agree', () => {
 
   it('both stamp NULL on a shared store', async () => {
     expect(await bothOrigins(projectStore({ sharedStore: true }))).toEqual([null, null]);
+  });
+});
+
+describe('remember lead-in: the thin client sends it', () => {
+  it('a routed remember stores the lead-in its flag carried, trimmed', async () => {
+    const store = projectStore({});
+    const id = await thinRemember(store, 'Three times a week; it keeps us on track.', {
+      'lead-in': ' user: How often do you and Mel run? ',
+    });
+    expect(readEntry(store, id)?.leadIn).toBe('user: How often do you and Mel run?');
   });
 });

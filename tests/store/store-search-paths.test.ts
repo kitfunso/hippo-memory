@@ -118,6 +118,13 @@ describe('loadSearchEntries paths', () => {
     expect(results.some((e) => e.content === 'alphabet soup contents')).toBe(true);
   });
 
+  it('FTS path: a word only the lead-in holds finds its row', () => {
+    const led = { ...makeRaw('Three times a week'), leadIn: 'user: How often do you run the zephyrline' };
+    writeEntry(root, led);
+    writeEntry(root, makeRaw('Plain row with no lead-in'));
+    expect(loadSearchEntries(root, 'zephyrline', 200, 'default').map((e) => e.id)).toEqual([led.id]);
+  });
+
   it('the environment cannot force the LIKE route: with the old variable set, a term query still comes back through FTS', () => {
     writeEntry(root, makeRaw('alphabet soup contents'));
     writeEntry(root, makeRaw('alphabetical order'));
@@ -230,6 +237,24 @@ describe('loadSearchEntries paths', () => {
       expect(JSON.parse(likes[0] ?? '')).toHaveLength(LIKE_WINDOW_TERMS);
     } finally {
       all.mockRestore();
+    }
+  });
+
+  // The trigram index holds content and tags, so only the window LIKE reaches a part of a lead-in word.
+  it.each([
+    ['FTS5 on, a 2-letter term', '1', 'zq'],
+    ['FTS5 off, every term', '0', 'zqxvli'],
+  ])('window LIKE path, %s: a part of a word only the lead-in holds finds its row', (_name, fts, query) => {
+    const db = openHippoDb(root);
+    try {
+      setMeta(db, 'fts5_available', fts);
+      const led = { ...makeRaw('Three times a week'), leadIn: 'user: How often do you run the zqxvline' };
+      writeEntryDbOnly(db, led);
+      writeEntryDbOnly(db, makeRaw('Plain row with no lead-in'));
+      const found = listRecallEntries(db, query, { limit: 200, tenantId: 'default' });
+      expect(found.map((e) => e.id)).toEqual([led.id]);
+    } finally {
+      closeHippoDb(db);
     }
   });
 

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../src/base/memory/agent-memory-tools.js';
 import { chunked } from '../../src/base/util/chunked.js';
-import { duplicateKey, heldTextKeys, mergedText } from '../../src/base/util/same-text.js';
+import { duplicateKey, heldTextKeys, identityText, mergedText } from '../../src/base/util/same-text.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
 import { listTextKeysHolding } from '../../src/store/sqlite/sharing/copy-rows.js';
@@ -102,6 +102,42 @@ describe('copy reads by whole text', () => {
     const live = (r: ScanRow) =>
       r.tenant_id === 'default' && r.superseded_by === null && !r.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX);
     expect(found).toEqual(wholeScan(root, live));
+  });
+});
+
+describe('copy reads of rows with a lead-in', () => {
+  const [L1, L2] = ['user: Is the flight booked?', 'user: Did Mel get the job?'];
+
+  it.each([true, false])('find a row by its identity text, spacing aside, index in sync: %s', (inSync) => {
+    const root = makeStore('text-keys-lead-in').root;
+    const [one, two, bare] = [row(TEXT, { leadIn: L1 }), row(TEXT, { leadIn: L2 }), row(TEXT)];
+    writeEntriesTogether(root, [one, two, bare]);
+    withDb(root, (db) => setFtsInSync(db, inSync));
+    const keys = (texts: string[]) => withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, texts));
+    const idsOf = (texts: string[]) => keys(texts).map((k) => k.id);
+
+    expect(idsOf([identityText(one)])).toEqual([one.id]);
+    expect(idsOf([identityText(two)])).toEqual([two.id]);
+    expect(idsOf([TEXT])).toEqual([bare.id]);
+    const spaced = { content: `  ${TEXT.replaceAll(' ', '\n ')} `, leadIn: `  ${L1.replaceAll(' ', '   ')}` };
+    expect(idsOf([identityText(spaced)])).toEqual([one.id]);
+    expect(keys([identityText(one)])[0]!.leadIn).toBe(L1);
+  });
+});
+
+describe('the copy probe on the index', () => {
+  it('finds a lead-in row by its first content words through the full-text index', () => {
+    const root = makeStore('text-keys-lead-in-probe').root;
+    const led = row('Yes.', { leadIn: 'user: Is the flight booked for the zephyrline trip?' });
+    writeEntriesTogether(root, [led, row('No.', { leadIn: 'user: Is the flight booked for the zephyrline trip?' })]);
+    withDb(root, (db) => setFtsInSync(db, true));
+
+    const { result, statements } = recordStatements(() =>
+      withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, [identityText(led)])),
+    );
+
+    expect(result.map((k) => k.id)).toEqual([led.id]);
+    expect(countMatching(statements, 'memories_fts MATCH')).toBe(1);
   });
 });
 

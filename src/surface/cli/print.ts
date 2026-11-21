@@ -1,6 +1,7 @@
 // Text printers for recall results, agent imports, task snapshots, session trails and handoffs.
 
 import { confidenceLabel } from '../../base/memory/strength.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { RerankStep, SearchResult } from '../../base/rank/search-types.js';
@@ -62,7 +63,7 @@ export function recallEntryText({
     // x1.50 -> 0.189".
     if (r.rerankTrace && r.rerankTrace.length > 0) lines.push(rankingLine(r.rerankTrace));
   }
-  lines.push('', e.content, '');
+  lines.push('', shownText(e), '');
   return lines.join('\n');
 }
 

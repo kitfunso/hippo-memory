@@ -46,6 +46,14 @@ def test_memory_envelope_roundtrip():
     })
 
 
+def test_lead_in_parses_on_envelope_and_recall_entry_and_is_none_when_absent():
+    led = {"id": "mem_a", "content": "Three times a week"}
+    assert MemoryEnvelope.model_validate({**led, "leadIn": "user: How often?"}).lead_in == "user: How often?"
+    assert RecallEntry.model_validate({**led, "leadIn": "user: How often?"}).lead_in == "user: How often?"
+    assert MemoryEnvelope.model_validate(led).lead_in is None
+    assert RecallEntry.model_validate(led).lead_in is None
+
+
 def test_recall_result_roundtrip():
     _roundtrip(RecallResult, {
         "results": [

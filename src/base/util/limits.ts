@@ -14,6 +14,8 @@ export const MAX_HOOK_FIELD_LEN = 128;
 // and MCP alike.
 export const MAX_SHORT_FIELD_LEN = 4096;
 
+export const MAX_LEAD_IN_CHARS = 2000;
+
 // A content-like field can be as long as the body that carries it.
 export const MAX_CONTENT_LEN = MAX_BODY_BYTES;
 

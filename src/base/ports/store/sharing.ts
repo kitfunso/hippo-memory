@@ -64,6 +64,7 @@ export interface EntryTextKey {
   id: string;
   tenantId: string;
   content: string;
+  leadIn?: string | null;
   source: string;
 }
 

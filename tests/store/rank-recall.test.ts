@@ -147,6 +147,22 @@ describe('rankRecall re-rank stages', () => {
     expect(ids((await rank({ evcAdaptive: true })).results)).toEqual(plain);
   });
 
+  it('evcAdaptive leaves the order alone for two "Yes." rows under different lead-ins', async () => {
+    put('mem_old', 'Yes.', {
+      leadIn: 'user: does the deploy canary roll out region by region, deploy first to east?',
+      created: '2024-01-01T00:00:00.000Z',
+    });
+    put('mem_new', 'Yes.', {
+      leadIn: 'user: must a dba sign off the deploy before friday?',
+      created: '2026-01-01T00:00:00.000Z',
+    });
+
+    const plain = ids((await rank()).results);
+    // Without this order the check below would pass when the stage swaps the rows.
+    expect(plain).toEqual(['mem_old', 'mem_new']);
+    expect(ids((await rank({ evcAdaptive: true })).results)).toEqual(plain);
+  });
+
   it('a reranker reorders its top K, its score replaces the old one, and the tail keeps its place', async () => {
     put('mem_1', 'deploy deploy deploy pipeline notes');
     put('mem_2', 'deploy pipeline notes for the runner');

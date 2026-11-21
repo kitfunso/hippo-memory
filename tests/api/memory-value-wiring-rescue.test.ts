@@ -5,7 +5,14 @@ import { Layer } from '../../src/base/memory/entry.js';
 import { resolveConfidence } from '../../src/entry/memory.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { rescueSet, validateWeights } from '../../src/domain/consolidate/memory-value.js';
+import {
+  mvCandidate,
+  rankCandidates,
+  rankNonPinnedByTenant,
+  rescueSet,
+  validateWeights,
+} from '../../src/domain/consolidate/memory-value.js';
+import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { MEMORY_VALUE_WEIGHTS, SOURCE_ARTIFACT_SHA256 } from '../../src/domain/consolidate/memory-value-weights.js';
 import { loadEveryTenantEntries, listMemoryConflicts } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -197,6 +204,29 @@ describe('(e) rescue semantics', () => {
     const remaining = loadEveryTenantEntries(dir);
     expect(remaining.find((e) => e.id === lonely.id)).toBeUndefined();
     expect(auditRescueRows(dir, 'tf').length).toBe(0);
+  });
+
+  it('ranks a score tie that differs only by lead-in the same way whole or paged, lead-in order first', async () => {
+    // Ids run against the lead-in order, so a ranking that drops the lead-in orders by id instead.
+    const rows = Array.from({ length: 10 }, (_, k) => ({
+      ...condemnedEntry('Yes.', { tenantId: 'ta' }),
+      id: `row-${9 - k}`,
+      leadIn: `lead-${k}`,
+    }));
+    const condemned = new Set([rows[0]!.id, rows[4]!.id, rows[9]!.id]);
+    const candidates = rows.map((row) => mvCandidate(row, NOW, PRODUCTION_STRENGTH));
+
+    const whole = rankNonPinnedByTenant({ entries: rows, now: NOW });
+    const paged = await rankCandidates(
+      candidates,
+      (id) => condemned.has(id),
+      (ids) => [rows.filter((row) => ids.includes(row.id))],
+    );
+
+    const ranks = (map: typeof whole, ids: Iterable<string>) => [...ids].map((id) => map.get(id)?.rank);
+    const everyId = rows.map((row) => row.id);
+    expect(ranks(whole, everyId)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(ranks(paged, condemned)).toEqual([1, 5, 10]);
   });
 });
 

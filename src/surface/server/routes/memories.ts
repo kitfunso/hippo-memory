@@ -54,6 +54,7 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
     scope: getString(body, 'scope', MAX_ID_LEN),
     owner: getString(body, 'owner', MAX_ID_LEN),
     artifactRef: getString(body, 'artifactRef', MAX_SHORT_FIELD_LEN),
+    leadIn: getString(body, 'leadIn', MAX_CONTENT_LEN),
     tags: getStringArray({
       obj: body,
       key: 'tags',

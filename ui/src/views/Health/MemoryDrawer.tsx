@@ -145,6 +145,7 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
         )}
         {d && (
           <>
+            {d.leadIn && <div className="muted">{d.leadIn}</div>}
             <p className="dr-content">{d.content}</p>
             <div className="dr-flags">
               <span>

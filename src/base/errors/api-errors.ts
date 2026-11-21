@@ -75,6 +75,8 @@ export class RejectedValueError extends BadRequestError {
   readonly entryId: string;
   readonly reason: string | null;
   readonly rejectedAt: string;
+  /** True when the tombstone is the identity of a row with a lead-in: refused under that lead-in only. */
+  readonly leadInScoped: boolean;
 
   constructor(opts: {
     digest: string;
@@ -82,16 +84,29 @@ export class RejectedValueError extends BadRequestError {
     entryId: string;
     reason: string | null;
     rejectedAt: string;
+    /** Optional so a store-kit adapter that builds this error keeps compiling; absent means value-wide. */
+    leadInScoped?: boolean;
   }) {
-    super(
-      `Memory value refused: matches a rejected value (digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., ` +
-        `reason: ${opts.reason ?? 'none given'}). Run "hippo unreject" to allow it again.`,
-    );
+    super(refusalMessage(opts));
     this.name = 'RejectedValueError';
     this.digest = opts.digest;
     this.tenantId = opts.tenantId;
     this.entryId = opts.entryId;
     this.reason = opts.reason;
     this.rejectedAt = opts.rejectedAt;
+    this.leadInScoped = opts.leadInScoped ?? false;
   }
+}
+
+function refusalMessage(opts: {
+  digest: string;
+  reason: string | null;
+  leadInScoped?: boolean;
+}): string {
+  const detail =
+    `(digest ${opts.digest.slice(0, DIGEST_DISPLAY_CHARS)}..., reason: ${opts.reason ?? 'none given'}). ` +
+    'Run "hippo unreject" to allow it again.';
+  return opts.leadInScoped
+    ? `Memory refused: this text under this lead-in matches a rejected memory ${detail}`
+    : `Memory value refused: matches a rejected value ${detail}`;
 }

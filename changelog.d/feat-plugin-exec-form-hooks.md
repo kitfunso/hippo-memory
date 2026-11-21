@@ -1,3 +1,0 @@
-### Changed
-
-- **The Claude Code plugin's hooks and MCP server start node scripts instead of shell lines.** Each hook now runs `node ${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs <verb>` in Claude Code's exec form, and the MCP server runs `scripts/mcp.mjs`. The scripts start the `hippo` on your PATH with no shell, so the hooks behave the same in Git Bash, PowerShell and cmd, and a `hippo` file in the project folder never runs. Hooks still exit 0 and stay quiet when hippo is missing. Anthropic's plugin directory refuses shell-text commands, so this is needed for the directory listing. Plugin version 0.7.0; it needs Claude Code 2.1.139 or later.
