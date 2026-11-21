@@ -156,15 +156,16 @@ function prepareRemember(
   assertOwnerIsCallers(ctx, opts.owner);
   const requestedScope = rememberScope(ctx, opts, screen.untrusted);
   const vetted = vetSecrets(opts.content);
+  const tags = opts.tags && withoutCaptureTags(opts.tags);
   const verdict = screenWrite(ctx.actor, {
     content: vetted.content,
-    tags: opts.tags,
+    tags,
     scope: requestedScope,
     untrusted: screen.untrusted,
     rule: opts.hold,
     holds: screen.holds,
   });
-  const tags = markedTags(opts.tags && withoutCaptureTags(opts.tags), verdict.marks);
+  const rowTags = markedTags(tags, verdict.marks);
   const local = opts.local ?? {};
   const created = createMemory(
     vetted.content,
@@ -180,7 +181,7 @@ function prepareRemember(
       scope: verdict.scope,
       owner: opts.owner ?? null,
       artifactRef: opts.artifactRef ?? null,
-      tags,
+      tags: rowTags,
       tenantId: ctx.tenantId,
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
     },

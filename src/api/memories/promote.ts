@@ -11,6 +11,7 @@ import { assertCallerProject, classifyOriginProject } from '../../base/scope/pro
 import {
   createSuccessor,
   generateId,
+  withoutCaptureTags,
   type Layer,
   type MemoryEntry,
 } from '../../base/memory/entry.js';
@@ -203,9 +204,10 @@ async function supersedeScreened(
   const [old] = await ctx.store.entriesByIds([oldId], ctx.tenantId);
   const target = assertSupersedable(ctx, oldId, old ?? null);
   const reviewer = reviewerOf(ctx);
+  const tags = withoutCaptureTags(overrides.tags ?? target.tags);
   const verdict = screenWrite(ctx.actor, {
     content: newContent,
-    tags: overrides.tags,
+    tags,
     scope: target.scope ?? null,
     untrusted: false,
     holds: reviewer !== undefined,
@@ -217,7 +219,7 @@ async function supersedeScreened(
       tenantId: ctx.tenantId,
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
       layer: overrides.layer,
-      tags: markedTags(overrides.tags ?? target.tags, verdict.marks),
+      tags: markedTags(tags, verdict.marks),
       pinned: overrides.pinned,
     },
     ctx.infra.clock(),
