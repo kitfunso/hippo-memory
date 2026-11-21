@@ -43,7 +43,14 @@ function memberCtx(home: string, keyId = 'k1'): FullContext {
   return apiCtx(home, 'default', { subject: `api_key:${keyId}`, role: 'member' });
 }
 
-function githubCommentEvent(body: string, isPrivateRepo = false, commentId = 501): IngestEvent {
+function githubCommentEvent(
+  body: string,
+  isPrivateRepo = false,
+  commentId = 501,
+  association: string | null = 'MEMBER',
+  login = 'mallory',
+  userId = 9,
+): IngestEvent {
   // SAFETY: ingestEvent's transform only reads the fields set below.
   return {
     eventName: 'issue_comment',
@@ -51,7 +58,12 @@ function githubCommentEvent(body: string, isPrivateRepo = false, commentId = 501
       action: 'created',
       repository: { full_name: 'acme/demo', private: isPrivateRepo, owner: { login: 'acme' }, name: 'demo' },
       issue: { number: 1 },
-      comment: { id: commentId, body, user: { login: 'mallory', id: 9 } },
+      comment: {
+        id: commentId,
+        body,
+        user: { login, id: userId },
+        ...(association === null ? {} : { author_association: association }),
+      },
     },
   } as IngestEvent;
 }
@@ -105,6 +117,75 @@ describe('GitHub ingest quarantines a flagged comment', () => {
     const result = await api.remember(ctx, { content: INJECTION, scope: 'github:public:acme/demo' });
     expect(result.quarantined).toBeUndefined();
     expect(readEntry(home, result.id, 'default')?.scope).toBe('github:public:acme/demo');
+  });
+});
+
+describe('GitHub ingest holds an outside author by rule', () => {
+  let home: string;
+  beforeEach(() => {
+    home = makeRoot('quarantine', ISOLATION_OFF);
+  });
+  afterEach(() => rmSync(home, { recursive: true, force: true }));
+
+  const ingest = (event: IngestEvent, deliveryId: string, trustedUserIds?: ReadonlySet<number>) =>
+    ingestEvent(adminCtx(home), { event, rawBody: deliveryId, deliveryId, trustedUserIds });
+
+  it('holds a clean comment from a first-time contributor, and an admin releases it', async () => {
+    const result = await ingest(githubCommentEvent(CLEAN, false, 601, 'FIRST_TIME_CONTRIBUTOR'), 'd601');
+    const id = result.memoryId!;
+
+    expect(readEntry(home, id, 'default')?.scope).toBe('quarantine:private:github:public:acme/demo');
+    expect(quarantineRow(home, id)).toMatchObject({
+      status: 'pending',
+      original_scope: 'github:public:acme/demo',
+      reason: 'outside-author:FIRST_TIME_CONTRIBUTOR',
+    });
+
+    await api.quarantineApprove(adminCtx(home), id);
+    expect(readEntry(home, id, 'default')?.scope).toBe('github:public:acme/demo');
+  });
+
+  it('holds a comment whose association is missing', async () => {
+    const result = await ingest(githubCommentEvent(CLEAN, false, 602, null), 'd602');
+
+    expect(quarantineRow(home, result.memoryId!)?.reason).toBe('outside-author:unknown');
+  });
+
+  it('keeps a comment from a collaborator live with no record', async () => {
+    const result = await ingest(githubCommentEvent(CLEAN, false, 603, 'COLLABORATOR'), 'd603');
+
+    expect(readEntry(home, result.memoryId!, 'default')?.scope).toBe('github:public:acme/demo');
+    expect(quarantineRow(home, result.memoryId!)).toBeUndefined();
+  });
+
+  it('names both reasons when an outside author also writes an instruction', async () => {
+    const result = await ingest(githubCommentEvent(INJECTION, false, 604, 'NONE'), 'd604');
+
+    expect(quarantineRow(home, result.memoryId!)?.reason).toBe('pattern:standing-order; outside-author:NONE');
+  });
+
+  describe('a teammate whose organization membership is private reads as CONTRIBUTOR', () => {
+    const teammate = (body: string, commentId: number) =>
+      githubCommentEvent(body, false, commentId, 'CONTRIBUTOR', 'ana', 5);
+
+    it('is held while the operator has not listed the id', async () => {
+      const result = await ingest(teammate(CLEAN, 605), 'd605');
+
+      expect(quarantineRow(home, result.memoryId!)?.reason).toBe('outside-author:CONTRIBUTOR');
+    });
+
+    it('is kept live once the id is listed', async () => {
+      const result = await ingest(teammate(CLEAN, 606), 'd606', new Set([5]));
+
+      expect(readEntry(home, result.memoryId!, 'default')?.scope).toBe('github:public:acme/demo');
+      expect(quarantineRow(home, result.memoryId!)).toBeUndefined();
+    });
+
+    it('still has an instruction held when the id is listed', async () => {
+      const result = await ingest(teammate(INJECTION, 607), 'd607', new Set([5]));
+
+      expect(quarantineRow(home, result.memoryId!)?.reason).toBe('pattern:standing-order');
+    });
   });
 });
 

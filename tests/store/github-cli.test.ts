@@ -186,6 +186,42 @@ describe('hippo github CLI', () => {
     }
   });
 
+  const contributorIssues = [
+    { number: 2, title: 'arm64 crash', body: 'repro attached', user: { login: 'Alice', id: 1 } },
+    { number: 3, title: 'arm64 hang', body: 'trace attached', user: { login: 'mallory', id: 9 } },
+  ].map((issue) => ({
+    ...issue,
+    author_association: 'CONTRIBUTOR',
+    updated_at: '2026-01-02T00:00:00Z',
+  }));
+
+  it('backfill keeps an outside-author issue live only when its user id is in GITHUB_TRUSTED_USER_IDS', async () => {
+    stubGitHubIssues(contributorIssues);
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '1');
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } });
+
+    const scopeOf = (suffix: string) =>
+      loadAllEntries(hippoRoot, 'default').find((e) => e.artifactRef?.endsWith(suffix))?.scope;
+    expect(scopeOf('/issue/2')).not.toMatch(/^quarantine:private:/);
+    expect(scopeOf('/issue/3')).toMatch(/^quarantine:private:/);
+  });
+
+  it('backfill refuses a login in GITHUB_TRUSTED_USER_IDS before it fetches or writes anything', async () => {
+    stubGitHubIssues(contributorIssues);
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice');
+
+    await expect(
+      handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } }),
+    ).rejects.toThrow(/GITHUB_TRUSTED_USER_IDS/);
+
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+  });
+
   it('dlq list on empty DLQ prints "no entries"', async () => {
     const r = await runCli(root, ['github', 'dlq', 'list']);
     expect(r.status).toBe(0);
@@ -452,6 +488,69 @@ describe('hippo github CLI', () => {
     const id = await parkDelivery('issues', withRepoUrl(issueOpenedBody, htmlUrl), SECRET, 'parse_error');
     expect((await replay(id)).status).toBe(0);
     expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
+  });
+
+  const contributorComment = (id: number, text: string, user: { login: string; id: number }): string =>
+    JSON.stringify({
+      action: 'created',
+      issue: { number: 42 },
+      comment: { id, body: text, user, author_association: 'CONTRIBUTOR' },
+      repository: REPOSITORY,
+      sender: user,
+      installation: { id: 99 },
+    });
+  const replayWithTrusted = (id: number, trusted: string) =>
+    runCli(root, ['github', 'dlq', 'replay', String(id)], {
+      GITHUB_WEBHOOK_SECRET: SECRET,
+      GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
+      GITHUB_TRUSTED_USER_IDS: trusted,
+    });
+
+  it('dlq replay reads GITHUB_TRUSTED_USER_IDS from the replaying shell', async () => {
+    const bob = await parkDelivery(
+      'issue_comment',
+      contributorComment(3001, 'I can repro on arm64', { login: 'bob', id: 2 }),
+    );
+    const mallory = await parkDelivery(
+      'issue_comment',
+      contributorComment(3002, 'Same here on arm64', { login: 'mallory', id: 9 }),
+    );
+
+    expect((await replayWithTrusted(bob, '2')).status).toBe(0);
+    expect((await replayWithTrusted(mallory, '2')).status).toBe(0);
+
+    expect(liveRaws('github://acme/repo/issue/42/comment/3001')[0].scope).toBe('github:public:acme/repo');
+    expect(liveRaws('github://acme/repo/issue/42/comment/3002')[0].scope).toMatch(/^quarantine:private:/);
+  });
+
+  it('dlq replay refuses a login in GITHUB_TRUSTED_USER_IDS, stores nothing and leaves the retry count at 0', async () => {
+    const id = await parkDelivery(
+      'issue_comment',
+      contributorComment(3003, 'I can repro on arm64', { login: 'bob', id: 2 }),
+    );
+
+    const r = await replayWithTrusted(id, 'alice');
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('Error: GITHUB_TRUSTED_USER_IDS');
+    expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+    expect(await retryCountOf(id)).toBe(0);
+  });
+
+  it('A26. under GHES a replayed outside-author comment is stored under the host ref and held', async () => {
+    const id = await parkDelivery(
+      'issue_comment',
+      withRepoUrl(
+        contributorComment(3004, 'I can repro on arm64', { login: 'mallory', id: 9 }),
+        'https://ghes.example.com/acme/repo',
+      ),
+    );
+
+    expect((await replayWith(id, { ...GHES_ENV, GITHUB_TRUSTED_USER_IDS: '2' })).status).toBe(0);
+
+    const rows = liveRaws('github://ghes.example.com/acme/repo/issue/42/comment/3004');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].scope).toBe('quarantine:private:github:public:ghes.example.com/acme/repo');
   });
 
   it('dlq replay stores nothing when the parked body does not match its event header', async () => {

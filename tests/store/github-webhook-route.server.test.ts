@@ -7,6 +7,7 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
 import { log } from '../../src/base/util/log.js';
 import { hostMismatch, mismatchSender, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
+import { githubTrustedUserIds } from '../../src/surface/connectors/github/webhook.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -592,6 +593,36 @@ describe('POST /v1/connectors/github/events', () => {
       closeHippoDb(db);
     }
   });
+  it('19. a comment from a listed user id is kept live; once the id leaves the list the same author is held', async () => {
+    const commentBody = (id: number, text: string): string =>
+      JSON.stringify({
+        action: 'created',
+        issue: { number: 42 },
+        comment: {
+          id,
+          body: text,
+          user: { login: 'erin', id: 5 },
+          author_association: 'CONTRIBUTOR',
+        },
+        repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
+        sender: { login: 'erin', id: 5 },
+        installation: { id: 99 },
+      });
+    const scopeOf = (commentId: number) =>
+      loadAllEntries(root, 'default').find(
+        (e) => e.artifactRef === `github://acme/repo/issue/42/comment/${String(commentId)}`,
+      )?.scope;
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', ' 5 , ,6 ');
+    const first = commentBody(2001, 'I can repro on arm64');
+    expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issue_comment', 'd-18a'))).status).toBe(200);
+    expect(scopeOf(2001)).toBe('github:public:acme/repo');
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '6');
+    const second = commentBody(2002, 'Still repros on arm64');
+    expect((await postWebhook(handle.port, second, defaultHeaders(second, 'issue_comment', 'd-18b'))).status).toBe(200);
+    expect(scopeOf(2002)).toBe('quarantine:private:github:public:acme/repo');
+  });
 });
 
 describe('POST /v1/connectors/github/events on GHES', () => {
@@ -741,6 +772,17 @@ describe('POST /v1/connectors/github/events on GHES', () => {
     }
     expect(dlqRows().map((r) => r.bucket)).toEqual(['host_mismatch']);
   });
+
+  it('G6. an outside author is held and still stored under the host ref and repo tag', async () => {
+    const body = issueBody().replace('"author_association":"MEMBER"', '"author_association":"NONE"');
+    expect(body).toContain('"author_association":"NONE"');
+    const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g6'));
+    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
+
+    const row = liveRaws('github://ghes.example.com/acme/repo/issue/42')[0];
+    expect(row?.tags).toContain('repo:ghes.example.com/acme/repo');
+    expect(row?.scope).toBe('quarantine:private:github:public:ghes.example.com/acme/repo');
+  });
 });
 
 describe('POST /v1/connectors/github/events with a bad GITHUB_ENTERPRISE_URL', () => {
@@ -788,5 +830,58 @@ describe('POST /v1/connectors/github/events with GITHUB_ENTERPRISE_BARE_REFS_HOS
       archivedCount: 1,
     });
     expect(live()).toHaveLength(0);
+  });
+});
+
+describe('githubTrustedUserIds', () => {
+  it('reads numeric ids, trims them and drops blank entries; unset is an empty list', () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', ' 5, ,1234567 ');
+    expect([...githubTrustedUserIds()].sort((x, y) => x - y)).toEqual([5, 1234567]);
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', undefined);
+    expect(githubTrustedUserIds().size).toBe(0);
+  });
+
+  it('refuses a login, or a login:id pair, and names the command that gets an id', () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '5,alice');
+    expect(() => githubTrustedUserIds()).toThrow(/"alice"/);
+    expect(() => githubTrustedUserIds()).toThrow(/gh api users\/<login> --jq \.id/);
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice:5');
+    expect(() => githubTrustedUserIds()).toThrow(/GITHUB_TRUSTED_USER_IDS/);
+  });
+
+  it('never prints an entry that is not login-shaped, such as a token pasted into the wrong variable', () => {
+    const pasted = `ghp_${'x'.repeat(36)}`;
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', `5,${pasted}`);
+
+    expect(pasted).toHaveLength(40);
+    let message = '';
+    try {
+      githubTrustedUserIds();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toContain('entry 2, not shown');
+    expect(message).not.toContain(pasted);
+  });
+
+  it('keeps hippo serve from starting on a bad entry', async () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice');
+
+    const started = await serve({
+      hippoRoot: makeRoot('trusted-ids-bad'),
+      host: '127.0.0.1',
+      port: 0,
+    }).then(
+      async (handle) => {
+        await handle.stop();
+        return true;
+      },
+      (err: unknown) => err,
+    );
+
+    expect(started).toBeInstanceOf(Error);
+    expect(String(started)).toMatch(/GITHUB_TRUSTED_USER_IDS/);
   });
 });

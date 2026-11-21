@@ -144,13 +144,18 @@ type GitHubPrReviewCommentItem = {
 };
 
 /** Build a stream-1 (issues) item. */
-function issueItem(number: number, updatedAt: string, isPr = false): GitHubIssueItem {
+function issueItem(
+  number: number,
+  updatedAt: string,
+  isPr = false,
+  association: string | undefined = 'MEMBER',
+): GitHubIssueItem {
   const item: GitHubIssueItem = {
     number,
     title: `issue ${number}`,
     body: `body for ${number}`,
     user: { login: 'alice', id: 1 },
-    author_association: 'MEMBER',
+    author_association: association,
     updated_at: updatedAt,
   };
   if (isPr) item.pull_request = { url: `https://api.github.com/repos/${REPO}/pulls/${number}` };
@@ -689,5 +694,40 @@ describe('backfillRepo', () => {
 
       expect(r.ingested.issues).toBe(1);
     });
+  });
+
+  it('17. carries author_association: an issue from an owner stays live and one from an outsider is held', async () => {
+    const fetcher = makeFakeFetcher({
+      issues: [
+        {
+          items: [
+            issueItem(1, '2026-05-01T10:00:00Z', false, 'OWNER'),
+            issueItem(2, '2026-05-02T10:00:00Z', false, 'NONE'),
+          ],
+          next: null,
+          rateLimit: NO_RATE,
+        },
+      ],
+    });
+
+    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher, token: 't' });
+
+    const entries = loadAllEntries(root, 'default');
+    const scopeOf = (suffix: string) => entries.find((e) => e.artifactRef?.endsWith(suffix))?.scope;
+    expect(scopeOf('/issue/1')).not.toMatch(/^quarantine:private:/);
+    expect(scopeOf('/issue/2')).toMatch(/^quarantine:private:/);
+  });
+
+  it('18. a GHES backfill holds an outsider and still stores the host ref and repo tag', async () => {
+    const fetcher = makeFakeFetcher({
+      issues: [{ items: [issueItem(3, '2026-05-03T10:00:00Z', false, 'NONE')], next: null, rateLimit: NO_RATE }],
+    });
+
+    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher, token: 't', site: GHES_SITE });
+
+    const row = loadAllEntries(root, 'default').find((e) => e.tags.includes('source:github'));
+    expect(row?.artifactRef).toBe('github://ghes.example.com/acme/demo/issue/3');
+    expect(row?.tags).toContain('repo:ghes.example.com/acme/demo');
+    expect(row?.scope).toMatch(/^quarantine:private:/);
   });
 });

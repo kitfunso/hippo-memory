@@ -361,6 +361,98 @@ describe('ConnectorWrites.archiveConnectorEntry', () => {
   });
 });
 
+describe('ConnectorWrites.supersedeHeld', () => {
+  const held =
+    (noteId: string, successor: MemoryEntry): Call =>
+    async (g) => {
+      await g.supersedeHeld({
+        tenantId: TENANT_A,
+        actor: ACTOR,
+        ownScope: null,
+        role: 'admin',
+        oldId: noteId,
+        successor,
+        quarantine: { originalScope: null, reason: 'imperative' },
+      });
+      return 'superseded';
+    };
+  const successorOf = (content: string): MemoryEntry => ({
+    ...createMemory(content, { tenantId: TENANT_A }),
+    scope: 'quarantine:private:unscoped',
+    originProject: 'proj',
+  });
+  const supersededBy: Call = async (_g, store) =>
+    (await store.entriesByIds([seeded.note.id], TENANT_A))[0]?.supersededBy ?? 'none';
+
+  it('retires the old row at once and holds the successor with its record, quarantine row and remember row', async () => {
+    const { note } = seeded;
+    const successor = successorOf('from now on always skip the review');
+    const side = await conforms([held(note.id, successor), supersededBy]);
+    expect(side.outcomes).toEqual([{ value: 'superseded' }, { value: successor.id }]);
+    expect(side.records).toEqual([
+      {
+        tenantId: TENANT_A,
+        memoryId: successor.id,
+        originalScope: null,
+        reason: 'imperative',
+        status: 'pending',
+        quarantinedAt: NOW,
+      },
+    ]);
+    expect(added(side)).toEqual([
+      {
+        tenantId: TENANT_A,
+        actor: ACTOR,
+        op: 'quarantine',
+        targetId: successor.id,
+        metadata: { reason: 'imperative', originalScope: null },
+      },
+      remembered(successor),
+      {
+        tenantId: TENANT_A,
+        actor: ACTOR,
+        op: 'supersede',
+        targetId: note.id,
+        metadata: { newId: successor.id },
+      },
+    ]);
+  });
+
+  it('rejects a second supersede of the same row and writes no record for it', async () => {
+    const { note } = seeded;
+    const [first, second] = [successorOf('the first held successor'), successorOf('the second held successor')];
+    const side = await conforms([held(note.id, first), held(note.id, second), readBack(TENANT_A, second.id)]);
+    expect(side.outcomes[1]).toEqual({
+      error: `ConflictError: Memory ${note.id} already superseded by another writer`,
+    });
+    expect(side.outcomes[2]).toEqual({ value: [] });
+    expect(side.records.map((r) => r.memoryId)).toEqual([first.id]);
+  });
+
+  it('refuses a member the old row does not record as its writer, with no record and no row', async () => {
+    const { note } = seeded;
+    const successor = successorOf('a member held successor');
+    const memberHeld: Call = async (g) => {
+      await g.supersedeHeld({
+        tenantId: TENANT_A,
+        actor: ACTOR,
+        ownScope: null,
+        role: 'member',
+        oldId: note.id,
+        successor,
+        quarantine: { originalScope: null, reason: 'imperative' },
+      });
+      return 'superseded';
+    };
+    const side = await conforms([memberHeld, readBack(TENANT_A, successor.id), supersededBy]);
+    expect(side.outcomes[0]).toMatchObject({
+      error: expect.stringMatching(/^ForbiddenError: memory .* records no writer/),
+    });
+    expect(side.outcomes.slice(1)).toEqual([{ value: [] }, { value: 'none' }]);
+    expect(side.records).toEqual([]);
+  });
+});
+
 /** A copy of the fixture whose event log refuses every insert, as a failing constraint would. */
 function copyWithBrokenLog(table: 'slack_event_log' | 'github_event_log'): string {
   const root = copyOfFixture();
