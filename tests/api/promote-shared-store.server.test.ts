@@ -155,7 +155,7 @@ describe('promote on a shared store over HTTP', () => {
     const before = { rows: countRows(), audit: (await promoteRows(store)).length };
     const r = await promoteAs(A.plaintext, ids.row, ALPHA);
     expect(r.status, r.text).toBe(200);
-    expect(JSON.parse(r.text)).toEqual({ ok: true, sourceId: ids.row, globalId: ids.row });
+    expect(JSON.parse(r.text)).toEqual({ ok: true, sourceId: ids.row, globalId: ids.row, originProject: 'alpha' });
     expect(countRows()).toBe(before.rows);
     expect(loadAllEntries(store, 'default').filter((e) => e.id.startsWith('g_'))).toEqual([]);
     const rows = await promoteRows(store);
@@ -216,7 +216,7 @@ describe('promote on a shared store over HTTP', () => {
     expect(noProject.text).toContain(NEEDS_PROJECT);
     const host = await promoteAs(ADM.plaintext, ids.row, {});
     expect(host.status, host.text).toBe(200);
-    expect(JSON.parse(host.text)).toEqual({ ok: true, sourceId: ids.row, globalId: ids.row });
+    expect(JSON.parse(host.text)).toEqual({ ok: true, sourceId: ids.row, globalId: ids.row, originProject: 'alpha' });
     const resolved = await promoteAs('signin-adm', ids.row, {});
     expect(resolved.status, resolved.text).toBe(400);
     expect(resolved.text).toContain(NEEDS_PROJECT);
@@ -269,6 +269,7 @@ describe('hippo promote in a shared folder', () => {
     const r = await runCli('promote', ids.cli);
     expect(r.status, r.out).toBe(0);
     expect(r.out).toContain('in place');
+    expect(r.out).toContain('already serves it to its project');
     expect(r.out).not.toContain('global store');
     expect(r.out).not.toContain(path.join(tmp2, 'global'));
     const rows = await promoteRows(root);
@@ -284,6 +285,8 @@ describe('hippo promote in a shared folder', () => {
     const r = await runCli('promote', ids.own);
     expect(r.status, r.out).toBe(0);
     expect(r.out).toContain('in place');
+    expect(r.out).toContain('this row has no project, so members see it only with a host admin key');
+    expect(r.out).not.toContain('serves it to its project');
   });
 
   it('P7 with a server running it goes through the server, sends the folder project, and a row of another project is not found', async () => {

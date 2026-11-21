@@ -63,6 +63,8 @@ export type Remembered =
 
 export interface Promoted {
   readonly globalId: string;
+  /** On a shared store: the row's origin project, null when it has none. */
+  readonly originProject?: string | null;
   /** The global store's folder, when this process wrote the copy. */
   readonly globalStore?: string;
 }
@@ -138,9 +140,11 @@ export function localWrites(root: string, tenantId: string): MemoryWrites {
     async promote(id) {
       const ctx = context();
       try {
-        const { globalId } = await api.promote(ctx, id);
+        const { globalId, originProject } = await api.promote(ctx, id);
         // An in-place promote on a shared store wrote no copy into the global store.
-        return globalId === id ? { globalId } : { globalId, globalStore: hippoHomeDir() };
+        return globalId === id
+          ? { globalId, originProject: originProject ?? null }
+          : { globalId, globalStore: hippoHomeDir() };
       } catch (err) {
         fail(promoteRefusal(errorMessage(err)));
       }
@@ -237,14 +241,14 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
       ),
     promote: (id) =>
       send(
-        async () => {
+        async (): Promise<Promoted> => {
           // The server learns a shared folder's project from the caller, as remember sends none.
           const project = isSharedStore(hippoRoot)
             ? callerProjectOf(
                 cliInfra().machine.projectIdentity(workingFolder({ infra: cliInfra() })),
               )
             : undefined;
-          return { globalId: (await client.postPromote(server.url, apiKey, id, project)).globalId };
+          return client.postPromote(server.url, apiKey, id, project);
         },
         (err) => fail(promoteRefusal(servedReason(err))),
         () => local.promote(id),

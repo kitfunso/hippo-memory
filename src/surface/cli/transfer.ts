@@ -46,10 +46,15 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  const { globalId, globalStore } = await (await pickWrites(hippoRoot, tenantId)).promote(id);
+  const { globalId, globalStore, originProject } = await (
+    await pickWrites(hippoRoot, tenantId)
+  ).promote(id);
   if (globalId === id) {
     console.log(
-      `Promoted ${id} in place: this shared store already serves it to its project, so nothing was copied.`,
+      originProject === null
+        ? `Promoted ${id} in place: nothing was copied; this row has no project, so members ` +
+            'see it only with a host admin key.'
+        : `Promoted ${id} in place: this shared store already serves it to its project, so nothing was copied.`,
     );
     return;
   }

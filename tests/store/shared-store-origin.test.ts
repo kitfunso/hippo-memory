@@ -7,6 +7,8 @@ import { createHost } from '../../src/host/host.js';
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
+import type { HippoStore } from '../../src/base/ports/store.js';
+import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { adminActor } from '../../src/api/index.js';
 import { promote } from '../../src/api/memories/promote.js';
@@ -117,13 +119,28 @@ describe('shared store origin stamp', () => {
     }
   });
 
+  it('a promote on a store with no folderFiles answers not-ported whatever its reach', async () => {
+    for (const { store } of layouts(false)) {
+      const entry = createMemory('the ferry timetable changes in october');
+      writeEntry(store, entry);
+      const ctx = apiCtx(store, 'default', adminActor('test'));
+      const unported: HippoStore = { ...ctx.store, folderFiles: undefined };
+      const bare = { ...ctx, reach: undefined, store: unported };
+      await expect(promote(bare, entry.id)).rejects.toBeInstanceOf(StoreNotPortedError);
+    }
+  });
+
   it('a promote on a flagged store copies nothing, and a share of a NULL row stays NULL in the global copy, labelled shared::', async () => {
     for (const { store } of layouts(true)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), originProject: null };
       writeEntry(store, entry);
+      const globalDb = path.join(getGlobalRoot(), 'hippo.db');
+      const globalRows = (): number =>
+        fs.existsSync(globalDb) ? loadAllEntries(getGlobalRoot(), 'default').length : 0;
+      const before = globalRows();
       const promoted = await promote(apiCtx(store, 'default', adminActor('test')), entry.id);
       expect(promoted.globalId).toBe(entry.id);
-      expect(readEntry(getGlobalRoot(), entry.id)).toBeNull();
+      expect(globalRows()).toBe(before);
       const toShare = rowToShare(store);
       writeEntry(store, toShare);
       const shared = sharedEntry(

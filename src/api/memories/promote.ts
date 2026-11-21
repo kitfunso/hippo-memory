@@ -34,6 +34,8 @@ export interface PromoteResult {
   ok: true;
   sourceId: string;
   globalId: string;
+  /** Set on a shared store only: the row's origin project, null when it has none. */
+  originProject?: string | null;
 }
 
 /** The caller's project, which a shared store needs to tell whose row it is. */
@@ -50,6 +52,8 @@ export async function promote(
   opts: PromoteOptions = {},
 ): Promise<PromoteResult> {
   if (sharedStoreOf(ctx)) return promoteInPlace(ctx, id, opts.project);
+  const files = ctx.store.folderFiles;
+  if (files === undefined) throw new StoreNotPortedError(ctx.store.kind, 'folderFiles');
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
@@ -62,8 +66,6 @@ export async function promote(
   }
   assertPromotable(id, entry);
 
-  const files = ctx.store.folderFiles;
-  if (files === undefined) throw new StoreNotPortedError(ctx.store.kind, 'folderFiles');
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store
   // fails the whole promote.
   const globalEntry = globalCopyOf(await files.home(), entry);
@@ -127,7 +129,7 @@ async function promoteInPlace(
       metadata: { sourceId: id },
     },
   ]);
-  return { ok: true, sourceId: id, globalId: id };
+  return { ok: true, sourceId: id, globalId: id, originProject: row.originProject ?? null };
 }
 
 function assertPromotable(id: string, entry: MemoryEntry): void {

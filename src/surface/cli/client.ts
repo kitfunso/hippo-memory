@@ -179,7 +179,7 @@ export async function postPromote(
   apiKey: string | undefined,
   id: string,
   project?: { readonly name: string; readonly aliases?: readonly string[] },
-): Promise<{ ok: true; sourceId: string; globalId: string }> {
+): Promise<{ ok: true; sourceId: string; globalId: string; originProject?: string | null }> {
   const res = await sendWrite(`${serverUrl}/v1/memories/${encodeURIComponent(id)}/promote`, {
     method: 'POST',
     ...(project === undefined
@@ -187,7 +187,7 @@ export async function postPromote(
       : { headers: buildHeaders(apiKey, true), body: JSON.stringify({ project }) }),
   });
   if (!res.ok) await throwForStatus(res);
-  return readReply<{ ok: true; sourceId: string; globalId: string }>(
+  return readReply<{ ok: true; sourceId: string; globalId: string; originProject?: string | null }>(
     res,
     'POST /v1/memories/:id/promote',
     (b) => isJsonString(b.sourceId) && isJsonString(b.globalId),
