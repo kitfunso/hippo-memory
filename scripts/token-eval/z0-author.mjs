@@ -13,7 +13,7 @@ const Z0 = '(?<![a-z0-9+])z0(?![0-9]|-[0-9])';
 export const DEFAULT_FORBID = `(?<![a-z])hippo(?![a-z])|${Z0}|token-eval`;
 // The CLI picks a set by name, so no pattern is ever built from a command-line argument.
 export const FORBID_SETS = Object.freeze({ default: DEFAULT_FORBID, 'hippo-repo': `${Z0}|token-eval` });
-const AUTHOR_UNSET = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'CODEX_HOME', 'EVAL_SEED'];
+const AUTHOR_UNSET = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'HIPPO_CAPTURE_SCRIPTED', 'CODEX_HOME', 'EVAL_SEED'];
 const USAGE = `usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-file FILE --out DIR [--model M] [--claude-bin PATH] [--forbid-set ${Object.keys(FORBID_SETS).join('|')}] [--timeout-min N]`;
 
 /** Each match of `forbid` in `texts` as `{where, match, near}`; one hit discards the author's output, and `near` lets the operator judge it. */

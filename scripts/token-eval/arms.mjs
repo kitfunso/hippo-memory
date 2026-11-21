@@ -23,7 +23,7 @@ const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
 const SHAM_COMMANDS = ['remember', 'capture', 'learn', 'outcome'];
 // The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
-const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
+const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'HIPPO_CAPTURE_SCRIPTED', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
@@ -66,6 +66,8 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   env.HIPPO_HOME = dirs.hippoHome;
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
   env.HIPPO_AGENT_MEMORY_TOOLS = 'claude-code,codex';
+  // The teach turn is a scripted `claude -p` resume playing the person, so capture must read it.
+  env.HIPPO_CAPTURE_SCRIPTED = '1';
   env.DISABLE_AUTOUPDATER = '1';
   env.EVAL_SEED = String(dirs.seed);
   for (const name of passEnv) {

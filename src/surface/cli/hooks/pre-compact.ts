@@ -1,6 +1,7 @@
 // The PreCompact hook: records the compaction and saves a working-state snapshot before the host
 // summarises.
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
+import { envCaptureScripted } from '../../../base/util/env.js';
 import { preCompactHook } from '../../capture/compact.js';
 import { readHookStdin } from '../stdin.js';
 import { cliApiContext, cliHookRequest, cliStore } from '../api-context.js';
@@ -43,6 +44,7 @@ export async function handlePreCompact({
         stdinTimedOut,
         logFile: stringFlag(flags, 'log-file'),
         runtime,
+        scriptedIsHuman: envCaptureScripted(),
         onBoundary: (printed) => {
           rec?.delivered(
             printed === null ? { state: 'empty' } : { state: 'sent', emittedText: printed },

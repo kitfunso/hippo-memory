@@ -231,7 +231,7 @@ describe('Z0 runner end to end (fake Claude Code)', () => {
       const res = raw(arm, 'a1');
       expect(res.env).toMatchObject({
         CLAUDE_CONFIG_DIR: join(dirsOf, 'claude-config'), CODEX_HOME: join(dirsOf, 'codex-home'), HIPPO_HOME: join(dirsOf, 'hippo-home'),
-        CLAUDE_CODE_DISABLE_AUTO_MEMORY: arm === 'A0' ? '1' : '0', HIPPO_AGENT_MEMORY_TOOLS: 'claude-code,codex', DISABLE_AUTOUPDATER: '1', EVAL_SEED: '1',
+        CLAUDE_CODE_DISABLE_AUTO_MEMORY: arm === 'A0' ? '1' : '0', HIPPO_AGENT_MEMORY_TOOLS: 'claude-code,codex', HIPPO_CAPTURE_SCRIPTED: '1', DISABLE_AUTOUPDATER: '1', EVAL_SEED: '1',
       });
       expect(res.hasToken).toBe(true);
       expect(res.argv).toEqual(expect.arrayContaining(['--setting-sources', 'project', '--strict-mcp-config']));

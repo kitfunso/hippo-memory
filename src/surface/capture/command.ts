@@ -52,6 +52,8 @@ export interface CaptureOptions {
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
+  /** HIPPO_CAPTURE_SCRIPTED: a scripted session's user turns are the person's. */
+  scriptedIsHuman?: boolean;
   /** The session the turns came from; without it a transcript's file name stands in. */
   sessionId?: string;
   /** Save the messages the person typed too. Only a session-end worker sets it, and only for the
@@ -390,7 +392,9 @@ function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
       console.log('No transcript found. Pass --transcript <path> or run from a SessionEnd hook.');
       return null;
     }
-    turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'));
+    turns = collectSessionTurns(fs.readFileSync(resolved, 'utf8'), undefined, {
+      scriptedIsHuman: options.scriptedIsHuman,
+    });
   }
   const { users, assistants } = sessionTail(turns);
   if (users.length === 0 && assistants.length === 0) {

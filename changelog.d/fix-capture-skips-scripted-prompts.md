@@ -1,0 +1,3 @@
+### Fixed
+
+- **Capture no longer saves a program's prompt as your rule.** A Claude Code session started by `claude -p`, an Agent SDK or the GitHub action, and a Codex `codex exec` or sub-agent session, now give capture no user messages. Before, a tool that drives Claude Code (Cline's Claude Code provider) had its system prompt saved as 9 pinned "from-user" rules, and they showed up in every later session. Prompts typed in the terminal, VS Code, Claude Desktop and JetBrains are read as before. A test harness that plays the user through `claude -p` sets `HIPPO_CAPTURE_SCRIPTED=1`; the Z0 runner does.

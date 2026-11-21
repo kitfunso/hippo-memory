@@ -6,7 +6,7 @@ import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js'
 import { tryParseJson } from '../../base/util/json.js';
 import { workingStateOf, type WorkingState } from '../../base/session/working-state.js';
 import { PRE_COMPACT_TAIL_BYTES, readTranscriptTail } from '../../infra/transcript-tail.js';
-import { humanUserText, summariseTranscript } from './transcript.js';
+import { humanUserText, summariseTranscript, type TranscriptReadOptions } from './transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
 
 type LineFlags = Parameters<typeof humanUserText>[0];
@@ -64,7 +64,11 @@ function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
 /**
  * A session's task, summary and next step from its transcript tail, secrets scrubbed and capped,
  * '' where none; null with a logged reason when nothing is derivable. */
-export function transcriptWorkingState(transcriptPath: string, log: LineLog): WorkingState | null {
+export function transcriptWorkingState(
+  transcriptPath: string,
+  log: LineLog,
+  opts: TranscriptReadOptions = {},
+): WorkingState | null {
   let tail = '';
   let rawTask = '';
   let rawNextStep = '';
@@ -83,7 +87,7 @@ export function transcriptWorkingState(transcriptPath: string, log: LineLog): Wo
         );
       }
       tail = readTranscriptTail(transcriptPath, cap);
-      rawTask = lastTurnText(tail, 'user', humanUserText);
+      rawTask = lastTurnText(tail, 'user', (entry, message) => humanUserText(entry, message, opts));
       rawNextStep = lastTurnText(tail, 'assistant', lastTextBlock);
       if ((rawTask && rawNextStep) || size <= cap) break;
     }
@@ -92,7 +96,11 @@ export function transcriptWorkingState(transcriptPath: string, log: LineLog): Wo
     return null;
   }
 
-  const state = workingStateOf({ rawTask, rawSummary: summariseTranscript(tail), rawNextStep });
+  const state = workingStateOf({
+    rawTask,
+    rawSummary: summariseTranscript(tail, opts),
+    rawNextStep,
+  });
   if (state === null) log('skip: empty summary');
   return state;
 }

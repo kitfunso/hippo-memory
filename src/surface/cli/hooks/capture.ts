@@ -1,5 +1,6 @@
 // `hippo capture`: extracts memories from piped text, a file or a session transcript.
 import { hippoHomeDir } from '../../../host/agent-homes.js';
+import { envCaptureScripted } from '../../../base/util/env.js';
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
 import { readHookStdin } from '../stdin.js';
 import {
@@ -33,6 +34,7 @@ export async function handleCapture({ hippoRoot, tenantId, flags }: CommandConte
     dryRun: boolFlag(flags, 'dry-run'),
     global: useGlobal,
     tenantId,
+    scriptedIsHuman: envCaptureScripted(),
   });
 }
 

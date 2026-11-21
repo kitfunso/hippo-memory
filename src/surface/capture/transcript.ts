@@ -42,14 +42,32 @@ interface TranscriptLineFlags {
   isSidechain?: unknown;
   isCompactSummary?: unknown;
   promptSource?: unknown;
+  entrypoint?: unknown;
 }
 
-function isNonHumanUserLine(entry: TranscriptLineFlags, content: string): boolean {
+/** `claude -p`, the Agent SDKs and the GitHub action: a program writes these sessions' user turns.
+ * promptSource cannot tell them apart, since VS Code and Desktop also stamp a typed prompt 'sdk'. */
+const SCRIPTED_CLAUDE_ENTRYPOINT = /^(?:sdk-|claude-code-github-action$)/;
+
+/** How to read a scripted session's user turns; the roots read HIPPO_CAPTURE_SCRIPTED into it. */
+export interface TranscriptReadOptions {
+  /** A test harness that plays the person through `claude -p` or `codex exec` sets this. */
+  readonly scriptedIsHuman?: boolean;
+}
+
+function isNonHumanUserLine(
+  entry: TranscriptLineFlags,
+  content: string,
+  opts: TranscriptReadOptions,
+): boolean {
   if (
     entry.isMeta === true ||
     entry.isSidechain === true ||
     entry.isCompactSummary === true ||
-    entry.promptSource === 'system'
+    entry.promptSource === 'system' ||
+    (isStringValue(entry.entrypoint) &&
+      SCRIPTED_CLAUDE_ENTRYPOINT.test(entry.entrypoint) &&
+      opts.scriptedIsHuman !== true)
   ) {
     return true;
   }
@@ -66,7 +84,11 @@ const NON_HUMAN_BLOCK_PREFIXES = ['<ide_', '[Request interrupted by user'];
 /**
  * The human's words on a Claude Code user line, '' when none; VS Code stores prompts as text
  * blocks, beside its own open-file, selection and interrupt blocks. */
-export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMessage): string {
+export function humanUserText(
+  entry: TranscriptLineFlags,
+  message: TranscriptMessage,
+  opts: TranscriptReadOptions = {},
+): string {
   const content = message.content;
   let text = '';
   if (isStringValue(content)) {
@@ -91,7 +113,7 @@ export function humanUserText(entry: TranscriptLineFlags, message: TranscriptMes
     text = parts.join('\n');
   }
   text = text.trim();
-  return text && !isNonHumanUserLine(entry, text) ? text : '';
+  return text && !isNonHumanUserLine(entry, text, opts) ? text : '';
 }
 
 export interface SessionTurn {
@@ -108,35 +130,47 @@ export interface TranscriptRecord extends TranscriptLineFlags {
 export function collectSessionTurns(
   jsonl: string,
   visit?: (record: TranscriptRecord) => void,
+  opts: TranscriptReadOptions = {},
 ): SessionTurn[] {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   const turns: SessionTurn[] = [];
+  let scriptedCodex = false;
 
   for (const line of lines) {
     // A torn or partial transcript line carries no turn.
     const entry: unknown = tryParseJson(line);
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
+    scriptedCodex ||= isScriptedCodexSession(entry);
 
-    const turn = copilotTurn(entry) ?? claudeCodeTurn(entry) ?? codexTurn(entry);
-    if (turn !== null) turns.push(turn);
+    const turn = copilotTurn(entry) ?? claudeCodeTurn(entry, opts) ?? codexTurn(entry);
+    if (turn === null) continue;
+    if (turn.role === 'user' && scriptedCodex && opts.scriptedIsHuman !== true) continue;
+    turns.push(turn);
   }
 
   return turns;
+}
+
+/** Codex names its driver once, in session_meta: `codex exec` and a sub-agent are programs. */
+function isScriptedCodexSession(entry: TranscriptRecord): boolean {
+  if (entry.type !== 'session_meta' || !isObjectLike(entry.payload)) return false;
+  const source = 'source' in entry.payload ? entry.payload.source : undefined;
+  return source === 'exec' || (isObjectLike(source) && 'subagent' in source);
 }
 
 /**
  * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no
  * human or reply text.
  */
-function claudeCodeTurn(entry: TranscriptRecord): SessionTurn | null {
+function claudeCodeTurn(entry: TranscriptRecord, opts: TranscriptReadOptions): SessionTurn | null {
   if (entry.type !== 'user' && entry.type !== 'assistant') return null;
   const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
   if (!message) return null;
   const content = 'content' in message ? message.content : undefined;
 
   if (entry.type === 'user') {
-    const text = humanUserText(entry, message);
+    const text = humanUserText(entry, message, opts);
     return text ? { role: 'user', text } : null;
   }
   if (!Array.isArray(content)) return null;
@@ -198,8 +232,8 @@ function codexTurn(entry: TranscriptRecord): SessionTurn | null {
   return null;
 }
 
-export function summariseTranscript(jsonl: string): string {
-  return summarizeSessionTurns(collectSessionTurns(jsonl));
+export function summariseTranscript(jsonl: string, opts: TranscriptReadOptions = {}): string {
+  return summarizeSessionTurns(collectSessionTurns(jsonl, undefined, opts));
 }
 
 /** The last 20 user turns and last 10 replies: session-end is about what was decided near the

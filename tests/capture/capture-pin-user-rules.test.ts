@@ -108,6 +108,73 @@ describe('capture pins the rules a person states', () => {
     expect(collectSessionTurns(jsonl)).toEqual([{ role: 'user', text: 'Never edit CHANGELOG.md by hand.' }]);
   });
 
+  // A wrapper such as Cline's Claude Code provider sends its system prompt as a `claude -p` user turn.
+  describe('a session a program drives', () => {
+    const WRAPPER_PROMPT =
+      'You are Cline, an AI coding agent. Always gather all the necessary context before starting to work on a task. Always use absolute paths when referring to files.';
+    const claudeLine = (entrypoint: string, text: string, promptSource = 'sdk') =>
+      JSON.stringify({ type: 'user', entrypoint, promptSource, message: { role: 'user', content: text } });
+    const reply = JSON.stringify({
+      type: 'assistant',
+      entrypoint: 'sdk-cli',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] },
+    });
+    const codexSession = (source: string | { subagent: string }, text: string) =>
+      [
+        JSON.stringify({ type: 'session_meta', payload: { id: 's1', source } }),
+        JSON.stringify({
+          type: 'response_item',
+          payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] },
+        }),
+      ].join('\n');
+
+    it('pins nothing from the prompt a wrapper sends through `claude -p`', async () => {
+      const turns = collectSessionTurns([claudeLine('sdk-cli', WRAPPER_PROMPT), reply].join('\n'));
+      expect(turns).toEqual([{ role: 'assistant', text: 'Done.' }]);
+      await capture(turns);
+      expect(loadAllEntries(root, 'default').filter((e) => e.pinned)).toEqual([]);
+    });
+
+    it.each(['sdk-cli', 'sdk-ts', 'sdk-py', 'claude-code-github-action'])(
+      'reads no user turn from entrypoint %s',
+      (entrypoint) => {
+        expect(collectSessionTurns(claudeLine(entrypoint, TAUGHT))).toEqual([]);
+      },
+    );
+
+    it.each(['cli', 'claude-vscode', 'claude-desktop'])(
+      'keeps the typed prompt from entrypoint %s, even stamped sdk',
+      (entrypoint) => {
+        expect(collectSessionTurns(claudeLine(entrypoint, TAUGHT))).toEqual([{ role: 'user', text: TAUGHT }]);
+      },
+    );
+
+    it('keeps the prompt when the harness says it plays the person', async () => {
+      const turns = collectSessionTurns(claudeLine('sdk-cli', TAUGHT), undefined, { scriptedIsHuman: true });
+      expect(turns).toEqual([{ role: 'user', text: TAUGHT }]);
+      await capture(turns);
+      expect(
+        loadAllEntries(root, 'default')
+          .filter((e) => e.pinned)
+          .map((e) => e.content),
+      ).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+    });
+
+    it.each([['exec'], [{ subagent: 'review' }]])('reads no user turn from a Codex session started by %j', (source) => {
+      expect(collectSessionTurns(codexSession(source, TAUGHT))).toEqual([]);
+    });
+
+    it.each([['cli'], ['vscode']])('keeps the typed prompt in a Codex %s session', (source) => {
+      expect(collectSessionTurns(codexSession(source, TAUGHT))).toEqual([{ role: 'user', text: TAUGHT }]);
+    });
+
+    it('keeps a codex exec prompt when the harness says it plays the person', () => {
+      expect(collectSessionTurns(codexSession('exec', TAUGHT), undefined, { scriptedIsHuman: true })).toEqual([
+        { role: 'user', text: TAUGHT },
+      ]);
+    });
+  });
+
   // A pin reaches every later session, so only words that outlast the task make the person's rule.
   describe('scope', () => {
     const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
