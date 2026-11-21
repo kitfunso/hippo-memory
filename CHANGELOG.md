@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.13.1 - 2026-11-21
+
+### Added
+
+- **Hippo is a Cursor plugin.** `extensions/cursor-plugin` holds a `.cursor-plugin/plugin.json`, an `mcp.json` that starts `npx -y hippo-memory mcp`, and an always-on rule that tells the agent when to call `hippo_context`, `hippo_remember` and `hippo_outcome`. `.cursor-plugin/marketplace.json` at the repo root points Cursor's marketplace and cursor.directory at it. The plugin manifest follows the package version, like the Kiro power.
+
+### Fixed
+
+- **The Claude Code marketplace entry now says plugin version 0.7.0.** `.claude-plugin/marketplace.json` still said 0.6.2 after the plugin moved to 0.7.0. A test now fails when the two differ.
+- **On Windows, hippo finds a tool on a quoted PATH entry and starts a shim from a folder whose name holds a `%NAME%` pair.** `spawnArgv` and the Codex wrapper now read PATH as cmd.exe does: a quoted entry such as `"C:\Program Files\nodejs"` loses its quotes, and a `;` inside the quotes stays in that entry. The cmd.exe line now quotes the shim path and escapes each `%` in it, so cmd.exe cannot expand it. The Claude Code plugin keeps its own copy of this code, which gets the same fixes (plugin 0.7.1), and a new test runs the same cases through both copies.
+- **The Claude Code plugin shows the last sleep's report at session start again.** The hook script dropped stderr for every verb, but `hippo last-sleep` writes the report to stderr and then deletes its log. That verb now keeps its stderr, as the shell line before the script did.
+- **The secret scan on master reads only master's history, so a fixture on a side branch no longer fails it.** A push to any other branch now scans the commits that branch adds to master, so a finding shows on the branch that holds it. A manual run of the Security scan workflow takes a git range, such as `--all`. Two shapes that are never keys, a file name as the value and a pinned file digest, no longer match `generic-api-key`.
+
 ## 3.13.0 - 2026-11-21
 
 ### Added
