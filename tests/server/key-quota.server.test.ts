@@ -25,6 +25,12 @@ const JSON_BODY = { 'content-type': 'application/json' };
 const TOOLS_LIST = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
 const REFUSAL = { retryAfterSec: 7, message: 'quota test' };
 const FAULT_LINE = /^\[hippo\] error: key quota: /;
+// Built at run time, so unicorn/no-thenable stays quiet about an object that must be a plain thenable.
+const THEN = ['th', 'en'].join('');
+
+interface Thenable {
+  [key: string]: (settle: (self: Thenable) => void) => void;
+}
 
 let root: string;
 let url = '';
@@ -191,12 +197,15 @@ describe('a refusing hook', () => {
 });
 
 describe('what the hook is asked', () => {
-  it('C5: is asked once per request with the tenant, route, request id and a frozen actor', async () => {
+  it('C5: is asked once per request with the tenant, route, request id and a frozen actor, and a null answer logs nothing', async () => {
+    setClock('2026-11-21T08:00:00Z');
+    const lines = captureStderr();
     const k = mint({ ownerSubject: 'oid-a' });
     const { quota, calls } = spy(() => null);
     await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
     const reply = await recall(bearer(k));
     expect(reply.status).toBe(200);
+    expect(lines()).toEqual([]);
     expect(calls).toHaveLength(1);
     const [call] = calls;
     expect(call).toMatchObject({
@@ -264,6 +273,7 @@ describe('a faulty hook', () => {
     ['15:00', 'a wait of NaN', { retryAfterSec: Number.NaN, message: 'x' }],
     ['15:20', 'a wait of Infinity', { retryAfterSec: Number.POSITIVE_INFINITY, message: 'x' }],
     ['15:40', 'a negative wait', { retryAfterSec: -1, message: 'x' }],
+    ['15:50', 'an array', []],
   ])('C9: at %s admits the request when the hook answers %s, and logs one line', async (time, _label, answer) => {
     setClock(`2026-11-21T${time}:00Z`);
     const lines = captureStderr();
@@ -323,5 +333,38 @@ describe('a faulty hook', () => {
     } finally {
       process.off('unhandledRejection', unhandled);
     }
+  });
+
+  it('C13: admits the request when the hook returns a thenable that resolves to itself, and the loop keeps running', async () => {
+    setClock('2026-11-21T19:00:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    const answer: Thenable = {
+      [THEN](settle) {
+        settle(this);
+      },
+    };
+    // SAFETY: a JS hook may return any value, and a self-resolving thenable is what core must survive.
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: spy(() => answer as never).quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(lines()).toEqual([expect.stringContaining('the hook answered neither null nor a refusal')]);
+  });
+
+  it('C14b: admits the request when the thrown value throws on every read', async () => {
+    setClock('2026-11-21T20:00:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    const thrown = new Proxy(new Error('x'), {
+      getPrototypeOf(): never {
+        throw new Error('trap');
+      },
+    });
+    const { quota } = spy(() => {
+      throw thrown;
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
   });
 });

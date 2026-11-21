@@ -1,6 +1,7 @@
 // serve's keyQuota hook: asked after the per-caller charge, so only admitted requests reach it.
 // It fails open: a quota guards load, not access.
 import type { IncomingMessage } from 'node:http';
+import { isPromise } from 'node:util/types';
 import type { Actor } from '../../api/index.js';
 import { frozenActor } from '../../api/frozen-actor.js';
 import { HttpError } from '../../base/errors/http-errors.js';
@@ -18,13 +19,20 @@ const MAX_RETRY_AFTER_SEC = 86_400;
 // One slot for the process: a broken meter faults on every request, and a line a minute shows it.
 let faultLoggedAt = Number.NEGATIVE_INFINITY;
 
-function quotaFault(what: string, fields?: LogFields): void {
+function quotaFault(what: string, fields?: () => LogFields): void {
   const now = Date.now();
   if (now - faultLoggedAt < FAULT_LOG_EVERY_MS) return;
   faultLoggedAt = now;
+  let built: LogFields | undefined;
+  try {
+    built = fields?.();
+  } catch {
+    // Describing a plugin's thrown value reads its traps and getters, so this path must not throw.
+    built = { errorClass: 'unprintable' };
+  }
   log.error(
     `key quota: ${what}; the request is admitted, and further faults this minute are not logged`,
-    fields,
+    built,
   );
 }
 
@@ -66,13 +74,12 @@ export function askKeyQuota(
     });
     if (answer === null) return;
     // Every read of the answer runs plugin getters, so all of it sits inside the guard.
-    // keyQuota is synchronous; a JS hook that returns a promise must not crash the process with an
-    // unhandled rejection.
-    void Promise.resolve(answer).then(undefined, () => undefined);
+    // Mute a returned native promise so it cannot crash the process; Promise.resolve would adopt a thenable.
+    if (isPromise(answer)) Promise.prototype.then.call(answer, undefined, () => undefined);
     // SAFETY: a JS hook may return any value; refusalOf checks each field it reads.
     refusal = refusalOf(answer as JsonValue);
   } catch (err) {
-    quotaFault('the hook threw', errorFields(err));
+    quotaFault('the hook threw', () => errorFields(err));
     return;
   }
   if (refusal === null) {

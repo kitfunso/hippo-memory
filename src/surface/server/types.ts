@@ -76,7 +76,7 @@ export interface KeyQuotaCall {
   readonly requestId: string | undefined;
 }
 
-/** A refusal: core answers 429 with `Retry-After` set to retryAfterSec, rounded up. */
+/** A 429 with `Retry-After`: a finite retryAfterSec above 0 (rounded up, at most 86400) and a non-empty message. */
 export interface KeyQuotaRefusal {
   readonly retryAfterSec: number;
   readonly message: string;
@@ -141,7 +141,7 @@ export interface ServeOptions {
   projectWriteGate?: ProjectWriteGate;
   /** Deadline for one projectWriteGate call; defaults to 5000 ms. */
   projectWriteGateTimeoutMs?: number;
-  /** Asked once per request after the per-caller charge; a throw admits it, since a quota guards load, not access. */
+  /** Asked once per request after the per-caller charge; a throw or a malformed answer admits it: quota guards load. */
   keyQuota?: KeyQuota;
 }
 
