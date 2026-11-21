@@ -53,9 +53,15 @@ const RULE_PATTERNS = [
   /\b(?:make sure|ensure)\s/i,
 ];
 // The lead words sit in a lookbehind so the match starts on the keyword, where the bracket check reads.
+const HELPER_VERB = String.raw`(?:has|have|had|was|were|been|is|are|did|does|got)\b`;
+const NEVER_WORD = String.raw`(?:never|always|do(?:n't| not)\s+ever)\s+(?!${HELPER_VERB})`;
+// After "you" or "we" the next word is the verb, and a past one reports: "we never worked on it".
+const IRREGULAR_PAST =
+  'said|told|saw|knew|went|made|thought|took|gave|came|wrote|ran|found|heard|meant|felt|sent|built';
+const PAST_VERB = String.raw`(?:(?!(?:embed|shred)\b)\w+[a-df-z]ed|${IRREGULAR_PAST})\b`;
 const DIRECTING_NEVER = new RegExp(
-  String.raw`(?<=^|[,;:.!]\s*|\b(?:and|but|so|or|then|please|pls|just|you|we|must|should|shall)\s+)` +
-    String.raw`(?:never|always|do(?:n't| not)\s+ever)\s+(?!(?:has|have|had|was|were|been|is|are|did|does|got)\b)`,
+  String.raw`(?<=^|[,;:.!]\s*|\b(?:and|but|so|or|then|please|pls|just|must|should|shall)\s+)${NEVER_WORD}` +
+    String.raw`|(?<=\b(?:you|we)\s+)${NEVER_WORD}(?!${PAST_VERB})`,
   'i',
 );
 // A person's rule pins into every later session, so it needs words that outlast the task: "must" or
