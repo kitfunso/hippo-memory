@@ -114,7 +114,13 @@ describe('hippo github CLI', () => {
       vi.fn(async (url: string | URL) => {
         urls.push(String(url));
         const issues = [
-          { number: 1, title: 'hello', body: 'world', user: { login: 'alice', id: 1 }, updated_at: '2026-01-01T00:00:00Z' },
+          {
+            number: 1,
+            title: 'hello',
+            body: 'world',
+            user: { login: 'alice', id: 1 },
+            updated_at: '2026-01-01T00:00:00Z',
+          },
         ];
         return new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 });
       }),

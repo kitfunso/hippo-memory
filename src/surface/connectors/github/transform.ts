@@ -54,12 +54,16 @@ export function issueEventToRememberOpts(
 ): RememberOptions | null {
   const content = titleAndBody(evt.issue);
   if (!content) return null;
-  return rememberOpts(evt.repository, {
-    content,
-    item: { kind: 'issue', number: evt.issue.number },
-    event: `issues.${evt.action}`,
-    login: evt.issue.user.login,
-  }, host);
+  return rememberOpts(
+    evt.repository,
+    {
+      content,
+      item: { kind: 'issue', number: evt.issue.number },
+      event: `issues.${evt.action}`,
+      login: evt.issue.user.login,
+    },
+    host,
+  );
 }
 
 export function issueCommentEventToRememberOpts(
@@ -68,12 +72,16 @@ export function issueCommentEventToRememberOpts(
 ): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
-  return rememberOpts(evt.repository, {
-    content,
-    item: { kind: 'issue_comment', number: evt.issue.number, commentId: evt.comment.id },
-    event: `issue_comment.${evt.action}`,
-    login: evt.comment.user.login,
-  }, host);
+  return rememberOpts(
+    evt.repository,
+    {
+      content,
+      item: { kind: 'issue_comment', number: evt.issue.number, commentId: evt.comment.id },
+      event: `issue_comment.${evt.action}`,
+      login: evt.comment.user.login,
+    },
+    host,
+  );
 }
 
 export function pullRequestEventToRememberOpts(
@@ -82,12 +90,16 @@ export function pullRequestEventToRememberOpts(
 ): RememberOptions | null {
   const content = titleAndBody(evt.pull_request);
   if (!content) return null;
-  return rememberOpts(evt.repository, {
-    content,
-    item: { kind: 'pull', number: evt.pull_request.number },
-    event: `pull_request.${evt.action}`,
-    login: evt.pull_request.user.login,
-  }, host);
+  return rememberOpts(
+    evt.repository,
+    {
+      content,
+      item: { kind: 'pull', number: evt.pull_request.number },
+      event: `pull_request.${evt.action}`,
+      login: evt.pull_request.user.login,
+    },
+    host,
+  );
 }
 
 export function prReviewCommentEventToRememberOpts(
@@ -96,10 +108,14 @@ export function prReviewCommentEventToRememberOpts(
 ): RememberOptions | null {
   const content = evt.comment.body?.trim();
   if (!content) return null;
-  return rememberOpts(evt.repository, {
-    content,
-    item: { kind: 'review_comment', number: evt.pull_request.number, commentId: evt.comment.id },
-    event: `pull_request_review_comment.${evt.action}`,
-    login: evt.comment.user.login,
-  }, host);
+  return rememberOpts(
+    evt.repository,
+    {
+      content,
+      item: { kind: 'review_comment', number: evt.pull_request.number, commentId: evt.comment.id },
+      event: `pull_request_review_comment.${evt.action}`,
+      login: evt.comment.user.login,
+    },
+    host,
+  );
 }

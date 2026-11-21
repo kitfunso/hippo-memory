@@ -287,10 +287,15 @@ function prReviewCommentItemToEvent(
 
 const GITHUB_STREAMS: readonly GitHubStream[] = ['issues', 'issueComments', 'prReviewComments'];
 
-const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStream): CursorKey => ({
+const hwmOf = (
+  ctx: ConnectorContext,
+  opts: BackfillOptions,
+  site: GitHubSite,
+  stream: GitHubStream,
+): CursorKey => ({
   connector: 'github',
   tenantId: ctx.tenantId,
-  repo: githubRepoKey(opts.repoFullName, (opts.site ?? GITHUB_COM).host),
+  repo: githubRepoKey(opts.repoFullName, site.host),
   stream,
 });
 
@@ -298,15 +303,16 @@ const hwmOf = (ctx: ConnectorContext, opts: BackfillOptions, stream: GitHubStrea
 async function resumeFrom(
   ctx: ConnectorContext,
   opts: BackfillOptions,
+  site: GitHubSite,
 ): Promise<Record<GitHubStream, string | null>> {
   const events = ctx.store.connectorEvents;
   const { sinceIso } = opts;
   if (sinceIso) {
     for (const stream of GITHUB_STREAMS) {
-      await events.saveCursor(hwmOf(ctx, opts, stream), sinceIso, { keepSaved: true });
+      await events.saveCursor(hwmOf(ctx, opts, site, stream), sinceIso, { keepSaved: true });
     }
   }
-  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, stream));
+  const since = (stream: GitHubStream) => events.cursor(hwmOf(ctx, opts, site, stream));
   return {
     issues: await since('issues'),
     issueComments: await since('issueComments'),
@@ -318,6 +324,7 @@ async function resumeFrom(
 async function backfillStream(
   ctx: ConnectorContext,
   opts: BackfillOptions,
+  site: GitHubSite,
   sleep: (ms: number) => Promise<void>,
   stream: {
     url: string;
@@ -331,12 +338,15 @@ async function backfillStream(
     token: opts.token,
     sleep,
     maxItems: opts.maxPerStream,
-    host: (opts.site ?? GITHUB_COM).host,
+    host: site.host,
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
-    await ctx.store.connectorEvents.saveCursor(hwmOf(ctx, opts, stream.name), res.maxUpdatedAt);
+    await ctx.store.connectorEvents.saveCursor(
+      hwmOf(ctx, opts, site, stream.name),
+      res.maxUpdatedAt,
+    );
   }
   return { ingested: res.ingested, pages: res.pages };
 }
@@ -346,16 +356,17 @@ export async function backfillRepo(
   opts: BackfillOptions,
 ): Promise<BackfillResult> {
   const sleep = opts.sleepMs ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  const cursors = await resumeFrom(ctx, opts);
+  const site = opts.site ?? GITHUB_COM;
+  const cursors = await resumeFrom(ctx, opts, site);
   const repository = syntheticRepository(opts.repoFullName);
-  const { apiBase } = opts.site ?? GITHUB_COM;
+  const { apiBase } = site;
 
   const result: BackfillResult = {
     ingested: { issues: 0, issueComments: 0, prReviewComments: 0 },
     pages: { issues: 0, issueComments: 0, prReviewComments: 0 },
   };
 
-  const issuesRes = await backfillStream(ctx, opts, sleep, {
+  const issuesRes = await backfillStream(ctx, opts, site, sleep, {
     url:
       `${apiBase}/repos/${opts.repoFullName}/issues?state=all&per_page=100` +
       (cursors.issues ? `&since=${encodeURIComponent(cursors.issues)}` : ''),
@@ -365,7 +376,7 @@ export async function backfillRepo(
   result.ingested.issues = issuesRes.ingested;
   result.pages.issues = issuesRes.pages;
 
-  const commentsRes = await backfillStream(ctx, opts, sleep, {
+  const commentsRes = await backfillStream(ctx, opts, site, sleep, {
     url:
       `${apiBase}/repos/${opts.repoFullName}/issues/comments?per_page=100` +
       (cursors.issueComments ? `&since=${encodeURIComponent(cursors.issueComments)}` : ''),
@@ -375,7 +386,7 @@ export async function backfillRepo(
   result.ingested.issueComments = commentsRes.ingested;
   result.pages.issueComments = commentsRes.pages;
 
-  const prCommentsRes = await backfillStream(ctx, opts, sleep, {
+  const prCommentsRes = await backfillStream(ctx, opts, site, sleep, {
     url:
       `${apiBase}/repos/${opts.repoFullName}/pulls/comments?per_page=100` +
       (cursors.prReviewComments ? `&since=${encodeURIComponent(cursors.prReviewComments)}` : ''),

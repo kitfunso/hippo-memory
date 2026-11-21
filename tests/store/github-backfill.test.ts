@@ -457,7 +457,9 @@ describe('backfillRepo', () => {
     const plan: FakePlan = {
       issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
       issueComments: [{ items: [issueCommentItem(101, 1, '2026-05-01T11:00:00Z')], next: null, rateLimit: NO_RATE }],
-      prReviewComments: [{ items: [prReviewCommentItem(201, 7, '2026-05-04T09:00:00Z')], next: null, rateLimit: NO_RATE }],
+      prReviewComments: [
+        { items: [prReviewCommentItem(201, 7, '2026-05-04T09:00:00Z')], next: null, rateLimit: NO_RATE },
+      ],
     };
     const capture: CallCapture = { calls: [] };
 
@@ -507,7 +509,12 @@ describe('backfillRepo', () => {
     expect(refs).toEqual(['github://acme/demo/issue/1', 'github://ghes.example.com/acme/demo/issue/1']);
 
     const capture: CallCapture = { calls: [] };
-    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher({}, capture), token: 't', site: GHES_SITE });
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher({}, capture),
+      token: 't',
+      site: GHES_SITE,
+    });
     const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
     expect(issuesCall?.url).toContain(`since=${encodeURIComponent('2026-05-01T10:00:00Z')}`);
   });
@@ -523,7 +530,12 @@ describe('backfillRepo', () => {
     }
     expect(readCursorRows(root).map((r) => r.repo_full_name)).toEqual(['acme/demo']);
 
-    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan()), token: 't', sinceIso: '2026-01-01T00:00:00Z' });
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher(plan()),
+      token: 't',
+      sinceIso: '2026-01-01T00:00:00Z',
+    });
     expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
   });
 
@@ -540,7 +552,12 @@ describe('backfillRepo', () => {
     };
 
     await expect(
-      backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan, capture), token: 't', site: GHES_SITE }),
+      backfillRepo(ctx(root), {
+        repoFullName: REPO,
+        fetcher: makeFakeFetcher(plan, capture),
+        token: 't',
+        site: GHES_SITE,
+      }),
     ).rejects.toThrow(/leaves https:\/\/ghes\.example\.com for https:\/\/evil\.example\.net/);
 
     expect(capture.calls.some((c) => c.url.startsWith('https://evil.example.net'))).toBe(false);

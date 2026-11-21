@@ -58,7 +58,11 @@ function eventItem(event: IngestEvent): GitHubItem {
     case 'issues':
       return { kind: 'issue', number: event.payload.issue.number };
     case 'issue_comment':
-      return { kind: 'issue_comment', number: event.payload.issue.number, commentId: event.payload.comment.id };
+      return {
+        kind: 'issue_comment',
+        number: event.payload.issue.number,
+        commentId: event.payload.comment.id,
+      };
     case 'pull_request':
       return { kind: 'pull', number: event.payload.pull_request.number };
     case 'pull_request_review_comment':

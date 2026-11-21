@@ -60,7 +60,9 @@ function hostRefusal(row: DlqItem, site: GitHubSite): string | null {
   const parked = mismatchSender(row.error);
   if (parked === null) return 'host_mismatch row names no sender, so it cannot be replayed';
   const still = hostMismatch(parked.sent, site);
-  return still === null ? null : `${still}; set GITHUB_ENTERPRISE_URL to the sending server, then replay`;
+  return still === null
+    ? null
+    : `${still}; set GITHUB_ENTERPRISE_URL to the sending server, then replay`;
 }
 
 /** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check

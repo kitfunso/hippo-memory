@@ -2,8 +2,12 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { rememberUntrusted } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
-import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/surface/connectors/github/ingest.js';
-import { githubEventRef } from '../../src/surface/connectors/github/ingest.js';
+import {
+  ingestEvent,
+  githubEventRef,
+  type IngestEvent,
+  type IngestInput,
+} from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
 import { issueEventToRememberOpts } from '../../src/surface/connectors/github/transform.js';

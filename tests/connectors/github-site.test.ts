@@ -69,12 +69,9 @@ describe('headerHost', () => {
 });
 
 describe('hostMismatch', () => {
-  it.each([undefined, 'ghes.example.com', '(invalid)'])(
-    'github.com site takes a delivery from %s',
-    (sent) => {
-      expect(hostMismatch(sent, GITHUB_COM)).toBeNull();
-    },
-  );
+  it.each([undefined, 'ghes.example.com', '(invalid)'])('github.com site takes a delivery from %s', (sent) => {
+    expect(hostMismatch(sent, GITHUB_COM)).toBeNull();
+  });
 
   it('GHES site takes its own host and parks the rest', () => {
     expect(hostMismatch('ghes.example.com', GHES)).toBeNull();

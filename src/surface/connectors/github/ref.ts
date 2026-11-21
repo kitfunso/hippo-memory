@@ -58,7 +58,9 @@ function itemOf(m: RegExpExecArray): GitHubItem | null {
     return parent === 'issue' ? { kind: 'issue', number } : { kind: 'pull', number };
   }
   const commentId = Number(childId);
-  if (parent === 'issue' && child === 'comment') return { kind: 'issue_comment', number, commentId };
+  if (parent === 'issue' && child === 'comment') {
+    return { kind: 'issue_comment', number, commentId };
+  }
   if (parent === 'pull' && child === 'review_comment') {
     return { kind: 'review_comment', number, commentId };
   }

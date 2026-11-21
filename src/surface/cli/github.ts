@@ -54,7 +54,9 @@ export function printGitHubBackfillUsage(): void {
   console.log('  --since  Initial high-water-mark for first run (optional, ISO 8601)');
   console.log('  --max    Cap items per stream (optional, integer)');
   console.log('  Requires GITHUB_TOKEN env var with repo read scope.');
-  console.log('  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.');
+  console.log(
+    '  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.',
+  );
 }
 
 /** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
