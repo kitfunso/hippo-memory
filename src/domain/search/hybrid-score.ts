@@ -1,5 +1,6 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { matchedQueryTerms } from './bm25.js';
 import {
   applyRankBoosts,
@@ -53,7 +54,7 @@ export function scoreHybridPool(input: HybridScoreInput): SearchResult[] {
       score: s.boosts.score,
       bm25: input.bm25Scores[i],
       cosine: input.dense.cosine[i],
-      tokens: estimateTokens(entry.content),
+      tokens: estimateTokens(shownText(entry)),
     };
     if (input.explain) result.breakdown = hybridBreakdown(i, s, input, queryTermSet);
     scored.push(result);

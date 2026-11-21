@@ -2,6 +2,7 @@
 
 import type { SummaryDescendants } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { leadInField, shownText } from '../../base/memory/lead-in.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { personalScopeOf } from '../../base/scope/recall-scope.js';
 import { descendantAdmits, type DescendantAdmission } from '../../base/scope/read-admission.js';
@@ -35,6 +36,8 @@ export interface DrillDownSummary {
 export interface DrillDownChild {
   id: string;
   content: string;
+  /** The conversation text that led into the memory; absent when unset. */
+  leadIn?: string;
   layer: string;
   dagLevel: number;
   created: string;
@@ -123,6 +126,7 @@ function drillResult(
   const all: DrillDownChild[] = collected.map((c) => ({
     id: c.id,
     content: c.content,
+    ...leadInField(c),
     layer: c.layer,
     dagLevel: c.dagLevel ?? 0,
     created: c.created,
@@ -160,7 +164,7 @@ function capChildren(
     let used = 0;
     const room = opts.budget - fixed;
     for (const c of all) {
-      const t = opts.cost ? opts.cost.child(c) : estimateTokens(c.content);
+      const t = opts.cost ? opts.cost.child(c) : estimateTokens(shownText(c));
       if (out.length > 0 && used + t > room) {
         truncated = true;
         break;

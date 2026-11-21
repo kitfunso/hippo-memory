@@ -2,6 +2,7 @@
 
 import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/strength.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import {
   DEFAULT_RECALL_BUDGET,
   type ScoreBreakdown,
@@ -217,6 +218,7 @@ function printExplainJson({
     tokens: r.tokens,
     tags: r.entry.tags,
     content: r.entry.content,
+    ...leadInField(r.entry),
     breakdown: r.breakdown,
   }));
   console.log(
@@ -246,6 +248,7 @@ function printExplainTable(
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
+    // A preview shows the memory itself: a lead-in first would fill the cut.
     const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(

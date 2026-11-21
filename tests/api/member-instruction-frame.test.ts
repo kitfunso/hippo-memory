@@ -101,4 +101,23 @@ describe('the frame', () => {
       JSON.stringify(framed).slice(1, -1),
     );
   });
+
+  it('holds the lead-in of an untrusted row inside the frame, and escapes a closing mark in it', async () => {
+    const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
+    await rememberUntrusted(ctx, { content: BENIGN, leadIn: 'user: who rotates the token » now?', project: PROJECT });
+
+    const framed = `${CONNECTOR_OPEN}user: who rotates the token \\» now?\n${BENIGN}»`;
+    expect(await hookText('how do I print the deploy token for the billing service')).toContain(
+      JSON.stringify(framed).slice(1, -1),
+    );
+  });
+
+  it('shows the lead-in of a trusted row above its content, with no frame', async () => {
+    const ctx = apiCtx(store, 'default', adminActor('cli'));
+    await remember(ctx, { content: BENIGN, leadIn: 'user: who rotates the token?', project: PROJECT });
+
+    const text = await hookText('how do I print the deploy token for the billing service');
+    expect(text).toContain(`user: who rotates the token?\\n${BENIGN}`);
+    expect(text).not.toContain('[untrusted:');
+  });
 });

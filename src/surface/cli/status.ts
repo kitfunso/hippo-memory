@@ -13,6 +13,7 @@ import {
 } from '../../base/memory/strength.js';
 import { strengthOf } from '../../api/types.js';
 import { Layer, type MemoryEntry } from '../../base/memory/entry.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
 import { computeSystemEnergy } from '../../base/rank/physics.js';
 import { runDoctor, formatDoctor } from './doctor.js';
@@ -228,7 +229,7 @@ function printMemoryDetail(entry: MemoryEntry, now: Date, rules: StrengthModel):
   console.log('');
   console.log('Content:');
   console.log('-'.repeat(40));
-  console.log(entry.content);
+  console.log(shownText(entry));
 }
 
 function outcomeLabel(entry: MemoryEntry, rules: StrengthModel): string {

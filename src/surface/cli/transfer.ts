@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { toWire } from '../../base/memory/memory-wire.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryList } from '../../api/memories/memories.js';
 import { pickWrites } from './memory-writes.js';
@@ -156,7 +157,7 @@ export async function handleExport({
           `half_life: ${e.halfLifeDays}d`,
           `strength: ${e.strength.toFixed(2)}`,
         ].join(' | ');
-        return `### ${e.id}\n\n${e.content}\n\n_${meta}_`;
+        return `### ${e.id}\n\n${shownText(e)}\n\n_${meta}_`;
       })
       .join('\n\n---\n\n');
   } else {

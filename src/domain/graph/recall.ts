@@ -13,6 +13,7 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { identityText } from '../../base/util/same-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
@@ -260,7 +261,7 @@ function buildGraphHit(
     score: originScore * (1 - HOP_DISCOUNT * via.hops),
     bm25: 0,
     cosine: 0,
-    tokens: estimateTokens(mem.content),
+    tokens: estimateTokens(shownText(mem)),
     graphVia: via,
     isGlobal,
   };

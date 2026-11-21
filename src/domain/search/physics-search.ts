@@ -1,6 +1,7 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { identityText } from '../../base/util/same-text.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
@@ -328,7 +329,7 @@ function physicsResult(
     score: finalScore,
     bm25: 0,
     cosine: s.baseScore,
-    tokens: estimateTokens(entry.content),
+    tokens: estimateTokens(shownText(entry)),
   };
   if (scoring.explain) {
     result.breakdown = addDagFields(

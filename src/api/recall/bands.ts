@@ -1,5 +1,6 @@
 // How the result bands are placed: the goal boost, the summary substitution and the fresh tail.
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
@@ -173,6 +174,7 @@ function baseItem(
   const item: RecallResultItem = {
     id: r.entry.id,
     content: r.entry.content,
+    ...leadInField(r.entry),
     score: r.score,
     layer: r.entry.layer,
     strength: r.entry.strength,
@@ -239,6 +241,7 @@ function freshTailBand(opts: RecallOptions, options: FreshTailBandOptions): Reca
     const item: RecallResultItem = {
       id: m.id,
       content: m.content,
+      ...leadInField(m),
       score: FRESH_TAIL_ITEM_SCORE,
       layer: m.layer,
       strength: m.strength,

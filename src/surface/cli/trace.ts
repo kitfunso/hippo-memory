@@ -2,6 +2,7 @@
 
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import { type MemoryEntry } from '../../base/memory/entry.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import * as api from '../../api/index.js';
 import { memoryGet, memoryListByIds } from '../../api/memories/memories.js';
 import { isInitialized } from '../../host/project-identity.js';
@@ -174,6 +175,7 @@ function printTraceJson(t: TraceView): void {
         starred: entry.starred,
         tags: entry.tags,
         content: entry.content,
+        ...leadInField(entry),
         created: entry.created,
         age_days: t.ageDays,
         last_retrieved: entry.lastRetrieved,
@@ -196,15 +198,19 @@ function printTraceJson(t: TraceView): void {
   );
 }
 
+/** A text on one line, cut to DETAIL_CONTENT_CHARS. */
+function detailLine(text: string): string {
+  const ellipsis = text.length > DETAIL_CONTENT_CHARS ? '...' : '';
+  return `${text.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`;
+}
+
 function printTraceText(t: TraceView): void {
   const { entry, sourceLabel, conf, ageDays, strength, projectedAt } = t;
   const { halfLife, rewardFactor, effHalfLife, sinceLast } = t;
   console.log(`Memory: ${entry.id}  [${sourceLabel}]`);
   console.log('='.repeat(50));
-  const ellipsis = entry.content.length > DETAIL_CONTENT_CHARS ? '...' : '';
-  console.log(
-    `Content:   ${entry.content.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`,
-  );
+  if (entry.leadIn) console.log(`Lead-in:   ${detailLine(entry.leadIn)}`);
+  console.log(`Content:   ${detailLine(entry.content)}`);
   const starred = entry.starred ? '  Starred: yes' : '';
   const pinned = entry.pinned ? 'yes' : 'no';
   console.log(

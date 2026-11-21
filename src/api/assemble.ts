@@ -1,6 +1,7 @@
 // Session context assembly under a token budget.
 
 import { estimateTokens } from '../base/util/token-text.js';
+import { leadInField, shownText } from '../base/memory/lead-in.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { assertScopeRequestAllowed, personalScopeOf } from '../base/scope/recall-scope.js';
 import { projectNames } from '../base/scope/project-identity.js';
@@ -41,6 +42,8 @@ export interface AssembleCost {
 export interface AssembledContextItem {
   id: string;
   content: string;
+  /** The conversation text that led into the memory; absent when unset. */
+  leadIn?: string;
   /** ISO timestamp of the source row's `created` field (or `earliest_at` for substituted
    * summaries). */
   createdAt: string;
@@ -106,7 +109,7 @@ export async function assemble(
   const cmpIso = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
   olderItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
   tailItems.sort((a, b) => cmpIso(a.createdAt, b.createdAt));
-  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(it.content));
+  const itemCost = opts.cost?.item ?? ((it: AssembledContextItem) => estimateTokens(shownText(it)));
   const room = budget - (opts.cost?.fixed(Math.max(budget, totalRaw)) ?? 0);
   const { items, tokens, evicted } = await fitToBudget(
     ctx,
@@ -201,6 +204,7 @@ function rawItem(r: MemoryEntry): AssembledContextItem {
   return {
     id: r.id,
     content: r.content,
+    ...leadInField(r),
     createdAt: r.created,
     strength: r.strength,
   };
@@ -210,6 +214,7 @@ function freshTailItem(r: MemoryEntry): AssembledContextItem {
   return {
     id: r.id,
     content: r.content,
+    ...leadInField(r),
     createdAt: r.created,
     isFreshTail: true,
     strength: r.strength,

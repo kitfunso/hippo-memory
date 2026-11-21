@@ -9,6 +9,7 @@ import {
   type StrengthModel,
 } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { renderAmbientSummary, type AmbientState } from '../../base/memory/ambient.js';
 import { formatHandoffEvidenceLine, type SessionHandoff } from '../../base/session/handoff.js';
@@ -52,7 +53,8 @@ function escapeFrameClose(text: string): string {
 
 function shownContent(e: MemoryEntry): string {
   const open = frameOpen(e.tags);
-  return open === null ? e.content : `${open}${escapeFrameClose(e.content)}${UNTRUSTED_CLOSE}`;
+  const text = shownText(e);
+  return open === null ? text : `${open}${escapeFrameClose(text)}${UNTRUSTED_CLOSE}`;
 }
 
 export function snapshotText(s: TaskSnapshot): string {
@@ -309,7 +311,7 @@ export function assembleHeading(c: AssembleHeadingCounts): string {
 
 export function assembleLine(it: AssembledContextItem): string {
   const prefix = it.isSummary ? '[summary]' : it.isFreshTail ? '[tail]' : '[older]';
-  return `  ${prefix} ${it.createdAt} ${it.id} - ${it.content}`;
+  return `  ${prefix} ${it.createdAt} ${it.id} - ${shownText(it)}`;
 }
 
 /** The window in full, as the MCP tool returns it; the header counts the whole block. */
@@ -343,7 +345,7 @@ function drillHead(s: DrillDownSummary, shown: number, total: number, truncated:
 }
 
 export function drillLine(c: DrillDownChild): string {
-  return `  [L${c.dagLevel}] ${c.id} - ${c.content}`;
+  return `  [L${c.dagLevel}] ${c.id} - ${shownText(c)}`;
 }
 
 export function drillText(r: DrillDownResult): string {

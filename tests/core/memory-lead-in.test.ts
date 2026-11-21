@@ -1,14 +1,17 @@
 // The lead-in contract: the conversation text that led into a memory, capped at the record and vetted at every write.
 import { describe, expect, it } from 'vitest';
-import { remember, rememberUntrusted } from '../../src/api/index.js';
+import { remember, rememberUntrusted, retrieve } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { shownText } from '../../src/base/memory/lead-in.js';
 import { MAX_LEAD_IN_CHARS } from '../../src/base/util/limits.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { matchedQueryTerms } from '../../src/domain/search/bm25.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { isQuarantineScope } from '../../src/domain/trust/quarantine.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
+import { formatMemories, memoryCostAt } from '../../src/surface/mcp/tool-text.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -140,8 +143,38 @@ describe('BM25 over a row with a lead-in', () => {
   it('ranks a row by a word only its lead-in holds, and names the word as matched', () => {
     const led = createMemory(REPLY, { leadIn: TURN });
     const other = createMemory('Deploys go out on Friday afternoon.');
-    expect(rankBm25('Mel', [led, other], { now: evalNow() }).map((r) => r.entry.id)).toEqual([led.id]);
+    const [hit] = rankBm25('Mel', [led, other], { now: evalNow() });
+    expect(hit.entry.id).toBe(led.id);
+    expect(hit.tokens).toBe(estimateTokens(shownText(led)));
     expect(matchedQueryTerms(['mel'], led)).toEqual(['mel']);
     expect(matchedQueryTerms(['mel'], createMemory(REPLY))).toEqual([]);
+  });
+});
+
+describe('recall of a row with a lead-in', () => {
+  it('carries the lead-in on its item, and prices the text it shows', async () => {
+    const ctx = newCtx();
+    const led = await remember(ctx, { content: REPLY, leadIn: TURN });
+    const plainContent = 'Mel entered the spring half marathon.';
+    const plain = await remember(ctx, { content: plainContent });
+    const { results, tokens } = await retrieve(ctx, { query: 'Mel' });
+    const byId = new Map(results.map((r) => [r.id, r]));
+    expect(byId.get(led.id)?.leadIn).toBe(TURN);
+    expect(Object.hasOwn(byId.get(plain.id) ?? {}, 'leadIn')).toBe(false);
+    const shown = (content: string, leadIn?: string): number => estimateTokens(shownText({ content, leadIn }));
+    expect(tokens).toBe(shown(REPLY, TURN) + shown(plainContent));
+    expect(shown(REPLY, TURN)).toBeGreaterThan(estimateTokens(REPLY));
+  });
+
+  it('prints the lead-in above the content in the MCP text, and charges it to the budget', () => {
+    const led = createMemory(REPLY, { leadIn: TURN });
+    const bare = createMemory(REPLY);
+    const now = evalNow();
+    expect(formatMemories([{ entry: led }], now)).toContain(`
+${TURN}
+${REPLY}
+`);
+    expect(formatMemories([{ entry: bare }], now)).not.toContain(TURN);
+    expect(memoryCostAt(now)({ entry: led })).toBeGreaterThan(memoryCostAt(now)({ entry: bare }));
   });
 });

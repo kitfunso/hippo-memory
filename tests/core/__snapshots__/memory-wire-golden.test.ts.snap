@@ -4,6 +4,7 @@ exports[`memory wire goldens > MCP hippo_recall text 1`] = `
 "Found 1 memories:
 
 [observed] tags: wire, golden (strength=0.81)
+user: where does the wire golden keep every stored key?
 the haddock wire golden reads back through recall
 "
 `;
@@ -40,6 +41,7 @@ exports[`memory wire goldens > a conflict: hippo conflicts --json, trace --json 
     "golden"
   ],
   "content": "the wire golden keeps every stored key in its place",
+  "leadIn": "user: where does the wire golden keep every stored key?",
   "created": "2026-01-10T09:00:00.000Z",
   "age_days": 21.625,
   "last_retrieved": "2026-01-20T10:00:00.000Z",
@@ -206,7 +208,7 @@ exports[`memory wire goldens > hippo export: the JSON dump 1`] = `
 `;
 
 exports[`memory wire goldens > hippo recall --json --why 1`] = `
-"{"query":"haddock","budget":4000,"results":[{"id":"mem-golden-recall","score":0.2876166606537619,"strength":0.8125,"tokens":13,"tags":["wire","golden"],"content":"the haddock wire golden reads back through recall","layer":"episodic","confidence":"observed","aged_out":false,"source":"local","reason":"BM25: matched terms [haddock]","bm25":0.28768207245178085,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":"user:golden","artifact_ref":"gh://kitfunso/hippo-memory/pull/1","session_id":"sess-golden","confidence":"observed"}}],"total":1,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
+"{"query":"haddock","budget":4000,"results":[{"id":"mem-golden-recall","score":0.2876166606537619,"strength":0.8125,"tokens":27,"tags":["wire","golden"],"content":"the haddock wire golden reads back through recall","leadIn":"user: where does the wire golden keep every stored key?","layer":"episodic","confidence":"observed","aged_out":false,"source":"local","reason":"BM25: matched terms [haddock]","bm25":0.28768207245178085,"cosine":0,"envelope":{"kind":"distilled","scope":null,"owner":"user:golden","artifact_ref":"gh://kitfunso/hippo-memory/pull/1","session_id":"sess-golden","confidence":"observed"}}],"total":1,"suppressionSummary":{"totalCandidates":1,"droppedPreRank":0,"droppedByBudget":0,"summarySubstitutionsAdded":0,"freshTailAdded":0,"suppressedByInterference":0}}
 "
 `;
 
@@ -224,6 +226,7 @@ exports[`memory wire goldens > hippo trace --json 1`] = `
     "golden"
   ],
   "content": "the wire golden keeps every stored key in its place",
+  "leadIn": "user: where does the wire golden keep every stored key?",
   "created": "2026-01-10T09:00:00.000Z",
   "age_days": 21.625,
   "last_retrieved": "2026-01-20T10:00:00.000Z",

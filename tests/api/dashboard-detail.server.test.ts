@@ -33,6 +33,14 @@ describe('dashboardMemoryDetail', () => {
     expect(detail).toMatchObject({ id: live.id, content: 'a live fact', tags: ['ops'], snapshotId: held });
   });
 
+  it('carries the lead-in when the memory has one, and no key when it has none', async () => {
+    const led = seed(store.hippoRoot, 'Three times a week', { leadIn: 'user: How often do you run?' });
+    const plain = seed(store.hippoRoot, 'a live fact');
+
+    expect(await dashboardMemoryDetail(ctx, view, led.id, at)).toMatchObject({ leadIn: 'user: How often do you run?' });
+    expect(Object.hasOwn((await dashboardMemoryDetail(ctx, view, plain.id, at)) ?? {}, 'leadIn')).toBe(false);
+  });
+
   it('answers null for a superseded row, another tenant row and a missing id', async () => {
     const live = seed(store.hippoRoot, 'the replacement');
     const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: live.id });

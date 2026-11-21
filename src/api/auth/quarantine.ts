@@ -15,6 +15,8 @@ export interface QuarantineListItem {
   decidedAt: string | null;
   decidedBy: string | null;
   contentPreview: string;
+  /** The held memory's lead-in, cut like the content; absent when it has none. */
+  leadInPreview?: string;
 }
 
 const QUARANTINE_PREVIEW_CHARS = 200;
@@ -30,16 +32,20 @@ export async function quarantineList(
     limit: opts.limit,
     after: opts.after,
   });
-  return rows.map((row) => ({
-    id: row.memoryId,
-    originalScope: row.originalScope,
-    reason: row.reason,
-    status: row.status,
-    quarantinedAt: row.quarantinedAt,
-    decidedAt: row.decidedAt,
-    decidedBy: row.decidedBy,
-    contentPreview: (row.content ?? '').slice(0, QUARANTINE_PREVIEW_CHARS),
-  }));
+  return rows.map((row) => {
+    const item: QuarantineListItem = {
+      id: row.memoryId,
+      originalScope: row.originalScope,
+      reason: row.reason,
+      status: row.status,
+      quarantinedAt: row.quarantinedAt,
+      decidedAt: row.decidedAt,
+      decidedBy: row.decidedBy,
+      contentPreview: (row.content ?? '').slice(0, QUARANTINE_PREVIEW_CHARS),
+    };
+    if (row.leadIn) item.leadInPreview = row.leadIn.slice(0, QUARANTINE_PREVIEW_CHARS);
+    return item;
+  });
 }
 
 function refusalError(id: string, refusal: QuarantineRefusal): Error {

@@ -2,6 +2,7 @@
 // the client holds.
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import { isLiveMemory } from '../../base/scope/live-memory.js';
 import { memoryFacts } from '../../base/memory/memory-facts.js';
 import { round1 } from '../../base/util/format.js';
@@ -75,6 +76,7 @@ async function buildMemoryDetail(
     snapshotId,
     id: entry.id,
     content: entry.content,
+    ...leadInField(entry),
     layer: LAYERS[f.layer],
     band: BANDS[f.band],
     tags: entry.tags,

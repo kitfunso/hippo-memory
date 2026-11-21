@@ -16,6 +16,8 @@ export interface QuarantineListQuery {
  * such memory row. */
 export interface QuarantinedMemory extends QuarantineRow {
   readonly content: string | null;
+  /** The held memory's lead-in; absent when it has none, so a review sees text the flag may sit in. */
+  readonly leadIn?: string;
 }
 
 /** Why a decision wrote nothing: the tenant holds no record for the id (another tenant's id
