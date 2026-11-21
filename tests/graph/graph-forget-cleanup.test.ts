@@ -114,6 +114,18 @@ const PATHS: ReadonlyArray<readonly [string, (home: string, m: MemoryEntry) => v
   ],
   ['sleep flush', (home, m) => void batchWriteAndDeleteInFolder(home, [], [m.id])],
   ['set-aside', (home, m) => onDb(home, (db) => deleteEntryRowInTx(db, readEntry(home, m.id)!, 'test'))],
+  [
+    'admitted automatic delete',
+    (home, m) => {
+      const out = onDb(home, (db) =>
+        deleteEntriesInBatches(db, storeFilesOf(home), [{ id: m.id, reason: 'test' }], {
+          actor: 'test',
+          automatic: true,
+        }),
+      );
+      expect(out).toEqual([true]);
+    },
+  ],
 ];
 
 describe('deleting a memory deletes the graph rows only it backs', () => {
@@ -153,25 +165,6 @@ describe('deleting a memory deletes the graph rows only it backs', () => {
     expect(ents.get(s.eM)).toMatchObject({ memory_id: s.m.id });
     expect(rels.get(s.rM)).toMatchObject({ memory_id: s.m.id });
     expect(rels.has(s.rX)).toBe(true);
-  });
-
-  it('T2b an admitted automatic delete clears the rows only the memory backed', async () => {
-    const s = await seed(home);
-    const out = onDb(home, (db) =>
-      deleteEntriesInBatches(db, storeFilesOf(home), [{ id: s.m.id, reason: 'test' }], {
-        actor: 'test',
-        automatic: true,
-      }),
-    );
-    expect(out).toEqual([true]);
-    const ents = table(home, 'entities');
-    const rels = table(home, 'relations');
-    expect(ents.has(s.eM)).toBe(false);
-    expect(rels.has(s.rM)).toBe(false);
-    expect(rels.has(s.rX)).toBe(false);
-    expect(ents.get(s.eP)).toMatchObject({ memory_id: null });
-    expect(rels.get(s.rP)).toMatchObject({ memory_id: null });
-    expect(rels.get(s.rN)).toMatchObject({ memory_id: s.n.id });
   });
 
   it('T3 rows left all-null before the fix stay hidden from scoped readers', async () => {
