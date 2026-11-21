@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.11.0 - 2026-11-21
+
+### Added
+
+- **Gemini CLI extension and Kiro power.** `gemini extensions install https://github.com/kitfunso/hippo-memory` adds hippo's MCP server to Gemini CLI, and the Gemini CLI extension gallery can now index the repo. Kiro users import `extensions/kiro-power` as a custom power.
+- **Each npm release is listed in the official MCP Registry.** `npm-publish.yml` now runs `mcp-registry.yml` after a publish, which logs in by GitHub OIDC and publishes `server.json`; GitHub's MCP registry and other directories read from it. `gemini-extension.json` and `extensions/kiro-power/plugin.json` join the version lockstep.
+- **VS Code extension.** `extensions/vscode` adds hippo's MCP server to VS Code through the MCP server provider API, so Copilot agent mode gets hippo's tools with no `mcp.json` edit. It is not on the VS Code Marketplace yet. Its `package.json` joins the version lockstep.
+
+### Fixed
+
+- **`llms-install.md` names each client's own MCP config file.** Step 4 now lists Cline's `cline_mcp_settings.json` (`CLINE_MCP_SETTINGS_PATH`, then `CLINE_DATA_DIR`, and the IDE panel) beside Cursor and Claude Desktop, and tells the agent to write the file of the client it runs in. The step is now titled "Connect the client you are running in" and says it is required outside Claude Code. Before, Cline following the guide wrote hippo into `.cursor/mcp.json`, or skipped the step as optional, so Cline itself never got hippo's tools.
+- **Capture no longer pins a remark about the past as your rule.** "Because obviously we never worked on these before" was saved as a pinned rule, because "we never" or "you always" followed by any verb counted as a standing order. After "we" or "you", a past-tense verb ("worked", "told", "shipped") now marks a report, which stays an unpinned note. "We never feed the raw transcript to the judge" and "keep the keys in the vault, never committed to git" still pin.
+- **Capture no longer saves a program's prompt as your rule.** A Claude Code session started by `claude -p`, an Agent SDK or the GitHub action, and a Codex `codex exec` or sub-agent session, now give capture no user messages. Before, a tool that drives Claude Code (Cline's Claude Code provider) had its system prompt saved as 9 pinned "from-user" rules, and they showed up in every later session. Prompts typed in the terminal, VS Code, Claude Desktop and JetBrains are read as before. A test harness that plays the user through `claude -p` sets `HIPPO_CAPTURE_SCRIPTED=1`; the Z0 runner does.
+- **The MCP Registry accepts the release.** The registry refused 3.10.0 because `server.json` listed the npm package without its own version. The package entry now carries it, `sync-version.mjs` sets it with the top-level version on every release, and `check-manifest-versions.mjs` fails when they differ.
+
 ## 3.10.0 - 2026-11-20
 
 ### Added
