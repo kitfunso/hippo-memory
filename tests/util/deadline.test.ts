@@ -60,4 +60,30 @@ describe('withDeadline', () => {
       }),
     ).rejects.toBe(boom);
   });
+
+  it('keeps an on-time answer when another call blocks the thread before it is read', async () => {
+    const [fast, slow] = await Promise.allSettled([
+      withDeadline(20, () => 'fast'),
+      withDeadline(10, () => {
+        busyWait(80);
+        return 'slow';
+      }),
+    ]);
+    expect(fast).toEqual({ status: 'fulfilled', value: 'fast' });
+    expect(slow.status).toBe('rejected');
+    expect(slow.status === 'rejected' && slow.reason).toBeInstanceOf(DeadlineError);
+  });
+
+  it('rejects an async callback that blocks the thread after an await and aborts its signal', async () => {
+    let seen: AbortSignal | undefined;
+    await expect(
+      withDeadline(10, async (signal) => {
+        seen = signal;
+        await Promise.resolve();
+        busyWait(60);
+        return 'late';
+      }),
+    ).rejects.toBeInstanceOf(DeadlineError);
+    expect(seen?.aborted).toBe(true);
+  });
 });
