@@ -82,6 +82,14 @@ A `kind='raw'` memory: a connector message or imported note, append-only. Sleep 
 deletes one; only the raw archive removes it.
 _Avoid_: raw memory, transcript
 
+**Lead-in**:
+The conversation text that came just before a memory, saved with it in the optional `lead_in`
+field. Search matches its words, recall shows it above the memory, and `remember --extract` reads
+it as context. It is not part of the content: duplicate checks and rejections compare the
+identity text (content plus lead-in), the trigram index ignores it, and sleep never merges a
+lead-in row.
+_Avoid_: context (the `hippo context` command and the `Context` type), surrounding text
+
 **Compaction memory**:
 A memory `hippo post-compact` saves from one item of the summariser's "Memories for hippo" list:
 tagged `compaction-memory`, source `compaction:<session id>`, kind distilled, confidence observed.
