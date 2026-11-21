@@ -221,6 +221,36 @@ describe('promote on a shared store over HTTP', () => {
     expect(resolved.status, resolved.text).toBe(400);
     expect(resolved.text).toContain(NEEDS_PROJECT);
   });
+
+  it('P5b a member promotes a user-global row in place', async () => {
+    const row = {
+      ...createMemory('the shared kettle is descaled monthly', { tenantId: 'default' }),
+      originProject: '',
+    };
+    writeEntry(store, row);
+    const before = { rows: countRows(), audit: (await promoteRows(store)).length };
+    const r = await promoteAs(A.plaintext, row.id, ALPHA);
+    expect(r.status, r.text).toBe(200);
+    expect(JSON.parse(r.text)).toEqual({ ok: true, sourceId: row.id, globalId: row.id, originProject: '' });
+    expect(countRows()).toBe(before.rows);
+    expect(loadAllEntries(store, 'default').filter((e) => e.id.startsWith('g_'))).toEqual([]);
+    expect(await promoteRows(store)).toHaveLength(before.audit + 1);
+  });
+
+  it('P5c a member naming an alias of its project promotes a row stamped with that alias', async () => {
+    const row = {
+      ...createMemory('the alpha crane was inspected in june', { tenantId: 'default' }),
+      originProject: 'alpha-old',
+    };
+    writeEntry(store, row);
+    const body = { project: { name: 'alpha', aliases: ['alpha-old'] } };
+    const before = (await promoteRows(store)).length;
+    const r = await promoteAs(A.plaintext, row.id, body);
+    expect(r.status, r.text).toBe(200);
+    expect(JSON.parse(r.text)).toEqual({ ok: true, sourceId: row.id, globalId: row.id, originProject: 'alpha-old' });
+    expect(await promoteRows(store)).toHaveLength(before + 1);
+    await sameAsMissing(row.id, (x) => promoteAs(A.plaintext, x, ALPHA), 404);
+  });
 });
 
 describe('hippo promote in a shared folder', () => {
@@ -285,7 +315,7 @@ describe('hippo promote in a shared folder', () => {
     const r = await runCli('promote', ids.own);
     expect(r.status, r.out).toBe(0);
     expect(r.out).toContain('in place');
-    expect(r.out).toContain('this row has no project, so members see it only with a host admin key');
+    expect(r.out).toContain("This row has no project, so a member's project-scoped context read leaves it out");
     expect(r.out).not.toContain('serves it to its project');
   });
 
@@ -308,5 +338,14 @@ describe('hippo promote in a shared folder', () => {
     expect(own.status).not.toBe(0);
     expect(own.out).toContain('Failed to promote: memory not found');
     expect(await promoteRows(root)).toHaveLength(before + 1);
+  });
+
+  it('P7c with a server running a row stamped with the legacy folder name reads as not found', async () => {
+    const legacy = seed('the legacy folder dock opens at eight', 'team');
+    const before = (await promoteRows(root)).length;
+    const r = await runCli('promote', legacy);
+    expect(r.status).not.toBe(0);
+    expect(r.out).toContain(`Failed to promote: memory not found: ${legacy}`);
+    expect(await promoteRows(root)).toHaveLength(before);
   });
 });

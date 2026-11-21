@@ -50,12 +50,15 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
     await pickWrites(hippoRoot, tenantId)
   ).promote(id);
   if (globalId === id) {
-    console.log(
+    const inPlace = `Promoted ${id} in place: `;
+    const line =
       originProject === null
-        ? `Promoted ${id} in place: nothing was copied; this row has no project, so members ` +
-            'see it only with a host admin key.'
-        : `Promoted ${id} in place: this shared store already serves it to its project, so nothing was copied.`,
-    );
+        ? `${inPlace}nothing was copied. This row has no project, ` +
+          "so a member's project-scoped context read leaves it out."
+        : originProject === ''
+          ? `${inPlace}nothing was copied. This row is user-global, so every project's context read includes it.`
+          : `${inPlace}this shared store already serves it to its project, so nothing was copied.`;
+    console.log(line);
     return;
   }
   console.log(`Promoted ${id} to global store as ${globalId}`);

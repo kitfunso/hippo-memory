@@ -243,10 +243,9 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
       send(
         async (): Promise<Promoted> => {
           // The server learns a shared folder's project from the caller, as remember sends none.
+          const infra = cliInfra();
           const project = isSharedStore(hippoRoot)
-            ? callerProjectOf(
-                cliInfra().machine.projectIdentity(workingFolder({ infra: cliInfra() })),
-              )
+            ? callerProjectOf(infra.machine.projectIdentity(workingFolder({ infra })))
             : undefined;
           return client.postPromote(server.url, apiKey, id, project);
         },
@@ -258,7 +257,9 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
 
 /** The wire shape of a folder's project: legacyName is a folder name, which would pool every
  * same-named folder, so it never goes. A blank name sends none, and the server says why. */
-function callerProjectOf(identity: ProjectIdentity) {
+function callerProjectOf(
+  identity: ProjectIdentity,
+): { name: string; aliases: string[] } | undefined {
   if (identity.name === '') return undefined;
   const aliases = (identity.aliases ?? []).filter((a) => a !== identity.legacyName);
   return { name: identity.name, aliases };
