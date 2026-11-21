@@ -47,15 +47,15 @@ claude plugin marketplace add kitfunso/hippo-memory
 claude plugin install hippo-memory@hippo-memory
 ```
 
-## 4. Connect other MCP clients
+## 4. Connect the client you are running in
 
-Any MCP client can use hippo's MCP server over stdio. Claude Code:
+Do this step in every client except Claude Code with the hooks from step 3: without it, you get none of hippo's tools. Any MCP client can use hippo's MCP server over stdio. Claude Code:
 
 ```bash
 claude mcp add hippo-memory -- hippo mcp
 ```
 
-Other clients take a JSON entry like this in their MCP config file (for example `.cursor/mcp.json` or `claude_desktop_config.json`):
+Other clients take a JSON entry like this in their own MCP config file:
 
 ```json
 {
@@ -64,6 +64,14 @@ Other clients take a JSON entry like this in their MCP config file (for example 
   }
 }
 ```
+
+Put it in the file of the client you are running in, not another client's file:
+
+- Cline CLI: check `CLINE_MCP_SETTINGS_PATH` first and use that file when it is set. Otherwise use `settings/cline_mcp_settings.json` in `CLINE_DATA_DIR`, which defaults to `~/.cline/data`.
+- Cline in an IDE: the MCP Servers panel, Configure tab, then Configure MCP Servers opens the file.
+- Cursor: `.cursor/mcp.json` in the project. Claude Desktop: `claude_desktop_config.json`.
+
+Merge the `hippo-memory` entry into any `mcpServers` already in the file.
 
 The server exposes 13 tools; `hippo_context` at session start and `hippo_remember` for lessons are the two to use first.
 
