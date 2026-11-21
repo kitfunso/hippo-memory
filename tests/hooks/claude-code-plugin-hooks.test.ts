@@ -73,4 +73,12 @@ describe('Claude Code plugin hook manifest', () => {
       expect(fs.existsSync(path.join(PLUGIN, 'scripts', script))).toBe(true);
     }
   });
+
+  it('gives the marketplace entry the same version as the plugin manifest', () => {
+    const plugin = JSON.parse(fs.readFileSync(path.join(PLUGIN, '.claude-plugin', 'plugin.json'), 'utf8'));
+    const marketplace = path.join(PLUGIN, '..', '..', '.claude-plugin', 'marketplace.json');
+    expect(JSON.parse(fs.readFileSync(marketplace, 'utf8'))).toMatchObject({
+      plugins: [{ source: './extensions/claude-code-plugin', version: plugin.version }],
+    });
+  });
 });

@@ -1,0 +1,13 @@
+---
+description: Read and write the project's hippo memory with the hippo-memory MCP tools
+alwaysApply: true
+---
+
+# Hippo memory
+
+This project uses hippo. Hippo is a local memory that your coding agents share. Use its MCP tools as follows.
+
+- At the start of a task, call `hippo_context`. If the task is about one topic, also call `hippo_recall` with a short description of that topic. Read the result before you start.
+- When you learn something that is not obvious about this code, an API or a workflow, call `hippo_remember` with one or two specific sentences.
+- When something fails unexpectedly, call `hippo_remember` with what failed and why, and set `error` to true. An error memory lasts twice as long.
+- After the task, call `hippo_outcome`. Set `good` to true if the recalled memories helped, or to false if they were wrong or off topic.
