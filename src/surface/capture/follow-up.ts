@@ -18,7 +18,7 @@ import {
   type ExtractedItem,
 } from './extract.js';
 import { scrubForSharing } from './share-scrub.js';
-import { detectInstruction } from '../../domain/trust/instruction-detect.js';
+import { detectInstruction } from '../../base/trust/instruction-detect.js';
 
 const FOLLOW_UP_TURNS = 20;
 const TURN_CHARS = 1000;

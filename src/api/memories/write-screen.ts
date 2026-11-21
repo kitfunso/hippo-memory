@@ -8,7 +8,7 @@ import {
   instructionIn,
   type InstructionDetection,
   UNTRUSTED_ORIGIN_TAG,
-} from '../../domain/trust/instruction-detect.js';
+} from '../../base/trust/instruction-detect.js';
 import type { Actor, ContextWith } from '../types.js';
 
 /** The groups that hold a flagged write: the write that commits its review record, and the

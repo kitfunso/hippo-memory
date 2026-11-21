@@ -11,7 +11,7 @@ import {
   derivationPartitionKey,
   isPersonalScope,
 } from '../../base/scope/recall-scope.js';
-import { INSTRUCTION_LIKE_TAG, instructionIn } from '../trust/instruction-detect.js';
+import { INSTRUCTION_LIKE_TAG, instructionIn } from '../../base/trust/instruction-detect.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isSuperseded } from '../../base/memory/liveness.js';

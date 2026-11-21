@@ -27,7 +27,7 @@ import {
   INSTRUCTION_LIKE_TAG,
   printedTags,
   UNTRUSTED_ORIGIN_TAG,
-} from '../../domain/trust/instruction-detect.js';
+} from '../../base/trust/instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */
