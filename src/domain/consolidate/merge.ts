@@ -6,7 +6,12 @@ import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { duplicateKey, heldTexts, mergedText } from '../../base/util/same-text.js';
 import { successorAfterRetirement } from '../../base/memory/merged-row.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
-import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
+import {
+  derivationScope,
+  derivationPartitionKey,
+  isPersonalScope,
+} from '../../base/scope/recall-scope.js';
+import { INSTRUCTION_LIKE_TAG, instructionIn } from '../trust/instruction-detect.js';
 import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
@@ -264,7 +269,7 @@ function semanticSummary(
   partition: MergePartition,
   run: Pick<SleepRun, 'config' | 'now'>,
 ): MemoryEntry {
-  const allTags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  const allTags = mergedTags(mergedContent, cluster, partition.scope);
   const maxValence = pickStrongestValence(cluster);
   return {
     ...createMemory(
@@ -285,6 +290,19 @@ function semanticSummary(
     originProject: partition.origin,
     parents: cluster.map((e) => e.id),
   };
+}
+
+/** The sources' tags, plus the frame mark when the merged text is flagged; a personal scope is not screened, as a
+ * personal write is not. */
+function mergedTags(
+  mergedContent: string,
+  cluster: readonly MemoryEntry[],
+  scope: MergePartition['scope'],
+): string[] {
+  const tags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
+  if (isPersonalScope(scope) || tags.includes(INSTRUCTION_LIKE_TAG)) return tags;
+  // The merged tags and contents can form a pattern no source row holds.
+  return instructionIn(mergedContent, tags).flagged ? [...tags, INSTRUCTION_LIKE_TAG].sort() : tags;
 }
 
 /** The later conflict check reads the survivors, so it sees the post-demotion half-life. */
