@@ -120,6 +120,7 @@ type GitHubIssueItem = {
   title: string;
   body: string;
   user: { login: string; id: number };
+  author_association?: string;
   updated_at: string;
   pull_request?: { url: string };
 };
@@ -128,6 +129,7 @@ type GitHubIssueCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };
+  author_association?: string;
   updated_at: string;
   issue_url: string;
 };
@@ -136,6 +138,7 @@ type GitHubPrReviewCommentItem = {
   id: number;
   body: string;
   user: { login: string; id: number };
+  author_association?: string;
   updated_at: string;
   pull_request_url: string;
 };
@@ -147,6 +150,7 @@ function issueItem(number: number, updatedAt: string, isPr = false): GitHubIssue
     title: `issue ${number}`,
     body: `body for ${number}`,
     user: { login: 'alice', id: 1 },
+    author_association: 'MEMBER',
     updated_at: updatedAt,
   };
   if (isPr) item.pull_request = { url: `https://api.github.com/repos/${REPO}/pulls/${number}` };
@@ -158,6 +162,7 @@ function issueCommentItem(id: number, issueNumber: number, updatedAt: string): G
     id,
     body: `comment ${id}`,
     user: { login: 'bob', id: 2 },
+    author_association: 'MEMBER',
     updated_at: updatedAt,
     issue_url: `https://api.github.com/repos/${REPO}/issues/${issueNumber}`,
   };
@@ -168,6 +173,7 @@ function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): G
     id,
     body: `review comment ${id}`,
     user: { login: 'carol', id: 3 },
+    author_association: 'MEMBER',
     updated_at: updatedAt,
     pull_request_url: `https://api.github.com/repos/${REPO}/pulls/${prNumber}`,
   };

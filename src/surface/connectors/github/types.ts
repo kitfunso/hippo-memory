@@ -41,6 +41,7 @@ export interface GitHubIssueEvent extends GitHubWebhookEnvelope {
     title: string;
     body: string | null;
     user: GitHubSender;
+    author_association?: string;
     updated_at?: string;
   };
 }
@@ -52,6 +53,7 @@ export interface GitHubIssueCommentEvent extends GitHubWebhookEnvelope {
     id: number;
     body: string | null;
     user: GitHubSender;
+    author_association?: string;
     updated_at?: string;
   };
 }
@@ -63,6 +65,7 @@ export interface GitHubPullRequestEvent extends GitHubWebhookEnvelope {
     title: string;
     body: string | null;
     user: GitHubSender;
+    author_association?: string;
     updated_at?: string;
   };
 }
@@ -74,6 +77,7 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
     id: number;
     body: string | null;
     user: GitHubSender;
+    author_association?: string;
     updated_at?: string;
   };
 }

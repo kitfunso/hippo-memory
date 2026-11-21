@@ -51,7 +51,13 @@ interface IssueBodyOptions {
 
 interface GitHubIssueEventPayload {
   action: string;
-  issue: { number: number; title: string; body: string; user: { login: string; id: number } };
+  issue: {
+    number: number;
+    title: string;
+    body: string;
+    user: { login: string; id: number };
+    author_association?: string;
+  };
   repository: { full_name: string; private: boolean; owner: { login: string }; name: string };
   sender: { login: string; id: number };
   installation?: { id: number };
@@ -65,6 +71,7 @@ function issueBody(opts: IssueBodyOptions = {}): string {
       title: 'Bug',
       body: 'broken',
       user: { login: 'alice', id: 1 },
+      author_association: 'MEMBER',
     },
     repository: {
       full_name: opts.repoFullName ?? 'acme/repo',
@@ -88,6 +95,7 @@ function issueCommentBody(action: 'created' | 'edited' | 'deleted' = 'created'):
       id: 999,
       body: 'I can repro',
       user: { login: 'bob', id: 2 },
+      author_association: 'MEMBER',
     },
     repository: {
       full_name: 'acme/repo',
@@ -108,6 +116,7 @@ function pullRequestBody(): string {
       title: 'Fix',
       body: 'patches the bug',
       user: { login: 'carol', id: 3 },
+      author_association: 'MEMBER',
     },
     repository: {
       full_name: 'acme/repo',
@@ -128,6 +137,7 @@ function prReviewCommentBody(action: 'created' | 'deleted' = 'created'): string 
       id: 12345,
       body: 'nit',
       user: { login: 'dave', id: 4 },
+      author_association: 'MEMBER',
     },
     repository: {
       full_name: 'acme/repo',

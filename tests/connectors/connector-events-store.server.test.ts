@@ -123,7 +123,12 @@ describe('the connector entry points on a store with connectorEvents', () => {
             action: 'created',
             repository: REPO,
             issue: { number: 1 },
-            comment: { id: 9, body: 'I can reproduce this on main', user: { login: 'bob', id: 2 } },
+            comment: {
+              id: 9,
+              body: 'I can reproduce this on main',
+              user: { login: 'bob', id: 2 },
+              author_association: 'MEMBER',
+            },
           },
         },
         rawBody: '{}',
@@ -269,6 +274,7 @@ describe('both webhooks under a store that is not hippo.db', () => {
       id: 9,
       body: 'I can reproduce this on main',
       user: { login: 'bob', id: 2 },
+      author_association: 'MEMBER',
       updated_at: '2026-02-28T09:00:00Z',
     },
   });

@@ -327,6 +327,8 @@ export const envGitHubToken = text('GITHUB_TOKEN');
 export const envGitHubWebhookSecret = text('GITHUB_WEBHOOK_SECRET');
 export const envGitHubWebhookSecretPrevious = text('GITHUB_WEBHOOK_SECRET_PREVIOUS');
 export const envGitHubWebhookSecretPreviousUntil = text('GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL');
+/** Comma-separated GitHub user ids whose items skip the outside-author hold; connectors/github/webhook.ts parses it. */
+export const envGitHubTrustedUserIds = trimmedText('GITHUB_TRUSTED_USER_IDS');
 export const envGitHubAllowUnknownInstallationFallback = bool(
   'GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK',
 );

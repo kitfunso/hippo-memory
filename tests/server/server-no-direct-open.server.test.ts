@@ -47,7 +47,13 @@ const githubBody = JSON.stringify({
   installation: { id: 101 },
   repository: { full_name: 'acme/demo', private: false, owner: { login: 'acme' }, name: 'demo' },
   issue: { number: 1 },
-  comment: { id: 9, body: 'I can reproduce this', user: { login: 'bob', id: 2 }, updated_at: '2026-02-28T09:00:00Z' },
+  comment: {
+    id: 9,
+    body: 'I can reproduce this',
+    user: { login: 'bob', id: 2 },
+    author_association: 'MEMBER',
+    updated_at: '2026-02-28T09:00:00Z',
+  },
 });
 
 function slackHeaders() {

@@ -75,6 +75,7 @@ describe('hippo github CLI', () => {
         title: 'hello',
         body: 'world',
         user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
         updated_at: '2026-01-01T00:00:00Z',
       },
     ]);
@@ -243,6 +244,7 @@ describe('hippo github CLI', () => {
       title: 'Bug',
       body: 'broken',
       user: { login: 'alice', id: 1 },
+      author_association: 'MEMBER',
     },
     repository: REPOSITORY,
     sender: { login: 'alice', id: 1 },
@@ -257,7 +259,7 @@ describe('hippo github CLI', () => {
     return JSON.stringify({
       action,
       ...parent,
-      comment: { id: 999, body: 'I can repro', user: { login: 'bob', id: 2 } },
+      comment: { id: 999, body: 'I can repro', user: { login: 'bob', id: 2 }, author_association: 'MEMBER' },
       repository: REPOSITORY,
       sender: { login: 'bob', id: 2 },
       installation: { id: 99 },
@@ -493,6 +495,7 @@ describe('hippo github CLI', () => {
         title: `issue ${number}`,
         body: 'body text',
         user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
         updated_at: `2026-01-0${number}T00:00:00Z`,
       })),
     );

@@ -2,6 +2,7 @@ import {
   envGitHubAllowUnknownInstallationFallback,
   envGitHubEnterpriseBareRefsHost,
   envGitHubEnterpriseUrl,
+  envGitHubTrustedUserIds,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
   envGitHubWebhookSecretPreviousUntil,
@@ -72,6 +73,34 @@ export function warnGitHubPreviousSecretOpen(): void {
     envGitHubWebhookSecretPrevious(),
     envGitHubWebhookSecretPreviousUntil(),
   );
+}
+
+const USER_ID = /^[1-9][0-9]*$/;
+const LOGIN_ENTRY = /^[A-Za-z0-9-]{1,39}(:[0-9]+)?$/;
+
+/** GITHUB_TRUSTED_USER_IDS for the webhook, the DLQ replay and backfill alike. It throws on an entry that is
+ * not an id, such as a login: dropping it would hold the person the operator meant to trust. */
+export function githubTrustedUserIds(): ReadonlySet<number> {
+  const entries = (envGitHubTrustedUserIds() ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const bad = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => !USER_ID.test(entry) || !Number.isSafeInteger(Number(entry)));
+  if (bad.length > 0) {
+    // Only a login-shaped entry is quoted; any other is named by position, so a token pasted here never prints.
+    const named = bad
+      .map(({ entry, index }) =>
+        LOGIN_ENTRY.test(entry) ? JSON.stringify(entry) : `entry ${index + 1}, not shown`,
+      )
+      .join(', ');
+    throw new Error(
+      `GITHUB_TRUSTED_USER_IDS has entries that are not numeric GitHub user ids: ${named}; ` +
+        'get each id with: gh api users/<login> --jq .id',
+    );
+  }
+  return new Set(entries.map(Number));
 }
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous
@@ -420,6 +449,7 @@ async function dispatchGitHubEvent({
       deliveryId,
       host: d.site.host,
       ownsBareRefs: d.site.ownsBareRefs,
+      trustedUserIds: githubTrustedUserIds(),
     });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }

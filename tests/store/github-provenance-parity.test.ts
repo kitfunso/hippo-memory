@@ -37,7 +37,7 @@ function makeIssue(i: number): IngestEvent {
       number: 100 + i,
       title: `prov-issue-${i}`,
       body: `body ${i}`,
-      user: { login: `user${i}`, id: i + 1 },
+      user: { login: `user${i}, author_association: 'MEMBER'`, id: i + 1 },
     },
   };
   return { eventName: 'issues', payload };
@@ -51,7 +51,7 @@ function makeIssueComment(i: number): IngestEvent {
     comment: {
       id: 7000 + i,
       body: `prov-comment-${i}`,
-      user: { login: `user${i}`, id: i + 1 },
+      user: { login: `user${i}, author_association: 'MEMBER'`, id: i + 1 },
     },
   };
   return { eventName: 'issue_comment', payload };

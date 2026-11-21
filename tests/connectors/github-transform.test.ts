@@ -268,7 +268,10 @@ describe('the shape all four transforms share', () => {
 
   it('pins the exact opts, tag order included, for an event with no repository', () => {
     expect(
-      issueEventToRememberOpts({ action: 'opened', issue: { number: 1, title: ' T ', body: ' B ', user } }),
+      issueEventToRememberOpts({
+        action: 'opened',
+        issue: { number: 1, title: ' T ', body: ' B ', user, author_association: 'MEMBER' },
+      }),
     ).toEqual({
       ...common,
       content: 'T\n\nB',
@@ -279,7 +282,7 @@ describe('the shape all four transforms share', () => {
       issueCommentEventToRememberOpts({
         action: 'created',
         issue: { number: 1 },
-        comment: { id: 2, body: ' C ', user },
+        comment: { id: 2, body: ' C ', user, author_association: 'MEMBER' },
       }),
     ).toEqual({
       ...common,
@@ -288,7 +291,10 @@ describe('the shape all four transforms share', () => {
       tags: ['source:github', 'repo:unknown/unknown', 'event:issue_comment.created', 'user:github:octocat'],
     });
     expect(
-      pullRequestEventToRememberOpts({ action: 'opened', pull_request: { number: 3, title: '', body: ' B ', user } }),
+      pullRequestEventToRememberOpts({
+        action: 'opened',
+        pull_request: { number: 3, title: '', body: ' B ', user, author_association: 'MEMBER' },
+      }),
     ).toEqual({
       ...common,
       content: 'B',
@@ -299,7 +305,7 @@ describe('the shape all four transforms share', () => {
       prReviewCommentEventToRememberOpts({
         action: 'created',
         pull_request: { number: 3 },
-        comment: { id: 4, body: ' R ', user },
+        comment: { id: 4, body: ' R ', user, author_association: 'MEMBER' },
       }),
     ).toEqual({
       ...common,
