@@ -56,6 +56,7 @@ function query<T>(sql: string, ...args: string[]): T[] {
 function queryAt<T>(root: string, sql: string, ...args: string[]): T[] {
   const db = openHippoDb(root);
   try {
+    // SAFETY: every caller names the columns its row type declares.
     return db.prepare(sql).all(...args) as T[];
   } finally {
     closeHippoDb(db);
