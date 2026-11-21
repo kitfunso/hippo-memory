@@ -120,6 +120,13 @@ export function fromSite(
   sent: string | undefined,
   payloadSays: string | undefined,
 ): boolean {
-  if (site.host === undefined) return sent === undefined && payloadSays === 'github.com';
-  return sent === site.host && payloadSays === site.host;
+  return sent === site.host && payloadFromSite(site.host, payloadSays);
+}
+
+/** True when a payload's repository host is the site's own: github.com when `host` is undefined. */
+export function payloadFromSite(
+  host: string | undefined,
+  payloadSays: string | undefined,
+): boolean {
+  return payloadSays === (host ?? 'github.com');
 }

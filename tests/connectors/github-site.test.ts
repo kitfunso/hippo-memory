@@ -4,6 +4,7 @@ import {
   GITHUB_COM,
   headerHost,
   fromSite,
+  payloadFromSite,
   hostMismatch,
   mismatchSender,
   parseGitHubEnterpriseUrl,
@@ -181,5 +182,18 @@ describe('fromSite', () => {
     ['other.example.com', 'other.example.com', false],
   ])('GHES site: sent %s, payload %s is %s', (sent, payloadSays, expected) => {
     expect(fromSite(GHES, sent, payloadSays)).toBe(expected);
+  });
+});
+
+describe('payloadFromSite', () => {
+  it.each([
+    [undefined, 'github.com', true],
+    [undefined, 'ghes.example.com', false],
+    [undefined, undefined, false],
+    ['ghes.example.com', 'ghes.example.com', true],
+    ['ghes.example.com', 'github.com', false],
+    ['ghes.example.com', undefined, false],
+  ])('host %s, payload %s is %s', (host, payloadSays, expected) => {
+    expect(payloadFromSite(host, payloadSays)).toBe(expected);
   });
 });

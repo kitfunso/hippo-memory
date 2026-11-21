@@ -186,7 +186,7 @@ export function contextLine({
   strengthPct,
 }: ContextLineOptions): string {
   const e = item.entry;
-  const tagText = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
+  const tagText = printedTags(e.tags);
   const content = shownContent(e, tagText);
   const tagStr = tagsOutsideFrame(e, tagText);
   const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
@@ -248,9 +248,14 @@ export function crossProjectHeading(entries: number): string {
   return `\n## Other-project memory (explicitly requested, ${entries} entries)\n`;
 }
 
+/** The tag list as a context line prints it; the write screen checks this same text. */
+export function printedTags(tags: readonly string[]): string {
+  return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+}
+
 export function crossProjectLine(item: Pick<ContextResultEntry, 'entry' | 'origin'>): string {
   const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
-  const tagText = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
+  const tagText = printedTags(item.entry.tags);
   const tagStr = tagsOutsideFrame(item.entry, tagText);
   return `- **[${originLabel}]** ${shownContent(item.entry, tagText)}${tagStr}`;
 }

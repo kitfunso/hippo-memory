@@ -9,6 +9,7 @@ import {
   type InstructionDetection,
   UNTRUSTED_ORIGIN_TAG,
 } from '../instruction-detect.js';
+import { printedTags } from '../context/context-render.js';
 import type { Actor, ContextWith } from '../types.js';
 
 /** The groups that hold a flagged write: the write that commits its review record, and the
@@ -48,7 +49,11 @@ const NOT_FLAGGED: InstructionDetection = { flagged: false, reason: null };
 
 export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
   const screened = input.untrusted || sharesAsMember(actor, input.scope);
-  const detection = screened ? firstFlagged([input.content, ...(input.tags ?? [])]) : NOT_FLAGGED;
+  const tags = input.tags ?? [];
+  // The hook prints content and tags as one line, so a pattern can span the join.
+  const detection = screened
+    ? firstFlagged([input.content, ...tags, `${input.content}${printedTags(tags)}`])
+    : NOT_FLAGGED;
   // Only a connector's rule may hold a write; a client body never reaches `rule`.
   const reason = holdReason(detection, input.untrusted ? input.rule : undefined);
   const quarantine =

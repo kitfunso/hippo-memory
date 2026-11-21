@@ -17,7 +17,7 @@ import {
   githubTrustedUserIds,
 } from '../connectors/github/webhook.js';
 import { isGitHubRepoFullName } from '../connectors/github/ref.js';
-import { payloadHost, type GitHubSite } from '../connectors/github/site.js';
+import { payloadFromSite, payloadHost, type GitHubSite } from '../connectors/github/site.js';
 import {
   isGitHubIssueEvent,
   isGitHubIssueCommentEvent,
@@ -201,8 +201,9 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
       host,
       ownsBareRefs,
       // The parked row keeps no header, so the payload's repository host alone says the server.
-      trustedUserIds:
-        payloadHost(parsed) === (host ?? 'github.com') ? trustedUserIds : NO_TRUSTED_USER_IDS,
+      trustedUserIds: payloadFromSite(host, payloadHost(parsed))
+        ? trustedUserIds
+        : NO_TRUSTED_USER_IDS,
     });
     return { memoryId: r.memoryId };
   };
