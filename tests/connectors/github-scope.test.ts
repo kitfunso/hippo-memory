@@ -35,4 +35,12 @@ describe('scopeFromRepository', () => {
     };
     expect(scopeFromRepository(repo)).toBe('github:private:acme/legacy');
   });
+
+  it('a GHES host goes before owner/name', () => {
+    const open: GitHubRepository = { full_name: 'acme/open', private: false, owner: { login: 'acme' }, name: 'open' };
+    const secret: GitHubRepository = { full_name: 'acme/secret', private: true, owner: { login: 'acme' }, name: 'secret' };
+    expect(scopeFromRepository(secret, 'ghes.example.com')).toBe('github:private:ghes.example.com/acme/secret');
+    expect(scopeFromRepository(open, 'ghes.example.com')).toBe('github:public:ghes.example.com/acme/open');
+    expect(scopeFromRepository(undefined, 'ghes.example.com')).toBe('github:private:unknown');
+  });
 });

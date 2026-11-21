@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { rememberUntrusted } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { ingestEvent, type IngestEvent, type IngestInput } from '../../src/surface/connectors/github/ingest.js';
+import { githubEventRef } from '../../src/surface/connectors/github/ingest.js';
 import type { IngestResult } from '../../src/surface/connectors/ingest.js';
 import { computeIdempotencyKey } from '../../src/surface/connectors/github/signature.js';
 import { issueEventToRememberOpts } from '../../src/surface/connectors/github/transform.js';
@@ -382,5 +383,68 @@ describe('ingestEvent', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it.each([undefined, 'ghes.example.com'])(
+    '9. stores each event under githubEventRef and logs the matching key (host %s)',
+    async (host) => {
+      const events: IngestEvent[] = [
+        { eventName: 'issues', payload: makeIssueEvent() },
+        { eventName: 'issue_comment', payload: makeIssueCommentEvent() },
+        { eventName: 'pull_request', payload: makePullRequestEvent() },
+        { eventName: 'pull_request_review_comment', payload: makePrReviewCommentEvent() },
+      ];
+      for (const event of events) {
+        const r = await ingestEvent(ctx(root), {
+          event,
+          rawBody: JSON.stringify(event.payload),
+          deliveryId: `d-${event.eventName}`,
+          host,
+        });
+        expect(r.status).toBe('ingested');
+      }
+      const raw = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
+      expect(raw).toHaveLength(4);
+      const db = openHippoDb(root);
+      try {
+        for (const event of events) {
+          const ref = githubEventRef(event, host);
+          expect(raw.map((e) => e.artifactRef)).toContain(ref);
+          if (host !== undefined) expect(ref.startsWith('github://ghes.example.com/acme/demo/')).toBe(true);
+          const row = db
+            .prepare('SELECT 1 AS hit FROM github_event_log WHERE idempotency_key = ?')
+            .get(computeIdempotencyKey(ref, null));
+          expect(row).toBeDefined();
+        }
+      } finally {
+        closeHippoDb(db);
+      }
+    },
+  );
+
+  it('10. a GHES ingest finds an item stored under the github.com-form ref, and stores new items under the host ref', async () => {
+    const payload = makeIssueEvent();
+    const rawBody = JSON.stringify(payload);
+    const event: IngestEvent = { eventName: 'issues', payload };
+
+    const first = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-a' });
+    expect(first.status).toBe('ingested');
+
+    const again = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-b', host: 'ghes.example.com' });
+    expect(again).toEqual({ status: 'duplicate', memoryId: first.memoryId });
+    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
+
+    const next = makeIssueEvent({ number: 43 });
+    const fresh = await ingestEvent(ctx(root), {
+      event: { eventName: 'issues', payload: next },
+      rawBody: JSON.stringify(next),
+      deliveryId: 'd-c',
+      host: 'ghes.example.com',
+    });
+    expect(fresh.status).toBe('ingested');
+    const refs = loadAllEntries(root, 'default')
+      .filter((e) => e.tags.includes('source:github'))
+      .map((e) => e.artifactRef);
+    expect(refs).toContain('github://ghes.example.com/acme/demo/issue/43');
   });
 });

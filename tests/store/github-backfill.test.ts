@@ -19,6 +19,7 @@ import {
   type GitHubFetcher,
   type GitHubBackfillPage,
 } from '../../src/surface/connectors/github/octokit-client.js';
+import { parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -27,6 +28,7 @@ const { apiCtx } = sessionPerTest();
 
 const REPO = 'acme/demo';
 const TENANT = 'default';
+const GHES_SITE = parseGitHubEnterpriseUrl('https://ghes.example.com');
 
 const ctx = (root: string): FullContext => apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' });
 
@@ -47,6 +49,19 @@ function readCursorRow(root: string): CursorRow | undefined {
          FROM github_cursors WHERE tenant_id = ? AND repo_full_name = ?`,
       )
       .get(TENANT, REPO) as CursorRow | undefined;
+  } finally {
+    closeHippoDb(db);
+  }
+}
+
+function readCursorRows(root: string): Array<{ repo_full_name: string; issues_hwm: string | null }> {
+  const db = openHippoDb(root);
+  try {
+    // SAFETY: sql is a literal SELECT of the two columns the return type names.
+    const rows = db
+      .prepare(`SELECT repo_full_name, issues_hwm FROM github_cursors WHERE tenant_id = ? ORDER BY repo_full_name`)
+      .all(TENANT) as Array<{ repo_full_name: string; issues_hwm: string | null }>;
+    return rows.map((r) => ({ ...r }));
   } finally {
     closeHippoDb(db);
   }
@@ -436,5 +451,99 @@ describe('backfillRepo', () => {
       expect(row.issue_comments_hwm).toBeNull();
       expect(row.pr_review_comments_hwm).toBeNull();
     }
+  });
+
+  it('9. a GHES site sends every call to its API and stores host refs and repo tags', async () => {
+    const plan: FakePlan = {
+      issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
+      issueComments: [{ items: [issueCommentItem(101, 1, '2026-05-01T11:00:00Z')], next: null, rateLimit: NO_RATE }],
+      prReviewComments: [{ items: [prReviewCommentItem(201, 7, '2026-05-04T09:00:00Z')], next: null, rateLimit: NO_RATE }],
+    };
+    const capture: CallCapture = { calls: [] };
+
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher(plan, capture),
+      token: 't',
+      site: GHES_SITE,
+    });
+
+    expect(capture.calls.length).toBeGreaterThanOrEqual(3);
+    for (const { url } of capture.calls) {
+      expect(url.startsWith('https://ghes.example.com/api/v3/repos/acme/demo/')).toBe(true);
+    }
+    const rows = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.artifactRef?.startsWith('github://ghes.example.com/acme/demo/')).toBe(true);
+      expect(row.tags).toContain('repo:ghes.example.com/acme/demo');
+    }
+  });
+
+  it('10. two hosts with one owner/name keep separate cursors and rows', async () => {
+    const onePage = (updatedAt: string): FakePlan => ({
+      issues: [{ items: [issueItem(1, updatedAt)], next: null, rateLimit: NO_RATE }],
+    });
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher(onePage('2026-05-01T10:00:00Z')),
+      token: 't',
+      site: GHES_SITE,
+    });
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher(onePage('2026-06-01T10:00:00Z')),
+      token: 't',
+    });
+
+    expect(readCursorRows(root)).toEqual([
+      { repo_full_name: 'acme/demo', issues_hwm: '2026-06-01T10:00:00Z' },
+      { repo_full_name: 'ghes.example.com/acme/demo', issues_hwm: '2026-05-01T10:00:00Z' },
+    ]);
+    const refs = loadAllEntries(root, 'default')
+      .filter((e) => e.tags.includes('source:github'))
+      .map((e) => e.artifactRef)
+      .sort();
+    expect(refs).toEqual(['github://acme/demo/issue/1', 'github://ghes.example.com/acme/demo/issue/1']);
+
+    const capture: CallCapture = { calls: [] };
+    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher({}, capture), token: 't', site: GHES_SITE });
+    const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
+    expect(issuesCall?.url).toContain(`since=${encodeURIComponent('2026-05-01T10:00:00Z')}`);
+  });
+
+  it('11. no site keeps github.com URLs and the bare cursor, and a rerun adds no row', async () => {
+    const plan = (): FakePlan => ({
+      issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
+    });
+    const capture: CallCapture = { calls: [] };
+    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan(), capture), token: 't' });
+    for (const { url } of capture.calls) {
+      expect(url.startsWith('https://api.github.com/repos/acme/demo/')).toBe(true);
+    }
+    expect(readCursorRows(root).map((r) => r.repo_full_name)).toEqual(['acme/demo']);
+
+    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan()), token: 't', sinceIso: '2026-01-01T00:00:00Z' });
+    expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
+  });
+
+  it('12. a next-page link to another origin stops the backfill before any fetch of it', async () => {
+    const capture: CallCapture = { calls: [] };
+    const plan: FakePlan = {
+      issues: [
+        {
+          items: [issueItem(1, '2026-05-01T10:00:00Z')],
+          next: 'https://evil.example.net/api/v3/repos/acme/demo/issues?page=2',
+          rateLimit: NO_RATE,
+        },
+      ],
+    };
+
+    await expect(
+      backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan, capture), token: 't', site: GHES_SITE }),
+    ).rejects.toThrow(/leaves https:\/\/ghes\.example\.com for https:\/\/evil\.example\.net/);
+
+    expect(capture.calls.some((c) => c.url.startsWith('https://evil.example.net'))).toBe(false);
+    expect(readCursorRows(root).filter((r) => r.issues_hwm !== null)).toEqual([]);
   });
 });

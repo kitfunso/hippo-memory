@@ -43,6 +43,7 @@ const NOW = '2026-03-01T12:00:05.000Z';
 const ACTOR = 'connector:github';
 const MESSAGE_REF = 'slack://T1/C1/1700.000001';
 const COMMENT_REF = 'github://acme/demo/issue/1/comment/9';
+const HOST_REF = 'github://ghes.example.com/acme/demo/issue/1/comment/9';
 const ONLY_B_REF = 'github://globex/site/issue/3/comment/4';
 const REASON = 'source_deleted:github:issue_comment:d-1';
 
@@ -210,6 +211,20 @@ const archive =
       artifactRef,
       reason: REASON,
     });
+const targetEither =
+  (event: ConnectorEvent, artifactRef: string, legacyArtifactRef: string, tenantId: string): Call =>
+  (g) =>
+    g.eventRecord(event, { artifactRef, legacyArtifactRef, tenantId });
+const archiveEither =
+  (event: ReturnType<typeof github>, artifactRef: string, legacyArtifactRef: string): Call =>
+  (g) =>
+    g.markEventSeen(event, {
+      tenantId: TENANT_A,
+      actor: ACTOR,
+      artifactRef,
+      legacyArtifactRef,
+      reason: REASON,
+    });
 const park =
   (letter: ConnectorDeadLetter): Call =>
   (g) =>
@@ -371,6 +386,23 @@ describe('ConnectorEvents.eventRecord with an artifact', () => {
     ]);
     expect([newEvents(side), added(side)]).toEqual([[], []]);
   });
+
+  it('also answers a raw row stored under the legacy ref, and no row without it', async () => {
+    const stored = createMemory('stored before refs carried the host', {
+      tenantId: TENANT_A,
+      kind: 'raw',
+      artifactRef: COMMENT_REF,
+    });
+    const side = await conforms([
+      writeRaw(stored),
+      targetEither(github('key-legacy-read'), HOST_REF, COMMENT_REF, TENANT_A),
+      target(github('key-legacy-read'), HOST_REF, TENANT_A),
+    ]);
+    expect(values(side).slice(1)).toEqual([
+      { seen: false, memoryId: stored.id },
+      { seen: false, memoryId: null },
+    ]);
+  });
 });
 
 describe('ConnectorEvents.markEventSeen with a deletion', () => {
@@ -416,6 +448,17 @@ describe('ConnectorEvents.markEventSeen with a deletion', () => {
     ]);
     expect(newEvents(side)).toEqual([loggedRow(github('key-deleted'), first.id)]);
     expect(added(side)).toEqual([remembered(first), remembered(edited), archivedRow(first), archivedRow(edited)]);
+  });
+
+  it('archives a raw row stored under the legacy ref when the delete names the host ref', async () => {
+    const stored = fresh('stored before refs carried the host');
+    const side = await conforms([
+      writeRaw(stored),
+      archiveEither(github('key-legacy-delete'), HOST_REF, COMMENT_REF),
+      readBack(TENANT_A, stored.id),
+    ]);
+    expect(values(side).slice(1)).toEqual([{ duplicate: false, archived: 1 }, []]);
+    expect(added(side)).toEqual([remembered(stored), archivedRow(stored)]);
   });
 
   it('with no raw row of the tenant under the ref it archives nothing and still logs the event, so a redelivery answers duplicate', async () => {

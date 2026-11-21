@@ -246,4 +246,38 @@ describe('handleCommentDeleted', () => {
     const remaining = loadAllEntries(root, 'default').filter((e) => e.content.includes(distinctive));
     expect(remaining).toHaveLength(0);
   });
+
+  it('9. a GHES ref also archives the github.com-form row stored before the host was set', async () => {
+    const hostRef = 'github://ghes.example.com/acme/repo/issue/42/comment/123';
+    const legacy = await seedMemory(root, { content: 'stored before the setting' });
+    const hosted = await seedMemory(root, { content: 'stored after the setting', artifactRef: hostRef });
+
+    const result = await handleCommentDeleted(ctxFor(root), {
+      artifactRef: hostRef,
+      idempotencyKey: 'idem-ghes',
+      deliveryId: 'd-ghes',
+      eventName: 'issue_comment',
+    });
+
+    expect(result).toEqual({ status: 'archived', archivedCount: 2 });
+    expect(rawRowExists(root, legacy)).toBe(false);
+    expect(rawRowExists(root, hosted)).toBe(false);
+  });
+
+  it('10. a github.com ref never reaches a GHES row', async () => {
+    const hosted = await seedMemory(root, {
+      content: 'a GHES comment',
+      artifactRef: 'github://ghes.example.com/acme/repo/issue/42/comment/123',
+    });
+
+    const result = await handleCommentDeleted(ctxFor(root), {
+      artifactRef: ARTIFACT,
+      idempotencyKey: 'idem-com',
+      deliveryId: 'd-com',
+      eventName: 'issue_comment',
+    });
+
+    expect(result.status).toBe('archive_skipped_not_found');
+    expect(rawRowExists(root, hosted)).toBe(true);
+  });
 });

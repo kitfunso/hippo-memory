@@ -86,6 +86,17 @@ describe('github DLQ', () => {
     expect(observed).toEqual([...buckets].sort());
   });
 
+  it('parkInDlq lists a host_mismatch row back under its own bucket', async () => {
+    await parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: '{}',
+      error: 'host_mismatch: X-GitHub-Enterprise-Host=(none); GITHUB_ENTERPRISE_URL names ghes.example.com',
+      bucket: 'host_mismatch',
+    });
+    const items = await listDlq(githubDlq, sqliteStore(root), { tenantId: 'default' });
+    expect(items.map((i) => i.bucket)).toEqual(['host_mismatch']);
+  });
+
   it('listDlq filters by tenant and orders by received_at ASC', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));

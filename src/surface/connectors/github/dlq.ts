@@ -6,6 +6,7 @@ import {
   type SignatureRefusal,
 } from '../dlq.js';
 import { verifyGitHubSignature } from './signature.js';
+import { GITHUB_COM, hostMismatch, mismatchSender, type GitHubSite } from './site.js';
 import { isGitHubWebhookEnvelope, type GitHubWebhookEnvelope } from './types.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import type {
@@ -36,6 +37,9 @@ export interface ReplayDlqOptions {
   previousSecret?: string;
   /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
+  /** Today's GITHUB_ENTERPRISE_URL site. A host_mismatch row replays only when the webhook's host
+   * check would take its sender now; --force does not skip this. */
+  site?: GitHubSite;
 }
 
 /** Hook the webhook route injects to re-ingest a row, which keeps this module free of every event-type handler.
@@ -49,6 +53,16 @@ export type IngestHook = (
   },
 ) => Promise<{ memoryId: string | null }>;
 
+/** Why a host_mismatch row may not replay under today's setting: the webhook's own host check,
+ * run on the sender the park recorded. */
+function hostRefusal(row: DlqItem, site: GitHubSite): string | null {
+  if (row.bucket !== 'host_mismatch') return null;
+  const parked = mismatchSender(row.error);
+  if (parked === null) return 'host_mismatch row names no sender, so it cannot be replayed';
+  const still = hostMismatch(parked.sent, site);
+  return still === null ? null : `${still}; set GITHUB_ENTERPRISE_URL to the sending server, then replay`;
+}
+
 /** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check
  * bumps retry_count. No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with
  * memoryId=null. Replays use today's routing. */
@@ -57,7 +71,7 @@ export async function replayGithubDlqEntry(
   id: number,
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
-  const { webhookSecret, previousSecret, ingestHook } = opts;
+  const { webhookSecret, previousSecret, ingestHook, site } = opts;
   return replayParked<'github', JsonValue & GitHubWebhookEnvelope>(
     {
       dlq: githubDlq,
@@ -67,6 +81,8 @@ export async function replayGithubDlqEntry(
       isEnvelope: isGitHubWebhookEnvelope,
       notEnvelope: 'not a GitHub webhook envelope',
       reingest: async (row) => {
+        const refused = hostRefusal(row, site ?? GITHUB_COM);
+        if (refused !== null) return { ok: false, status: 'unroutable', reason: refused };
         if (!ingestHook) {
           return {
             ok: true,

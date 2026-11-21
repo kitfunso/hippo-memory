@@ -7,10 +7,11 @@ import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
 import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
-import { ingestEvent, type IngestEvent } from '../connectors/github/ingest.js';
+import { ingestEvent, githubEventRef, type IngestEvent } from '../connectors/github/ingest.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
-import { githubPreviousSecret } from '../connectors/github/webhook.js';
+import { githubPreviousSecret, githubSiteFromEnv } from '../connectors/github/webhook.js';
+import type { GitHubSite } from '../connectors/github/site.js';
 import {
   isGitHubIssueEvent,
   isGitHubIssueCommentEvent,
@@ -53,6 +54,7 @@ export function printGitHubBackfillUsage(): void {
   console.log('  --since  Initial high-water-mark for first run (optional, ISO 8601)');
   console.log('  --max    Cap items per stream (optional, integer)');
   console.log('  Requires GITHUB_TOKEN env var with repo read scope.');
+  console.log('  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.');
 }
 
 /** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
@@ -61,6 +63,16 @@ function maxPerStreamFlag(flags: CliFlags): number | undefined {
   if (maxRaw === undefined) return undefined;
   const parsed = Number(maxRaw);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+}
+
+/** GITHUB_ENTERPRISE_URL's site; a bad value exits 2 with its reason, as a missing token does. */
+function githubSiteOrExit(): GitHubSite {
+  try {
+    return githubSiteFromEnv();
+  } catch (e) {
+    console.error(errorMessage(e));
+    throw new CliExit(2);
+  }
 }
 
 async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
@@ -76,6 +88,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
     );
     throw new CliExit(2);
   }
+  const site = githubSiteOrExit();
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
 
@@ -87,6 +100,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
       token,
       maxPerStream,
       sinceIso,
+      site,
     });
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
@@ -135,44 +149,43 @@ export function parseParkedPayload(rawPayload: string): JsonValue {
   }
 }
 
-const reingestParkedDelivery: IngestHook = async (innerCtx, args) => {
-  const parsed = parseParkedPayload(args.rawPayload);
-  const event = parsedToIngestEvent(parsed, args.eventName);
-  if (!event) {
-    return { memoryId: null };
-  }
-  // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which
-  // would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
-  if (
-    (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
-    event.payload.action === 'deleted'
-  ) {
-    const repo = event.payload.repository?.full_name ?? '';
-    const artifactRef =
-      event.eventName === 'issue_comment'
-        ? `github://${repo}/issue/${event.payload.issue.number}/comment/${event.payload.comment.id}`
-        : `github://${repo}/pull/${event.payload.pull_request.number}/review_comment/${event.payload.comment.id}`;
-    const idempotencyKey = computeDeletionKey(
-      artifactRef,
-      event.payload.comment.updated_at ?? null,
-    );
-    const r = await handleCommentDeleted(innerCtx, {
-      artifactRef,
-      idempotencyKey,
+function reingestParkedDelivery(host: string | undefined): IngestHook {
+  return async (innerCtx, args) => {
+    const parsed = parseParkedPayload(args.rawPayload);
+    const event = parsedToIngestEvent(parsed, args.eventName);
+    if (!event) {
+      return { memoryId: null };
+    }
+    // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which
+    // would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
+    if (
+      (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
+      event.payload.action === 'deleted'
+    ) {
+      const artifactRef = githubEventRef(event, host);
+      const idempotencyKey = computeDeletionKey(
+        artifactRef,
+        event.payload.comment.updated_at ?? null,
+      );
+      const r = await handleCommentDeleted(innerCtx, {
+        artifactRef,
+        idempotencyKey,
+        deliveryId: args.deliveryId,
+        eventName: event.eventName,
+      });
+      // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return
+      // null; the replay audit trail is github_dlq.retry_count + retried_at.
+      return { memoryId: r.archivedCount > 0 ? 'archived' : null };
+    }
+    const r = await ingestEvent(innerCtx, {
+      event,
+      rawBody: args.rawPayload,
       deliveryId: args.deliveryId,
-      eventName: event.eventName,
+      host,
     });
-    // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return
-    // null; the replay audit trail is github_dlq.retry_count + retried_at.
-    return { memoryId: r.archivedCount > 0 ? 'archived' : null };
-  }
-  const r = await ingestEvent(innerCtx, {
-    event,
-    rawBody: args.rawPayload,
-    deliveryId: args.deliveryId,
-  });
-  return { memoryId: r.memoryId };
-};
+    return { memoryId: r.memoryId };
+  };
+}
 
 export async function replayGitHubDlq(
   hippoRoot: string,
@@ -180,6 +193,7 @@ export async function replayGitHubDlq(
   args: string[],
   flags: CliFlags,
 ): Promise<void> {
+  const site = githubSiteOrExit();
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook
   // re-runs ingest.
@@ -188,7 +202,8 @@ export async function replayGitHubDlq(
       force,
       webhookSecret: envGitHubWebhookSecret(),
       previousSecret: githubPreviousSecret(),
-      ingestHook: reingestParkedDelivery,
+      ingestHook: reingestParkedDelivery(site.host),
+      site,
     }),
   );
 }

@@ -5,6 +5,8 @@ import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/i
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
+import { log } from '../../src/base/util/log.js';
+import { hostMismatch, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -560,5 +562,157 @@ describe('POST /v1/connectors/github/events', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  it('18. an X-GitHub-Enterprise-Host header with GITHUB_ENTERPRISE_URL unset still ingests under github.com keys', async () => {
+    const body = issueBody();
+    const res = await postWebhook(handle.port, body, {
+      ...defaultHeaders(body, 'issues', 'd-18'),
+      'x-github-enterprise-host': 'ghes.example.com',
+    });
+    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
+
+    const row = loadAllEntries(root, 'default').find((e) => e.tags.includes('source:github') && e.kind === 'raw');
+    expect(row?.artifactRef).toBe('github://acme/repo/issue/42');
+    expect(row?.tags).toContain('repo:acme/repo');
+    const db = openHippoDb(root);
+    try {
+      expect(queryOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM github_dlq`).n).toBe(0);
+    } finally {
+      closeHippoDb(db);
+    }
+  });
+});
+
+describe('POST /v1/connectors/github/events on GHES', () => {
+  const GHES_URL = 'https://ghes.example.com';
+  const GHES_SITE = parseGitHubEnterpriseUrl(GHES_URL);
+  let root: string;
+  let handle: ServerHandle;
+
+  beforeEach(async () => {
+    root = makeRoot('gh-route-ghes');
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', GHES_URL);
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+  });
+
+  const ghesHeaders = (body: string, eventName: string, deliveryId: string) => ({
+    ...defaultHeaders(body, eventName, deliveryId),
+    'x-github-enterprise-host': 'ghes.example.com',
+  });
+
+  const dlqRows = () => {
+    const db = openHippoDb(root);
+    try {
+      return db.prepare(`SELECT bucket, tenant_id, error FROM github_dlq ORDER BY id`).all() as Array<{
+        bucket: string;
+        tenant_id: string;
+        error: string;
+      }>;
+    } finally {
+      closeHippoDb(db);
+    }
+  };
+
+  const liveRaws = (artifactRef: string) =>
+    loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
+
+  it('G1. issues.opened is stored under the host ref, repo tag and scope', async () => {
+    const body = issueBody();
+    const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g1'));
+    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
+
+    const row = loadAllEntries(root, 'default').find((e) => e.tags.includes('source:github') && e.kind === 'raw');
+    expect(row?.artifactRef).toBe('github://ghes.example.com/acme/repo/issue/42');
+    expect(row?.tags).toContain('repo:ghes.example.com/acme/repo');
+    expect(row?.scope).toBe('github:public:ghes.example.com/acme/repo');
+  });
+
+  it.each([
+    {
+      eventName: 'issue_comment',
+      make: (a: 'created' | 'deleted') => issueCommentBody(a),
+      ref: 'github://ghes.example.com/acme/repo/issue/42/comment/999',
+    },
+    {
+      eventName: 'pull_request_review_comment',
+      make: (a: 'created' | 'deleted') => prReviewCommentBody(a),
+      ref: 'github://ghes.example.com/acme/repo/pull/7/review_comment/12345',
+    },
+  ])('G2. a deleted $eventName archives the row stored under the host ref', async ({ eventName, make, ref }) => {
+    const created = make('created');
+    await postWebhook(handle.port, created, ghesHeaders(created, eventName, `g2a-${eventName}`));
+    expect(liveRaws(ref)).toHaveLength(1);
+
+    const deleted = make('deleted');
+    const res = await postWebhook(handle.port, deleted, ghesHeaders(deleted, eventName, `g2b-${eventName}`));
+    expect(await jsonAs<{ status: string; archivedCount: number }>(res)).toMatchObject({
+      status: 'archived',
+      archivedCount: 1,
+    });
+    expect(liveRaws(ref)).toHaveLength(0);
+  });
+
+  it.each([{ header: 'other.example.com' }, { header: undefined }])(
+    'G3. a delivery from $header is parked as host_mismatch, with a warning',
+    async ({ header }) => {
+      const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+      try {
+        const body = issueBody();
+        const deliveryId = `g3-${header ?? 'none'}`;
+        const signed = defaultHeaders(body, 'issues', deliveryId);
+        const headers = header === undefined ? signed : { ...signed, 'x-github-enterprise-host': header };
+        const res = await postWebhook(handle.port, body, headers);
+        expect(res.status).toBe(200);
+        expect(await jsonAs<{ ok: boolean; status: string }>(res)).toEqual({ ok: true, status: 'dlq' });
+
+        expect(dlqRows()).toEqual([
+          { bucket: 'host_mismatch', tenant_id: 'default', error: hostMismatch(header, GHES_SITE) },
+        ]);
+        expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
+        const parked = warn.mock.calls.filter(([m]) => String(m).includes('host_mismatch'));
+        expect(parked).toHaveLength(1);
+        expect(String(parked[0]?.[0])).toContain(deliveryId);
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
+  it('G5. an unmapped github.com delivery parks as host_mismatch, not unroutable, when a routing row exists', async () => {
+    const db = openHippoDb(root);
+    try {
+      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'globex/other',
+        'default',
+        '2026-01-01T00:00:00.000Z',
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    try {
+      const body = issueBody({ installationId: null });
+      const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'g5'));
+      expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'dlq' });
+    } finally {
+      warn.mockRestore();
+    }
+    expect(dlqRows().map((r) => r.bucket)).toEqual(['host_mismatch']);
+  });
+});
+
+describe('POST /v1/connectors/github/events with a bad GITHUB_ENTERPRISE_URL', () => {
+  it('G4. serve refuses to start, naming the setting', async () => {
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghe');
+    await expect(serve({ hippoRoot: makeRoot('gh-ghes-boot'), host: '127.0.0.1', port: 0 })).rejects.toThrow(
+      /GITHUB_ENTERPRISE_URL/,
+    );
   });
 });

@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
+import { hostMismatch, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -104,6 +105,48 @@ describe('hippo github CLI', () => {
     const all = loadAllEntries(hippoRoot, 'default');
     // An issue's memory is its title and body, a blank line apart.
     expect(all.map((e) => e.content)).toEqual(['hello\n\nworld']);
+  });
+
+  it('A16. backfill with GITHUB_ENTERPRISE_URL set calls the GHES API and stores host refs', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        urls.push(String(url));
+        const issues = [
+          { number: 1, title: 'hello', body: 'world', user: { login: 'alice', id: 1 }, updated_at: '2026-01-01T00:00:00Z' },
+        ];
+        return new Response(JSON.stringify(String(url).includes('/issues?') ? issues : []), { status: 200 });
+      }),
+    );
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghes.example.com');
+    const printed = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'acme/widgets' } });
+    } finally {
+      printed.mockRestore();
+    }
+    expect(urls.length).toBeGreaterThanOrEqual(3);
+    for (const url of urls) expect(url.startsWith('https://ghes.example.com/api/v3/repos/acme/widgets/')).toBe(true);
+    const raws = loadAllEntries(hippoRoot, 'default').filter((e) => e.kind === 'raw');
+    expect(raws.map((e) => e.artifactRef)).toEqual(['github://ghes.example.com/acme/widgets/issue/1']);
+  });
+
+  it('A17. a bad GITHUB_ENTERPRISE_URL exits 2 naming the setting, before any fetch', async () => {
+    stubGitHubIssues([]);
+    vi.stubEnv('GITHUB_TOKEN', 'fake-token');
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghe');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(
+        handleGitHub({ hippoRoot, tenantId: 'default', args: ['backfill'], flags: { repo: 'a/b' } }),
+      ).rejects.toMatchObject({ code: 2 });
+      expect(errors.mock.calls.map((c) => c.map(String).join(' ')).join('\n')).toMatch(/GITHUB_ENTERPRISE_URL/);
+    } finally {
+      errors.mockRestore();
+    }
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
   it('dlq list on empty DLQ prints "no entries"', async () => {
@@ -245,6 +288,61 @@ describe('hippo github CLI', () => {
       expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
     },
   );
+
+  const GHES_ENV = { GITHUB_ENTERPRISE_URL: 'https://ghes.example.com' };
+  const replayWith = (id: number, extraEnv: Record<string, string>, ...flags: string[]) =>
+    runCli(root, ['github', 'dlq', 'replay', String(id), ...flags], {
+      GITHUB_WEBHOOK_SECRET: SECRET,
+      GITHUB_WEBHOOK_SECRET_PREVIOUS: '',
+      ...extraEnv,
+    });
+
+  it.each([
+    ['issue_comment', { issue: { number: 42 } }, 'github://ghes.example.com/acme/repo/issue/42/comment/999'],
+    [
+      'pull_request_review_comment',
+      { pull_request: { number: 7 } },
+      'github://ghes.example.com/acme/repo/pull/7/review_comment/999',
+    ],
+  ] as const)(
+    'A18. under GITHUB_ENTERPRISE_URL a replayed %s is stored under the host ref and its deletion archives it',
+    async (eventName, parent, hostRef) => {
+      const created = await parkDelivery(eventName, commentBody(parent, 'created'));
+      const deleted = await parkDelivery(eventName, commentBody(parent, 'deleted'));
+
+      expect((await replayWith(created, GHES_ENV)).status).toBe(0);
+      expect(liveRaws(hostRef)).toHaveLength(1);
+
+      expect((await replayWith(deleted, GHES_ENV)).status).toBe(0);
+      expect(liveRaws(hostRef)).toHaveLength(0);
+    },
+  );
+
+  it('A21. a github.com delivery parked as host_mismatch cannot replay under GHES, even with --force, and replays once the hosts agree', async () => {
+    const parkedForHost = await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
+      tenantId: 'default',
+      rawPayload: issueOpenedBody,
+      error: hostMismatch(undefined, parseGitHubEnterpriseUrl('https://ghes.example.com'))!,
+      bucket: 'host_mismatch',
+      eventName: 'issues',
+      deliveryId: 'delivery-host',
+      signature: `sha256=${createHmac('sha256', SECRET).update(issueOpenedBody).digest('hex')}`,
+      installationId: '99',
+      repoFullName: 'acme/repo',
+    });
+
+    for (const flags of [[], ['--force']]) {
+      const refused = await replayWith(parkedForHost, GHES_ENV, ...flags);
+      expect(refused.status).toBe(1);
+      expect(refused.stderr).toContain('status=unroutable');
+      expect(refused.stderr).toContain('GITHUB_ENTERPRISE_URL names ghes.example.com');
+      expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
+    }
+
+    const agreed = await replayWith(parkedForHost, { GITHUB_ENTERPRISE_URL: '' });
+    expect(agreed.status).toBe(0);
+    expect(liveRaws('github://acme/repo/issue/42')).toHaveLength(1);
+  });
 
   it('dlq replay stores nothing when the parked body does not match its event header', async () => {
     const id = await parkDelivery('issues', commentBody(COMMENT_EVENTS[0][1], 'created'));
