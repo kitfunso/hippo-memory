@@ -8,6 +8,9 @@ import { getGlobalRoot } from '../../src/host/global-store.js';
 import { shareMemory } from '../../src/domain/sharing/share.js';
 import { syncGlobalToLocal } from '../../src/domain/sharing/global-sync.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
+import { adminActor } from '../../src/api/index.js';
+import { promote } from '../../src/api/memories/promote.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { originFromSource } from '../../src/host/project-identity.js';
 import { projectNameRepairOnce } from '../../src/api/objects/projects.js';
@@ -114,14 +117,13 @@ describe('shared store origin stamp', () => {
     }
   });
 
-  it('a NULL row from a flagged store stays NULL in the global copy, labelled shared::', async () => {
+  it('a promote on a flagged store copies nothing, and a share of a NULL row stays NULL in the global copy, labelled shared::', async () => {
     for (const { store } of layouts(true)) {
       const entry = { ...createMemory('the handbook lives in the wiki under ops'), originProject: null };
       writeEntry(store, entry);
-      const promoted = await copyToGlobal(store, entry.id);
-      expect(originOf(getGlobalRoot(), promoted.id)).toBeNull();
-      expect(promoted.source.startsWith('shared::')).toBe(true);
-      expect(originFromSource(promoted.source)).toBeNull();
+      const promoted = await promote(apiCtx(store, 'default', adminActor('test')), entry.id);
+      expect(promoted.globalId).toBe(entry.id);
+      expect(readEntry(getGlobalRoot(), entry.id)).toBeNull();
       const toShare = rowToShare(store);
       writeEntry(store, toShare);
       const shared = sharedEntry(
