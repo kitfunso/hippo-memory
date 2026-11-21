@@ -1811,6 +1811,111 @@
       ]
     },
     {
+      "name": "IMLogic, Table 5",
+      "task": "Multiple-choice accuracy, GPT-5.1 answers, no judge",
+      "tag": "official setup",
+      "reason": "Table 5 of arXiv 2606.23283: conversation-level multiple-choice accuracy with GPT-5.1 answers, top-30 retrieval and a GPT-4o-mini memory backbone for every method. hippo ran it with its embedder on 21 Nov 2026: gpt-5.1-2025-11-13 at temperature 0, the authors' prompt and option shuffle, and exact option matching. hippo makes no model call when it stores a memory, so it needs no memory backbone. 1 smoke-test item is never scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "38.33",
+        "num": 38.33,
+        "setting": "embedder, top 30, one run, 2,215 of 2,216 (1 test item never scored)",
+        "status": null
+      },
+      "cells": {
+        "EverMemOS": {
+          "value": "43.50",
+          "system": null,
+          "model": "GPT-5.1",
+          "detail": null,
+          "url": "https://arxiv.org/abs/2606.23283",
+          "muted": false
+        },
+        "MemOS": {
+          "value": "39.44",
+          "system": null,
+          "model": "GPT-5.1",
+          "detail": null,
+          "url": "https://arxiv.org/abs/2606.23283",
+          "muted": false
+        },
+        "Mem0": {
+          "value": "38.18",
+          "system": null,
+          "model": "GPT-5.1",
+          "detail": null,
+          "url": "https://arxiv.org/abs/2606.23283",
+          "muted": false
+        },
+        "Other": {
+          "value": "44.18",
+          "system": "T-Mem",
+          "model": "GPT-5.1",
+          "detail": null,
+          "url": "https://arxiv.org/abs/2606.23283",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "T-Mem",
+          "value": "44.18",
+          "num": 44.18,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "EverOS",
+          "value": "43.50",
+          "num": 43.5,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "MemOS",
+          "value": "39.44",
+          "num": 39.44,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "Mem0",
+          "value": "38.18",
+          "num": 38.18,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "LightMem",
+          "value": "37.55",
+          "num": 37.55,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "A-Mem",
+          "value": "37.32",
+          "num": 37.32,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        },
+        {
+          "name": "TACITREE",
+          "value": "30.46",
+          "num": 30.46,
+          "system": null,
+          "model": "GPT-5.1",
+          "url": "https://arxiv.org/abs/2606.23283"
+        }
+      ]
+    },
+    {
       "name": "DolphinBench, official Claude Code setup",
       "task": "Agent memory, Claude Code with Sonnet 5",
       "tag": "official setup",
@@ -1987,111 +2092,6 @@
           "system": "HippoRAG-v2",
           "model": "GPT-5.1",
           "url": "https://arxiv.org/abs/2605.11814"
-        }
-      ]
-    },
-    {
-      "name": "IMLogic, Table 5",
-      "task": "Multiple-choice accuracy, GPT-5.1 answers, no judge",
-      "tag": "official setup",
-      "reason": "Table 5 of arXiv 2606.23283: conversation-level multiple-choice accuracy with GPT-5.1 answers, top-30 retrieval and a GPT-4o-mini memory backbone for every method. hippo has not run this setup.",
-      "caveat": null,
-      "hippo": {
-        "value": null,
-        "num": null,
-        "setting": null,
-        "status": "not run"
-      },
-      "cells": {
-        "EverMemOS": {
-          "value": "43.50",
-          "system": null,
-          "model": "GPT-5.1",
-          "detail": null,
-          "url": "https://arxiv.org/abs/2606.23283",
-          "muted": false
-        },
-        "MemOS": {
-          "value": "39.44",
-          "system": null,
-          "model": "GPT-5.1",
-          "detail": null,
-          "url": "https://arxiv.org/abs/2606.23283",
-          "muted": false
-        },
-        "Mem0": {
-          "value": "38.18",
-          "system": null,
-          "model": "GPT-5.1",
-          "detail": null,
-          "url": "https://arxiv.org/abs/2606.23283",
-          "muted": false
-        },
-        "Other": {
-          "value": "44.18",
-          "system": "T-Mem",
-          "model": "GPT-5.1",
-          "detail": null,
-          "url": "https://arxiv.org/abs/2606.23283",
-          "muted": false
-        }
-      },
-      "rivals": [
-        {
-          "name": "T-Mem",
-          "value": "44.18",
-          "num": 44.18,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "EverOS",
-          "value": "43.50",
-          "num": 43.5,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "MemOS",
-          "value": "39.44",
-          "num": 39.44,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "Mem0",
-          "value": "38.18",
-          "num": 38.18,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "LightMem",
-          "value": "37.55",
-          "num": 37.55,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "A-Mem",
-          "value": "37.32",
-          "num": 37.32,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
-        },
-        {
-          "name": "TACITREE",
-          "value": "30.46",
-          "num": 30.46,
-          "system": null,
-          "model": "GPT-5.1",
-          "url": "https://arxiv.org/abs/2606.23283"
         }
       ]
     },
