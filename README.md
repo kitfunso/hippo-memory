@@ -137,7 +137,7 @@ You, your team and your platform lead read the same store.
 |---|---|
 | Claude Code | `CLAUDE.md` + 9 hooks |
 | Codex | `AGENTS.md` + 2 hooks |
-| Cursor | reads `AGENTS.md` |
+| Cursor | plugin: rule + MCP (`extensions/cursor-plugin`), or reads `AGENTS.md` |
 | Pi | reads `AGENTS.md` |
 | OpenClaw | plugin |
 | OpenCode | plugin |

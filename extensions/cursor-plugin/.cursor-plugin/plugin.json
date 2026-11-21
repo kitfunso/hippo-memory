@@ -1,0 +1,11 @@
+{
+  "name": "hippo-memory",
+  "version": "3.12.0",
+  "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
+  "author": { "name": "Keith So" },
+  "homepage": "https://hippo-memory.com",
+  "repository": "https://github.com/kitfunso/hippo-memory",
+  "license": "MIT",
+  "keywords": ["memory", "remember", "recall", "lesson", "mistake", "hippo"],
+  "logo": "assets/logo.png"
+}

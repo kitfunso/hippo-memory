@@ -1,5 +1,7 @@
 # Hippo + Cursor Integration
 
+The hippo-memory Cursor plugin (`extensions/cursor-plugin`) installs the rule and MCP server below for you. Use this page for a setup without the plugin.
+
 Add this to `AGENTS.md` in the project root. Cursor reads that file as an alternative to `.cursor/rules`, and its rules docs no longer mention `.cursorrules`. Cursor gets this instruction block and hippo's memory tools over MCP. That is lighter than the hooks Claude Code gets, and MCP access alone doesn't capture a session.
 
 ---
