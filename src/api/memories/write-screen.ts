@@ -23,7 +23,8 @@ export function reviewerOf(ctx: ContextWith<never, ReviewGroup>): ConnectorWrite
 export interface ScreenInput {
   /** The text the row stores. */
   readonly content: string;
-  /** The caller's own tags, screened like the content; never the marks or system tags code adds. */
+  /** The tag list the row stores, screened like the content, before the marks this call adds. Supersede passes
+   * the inherited tags, which can hold code marks no pattern matches. */
   readonly tags?: readonly string[];
   /** The scope the caller asked for. */
   readonly scope: string | null;
