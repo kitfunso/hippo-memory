@@ -9,6 +9,11 @@ export class DeadlineError extends Error {
   }
 }
 
+// instanceof Promise misses a promise from another realm and a non-native thenable.
+function isThenable<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof Object(value).then === 'function';
+}
+
 /** Runs `run` against a deadline: past it the signal aborts and the call rejects with DeadlineError. */
 export async function withDeadline<T>(
   deadlineMs: number,
@@ -35,8 +40,8 @@ export async function withDeadline<T>(
   let called: Promise<T>;
   try {
     const out = run(abort.signal);
-    if (out instanceof Promise) {
-      called = out.finally(stamp);
+    if (isThenable(out)) {
+      called = Promise.resolve(out).finally(stamp);
     } else {
       stamp();
       called = Promise.resolve(out);

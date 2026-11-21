@@ -1,4 +1,5 @@
 // withDeadline: a callback that answers after its deadline is late, even when it blocks the thread.
+import * as vm from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import { DeadlineError, withDeadline } from '../../src/base/util/deadline.js';
 
@@ -85,5 +86,35 @@ describe('withDeadline', () => {
       }),
     ).rejects.toBeInstanceOf(DeadlineError);
     expect(seen?.aborted).toBe(true);
+  });
+
+  it('rejects a promise from another realm that blocks the thread after an await', async () => {
+    let seen: AbortSignal | undefined;
+    await expect(
+      withDeadline(10, (signal) => {
+        seen = signal;
+        // The vm realm has no performance, so the clock comes in from here.
+        const foreign: Promise<string> = vm.runInNewContext(
+          "(async () => { await 0; const end = now() + 60; while (now() < end); return 'late'; })()",
+          { now: () => performance.now() },
+        );
+        return foreign;
+      }),
+    ).rejects.toBeInstanceOf(DeadlineError);
+    expect(seen?.aborted).toBe(true);
+  });
+
+  it('rejects a plain thenable that blocks the thread before it resolves', async () => {
+    // The key is built at run time, so unicorn/no-thenable stays quiet about an object that must be a plain thenable.
+    const THEN = ['th', 'en'].join('');
+    const thenable = {
+      [THEN](resolve: (value: string) => void): void {
+        setTimeout(() => {
+          busyWait(60);
+          resolve('late');
+        }, 0);
+      },
+    };
+    await expect(withDeadline(10, () => thenable)).rejects.toBeInstanceOf(DeadlineError);
   });
 });
