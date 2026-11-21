@@ -76,31 +76,24 @@ export function warnGitHubPreviousSecretOpen(): void {
 }
 
 const USER_ID = /^[1-9][0-9]*$/;
-const LOGIN_ENTRY = /^[A-Za-z0-9-]{1,39}(:[0-9]+)?$/;
 
 /** GITHUB_TRUSTED_USER_IDS for the webhook, the DLQ replay and backfill alike. It throws on an entry that is
  * not an id, such as a login: dropping it would hold the person the operator meant to trust. */
 export function githubTrustedUserIds(): ReadonlySet<number> {
-  const entries = (envGitHubTrustedUserIds() ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+  const entries = (envGitHubTrustedUserIds() ?? '').split(',').map((entry) => entry.trim());
   const bad = entries
     .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.length > 0)
     .filter(({ entry }) => !USER_ID.test(entry) || !Number.isSafeInteger(Number(entry)));
   if (bad.length > 0) {
-    // Only a login-shaped entry is quoted; any other is named by position, so a token pasted here never prints.
-    const named = bad
-      .map(({ entry, index }) =>
-        LOGIN_ENTRY.test(entry) ? JSON.stringify(entry) : `entry ${index + 1}, not shown`,
-      )
-      .join(', ');
+    // No entry is quoted: any of them may be a secret pasted into the wrong variable.
+    const named = bad.map(({ index }) => `entry ${index + 1}`).join(', ');
     throw new Error(
       `GITHUB_TRUSTED_USER_IDS has entries that are not numeric GitHub user ids: ${named}; ` +
         'get each id with: gh api users/<login> --jq .id',
     );
   }
-  return new Set(entries.map(Number));
+  return new Set(entries.filter((entry) => entry.length > 0).map(Number));
 }
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous

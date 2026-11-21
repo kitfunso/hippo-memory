@@ -425,6 +425,13 @@ describe('trust follows the author', () => {
     expect(heldFor(association)).toEqual({ reason: 'outside-author:unknown' });
   });
 
+  it('holds an author whose association is not a string as unknown', () => {
+    const evt = commentBy(undefined);
+    // SAFETY: the test plants a payload value the declared type forbids, to prove the rule holds anyway.
+    (evt.comment as { author_association?: unknown }).author_association = ['OWNER'];
+    expect(issueCommentEventToRememberOpts(evt)?.hold).toEqual({ reason: 'outside-author:unknown' });
+  });
+
   it('applies the rule to all four event shapes', () => {
     const user = { login: 'ana', id: 5 };
     const issue = (association: string): GitHubIssueEvent => ({

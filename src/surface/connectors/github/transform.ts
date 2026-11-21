@@ -23,6 +23,9 @@ const ASSOCIATION_NAME = /^[A-Z_]{1,40}$/;
 /** No author vouched for; ingest passes GITHUB_TRUSTED_USER_IDS in its place where a reader set it. */
 export const NO_TRUSTED_USER_IDS: ReadonlySet<number> = new Set();
 
+/** A payload can carry an array or a number here; the template literal equals the value only for a string. */
+const isText = (value: string | undefined): value is string => value === `${value}`;
+
 /** Any other author, a missing association included, is held by rule unless the operator lists its user id: the
  * id, not the login, since GitHub lets anyone claim a freed login. The instruction check runs either way. */
 function outsideAuthorHold(
@@ -30,10 +33,9 @@ function outsideAuthorHold(
   authorId: number,
   trusted: ReadonlySet<number>,
 ): ConnectorRememberOptions['hold'] {
-  if (association !== undefined && INSIDE_AUTHORS.has(association)) return undefined;
+  if (isText(association) && INSIDE_AUTHORS.has(association)) return undefined;
   if (trusted.has(authorId)) return undefined;
-  const named =
-    association !== undefined && ASSOCIATION_NAME.test(association) ? association : 'unknown';
+  const named = isText(association) && ASSOCIATION_NAME.test(association) ? association : 'unknown';
   return { reason: `outside-author:${named}` };
 }
 

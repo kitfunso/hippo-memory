@@ -844,14 +844,14 @@ describe('githubTrustedUserIds', () => {
 
   it('refuses a login, or a login:id pair, and names the command that gets an id', () => {
     vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '5,alice');
-    expect(() => githubTrustedUserIds()).toThrow(/"alice"/);
+    expect(() => githubTrustedUserIds()).toThrow(/entry 2/);
     expect(() => githubTrustedUserIds()).toThrow(/gh api users\/<login> --jq \.id/);
 
     vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice:5');
     expect(() => githubTrustedUserIds()).toThrow(/GITHUB_TRUSTED_USER_IDS/);
   });
 
-  it('never prints an entry that is not login-shaped, such as a token pasted into the wrong variable', () => {
+  it('never prints an entry, such as a token pasted into the wrong variable', () => {
     const pasted = `ghp_${'x'.repeat(36)}`;
     vi.stubEnv('GITHUB_TRUSTED_USER_IDS', `5,${pasted}`);
 
@@ -862,8 +862,22 @@ describe('githubTrustedUserIds', () => {
     } catch (err) {
       message = err instanceof Error ? err.message : String(err);
     }
-    expect(message).toContain('entry 2, not shown');
+    expect(message).toContain('not numeric GitHub user ids: entry 2;');
     expect(message).not.toContain(pasted);
+  });
+
+  it('counts entry positions before blank entries are dropped and never prints a hex secret', () => {
+    const secret = '0123456789abcdef0123456789abcdef';
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', `5,,${secret}`);
+
+    let message = '';
+    try {
+      githubTrustedUserIds();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    expect(message).toContain('entry 3');
+    expect(message).not.toContain(secret);
   });
 
   it('keeps hippo serve from starting on a bad entry', async () => {
