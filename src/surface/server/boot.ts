@@ -51,7 +51,7 @@ import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { answerRequest } from './failure-replies.js';
 import { bootLimiters } from './rate-limits.js';
 import type { RateLimiter } from './rate-limit.js';
-import { warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
+import { githubSiteFromEnv, warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
 import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
 import {
   bindAddonRoutes,
@@ -256,6 +256,8 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const limiters = bootLimiters(opts.rateLimits);
   assertClientIpHeaderPinned();
   assertFlagsValid();
+  // A bad GITHUB_ENTERPRISE_URL is refused here, not on the first delivery.
+  githubSiteFromEnv();
   const loopbackHosts = await loopbackBindHosts(host);
   assertTlsOrCleartextAllowed(
     host,

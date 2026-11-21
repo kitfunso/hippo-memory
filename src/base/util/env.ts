@@ -330,3 +330,5 @@ export const envGitHubWebhookSecretPreviousUntil = text('GITHUB_WEBHOOK_SECRET_P
 export const envGitHubAllowUnknownInstallationFallback = bool(
   'GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK',
 );
+export const envGitHubEnterpriseUrl = trimmedText('GITHUB_ENTERPRISE_URL');
+export const envGitHubEnterpriseBareRefsHost = trimmedText('GITHUB_ENTERPRISE_BARE_REFS_HOST');

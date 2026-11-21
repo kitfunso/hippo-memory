@@ -8,6 +8,7 @@ import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { tryParseUrl } from '../../../base/util/net.js';
 
 export class GitHubFetchError extends Error {
   constructor(
@@ -43,6 +44,12 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
     entries.push([k.toLowerCase(), v]);
   });
   return Object.fromEntries(entries);
+}
+
+/** Host and path only: the query string can carry a cursor or filter that is not ours to print. */
+function hostAndPath(url: string): string {
+  const { origin, pathname } = new URL(url);
+  return origin + pathname;
 }
 
 const GITHUB_TIMEOUT_MS = 30_000;
@@ -82,7 +89,17 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       },
     },
     { timeoutMs: GITHUB_TIMEOUT_MS },
-  );
+  ).catch((err) => {
+    // A GHES host that never answers must name itself; a bare "fetch failed" leaves the operator guessing.
+    throw new Error(`GitHub request to ${hostAndPath(url)} failed: ${errorMessage(err)}`, {
+      cause: err,
+    });
+  });
+  // A redirect to another origin would feed that server's body into this server's refs.
+  const finalOrigin = res.url ? tryParseUrl(res.url)?.origin : undefined;
+  if (finalOrigin !== undefined && finalOrigin !== new URL(url).origin) {
+    throw new Error(`GitHub request to ${hostAndPath(url)} was redirected to ${finalOrigin}`);
+  }
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 
@@ -99,12 +116,10 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       );
       return '';
     });
-    // Host and path only: the query string can carry a cursor or filter that is not ours to print.
-    const { origin, pathname } = new URL(url);
     throw new GitHubFetchError(
       res.status,
       body.slice(0, ERROR_BODY_SNIPPET_CHARS),
-      origin + pathname,
+      hostAndPath(url),
     );
   }
 

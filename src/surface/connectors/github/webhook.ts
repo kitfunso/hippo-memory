@@ -1,5 +1,7 @@
 import {
   envGitHubAllowUnknownInstallationFallback,
+  envGitHubEnterpriseBareRefsHost,
+  envGitHubEnterpriseUrl,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
   envGitHubWebhookSecretPreviousUntil,
@@ -18,9 +20,18 @@ import {
   type GitHubWebhookEnvelope,
 } from './types.js';
 import {
+  githubEventRef,
   ingestEvent as ingestGitHubEvent,
   type IngestEvent as GitHubIngestEvent,
 } from './ingest.js';
+import {
+  headerHost,
+  hostMismatch,
+  parseGitHubEnterpriseUrl,
+  payloadHost,
+  payloadMismatch,
+  type GitHubSite,
+} from './site.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -47,6 +58,12 @@ export function githubPreviousSecret(): string | undefined {
     envGitHubWebhookSecretPrevious(),
     envGitHubWebhookSecretPreviousUntil(),
   );
+}
+
+/** The GitHub site GITHUB_ENTERPRISE_URL names, for the webhook, the backfill and the DLQ replay
+ * alike; throws on a value that is not a GHES root URL. */
+export function githubSiteFromEnv(): GitHubSite {
+  return parseGitHubEnterpriseUrl(envGitHubEnterpriseUrl(), envGitHubEnterpriseBareRefsHost());
 }
 
 export function warnGitHubPreviousSecretOpen(): void {
@@ -91,7 +108,7 @@ export async function handleGitHubEventsWebhook(
   // buffer one.
   const secret = envGitHubWebhookSecret();
   if (!secret) return refuseUnconfigured(request);
-  const { sigStr, eventName, deliveryId } = readGitHubHeaders(req);
+  const { sigStr, eventName, deliveryId, enterpriseHost } = readGitHubHeaders(req);
 
   if (sigStr === null || !isWellFormedGitHubSignature(sigStr)) {
     closeIfBodyUnread(request);
@@ -112,6 +129,8 @@ export async function handleGitHubEventsWebhook(
       rawBody,
       eventName,
       deliveryId,
+      enterpriseHost,
+      site: githubSiteFromEnv(),
       signature: sigStr,
     });
   } catch (err) {
@@ -133,16 +152,19 @@ interface GitHubHeaders {
   readonly sigStr: string | null;
   readonly eventName: string | null;
   readonly deliveryId: string | null;
+  readonly enterpriseHost: string | null;
 }
 
 function readGitHubHeaders(req: WebhookRequest['req']): GitHubHeaders {
   const sigHdr = req.headers['x-hub-signature-256'];
   const eventHdr = req.headers['x-github-event'];
   const deliveryHdr = req.headers['x-github-delivery'];
+  const enterpriseHdr = req.headers['x-github-enterprise-host'];
   return {
     sigStr: isHeaderString(sigHdr) ? sigHdr : null,
     eventName: isHeaderString(eventHdr) ? eventHdr : null,
     deliveryId: isHeaderString(deliveryHdr) ? deliveryHdr : null,
+    enterpriseHost: isHeaderString(enterpriseHdr) ? enterpriseHdr : null,
   };
 }
 
@@ -183,6 +205,8 @@ interface SignedDelivery extends WebhookPorts {
   rawBody: string;
   eventName: string | null;
   deliveryId: string | null;
+  enterpriseHost: string | null;
+  site: GitHubSite;
   signature: string;
 }
 
@@ -210,14 +234,57 @@ async function parkAndAck(
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
 }
 
-async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
-  const body = await parseEnvelopeOrPark(d);
-  if (body === null || d.deliveryId === null) return;
-
-  const routing: DlqRouting = {
+function routingOf(body: SignedEnvelope): DlqRouting {
+  return {
     installationId: body.installation?.id != null ? String(body.installation.id) : null,
     repoFullName: body.repository?.full_name ?? null,
   };
+}
+
+let warnedEnterpriseUnset = false;
+
+/** Parks a delivery from a server the set GITHUB_ENTERPRISE_URL does not name, by its header or by
+ * the repository URL its signed payload carries; true when it did. With the setting unset, a GHES
+ * delivery gets through and one warning per process says its keys carry no host. */
+async function parkedForHost(d: SignedDelivery): Promise<boolean> {
+  const sent = headerHost(d.enterpriseHost);
+  if (d.site.host === undefined) {
+    // Nothing parks without a host, so no parse here; parseEnvelopeOrPark parses the body once.
+    if (sent !== undefined && !warnedEnterpriseUnset) {
+      warnedEnterpriseUnset = true;
+      log.warn(
+        `GitHub Enterprise delivery from ${sent}, but GITHUB_ENTERPRISE_URL is unset; ` +
+          'its refs, tags and scope carry no host',
+      );
+    }
+    return false;
+  }
+  const parsed = tryParseJson(d.rawBody);
+  // A payload with no repository URL passes: the header it matched already names the server.
+  const payloadSays = payloadHost(parsed);
+  const error =
+    hostMismatch(sent, d.site) ??
+    (payloadSays === undefined ? null : payloadMismatch(sent, payloadSays, d.site));
+  if (error === null) return false;
+  // A parked delivery still answers 200, so this line is how an operator sees intake stop.
+  log.warn(`github webhook: parked delivery ${d.deliveryId ?? '-'} as host_mismatch: ${error}`);
+  const body = parsed !== undefined && isGitHubWebhookEnvelope(parsed) ? parsed : null;
+  const routing: DlqRouting =
+    body === null ? { installationId: null, repoFullName: null } : routingOf(body);
+  const tenantId = body === null ? envTenant() : await resolveGitHubTenant(d, routing);
+  await parkAndAck(d, { ...routing, tenantId, error, bucket: 'host_mismatch' });
+  return true;
+}
+
+async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
+  // First of every park, so a delivery from the wrong server never parks as unroutable or
+  // parse_error, which a replay could then store under this server's keys.
+  if (d.eventName !== 'ping' && (await parkedForHost(d))) return;
+
+  const body = await parseEnvelopeOrPark(d);
+  if (body === null || d.deliveryId === null) return;
+
+  const routing = routingOf(body);
 
   const resolvedTenant = await resolveGitHubTenant(d, routing);
   if (resolvedTenant === null) {
@@ -322,7 +389,7 @@ async function dispatchGitHubEvent({
   deliveryId,
   routing,
 }: DispatchGitHubEventOptions): Promise<boolean> {
-  const action = deliveryAction(d.eventName, body);
+  const action = deliveryAction(d.eventName, body, d.site.host);
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
@@ -343,10 +410,17 @@ async function dispatchGitHubEvent({
       idempotencyKey,
       deliveryId,
       eventName: action.eventName,
+      ownsBareRefs: d.site.ownsBareRefs,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
   } else {
-    const r = await ingestGitHubEvent(ctx, { event: action.event, rawBody: d.rawBody, deliveryId });
+    const r = await ingestGitHubEvent(ctx, {
+      event: action.event,
+      rawBody: d.rawBody,
+      deliveryId,
+      host: d.site.host,
+      ownsBareRefs: d.site.ownsBareRefs,
+    });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }
   return true;
@@ -360,7 +434,11 @@ type DeliveryAction =
 
 // Dispatch by event header. Type guards cross-check the body shape against the header so a payload
 // of one event type cannot satisfy another's guard.
-function deliveryAction(eventName: string | null, body: SignedEnvelope): DeliveryAction | null {
+function deliveryAction(
+  eventName: string | null,
+  body: SignedEnvelope,
+  host: string | undefined,
+): DeliveryAction | null {
   if (eventName === 'issues' && isGitHubIssueEvent(body, 'issues')) {
     if (body.action === 'deleted') return { kind: 'manual-review' };
     return { kind: 'ingest', event: { eventName: 'issues', payload: body } };
@@ -368,8 +446,7 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
 
   if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(body, 'issue_comment')) {
     if (body.action === 'deleted') {
-      const repo = body.repository?.full_name ?? '';
-      const artifactRef = `github://${repo}/issue/${body.issue.number}/comment/${body.comment.id}`;
+      const artifactRef = githubEventRef({ eventName: 'issue_comment', payload: body }, host);
       return {
         kind: 'archive-comment',
         eventName,
@@ -389,8 +466,10 @@ function deliveryAction(eventName: string | null, body: SignedEnvelope): Deliver
     isGitHubPullRequestReviewCommentEvent(body, 'pull_request_review_comment')
   ) {
     if (body.action === 'deleted') {
-      const repo = body.repository?.full_name ?? '';
-      const artifactRef = `github://${repo}/pull/${body.pull_request.number}/review_comment/${body.comment.id}`;
+      const artifactRef = githubEventRef(
+        { eventName: 'pull_request_review_comment', payload: body },
+        host,
+      );
       // Same "deleted:" key namespace as the issue_comment branch above.
       return {
         kind: 'archive-comment',
