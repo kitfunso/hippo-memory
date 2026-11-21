@@ -21,6 +21,7 @@ import { noteFailedUnit } from '../../../base/errors/failed-unit.js';
 import { chunked, ID_CHUNK } from '../../../base/util/chunked.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
+import { deleteMemoryOnlyGraphRows } from '../graph/graph-writes.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import type {
   FlushComponent,
@@ -136,8 +137,11 @@ function deleteTargetRow(
   const { id, tenant_id: tenantId } = row;
   const guard = opts?.automatic ? AUTOMATIC_DELETE : null;
   // The tenant is in the WHERE so the DELETE itself cannot reach a row the read did not.
-  const sql = `DELETE FROM memories WHERE id = ? AND tenant_id = ?${guard ? ` AND ${guard.sql}` : ''}`;
-  if (deleteMemoryRow(db, sql, [id, tenantId, ...(guard?.params ?? [])]) === 0) return null;
+  const where = `id = ? AND tenant_id = ?${guard ? ` AND ${guard.sql}` : ''}`;
+  const params = [id, tenantId, ...(guard?.params ?? [])];
+  // The same WHERE in the same transaction: the graph rows go exactly when the memory does.
+  deleteMemoryOnlyGraphRows(db, { sql: `SELECT id FROM memories WHERE ${where}`, params });
+  if (deleteMemoryRow(db, `DELETE FROM memories WHERE ${where}`, params) === 0) return null;
   deleteFtsRow(db, id);
   if (!opts?.suppressForgetAudit) {
     audit(db, 'forget', {
@@ -461,8 +465,10 @@ function moveDormantAndDelete(
   }
   const doomed = [...deletableIds, ...movable.map((m) => m.entry.id)];
   for (const chunk of chunked(doomed)) {
+    const ids = JSON.stringify(chunk);
+    deleteMemoryOnlyGraphRows(db, { sql: 'SELECT value FROM json_each(?)', params: [ids] });
     cachedStatement(db, 'DELETE FROM memories WHERE id IN (SELECT value FROM json_each(?))').run(
-      JSON.stringify(chunk),
+      ids,
     );
   }
   for (const id of doomed) out.removedIds.push(id);

@@ -295,14 +295,7 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(loadExtractionQueue(home, 'default', { status: 'processed' }).length).toBe(1);
   });
 
-  it('ON DELETE SET NULL (v38): forgetting a memory nulls graph rows memory_id but keeps them; queue still cascades', async () => {
-    // v38 (E2-provenance): entities/relations.memory_id is now NULLABLE with ON DELETE
-    // SET NULL (was NOT NULL / CASCADE), so a mirror forget no longer drops a graph row -
-    // it nulls the recall pointer and the row survives. graph_extraction_queue is untouched
-    // by v38 (still ON DELETE CASCADE), so its rows still disappear on a memory delete.
-    // (These rows are memory-only - no source_object - so the SET NULL leaves an all-null
-    // provenance row; that is tolerated because the SET NULL does NOT fire the BEFORE
-    // UPDATE guard: recursive_triggers is default-OFF.)
+  it('forgetting a memory deletes its memory-only graph rows; queue still cascades', async () => {
     const md = addMemory(home, 'default', 'distilled');
     const a = insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const b = insertEntityAt(home, 'default', { entityType: 'system', name: 'b', memoryId: md });
@@ -312,11 +305,8 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(countRows(home, 'relations')).toBe(1);
     expect(countRows(home, 'graph_extraction_queue')).toBe(1);
     deleteEntry(home, md); // distilled deletes are allowed (raw is append-only)
-    // entities + relations SURVIVE, their memory_id nulled (SET NULL).
-    expect(countRows(home, 'entities')).toBe(2);
-    expect(countRows(home, 'relations')).toBe(1);
-    expect((await loadEntitiesByIds(home, 'default', [a.id]))[0]!.memoryId).toBeNull();
-    expect((await loadEntitiesByIds(home, 'default', [b.id]))[0]!.memoryId).toBeNull();
+    expect(countRows(home, 'entities')).toBe(0);
+    expect(countRows(home, 'relations')).toBe(0);
     // the queue row still cascades away (graph_extraction_queue is untouched by v38).
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });

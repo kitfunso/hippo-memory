@@ -200,6 +200,7 @@ entry/store-kit.d.ts: FailureEvent re-export
 entry/store-kit.d.ts: FailureLog re-export
 entry/store-kit.d.ts: FailureOutcome re-export
 entry/store-kit.d.ts: FailureSummary re-export
+entry/store-kit.d.ts: GRAPH_ID_BATCH re-export
 entry/store-kit.d.ts: GetActiveGoalsOptions re-export
 entry/store-kit.d.ts: Goal re-export
 entry/store-kit.d.ts: GoalRecallLogRow re-export
@@ -258,6 +259,7 @@ entry/store-kit.d.ts: RequiredStore re-export
 entry/store-kit.d.ts: RetrievalPolicy re-export
 entry/store-kit.d.ts: SCHEMA_FIT_WINDOW_ROWS re-export
 entry/store-kit.d.ts: SECRET_TAGS re-export
+entry/store-kit.d.ts: ScopeActor re-export
 entry/store-kit.d.ts: ScopeReader re-export
 entry/store-kit.d.ts: SelfKeyMint re-export
 entry/store-kit.d.ts: SessionEndHandoffRequest re-export
@@ -297,6 +299,7 @@ entry/store-kit.d.ts: ambientRefusal re-export
 entry/store-kit.d.ts: assertWriteRight re-export
 entry/store-kit.d.ts: auditRowsRead re-export
 entry/store-kit.d.ts: bufferToFloat32 re-export
+entry/store-kit.d.ts: canReadScope re-export
 entry/store-kit.d.ts: cjkIndexTerms re-export
 entry/store-kit.d.ts: decodeVector re-export
 entry/store-kit.d.ts: descendantAdmits re-export

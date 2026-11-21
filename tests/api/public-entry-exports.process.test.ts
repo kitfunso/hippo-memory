@@ -269,6 +269,7 @@ describe('published runtime exports', () => {
         transcriptWorkingState",
           "./store-kit": "ALL_TENANTS
         EMBEDDING_MODEL_META_KEY
+        GRAPH_ID_BATCH
         LIKE_WINDOW_ROWS LIKE_WINDOW_TERMS
         OPTIONAL_GROUPS OTHER_STORE_MARKER
         PROTECTED_ROWS
@@ -276,7 +277,7 @@ describe('published runtime exports', () => {
         SCHEMA_FIT_WINDOW_ROWS SECRET_TAGS StoreBusyError
         ambientRefusal assertWriteRight auditRowsRead
         bufferToFloat32
-        cjkIndexTerms
+        canReadScope cjkIndexTerms
         decodeVector descendantAdmits diffGraph duplicateHash
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts

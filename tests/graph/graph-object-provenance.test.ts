@@ -276,19 +276,11 @@ describe('graph provenance is anchored to the first-class object, not its memory
     }
   });
 
-  it('mirror forget on a memory-only entity succeeds and leaves an all-null row (UPDATE trigger tolerates the FK SET NULL)', () => {
-    // Insert a memory-only entity (no source_object), then forget the memory. The FK
-    // ON DELETE SET NULL nulls memory_id. NOTE (deviation from plan premise, verified):
-    // node:sqlite DOES fire the BEFORE UPDATE trigger from the FK action even with
-    // recursive_triggers OFF, so the all-null ABORT was removed from the UPDATE triggers
-    // (kept on INSERT). The delete therefore succeeds and the row survives all-null.
+  it('mirror forget on a memory-only entity deletes it with the memory', () => {
     const md = addMemory(home, 'distilled');
     const e = insertEntityAt(home, T, { entityType: 'system', name: 'mem-only', memoryId: md });
     expect(() => deleteEntry(home, md)).not.toThrow();
-    const ents = entityRows(home);
-    const row = ents.find((r) => r.id === e.id)!;
-    expect(row.memory_id).toBeNull();
-    expect(row.source_object_id).toBeNull(); // all-null, intentionally tolerated post-forget
+    expect(entityRows(home).find((r) => r.id === e.id)).toBeUndefined();
   });
 
   it('supersedes + references edges survive a mirror forget on an endpoint', async () => {
