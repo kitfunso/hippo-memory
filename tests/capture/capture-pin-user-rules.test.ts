@@ -202,6 +202,10 @@ describe('capture pins the rules a person states', () => {
       'Most tools pile up notes the agent never reads back.',
       'You always have had doubts about what can be done.',
       'The release notes (never skip the review) live in the wiki.',
+      'Because obviously we never worked on these before.',
+      'You never told me the build was red.',
+      'We always shipped on Fridays.',
+      'merge 1255 1257 1259 1260, release 3.10.0; remove the 4 pinned rows; skip quizzes',
     ])('pins no description or aside: %s', async (reply) => {
       await capture([{ role: 'user', text: REQUEST }, done, { role: 'user', text: reply }]);
       expect(loadAllEntries(root, 'default').filter((e) => e.pinned)).toEqual([]);
@@ -218,6 +222,9 @@ describe('capture pins the rules a person states', () => {
       'I have told you many times: spawn sub-agents for wide searches.',
       'Important: the `staging` database is read only for migrations.',
       'We must run each benchmark the way its authors did, I have told you many times.',
+      'We never feed the raw transcript to the judge.',
+      'You never embed a key in a test fixture.',
+      'Keep the keys in the vault, never committed to git.',
     ])('pins the lasting rule %s', async (reply) => {
       await capture([{ role: 'user', text: REQUEST }, done, { role: 'user', text: reply }]);
       const rows = loadAllEntries(root, 'default');
