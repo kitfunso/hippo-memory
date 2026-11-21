@@ -8,6 +8,14 @@ The plugin keeps what comes up as you work, such as a rule you stated, a tool ca
 
 ### From the marketplace
 
+On Claude Code 2.1.275 or later, one line:
+
+```
+/plugin install hippo-memory --marketplace kitfunso/hippo-memory
+```
+
+On an older Claude Code:
+
 ```
 /plugin marketplace add kitfunso/hippo-memory
 /plugin install hippo-memory
