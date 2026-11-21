@@ -13,6 +13,8 @@ import { parseRequest } from './request.js';
 import type { KeyQuota } from './types.js';
 
 const FAULT_LOG_EVERY_MS = MINUTE_MS;
+// A huge finite wait would print as `1e+21`, which is not valid delta-seconds.
+const MAX_RETRY_AFTER_SEC = 86_400;
 // One slot for the process: a broken meter faults on every request, and a line a minute shows it.
 let faultLoggedAt = Number.NEGATIVE_INFINITY;
 
@@ -39,7 +41,7 @@ function refusalOf(answer: JsonValue | undefined): Refusal | null {
     return null;
   }
   if (!isJsonString(message) || message === '') return null;
-  return { message, seconds: Math.ceil(retryAfterSec) };
+  return { message, seconds: Math.min(Math.ceil(retryAfterSec), MAX_RETRY_AFTER_SEC) };
 }
 
 export function askKeyQuota(

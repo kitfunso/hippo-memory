@@ -71,12 +71,16 @@ interface Reply {
 
 async function send(path: string, init: RequestInit = {}): Promise<Reply> {
   const res = await fetch(`${url}${path}`, init);
+  const contentType = res.headers.get('content-type');
+  // An open stream never ends, so its text is never awaited: cancel it and fail on the status.
+  const isStream = contentType?.includes('text/event-stream') === true;
+  if (isStream) await res.body?.cancel();
   return {
     status: res.status,
     retryAfter: res.headers.get('retry-after'),
     requestId: res.headers.get('x-request-id'),
-    contentType: res.headers.get('content-type'),
-    body: await res.text(),
+    contentType,
+    body: isStream ? '' : await res.text(),
   };
 }
 
@@ -173,6 +177,17 @@ describe('a refusing hook', () => {
     await start({ perCaller: 'off', perAddress: WIDE }, { keyQuota: spy(() => REFUSAL).quota });
     expectRefused(await recall(bearer(k)));
   });
+
+  it('C14: caps Retry-After at one day, so a huge wait stays valid delta-seconds', async () => {
+    const k = mint({ ownerSubject: 'oid-a' });
+    await start(
+      { perCaller: WIDE, perAddress: WIDE },
+      { keyQuota: spy(() => ({ retryAfterSec: 1e21, message: 'x' })).quota },
+    );
+    const reply = await recall(bearer(k));
+    expect(reply.status).toBe(429);
+    expect(reply.retryAfter).toBe('86400');
+  });
 });
 
 describe('what the hook is asked', () => {
@@ -191,7 +206,9 @@ describe('what the hook is asked', () => {
       requestId: reply.requestId,
     });
     expect(call!.actor.subject).toBe(`api_key:${keyIdOf(k)}`);
+    expect(call!.actor.owner).toBe('oid-a');
     expect(Object.isFrozen(call!.actor)).toBe(true);
+    if (call!.actor.scopes) expect(Object.isFrozen(call!.actor.scopes)).toBe(true);
   });
 
   it('C6: is never asked about the local CLI key', async () => {
@@ -239,13 +256,16 @@ describe('a faulty hook', () => {
   });
 
   it.each([
-    ['10', 'undefined', undefined],
-    ['11', 'a string', 'no'],
-    ['12', 'no message', { retryAfterSec: 5 }],
-    ['13', 'no wait', { retryAfterSec: 0, message: 'x' }],
-    ['14', 'an empty message', { retryAfterSec: 5, message: '' }],
-  ])('C9: at %s:00 admits the request when the hook answers %s, and logs one line', async (hour, _label, answer) => {
-    setClock(`2026-11-21T${hour}:00:00Z`);
+    ['10:00', 'undefined', undefined],
+    ['11:00', 'a string', 'no'],
+    ['12:00', 'no message', { retryAfterSec: 5 }],
+    ['13:00', 'no wait', { retryAfterSec: 0, message: 'x' }],
+    ['14:00', 'an empty message', { retryAfterSec: 5, message: '' }],
+    ['15:00', 'a wait of NaN', { retryAfterSec: Number.NaN, message: 'x' }],
+    ['15:20', 'a wait of Infinity', { retryAfterSec: Number.POSITIVE_INFINITY, message: 'x' }],
+    ['15:40', 'a negative wait', { retryAfterSec: -1, message: 'x' }],
+  ])('C9: at %s admits the request when the hook answers %s, and logs one line', async (time, _label, answer) => {
+    setClock(`2026-11-21T${time}:00Z`);
     const lines = captureStderr();
     const k = mint({ ownerSubject: 'oid-a' });
     await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: spy(() => answer).quota });

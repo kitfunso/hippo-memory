@@ -82,6 +82,7 @@ export interface KeyQuotaRefusal {
   readonly message: string;
 }
 
+/** Never asked for the local CLI key; a throw or a malformed answer admits the request. */
 export type KeyQuota = (call: KeyQuotaCall) => KeyQuotaRefusal | null;
 
 export interface ServeOptions {
