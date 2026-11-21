@@ -204,7 +204,7 @@ jobs:
       - name: Open-core line
         run: node scripts/checks/check-open-core.mjs
 
-  # The MCP Registry's own validator on server.json, so a PR or a release tag learns what the registry would refuse
+  # The MCP Registry's own validator on server.json, so a PR or a release tag learns what the registry's validator would refuse
   # before npm publishes. It posts server.json to the registry's /v0/validate: no login, no secret, no id-token.
   server-json:
     runs-on: ubuntu-latest

@@ -67,7 +67,7 @@ async function hippo(cwd: string, ...args: string[]): Promise<InProcessResult> {
 }
 
 const busy = (op: string): Error =>
-  Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY' });
+  Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY', syscall: 'open' });
 
 /** Fails every rename onto, and every in-place write of, a file under the Copilot home; every other path goes through.
  * The rename fails with EXDEV, which renameOnto does not retry, so the write falls back to in place; that write fails with `fail`. */
@@ -200,6 +200,18 @@ describe('hippo init and the Copilot CLI', () => {
 
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('a bug in the Copilot install');
+    expect(r.stderr).not.toContain(RETRY);
+  });
+
+  it('a Node argument error, which has a code but no syscall, fails init, as a bug should', async () => {
+    copilotCli();
+    fs.mkdirSync(path.join(home, 'code', 'alpha', '.git'), { recursive: true });
+    refuseCopilotWrites(() => Object.assign(new TypeError('bad arg'), { code: 'ERR_INVALID_ARG_TYPE' }));
+
+    const r = await runInit(home, 'init', '--scan', home);
+
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('ERR_INVALID_ARG_TYPE');
     expect(r.stderr).not.toContain(RETRY);
   });
 });

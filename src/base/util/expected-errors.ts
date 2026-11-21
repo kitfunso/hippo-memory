@@ -7,6 +7,17 @@ import { errorCode } from './log.js';
  * to this user. */
 export const PATH_UNREADABLE = ['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR'] as const;
 
+/** True for a failed system call; Node's own ERR_* validation errors carry a code but no syscall. */
+export function isFileSystemError(cause: unknown): cause is NodeJS.ErrnoException {
+  return (
+    cause instanceof Error &&
+    'code' in cause &&
+    typeof cause.code === 'string' &&
+    'syscall' in cause &&
+    typeof cause.syscall === 'string'
+  );
+}
+
 /** `fn()`, or undefined when it throws an error whose errno name is in `codes`; any other error
  * is thrown on. */
 export function ignoringCodes<T>(codes: readonly string[], fn: () => T): T | undefined {

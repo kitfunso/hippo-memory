@@ -36,6 +36,7 @@ import {
 import { printAgentImport } from './print.js';
 import { printCopilotInstall } from './copilot-report.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
+import { isFileSystemError } from '../../base/util/expected-errors.js';
 import {
   installCodexMemoryHooks,
   printLeftOutHooks,
@@ -525,7 +526,7 @@ function installCopilotForCli(): void {
     if (!isCopilotCliPresent()) return;
     printCopilotInstall(installCopilot(), '   ');
   } catch (err) {
-    if (!errorCode(err)) throw err;
+    if (!isFileSystemError(err)) throw err;
     log.warn(
       `init left out the Copilot files: ${errorMessage(err)}. ` +
         'Fix that, then run `hippo hook install copilot`.',

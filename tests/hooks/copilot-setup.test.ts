@@ -228,7 +228,7 @@ describe('installCopilot and uninstallCopilot', () => {
     // writeFileAtomic resolves an existing file to its real path before it writes.
     const target = fs.realpathSync(files.mcp);
     const busy = (op: string): Error =>
-      Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY' });
+      Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY', syscall: 'open' });
     const rename = fs.renameSync.bind(fs);
     const write = fs.writeFileSync.bind(fs);
     // EXDEV is not retried, so the write falls back to in place and fails with EBUSY.
@@ -247,6 +247,26 @@ describe('installCopilot and uninstallCopilot', () => {
     const failed = { failed: expect.stringContaining('is in use by another program') };
     expect(installCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'written' });
     expect(read(files.mcp)).toBe('{}\n');
+  });
+
+  it('a Node argument error, which has a code but no syscall, is thrown and not reported as a failure', () => {
+    writeFile(files.mcp, '{}\n');
+    const target = fs.realpathSync(files.mcp);
+    const rename = fs.renameSync.bind(fs);
+    const write = fs.writeFileSync.bind(fs);
+    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (to === target) {
+        throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' });
+      }
+      rename(from, to);
+    });
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
+      if (dest === target) throw Object.assign(new TypeError('bad arg'), { code: 'ERR_INVALID_ARG_TYPE' });
+      write(dest, data, options);
+    });
+    syncBuiltinESMExports();
+
+    expect(() => installCopilot()).toThrow('ERR_INVALID_ARG_TYPE');
   });
 
   it.each([
