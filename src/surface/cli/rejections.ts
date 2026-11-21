@@ -61,7 +61,9 @@ function printRejected(result: Awaited<ReturnType<typeof api.rejectOnHost>>, rea
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
   console.log(`  Reason: ${reason}`);
   if (result.leadInOnly) {
-    console.log('  Only this lead-in is refused. Use --value to reject the text everywhere.');
+    console.log(
+      '  The text is refused under this lead-in only. Use --value to refuse it everywhere.',
+    );
   }
   if (result.removedIds.length > 0) {
     console.log(

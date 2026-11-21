@@ -45,11 +45,11 @@ describe('the CLI curate verbs go through src/api', () => {
       );
 
     const byId = await reject([withLeadIn.id], {});
-    expect(byId.stdout).toContain('Only this lead-in is refused. Use --value to reject the text everywhere.');
+    expect(byId.stdout).toContain('The text is refused under this lead-in only. Use --value to refuse it everywhere.');
     const byBare = await reject([bare.id], {});
-    expect(byBare.stdout).not.toContain('Only this lead-in is refused');
+    expect(byBare.stdout).not.toContain('under this lead-in only');
     const byValue = await reject([], { value: 'Yes.' });
-    expect(byValue.stdout).not.toContain('Only this lead-in is refused');
+    expect(byValue.stdout).not.toContain('under this lead-in only');
   });
 
   it('hippo invalidate weakens the matching row through the api', async () => {
