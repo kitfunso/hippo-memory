@@ -243,7 +243,7 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > refine
 "$ hippo refine -> 1
 --- stdout
 --- stderr
-hippo refine needs ANTHROPIC_API_KEY in the environment.
+hippo refine needs a model: set HIPPO_LLM_BASE_URL and HIPPO_LLM_MODEL, or ANTHROPIC_API_KEY.
 "
 `;
 

@@ -1,6 +1,7 @@
 // The store is not scrubbed at write, so every path that ships memory text off the box must scrub it first.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
+import { openAiChatLlm } from '../../src/infra/openai-chat-llm.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -77,6 +78,16 @@ describe('secret redaction before memory text leaves the box', () => {
       llm: anthropicLlm({ apiKey: 'k', fetcher: capture({ content: [{ text: 'a summary line' }] }) }),
     });
     await extractFacts(TEXT, { llm: anthropicLlm({ apiKey: 'k', fetcher: capture({ content: [{ text: '[]' }] }) }) });
+    expectScrubbed(2);
+  });
+
+  it('the OpenAI-compatible endpoint adapter carries the same scrub', async () => {
+    const baseUrl = new URL('http://127.0.0.1:9/v1');
+    const reply = (content: string) => capture({ choices: [{ message: { content } }] });
+    await generateDagSummary(TEXT, [TEXT], {
+      llm: openAiChatLlm({ baseUrl, model: 'm', fetcher: reply('a summary line here') }),
+    });
+    await extractFacts(TEXT, { llm: openAiChatLlm({ baseUrl, model: 'm', fetcher: reply('[]') }) });
     expectScrubbed(2);
   });
 

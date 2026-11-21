@@ -163,8 +163,9 @@ export interface HippoConfig {
     maxVectors: number;
   };
   /** Session capture. `followUpRules: 'model'` sends the person's scrubbed turns after the first to
-   * Anthropic (ANTHROPIC_API_KEY), which picks the sentences that state a lasting rule. Default 'off'.
-   * `userMessages` saves each message the person types as a raw row. Default true. */
+   * the model llmFromEnv picks (HIPPO_LLM_BASE_URL, else ANTHROPIC_API_KEY), which picks the
+   * sentences that state a lasting rule. Default 'off'. `userMessages` saves each message the person
+   * types as a raw row. Default true. */
   capture: {
     followUpRules: 'off' | 'model';
     userMessages: boolean;

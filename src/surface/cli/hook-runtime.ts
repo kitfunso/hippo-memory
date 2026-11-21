@@ -12,7 +12,7 @@ import { cliDetached, cliFolder, cliInfra, cliLedgerReach, cliSyncOptions } from
 import { detachedEmbedder } from '../../api/embeddings.js';
 import type { CaptureTarget } from '../capture/command.js';
 import type { WorkerMode } from '../capture/session-worker.js';
-import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { llmFromEnv } from '../../infra/ports.js';
 import {
   hookPayloadSessionId,
   hookPayloadString,
@@ -216,7 +216,7 @@ export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
   const folder = cliFolder(root);
   // A per-reply capture sees only the turns since the last reply, and would pay for a call per reply.
   const askModel = mode === 'full' && folder.config.capture.followUpRules === 'model';
-  const llm = askModel ? anthropicLlmFromEnv() : undefined;
+  const llm = askModel ? llmFromEnv() : undefined;
   return {
     root,
     store: folder.store,
@@ -225,7 +225,7 @@ export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
     llm,
     llmMissing:
       askModel && llm === undefined
-        ? 'capture.followUpRules is "model" but ANTHROPIC_API_KEY is not set; follow-up rules skipped'
+        ? 'capture.followUpRules is "model" but no model is set: ANTHROPIC_API_KEY is not set and neither is HIPPO_LLM_BASE_URL; follow-up rules skipped'
         : undefined,
   };
 }

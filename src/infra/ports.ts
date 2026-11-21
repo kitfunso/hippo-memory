@@ -3,9 +3,10 @@
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { Llm } from '../base/ports/llm.js';
 import type { RerankerLookup } from '../base/ports/reranker.js';
-import { envAnthropicApiKey } from '../base/util/env.js';
 import { evalClock, evalSwitches } from './eval-switches.js';
 import { anthropicLlm } from './anthropic-llm.js';
+import { readLlmChoice } from './llm-route.js';
+import { openAiChatLlm } from './openai-chat-llm.js';
 import { resolveEmbeddingProvider } from './embedding-provider.js';
 import { createHost, type Host } from '../host/host.js';
 import { currentMachine } from './machine.js';
@@ -13,11 +14,16 @@ import { realRerankers } from './rerankers/index.js';
 import { readApiCalls } from './transcript-calls.js';
 import { FailureNotices } from '../base/util/failure-notices.js';
 
-/** The Llm ANTHROPIC_API_KEY opens, or undefined when the key is unset: with no key, no model is
- * called. */
-export function anthropicLlmFromEnv(fetcher?: typeof fetch): Llm | undefined {
-  const apiKey = envAnthropicApiKey();
-  return apiKey ? anthropicLlm({ apiKey, fetcher }) : undefined;
+/** The Llm the environment picks: the HIPPO_LLM_BASE_URL endpoint, else ANTHROPIC_API_KEY's;
+ * undefined when neither is set, so no model is called. A refused setting gives an Llm whose every
+ * call fails, never a fall back to Anthropic. */
+export function llmFromEnv(fetcher?: typeof fetch): Llm | undefined {
+  const choice = readLlmChoice();
+  if ('endpoint' in choice) return openAiChatLlm({ ...choice.endpoint, fetcher });
+  if ('anthropicKey' in choice) return anthropicLlm({ apiKey: choice.anthropicKey, fetcher });
+  const { route } = choice;
+  if (route.kind !== 'refused') return undefined;
+  return { send: async () => ({ ok: false, failure: { kind: 'config', message: route.reason } }) };
 }
 
 /** What a root builds once and keeps: its rerankers, so the cross-encoder loads once, and its
@@ -33,7 +39,7 @@ interface RootKept {
 function realInfra({ reranker, failureNotices }: RootKept, host: Host): InfraPorts {
   return {
     machine: currentMachine(host),
-    llm: anthropicLlmFromEnv(),
+    llm: llmFromEnv(),
     embedderFor: (embeddings, opts) => resolveEmbeddingProvider(embeddings, opts),
     reranker,
     transcriptCalls: readApiCalls,

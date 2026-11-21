@@ -5,7 +5,7 @@ set -euo pipefail
 R="$1"; DATA="$2"
 W="$(cd "$(dirname "$0")/../.." && pwd)"
 : "${HIPPO_MODEL_CACHE:?set HIPPO_MODEL_CACHE so every store uses the same local model file}"
-unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY
+unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY HIPPO_LLM_BASE_URL HIPPO_LLM_API_KEY
 mkdir -p "$R/turn"
 
 hip() { local s="$1"; shift; env -C "$s" HIPPO_HOME="$s" HOME="$s" USERPROFILE="$s" node "$W/bin/hippo.js" "$@"; }

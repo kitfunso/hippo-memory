@@ -21,7 +21,7 @@ function replay(transcripts, hippo, scratch) {
   const home = join(scratch, 'home');
   mkdirSync(project);
   mkdirSync(home);
-  const { ANTHROPIC_API_KEY: _key, ...rest } = process.env;
+  const { ANTHROPIC_API_KEY: _key, HIPPO_LLM_BASE_URL: _base, ...rest } = process.env;
   const env = { ...rest, HIPPO_HOME: home, HIPPO_SKIP_SCHEDULE: '1' };
   spawnSync('git', ['init', '-q', '.'], { cwd: project });
   run(hippo, project, env, ['init', '--no-hooks', '--no-schedule', '--no-learn']);

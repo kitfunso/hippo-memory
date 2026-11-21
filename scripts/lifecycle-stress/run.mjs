@@ -29,7 +29,7 @@
  * Scoring is BY FACT VALUE (a condition answers fact F iff any assembled entry
  * content includes F's opaque answer token), never by source memory id.
  *
- * Hermetic: local embeddings only, no network, ANTHROPIC_API_KEY never set.
+ * Hermetic: local embeddings only, no network, ANTHROPIC_API_KEY and HIPPO_LLM_BASE_URL never set.
  *
  * Run (tractable smoke):
  *   node scripts/lifecycle-stress/run.mjs --facts 6 --dupes 3 \
@@ -508,8 +508,10 @@ async function main() {
     console.error('NO_EMBEDDINGS - local embedding model unavailable; cannot run the physics path.');
     process.exit(2);
   }
-  if (process.env.ANTHROPIC_API_KEY) {
-    console.error('ANTHROPIC_API_KEY is set; this harness must run hermetically. Unset it and re-run.');
+  if (process.env.ANTHROPIC_API_KEY || process.env.HIPPO_LLM_BASE_URL) {
+    console.error(
+      'ANTHROPIC_API_KEY or HIPPO_LLM_BASE_URL is set; this harness must run hermetically. Unset both and re-run.',
+    );
     process.exit(2);
   }
   fs.mkdirSync(OUT_DIR, { recursive: true });

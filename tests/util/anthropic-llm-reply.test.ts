@@ -1,4 +1,6 @@
 // The Anthropic Llm reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { isPermanentFailure, llmFailureFields, type LlmFailure, type LlmReply } from '../../src/base/ports/llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
@@ -43,7 +45,7 @@ describe('anthropicLlm reply reading', () => {
     }
     expect(await send('<html>busy</html>')).toEqual({
       ok: false,
-      failure: { kind: 'unreadable', message: 'reply is not JSON', cause: expect.any(Error) },
+      failure: { kind: 'unreadable', message: 'reply is not JSON' },
     });
   });
 
@@ -52,8 +54,44 @@ describe('anthropicLlm reply reading', () => {
     expect(JSON.parse(padded).content[0].text).toBe('tea');
     expect(await send(padded)).toEqual({
       ok: false,
-      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes`, cause: expect.any(Error) },
+      failure: { kind: 'unreadable', message: `reply over ${REPLY_CAP_BYTES} bytes` },
     });
+  });
+
+  it('keeps reply text out of the failure and its log fields', async () => {
+    const reply = await send('zebra-7731 not json');
+    expect(reply).toEqual({ ok: false, failure: { kind: 'unreadable', message: 'reply is not JSON' } });
+    if (reply.ok) throw new Error('expected a failure');
+    expect(reply.failure).not.toHaveProperty('cause');
+    expect(JSON.stringify(llmFailureFields(reply.failure))).not.toContain('zebra');
+  });
+});
+
+describe('anthropicLlm with a key a header cannot carry', () => {
+  it('refuses it as a config failure, with no request and no echo', async () => {
+    let requests = 0;
+    const server = http.createServer((_req, res) => {
+      requests++;
+      res.end('{}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    // SAFETY: listen() was given a TCP port, so address() is AddressInfo, never a pipe name.
+    const { port } = server.address() as AddressInfo;
+    try {
+      const reply = await anthropicLlm({
+        apiKey: 'zebra-7731\nb',
+        fetcher: (_url, init) => fetch(`http://127.0.0.1:${port}/v1/messages`, init),
+      }).send({ maxTokens: 10, prompt: 'hi' });
+      expect(reply).toEqual({
+        ok: false,
+        failure: { kind: 'config', message: 'ANTHROPIC_API_KEY has characters a header cannot carry' },
+      });
+      expect(JSON.stringify(reply)).not.toContain('zebra-7731');
+      expect(requests).toBe(0);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

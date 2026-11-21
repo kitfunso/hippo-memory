@@ -1,5 +1,5 @@
-// Loopback rules for a URL hostname and a socket remote address, and the outbound URL rule built on
-// the first.
+// Loopback rules for a URL hostname and a socket remote address, the outbound URL rule built on
+// the first, and the header rule for a credential.
 
 const IPV4_LOOPBACK = /^127(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const MAPPED_PREFIX = '::ffff:';
@@ -20,12 +20,22 @@ export function tryParseUrl(raw: string): URL | undefined {
   return URL.canParse(raw) ? new URL(raw) : undefined;
 }
 
-/** An endpoint that gets a key or memory text: https, or http only to this machine, and no
- * userinfo, which fetch echoes in its error text. Throws naming `setting`, and `keySetting` as
- * the home for a credential. */
+/** An endpoint that gets a key or memory text: https, or http only to this machine (any host with
+ * `allowHttp`), and no userinfo, which fetch echoes in its error text. Throws naming `setting`,
+ * `keySetting` as the home for a credential, and `allowHttpSetting` as the opt-in. */
 export function parseOutboundUrl(
   raw: string,
-  { setting, keySetting }: { readonly setting: string; readonly keySetting?: string },
+  {
+    setting,
+    keySetting,
+    allowHttp,
+    allowHttpSetting,
+  }: {
+    readonly setting: string;
+    readonly keySetting?: string;
+    readonly allowHttp?: boolean;
+    readonly allowHttpSetting?: string;
+  },
 ): URL {
   const parsed = tryParseUrl(raw);
   if (parsed === undefined) throw new Error(`${setting} is not a valid URL`);
@@ -39,10 +49,20 @@ export function parseOutboundUrl(
   }
   // Plain http would put the key and the memory text on the wire, so only the local machine may use
   // it.
-  if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
-    throw new Error(`${setting} must use https unless it is on this machine`);
+  if (parsed.protocol === 'http:' && !allowHttp && !isLoopbackHost(parsed.hostname)) {
+    throw new Error(
+      `${setting} must use https unless it is on this machine${allowHttpSetting ? `, or set ${allowHttpSetting}=1` : ''}`,
+    );
   }
   return parsed;
+}
+
+// fetch quotes a rejected header value in its error, so a token it would reject must never reach
+// it.
+export function checkHeaderSafe(name: string, token: string): void {
+  if (!/^[\x21-\x7e]+$/.test(token)) {
+    throw new Error(`${name} has characters a header cannot carry`);
+  }
 }
 
 /** A socket remote address on this machine; Node reports a dual-stack IPv4 peer as

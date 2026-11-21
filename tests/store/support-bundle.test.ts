@@ -230,6 +230,23 @@ describe('buildSupportBundle', () => {
     expect(parsed.logs.tails).toBeUndefined();
   });
 
+  it('lists HIPPO_LLM_API_KEY by name and never its value', async () => {
+    const s = seed();
+    const canary = `llm-key-${randomUUID()}`;
+    vi.stubEnv('HIPPO_LLM_API_KEY', canary);
+    const bundle = await buildSupportBundle({
+      diagnosticsBodies,
+      tenantId: 'default',
+      cwd: s.cwd,
+      home: s.home,
+      version: 'test',
+      includeLogs: false,
+      now: FIXED_NOW,
+    });
+    expect(JSON.parse(JSON.stringify(bundle)).env).toContain('HIPPO_LLM_API_KEY');
+    expect(bundleText(bundle).filter((t) => t.includes(canary.toLowerCase()))).toEqual([]);
+  });
+
   it('swaps a short-name or symlinked form of the home that HIPPO_HOME passes through unresolved', async () => {
     const s = seed();
     // tmpdir() is often an 8.3 short form on Windows and a symlink on macOS; elsewhere this is the plain path.

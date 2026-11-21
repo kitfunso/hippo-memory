@@ -1,5 +1,5 @@
 // The language-model port: domain writes the prompt and reads the reply; src/infra/anthropic-llm.ts
-// makes the call.
+// and src/infra/openai-chat-llm.ts make the call.
 import { errorCode, errorFields, type LogFields } from '../util/log.js';
 
 export interface LlmRequest {
@@ -17,6 +17,7 @@ export type LlmFailure =
   | { kind: 'request'; message: string; cause?: unknown }
   | { kind: 'http'; status: number; detail: string }
   | { kind: 'unreadable'; message: string; cause?: unknown }
+  | { kind: 'config'; message: string }
   | { kind: 'empty' };
 
 /** What the provider billed for one call; an empty reply is billed too. */
@@ -41,7 +42,9 @@ const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 404]);
 /** True for a failure the next call would repeat, so a caller looping over items should stop
  * rather than retry. */
 export function isPermanentFailure(failure: LlmFailure): boolean {
-  return failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status);
+  return (
+    failure.kind === 'config' || (failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status))
+  );
 }
 
 /** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level
@@ -87,6 +90,8 @@ export function describeLlmFailure(failure: LlmFailure): string {
         : `HTTP ${failure.status}`;
     case 'unreadable':
       return `unparseable response: ${failure.message}`;
+    case 'config':
+      return failure.message;
     case 'empty':
       return 'the reply held no text';
   }

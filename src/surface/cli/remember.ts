@@ -183,7 +183,7 @@ function printEntry(entry: MemoryEntry, useGlobal: boolean): void {
 
 function printExtraction(extraction: api.FactExtraction): void {
   if (extraction.status === 'no_key') {
-    printError('  (extraction skipped: ANTHROPIC_API_KEY not set)');
+    printError('  (extraction skipped: no model set; set HIPPO_LLM_BASE_URL or ANTHROPIC_API_KEY)');
   }
   if (extraction.status !== 'ran') return;
   for (const failure of extraction.failures) printError(`  (extraction failed: ${failure})`);
