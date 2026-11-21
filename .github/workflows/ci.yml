@@ -204,6 +204,24 @@ jobs:
       - name: Open-core line
         run: node scripts/checks/check-open-core.mjs
 
+  # The MCP Registry's own validator on server.json, so a PR or a release tag learns what the registry's validator would refuse
+  # before npm publishes. It posts server.json to the registry's /v0/validate: no login, no secret, no id-token.
+  server-json:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/mcp-publisher
+      - name: server.json passes mcp-publisher validate
+        # Three tries absorb a short registry outage; a refusal fails all three, so the job still fails.
+        run: |
+          for attempt in 1 2 3; do
+            ./mcp-publisher validate && exit 0
+            echo "::warning::mcp-publisher validate failed, try $attempt of 3"
+            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+          done
+          exit 1
+
   # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
   # not 'sqlite', with only the required groups and the optional ones each suite names, so the port holds for the
   # smallest store. A test that needs hippo.db's folder skips with its reason (tests/_helpers/store-switch.ts).

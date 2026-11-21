@@ -138,7 +138,9 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
 
 /** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off and prompt recall pinned on. */
 export function hippoInit(run, fakeHome) {
-  const env = { ...childEnv(run.env), HOME: fakeHome, USERPROFILE: fakeHome };
+  // Init installs Copilot when it finds the CLI; these keep it off the operator's Copilot and VS Code folders.
+  const homes = { HOME: fakeHome, USERPROFILE: fakeHome, COPILOT_HOME: '', VSCODE_PORTABLE: '' };
+  const env = { ...childEnv(run.env), ...homes, VSCODE_APPDATA: path.join(fakeHome, 'vscode-data') };
   // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
   const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
   if (r.status !== 0) {

@@ -4,6 +4,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
+import { isFileSystemError } from '../../base/util/expected-errors.js';
 import { type JsonValue } from '../../base/util/json.js';
 import { readJsonFile } from '../../host/json-file.js';
 import {
@@ -103,17 +104,13 @@ function removeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpRemo
   return status;
 }
 
-function hasErrnoCode(err: Error): err is NodeJS.ErrnoException {
-  return 'code' in err && typeof err.code === 'string';
-}
-
 /** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the
  * instructions still install. */
 function mcpStep<S extends string>(step: () => S): S | McpFailure {
   try {
     return step();
   } catch (err) {
-    if (err instanceof Error && hasErrnoCode(err)) return { failed: err.message };
+    if (isFileSystemError(err)) return { failed: err.message };
     throw err;
   }
 }

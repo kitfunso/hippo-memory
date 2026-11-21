@@ -23,9 +23,10 @@ No global installs allowed? Use `npx -y hippo-memory <command>` in place of `hip
 Before you run anything in this step, tell the user what `hippo init` changes:
 
 - `.hippo/` in the project, seeded on the first run with lessons from the last 30 days of git history.
-- A hippo block in each instruction file that already exists, such as `CLAUDE.md` or `AGENTS.md`. It never creates one.
+- A hippo block in each project instruction file that already exists, such as `CLAUDE.md` or `AGENTS.md`. It never creates one.
 - When the project uses Claude Code, 9 hook entries in `~/.claude/settings.json`. When it uses OpenCode, a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - When the project has `AGENTS.md` or `.codex` and Codex is installed, 2 hook entries in Codex's `hooks.json`. Codex runs them only after the user trusts them once in `/hooks`, so tell the user to do that, and never write Codex's trust settings yourself.
+- When the Copilot CLI is installed (`$COPILOT_HOME`, else `~/.copilot`, holds more than a `hooks` folder), whatever the project holds: hippo's `hooks/hippo.json`, a `hippo` server in `mcp-config.json`, and a block in `copilot-instructions.md`, which init creates if missing. When VS Code has a User folder, also the `hippo` server in its `mcp.json` and `prompts/hippo.instructions.md`.
 - A daily 6:15am run, a crontab line on Linux and macOS or a scheduled task on Windows. It learns from each registered project's commits and runs `hippo sleep` there.
 - On the first run, an import of this project's Claude Code auto memory, from its folder under `~/.claude/projects/`.
 - When hippo is a global npm install, the local embedder for recall by meaning: `@huggingface/transformers@4.3.2` in npm's global folder, about 480 MB, with no install scripts run. Its 87 MB model downloads from Hugging Face the first time hippo embeds. This step can take a few minutes, so give `hippo init` a 10-minute timeout. Under npx, init prints how to add it instead.
@@ -38,7 +39,7 @@ Then, in the root of the project the user works in, run it with any flags the us
 hippo init
 ```
 
-Run `hippo init --scan <folder>` only if the user asks to set up many repositories at once, and say first what it changes: every git repo in the folder and up to three levels below gets its own `.hippo/` store, seeded from a year of its git history, and the same user-level hooks and daily run go in. It patches no instruction file.
+Run `hippo init --scan <folder>` only if the user asks to set up many repositories at once, and say first what it changes: every git repo in the folder and up to three levels below gets its own `.hippo/` store, seeded from a year of its git history, and the same user-level hooks and daily run go in. It patches no instruction file in any repository.
 
 For Claude Code, the plugin is an alternative to the hooks `hippo init` installs (use one, not both):
 

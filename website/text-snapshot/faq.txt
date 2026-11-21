@@ -18,7 +18,7 @@ hippo init adds its instructions to AGENTS.md if the project has one, which Curs
 How do I give Codex memory across sessions?
 hippo init adds its instructions to your AGENTS.md, which Codex reads before it starts work. Capturing Codex sessions is opt-in, with hippo hook install codex.
 Which agents does hippo work with?
-hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode and Pi, and wires itself into each one's instruction file, hooks or plugin. What runs automatically differs by agent. Any MCP client can use the MCP server, and anything else can call the CLI.
+hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and the Copilot CLI, and wires itself into each one's instruction file, hooks, plugin or MCP config. What runs automatically differs by agent. Any MCP client can use the MCP server, and anything else can call the CLI.
 Can I use hippo as an MCP memory server?
 Yes. hippo mcp runs the server over stdio. Add it to the MCP config of Cursor, Claude Desktop, Windsurf (now Devin Desktop), Cline or any other client, or in Claude Code run claude mcp add hippo-memory -- hippo mcp.
 How is hippo different from memN?
