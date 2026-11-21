@@ -1,7 +1,8 @@
 // hippo setup gives Copilot one hooks file hippo owns, one key in the shared mcp-config.json and an instructions block,
 // plus one key in each VS Code mcp.json and one instructions file; uninstall takes back only those.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import * as fs from 'node:fs';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,8 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  syncBuiltinESMExports();
   vi.unstubAllEnvs();
 });
 // The committed text installCopilot must write; edit it with the instructions in src/surface/hooks-install/rules/copilot.ts.
@@ -218,6 +221,32 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(installCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'written' });
     expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'removed' });
     expect(fs.statSync(files.mcp).isDirectory()).toBe(true);
+  });
+
+  it('reports an mcp-config.json another program holds open as a failure, and still installs the rest', () => {
+    writeFile(files.mcp, '{}\n');
+    // writeFileAtomic resolves an existing file to its real path before it writes.
+    const target = fs.realpathSync(files.mcp);
+    const busy = (op: string): Error =>
+      Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY' });
+    const rename = fs.renameSync.bind(fs);
+    const write = fs.writeFileSync.bind(fs);
+    // EXDEV is not retried, so the write falls back to in place and fails with EBUSY.
+    vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (to === target) {
+        throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' });
+      }
+      rename(from, to);
+    });
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
+      if (dest === target) throw busy('open');
+      write(dest, data, options);
+    });
+    syncBuiltinESMExports();
+
+    const failed = { failed: expect.stringContaining('is in use by another program') };
+    expect(installCopilot()).toMatchObject({ hooks: true, mcp: failed, instructions: 'written' });
+    expect(read(files.mcp)).toBe('{}\n');
   });
 
   it.each([

@@ -351,7 +351,7 @@
         "compactResume": null
       },
       "upstream": { "preLossEvent": "preCompact", "beforeTrimOrReset": null },
-      "setup": "hippo setup, when ~/.copilot, $COPILOT_HOME or a VS Code User folder exists, writes hooks/hippo.json, the hippo server in mcp-config.json and a block in copilot-instructions.md, plus the server in each VS Code User mcp.json and prompts/hippo.instructions.md; hippo hook install copilot does the same",
+      "setup": "hippo setup, when ~/.copilot, $COPILOT_HOME or a VS Code User folder exists, writes hooks/hippo.json, the hippo server in mcp-config.json and a block in copilot-instructions.md, plus the server in each VS Code User mcp.json and prompts/hippo.instructions.md; hippo hook install copilot does the same; hippo init does the same when the Copilot home holds more than hooks/, the sign of the Copilot CLI",
       "store": null,
       "maxSaveDelay": null,
       "interface": "Copilot version-1 hooks file with bash and powershell commands, mcp-config.json and copilot-instructions.md; in VS Code, the User mcp.json and prompts/hippo.instructions.md",

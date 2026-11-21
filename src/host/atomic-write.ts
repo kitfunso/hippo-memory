@@ -133,7 +133,13 @@ function writeInPlace(target: string, data: string | Uint8Array): void {
       errorCode(err) === 'EBUSY'
         ? 'is in use by another program, so hippo could not replace it; close that program and run the command again'
         : `could not be replaced (${errorCode(err) || err.message})`;
-    throw new Error(`${target} ${reason}`, { cause: err });
+    const wrapped: NodeJS.ErrnoException = new Error(`${target} ${reason}`, { cause: err });
+    const { code, errno, syscall }: NodeJS.ErrnoException = err;
+    // Callers sort file errors by `code`; a field the cause lacks stays off, as errorCode reads any `code` key.
+    if (code !== undefined) wrapped.code = code;
+    if (errno !== undefined) wrapped.errno = errno;
+    if (syscall !== undefined) wrapped.syscall = syscall;
+    throw wrapped;
   }
 }
 

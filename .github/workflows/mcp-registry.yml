@@ -16,9 +16,6 @@ jobs:
     permissions:
       contents: read
       id-token: write   # OIDC login proves the io.github.kitfunso namespace; no secret needed
-    env:
-      MCP_PUBLISHER_VERSION: v1.8.10
-      MCP_PUBLISHER_SHA256: 32d287ed6fb7dc04eddd2621097784c06a355b2348b35ccc630a1643aa75ff4a
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # npm shows a new version some minutes after the publish job ends, so wait for it.
@@ -32,12 +29,8 @@ jobs:
           done
           echo "hippo-memory@$version is still not on npm after 10 minutes. Re-run this job when npm shows it."
           exit 1
-      - name: Download mcp-publisher
-        run: |
-          curl -fsSL -o mcp-publisher.tar.gz \
-            "https://github.com/modelcontextprotocol/registry/releases/download/$MCP_PUBLISHER_VERSION/mcp-publisher_linux_amd64.tar.gz"
-          echo "$MCP_PUBLISHER_SHA256  mcp-publisher.tar.gz" | sha256sum -c -
-          tar -xzf mcp-publisher.tar.gz mcp-publisher
+      # The pinned binary; .github/actions/mcp-publisher holds its version and sha256.
+      - uses: ./.github/actions/mcp-publisher
       - run: ./mcp-publisher validate
       - run: ./mcp-publisher login github-oidc
       - run: ./mcp-publisher publish

@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileAtomic } from '../../src/host/atomic-write.js';
+import { errorCode } from '../../src/base/util/log.js';
 
 const WINDOWS = process.platform === 'win32';
 const NEW_TEXT = 'new content';
@@ -127,6 +128,48 @@ describe('writeFileAtomic when the platform refuses the rename', () => {
     expect(logged()).toEqual([
       `[hippo] warn: ${file} could not be replaced by a rename (EXDEV), so it is written in place: not atomic, a crash mid-write can leave it truncated`,
     ]);
+  });
+});
+
+describe('writeFileAtomic when the in-place write fails too', () => {
+  /** Refuses the rename, so the write falls back to in place, then fails that write with `error`. */
+  function failInPlace(error: Error): void {
+    const write = fs.writeFileSync.bind(fs);
+    vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' });
+    });
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
+      if (dest === file) throw error;
+      write(dest, data, options);
+    });
+    syncBuiltinESMExports();
+    captureLog();
+  }
+
+  it('throws an error that keeps the code, errno and syscall of the one it wraps', () => {
+    const cause = Object.assign(new Error('EBUSY: resource busy or locked, open'), {
+      code: 'EBUSY',
+      errno: -4082,
+      syscall: 'open',
+    });
+    failInPlace(cause);
+
+    expect(() => writeFileAtomic(file, NEW_TEXT)).toThrow(
+      expect.objectContaining({ code: 'EBUSY', errno: -4082, syscall: 'open', cause }),
+    );
+  });
+
+  it('adds no code when the error it wraps has none, so errorCode still reads no errno', () => {
+    failInPlace(new Error('the disk went away'));
+    let thrown: unknown;
+    try {
+      writeFileAtomic(file, NEW_TEXT);
+    } catch (err) {
+      thrown = err;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(errorCode(thrown)).toBe('');
   });
 });
 

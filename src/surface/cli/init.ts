@@ -10,6 +10,7 @@ import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
 import { isCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin } from '../hooks-install/opencode.js';
+import { installCopilot, isCopilotCliPresent } from '../hooks-install/copilot.js';
 import { initMemoryStore } from '../../api/store-init.js';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -33,6 +34,7 @@ import {
   boolFlag,
 } from './flag-values.js';
 import { printAgentImport } from './print.js';
+import { printCopilotInstall } from './copilot-report.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import {
   installCodexMemoryHooks,
@@ -516,9 +518,25 @@ function installOpencodeUserPlugin(): void {
   }
 }
 
+/** The Copilot CLI keeps hippo's files in its own folder, so a machine check picks it, whatever the project holds. */
+function installCopilotForCli(): void {
+  try {
+    // VS Code alone is setup's to wire; the strict check also skips the hooks/ folder setup leaves there.
+    if (!isCopilotCliPresent()) return;
+    printCopilotInstall(installCopilot(), '   ');
+  } catch (err) {
+    if (!errorCode(err)) throw err;
+    log.warn(
+      `init left out the Copilot files: ${errorMessage(err)}. ` +
+        'Fix that, then run `hippo hook install copilot`.',
+      errorFields(err),
+    );
+  }
+}
+
 /**
- * Claude Code settings hooks, Codex's hooks.json and the OpenCode plugin, under the home directory;
- * idempotent, so re-running init adds newer hooks.
+ * Claude Code settings hooks, Codex's hooks.json, the OpenCode plugin and the Copilot CLI's files, under the home
+ * directory; idempotent, so re-running init adds newer hooks.
  */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
@@ -534,4 +552,5 @@ function installUserLevelHooks(agents: readonly string[], codexHint: boolean): v
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }
+  installCopilotForCli();
 }

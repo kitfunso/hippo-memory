@@ -21,7 +21,9 @@ Setup installs for Copilot when Copilot's home folder exists (`$COPILOT_HOME` wh
 hippo hook install copilot
 ```
 
-Both write:
+`hippo init` installs the same files when the Copilot CLI is installed, that is, when the Copilot home folder holds more than `hooks`. With VS Code alone, init leaves Copilot out; run `hippo setup`. `hippo init --no-hooks` and `HIPPO_SKIP_AUTO_INTEGRATIONS=1` leave Copilot out too.
+
+All three write:
 
 | File | What hippo puts there |
 |------|-----------------------|

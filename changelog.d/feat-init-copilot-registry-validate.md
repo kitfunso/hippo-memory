@@ -1,0 +1,4 @@
+### Added
+
+- **`hippo init` sets up GitHub Copilot when the Copilot CLI is installed.** When `$COPILOT_HOME` (else `~/.copilot`) holds more than a `hooks` folder, `hippo init` and `hippo init --scan` write the same files as `hippo hook install copilot`. That is the hooks file, the `hippo` MCP server and the instructions block, plus the VS Code User files when VS Code is there. `--no-hooks` and `HIPPO_SKIP_AUTO_INTEGRATIONS=1` leave them out. If a Copilot file cannot be written, for example because another program holds it open, init warns, names the retry command and finishes the rest.
+- **Every pull request runs the MCP Registry's validator on `server.json`.** A new `server-json` CI job runs the same pinned `mcp-publisher validate` as the release, with up to three tries so a short registry outage does not fail it. A release tag now validates before npm publishes, not only after. The publisher's version and checksum live once, in `.github/actions/mcp-publisher`.
