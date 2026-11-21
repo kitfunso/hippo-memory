@@ -7,6 +7,7 @@ import { runModuleScript } from '../_helpers/run-module-script.js';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const SERVER_VALUES = [
+  'admitProjectWrite',
   'authCreate',
   'authCreateSelf',
   'authRevoke',
@@ -59,6 +60,8 @@ const SERVER_TYPES = [
   'DetachedWork',
   'HippoStore',
   'JsonValue',
+  'ProjectWriteCall',
+  'ProjectWriteGate',
   'RateLimitSpec',
   'ResolvedBearer',
   'ServeOptions',
