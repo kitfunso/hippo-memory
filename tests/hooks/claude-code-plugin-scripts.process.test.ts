@@ -13,6 +13,8 @@ let dir: string;
 let bin: string;
 let empty: string;
 let project: string;
+// A folder name holding a %NAME% pair that run() sets, so a cmd.exe that expands the shim path cannot start it.
+let pctBin: string;
 // A space and a %NAME% pair, so a cmd.exe that splits or expands the argument fails the session-end test.
 let home: string;
 
@@ -33,13 +35,15 @@ beforeAll(() => {
   empty = join(dir, 'empty');
   project = join(dir, 'project');
   home = join(dir, 'home dir %USERNAME%');
-  for (const folder of [bin, empty, project, home]) mkdirSync(folder);
-  writeFakeHippo(
-    bin,
+  pctBin = join(dir, 'bin %HIPPO_PLUGIN_PROBE%');
+  for (const folder of [bin, empty, project, home, pctBin]) mkdirSync(folder);
+  const fake =
     "let stdin = '';\nprocess.stdin.on('data', (d) => (stdin += d));\nprocess.stdin.on('end', () => {\n" +
-      '  process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), stdin }));\n' +
-      '  process.exit(Number(process.env.FAKE_HIPPO_EXIT ?? 0));\n});\n',
-  );
+    "  process.stderr.write('fake hippo stderr');\n" +
+    '  process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), stdin }));\n' +
+    '  process.exit(Number(process.env.FAKE_HIPPO_EXIT ?? 0));\n});\n';
+  writeFakeHippo(bin, fake);
+  writeFakeHippo(pctBin, fake);
   writeFakeHippo(project, "process.stdout.write('HIJACK');\n");
 });
 
@@ -49,7 +53,14 @@ function run(script: string, args: readonly string[], pathDir: string, exitCode 
   );
   return spawnSync(process.execPath, [join(SCRIPTS, script), ...args], {
     cwd: project,
-    env: { ...env, PATH: pathDir, HOME: home, USERPROFILE: home, FAKE_HIPPO_EXIT: String(exitCode) },
+    env: {
+      ...env,
+      PATH: pathDir,
+      HOME: home,
+      USERPROFILE: home,
+      FAKE_HIPPO_EXIT: String(exitCode),
+      HIPPO_PLUGIN_PROBE: 'gone',
+    },
     input: '{"hook":"payload"}',
     encoding: 'utf8',
   });
@@ -69,6 +80,21 @@ describe('plugin hook script', () => {
       argv: ['session-end', '--log-file', join(home, '.hippo', 'logs', 'last-sleep.log')],
       stdin: '{"hook":"payload"}',
     });
+  });
+
+  it("keeps last-sleep's stderr, as its shell line did, and drops every other verb's", () => {
+    expect(run('hook.mjs', ['last-sleep'], bin).stderr).toBe('fake hippo stderr');
+    expect(run('hook.mjs', ['context'], bin).stderr).toBe('');
+  });
+
+  it.skipIf(!WIN)('finds hippo on a quoted PATH entry, as cmd.exe does', () => {
+    const result = run('hook.mjs', ['context'], `"${bin}"`);
+    expect(JSON.parse(result.stdout).argv).toEqual(['context']);
+  });
+
+  it.skipIf(!WIN)('starts hippo from a folder whose name holds a set %NAME% pair', () => {
+    const result = run('hook.mjs', ['context'], pctBin);
+    expect(JSON.parse(result.stdout).argv).toEqual(['context']);
   });
 
   it('exits 0 with no output when hippo is not on PATH, and never runs one from the project folder', () => {
