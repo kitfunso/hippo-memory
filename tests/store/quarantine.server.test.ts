@@ -62,7 +62,7 @@ function githubCommentEvent(
         id: commentId,
         body,
         user: { login, id: userId },
-        ...(association === null ? {} : { author_association: association }),
+        author_association: association ?? undefined,
       },
     },
   } as IngestEvent;

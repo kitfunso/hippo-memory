@@ -405,7 +405,7 @@ describe('trust follows the author', () => {
       id: 2,
       body: 'I can repro on arm64',
       user,
-      ...(association === undefined ? {} : { author_association: association }),
+      author_association: association,
     },
   });
   const heldFor = (association: string | undefined) => issueCommentEventToRememberOpts(commentBy(association))?.hold;

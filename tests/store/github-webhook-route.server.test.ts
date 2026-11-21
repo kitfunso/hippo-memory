@@ -878,7 +878,7 @@ describe('githubTrustedUserIds', () => {
         await handle.stop();
         return true;
       },
-      (err: unknown) => err,
+      (err: Error) => err,
     );
 
     expect(started).toBeInstanceOf(Error);
