@@ -318,6 +318,7 @@ export type {
   ConnectorWriteOutcome,
   ConnectorArchive,
   ConnectorWrites,
+  HeldSupersede,
   ConnectorEventRecord,
   DeliveryClaim,
   ConnectorDeadLetter,

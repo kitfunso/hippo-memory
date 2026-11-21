@@ -1,17 +1,10 @@
-// Write path: remember stores one memory after secret vetting and, for untrusted content, the
-// instruction check.
+// Write path: remember stores one memory after secret vetting and the one write screen (write-screen.ts).
 
 import type {
   ConnectorEvent,
   ConnectorWrite,
   ConnectorWriteOutcome,
 } from '../../base/ports/store.js';
-import {
-  detectInstruction,
-  INSTRUCTION_LIKE_TAG,
-  UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
-import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
   createMemory,
   type ConfidenceLevel,
@@ -35,6 +28,7 @@ import {
 import { isQuarantineScope } from '../../domain/trust/quarantine.js';
 import type { Context, ContextWith } from '../types.js';
 import { autoSleepAfterWrite } from '../sleep/auto-sleep.js';
+import { markedTags, reviewerOf, screenWrite, type ReviewGroup } from './write-screen.js';
 
 /** Row fields the caller's own process decides, as the CLI does from its flags and its salience
  * gate. */
@@ -74,6 +68,8 @@ export interface ConnectorRememberOptions extends RememberOptions {
   /** The connector event this write answers. The store logs it in the memory's own transaction;
    * an event logged before stores nothing and answers `duplicate`. */
   event?: ConnectorEvent;
+  /** The connector's own rule holds the write for review whatever the check finds, as GitHub does for an outside author. */
+  hold?: { readonly reason: string };
 }
 
 /** A write that asks for the salience gate: one it judges not worth keeping answers
@@ -90,8 +86,8 @@ export interface RememberResult {
   /** The row as written, so a caller can show it without reading it back. */
   halfLifeDays: number;
   tags: string[];
-  /** Set only when untrusted content was flagged and quarantined instead of stored under its
-   * requested scope. */
+  /** Set when the write was held for review: connector content flagged or held by its connector's rule, or a
+   * member's shared write flagged on a store that reviews. */
   quarantined?: { reason: string };
   /** Set only when the content held secret material, which was redacted before storing. */
   warnings?: string[];
@@ -141,32 +137,31 @@ function assertOwnerIsCallers(ctx: Context, owner: string | undefined): void {
   throw new ForbiddenError("owner must be the caller's own unless the caller is an admin");
 }
 
-/** The vetted row a remember writes, with its scope and quarantine verdict, decided the same way
- * on both paths. */
+/** The vetted row a remember writes and, for a held write, the review record that commits with it. */
 interface PreparedRemember {
   readonly entry: MemoryEntry;
-  readonly requestedScope: string | null;
-  readonly detection: { readonly flagged: boolean; readonly reason: string | null };
+  readonly quarantine: ConnectorWrite['quarantine'];
   readonly warnings: readonly string[];
 }
 
-/** `untrusted` marks connector content an agent doesn't control, which the instruction check
- * gates. */
+/** `screen.untrusted` marks connector content; `screen.holds` says the store writes a review record. */
 function prepareRemember(
   ctx: Context,
-  opts: RememberOptions,
-  untrusted: boolean,
+  opts: ConnectorRememberOptions,
+  screen: { readonly untrusted: boolean; readonly holds: boolean },
 ): PreparedRemember {
   if (opts.project) assertCallerProject(opts.project);
   assertOwnerIsCallers(ctx, opts.owner);
-  const requestedScope = rememberScope(ctx, opts, untrusted);
+  const requestedScope = rememberScope(ctx, opts, screen.untrusted);
   const vetted = vetSecrets(opts.content);
-  const detection = untrusted
-    ? detectInstruction(vetted.content)
-    : { flagged: false, reason: null };
-  const flagged =
-    !untrusted && memberShares(ctx, opts) && detectInstruction(vetted.content).flagged;
-  const tags = trustTagged(opts.tags && withoutCaptureTags(opts.tags), untrusted, flagged);
+  const verdict = screenWrite(ctx.actor, {
+    content: vetted.content,
+    scope: requestedScope,
+    untrusted: screen.untrusted,
+    rule: opts.hold,
+    holds: screen.holds,
+  });
+  const tags = markedTags(opts.tags && withoutCaptureTags(opts.tags), verdict.marks);
   const local = opts.local ?? {};
   const created = createMemory(
     vetted.content,
@@ -179,7 +174,7 @@ function prepareRemember(
       traceOutcome: local.traceOutcome,
       sourceSessionId: local.sourceSessionId,
       kind: opts.kind ?? 'distilled',
-      scope: detection.flagged ? quarantineScopeFor(requestedScope) : requestedScope,
+      scope: verdict.scope,
       owner: opts.owner ?? null,
       artifactRef: opts.artifactRef ?? null,
       tags,
@@ -193,27 +188,7 @@ function prepareRemember(
   // A personal row's '' follows its owner into every project.
   const origin = opts.personal ? '' : opts.project?.name;
   const stamped = origin !== undefined ? { ...entry, originProject: origin } : entry;
-  return { entry: stamped, requestedScope, detection, warnings: vetted.warnings };
-}
-
-/** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row
- * the check flagged. */
-function trustTagged(
-  tags: string[] | undefined,
-  untrusted: boolean,
-  flagged: boolean,
-): string[] | undefined {
-  const marks = [
-    ...(untrusted ? [UNTRUSTED_ORIGIN_TAG] : []),
-    ...(flagged ? [INSTRUCTION_LIKE_TAG] : []),
-  ];
-  return marks.length > 0 ? [...(tags ?? []), ...marks] : tags;
-}
-
-/** A member key's write outside its personal scope reaches the other members' prompts, as
- * connector text does. */
-function memberShares(ctx: Context, opts: RememberOptions): boolean {
-  return ctx.actor.role === 'member' && !opts.personal;
+  return { entry: stamped, quarantine: verdict.quarantine, warnings: vetted.warnings };
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {
@@ -229,7 +204,7 @@ function rememberResult(
   prepared: PreparedRemember,
   written?: ConnectorWriteOutcome,
 ): RememberResult {
-  const { entry, detection, warnings } = prepared;
+  const { entry, quarantine, warnings } = prepared;
   const result: RememberResult = {
     id: entry.id,
     kind: entry.kind,
@@ -237,20 +212,10 @@ function rememberResult(
     halfLifeDays: entry.halfLifeDays,
     tags: [...entry.tags],
   };
-  if (detection.flagged) result.quarantined = { reason: detection.reason ?? 'unknown' };
+  if (quarantine) result.quarantined = { reason: quarantine.reason };
   if (warnings.length > 0) result.warnings = [...warnings];
   if (written?.outcome === 'duplicate') result.duplicate = { memoryId: written.memoryId };
   return result;
-}
-
-/** A flagged row's review record, which the store writes in the row's own transaction. */
-function quarantineOf({
-  requestedScope,
-  detection,
-}: PreparedRemember): ConnectorWrite['quarantine'] {
-  return detection.flagged
-    ? { originalScope: requestedScope, reason: detection.reason ?? 'unknown' }
-    : undefined;
 }
 
 // The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once
@@ -316,11 +281,20 @@ export async function remember(
   return startedWeak ? { ...result, startedWeak } : result;
 }
 
-/** The store's entryWrites group writes the row and its one remember audit row, under the
- * caller's subject. */
-async function writeRemembered(ctx: Context, opts: RememberOptions): Promise<RememberResult> {
-  const prepared = prepareRemember(ctx, opts, false);
-  await ctx.store.entryWrites.writeEntry({ entry: prepared.entry, actor: ctx.actor.subject });
+/** entryWrites writes the row and its one remember audit row under the caller's subject; a held row goes
+ * through the reviewer, which commits its review record in the same transaction. */
+async function writeRemembered(
+  ctx: ContextWith<never, ReviewGroup>,
+  opts: RememberOptions,
+): Promise<RememberResult> {
+  const reviewer = reviewerOf(ctx);
+  const prepared = prepareRemember(ctx, opts, { untrusted: false, holds: reviewer !== undefined });
+  const write = { entry: prepared.entry, actor: ctx.actor.subject };
+  if (reviewer && prepared.quarantine) {
+    await reviewer.writeConnectorEntry({ ...write, quarantine: prepared.quarantine });
+  } else {
+    await ctx.store.entryWrites.writeEntry(write);
+  }
   return rememberResult(ctx, prepared);
 }
 
@@ -331,12 +305,12 @@ export async function rememberUntrusted(
   ctx: ContextWith<'connectorWrites'>,
   opts: ConnectorRememberOptions,
 ): Promise<RememberResult> {
-  const prepared = prepareRemember(ctx, opts, true);
+  const prepared = prepareRemember(ctx, opts, { untrusted: true, holds: true });
   const written = await ctx.store.connectorWrites.writeConnectorEntry({
     entry: prepared.entry,
     actor: ctx.actor.subject,
     event: opts.event,
-    quarantine: quarantineOf(prepared),
+    quarantine: prepared.quarantine,
   });
   await autoSleepAfterWrite(ctx);
   return rememberResult(ctx, prepared, written);

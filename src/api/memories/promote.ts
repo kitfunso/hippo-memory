@@ -25,6 +25,7 @@ import {
   scopeReaderOf,
 } from '../../base/scope/recall-scope.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
+import { markedTags, reviewerOf, screenWrite, type ReviewGroup } from './write-screen.js';
 
 /** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and
  * we add a 'promote' audit event so intent stays distinct. The copy keeps the entry's tenantId
@@ -115,6 +116,8 @@ export interface SupersedeResult {
   ok: true;
   oldId: string;
   newId: string;
+  /** Set when the successor was held for review: the old row is superseded, and the new one waits in the queue. */
+  quarantined?: { reason: string };
 }
 /** What the successor takes instead of the old row's value. Never set from a request body: the
  * CLI fills it from its flags. */
@@ -129,28 +132,56 @@ export async function supersede(
   newContent: string,
   overrides: SupersedeOverrides = {},
 ): Promise<SupersedeResult> {
-  const store = ctx.store;
-  const entryWrites = store.entryWrites;
-  const [old] = await store.entriesByIds([oldId], ctx.tenantId);
-  const successor = createSuccessor(
-    assertSupersedable(ctx, oldId, old ?? null),
+  return supersedeScreened(ctx, oldId, newContent, overrides);
+}
+
+/** The successor runs the same screen as remember: a member's flagged text in a shared scope is held where the
+ * store reviews, else tagged. Secret vetting is not done here. */
+async function supersedeScreened(
+  ctx: ContextWith<never, ReviewGroup>,
+  oldId: string,
+  newContent: string,
+  overrides: SupersedeOverrides,
+): Promise<SupersedeResult> {
+  const [old] = await ctx.store.entriesByIds([oldId], ctx.tenantId);
+  const target = assertSupersedable(ctx, oldId, old ?? null);
+  const reviewer = reviewerOf(ctx);
+  const verdict = screenWrite(ctx.actor, {
+    content: newContent,
+    scope: target.scope ?? null,
+    untrusted: false,
+    holds: reviewer !== undefined,
+  });
+  const next = createSuccessor(
+    target,
     newContent,
     {
       tenantId: ctx.tenantId,
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
       layer: overrides.layer,
-      tags: overrides.tags,
+      tags: markedTags(overrides.tags ?? target.tags, verdict.marks),
       pinned: overrides.pinned,
     },
     ctx.infra.clock(),
   );
-  await entryWrites.supersede({
+  const successor = { ...next, scope: verdict.scope };
+  const write = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     ...scopeReaderOf(ctx.actor),
     oldId,
     successor,
-  });
+  };
+  if (reviewer && verdict.quarantine) {
+    await reviewer.supersedeHeld({ ...write, quarantine: verdict.quarantine });
+    return {
+      ok: true,
+      oldId,
+      newId: successor.id,
+      quarantined: { reason: verdict.quarantine.reason },
+    };
+  }
+  await ctx.store.entryWrites.supersede(write);
   return { ok: true, oldId, newId: successor.id };
 }
 

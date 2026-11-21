@@ -1,5 +1,5 @@
 // The connector groups of the store port and the rows they read and write.
-import type { EntryWrite, RawArchive } from './entry-writes.js';
+import type { EntryWrite, RawArchive, SupersedeWrite } from './entry-writes.js';
 import type { MethodEffects } from './effects.js';
 
 /** What a connector delivery reads and writes beside connectorWrites, one method family per
@@ -236,8 +236,8 @@ export interface SlackWorkspace {
   addedAt: string; // ISO timestamp
 }
 
-/** A connector's writes with the rows that must commit with them: the event log row that turns a
- * redelivery into a no-op, and the quarantine record of flagged content. */
+/** Writes with the rows that must commit with them: the event log row that turns a redelivery into a no-op, and
+ * the review record of a held row. */
 export interface ConnectorWrites {
   /** entryWrites.writeEntry plus, in its transaction: with `quarantine`, one pending record and
    * quarantine row; with `event`, one log row. All commit or none. A key logged before resolves
@@ -249,19 +249,29 @@ export interface ConnectorWrites {
    * logged before keeps its row and does not stop the archive. Reach and every rejection are
    * archiveRaw's own. */
   archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
+  /** entryWrites.supersede with the successor held: in its transaction, one pending record and quarantine row
+   * for the successor, whose entry already carries its quarantine scope. Reach, the old row's checks and every
+   * refusal are supersede's own; a refusal writes no record. */
+  supersedeHeld(write: HeldSupersede): Promise<void>;
 }
 
 /** What each ConnectorWrites method does to the store; every adapter honours it. */
 export const CONNECTOR_WRITES_EFFECTS = {
   writeConnectorEntry: 'write',
   archiveConnectorEntry: 'write',
+  supersedeHeld: 'write',
 } as const satisfies MethodEffects<ConnectorWrites>;
 
-/** An entry a connector brings in. `quarantine` is the review record of flagged content, whose
+/** An entry a connector brings in, or a member's write held for review. `quarantine` is the review record, whose
  * entry already carries its quarantine scope. */
 export interface ConnectorWrite extends EntryWrite {
   readonly event?: ConnectorEvent;
   readonly quarantine?: { readonly originalScope: string | null; readonly reason: string };
+}
+
+/** A member's supersede whose successor waits for review; `quarantine` is its review record. */
+export interface HeldSupersede extends SupersedeWrite {
+  readonly quarantine: NonNullable<ConnectorWrite['quarantine']>;
 }
 
 /** 'duplicate': the event's key was logged before; `memoryId` is the id its log row holds, null

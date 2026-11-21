@@ -31,6 +31,9 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
 
   const tagStr = result.tags.join(', ') || 'none';
   const warnings = (result.warnings ?? []).map((w) => `\nWarning: ${w}`).join('');
+  if (result.quarantined) {
+    return `Quarantined [${result.id}] for admin review (reason: ${result.quarantined.reason}, tags: ${tagStr})${warnings}`;
+  }
   return `Remembered [${result.id}] (half-life: ${result.halfLifeDays}d, tags: ${tagStr})${warnings}`;
 }
 

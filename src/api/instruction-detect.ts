@@ -4,8 +4,8 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
-/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
- * untrusted. */
+/** What a member's flagged row in a shared scope carries: held for review on a store that reviews, else kept;
+ * either way it prints framed. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
 
 /** What every untrusted write (connector text) carries, so it prints framed whatever the

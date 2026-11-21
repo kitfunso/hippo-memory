@@ -157,7 +157,13 @@ async function printRemembered(outcome: Remembered, useGlobal: boolean): Promise
     console.log(`Weakened (salience: ${weak.reason}, strength ${weak.strength.toFixed(2)})`);
   }
   if (outcome.status === 'relayed') {
-    console.log(`Remembered [${outcome.id}] (via ${outcome.via})`);
+    const held = outcome.quarantined;
+    console.log(
+      held
+        ? `Quarantined [${outcome.id}] (via ${outcome.via}) for admin review (reason: ${held.reason}); ` +
+            `an admin releases it with: hippo quarantine approve ${outcome.id}`
+        : `Remembered [${outcome.id}] (via ${outcome.via})`,
+    );
     console.log(`   Kind: ${outcome.kind} | Tenant: ${outcome.tenantId}`);
   } else {
     printEntry(outcome.entry, useGlobal);

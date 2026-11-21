@@ -8,10 +8,10 @@ import type { Cards } from './store/cards.js';
 import type { Conflicts } from './store/conflicts.js';
 import type { Rejections } from './store/rejections.js';
 
-/** The connector webhooks and verbs, and the queue a flagged connector row waits in; without
+/** The connector webhooks and verbs, and the queue a held row waits in; without
  * them, both webhooks and /v1/quarantine answer 501. */
 export interface ConnectorGroups {
-  /** A write that carries a connector event or untrusted content. */
+  /** A write that carries a connector event or a review record. */
   readonly connectorWrites: ConnectorWrites;
   /** Both connector webhooks' dedup, dead letters and tenant routing. */
   readonly connectorEvents: ConnectorEvents;

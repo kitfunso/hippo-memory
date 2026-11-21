@@ -40,6 +40,8 @@ export interface Actor {
   /** The host's operator (CLI, stdio MCP, host-tenant admin key): may act beyond its
    * tenant. */
   hostAdmin?: true;
+  /** The operator's own CLI, signed with server.key; server auth alone sets it from that key. */
+  localKey?: true;
   owner?: string; // the person behind the key; task state keys on it
 }
 

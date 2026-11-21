@@ -222,6 +222,7 @@ async function askResolver(
  * tag. */
 interface BearerIdentity extends ResolvedBearer {
   viaAuthResolver?: true;
+  localKey?: true;
   owner?: string;
 }
 
@@ -246,7 +247,13 @@ async function resolveBearer(
 ): Promise<BearerIdentity> {
   // First, so the local secret never reaches resolver plugin code.
   if (opts.localKey.matches(token)) {
-    return { tenantId: envTenant(), subject: LOCAL_KEY_SUBJECT, role: 'member', scopes: [] };
+    return {
+      tenantId: envTenant(),
+      subject: LOCAL_KEY_SUBJECT,
+      role: 'member',
+      scopes: [],
+      localKey: true,
+    };
   }
   // Routing by shape keeps key plaintext out of plugin code and stops a resolver overriding a key's
   // identity.
@@ -309,6 +316,7 @@ async function checkAuth(req: IncomingMessage, opts: AuthOptions): Promise<Beare
 function bearerActor(id: BearerIdentity): Actor {
   const actor: Actor = { subject: id.subject, role: id.role, scopes: id.scopes };
   if (id.owner !== undefined) actor.owner = id.owner;
+  if (id.localKey) actor.localKey = true;
   if (id.viaAuthResolver) actor.viaAuthResolver = true;
   // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
   else if (id.role === 'admin' && id.tenantId === envTenant()) actor.hostAdmin = true;
