@@ -442,22 +442,22 @@ describe('trust follows the author', () => {
     expect(issueCommentEventToRememberOpts(evt)?.hold).toEqual({ reason: 'outside-author:unknown' });
   });
 
-  it('applies the rule to all four event shapes', () => {
-    const user = { login: 'ana', id: 5 };
-    const issue = (association: string): GitHubIssueEvent => ({
-      action: 'opened',
-      issue: { number: 1, title: 'T', body: 'B', user, author_association: association },
-    });
-    const pull = (association: string): GitHubPullRequestEvent => ({
-      action: 'opened',
-      pull_request: { number: 3, title: 'T', body: 'B', user, author_association: association },
-    });
-    const review = (association: string): GitHubPullRequestReviewCommentEvent => ({
-      action: 'created',
-      pull_request: { number: 3 },
-      comment: { id: 4, body: 'R', user, author_association: association },
-    });
+  const user = { login: 'ana', id: 5 };
+  const issue = (association: string): GitHubIssueEvent => ({
+    action: 'opened',
+    issue: { number: 1, title: 'T', body: 'B', user, author_association: association },
+  });
+  const pull = (association: string): GitHubPullRequestEvent => ({
+    action: 'opened',
+    pull_request: { number: 3, title: 'T', body: 'B', user, author_association: association },
+  });
+  const review = (association: string): GitHubPullRequestReviewCommentEvent => ({
+    action: 'created',
+    pull_request: { number: 3 },
+    comment: { id: 4, body: 'R', user, author_association: association },
+  });
 
+  it('applies the rule to all four event shapes', () => {
     const outside = [
       issueEventToRememberOpts(issue('NONE')),
       pullRequestEventToRememberOpts(pull('NONE')),
@@ -471,6 +471,19 @@ describe('trust follows the author', () => {
 
     for (const opts of outside) expect(opts?.hold).toEqual({ reason: 'outside-author:NONE' });
     for (const opts of inside) expect('hold' in opts!).toBe(false);
+  });
+
+  it('skips the rule for a listed id on the issue, pull request and review shapes', () => {
+    const held = { reason: 'outside-author:NONE' };
+    const listed = new Set([5]);
+    const other = new Set([6]);
+
+    expect('hold' in issueEventToRememberOpts(issue('NONE'), undefined, listed)!).toBe(false);
+    expect('hold' in pullRequestEventToRememberOpts(pull('NONE'), undefined, listed)!).toBe(false);
+    expect('hold' in prReviewCommentEventToRememberOpts(review('NONE'), undefined, listed)!).toBe(false);
+    expect(issueEventToRememberOpts(issue('NONE'), undefined, other)?.hold).toEqual(held);
+    expect(pullRequestEventToRememberOpts(pull('NONE'), undefined, other)?.hold).toEqual(held);
+    expect(prReviewCommentEventToRememberOpts(review('NONE'), undefined, other)?.hold).toEqual(held);
   });
 
   it('skips the rule for a listed user id and holds the same comment when the id is not listed', () => {
