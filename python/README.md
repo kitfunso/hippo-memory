@@ -86,7 +86,7 @@ async with Hippo(api_key="sk_...") as client:
 | `forget(id)` | `DELETE /v1/memories/:id` | hard-delete |
 | `archive(id, reason?)` | `POST /v1/memories/:id/archive` | soft-archive (append-only raw memories) |
 | `supersede(id, by)` | `POST /v1/memories/:id/supersede` | mark superseded |
-| `promote(id)` | `POST /v1/memories/:id/promote` | local -> global |
+| `promote(id)` | `POST /v1/memories/:id/promote` | local -> global; on a shared server in place (`global_id == source_id`) |
 | `outcome(good, ids?)` | `POST /v1/outcome` | apply outcome; last-recall path if no ids |
 | `get_context(...)` | `GET /v1/context` | assemble context bundle for prompt injection |
 | `sleep(dry_run?, no_share?)` | `POST /v1/sleep` | consolidation (loopback-only) |

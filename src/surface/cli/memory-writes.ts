@@ -10,12 +10,14 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import * as api from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
+import { isSharedStore } from '../../host/config-file.js';
+import type { ProjectIdentity } from '../../base/scope/project-identity.js';
 import { type ServerInfo, detectServer, removePidfileIfOwned } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
 import * as client from './client.js';
-import { type CliContext, cliApiContext } from './api-context.js';
+import { type CliContext, cliApiContext, cliInfra } from './api-context.js';
 import { fail } from './exit.js';
-import { requireInit } from './shared.js';
+import { requireInit, workingFolder } from './shared.js';
 
 /** One `hippo remember`, every flag parsed and checked. */
 export interface RememberRequest {
@@ -137,7 +139,8 @@ export function localWrites(root: string, tenantId: string): MemoryWrites {
       const ctx = context();
       try {
         const { globalId } = await api.promote(ctx, id);
-        return { globalId, globalStore: hippoHomeDir() };
+        // An in-place promote on a shared store wrote no copy into the global store.
+        return globalId === id ? { globalId } : { globalId, globalStore: hippoHomeDir() };
       } catch (err) {
         fail(promoteRefusal(errorMessage(err)));
       }
@@ -234,11 +237,27 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
       ),
     promote: (id) =>
       send(
-        async () => ({ globalId: (await client.postPromote(server.url, apiKey, id)).globalId }),
-        (err) => fail(promoteRefusal(errorMessage(err))),
+        async () => {
+          // The server learns a shared folder's project from the caller, as remember sends none.
+          const project = isSharedStore(hippoRoot)
+            ? callerProjectOf(
+                cliInfra().machine.projectIdentity(workingFolder({ infra: cliInfra() })),
+              )
+            : undefined;
+          return { globalId: (await client.postPromote(server.url, apiKey, id, project)).globalId };
+        },
+        (err) => fail(promoteRefusal(servedReason(err))),
         () => local.promote(id),
       ),
   };
+}
+
+/** The wire shape of a folder's project: legacyName is a folder name, which would pool every
+ * same-named folder, so it never goes. A blank name sends none, and the server says why. */
+function callerProjectOf(identity: ProjectIdentity) {
+  if (identity.name === '') return undefined;
+  const aliases = (identity.aliases ?? []).filter((a) => a !== identity.legacyName);
+  return { name: identity.name, aliases };
 }
 
 function relayedRequest(request: RememberRequest): api.RememberOptions {

@@ -47,6 +47,12 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
     fail('Please provide a memory ID.');
   }
   const { globalId, globalStore } = await (await pickWrites(hippoRoot, tenantId)).promote(id);
+  if (globalId === id) {
+    console.log(
+      `Promoted ${id} in place: this shared store already serves it to its project, so nothing was copied.`,
+    );
+    return;
+  }
   console.log(`Promoted ${id} to global store as ${globalId}`);
   if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }

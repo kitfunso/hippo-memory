@@ -136,9 +136,8 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'caller',
-    // The copy names its source folder and goes to the operator's global store, which only a folder
-    // store reaches.
-    storeReady: 'folderFiles',
+    // No group: a shared store promotes in place through base methods; elsewhere the copy needs
+    // folderFiles.
     handler: handlePromoteMemory,
   },
   {

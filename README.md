@@ -847,7 +847,7 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo resolve <id>` | Show both conflicting memories for comparison |
 | `hippo resolve <id> --keep <mem_id>` | Resolve: keep winner, weaken loser |
 | `hippo resolve <id> --keep <mem_id> --forget` | Resolve: keep winner, delete loser |
-| `hippo promote <id>` | Copy a local memory to the global store |
+| `hippo promote <id>` | Copy a local memory to the global store (in a shared store nothing is copied: the store already serves it; with `hippo serve` running on a shared folder, a row with no project, the CLI's own rows included, reads as not found: set `HIPPO_API_KEY` to a host admin key or stop the server) |
 | `hippo share <id>` | Share with attribution + transfer scoring |
 | `hippo share <id> --force` | Share even if transfer score is low |
 | `hippo share --auto` | Auto-share all high-scoring memories |

@@ -250,7 +250,10 @@ class HippoSync:
         return SupersedeResult.model_validate(data)
 
     def promote(self, memory_id: str) -> PromoteResult:
-        """POST /v1/memories/:id/promote. Promote a local memory to the global store."""
+        """POST /v1/memories/:id/promote. Promote a local memory to the global store.
+
+        On a shared server nothing is copied and global_id equals source_id.
+        """
         data = self._request("POST", f"/v1/memories/{memory_id}/promote")
         return PromoteResult.model_validate(data)
 
