@@ -4,6 +4,7 @@ import { DeadlineError, withDeadline } from '../base/util/deadline.js';
 import { HttpError } from '../base/errors/http-errors.js';
 import { type JsonValue, isJsonString } from '../base/util/json.js';
 import { errorFields, log } from '../base/util/log.js';
+import { isStoreBusy } from '../base/util/store-blocked.js';
 import type { Context } from './types.js';
 
 const DEFAULT_REFUSAL = 'this caller may not write under this project';
@@ -20,8 +21,12 @@ export async function admitProjectWrite(
   if (project !== null) assertCallerProject(project);
   const t = ctx.projectWriteGateTimeoutMs;
   const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_GATE_DEADLINE_MS;
-  // A frozen copy, so a JS gate that mutates its argument cannot change the request's actor.
-  const actor = Object.freeze({ ...ctx.actor });
+  // A frozen copy with its own frozen scopes, so a JS gate that mutates its argument cannot change the request's actor.
+  const scopes = ctx.actor.scopes;
+  const actor = Object.freeze({
+    ...ctx.actor,
+    ...(scopes !== undefined && { scopes: Object.freeze([...scopes]) }),
+  });
   // Widened to unknown, so a JS gate that returns nothing or a non-string refuses instead of letting the write run.
   let answer: unknown;
   try {
@@ -33,6 +38,9 @@ export async function admitProjectWrite(
       log.error(`project write gate: ${err.message}`, errorFields(err));
       throw new HttpError(503, 'project write gate unavailable');
     }
+    // A busy store keeps its 503 and Retry-After; its text is fixed, so no gate text leaks.
+    if (isStoreBusy(err)) throw err;
+    log.error('project write gate: the gate threw', errorFields(err));
     // A plain Error answers 500; an HttpError or ApiError from the gate would keep its own status and text.
     throw new Error('project write gate failed', { cause: err });
   }

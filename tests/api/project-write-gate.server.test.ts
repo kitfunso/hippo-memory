@@ -7,6 +7,8 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { HttpError, admitProjectWrite, serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
 import type { AuthResolver } from '../../src/surface/server/types.js';
 import type { JsonValue } from '../../src/base/util/json.js';
+import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/util/store-blocked.js';
+import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -348,6 +350,8 @@ describe('project write gate', () => {
   });
 
   it('21. a gate that mutates the actor does not change the actor of the audit row', async () => {
+    let scopesThrew: boolean | undefined;
+    let seenScopes: readonly string[] | undefined;
     set((c) => {
       try {
         // SAFETY: the case under test is a JS gate writing to a frozen argument.
@@ -355,13 +359,96 @@ describe('project write gate', () => {
       } catch {
         // A frozen actor throws in strict mode; either way the request's actor stays.
       }
+      try {
+        // SAFETY: the case under test is a JS gate pushing into the actor's scopes.
+        (c.actor.scopes as string[]).push('admin');
+        scopesThrew = false;
+      } catch {
+        scopesThrew = true;
+      }
+      seenScopes = c.actor.scopes;
       return null;
     });
     const r = await write(gated.url, keyM.plaintext, 'case21');
     expect(r.status, r.text).toBe(200);
     expect(Object.isFrozen(calls.at(-1)?.actor)).toBe(true);
+    expect(seenScopes).toBeDefined();
+    expect(scopesThrew).toBe(true);
+    // A second call sees the request's own scopes, unchanged by the first gate.
+    let second: readonly string[] | undefined;
+    set((c) => {
+      second = c.actor.scopes;
+      return null;
+    });
+    await write(gated.url, keyM.plaintext, 'case21b');
+    expect(second).toEqual([]);
     const audited = query<{ actor: string }>('SELECT actor FROM audit_log');
     expect(audited.map((a) => a.actor)).toContain(`api_key:${keyM.keyId}`);
     expect(audited.map((a) => a.actor)).not.toContain('hijacked');
+  });
+
+  it('22. a gate that throws StoreBusyError answers 503 with Retry-After and the store-busy text', async () => {
+    set(() => {
+      throw new StoreBusyError();
+    });
+    const res = await fetch(`${gated.url}/v1/memories`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        authorization: `Bearer ${keyM.plaintext}`,
+      },
+      body: JSON.stringify({ content: 'case22', force: true, project: { name: 'alpha' } }),
+    });
+    const text = await res.text();
+    expect(res.status, text).toBe(503);
+    expect(res.headers.get('retry-after')).not.toBeNull();
+    expect(text).toContain(STORE_BUSY_MESSAGE);
+    expect(rows('case22')).toEqual([]);
+  });
+
+  it('23. a timeout above the setTimeout ceiling does not fire at once', async () => {
+    const tmp = path.dirname(path.dirname(store));
+    const longStore = path.join(tmp, 'srv-long', 'hippo-team');
+    fs.mkdirSync(longStore, { recursive: true });
+    initTestStore(longStore);
+    fs.writeFileSync(path.join(longStore, 'config.json'), JSON.stringify({ sharedStore: true }));
+    const key = mint('long-m', 'member', undefined, longStore);
+    const long = await serve({
+      host: '127.0.0.1',
+      port: 0,
+      authResolver: resolver,
+      hippoRoot: longStore,
+      projectWriteGateTimeoutMs: 3_000_000_000,
+      projectWriteGate: () => new Promise<null>((resolve) => setTimeout(() => resolve(null), 50)),
+    });
+    try {
+      const r = await write(long.url, key.plaintext, 'case23');
+      expect(r.status, r.text).toBe(200);
+    } finally {
+      await long.stop();
+    }
+  });
+
+  it('24. the local CLI key reaches the gate as localhost:cli with no owner', async () => {
+    const token = readLocalKey(store);
+    expect(token).toBeDefined();
+    set(() => null);
+    const r = await write(gated.url, token ?? '', 'case24');
+    expect(r.status, r.text).toBe(200);
+    expect(calls.at(-1)?.actor.subject).toBe('localhost:cli');
+    expect(calls.at(-1)?.actor.owner).toBeUndefined();
+  });
+
+  it('25. over MCP, a gate that throws an HttpError leaks none of its text', async () => {
+    set(() => {
+      const boom = new HttpError(401, 'upstream secret');
+      boom.stack = 'HttpError: gate broke';
+      throw boom;
+    });
+    const text = await mcpRemember(gated.url, keyM.plaintext, 'case25');
+    expect(text).not.toContain('upstream');
+    expect(text).not.toBe('');
+    expect(rows('case25')).toEqual([]);
   });
 });
