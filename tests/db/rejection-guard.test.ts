@@ -7,6 +7,7 @@ import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js'
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
 import { identityText } from '../../src/base/util/same-text.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
+import { DIGEST_DISPLAY_CHARS } from '../../src/base/util/token-text.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { deleteEntry, applyRebuildResult, readEntry, batchWriteAndDeleteInFolder } from '../_helpers/root-forms.js';
@@ -284,6 +285,34 @@ describe('rejection guard on rows with a lead-in', () => {
     reject(home, 'Yes.', 'never say it');
 
     for (const leadIn of [L1, L3, undefined]) expect(() => writeEntry(home, yes(leadIn))).toThrow(RejectedValueError);
+  });
+
+  it('says "under this lead-in" for an identity refusal and keeps the value message for a content one', () => {
+    const refusal = (home: string, leadIn: string): RejectedValueError => {
+      try {
+        writeEntry(home, yes(leadIn));
+      } catch (err) {
+        if (err instanceof RejectedValueError) return err;
+        throw err;
+      }
+      throw new Error('expected the write to be refused');
+    };
+    const tail = (digest: string, reason: string): string =>
+      `(digest ${digest.slice(0, DIGEST_DISPLAY_CHARS)}..., reason: ${reason}). Run "hippo unreject" to allow it again.`;
+
+    const scopedHome = makeRoot('rejection');
+    const scopedDigest = reject(scopedHome, identityText(yes(L1)), 'wrong answer');
+    const scoped = refusal(scopedHome, L1);
+    expect(scoped.leadInScoped).toBe(true);
+    expect(scoped.message).toBe(
+      `Memory refused: this text under this lead-in matches a rejected memory ${tail(scopedDigest, 'wrong answer')}`,
+    );
+
+    const wideHome = makeRoot('rejection');
+    const wideDigest = reject(wideHome, 'Yes.', 'never say it');
+    const wide = refusal(wideHome, L1);
+    expect(wide.leadInScoped).toBe(false);
+    expect(wide.message).toBe(`Memory value refused: matches a rejected value ${tail(wideDigest, 'never say it')}`);
   });
 
   it('refuses a same-id edit that only moves the row onto a tombstoned lead-in, and spares an unchanged re-persist', () => {

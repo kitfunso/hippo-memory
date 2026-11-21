@@ -3,7 +3,7 @@
  * `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the
  * reverse is a cycle). */
 
-import { rowDigests } from '../../../base/records/rejection-digest.js';
+import { rowDigests, tombstoneDigest } from '../../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import type { RejectedValueRow, RejectionCheck } from '../../../base/ports/store/rejections.js';
@@ -137,9 +137,10 @@ export function checkRejectionGuard(
   db: DatabaseSyncLike,
   { tenantId, entryId, content, leadIn }: RejectionCheck,
 ): void {
+  const identity = leadIn ? tombstoneDigest({ content, leadIn }) : null;
   const hits = rowDigests({ content, leadIn }).flatMap((digest) => {
     const tombstone = readRejectedValue(db, tenantId, digest);
-    return tombstone ? [{ digest, tombstone }] : [];
+    return tombstone ? [{ digest, tombstone, leadInScoped: digest === identity }] : [];
   });
   if (hits.length === 0) return; // miss ends the guard — the overwhelmingly common case
 
@@ -151,7 +152,7 @@ export function checkRejectionGuard(
   ).get(entryId) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
   const refusing = hits.find((hit) => introducesContent(storedRow, tenantId, hit.digest));
-  if (refusing) throw rejectedValueError(refusing.tombstone, entryId);
+  if (refusing) throw rejectedValueError(refusing.tombstone, entryId, refusing.leadInScoped);
 }
 
 /** The columns of the row an id holds now that say whether a write to it introduces content. */
@@ -178,12 +179,17 @@ export function introducesContent(
 }
 
 /** The refusal of a write to `entryId` that `tombstone` matched. */
-function rejectedValueError(tombstone: RejectedValueRow, entryId: string): RejectedValueError {
+function rejectedValueError(
+  tombstone: RejectedValueRow,
+  entryId: string,
+  leadInScoped: boolean,
+): RejectedValueError {
   return new RejectedValueError({
     digest: tombstone.digest,
     tenantId: tombstone.tenantId,
     entryId,
     reason: tombstone.reason,
     rejectedAt: tombstone.rejectedAt,
+    leadInScoped,
   });
 }

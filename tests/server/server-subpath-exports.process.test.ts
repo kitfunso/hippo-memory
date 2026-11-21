@@ -85,6 +85,7 @@ const STORE_KIT_VALUES = [
   'ftsTermParts',
   'hasGroup',
   'heldTexts',
+  'identityText',
   'initStore',
   'interleaveRows',
   'isoInstant',
@@ -112,6 +113,7 @@ const STORE_KIT_VALUES = [
   'rejectionDigest',
   'replacesIndex',
   'requireGroup',
+  'rowDigests',
   'runStoreConformance',
   'SCHEMA_FIT_WINDOW_ROWS',
   'SECRET_TAGS',
@@ -121,6 +123,7 @@ const STORE_KIT_VALUES = [
   'StoreBusyError',
   'tallyAmbientEntries',
   'targetReader',
+  'tombstoneDigest',
 ];
 const STORE_KIT_TYPES = [
   'ActiveGoals',
