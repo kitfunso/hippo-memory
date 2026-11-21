@@ -10,7 +10,7 @@ import { ERROR_TAG } from '../../base/memory/entry.js';
 import { mcpApiContext, type GroupToolCall, type ToolCall } from './protocol.js';
 import { keptShownIds } from '../../api/recall/last-recalled.js';
 import { DEFAULT_LEARN_DAYS, MAX_CONTENT_LEN, MAX_ID_LEN } from '../../base/util/limits.js';
-import { boolArg, numberArg, stringArg } from './tool-args.js';
+import { boolArg, numberArg, optionalStringArg, stringArg } from './tool-args.js';
 
 export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> {
   const text = stringArg(args, 'text', MAX_CONTENT_LEN);
@@ -24,6 +24,7 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
   // when one is due.
   const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
+    leadIn: optionalStringArg(args, 'lead_in', MAX_CONTENT_LEN),
     tags,
     personal: boolArg(args, 'personal'),
     project: ctx?.project,

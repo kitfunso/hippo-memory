@@ -51,6 +51,48 @@ describe('api.remember with salienceGate', () => {
   });
 });
 
+describe('api.remember with salienceGate and a lead-in', () => {
+  const FLIGHT = 'user: Is the flight booked?';
+  const JOB = 'user: Did Mel get the job?';
+
+  it('keeps a short reply under a new lead-in, and skips it only under the lead-in it already has', async () => {
+    const ctx = store(true);
+    const gated = (content: string, leadIn?: string) => remember(ctx, { content, leadIn, tags: [], salienceGate: true });
+    expect(await gated('Yes.')).toEqual({ skipped: { reason: 'content_too_short', score: 0 } });
+    expect('id' in (await gated('Yes.', FLIGHT))).toBe(true);
+    expect('id' in (await gated('Yes.', JOB))).toBe(true);
+    expect(await gated('Yes.', `  ${FLIGHT.replace(/ /g, '  ')}\n`)).toEqual({
+      skipped: { reason: expect.stringContaining('duplicate'), score: 0.1 },
+    });
+    expect(rowCount(ctx)).toBe(2);
+  });
+
+  it('judges a write the same way as before when no row in its window has a lead-in', async () => {
+    const ctx = store(true);
+    await remember(ctx, { content: TEXT, tags: [] });
+    const gated = (content: string) => remember(ctx, { content, tags: [], salienceGate: true });
+    expect(await gated('Yes.')).toEqual({ skipped: { reason: 'content_too_short', score: 0 } });
+    expect(await gated(TEXT)).toEqual({ skipped: { reason: expect.stringContaining('duplicate'), score: 0.1 } });
+    expect(await gated('the invoice worker sends a receipt after each charge')).toHaveProperty('id');
+    expect(await gated('the billing service retries a failed charge four times')).not.toHaveProperty('skipped');
+  });
+
+  it('starts an error turn weak when its lead-in repeats the row before it, which a bare turn does not', async () => {
+    const ctx = store(true);
+    // Four recent errors fill maxRepeatErrors; the last one is the row the lead-in repeats.
+    for (let i = 0; i < 4; i++) {
+      await remember(ctx, { content: `Error ${i}: connection timeout on database`, tags: ['error'] });
+    }
+    const gated = (leadIn?: string) =>
+      remember(ctx, { content: 'Retry fails again', leadIn, tags: ['error'], salienceGate: true });
+    const bare = await gated();
+    expect(bare).toHaveProperty('id');
+    expect(bare).not.toHaveProperty('startedWeak');
+    const led = await gated('Error 3: connection timeout on database');
+    expect(led).toMatchObject({ startedWeak: { reason: expect.stringMatching(/^repeat_error \(/), strength: 0.3 } });
+  });
+});
+
 describe('POST /v1/memories gate and force', () => {
   let ctx: FullContext;
   let handle: ServerHandle;
@@ -93,6 +135,14 @@ describe('POST /v1/memories gate and force', () => {
     expect(rowCount(ctx)).toBe(0);
     expect(await (await call('POST', '/v1/memories', { content: 'yes', force: true })).json()).toHaveProperty('id');
     expect(rowCount(ctx)).toBe(1);
+  });
+
+  it('stores leadIn, and refuses one that is not a string', async () => {
+    const body = { content: 'Yes.', leadIn: ' user: Is the flight booked? ', force: true };
+    expect((await call('POST', '/v1/memories', body)).status).toBe(200);
+    expect(loadAllEntries(ctx.hippoRoot, ctx.tenantId).map((e) => e.leadIn)).toEqual(['user: Is the flight booked?']);
+    const res = await call('POST', '/v1/memories', { content: TEXT, leadIn: 7 });
+    expect([res.status, await res.json()]).toEqual([400, { error: 'leadIn must be a string' }]);
   });
 
   it('refuses a force that is not a boolean', async () => {

@@ -1,5 +1,6 @@
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
+    --lead-in <text>       The conversation text that led into the memory
     --error                Tag as error (boosts retention)
     --pin                  Pin memory (never decays)
     --verified             Set confidence: verified (default)

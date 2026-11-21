@@ -63,13 +63,14 @@ export const MEMORY_VERBS = {
     repairsCodexWrapper: true,
     flags: {
       switches: ['error', 'extract', 'force', 'global', 'inferred', 'observed', 'pin', 'verified'],
-      values: ['artifact-ref', 'kind', 'layer', 'owner', 'scope'],
+      values: ['artifact-ref', 'kind', 'layer', 'lead-in', 'owner', 'scope'],
       lists: ['tag'],
     },
     usage: [
       `
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
+    --lead-in <text>       The conversation text that led into the memory
     --error                Tag as error (boosts retention)
     --pin                  Pin memory (never decays)
     --verified             Set confidence: verified (default)

@@ -64,6 +64,18 @@ describe('detectSecret patterns', () => {
     expect(flagged('rotate quarterly', ['SECRET'])).toBe(true);
   });
 
+  it('flags a secret that sits only in the lead-in, and a key-ish word in either text vouches for the guarded shapes', () => {
+    const leadIn = 'service api key sk_vendor_deadbeef123456 for the ingest worker';
+    expect(detectSecret({ content: 'rotate quarterly', tags: [], leadIn })).toEqual({
+      flagged: true,
+      reason: 'pattern:sk-underscore-key',
+    });
+    expect(detectSecret({ content: 'the deploy key was rotated', tags: [], leadIn: 'sk_vendor_deadbeef123456' }).flagged).toBe(true);
+    for (const clean of [undefined, null, '', 'Did the release go out?']) {
+      expect(detectSecret({ content: 'rotate quarterly', tags: [], leadIn: clean }).flagged).toBe(false);
+    }
+  });
+
   it('does not flag benign prose', () => {
     expect(flagged('the ghp_ prefix identifies GitHub personal access tokens')).toBe(false);
     expect(flagged('use sklearn for the regression baseline')).toBe(false);
@@ -243,6 +255,28 @@ describe('producer + sync vetoes (real stores)', () => {
     expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
   });
 
+  it('shareMemory and autoShare refuse a row whose secret sits only in its lead-in', async () => {
+    writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'], leadIn: SECRET_ROW }));
+    const [row] = loadAllEntries(projA, 'default');
+    await expect(
+      shareMemory(...sharingStores(projA), row.id, {
+        actor: TEST_ACTOR,
+        embed: TEST_RUN,
+        detached: TEST_DETACHED,
+        tenantId: 'default',
+        force: true,
+      }),
+    ).rejects.toThrow(/secret/i);
+    const shared = await autoShare(...sharingStores(projA), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+      tenantId: ALL_TENANTS,
+      minScore: 0.6,
+    });
+    expect(shared).toEqual([]);
+    expect(loadAllEntries(getGlobalRoot(), 'default')).toHaveLength(0);
+  });
+
   it('autoShare silently skips secret rows and still shares clean ones', async () => {
     // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
@@ -339,6 +373,16 @@ describe('producer + sync vetoes (real stores)', () => {
     });
     expect(withCross).toBe(1); // proj-b row now copies; the secret still never does
     expect(loadAllEntries(projA, 'default').map((e) => e.content)).not.toContain(SECRET_ROW);
+  });
+
+  it('syncGlobalToLocal skips a row whose secret sits only in its lead-in', async () => {
+    writeEntry(globalStore, { ...createMemory(CLEAN_ROW, { leadIn: SECRET_ROW }), originProject: '' });
+    const count = await syncGlobalToLocal(...sharingStores(projA, globalStore), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+    });
+    expect(count).toBe(0);
+    expect(loadAllEntries(projA, 'default')).toEqual([]);
   });
 
   it('ambient context never injects a secret outside its owning project, even cross-project or with isolation off', async () => {

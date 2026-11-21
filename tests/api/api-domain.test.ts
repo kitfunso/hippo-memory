@@ -138,6 +138,14 @@ describe('api domain — recall/forget/promote/supersede', () => {
         `Refusing to promote ${id} to the global store: content matches secret material ` +
         `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`,
     ],
+    [
+      'secret-in-lead-in',
+      { leadIn: 'service api key sk_vendor_deadbeef123456 for the ingest worker' },
+      'promote-veto lead-in row',
+      (id: string) =>
+        `Refusing to promote ${id} to the global store: content matches secret material ` +
+        `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`,
+    ],
   ] as const)(
     'promote refuses a %s row with a 400 and its text, writing no copy and no promote row',
     async (_kind, scope, content, text) => {

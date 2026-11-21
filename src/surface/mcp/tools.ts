@@ -11,6 +11,7 @@ import {
   DEFAULT_LEARN_DAYS,
   MAX_FRESH_RAW,
   MAX_ID_LEN,
+  MAX_LEAD_IN_CHARS,
   MAX_LIST_LIMIT,
 } from '../../base/util/limits.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
@@ -197,6 +198,12 @@ export const TOOLS: readonly McpToolDefinition[] = [
         error: { type: 'boolean', description: 'Mark as error memory (doubles half-life)' },
         pin: { type: 'boolean', description: 'Pin memory (never decays)' },
         tag: { type: 'string', description: 'Optional tag for categorization' },
+        lead_in: {
+          type: 'string',
+          description:
+            'Optional: the conversation text that led into this memory (for example the turn before it), so a ' +
+            `short memory keeps its context. Only its last ${MAX_LEAD_IN_CHARS} characters are kept.`,
+        },
         personal: {
           type: 'boolean',
           description:

@@ -32,6 +32,8 @@ export interface LocalRememberInput {
   readonly scope?: string;
   readonly owner?: string;
   readonly artifactRef?: string;
+  /** The conversation text that led into `content`; remember trims, redacts and caps it. */
+  readonly leadIn?: string;
   readonly layer?: Layer;
   readonly pinned?: boolean;
   readonly confidence?: ConfidenceLevel;
@@ -103,6 +105,7 @@ export async function rememberLocally(
     scope: input.scope,
     owner: input.owner,
     artifactRef: input.artifactRef,
+    leadIn: input.leadIn,
     tags: [...input.tags],
     salienceGate: input.force !== true,
     local: {
