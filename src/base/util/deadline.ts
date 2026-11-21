@@ -14,15 +14,32 @@ function isCallable<F>(value: F | undefined): value is F {
 }
 
 function adopt<T>(out: T | Promise<T>, stamp: () => void): Promise<T> {
-  // Read once and never again, as Promises/A+ 2.3.3.1 does: a getter may answer differently the second time.
-  const then: Promise<T>['then'] | undefined = Object(out).then;
-  if (!isCallable(then)) {
-    stamp();
-    return Promise.resolve(out);
-  }
+  // Promises/A+ 2.3.3: read `then` once, call it through the intrinsic call, and let the first reaction win.
   return new Promise<T>((resolve, reject) => {
-    then.call(out, resolve, reject);
-  }).finally(stamp);
+    let settled = false;
+    const ok = (value: T | Promise<T>): void => {
+      if (settled) return;
+      settled = true;
+      resolve(adopt(value, stamp));
+    };
+    const fail: typeof reject = (err) => {
+      if (settled) return;
+      settled = true;
+      stamp();
+      reject(err);
+    };
+    try {
+      const then: Promise<T>['then'] | undefined = Object(out).then;
+      if (isCallable(then)) {
+        Function.prototype.call.call(then, out, ok, fail);
+      } else {
+        stamp();
+        resolve(out);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 }
 
 /** Runs `run` against a deadline: past it the signal aborts and the call rejects with DeadlineError. */

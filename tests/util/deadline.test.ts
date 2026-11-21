@@ -136,4 +136,51 @@ describe('withDeadline', () => {
     const plain = Object.defineProperty({ id: 7 }, THEN, { get: () => 0 });
     await expect(withDeadline(1_000, () => plain)).resolves.toBe(plain);
   });
+
+  it('keeps a settled native answer on time when another callback awaits once and then blocks', async () => {
+    const [fast, slow] = await Promise.allSettled([
+      withDeadline(20, async () => 'fast'),
+      withDeadline(10, async () => {
+        await Promise.resolve();
+        busyWait(80);
+        return 'slow';
+      }),
+    ]);
+    expect(fast).toEqual({ status: 'fulfilled', value: 'fast' });
+    expect(slow.status).toBe('rejected');
+    expect(slow.status === 'rejected' && slow.reason).toBeInstanceOf(DeadlineError);
+  });
+
+  it('calls a then function whose own call property is overridden', async () => {
+    const then = Object.assign((resolve: (value: string) => void): void => resolve('called'), { call: undefined });
+    const thenable = Object.defineProperty({}, THEN, { value: then });
+    await expect(withDeadline(1_000, () => thenable)).resolves.toBe('called');
+  });
+
+  it('counts only the first reaction of a thenable', async () => {
+    const thenable = Object.defineProperty({}, THEN, {
+      value: (resolve: (value: string) => void, reject: (reason: Error) => void): void => {
+        resolve('first');
+        reject(new Error('x'));
+      },
+    });
+    await expect(withDeadline(1_000, () => thenable)).resolves.toBe('first');
+  });
+
+  it('rejects when a thenable resolves with a second thenable that blocks the thread', async () => {
+    const inner = {
+      [THEN](resolve: (value: string) => void): void {
+        setTimeout(() => {
+          busyWait(60);
+          resolve('late');
+        }, 0);
+      },
+    };
+    const outer = {
+      [THEN](resolve: (value: typeof inner) => void): void {
+        resolve(inner);
+      },
+    };
+    await expect(withDeadline(10, () => outer)).rejects.toBeInstanceOf(DeadlineError);
+  });
 });
