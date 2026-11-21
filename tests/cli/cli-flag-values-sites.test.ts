@@ -84,6 +84,7 @@ const VALUE_LESS: readonly Row[] = [
     () => handleTrace(c(['record'], { task: 't', steps: STEPS, outcome: 'success', source: true })),
   ],
   ['remember', 'scope', () => handleRemember(c(['the deploy runs at noon'], { scope: true }))],
+  ['remember', 'lead-in', () => handleRemember(c(['the deploy runs at noon'], { 'lead-in': true }))],
   ['export', 'format', () => handleExport(c([], { format: true }))],
   ['import', 'file', () => handleImport(c([], { file: true }))],
   ['import', 'chatgpt', () => handleImport(c([], { chatgpt: true }))],

@@ -102,7 +102,7 @@ function parseRememberEnvelope(flags: CliFlags): RememberEnvelope {
     kind,
     owner: ownerCheck.value ?? undefined,
     artifactRef: stringFlag(flags, 'artifact-ref'),
-    leadIn: stringFlag(flags, 'lead-in'),
+    leadIn: stringFlagOrExit(flags, 'lead-in'),
     scope,
   };
 }
