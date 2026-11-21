@@ -1,6 +1,6 @@
 // The lead-in contract: the conversation text that led into a memory, capped at the record and vetted at every write.
 import { describe, expect, it } from 'vitest';
-import { remember, rememberUntrusted, retrieve } from '../../src/api/index.js';
+import { remember, rememberUntrusted, retrieve, supersede } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { shownText } from '../../src/base/memory/lead-in.js';
 import { MAX_LEAD_IN_CHARS } from '../../src/base/util/limits.js';
@@ -61,7 +61,10 @@ describe('remember with a lead-in', () => {
   it('redacts a secret in the lead-in, and its warning follows the content warnings with a prefix', async () => {
     const ctx = newCtx();
     const result = await remember(ctx, { content: `${REPLY} Key ${TOKEN}`, leadIn: `${TURN} My token is ${TOKEN}` });
-    expect(result.warnings).toEqual([expect.stringMatching(/^secret-shaped text/), expect.stringMatching(REDACTED_WARNING)]);
+    expect(result.warnings).toEqual([
+      expect.stringMatching(/^secret-shaped text/),
+      expect.stringMatching(REDACTED_WARNING),
+    ]);
     const leadIn = storedLeadIn(ctx, result.id);
     expect(leadIn).toBe(`${TURN} My token is [REDACTED]`);
     expect(readEntry(ctx.hippoRoot, result.id)?.content).not.toContain(TOKEN);
@@ -148,6 +151,18 @@ describe('hippo_remember with lead_in', () => {
     expect(text).toContain('\nWarning: lead-in: secret-shaped text was redacted');
     const id = /\[(mem_[0-9a-f]+)\]/.exec(text)?.[1] ?? '';
     expect(storedLeadIn(ctx, id)).toBe(`${TURN} My token is [REDACTED]`);
+  });
+});
+
+describe('supersede of a row with a lead-in', () => {
+  it('hands the lead-in to the successor, so a question-only recall finds it and not the old row', async () => {
+    const ctx = newCtx();
+    const old = await remember(ctx, { content: REPLY, leadIn: TURN });
+    const { newId } = await supersede(ctx, old.id, 'Twice a week now; the rain moved one run.');
+    expect(storedLeadIn(ctx, newId)).toBe(TURN);
+    const { results } = await retrieve(ctx, { query: 'Mel' });
+    expect(results.map((r) => r.id)).toEqual([newId]);
+    expect(results[0]?.leadIn).toBe(TURN);
   });
 });
 

@@ -340,8 +340,8 @@ async function tiePlaces(
   });
 }
 
-function identityOf({ content, id, layer, tags, source }: EntryIdentity): EntryIdentity {
-  return { content, id, layer, tags, source };
+function identityOf({ content, leadIn, id, layer, tags, source }: EntryIdentity): EntryIdentity {
+  return { content, leadIn, id, layer, tags, source };
 }
 
 /** How many of `held`, sorted, come before `row`. */

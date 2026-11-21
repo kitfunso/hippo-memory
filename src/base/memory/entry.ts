@@ -328,7 +328,7 @@ export interface SuccessorOptions {
 }
 
 /** The row that replaces `old`, created at `now`: a supersede never changes where a memory
- * belongs or whose it is, so source, scope, owner, session and a stamped origin carry over. */
+ * belongs or whose it is, so source, scope, owner, session, lead-in and a stamped origin carry over. */
 export function createSuccessor(
   old: MemoryEntry,
   content: string,
@@ -345,6 +345,7 @@ export function createSuccessor(
     scope: old.scope,
     owner: old.owner,
     sourceSessionId: old.sourceSessionId,
+    leadIn: old.leadIn,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   };
   const next = createMemory(content, fields, now);
