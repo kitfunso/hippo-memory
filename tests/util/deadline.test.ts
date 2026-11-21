@@ -8,6 +8,9 @@ function busyWait(ms: number): void {
   while (performance.now() < end);
 }
 
+// The key is built at run time, so unicorn/no-thenable stays quiet about objects that must be plain thenables.
+const THEN = ['th', 'en'].join('');
+
 describe('withDeadline', () => {
   it('rejects a synchronous callback that blocks past the deadline and aborts its signal', async () => {
     let seen: AbortSignal | undefined;
@@ -105,8 +108,6 @@ describe('withDeadline', () => {
   });
 
   it('rejects a plain thenable that blocks the thread before it resolves', async () => {
-    // The key is built at run time, so unicorn/no-thenable stays quiet about an object that must be a plain thenable.
-    const THEN = ['th', 'en'].join('');
     const thenable = {
       [THEN](resolve: (value: string) => void): void {
         setTimeout(() => {
@@ -116,5 +117,23 @@ describe('withDeadline', () => {
       },
     };
     await expect(withDeadline(10, () => thenable)).rejects.toBeInstanceOf(DeadlineError);
+  });
+
+  it('reads then of a returned thenable once', async () => {
+    let reads = 0;
+    const thenable = Object.defineProperty({}, THEN, {
+      get() {
+        reads += 1;
+        if (reads > 1) throw new Error('then read twice');
+        return (resolve: (value: string) => void): void => resolve('once');
+      },
+    });
+    await expect(withDeadline(1_000, () => thenable)).resolves.toBe('once');
+    expect(reads).toBe(1);
+  });
+
+  it('returns a plain object whose then is not a function as the same object', async () => {
+    const plain = Object.defineProperty({ id: 7 }, THEN, { get: () => 0 });
+    await expect(withDeadline(1_000, () => plain)).resolves.toBe(plain);
   });
 });
