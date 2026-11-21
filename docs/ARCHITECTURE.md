@@ -151,6 +151,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 ### src/api/memories/promote.ts
 - `PromoteResult`: `copyToGlobal` reads the local row in `opts.tenantId` (`promote` passes the caller's) and keeps the entry's tenantId on the global side.
 - `assertPromotable`: CD5: same veto as shareMemory; a promoted copy would have no quarantine record to review. The quarantine, personal-scope and secret vetoes moved here from `src/store` in 3.0; the store keeps only `promotion.writeCopy`.
+- `promoteInPlace`: a shared store copies nothing: project admission first, then the laptop vetoes, one `promote` audit row, and `globalId` equals `sourceId`.
 - `SupersedeResult`: Mirrors `cmdSupersede` in cli.ts (without flag-driven layer/tag/pin overrides — A1 keeps the API minimal; the CLI handler will continue to handle those flags and pass the resolved values once Task 4 lands).
 - `ArchiveRawOpts`: We DO NOT emit a second audit event here to avoid double-emitting the archive_raw op (unlike Task 1 remember/forget where the underlying helpers hardcode actor='cli').
 - `ArchiveRawOpts.event`: Took the place of `afterArchive`, the connector idempotency hook of v0.39 commit 3, which passed the archive's database handle through the api contract. The store's `connectorWrites` group now logs the event in the archive's transaction.

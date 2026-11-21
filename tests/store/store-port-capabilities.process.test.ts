@@ -133,15 +133,20 @@ describe('serve() under a store without local files', () => {
     expect(res.status).toBe(501);
   });
 
-  it('POST /v1/memories/:id/promote answers 501', async () => {
+  it('POST /v1/memories/:id/promote runs in place on a port-only store', async () => {
     const root = newRoot('capability-promote-http');
     const { plaintext } = keyFor(root, 'default');
+    const row = createMemory('the port-only store serves this row to every reader');
+    writeEntry(root, row);
     const handle = await start(root, portOnlyStore(root));
-    const res = await fetch(`${handle.url}/v1/memories/m1/promote`, {
+    const res = await fetch(`${handle.url}/v1/memories/${row.id}/promote`, {
       method: 'POST',
       headers: jsonHeaders(plaintext),
     });
-    expect(res.status).toBe(501);
+    expect({ status: res.status, body: await res.json() }).toEqual({
+      status: 200,
+      body: { ok: true, sourceId: row.id, globalId: row.id, originProject: '' },
+    });
   });
 
   it('still fences hippo.db inside a request on a folder marked for another store', async () => {

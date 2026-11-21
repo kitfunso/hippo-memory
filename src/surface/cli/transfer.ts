@@ -46,7 +46,21 @@ export async function handlePromote({ hippoRoot, tenantId, args }: CommandContex
   if (!id) {
     fail('Please provide a memory ID.');
   }
-  const { globalId, globalStore } = await (await pickWrites(hippoRoot, tenantId)).promote(id);
+  const { globalId, globalStore, originProject } = await (
+    await pickWrites(hippoRoot, tenantId)
+  ).promote(id);
+  if (globalId === id) {
+    const inPlace = `Promoted ${id} in place: `;
+    const line =
+      originProject === null
+        ? `${inPlace}nothing was copied. This row has no project, ` +
+          "so a member's project-scoped context read leaves it out."
+        : originProject === ''
+          ? `${inPlace}nothing was copied. This row is user-global, so every project's context read includes it.`
+          : `${inPlace}this shared store already serves it to its project, so nothing was copied.`;
+    console.log(line);
+    return;
+  }
   console.log(`Promoted ${id} to global store as ${globalId}`);
   if (globalStore !== undefined) console.log(`   Global store: ${globalStore}`);
 }

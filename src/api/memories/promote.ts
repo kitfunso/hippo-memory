@@ -6,6 +6,8 @@ import {
   memoryNotFoundText,
 } from '../../base/errors/api-errors.js';
 import type { ConnectorEvent, StoreHome } from '../../base/ports/store.js';
+import { StoreNotPortedError } from '../../base/util/store-blocked.js';
+import { assertCallerProject, classifyOriginProject } from '../../base/scope/project-identity.js';
 import {
   createSuccessor,
   generateId,
@@ -26,15 +28,32 @@ import {
 } from '../../base/scope/recall-scope.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
 
-/** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and
- * we add a 'promote' audit event so intent stays distinct. The copy keeps the entry's tenantId
- * on the global side. */
+/** `globalId` names the copy in the global store; on a shared store nothing is copied and it
+ * equals `sourceId`. */
 export interface PromoteResult {
   ok: true;
   sourceId: string;
   globalId: string;
+  /** Set on a shared store only: the row's origin project, null when it has none. */
+  originProject?: string | null;
 }
-export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Promise<PromoteResult> {
+
+/** The caller's project, which a shared store needs to tell whose row it is. */
+export interface PromoteOptions {
+  readonly project?: { readonly name: string; readonly aliases?: readonly string[] };
+}
+
+/** Copies a local memory into the global store; the inner writeEntry emits 'remember' there, and
+ * we add a 'promote' audit event so intent stays distinct. The copy keeps the entry's tenantId
+ * on the global side. A shared store copies nothing: see promoteInPlace. */
+export async function promote(
+  ctx: ContextWith<never, 'folderFiles'>,
+  id: string,
+  opts: PromoteOptions = {},
+): Promise<PromoteResult> {
+  if (sharedStoreOf(ctx)) return promoteInPlace(ctx, id, opts.project);
+  const files = ctx.store.folderFiles;
+  if (files === undefined) throw new StoreNotPortedError(ctx.store.kind, 'folderFiles');
   // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
   // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
@@ -49,12 +68,7 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
 
   // The 'promote' row commits with the global copy, so no write follows the commit and a busy store
   // fails the whole promote.
-  const globalEntry = globalCopyOf(
-    await ctx.store.folderFiles.home(),
-    entry,
-    sharedStoreOf(ctx),
-    ctx.infra.clock(),
-  );
+  const globalEntry = globalCopyOf(await files.home(), entry);
   await target.store.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
@@ -68,23 +82,66 @@ export async function promote(ctx: ContextWith<'folderFiles'>, id: string): Prom
 }
 
 /** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL
- * row gets its folder back; a shared store's folder is no caller's project, so NULL stays and
- * the label names no path. */
-function globalCopyOf(
-  local: StoreHome,
-  entry: MemoryEntry,
-  shared: boolean,
-  now: Date,
-): MemoryEntry {
+ * row gets its folder back. */
+function globalCopyOf(local: StoreHome, entry: MemoryEntry): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),
-    source: shared ? `shared::${now.toISOString()}` : `promoted:${local.folder}`,
-    originProject: entry.originProject ?? (shared ? null : local.project.name),
+    source: `promoted:${local.folder}`,
+    originProject: entry.originProject ?? local.project.name,
   };
 }
 
+async function promoteInPlace(
+  ctx: Context,
+  id: string,
+  project: PromoteOptions['project'],
+): Promise<PromoteResult> {
+  // A host admin names no project; every other caller must, before any row is read.
+  if (!ctx.actor.hostAdmin) {
+    if (project === undefined) {
+      throw new BadRequestError("a shared store needs the caller's project");
+    }
+    assertCallerProject(project);
+  }
+  const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
+  const ref =
+    project === undefined
+      ? undefined
+      : { name: project.name, legacyName: project.name, aliases: [...(project.aliases ?? [])] };
+  const admitted =
+    ctx.actor.hostAdmin === true ||
+    (entry !== undefined &&
+      ref !== undefined &&
+      classifyOriginProject(entry.originProject, ref) !== 'cross-project');
+  // An unadmitted row fails like a missing one, so the reply says nothing of other projects.
+  const row = admitted ? entry : undefined;
+  assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
+  assertPromotable(id, row);
+  // A shared store already serves the row to its project, so a copy would only be a duplicate the
+  // next dedupe deletes.
+  await ctx.store.appendAuditEvents([
+    {
+      tenantId: ctx.tenantId,
+      actor: ctx.actor.subject,
+      op: 'promote',
+      targetId: id,
+      metadata: { sourceId: id },
+    },
+  ]);
+  return { ok: true, sourceId: id, globalId: id, originProject: row.originProject ?? null };
+}
+
 function assertPromotable(id: string, entry: MemoryEntry): void {
+  // The copy of a superseded row is born superseded and recall drops it.
+  if (isSuperseded(entry)) {
+    const by = entry.supersededBy;
+    throw new ConflictError(
+      by === ''
+        ? `Refusing to promote ${id}: it is already superseded.`
+        : `Refusing to promote ${id}: it is superseded by ${by}; promote that one instead.`,
+    );
+  }
   // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
