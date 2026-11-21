@@ -142,6 +142,36 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     expect(text).not.toContain('[tail]');
   });
 
+  it('previews a tail row by its content, so a lead-in cannot fill the cut', async () => {
+    const lead = 'user: How often do you and Mel run?';
+    const row = createMemory('Three times a week; it keeps us on track.', {
+      layer: Layer.Buffer,
+      kind: 'raw',
+      sourceSessionId: 'sess-A',
+      leadIn: lead,
+    });
+    writeEntry(home, row);
+    const res = await callTool(
+      'hippo_recall',
+      { query: 'zzqqxx', fresh_tail_count: 1, fresh_tail_session_id: 'sess-A' },
+      mcpContext({
+        hippoRoot: home,
+        tenantId: 'default',
+        actor: 'mcp',
+        role: 'admin',
+        hostAdmin: true,
+        store: sqliteStore(home),
+        config: cliConfig(home),
+        infra: testInfra(),
+      }),
+    );
+    // SAFETY: hippo_recall's tool result carries result.content, as in the cases above.
+    const text = (res as { result?: { content: Array<{ text: string }> } }).result?.content?.[0]?.text ?? '';
+    const line = text.split('\n').find((l) => l.startsWith(`- [tail] ${row.id}:`));
+    expect(line).toBe(`- [tail] ${row.id}: Three times a week; it keeps us on track.`);
+    expect(text).not.toContain(lead);
+  });
+
   it('env unset, no session_id, fresh_tail_count > 0 → no error (back-compat)', async () => {
     for (let i = 0; i < 3; i++) {
       writeEntry(

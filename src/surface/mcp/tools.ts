@@ -201,8 +201,9 @@ export const TOOLS: readonly McpToolDefinition[] = [
         lead_in: {
           type: 'string',
           description:
-            'Optional: the conversation text that led into this memory (for example the turn before it), so a ' +
-            `short memory keeps its context. Only its last ${MAX_LEAD_IN_CHARS} characters are kept.`,
+            'Optional: the conversation text just before this memory (for example the turn before it), so a ' +
+            'short memory keeps its context. Recall shows it above the memory, and search matches its words. ' +
+            `Only its last ${MAX_LEAD_IN_CHARS} characters are kept.`,
         },
         personal: {
           type: 'boolean',

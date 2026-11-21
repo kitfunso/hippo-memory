@@ -104,6 +104,7 @@ class MemoryEnvelope(_Base):
     scope: str | None = None
     owner: str | None = None
     artifact_ref: str | None = None
+    lead_in: str | None = None
     created: str | None = None
     pinned: bool | None = None
     superseded_by: str | None = None
@@ -119,6 +120,7 @@ class RecallEntry(_Base):
 
     id: str
     content: str | None = None
+    lead_in: str | None = None
     score: float | None = None
     tokens: int | None = None
     layer: str | None = None
@@ -346,6 +348,7 @@ class ContextEntry(_Base):
         - ``tags``: list[str]
         - ``confidence``: 'verified' | 'observed' | 'inferred' | 'stale' | None
         - ``content``: memory text
+        - ``lead_in``: the text just before the memory; the key is absent when the row has none
         - ``global``: bool (true when sourced from global store)
 
         Use this when piping SDK results into LLM context or CLI-shaped
@@ -353,15 +356,18 @@ class ContextEntry(_Base):
         the model for callers who need it (e.g. for ``superseded_by``,
         ``embeddings``, ``goal_associations``).
         """
-        return {
+        lean: dict[str, Any] = {
             "id": self.entry.id,
             "score": self.score,
             "strength": self.entry.strength,
             "tags": self.entry.tags,
             "confidence": self.entry.confidence,
             "content": self.entry.content,
-            "global": bool(self.is_global),
         }
+        if self.entry.lead_in:
+            lean["lead_in"] = self.entry.lead_in
+        lean["global"] = bool(self.is_global)
+        return lean
 
 
 class ContextResult(_Base):

@@ -283,4 +283,45 @@ describe('extractRememberedFacts', () => {
     expect(unparseable).toHaveProperty('failures.0', expect.stringMatching(/^unparseable response: /));
     expect(extracted(ctx, entry)).toHaveLength(0);
   });
+
+  describe('with a lead-in', () => {
+    const LEAD_IN = 'user: How often do you and Mel run?';
+    /** The prompt the model got, from a stub that answers no facts. */
+    async function promptFor(ctx: FullContext, entry: MemoryEntry): Promise<string> {
+      let prompt = '';
+      const fetcher: typeof fetch = async (_url, init) => {
+        // SAFETY: anthropicLlm posts the Messages API body, `{ messages: [{ role, content }] }`.
+        const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
+        prompt = body.messages[0]?.content ?? '';
+        return new Response(JSON.stringify({ content: [{ text: '[]' }] }));
+      };
+      await extractRememberedFacts(withModel(ctx, fetcher), entry, { requested: true });
+      return prompt;
+    }
+
+    it('sends the lead-in marked as context above the memory', async () => {
+      const ctx = store();
+      const entry = storedRow(await rememberLocally(ctx, { content: TEXT, tags: [], leadIn: LEAD_IN }));
+      const prompt = await promptFor(ctx, entry);
+      expect(prompt).toContain(`Earlier in the conversation (context only):\n${LEAD_IN}\n\nThe memory:\n${TEXT}`);
+    });
+
+    it('sends content alone when the row has no lead-in', async () => {
+      const ctx = store();
+      const prompt = await promptFor(ctx, await stored(ctx));
+      expect(prompt).toContain(TEXT);
+      expect(prompt).not.toContain('Earlier in the conversation');
+    });
+
+    it.each(['untrusted-origin', 'source:slack', 'instruction-like'])(
+      'keeps the lead-in out of a %s row',
+      async (tag) => {
+        const ctx = store();
+        const entry = createMemory(TEXT, { tags: [tag], leadIn: LEAD_IN, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
+        const prompt = await promptFor(ctx, entry);
+        expect(prompt).toContain(TEXT);
+        expect(prompt).not.toContain(LEAD_IN);
+      },
+    );
+  });
 });
