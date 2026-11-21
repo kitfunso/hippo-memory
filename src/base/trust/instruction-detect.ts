@@ -211,3 +211,16 @@ export function instructionIn(content: string, tags: readonly string[]): Instruc
   }
   return { flagged: false, reason: null };
 }
+
+/** True when the merged tags turn one of the texts into an instruction its own tags did not make. A merge puts a line
+ * break between rows, so the only new pattern it can form is a row's text joined to the printed union of tags; a row
+ * flagged on its own tags was screened at write, or written by someone the write screen trusts. */
+export function mergeFormsInstruction(
+  texts: readonly { readonly content: string; readonly tags: readonly string[] }[],
+  mergedTags: readonly string[],
+): boolean {
+  return texts.some(
+    (t) =>
+      !instructionIn(t.content, t.tags).flagged && instructionIn(t.content, mergedTags).flagged,
+  );
+}

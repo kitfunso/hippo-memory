@@ -15,7 +15,7 @@ import {
   type Llm,
   type LlmFailure,
 } from '../../base/ports/llm.js';
-import { neverAutoShareTags } from '../sharing/share.js';
+import { frameTags, neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
@@ -153,6 +153,7 @@ export async function storeExtractedFacts(
   const inheritedTags = [
     ...source.tags.filter((t) => INHERITABLE_PREFIXES.some((p) => t.startsWith(p))),
     ...neverAutoShareTags([source]),
+    ...frameTags([source]),
   ];
 
   const entries: MemoryEntry[] = [];
