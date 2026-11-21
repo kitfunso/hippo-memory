@@ -34,6 +34,7 @@ import type {
 } from './pipeline.js';
 import { poolScope } from './rank-search.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
+import { findableText } from '../../base/memory/lead-in.js';
 
 export interface RankState {
   results: SearchResult[];
@@ -223,7 +224,7 @@ function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResul
   for (const r of pool) {
     let hits = 0;
     if (queryTokens.size > 0) {
-      const candTokens = new Set(indexTokenize(r.entry.content));
+      const candTokens = new Set(indexTokenize(findableText(r.entry)));
       for (const t of queryTokens) if (candTokens.has(t)) hits++;
     }
     const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;

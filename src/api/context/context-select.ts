@@ -21,6 +21,7 @@ import {
 } from '../../domain/context/select-policy.js';
 import type { ContextPlan } from './context-plan.js';
 import type { ContextAdmission, ContextPools } from './context-pools.js';
+import { findableText } from '../../base/memory/lead-in.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
@@ -267,7 +268,7 @@ function promptCandidateItems(
       seenCandidateIds.add(e.id);
       candidateItems.push({
         id: e.id,
-        tokens: memoryTokens(e.content, prompt),
+        tokens: memoryTokens(findableText(e), prompt),
         entry: e,
         isGlobal,
       });

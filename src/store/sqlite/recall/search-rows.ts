@@ -302,12 +302,14 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
   // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
   // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
+  // lead_in takes no LOWER: LIKE folds ASCII case itself, and a null lead-in must not reach a lower().
   return {
     sql:
       `SELECT * FROM (SELECT ${MEMORY_SELECT_COLUMNS}, updated_at ` +
       `FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}${p.plainScope.sql}${p.currentNoAlias} ` +
       `ORDER BY ${newestFirst} LIMIT ?) WHERE EXISTS (SELECT 1 FROM json_each(?) j WHERE ` +
-      `LOWER(content) LIKE j.value ESCAPE '\\' OR LOWER(tags_json) LIKE j.value ESCAPE '\\')`,
+      `LOWER(content) LIKE j.value ESCAPE '\\' OR LOWER(tags_json) LIKE j.value ESCAPE '\\' ` +
+      `OR lead_in LIKE j.value ESCAPE '\\')`,
     params: [...p.tenantParams, ...p.scopeParams, Math.max(limit, LIKE_WINDOW_ROWS), likes],
   };
 }

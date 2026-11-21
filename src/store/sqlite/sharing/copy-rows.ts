@@ -25,7 +25,8 @@ const PHRASE_WORDS = 32;
 /** The first words of `text`, which a row holding the text word for word holds in a row; null
  * when they might name no token, since an empty phrase matches no row. */
 function openingPhrase(text: string): string | null {
-  // The index holds content alone, so a lead-in row is found by the content part of its identity.
+  // The index holds the content first, then the lead-in, so the content part of the identity finds
+  // a lead-in row.
   const opening = duplicateKey(text.split(LEAD_IN_MARK)[0])
     .split(' ')
     .slice(0, PHRASE_WORDS)

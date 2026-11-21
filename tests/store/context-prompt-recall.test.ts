@@ -95,6 +95,22 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(hit?.promptRecall).toBe(true);
   });
 
+  it('admits a row whose prompt words sit only in its lead-in', async () => {
+    enablePromptRecall(local);
+    const relevant = seed(local, 'Yes, do that first.', {
+      leadIn: 'user: the postgres migration script needs a rollback plan before deploy',
+    });
+    seed(local, 'unrelated note about coffee and lunch scheduling for the office');
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: 'how should the postgres migration rollback plan work',
+    });
+
+    expect(ids(result)).toEqual([relevant.id]);
+  });
+
   it('recalls from a store with no pins and no include-recent', async () => {
     enablePromptRecall(local);
     const relevant = seed(local, 'the postgres migration script needs a rollback plan before deploy');

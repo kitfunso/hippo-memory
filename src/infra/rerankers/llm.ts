@@ -14,6 +14,7 @@ import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
 import { errorMessage } from '../../base/util/log.js';
+import { findableText } from '../../base/memory/lead-in.js';
 import { parseOutboundUrl } from '../../base/util/net.js';
 
 const DEFAULT_LLM_RERANK_TOP_K = 20;
@@ -69,7 +70,7 @@ function rerankPrompt(query: string, head: readonly SearchResult[]): string {
     `Rerank the candidates below by relevance to the query. Output a JSON array of indices (zero-indexed) in ` +
       `best-first order.`,
     `Query: ${redactSecretsStrict(query)}`,
-    ...head.map((r, i) => `[${i}] ${redactSecretsStrict(r.entry.content)}`),
+    ...head.map((r, i) => `[${i}] ${redactSecretsStrict(findableText(r.entry))}`),
     `Output format: [<int>, <int>, ...] with all ${head.length} indices.`,
   ].join('\n');
 }

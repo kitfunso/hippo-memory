@@ -57,6 +57,19 @@ describe('listEntriesMentioning on the FTS path', () => {
     expect(hit.targets).toHaveLength(1);
   });
 
+  it('matches a row by a word only its lead-in holds, on both paths', async () => {
+    const led = createMemory('Plain sentence', { leadIn: 'user: ask about the zephyrline', tenantId: 'default' });
+    writeEntry(root, led);
+    const ids = async (): Promise<string[]> =>
+      (await sqliteStore(root).learning.entriesMentioning(['zephyrline'], 'zephyrline', 'default', { limit: 100 })).entries
+        .filter((e) => e.leadIn)
+        .map((e) => e.id);
+    expect(await ids()).toEqual([led.id]);
+    setFts(root, '0');
+    expect(await ids()).toEqual([led.id]);
+    setFts(root, '1');
+  });
+
   it('matches an exact tag through the tags column', async () => {
     const result = await invalidateMatching(sqliteStore(root), { from: 'ops', to: null, type: 'removal' }, 'default', {
       dryRun: true,

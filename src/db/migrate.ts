@@ -1,4 +1,5 @@
 import { PACKAGE_VERSION, compareSemver } from '../base/util/version.js';
+import { FINDABLE_TEXT_SQL } from '../base/memory/lead-in.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -363,7 +364,7 @@ export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   // match nothing.
   db.exec(`
     INSERT INTO memories_fts(id, content, tags)
-    SELECT m.id, m.content, m.tags_json
+    SELECT m.id, ${FINDABLE_TEXT_SQL('m')}, m.tags_json
     FROM memories m
     WHERE m.id NOT IN (SELECT id FROM memories_fts WHERE id IS NOT NULL)
   `);

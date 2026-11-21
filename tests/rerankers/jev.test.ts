@@ -198,6 +198,17 @@ describe('jev reranker', () => {
     expect(body.state).not.toContain('x'.repeat(1201));
   });
 
+  it('sends a row with a lead-in as its content, then the lead-in, with a secret in it cut', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.5]));
+    // Built at runtime, so no secret-shaped literal sits in source.
+    const token = ['ghp', 'a1B2c3D4e5'.repeat(4).slice(0, 36)].join('_');
+    const entry = { ...createMemory('Three times a week'), leadIn: `user: how often do you run, token ${token}` };
+    await freshReranker()('q', [{ ...asResult('placeholder', 1.0), entry }]);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.state).toContain('[1] Three times a week\nuser: how often do you run, token ');
+    expect(body.state).not.toContain(token);
+  });
+
   it('sends HIPPO_JEV_MODEL when it is set', async () => {
     vi.stubEnv('HIPPO_JEV_MODEL', 'jev-override-sentinel');
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jevResponse([0.1, 0.9, 0.5]));

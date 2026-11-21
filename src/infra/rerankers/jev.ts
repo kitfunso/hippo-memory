@@ -12,6 +12,7 @@ import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonNumber, isJsonObject } from '../../base/util/json.js';
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { errorMessage } from '../../base/util/log.js';
+import { findableText } from '../../base/memory/lead-in.js';
 
 const REQUEST_ID_MAX_CHARS = 64;
 
@@ -53,7 +54,7 @@ export function buildRelevanceRequest(
   // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
   const lines = head.map(
     (r, i) =>
-      `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(r.entry.content), TRUNCATE_CHARS)}`,
+      `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(findableText(r.entry)), TRUNCATE_CHARS)}`,
   );
   const state =
     `Query: ${redactSecretsStrict(query)}\n\nNumbered candidate memories from an AI coding agent's ` +

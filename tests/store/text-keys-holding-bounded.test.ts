@@ -125,6 +125,22 @@ describe('copy reads of rows with a lead-in', () => {
   });
 });
 
+describe('the copy probe on the index', () => {
+  it('finds a lead-in row by its first content words through the full-text index', () => {
+    const root = makeStore('text-keys-lead-in-probe').root;
+    const led = row('Yes.', { leadIn: 'user: Is the flight booked for the zephyrline trip?' });
+    writeEntriesTogether(root, [led, row('No.', { leadIn: 'user: Is the flight booked for the zephyrline trip?' })]);
+    withDb(root, (db) => setFtsInSync(db, true));
+
+    const { result, statements } = recordStatements(() =>
+      withDb(root, (db) => listTextKeysHolding(db, { tenantId: 'default' }, [identityText(led)])),
+    );
+
+    expect(result.map((k) => k.id)).toEqual([led.id]);
+    expect(countMatching(statements, 'memories_fts MATCH')).toBe(1);
+  });
+});
+
 describe('copy reads statements', () => {
   it.each([
     [10, true],

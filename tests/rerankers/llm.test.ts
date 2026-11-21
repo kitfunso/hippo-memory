@@ -46,6 +46,22 @@ describe('llmReranker', () => {
     expect(out[2].entry.content).toBe('beta content');
   });
 
+  it('sends a row with a lead-in as its content, then the lead-in, with a secret in it cut', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '[0]' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    // Built at runtime, so no secret-shaped literal sits in source.
+    const token = ['ghp', 'a1B2c3D4e5'.repeat(4).slice(0, 36)].join('_');
+    const entry = { ...createMemory('Three times a week'), leadIn: `user: how often do you run, token ${token}` };
+    await llmReranker('q', [{ ...asResult('placeholder', 1.0), entry }]);
+    const prompt = JSON.stringify(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)));
+    expect(prompt).toContain('[0] Three times a week\\nuser: how often do you run, token ');
+    expect(prompt).not.toContain(token);
+  });
+
   it('falls back to input ordering when the model returns malformed output', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ choices: [{ message: { content: 'not a permutation' } }] }), {

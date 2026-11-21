@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { remember, rememberUntrusted } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { MAX_LEAD_IN_CHARS } from '../../src/base/util/limits.js';
+import { matchedQueryTerms } from '../../src/domain/search/bm25.js';
+import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { isQuarantineScope } from '../../src/domain/trust/quarantine.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
@@ -130,5 +133,15 @@ describe('hippo_remember with lead_in', () => {
     expect(text).toContain('\nWarning: lead-in: secret-shaped text was redacted');
     const id = /\[(mem_[0-9a-f]+)\]/.exec(text)?.[1] ?? '';
     expect(storedLeadIn(ctx, id)).toBe(`${TURN} My token is [REDACTED]`);
+  });
+});
+
+describe('BM25 over a row with a lead-in', () => {
+  it('ranks a row by a word only its lead-in holds, and names the word as matched', () => {
+    const led = createMemory(REPLY, { leadIn: TURN });
+    const other = createMemory('Deploys go out on Friday afternoon.');
+    expect(rankBm25('Mel', [led, other], { now: evalNow() }).map((r) => r.entry.id)).toEqual([led.id]);
+    expect(matchedQueryTerms(['mel'], led)).toEqual(['mel']);
+    expect(matchedQueryTerms(['mel'], createMemory(REPLY))).toEqual([]);
   });
 });

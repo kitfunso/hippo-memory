@@ -221,7 +221,12 @@ function settleFields(
       : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
   if (!row) return { changed: false, refused: false };
   // A bare UPDATE leaves memories_fts behind, so the row's text is indexed again.
-  syncFtsRow(db, { id, content: row.content, tags: parseJsonArray(row.tags_json) });
+  syncFtsRow(db, {
+    id,
+    content: row.content,
+    tags: parseJsonArray(row.tags_json),
+    leadIn: null,
+  });
   const target = { tenantId, actor: settle.actor, targetId: id };
   const refusal = tombstone ? [refusalAudit(target, tombstone)] : [];
   auditRows(db, [...refusal, ...settle.audit]);

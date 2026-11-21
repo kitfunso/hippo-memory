@@ -21,6 +21,7 @@ import { placeholders, rowsPerStatement, valuesRows } from '../../../db/sql.js';
 import { raiseMinBinary } from '../../../db/meta.js';
 import { duplicateHash, identityText } from '../../../base/util/same-text.js';
 import { LEAD_IN_MIN_BINARY } from '../../../base/util/version.js';
+import { findableText } from '../../../base/memory/lead-in.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
  * sound. */
@@ -158,7 +159,7 @@ function markFtsDrifted(db: DatabaseSyncLike): void {
 
 export function syncFtsRow(
   db: DatabaseSyncLike,
-  entry: Pick<MemoryEntry, 'id' | 'content' | 'tags'>,
+  entry: Pick<MemoryEntry, 'id' | 'content' | 'tags' | 'leadIn'>,
   isNewRow = false,
 ): void {
   if (!isFtsAvailable(db)) return;
@@ -166,7 +167,7 @@ export function syncFtsRow(
     if (!isNewRow) db.prepare(`DELETE FROM memories_fts WHERE id = ?`).run(entry.id);
     db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`).run(
       entry.id,
-      entry.content,
+      findableText(entry),
       entry.tags.join(' '),
     );
   } catch (err) {
@@ -230,7 +231,7 @@ export function replaceFtsRows(
   const insert = db.prepare(`INSERT INTO memories_fts(id, content, tags) VALUES (?, ?, ?)`);
   for (const row of toInsert) {
     try {
-      insert.run(row.id, row.content, row.tags.join(' '));
+      insert.run(row.id, findableText(row), row.tags.join(' '));
     } catch (err) {
       markFtsDrifted(db);
       log.warnThenSample(
