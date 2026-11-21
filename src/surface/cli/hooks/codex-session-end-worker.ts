@@ -1,6 +1,7 @@
 // The Codex wrapper's session-end worker (`__codex-session-end-worker`): sleep, then capture and
 // digest the rollout.
 import * as path from 'node:path';
+import { envCaptureScripted } from '../../../base/util/env.js';
 import { resolveCodexSessionTranscript } from '../../capture/codex-session.js';
 import { resolveCodexWrapperPaths } from '../../hooks-install/codex-wrapper.js';
 import { readSessionScan, recordSessionDigest } from '../../capture/session-digest.js';
@@ -115,7 +116,9 @@ async function captureCodexRollout(
   transcriptPath: string,
 ): Promise<void> {
   const digestLog: LineLog = (message, opts) => appendSessionEndCloseLog(logFile, message, opts);
-  const scan = readSessionScan(transcriptPath, digestLog);
+  const scan = readSessionScan(transcriptPath, digestLog, {
+    scriptedIsHuman: envCaptureScripted(),
+  });
   const captureOpts: CaptureOptions = {
     source: 'last-session',
     transcriptPath,

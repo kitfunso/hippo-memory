@@ -2,7 +2,12 @@
 // files it changed.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { collectSessionTurns, type SessionTurn, type TranscriptRecord } from './transcript.js';
+import {
+  collectSessionTurns,
+  type SessionTurn,
+  type TranscriptReadOptions,
+  type TranscriptRecord,
+} from './transcript.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { PATCH_SUCCESS_LINE, patchPaths, shellPatch } from './codex-patch.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -284,7 +289,10 @@ function visitRecord(record: TranscriptRecord, state: ScanState): void {
  * One pass over a Claude Code or Codex transcript: the turns capture reads, the closing message,
  * and the edits that landed.
  */
-export function scanSessionTranscript(jsonl: string): SessionScan {
+export function scanSessionTranscript(
+  jsonl: string,
+  opts: TranscriptReadOptions = {},
+): SessionScan {
   const state: ScanState = {
     cwd: null,
     firstCwd: null,
@@ -294,7 +302,7 @@ export function scanSessionTranscript(jsonl: string): SessionScan {
     codexFinal: '',
     codexUnphased: '',
   };
-  const turns = collectSessionTurns(jsonl, (record) => visitRecord(record, state));
+  const turns = collectSessionTurns(jsonl, (record) => visitRecord(record, state), opts);
   return {
     turns,
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
@@ -320,9 +328,13 @@ export function readSessionTranscript(transcriptPath: string, log: LineLog): str
 }
 
 /** The transcript, read once and scanned, or null with the reason logged. */
-export function readSessionScan(transcriptPath: string, log: LineLog): SessionScan | null {
+export function readSessionScan(
+  transcriptPath: string,
+  log: LineLog,
+  opts: TranscriptReadOptions = {},
+): SessionScan | null {
   try {
-    return scanSessionTranscript(readSessionTranscript(transcriptPath, log));
+    return scanSessionTranscript(readSessionTranscript(transcriptPath, log), opts);
   } catch (err) {
     log(`digest: could not read the transcript: ${errorMessage(err)}`, {
       fields: errorFields(err),

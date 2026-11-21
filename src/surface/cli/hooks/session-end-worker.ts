@@ -1,5 +1,6 @@
 // The detached session-end worker (`__session-end-worker`): sleep, capture, digest and the handoff,
 // each step logged.
+import { envCaptureScripted } from '../../../base/util/env.js';
 import {
   readSessionScan,
   recordSessionDigest,
@@ -66,6 +67,17 @@ interface RunSessionEndWorkOptions {
   readonly held: HeldLog;
 }
 
+/** The worker's transcript reads; the root reads HIPPO_CAPTURE_SCRIPTED for them. */
+function transcriptReads(transcriptPath: string | undefined) {
+  const read = { scriptedIsHuman: envCaptureScripted() };
+  return {
+    readScan: (log: LineLog) =>
+      transcriptPath ? readSessionScan(transcriptPath, log, read) : null,
+    workingState: (log: LineLog) =>
+      transcriptPath ? transcriptWorkingState(transcriptPath, log, read) : null,
+  };
+}
+
 function runSessionEndWork({
   hippoRoot,
   tenantId,
@@ -86,7 +98,7 @@ function runSessionEndWork({
     held,
     sleep: () => sleepFolderStore(hippoRoot, tenantId, flags, logFile),
     importAgentNotes: () => logSessionEndImport(logFile, tenantId, transcriptPath),
-    readScan: (log) => (transcriptPath ? readSessionScan(transcriptPath, log) : null),
+    ...transcriptReads(transcriptPath),
     cursor: {
       after: (id, file, turns) => turnsAfter(turns, loadTurnPosition(id, file)),
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
@@ -111,7 +123,6 @@ function runSessionEndWork({
     },
     digest: (scan, key, log) =>
       recordSessionDigest(hippoRoot, ctx.store, scan, { key, tenantId, log, config: ctx.config }),
-    workingState: (log) => (transcriptPath ? transcriptWorkingState(transcriptPath, log) : null),
     evidence: () => collectHandoffEvidence(workingFolder(ctx), 'unknown'),
   });
 }

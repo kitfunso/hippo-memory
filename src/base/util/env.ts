@@ -29,6 +29,7 @@ const FLAGS = {
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
   HIPPO_ALLOW_CLEARTEXT: false,
+  HIPPO_CAPTURE_SCRIPTED: false,
   HIPPO_READ_ONLY: true,
   SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
   GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK: false,
@@ -232,6 +233,8 @@ export const envSkipEmbedderInstall = bool('HIPPO_SKIP_EMBEDDER_INSTALL');
 export const envMcpStdio = bool('HIPPO_MCP_STDIO');
 export const envRequireServer = bool('HIPPO_REQUIRE_SERVER');
 export const envReadOnly = bool('HIPPO_READ_ONLY');
+/** Set by a test harness that plays the person through a scripted session, so capture reads it. */
+export const envCaptureScripted = bool('HIPPO_CAPTURE_SCRIPTED');
 const envRequireSessionScopedFreshTail = bool('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL');
 export const envStdinWaitMs = posInt('HIPPO_STDIN_WAIT_MS');
 export function envLogLevel(): string {

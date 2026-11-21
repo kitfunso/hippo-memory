@@ -149,8 +149,10 @@ async function runPreCompact(
 
   // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with
   // junk.
-  const derived = transcriptWorkingState(transcriptPath, (message, opts) =>
-    appendPreCompactLog(logFile, message, opts?.fields),
+  const derived = transcriptWorkingState(
+    transcriptPath,
+    (message, opts) => appendPreCompactLog(logFile, message, opts?.fields),
+    { scriptedIsHuman: options.scriptedIsHuman },
   );
   if (!derived) return;
 
@@ -385,6 +387,8 @@ export interface PreCompactOptions {
   stdinTimedOut?: boolean;
   logFile?: string;
   runtime?: HookRuntime;
+  /** HIPPO_CAPTURE_SCRIPTED: a scripted session's user turns are the person's. */
+  scriptedIsHuman?: boolean;
   /** Called once when the hook accepts a compaction, with the text it printed or null when it
    * printed none. */
   onBoundary?: (printed: string | null) => void;
