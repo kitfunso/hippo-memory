@@ -372,6 +372,23 @@ describe('hippo github CLI', () => {
     },
   );
 
+  it('A18b. with GITHUB_ENTERPRISE_BARE_REFS_HOST set, replaying a GHES deletion archives the bare twin', async () => {
+    const [eventName, parent, bareRef] = COMMENT_EVENTS[0];
+    const created = await parkDelivery(eventName, commentBody(parent, 'created'));
+    expect((await replay(created)).status).toBe(0);
+    expect(liveRaws(bareRef)).toHaveLength(1);
+
+    const deleted = await parkDelivery(
+      eventName,
+      withRepoUrl(commentBody(parent, 'deleted'), 'https://ghes.example.com/acme/repo'),
+    );
+    const archived = await replayWith(deleted, { ...GHES_ENV, GITHUB_ENTERPRISE_BARE_REFS_HOST: 'ghes.example.com' });
+
+    expect(archived.status).toBe(0);
+    expect(archived.stdout).toContain('memory_id=archived');
+    expect(liveRaws(bareRef)).toHaveLength(0);
+  });
+
   it('A21. a github.com delivery parked as host_mismatch cannot replay under GHES, even with --force, and replays once the hosts agree', async () => {
     const parkedForHost = await parkInDlq(githubDlq, sqliteStore(hippoRoot), {
       tenantId: 'default',

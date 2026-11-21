@@ -248,14 +248,9 @@ let warnedEnterpriseUnset = false;
  * delivery gets through and one warning per process says its keys carry no host. */
 async function parkedForHost(d: SignedDelivery): Promise<boolean> {
   const sent = headerHost(d.enterpriseHost);
-  const parsed = tryParseJson(d.rawBody);
-  // A payload with no repository URL passes: the header it matched already names the server.
-  const payloadSays = payloadHost(parsed);
-  const error =
-    hostMismatch(sent, d.site) ??
-    (payloadSays === undefined ? null : payloadMismatch(sent, payloadSays, d.site));
-  if (error === null) {
-    if (sent !== undefined && d.site.host === undefined && !warnedEnterpriseUnset) {
+  if (d.site.host === undefined) {
+    // Nothing parks without a host, so no parse here; parseEnvelopeOrPark parses the body once.
+    if (sent !== undefined && !warnedEnterpriseUnset) {
       warnedEnterpriseUnset = true;
       log.warn(
         `GitHub Enterprise delivery from ${sent}, but GITHUB_ENTERPRISE_URL is unset; ` +
@@ -264,6 +259,13 @@ async function parkedForHost(d: SignedDelivery): Promise<boolean> {
     }
     return false;
   }
+  const parsed = tryParseJson(d.rawBody);
+  // A payload with no repository URL passes: the header it matched already names the server.
+  const payloadSays = payloadHost(parsed);
+  const error =
+    hostMismatch(sent, d.site) ??
+    (payloadSays === undefined ? null : payloadMismatch(sent, payloadSays, d.site));
+  if (error === null) return false;
   // A parked delivery still answers 200, so this line is how an operator sees intake stop.
   log.warn(`github webhook: parked delivery ${d.deliveryId ?? '-'} as host_mismatch: ${error}`);
   const body = parsed !== undefined && isGitHubWebhookEnvelope(parsed) ? parsed : null;

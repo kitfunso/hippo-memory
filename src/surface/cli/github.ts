@@ -59,7 +59,8 @@ export function printGitHubBackfillUsage(): void {
     '  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.',
   );
   console.log(
-    '  Also set GITHUB_ENTERPRISE_BARE_REFS_HOST=<host> if that server sent webhooks before you set the URL.',
+    '  Also set GITHUB_ENTERPRISE_BARE_REFS_HOST=<host> only if the store took webhooks from that server\n' +
+      '  before you set the URL and never took github.com ones.',
   );
 }
 

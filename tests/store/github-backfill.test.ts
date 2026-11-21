@@ -21,6 +21,7 @@ import {
   type GitHubBackfillPage,
 } from '../../src/surface/connectors/github/octokit-client.js';
 import { parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
+import { githubSiteFromEnv } from '../../src/surface/connectors/github/webhook.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -591,6 +592,33 @@ describe('backfillRepo', () => {
     expect(failure?.message).not.toMatch(/sekrit|bob/);
     expect(capture.calls).toHaveLength(1);
     expect(readCursorRows(root).filter((r) => r.issues_hwm !== null)).toEqual([]);
+  });
+
+  describe('with GITHUB_ENTERPRISE_BARE_REFS_HOST set', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('16. an item an unset-URL run stored under its bare key is skipped, not stored again', async () => {
+      const plan = (): FakePlan => ({
+        issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
+      });
+      await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan()), token: 't' });
+      const sources = () => loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
+      expect(sources().map((e) => e.artifactRef)).toEqual(['github://acme/demo/issue/1']);
+
+      vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghes.example.com');
+      vi.stubEnv('GITHUB_ENTERPRISE_BARE_REFS_HOST', 'ghes.example.com');
+      const r = await backfillRepo(ctx(root), {
+        repoFullName: REPO,
+        fetcher: makeFakeFetcher(plan()),
+        token: 't',
+        site: githubSiteFromEnv(),
+      });
+
+      expect(r.ingested.issues).toBe(0);
+      expect(sources().map((e) => e.artifactRef)).toEqual(['github://acme/demo/issue/1']);
+    });
   });
 
   describe('a cross-origin redirect', () => {

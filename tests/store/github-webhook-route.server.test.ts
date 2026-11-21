@@ -742,3 +742,41 @@ describe('POST /v1/connectors/github/events with a bad GITHUB_ENTERPRISE_URL', (
     );
   });
 });
+
+describe('POST /v1/connectors/github/events with GITHUB_ENTERPRISE_BARE_REFS_HOST set', () => {
+  let root: string;
+  let handle: ServerHandle;
+
+  beforeEach(async () => {
+    root = makeRoot('gh-route-bare');
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+  });
+
+  afterEach(async () => {
+    await handle.stop();
+  });
+
+  const ghesHeaders = (body: string, eventName: string, deliveryId: string) => ({
+    ...defaultHeaders(body, eventName, deliveryId),
+    'x-github-enterprise-host': 'ghes.example.com',
+  });
+
+  it('B1. a signed GHES deletion archives the comment an earlier unset-URL delivery stored bare', async () => {
+    const created = issueCommentBody('created');
+    await postWebhook(handle.port, created, ghesHeaders(created, 'issue_comment', 'b1-created'));
+    const bareRef = 'github://acme/repo/issue/42/comment/999';
+    const live = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === bareRef);
+    expect(live()).toHaveLength(1);
+
+    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghes.example.com');
+    vi.stubEnv('GITHUB_ENTERPRISE_BARE_REFS_HOST', 'ghes.example.com');
+    const deleted = issueCommentBody('deleted');
+    const res = await postWebhook(handle.port, deleted, ghesHeaders(deleted, 'issue_comment', 'b1-deleted'));
+    expect(await jsonAs<{ status: string; archivedCount: number }>(res)).toMatchObject({
+      status: 'archived',
+      archivedCount: 1,
+    });
+    expect(live()).toHaveLength(0);
+  });
+});

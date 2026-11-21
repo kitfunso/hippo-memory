@@ -77,7 +77,8 @@ export function parseGitHubArtifactRef(ref: string): ParsedGitHubRef | null {
   return { host, repoFullName: m[2], item };
 }
 
-const OWNER_RE = /^[A-Za-z0-9-]+$/;
+// An Enterprise Managed User login is name_shortcode, so the owner may hold an underscore.
+const OWNER_RE = /^[A-Za-z0-9_-]+$/;
 const REPO_NAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /** True for exactly owner/name; the names '.' and '..' are refused because a URL path resolves

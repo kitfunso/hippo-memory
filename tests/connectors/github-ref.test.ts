@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   githubArtifactRef,
   githubRepoKey,
+  isGitHubRepoFullName,
   legacyGitHubRef,
   parseGitHubArtifactRef,
   type GitHubItem,
@@ -91,4 +92,17 @@ describe('legacyGitHubRef', () => {
     expect(legacyGitHubRef('github://acme/w/issue/42/comment/999')).toBeUndefined();
     expect(legacyGitHubRef('not a ref')).toBeUndefined();
   });
+});
+
+describe('isGitHubRepoFullName', () => {
+  it.each(['acme/widgets', 'alice_acme/widgets', 'acme/widgets.js', 'acme/.github'])('accepts %s', (repo) => {
+    expect(isGitHubRepoFullName(repo)).toBe(true);
+  });
+
+  it.each(['../widgets', 'a/b/c', 'alice/..', 'alice/.', 'acme', 'ac.me/widgets', 'acme/wid gets'])(
+    'refuses %s',
+    (repo) => {
+      expect(isGitHubRepoFullName(repo)).toBe(false);
+    },
+  );
 });

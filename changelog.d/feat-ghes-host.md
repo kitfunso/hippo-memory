@@ -5,4 +5,4 @@
 
 ### Security
 
-- **Backfill keeps the token on the configured server.** A next-page link to another origin stops the backfill with an error instead of sending the token there.
+- **Backfill keeps the token on the configured server.** A next-page link to another origin stops the backfill with an error instead of sending the token there. A next-page link that carries credentials is refused. A request that a redirect sends to another origin fails the backfill. `hippo github dlq replay` refuses a row whose payload has no repository URL while `GITHUB_ENTERPRISE_URL` is set. `--repo` takes `owner/name` only: the owner holds letters, digits, `-` and `_`, and `.` and `..` are refused as names.
