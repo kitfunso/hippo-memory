@@ -268,3 +268,26 @@ def test_gpt5_mini_is_in_the_small_free_pool_at_its_list_price(tmp_path, wire):
     llm = client(tmp_path, ol.Settings("gpt-5-mini-2025-08-07", temperature=None))
     assert llm.pool == "small" and ol.PRICES["gpt-5-mini-2025-08-07"] == (0.25, 2.00)
     assert ol.worst_case(json.loads(llm._body("", "q")))[1] == 128_000
+
+
+def test_a_model_in_no_free_pool_refuses_unless_openai_billed_models_names_it(tmp_path, wire, monkeypatch):
+    monkeypatch.delenv("OPENAI_BILLED_MODELS", raising=False)
+    with pytest.raises(SystemExit, match="OPENAI_BILLED_MODELS"):
+        client(tmp_path, ol.Settings("gpt-5.1"))
+    monkeypatch.setenv("OPENAI_BILLED_MODELS", "gpt-4o-mini, gpt-5.1-2025-11-13")  # another model, not this one
+    with pytest.raises(SystemExit, match="OPENAI_BILLED_MODELS"):
+        client(tmp_path, ol.Settings("gpt-5.1"))
+
+
+def test_a_billed_model_runs_holds_no_free_tokens_and_logs_its_spend(tmp_path, wire, monkeypatch):
+    sent, queue = wire
+    monkeypatch.setenv("OPENAI_BILLED_MODELS", "gpt-4o-mini, gpt-5.1")
+    for pool in ("BIG", "SMALL"):
+        monkeypatch.setenv(f"OPENAI_FREE_DAILY_{pool}", "1")  # no free day could hold the call; a billed one skips it
+    monkeypatch.setattr(ol.FreeTokens, "take", lambda *a: pytest.fail("a billed call took free tokens"))
+    llm = client(tmp_path, ol.Settings("gpt-5.1"))
+    queue.append({**ok("B", pt=3000, ct=2), "model": "gpt-5.1-2025-11-13"})
+    assert llm.ask("s", "p", effort=ol.EFFORT, tag="t")["models"] == ["gpt-5.1-2025-11-13"] and len(sent) == 1
+    spend = [json.loads(x) for x in llm.spend_path.read_text().splitlines()]
+    assert spend[0]["pool"] is None and spend[0]["usd"] == pytest.approx((3000 * 1.25 + 2 * 10.00) / 1e6)
+    assert ol.worst_case(sent[0])[1] == 128_000 and not list((tmp_path / "spend").glob("*.inflight"))

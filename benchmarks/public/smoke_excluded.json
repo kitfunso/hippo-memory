@@ -24,5 +24,9 @@
   "meme": ["pl_001-b3", "pl_001-a4", "pl_001-a6", "pl_001-a0", "pl_001-a5"],
   "triggerbench": ["tb-pc-seed_02", "tb-po-seed_01_absolute_blind_action", "tb-nc-logical_adherence_001", "tb-pc-interrupt_seed_001", "tb-nc-seed_b01"],
   "stalebench": ["anchored-q000", "anchored-q075", "anchored-q149", "anchor_free-q000", "anchor_free-q075"],
-  "precisionmembench": ["happy-stack-repository-layer", "canonical-name-match-mara", "cap-stress-kitchen-sink-exceeds-twelve", "recency-tiebreak-reinforcement", "relation-does-not-appear-as-entity"]
+  "precisionmembench": ["happy-stack-repository-layer", "canonical-name-match-mara", "cap-stress-kitchen-sink-exceeds-twelve", "recency-tiebreak-reinforcement", "relation-does-not-appear-as-entity"],
+  "omnimemeval": ["conv0_q0", "conv0_q2", "conv0_q3", "conv0_q82", "conv0_q151"],
+  "omnimemeval-beam-100k": ["100K_0_q1_abstention", "100K_0_q5_event_ordering", "100K_0_q7_information_extraction", "100K_0_q9_instruction_following", "100K_0_q14_preference_following"],
+  "omnimemeval-beam-10m": [],
+  "imlogic": ["u00-q0000"]
 }

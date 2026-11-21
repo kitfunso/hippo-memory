@@ -5,6 +5,7 @@ exhausted quota or a rejected key stops the process. Before every call the logge
 OPENAI_BENCH_CAP_USD, or the process stops. The key comes from OPENAI_API_KEY and never reaches a log.
 Free daily tokens (dated notes 30): a call goes only if today's UTC tokens of its pool, in every spend folder and in
 flight, plus its own worst case stay inside OPENAI_FREE_DAILY_BIG or _SMALL; else it waits for 00:00:30 UTC.
+A model in neither pool runs only if OPENAI_BILLED_MODELS (a comma list) names it, and then holds no free tokens.
 Usage: OpenAIChat(log, Settings("gpt-4o-2024-08-06", max_tokens=10)).ask("", prompt, effort=EFFORT, tag="t")["text"]
 """
 from __future__ import annotations
@@ -32,14 +33,16 @@ URL = "https://api.openai.com/v1/chat/completions"
 # USD per 1M tokens, input and output, at developers.openai.com/api/docs/pricing (read 16 Nov 2026)
 PRICES = {"gpt-4o-2024-08-06": (2.50, 10.00), "gpt-4o-mini-2024-07-18": (0.15, 0.60), "gpt-4o-mini": (0.15, 0.60),
           "gpt-4.1-mini-2025-04-14": (0.40, 1.60), "gpt-5-mini-2025-08-07": (0.25, 2.00),
-          "gpt-4.1": (2.00, 8.00)}  # gpt-4.1: developers.openai.com/api/docs/models/gpt-4.1 (read 17 Nov 2026)
+          "gpt-4.1": (2.00, 8.00),  # gpt-4.1: developers.openai.com/api/docs/models/gpt-4.1 (read 17 Nov 2026)
+          "gpt-5.1": (1.25, 10.00), "gpt-5.1-2025-11-13": (1.25, 10.00)}  # .../models/gpt-5.1 (read 20 Nov 2026)
 # The org's free-token pools on traffic shared with OpenAI (Keith, 17 Nov 2026); a model in neither would bill
 BIG = ("gpt-4o-2024-08-06", "gpt-4.1", "gpt-5-2025-08-07", "gpt-5.6-sol")
 SMALL = ("gpt-4o-mini", "gpt-4o-mini-2024-07-18", "gpt-4.1-mini-2025-04-14",
          "gpt-5-mini-2025-08-07")  # 2.5M Build group: help.openai.com/en/articles/10306912 (read 17 Nov 2026)
 # Max output tokens, the worst case of a call sent with no token limit (developers.openai.com/api/docs/models, 17 Nov)
 MAX_OUT = {"gpt-4o-2024-08-06": 16_384, "gpt-4o-mini": 16_384, "gpt-4o-mini-2024-07-18": 16_384, "gpt-4.1": 32_768,
-           "gpt-4.1-mini-2025-04-14": 32_768, "gpt-5-2025-08-07": 128_000, "gpt-5-mini-2025-08-07": 128_000}
+           "gpt-4.1-mini-2025-04-14": 32_768, "gpt-5-2025-08-07": 128_000, "gpt-5-mini-2025-08-07": 128_000,
+           "gpt-5.1": 128_000, "gpt-5.1-2025-11-13": 128_000}  # gpt-5.1: its model page (read 20 Nov 2026)
 INPUT_LIMIT = {"gpt-5-2025-08-07": 272_000}  # the API refuses a longer prompt unbilled (dated notes 29)
 DAY_S, WAKE_S = 86_400, 30  # the free day starts at 00:00 UTC; a waiting call wakes 30 s after it
 # One file per process: Windows can split a line two processes append to one file at once (16 Nov)
@@ -101,6 +104,11 @@ def spent(folder: Path, skip: Path | None = None) -> float:
 
 def pool_of(model: str) -> str | None:
     return "big" if model in BIG else "small" if model in SMALL else None
+
+
+def billed_models() -> set[str]:
+    """The models in no free pool that the owner has said may bill: OPENAI_BILLED_MODELS, a comma list."""
+    return {m.strip() for m in os.environ.get("OPENAI_BILLED_MODELS", "").split(",") if m.strip()}
 
 
 def free_caps() -> dict[str, int]:
@@ -248,9 +256,10 @@ class OpenAIChat(Claude):
         if settings.model not in PRICES:
             raise SystemExit(f"{settings.model} has no list price in qa/openai_llm.py PRICES")
         self.pool = pool_of(settings.model)
-        if self.pool is None:
+        if self.pool is None and settings.model not in billed_models():
             raise SystemExit(f"{settings.model} is in neither free-token pool (qa/openai_llm.py BIG, SMALL), so every "
-                             "call would bill: add it to the pool OpenAI lists it in")
+                             "call would bill: add it to the pool OpenAI lists it in, or name it in "
+                             "OPENAI_BILLED_MODELS (a comma list) once the owner has said yes to the spend")
         work = log.parent / "openai-work"
         self.cwd, self.sysdir = work / "cwd", work / "system-prompts"  # attributes Claude.ask and _log read
         for d in (self.cwd, self.sysdir, spend):
@@ -262,7 +271,8 @@ class OpenAIChat(Claude):
         self.cap = float(os.environ.get("OPENAI_BENCH_CAP_USD", "60")) if cap is None else cap
         self.spend_lock, self.mine, self.limits_logged = threading.Lock(), 0.0, False
         self.others, self.summed_at = spent(spend), time.monotonic()
-        self.free, self.free_cap, self.waits_logged = FreeTokens(spend, self.spend_path), free_caps()[self.pool], set()
+        self.free, self.waits_logged = FreeTokens(spend, self.spend_path), set()
+        self.free_cap = free_caps()[self.pool] if self.pool else None
         worst_case(json.loads(self._body("", "")))  # a model with no token limit and no MAX_OUT stops here, not mid-run
 
     def ask(self, system: str, user: str, *, effort: str, tag: str, want_json: bool = False) -> dict:
@@ -285,6 +295,9 @@ class OpenAIChat(Claude):
     @contextmanager
     def _free_tokens(self, body: bytes):
         """Holds the call's worst case against today's free tokens of its pool while it runs and is charged."""
+        if self.pool is None:  # a billed model has no free tokens to hold; the spend cap still binds it
+            yield
+            return
         b = json.loads(body)
         prompt, out = worst_case(b)
         if prompt > INPUT_LIMIT.get(b["model"], float("inf")) * 1.02:  # 2% over the count, so surely refused

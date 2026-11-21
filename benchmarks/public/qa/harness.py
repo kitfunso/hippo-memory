@@ -3,8 +3,9 @@
 Stages, run in order, each resumable: ingest, retrieve, answer, judge, score.
   python -I harness.py <stage> --bench <loader> --out DIR [--limit N] [--slots 10] [--port-base 8921] [--bonferroni K]
   --arm full|hippo-emb|hippo-best --pairs-with RUN [RUN ...]: one extra arm in a new --out, scored paired with each
-  registered run. `full` (dated notes 4) shows every turn and has no store, so it starts at retrieve; `hippo-emb` (dated
-  notes 5) is hippo with its local embeddings on; `hippo-best` (dated notes 9) adds the cross-encoder at top 50 and a
+  registered run; --alone in place of --pairs-with runs it unpaired, for a lane with no registered run (IMLogic).
+  `full` (dated notes 4) shows every turn and has no store, so it starts at retrieve; `hippo-emb` (dated notes 5)
+  is hippo with its local embeddings on; `hippo-best` (dated notes 9) adds the cross-encoder at top 50 and a
   score that follows the rank. retrieve --store-from RUN searches RUN's hippo-emb store read-only and stops on the first
   question where the hippo-emb flags do not give back RUN's file.
 Each arm gets its own hippo-mem0-server on its own data dir under DIR. Answers are Claude Sonnet 5 at medium effort
@@ -275,7 +276,7 @@ def setup(a: argparse.Namespace):
         qs = mod.questions()
         if len({q["qid"] for q in qs}) != len(qs):
             sys.exit("loader gives duplicate qids")
-        if a.arm:  # an extra arm asks exactly the paired runs' questions, in their order
+        if a.pairs_with:  # an extra arm asks exactly the paired runs' questions, in their order
             by_id = {q["qid"]: q for q in qs}
             qs = [by_id[i] for i in load(a.pairs_with[0] / "questions.json")["qids"]]
         if a.limit:
@@ -295,7 +296,7 @@ def setup(a: argparse.Namespace):
                "arms": a.arms, "hippo_memory": pkg, "repo_head": head, "loader_sha256": sha_bytes(Path(mod.__file__).read_bytes()),
                "data_sha256": {p.name: sha_bytes(p.read_bytes()) for p in mod.DATA_FILES},
                "answerer": "claude-sonnet-5 medium", "judge": "gpt-5.6-sol medium (llm items), match otherwise",
-               **({"pairs_with": [str(r) for r in a.pairs_with]} if a.arm else {}),
+               **({"pairs_with": [str(r) for r in a.pairs_with]} if a.pairs_with else {}),
                **({"store_from": str(a.store_from)} if a.store_from else {})}
         qfile.write_text(json.dumps({"qids": [q["qid"] for q in qs]}), encoding="utf-8")
         (a.out / "config.json").write_text(json.dumps(cfg, indent=1), encoding="utf-8")
@@ -573,9 +574,10 @@ def main() -> None:
     ap.add_argument("--store-from", type=Path, metavar="RUN",
                     help="retrieve --arm hippo-best over RUN's hippo-emb store, read-only, after the replay gate")
     ap.add_argument("--pairs-with", type=Path, nargs="+", default=[], metavar="RUN", help="registered runs --arm pairs with")
+    ap.add_argument("--alone", action="store_true", help="--arm with no registered run to pair with (IMLogic has none)")
     a = ap.parse_args()
-    if bool(a.arm) != bool(a.pairs_with):
-        ap.error("--arm and --pairs-with go together")
+    if bool(a.arm) != bool(a.pairs_with or a.alone) or (a.alone and a.pairs_with):
+        ap.error("--arm goes with --pairs-with, or with --alone when no registered run exists")
     if a.arm and any(r.resolve() == a.out.resolve() for r in a.pairs_with):
         ap.error("--arm runs in a new --out, never in a paired run's folder")
     if a.store_from and (a.arm != "hippo-best" or a.stage != "retrieve"):

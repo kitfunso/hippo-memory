@@ -958,3 +958,29 @@ Line 24 says "The LongMemEval file records no models." That is wrong. At runner 
 **What changes.** Only who pays for a call past the free daily tokens. The wait for the next free day is off: `results-r2/openai-credit.env`, which the PrefEval `hippo-cap`, OmniMemEval queue and HaluMem-Long wrappers read, sets `OPENAI_FREE_DAILY_BIG` and `_SMALL` to 1,000,000,000. The spend cap `OPENAI_BENCH_CAP_USD` is the list-price USD logged in `logs/openai-spend.d` at the switch (102.17) plus 90, so 192.17: the three jobs together can log at most $90 more. Calls inside the free tokens count against the cap too, so the cap errs high. Models, prompts, data, top-k, judges and seeds do not change, so no score changes because of this note.
 
 **Read before this note.** The answer counts of PrefEval `hippo-cap` (100 of 1,000), HaluMem-Long `hippo-emb` (500 of 3,467) and OmniMemEval BEAM-10M. No score of these runs.
+
+### Amendment 6, dated notes 34 (2026-11-21, a late record of the cap change made on 20 Nov): the grant cap is the whole $100, counted over both spend folders
+
+**Why.** Dated notes 33 set the cap at the shared folder's logged spend plus $90. Keith then said "use all $100". `qa/openai_llm.py` `spend_dirs` counts the gpt-5 folder `logs/openai-spend-gpt5.d` as well, and dated notes 33 left that folder out of its sum.
+
+**What changes.** `results-r2/openai-credit.env` sets `OPENAI_BENCH_CAP_USD` to 238.16: the list-price USD in both folders before the grant (102.17 + 35.99 = 138.16) plus 100. The change took effect on 20 Nov, before this note. Models, prompts, data, top-k, judges and seeds do not change, so no score changes because of this note. If the cap stops a job, the job is reported, and the cap does not rise without Keith.
+
+**Read before this note.** The logged spend over both folders, 194.98 USD on 21 Nov (`spent()`). No score.
+
+### Amendment 6, dated notes 35 (2026-11-21, after 1,030 of 2,216 full answers and before any score): IMLogic conversation level, multiple choice, GPT-5.1 over hippo's top 30
+
+**Why.** IMLogic (arXiv 2606.23283, Table 5) publishes memory-system rows that share one answer model and one retrieval setting, so a hippo row can be comparable. IMLogic was chosen on 20 Nov for the rest of the grant.
+
+**Late note.** The full answer stage started before this note existed. It sent 1,030 answers (1,031 log records). Then it was stopped by hand when the missing note was found. The score stage did not run, and no score of the full run was read. The 1,030 answers stay. The run resumes after the commit that adds this note, and the ledger reuses each settled answer, so it asks nothing twice.
+
+**Setup.** The authors' code is ThisIsCosine/IMLogic at `8823defc18ec`, `eval/evaluate_common.py`. Ours is `qa/loaders/imlogic.py` (data and prompt) and `mem0/imlogic_openai.py` (answer and score).
+1. Data: the dialogue `HaluMem-Medium.jsonl` and `qa_user00` to `qa_user19.json`, data digest `7b15affc22fdb3fd02f6185a274ad080f62b11c77df2574a878bbfd70565ec8f`. 20 users, 2,216 questions. Licence CC BY-NC-ND 4.0: scores only, and no derived data is committed.
+2. Memory: arm `hippo-emb`, hippo-memory 3.5.1 with its embedder. One turn is one memory, at the turn's own time. Each user's memory holds the whole dialogue before any question (evaluate_common.py:522-551). Retrieval uses the raw `query` at top 30 (paper sections 5.1.2 and C.2.2). Ingest and retrieval ran free and local on 20 and 21 Nov into `results-r2/imlogic-emb` (`qa/harness.py --alone`, since IMLogic has no registered run to pair with).
+3. Prompt: the authors' system message and prompt, with their global state. UUID and Session Count come from the dialogue item. Available Memory Count is hippo's store size, checked against the ingest record before any call. Persona Summary is the dataset's `persona_info`, which the authors' code gives every method. The options use the authors' shuffle, seed 42.
+4. Answer model: `gpt-5.1-2025-11-13`, the one snapshot behind "gpt-5.1", at temperature 0, with no max_tokens and no reasoning_effort, as `call_llm_text` sends it (evaluate_common.py:146-151 and 230-248). The ledger checks that each reply names that snapshot. A transport error runs again and is no ask. The first reply text counts. The model is in no free pool, so a call runs only with `OPENAI_BILLED_MODELS` naming it.
+5. Score: the exact option match of evaluate_common.py:553-560. The reply's option letter must name the gold option. A reply with no valid letter, or an item whose asks run out, scores wrong and stays in n. Accuracy is over every item asked (evaluate_common.py:616).
+6. Smoke items, excluded: `u00-q0000`, answered on 21 Nov. The primary has 2,215 questions, and the all-items line has 2,216.
+7. Cost: the grant, under dated notes 34. The smoke call used 3,593 prompt tokens and 10 completion tokens (0 reasoning), so the full run is about 8 million prompt tokens, about $10 to $15 at list price.
+8. Board: a row goes up only with Keith's go, beside the published Table 5 rows of the same setting.
+
+**Read before this note.** The authors' `evaluate_common.py`, paper sections 5.1.2 and C.2.2, the dry-run prompt of `u00-q0000`, the smoke reply (a smoke item only) and the count of answers sent. No score of the full run.
