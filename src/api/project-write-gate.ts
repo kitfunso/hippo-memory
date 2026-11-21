@@ -5,6 +5,7 @@ import { HttpError } from '../base/errors/http-errors.js';
 import { type JsonValue, isJsonString } from '../base/util/json.js';
 import { errorFields, log } from '../base/util/log.js';
 import { isStoreBusy } from '../base/util/store-blocked.js';
+import { frozenActor } from './frozen-actor.js';
 import type { Context } from './types.js';
 
 const DEFAULT_REFUSAL = 'this caller may not write under this project';
@@ -21,12 +22,7 @@ export async function admitProjectWrite(
   if (project !== null) assertCallerProject(project);
   const t = ctx.projectWriteGateTimeoutMs;
   const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_GATE_DEADLINE_MS;
-  // A frozen copy with its own frozen scopes, so a JS gate that mutates its argument cannot change the request's actor.
-  const scopes = ctx.actor.scopes;
-  const actor = Object.freeze({
-    ...ctx.actor,
-    ...(scopes !== undefined && { scopes: Object.freeze([...scopes]) }),
-  });
+  const actor = frozenActor(ctx.actor);
   // Widened to unknown, so a JS gate that returns nothing or a non-string refuses instead of letting the write run.
   let answer: unknown;
   try {

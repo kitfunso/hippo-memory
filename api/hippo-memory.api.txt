@@ -465,6 +465,9 @@ server.d.ts: ForbiddenError re-export
 server.d.ts: HippoStore re-export
 server.d.ts: HttpError re-export
 server.d.ts: JsonValue re-export
+server.d.ts: KeyQuota re-export
+server.d.ts: KeyQuotaCall re-export
+server.d.ts: KeyQuotaRefusal re-export
 server.d.ts: LOOPBACK_HOST_HEADER re-export
 server.d.ts: NotFoundError re-export
 server.d.ts: ProjectWriteCall re-export
