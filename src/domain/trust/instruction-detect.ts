@@ -195,3 +195,19 @@ export function detectInstruction(content: string): InstructionDetection {
   if (BIDI_CONTROL_RE.test(content)) return { flagged: true, reason: 'pattern:bidi-control' };
   return { flagged: false, reason: null };
 }
+
+/** The tag list as a context line prints it; the write screen checks the content joined to this text.
+ * The line's `**` between them only widens the gap. */
+export function printedTags(tags: readonly string[]): string {
+  return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+}
+
+/** The first flag in the content, in each tag, or in the content joined to the tags as a context line
+ * prints them. */
+export function instructionIn(content: string, tags: readonly string[]): InstructionDetection {
+  for (const text of [content, ...tags, `${content}${printedTags(tags)}`]) {
+    const found = detectInstruction(text);
+    if (found.flagged) return found;
+  }
+  return { flagged: false, reason: null };
+}

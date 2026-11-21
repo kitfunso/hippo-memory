@@ -3,7 +3,7 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
-import { detectInstruction } from '../../src/api/instruction-detect.js';
+import { detectInstruction } from '../../src/domain/trust/instruction-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from '../_helpers/property.js';
 import { apiCtx, onSession } from '../_helpers/api-ctx.js';

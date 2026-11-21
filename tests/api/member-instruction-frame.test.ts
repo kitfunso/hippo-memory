@@ -13,7 +13,7 @@ import {
   supersede,
   type Actor,
 } from '../../src/api/index.js';
-import { INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../../src/api/instruction-detect.js';
+import { INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../../src/domain/trust/instruction-detect.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { makeRoot } from '../_helpers/make-root.js';

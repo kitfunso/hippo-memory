@@ -4,12 +4,11 @@ import type { ConnectorWrite, ConnectorWrites } from '../../base/ports/store.js'
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
 import {
-  detectInstruction,
   INSTRUCTION_LIKE_TAG,
+  instructionIn,
   type InstructionDetection,
   UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
-import { printedTags } from '../context/context-render.js';
+} from '../../domain/trust/instruction-detect.js';
 import type { Actor, ContextWith } from '../types.js';
 
 /** The groups that hold a flagged write: the write that commits its review record, and the
@@ -51,9 +50,7 @@ export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
   const screened = input.untrusted || sharesAsMember(actor, input.scope);
   const tags = input.tags ?? [];
   // The hook prints content and tags as one line, so a pattern can span the join.
-  const detection = screened
-    ? firstFlagged([input.content, ...tags, `${input.content}${printedTags(tags)}`])
-    : NOT_FLAGGED;
+  const detection = screened ? instructionIn(input.content, tags) : NOT_FLAGGED;
   // Only a connector's rule may hold a write; a client body never reaches `rule`.
   const reason = holdReason(detection, input.untrusted ? input.rule : undefined);
   const quarantine =
@@ -63,14 +60,6 @@ export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
     ...(!input.untrusted && detection.flagged ? [INSTRUCTION_LIKE_TAG] : []),
   ];
   return { scope: quarantine ? quarantineScopeFor(input.scope) : input.scope, marks, quarantine };
-}
-
-function firstFlagged(texts: readonly string[]): InstructionDetection {
-  for (const text of texts) {
-    const found = detectInstruction(text);
-    if (found.flagged) return found;
-  }
-  return NOT_FLAGGED;
 }
 
 /** `tags` plus each mark it lacks. */

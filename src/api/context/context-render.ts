@@ -25,8 +25,9 @@ import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import {
   CONNECTOR_SOURCE_TAGS,
   INSTRUCTION_LIKE_TAG,
+  printedTags,
   UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
+} from '../../domain/trust/instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */
@@ -246,12 +247,6 @@ export function userRuleLines(entries: readonly MemoryEntry[]): string[] {
 
 export function crossProjectHeading(entries: number): string {
   return `\n## Other-project memory (explicitly requested, ${entries} entries)\n`;
-}
-
-/** The tag list as a context line prints it; the write screen checks the content joined to this text.
- * The line's `**` between them only widens the gap. */
-export function printedTags(tags: readonly string[]): string {
-  return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 }
 
 export function crossProjectLine(item: Pick<ContextResultEntry, 'entry' | 'origin'>): string {
