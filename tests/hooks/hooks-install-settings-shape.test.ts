@@ -37,6 +37,17 @@ function hippoCommandsIn(file: string): string[] {
   return strings.filter((text) => /^hippo(\.cmd)? /.test(text));
 }
 
+/** The hippo lines the plugin's exec-form hooks run: scripts/hook.mjs starts `hippo` with the args after the script. */
+function pluginHippoLines(file: string): string[] {
+  // SAFETY: the plugin's hooks.json is a checked-in file; claude-code-plugin-hooks.test.ts fails if its shape differs.
+  const { hooks } = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+    hooks: Record<string, { hooks: { args?: string[] }[] }[]>;
+  };
+  return Object.values(hooks).flatMap((groups) =>
+    groups.flatMap((g) => g.hooks.map((h) => ['hippo', ...(h.args ?? []).slice(1)].join(' '))),
+  );
+}
+
 /** A hook line as argv: cut at the first shell operator, then split on spaces outside quotes. */
 function hookArgv(line: string): string[] {
   const command = line.split(/\s(?:2>|\|\||&&|<<<)/)[0];
@@ -54,7 +65,7 @@ describe('first-party hook command lines', () => {
       lines.push(...hippoCommandsIn(settings));
     }
     lines.push(
-      ...hippoCommandsIn(
+      ...pluginHippoLines(
         path.resolve(__dirname, '..', '..', 'extensions', 'claude-code-plugin', 'hooks', 'hooks.json'),
       ),
     );
