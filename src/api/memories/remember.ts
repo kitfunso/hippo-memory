@@ -68,7 +68,8 @@ export interface ConnectorRememberOptions extends RememberOptions {
   /** The connector event this write answers. The store logs it in the memory's own transaction;
    * an event logged before stores nothing and answers `duplicate`. */
   event?: ConnectorEvent;
-  /** The connector's own rule holds the write for review whatever the check finds, as GitHub does for an outside author. */
+  /** The connector's own rule holds the write for review whatever the check finds, as GitHub
+   * does for an outside author. */
   hold?: { readonly reason: string };
 }
 

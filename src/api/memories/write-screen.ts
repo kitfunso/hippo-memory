@@ -11,7 +11,8 @@ import {
 } from '../instruction-detect.js';
 import type { Actor, ContextWith } from '../types.js';
 
-/** The groups that hold a flagged write: the write that commits its review record, and the queue it is released from. */
+/** The groups that hold a flagged write: the write that commits its review record, and the
+ * queue it is released from. */
 export type ReviewGroup = 'connectorWrites' | 'quarantine';
 
 /** The group that writes a held row with its review record; undefined on a store with no queue to release it. */
