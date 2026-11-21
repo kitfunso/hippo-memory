@@ -347,6 +347,14 @@ describe('project write gate', () => {
     expect(rows('case20')).toEqual([]);
   });
 
+  it('20b. the configured deadline wins: a gate that settles after it answers 503', async () => {
+    set(() => new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)));
+    const r = await write(gated.url, keyM.plaintext, 'case20b');
+    expect(r.status).toBe(503);
+    expect(errorOf(r)).toBe('project write gate unavailable');
+    expect(rows('case20b')).toEqual([]);
+  });
+
   it('21. a gate that mutates the actor does not change the actor of the audit row', async () => {
     let scopesThrew: boolean | undefined;
     let seenScopes: readonly string[] | undefined;
