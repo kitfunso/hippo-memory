@@ -248,7 +248,8 @@ export function crossProjectHeading(entries: number): string {
   return `\n## Other-project memory (explicitly requested, ${entries} entries)\n`;
 }
 
-/** The tag list as a context line prints it; the write screen checks the content joined to this text (the line's `**` only widens the gap). */
+/** The tag list as a context line prints it; the write screen checks the content joined to this text.
+ * The line's `**` between them only widens the gap. */
 export function printedTags(tags: readonly string[]): string {
   return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
 }
