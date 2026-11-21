@@ -121,6 +121,8 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   detached?: DetachedWork;
   /** The server's gate on a write under a caller's project; unset, none is asked. */
   projectWriteGate?: ProjectWriteGate;
+  /** Deadline for one gate call; unset, the 5000 ms default. */
+  projectWriteGateTimeoutMs?: number;
 }
 
 /** A tool's run for one call's arguments. */
@@ -169,6 +171,7 @@ export function mcpApiContext(ctx: McpCaller): ApiContext {
     signal: ctx.signal,
     detached: ctx.detached,
     projectWriteGate: ctx.projectWriteGate,
+    projectWriteGateTimeoutMs: ctx.projectWriteGateTimeoutMs,
   };
 }
 

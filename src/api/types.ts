@@ -81,6 +81,8 @@ export interface ProjectWriteCall {
   readonly actor: Readonly<Actor>;
   /** The caller's project name, already checked by assertCallerProject; null when the write names none. */
   readonly project: string | null;
+  /** Aborts when the gate passes its deadline. */
+  readonly signal: AbortSignal;
 }
 /** null lets the write run; a string refuses it with 403 and that text. */
 export type ProjectWriteGate = (call: ProjectWriteCall) => string | null | Promise<string | null>;
@@ -114,6 +116,8 @@ export interface Context {
   readonly detached?: DetachedWork | undefined;
   /** Set by a server root from serve's projectWriteGate; unset, every project is accepted. */
   readonly projectWriteGate?: ProjectWriteGate | undefined;
+  /** Deadline for one gate call; unset or not a positive number, 5000 ms. */
+  readonly projectWriteGateTimeoutMs?: number | undefined;
 }
 
 /** The strength model `ctx` scores by: its root's eval switches with its config's loss-aversion

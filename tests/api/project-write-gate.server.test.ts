@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { admitProjectWrite, serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
+import { HttpError, admitProjectWrite, serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
 import type { AuthResolver } from '../../src/surface/server/types.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -137,6 +137,7 @@ beforeAll(async () => {
   gated = await serve({
     ...base,
     hippoRoot: store,
+    projectWriteGateTimeoutMs: 100,
     projectWriteGate: (c) => {
       calls.push(c);
       return answer(c);
@@ -196,6 +197,7 @@ describe('project write gate', () => {
     expect(calls.at(-1)).toEqual({
       tenantId: 'default',
       project: 'alpha',
+      signal: expect.any(AbortSignal),
       actor: expect.objectContaining({ subject: `api_key:${keyM.keyId}`, role: 'member' }),
     });
   });
@@ -309,5 +311,57 @@ describe('project write gate', () => {
     const r = await write(plain.url, keyP.plaintext, 'hi', { force: false }, { name: 'Alpha' });
     expect(r.status, r.text).toBe(200);
     expect(JSON.parse(r.text)).toHaveProperty('skipped');
+  });
+
+  it('18. a gate that throws an HttpError answers 500 and the body holds none of its text', async () => {
+    set(() => {
+      const boom = new HttpError(401, 'upstream service credential rejected');
+      boom.stack = 'HttpError: gate broke';
+      throw boom;
+    });
+    const r = await write(gated.url, keyM.plaintext, 'case18');
+    expect(r.status).toBe(500);
+    expect(r.text).not.toContain('upstream');
+    expect(rows('case18')).toEqual([]);
+  });
+
+  it('19. a gate that rejects answers 500', async () => {
+    set(() => {
+      const boom = new Error('gate rejected');
+      boom.stack = 'Error: gate rejected';
+      return Promise.reject(boom);
+    });
+    const r = await write(gated.url, keyM.plaintext, 'case19');
+    expect(r.status).toBe(500);
+    expect(rows('case19')).toEqual([]);
+  });
+
+  it('20. a gate that never settles answers 503 within the deadline and its signal aborts', async () => {
+    set(() => new Promise<null>(() => undefined));
+    const started = Date.now();
+    const r = await write(gated.url, keyM.plaintext, 'case20');
+    expect(r.status).toBe(503);
+    expect(errorOf(r)).toBe('project write gate unavailable');
+    expect(Date.now() - started).toBeLessThan(3000);
+    expect(calls.at(-1)?.signal.aborted).toBe(true);
+    expect(rows('case20')).toEqual([]);
+  });
+
+  it('21. a gate that mutates the actor does not change the actor of the audit row', async () => {
+    set((c) => {
+      try {
+        // SAFETY: the case under test is a JS gate writing to a frozen argument.
+        (c.actor as { subject: string }).subject = 'hijacked';
+      } catch {
+        // A frozen actor throws in strict mode; either way the request's actor stays.
+      }
+      return null;
+    });
+    const r = await write(gated.url, keyM.plaintext, 'case21');
+    expect(r.status, r.text).toBe(200);
+    expect(Object.isFrozen(calls.at(-1)?.actor)).toBe(true);
+    const audited = query<{ actor: string }>('SELECT actor FROM audit_log');
+    expect(audited.map((a) => a.actor)).toContain(`api_key:${keyM.keyId}`);
+    expect(audited.map((a) => a.actor)).not.toContain('hijacked');
   });
 });
