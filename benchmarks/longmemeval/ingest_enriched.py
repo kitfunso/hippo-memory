@@ -132,7 +132,7 @@ def ingest_enriched(
 
     hippo_dir = store_dir / ".hippo"
     abs_store = str(store_dir.resolve())
-    init_env = {**os.environ, "HIPPO_HOME": abs_store, "HOME": abs_store, "USERPROFILE": abs_store}
+    init_env = {**os.environ, "HIPPO_HOME": abs_store, "HOME": abs_store, "USERPROFILE": abs_store, "HIPPO_SKIP_AUTO_INTEGRATIONS": "1"}
     if not hippo_dir.exists():
         result = subprocess.run(
             [hippo_bin, "init", "--no-hooks", "--no-schedule", "--no-learn"],

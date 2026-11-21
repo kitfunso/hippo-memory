@@ -102,7 +102,7 @@ export default createAdapter({
     this._completedCount = 0;
     // Strict: a missing or half-failing CLI must abort the run, not report a fake trap-hit rate (codex rounds 3-4).
     try {
-      hippoExec(this._storeDir, 'init --no-schedule', null, true);
+      hippoExec(this._storeDir, 'init --no-hooks --no-schedule', null, true);
     } catch (err) {
       rmSync(this._storeDir, { recursive: true, force: true });
       this._storeDir = null;

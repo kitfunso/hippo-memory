@@ -93,7 +93,7 @@ def hippo_server() -> Iterator[str]:
 
     # hippo serve requires a .hippo dir to exist. Bootstrap it via `hippo init`.
     init = subprocess.run(
-        ["node", str(HIPPO_BIN), "init"],
+        ["node", str(HIPPO_BIN), "init", "--no-hooks"],
         env=env,
         cwd=home,
         capture_output=True,
