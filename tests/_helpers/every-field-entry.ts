@@ -25,6 +25,7 @@ export function everyFieldEntry(): MemoryEntry {
     pinned: true,
     confidence: 'observed',
     content: 'the wire golden keeps every stored key in its place',
+    leadIn: 'user: where does the wire golden keep every stored key?',
     parents: ['mem-golden-parent'],
     starred: true,
     traceOutcome: 'success',

@@ -53,6 +53,7 @@ export interface MemoryWire {
   last_rebuilt_at?: string | null;
   rebuild_count?: number;
   dag_level_3_built_at?: string | null;
+  lead_in?: string;
   /** 2.x wrote a search row's FTS5 rank here; kept so such a wire object still types, though 3.0
    * never writes or reads it. A hit's score is on `SearchResult`. */
   bm25_score?: number;
@@ -61,7 +62,7 @@ export interface MemoryWire {
 /** Keys in the order a store read builds an entry, so a dump of a loaded entry keeps the bytes
  * 2.x wrote. */
 export function toWire(entry: MemoryEntry): MemoryWire {
-  return {
+  const wire: MemoryWire = {
     id: entry.id,
     created: entry.created,
     last_retrieved: entry.lastRetrieved,
@@ -103,12 +104,14 @@ export function toWire(entry: MemoryEntry): MemoryWire {
     rebuild_count: entry.rebuildCount,
     dag_level_3_built_at: entry.dagLevel3BuiltAt,
   };
+  if (entry.leadIn) wire.lead_in = entry.leadIn;
+  return wire;
 }
 
 /** The entry a wire object names; a key the wire lacks stays undefined, as JSON.parse left it
  * before. */
 export function fromWire(wire: MemoryWire): MemoryEntry {
-  return {
+  const entry: MemoryEntry = {
     id: wire.id,
     created: wire.created,
     lastRetrieved: wire.last_retrieved,
@@ -150,4 +153,6 @@ export function fromWire(wire: MemoryWire): MemoryEntry {
     rebuildCount: wire.rebuild_count,
     dagLevel3BuiltAt: wire.dag_level_3_built_at,
   };
+  if (wire.lead_in) entry.leadIn = wire.lead_in;
+  return entry;
 }

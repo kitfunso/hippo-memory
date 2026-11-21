@@ -50,6 +50,7 @@ interface EntryFrontmatterFields {
   dag_parent_id: FrontmatterValue;
   tenant_id?: FrontmatterValue;
   origin_project?: FrontmatterValue;
+  lead_in?: FrontmatterValue;
 }
 
 // Four decimal places: enough to tell two strengths apart, short enough to read in a mirror file.
@@ -113,6 +114,9 @@ export function serializeEntry(entry: MemoryEntry): string {
   if (wire.origin_project !== undefined) {
     frontmatter['origin_project'] = wire.origin_project;
   }
+  if (wire.lead_in !== undefined) {
+    frontmatter['lead_in'] = wire.lead_in;
+  }
   // Spread into a fresh literal: dumpFrontmatter's Record<string, YamlValue> needs an index
   // signature, which the named interface does not structurally provide.
   const fm = dumpFrontmatter({ ...frontmatter });
@@ -152,6 +156,7 @@ type LineageWire = Pick<
   | 'artifact_ref'
   | 'tenant_id'
   | 'origin_project'
+  | 'lead_in'
 >;
 
 function scoringWireOf(
@@ -219,6 +224,7 @@ function lineageWireOf(data: FrontmatterData, now: Date): LineageWire {
     artifact_ref: nullableString(data['artifact_ref']),
     tenant_id: nullableString(data['tenant_id']) ?? DEFAULT_TENANT_ID,
     origin_project: originProjectOf(data),
+    lead_in: nullableString(data['lead_in']) ?? undefined,
   };
 }
 
