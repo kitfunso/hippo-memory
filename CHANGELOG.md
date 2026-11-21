@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.12.0 - 2026-11-21
+
+### Added
+
+- **Four audit ops for SCIM user writes: `scim_user_create`, `scim_user_replace`, `scim_user_patch` and `scim_user_delete`.** An add-on that provisions users over SCIM can write them, and `hippo audit list --op` and `GET /v1/audit?op=` accept them. Core writes none of them itself.
+
+### Fixed
+
+- **The MCP Registry step waits for npm to show the new version.** It checked npm once, 13 seconds after the 3.11.0 publish, while npm took about 3.5 minutes to show that version, so the listing failed until the job ran again. It now checks every 20 seconds for up to 10 minutes.
+
 ## 3.11.0 - 2026-11-21
 
 ### Added
