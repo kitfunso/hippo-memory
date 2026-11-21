@@ -145,7 +145,7 @@ describe('serve() under a store without local files', () => {
     });
     expect({ status: res.status, body: await res.json() }).toEqual({
       status: 200,
-      body: { ok: true, sourceId: row.id, globalId: row.id },
+      body: { ok: true, sourceId: row.id, globalId: row.id, originProject: '' },
     });
   });
 
