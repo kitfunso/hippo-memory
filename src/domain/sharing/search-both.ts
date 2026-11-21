@@ -25,7 +25,7 @@ import {
   type VectorSource,
 } from '../search/vector.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
-import { duplicateKey } from '../../base/util/same-text.js';
+import { duplicateKey, identityText } from '../../base/util/same-text.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { SharingStore } from './text-keys.js';
@@ -213,7 +213,7 @@ function mergeStoreResults(
   // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
-    const key = duplicateKey(r.entry.content);
+    const key = duplicateKey(identityText(r.entry));
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

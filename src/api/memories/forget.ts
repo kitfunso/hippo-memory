@@ -70,7 +70,8 @@ export interface RejectResult {
 /** Tombstones a value's normalized digest so a matching write is refused everywhere until
  * `unreject`; pass exactly one of `memoryId` or `value`. `memoryId` also removes every live
  * tenant row with that digest (not others' personal rows); `reason` is required. Throws on an
- * unknown id or both/neither. */
+ * unknown id or both/neither. Rejecting a row with a lead-in by id refuses that lead-in only; `value`
+ * rejects the text with any lead-in. */
 export async function reject(
   ctx: ContextWith<'rejections'>,
   opts: RejectOptions,

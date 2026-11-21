@@ -15,7 +15,12 @@ export interface RejectedTextRequest {
 export function rejectedText(
   request: RejectedTextRequest,
   row:
-    | { readonly content: string; readonly tenant_id: string; readonly scope: string | null }
+    | {
+        readonly content: string;
+        readonly lead_in?: string | null;
+        readonly tenant_id: string;
+        readonly scope: string | null;
+      }
     | undefined,
 ): string {
   if (request.memoryId === undefined) {

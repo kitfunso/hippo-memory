@@ -19,7 +19,7 @@ import { chunked } from '../../../base/util/chunked.js';
 import { MEMORY_ROW_COLUMNS } from '../runtime/rows.js';
 import { placeholders, rowsPerStatement, valuesRows } from '../../../db/sql.js';
 import { raiseMinBinary } from '../../../db/meta.js';
-import { duplicateHash } from '../../../base/util/same-text.js';
+import { duplicateHash, identityText } from '../../../base/util/same-text.js';
 import { LEAD_IN_MIN_BINARY } from '../../../base/util/version.js';
 
 /** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
@@ -33,7 +33,12 @@ function rejectLegacyTenantKey(entry: MemoryEntry): void {
 export function upsertEntryRow(db: DatabaseSyncLike, entry: MemoryEntry): void {
   rejectLegacyTenantKey(entry);
   const tenantId = entry.tenantId ?? DEFAULT_TENANT_ID;
-  checkRejectionGuard(db, { tenantId, entryId: entry.id, content: entry.content });
+  checkRejectionGuard(db, {
+    tenantId,
+    entryId: entry.id,
+    content: entry.content,
+    leadIn: entry.leadIn,
+  });
   syncFtsRow(db, entry, upsertMemoryRow(db, entry));
 }
 
@@ -133,7 +138,7 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
     entry.earliestAt ?? null,
     entry.latestAt ?? null,
     entry.dagLevel3BuiltAt ?? null,
-    duplicateHash(entry.content),
+    duplicateHash(identityText(entry)),
   ];
 }
 

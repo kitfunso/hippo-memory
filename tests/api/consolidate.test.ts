@@ -250,6 +250,48 @@ describe('Merge pass', () => {
     expect(result.semanticCreated).toBe(0);
   });
 
+  it('leaves rows with a lead-in out of the merge, and reports no merge for a store of them', async () => {
+    initTestStore(tmpDir);
+
+    const turns = ['error', 'problem', 'warning', 'failure'].map((word, i) =>
+      createMemory7(`cache refresh failure data pipeline ${word}`, {
+        layer: Layer.Episodic,
+        leadIn: `user: question number ${i} about the cache?`,
+      }),
+    );
+    for (const turn of turns) writeEntry(tmpDir, turn);
+
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
+
+    expect([result.merged, result.semanticCreated]).toEqual([0, 0]);
+    expect(loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Semantic)).toHaveLength(0);
+    for (const turn of turns) expect(readEntry(tmpDir, turn.id)!.leadIn).toBe(turn.leadIn);
+  });
+
+  it('merges the rows with no lead-in beside lead-in rows, and counts only those', async () => {
+    initTestStore(tmpDir);
+
+    const plain = ['error', 'problem'].map((word) =>
+      createMemory7(`cache refresh failure data pipeline ${word}`, { layer: Layer.Episodic }),
+    );
+    const withLeadIn = ['warning', 'failure'].map((word, i) =>
+      createMemory7(`cache refresh failure data pipeline ${word}`, {
+        layer: Layer.Episodic,
+        leadIn: `user: question number ${i} about the cache?`,
+      }),
+    );
+    for (const row of [...plain, ...withLeadIn]) writeEntry(tmpDir, row);
+
+    const result = await consolidate(tmpDir, { now: FIXED_NOW });
+
+    expect([result.merged, result.semanticCreated]).toEqual([2, 1]);
+    const semantics = loadAllEntries(tmpDir, 'default').filter((e) => e.layer === Layer.Semantic);
+    expect(semantics).toHaveLength(1);
+    expect(semantics[0]!.content).toMatch(/error[\s\S]*problem|problem[\s\S]*error/);
+    expect(semantics[0]!.content).not.toMatch(/pipeline (warning|failure)/);
+    for (const row of withLeadIn) expect(readEntry(tmpDir, row.id)!.leadIn).toBe(row.leadIn);
+  });
+
   it('demotes merged source episodics via half_life_days, not the inert stored-strength field', async () => {
     initTestStore(tmpDir);
 

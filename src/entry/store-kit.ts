@@ -144,10 +144,15 @@ export function entryAfterOutcome(
     withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio),
   );
 }
-export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
+export {
+  normalizeValueForRejection,
+  rejectionDigest,
+  rowDigests,
+  tombstoneDigest,
+} from '../base/records/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule, and its row
 // writes keep hippo.db's duplicate hash.
-export { duplicateHash, heldTexts } from '../base/util/same-text.js';
+export { duplicateHash, heldTexts, identityText } from '../base/util/same-text.js';
 // An add-on store stamps (`isoInstant(stamp) ?? stamp`), searches and windows its rows as hippo.db
 // does, so both return the same rows in the same order.
 export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';

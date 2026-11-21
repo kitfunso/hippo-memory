@@ -2,6 +2,7 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
+import { identityText } from '../../base/util/same-text.js';
 import { DEFAULT_LOCAL_BUMP } from '../../base/rank/search-types.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
@@ -36,13 +37,13 @@ export function oneCopyPerMemory(
     calculateStrength(e, now, strength) * (isGlobal ? GLOBAL_DISCOUNT : 1);
   const best = new Map<string, { entry: MemoryEntry; isGlobal: boolean }>();
   const offer = (entry: MemoryEntry, isGlobal: boolean): void => {
-    const held = best.get(entry.content);
+    const held = best.get(identityText(entry));
     const wins =
       !held ||
       (held.entry.pinned !== entry.pinned
         ? entry.pinned
         : score(entry, isGlobal) > score(held.entry, held.isGlobal));
-    if (wins) best.set(entry.content, { entry, isGlobal });
+    if (wins) best.set(identityText(entry), { entry, isGlobal });
   };
   for (const e of local) offer(e, false);
   for (const e of global) offer(e, true);
@@ -212,7 +213,7 @@ function promptRecallCandidates({
 }: PromptRecallCandidatesOptions): PromptCandidate[] {
   const { obs, primaryIsGlobal } = plan;
   // A candidate carrying a pin's text would inject that memory a second time.
-  const pinnedText = new Set(rankedPinned.map((r) => r.entry.content));
+  const pinnedText = new Set(rankedPinned.map((r) => identityText(r.entry)));
   const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
     !admit(e)
       ? 'scope'
@@ -220,7 +221,7 @@ function promptRecallCandidates({
         ? 'pinned'
         : !isWorthSurfacing(e)
           ? 'quality'
-          : pinnedText.has(e.content)
+          : pinnedText.has(identityText(e))
             ? 'duplicate'
             : null;
   const eligible = (e: MemoryEntry): boolean => {

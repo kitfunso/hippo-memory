@@ -1,6 +1,7 @@
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { identityText } from '../../base/util/same-text.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { indexedModel, indexNeedsRebuild } from '../../base/embeddings/index-identity.js';
 import {
@@ -297,12 +298,10 @@ function scorePhysicsPool(
   const entryMap = new Map(pools.entries.map((e) => [e.id, e]));
   // Content tie key: baseScore ties pick the cluster amplification set, so the order must hold
   // across fresh ingests.
-  const scored = computePhysicsScores(
-    pools.particles,
-    queryVector,
-    config,
-    (id) => entryMap.get(id)?.content ?? id,
-  );
+  const scored = computePhysicsScores(pools.particles, queryVector, config, (id) => {
+    const entry = entryMap.get(id);
+    return entry ? identityText(entry) : id;
+  });
   const results: SearchResult[] = [];
   for (const s of scored) {
     if (s.finalScore <= 0) continue;

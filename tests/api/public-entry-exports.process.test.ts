@@ -281,14 +281,14 @@ describe('published runtime exports', () => {
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts
         hasGroup heldTexts
-        initStore interleaveRows isSharedStore isoInstant
+        identityText initStore interleaveRows isSharedStore isoInstant
         loadConfig
         normalizeValueForRejection
         ownScopeTouches
         partitionCjkTerms passesScopeFilterForRecall physicsSearch
-        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup runStoreConformance
+        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup rowDigests runStoreConformance
         sortableStamp splitLikeTerms sqliteStore
-        tallyAmbientEntries targetReader",
+        tallyAmbientEntries targetReader tombstoneDigest",
           "./testing": "ambientSecretAdmit ambientSecretAdmitWire
         batchWriteAndDeleteWire buildIndexFromDb
         calculateStrengthWire createMemoryWire

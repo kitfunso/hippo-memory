@@ -3,7 +3,7 @@
 // an import cycle.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
-import { heldTexts } from '../../../base/util/same-text.js';
+import { heldTexts, identityText } from '../../../base/util/same-text.js';
 import { audit } from '../audit/audit-event.js';
 import { deleteEntryCore } from '../entries/delete-and-batch.js';
 import {
@@ -27,7 +27,8 @@ import {
 } from './rejection.js';
 import {
   normalizeValueForRejection,
-  rejectionDigest,
+  rowDigests,
+  tombstoneDigest,
 } from '../../../base/records/rejection-digest.js';
 import type {
   AppliedRejection,
@@ -45,7 +46,8 @@ import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-type HoldsValue = (text: string) => boolean;
+/** Whether a row's text and lead-in hold the rejected value; a merged row's source texts have none. */
+type HoldsValue = (text: string, leadIn?: string | null) => boolean;
 
 /** What one rejection removed and wrote, gathered across the live and dormant passes. */
 interface Removal {
@@ -64,11 +66,11 @@ interface Holders {
 /** How a row holds the rejected text: as its whole text, as one text of a sleep-merged row, or
  * not at all. */
 function holdOf(
-  row: { content: string; source: string | null },
+  row: { content: string; leadIn?: string | null; source: string | null },
   holdsValue: HoldsValue,
 ): 'whole' | 'merged' | null {
-  if (holdsValue(row.content)) return 'whole';
-  return heldTexts({ content: row.content, source: row.source ?? '' }).some(holdsValue)
+  if (holdsValue(row.content, row.leadIn)) return 'whole';
+  return heldTexts({ content: row.content, source: row.source ?? '' }).some((t) => holdsValue(t))
     ? 'merged'
     : null;
 }
@@ -86,10 +88,12 @@ function listHolderIds(
   const keep = (row: {
     id: string;
     content: string;
+    lead_in: string | null;
     source: string | null;
     scope: string | null;
   }): void => {
-    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(row, holdsValue) !== null) {
+    const text = { content: row.content, leadIn: row.lead_in, source: row.source };
+    if (rejectionReaches(rejection.ownScope, row.scope) && holdOf(text, holdsValue) !== null) {
       found.push(row.id);
     }
   };
@@ -135,7 +139,9 @@ function heldUnderLock(
   const dormantHolding = (hold: 'whole' | 'merged'): string[] =>
     ids.filter((id) => {
       const row = dormant.get(id);
-      return row !== undefined && inReach(row.scope) && holdOf(row, holdsValue) === hold;
+      if (row === undefined || !inReach(row.scope)) return false;
+      const text = { content: row.content, leadIn: row.lead_in, source: row.source };
+      return holdOf(text, holdsValue) === hold;
     });
   return {
     live: { whole: liveHolding('whole'), merged: liveHolding('merged') },
@@ -273,11 +279,11 @@ function applyRejection(
 ): AppliedRejection {
   const { hippoRoot } = files;
   const { tenantId, actor, reason, memoryId } = rejection;
-  const content = rejectedText(
-    rejection,
-    memoryId === undefined ? undefined : entryRejectRow(db, memoryId),
-  );
-  const digest = rejectionDigest(content);
+  const row = memoryId === undefined ? undefined : entryRejectRow(db, memoryId);
+  const content = rejectedText(rejection, row);
+  // An id reject of a lead-in row names that row's identity; a value reject names the content.
+  const leadIn = row?.lead_in || null;
+  const digest = tombstoneDigest({ content, leadIn });
   const rejectedAt = files.clock().toISOString();
   withWriteScope(db, 'reject_value_row', () =>
     insertRejectedValue(db, {
@@ -287,12 +293,13 @@ function applyRejection(
       rejectedBy: actor,
       rejectedAt,
       sourceMemoryId: memoryId ?? null,
-      normalizedChars: normalizeValueForRejection(content).length,
+      normalizedChars: normalizeValueForRejection(identityText({ content, leadIn })).length,
     }),
   );
   // SHORTCUT: hashes every text of the tenant, a page at a time with no lock held; a digest column
   // needs a schema migration, held until approved.
-  const holdsValue: HoldsValue = (text) => rejectionDigest(text) === digest;
+  const holdsValue: HoldsValue = (text, lead) =>
+    rowDigests({ content: text, leadIn: lead }).includes(digest);
   const found = listHolderIds(db, rejection, holdsValue);
   const removal = removeHolders(db, files, { rejection, digest, holdsValue, found });
 
@@ -306,6 +313,7 @@ function applyRejection(
     removedRawIds,
     successorIds: successors.map((s) => s.id),
     dormantSuccessorIds,
+    leadInOnly: leadIn !== null,
   };
 }
 
@@ -333,9 +341,9 @@ function liftRejection(
 }
 
 export function refusedAmong(db: DatabaseSyncLike, checks: readonly RejectionCheck[]): boolean[] {
-  return checks.map(({ tenantId, entryId, content }) => {
+  return checks.map(({ tenantId, entryId, content, leadIn }) => {
     try {
-      checkRejectionGuard(db, { tenantId, entryId, content });
+      checkRejectionGuard(db, { tenantId, entryId, content, leadIn });
       return false;
     } catch (err) {
       if (err instanceof RejectedValueError) return true;

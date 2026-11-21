@@ -3,7 +3,12 @@
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { isUserMessage, USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
 import type { HeldText } from '../../../base/ports/store/types.js';
-import { duplicateKey, heldTextKeys, storedTextKeys } from '../../../base/util/same-text.js';
+import {
+  duplicateKey,
+  heldTextKeys,
+  identityText,
+  storedTextKeys,
+} from '../../../base/util/same-text.js';
 import { ruleReplaces } from '../../../base/memory/rule-replaces.js';
 import { CLI_ACTOR } from '../../../base/scope/actor.js';
 import { supersedeInTx, writeEntryMirrors } from '../entries/entry-writes.js';
@@ -28,7 +33,7 @@ function heldRows(
   entries: readonly MemoryEntry[],
   dedup: CaptureDedup,
 ): HeldText[] {
-  const texts = entries.map((entry) => entry.content);
+  const texts = entries.map(identityText);
   const admit = dedup.everyScope ? EVERY_SCOPE : undefined;
   return listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit });
 }
@@ -45,7 +50,7 @@ function copiesTheRuleReplaces(
   rule: MemoryEntry,
   project: readonly string[],
 ): string[] {
-  const key = duplicateKey(rule.content);
+  const key = duplicateKey(identityText(rule));
   return rows.flatMap(({ id, ...row }) =>
     id !== undefined && ruleReplaces(row, project) && heldTextKeys(row).includes(key) ? [id] : [],
   );
@@ -81,7 +86,7 @@ function writeCapturedEntries(
         : project
           ? storedTextKeys(rows.filter((r) => !ruleReplaces(r, project)))
           : held;
-      if (stops.has(duplicateKey(entry.content))) return 'skipped';
+      if (stops.has(duplicateKey(identityText(entry)))) return 'skipped';
       // One rejected entry must not abort the rest of this capture's entries. A person wrote a
       // message, as with imported notes, and the worth check drops a one-line fact.
       const worthCheck = !isUserMessage(stamped);

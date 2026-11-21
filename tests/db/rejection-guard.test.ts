@@ -5,6 +5,7 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { insertRejectedValue } from '../../src/store/sqlite/review/rejection.js';
 import { rejectionDigest, normalizeValueForRejection } from '../../src/base/records/rejection-digest.js';
+import { identityText } from '../../src/base/util/same-text.js';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -262,5 +263,58 @@ describe('rejection guard', () => {
     // The row stays in tenant A, untouched.
     expect(readEntry(home, entry.id, 'tenant-a')!.content).toBe('shared content across a tenant move');
     expect(readEntry(home, entry.id, 'tenant-b')).toBeNull();
+  });
+});
+
+describe('rejection guard on rows with a lead-in', () => {
+  const [L1, L2, L3] = ['user: Is the flight booked?', 'user: Did Mel get the job?', 'user: Is the hotel paid?'];
+  const yes = (leadIn?: string) => createMemory('Yes.', { layer: Layer.Episodic, leadIn });
+
+  it('an identity tombstone refuses that text with that lead-in only', () => {
+    const home = makeRoot('rejection');
+    reject(home, identityText(yes(L1)), 'wrong answer');
+
+    expect(() => writeEntry(home, yes(L1))).toThrow(RejectedValueError);
+    expect(() => writeEntry(home, yes(`  ${L1.replace(/ /g, '   ')}`))).toThrow(RejectedValueError);
+    for (const leadIn of [L2, undefined]) expect(() => writeEntry(home, yes(leadIn))).not.toThrow();
+  });
+
+  it('a content tombstone refuses that text with any lead-in', () => {
+    const home = makeRoot('rejection');
+    reject(home, 'Yes.', 'never say it');
+
+    for (const leadIn of [L1, L3, undefined]) expect(() => writeEntry(home, yes(leadIn))).toThrow(RejectedValueError);
+  });
+
+  it('refuses a same-id edit that only moves the row onto a tombstoned lead-in, and spares an unchanged re-persist', () => {
+    const home = makeRoot('rejection');
+    const held = yes(L1);
+    const sibling = yes(L2);
+    writeEntry(home, held);
+    writeEntry(home, sibling);
+    reject(home, identityText(held), 'wrong answer');
+
+    expect(() => writeEntry(home, { ...sibling, leadIn: L1 })).toThrow(RejectedValueError);
+    expect(readEntry(home, sibling.id)!.leadIn).toBe(L2);
+    expect(() => writeEntry(home, { ...held, retrievalCount: held.retrievalCount + 1 })).not.toThrow();
+  });
+
+  it('batchWriteAndDelete skips a row whose identity is tombstoned and writes its sibling', () => {
+    const home = makeRoot('rejection');
+    const refused = yes(L1);
+    const sibling = yes(L2);
+    const digest = reject(home, identityText(refused), 'wrong answer');
+
+    batchWriteAndDeleteInFolder(home, [refused, sibling], []);
+
+    expect(readEntry(home, refused.id)).toBeNull();
+    expect(readEntry(home, sibling.id)).not.toBeNull();
+    const db = openHippoDb(home);
+    try {
+      const refusals = listAuditEvents(db, { tenantId: 'default', op: 'reject_refusal' });
+      expect(refusals.map((r) => [r.targetId, r.metadata.digest])).toEqual([[refused.id, digest]]);
+    } finally {
+      closeHippoDb(db);
+    }
   });
 });

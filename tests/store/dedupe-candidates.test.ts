@@ -6,6 +6,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadEveryTenantEntries, writeEntriesTogether } from '../_helpers/root-forms.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
+import { duplicateKey } from '../../src/base/util/same-text.js';
 import { countMatching, recordStatementsAsync } from '../_helpers/count-statements.js';
 
 const BASE = Date.parse('2026-05-01T00:00:00.000Z');
@@ -81,5 +83,53 @@ describe('deduplicateStore over the duplicate candidates', () => {
     expect(countMatching(statements, /^BEGIN IMMEDIATE/)).toBe(1);
     expect(countMatching(statements, /INSERT INTO audit_log/)).toBe(3);
     expect((await deduplicateStore(store(), { dryRun: true })).pairs).toEqual([]);
+  });
+});
+
+describe('deduplicateStore over rows with a lead-in', () => {
+  const L1 = 'user: Is the flight booked?';
+  const L2 = 'user: Did Mel get the job?';
+  let root: string;
+
+  beforeEach(() => {
+    root = makeStore('dedupe-lead-in').root;
+  });
+
+  const pairsOf = async () => (await deduplicateStore(sqliteStore(root), { dryRun: true })).pairs;
+
+  it('keeps two rows with the same text and different lead-ins, and the bare row beside them', async () => {
+    writeEntriesTogether(root, [row('Yes.', 0, { leadIn: L1 }), row('Yes.', 1, { leadIn: L2 }), row('Yes.', 2)]);
+    expect(await pairsOf()).toEqual([]);
+    expect((await deduplicateStore(sqliteStore(root), { actor: 'cli' })).removed).toBe(0);
+    expect(loadEveryTenantEntries(root)).toHaveLength(3);
+  });
+
+  it('folds two rows with equal text and equal lead-in, spacing apart, into one', async () => {
+    writeEntriesTogether(root, [
+      row('Yes.', 0, { leadIn: L1 }),
+      row('Yes.\n', 1, { leadIn: `  ${L1.replace(/ /g, '   ')} ` }),
+      row('Yes.', 2, { leadIn: L2 }),
+    ]);
+    expect(await pairsOf()).toHaveLength(1);
+    expect((await deduplicateStore(sqliteStore(root), { actor: 'cli' })).removed).toBe(1);
+    const left = loadEveryTenantEntries(root).map((e) => duplicateKey(e.leadIn ?? ''));
+    expect(left.sort()).toEqual([L2, L1]);
+  });
+
+  it('groups rows an older binary left with no stored hash by the same identity', async () => {
+    writeEntriesTogether(root, [
+      row('Yes.', 0, { leadIn: L1 }),
+      row('Yes.', 1, { leadIn: L2 }),
+      row('Yes.', 2, { leadIn: L1 }),
+    ]);
+    const db = openHippoDb(root);
+    try {
+      db.exec('UPDATE memories SET duplicate_hash = NULL');
+    } finally {
+      closeHippoDb(db);
+    }
+    const pairs = await pairsOf();
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.kept).not.toBe(pairs[0]!.removed);
   });
 });

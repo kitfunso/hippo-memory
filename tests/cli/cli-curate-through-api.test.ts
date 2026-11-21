@@ -9,7 +9,8 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
-import { readEntry } from '../_helpers/root-forms.js';
+import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
 let root: string;
@@ -31,6 +32,24 @@ describe('the CLI curate verbs go through src/api', () => {
     expect((await listRejectionsForTenant(sqliteStore(root), 'default')).map((row) => row.rejectedBy)).toEqual([
       adminActor('cli').subject,
     ]);
+  });
+
+  it('hippo reject of a row with a lead-in says only that lead-in is refused; --value and a bare row do not', async () => {
+    const withLeadIn = createMemory('Yes.', { leadIn: 'user: Is the flight booked?' });
+    const bare = createMemory('Sure thing.');
+    writeEntry(root, withLeadIn);
+    writeEntry(root, bare);
+    const reject = (args: string[], flags: Record<string, string>) =>
+      runInProcess(() =>
+        handleReject({ hippoRoot: root, tenantId: 'default', args, flags: { reason: 'wrong', ...flags } }),
+      );
+
+    const byId = await reject([withLeadIn.id], {});
+    expect(byId.stdout).toContain('Only this lead-in is refused. Use --value to reject the text everywhere.');
+    const byBare = await reject([bare.id], {});
+    expect(byBare.stdout).not.toContain('Only this lead-in is refused');
+    const byValue = await reject([], { value: 'Yes.' });
+    expect(byValue.stdout).not.toContain('Only this lead-in is refused');
   });
 
   it('hippo invalidate weakens the matching row through the api', async () => {

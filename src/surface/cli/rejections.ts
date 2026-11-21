@@ -60,6 +60,9 @@ function printRejected(result: Awaited<ReturnType<typeof api.rejectOnHost>>, rea
   const preview = truncateWithEllipsis(result.content, CONTENT_PREVIEW_CHARS);
   console.log(`Rejected [${digestPrefix}...]: "${preview}"`);
   console.log(`  Reason: ${reason}`);
+  if (result.leadInOnly) {
+    console.log('  Only this lead-in is refused. Use --value to reject the text everywhere.');
+  }
   if (result.removedIds.length > 0) {
     console.log(
       `  Removed ${result.removedIds.length} matching row(s): ${result.removedIds.join(', ')}`,

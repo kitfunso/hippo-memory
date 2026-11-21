@@ -1,12 +1,14 @@
 // The SQL twins in src/store/sqlite/runtime/rule-sql.ts equal their JS rules over a seeded spread: strength under a
-// loss-aversion ratio (tests/core/memory.test.ts holds the default ratio) and the bare text of a stored content.
+// loss-aversion ratio (tests/core/memory.test.ts holds the default ratio), and the bare and identity text of a stored
+// content.
 import { rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { calculateStrength } from '../../src/entry/memory.js';
 import type { EmotionalValence, MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { bareText, SPACE_CODES } from '../../src/store/rules/copies.js';
-import { bareTextSql, strengthSql } from '../../src/store/sqlite/runtime/rule-sql.js';
+import { bareTextSql, IDENTITY_TEXT_SQL, strengthSql } from '../../src/store/sqlite/runtime/rule-sql.js';
+import { duplicateKey, identityText, LEAD_IN_MARK } from '../../src/base/util/same-text.js';
 import { PRODUCTION_STRENGTH, withLossAversion } from '../../src/base/memory/strength.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -90,6 +92,44 @@ describe('bareTextSql parity', () => {
         for (const text of texts) {
           // SAFETY: the SELECT names the single column b.
           expect((query.get(text) as { b: string }).b).toBe(bareText(text));
+        }
+      } finally {
+        closeHippoDb(db);
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('IDENTITY_TEXT_SQL parity', () => {
+  const L1 = 'user: Is the flight booked?';
+  const pairs: ReadonlyArray<readonly [string, string | null]> = [
+    ['Yes.', null],
+    ['Yes.', ''],
+    ['Yes.', L1],
+    ['two words', L1],
+    [`A${LEAD_IN_MARK}B`, `C${LEAD_IN_MARK}D`],
+    ['Yes.\n', `  ${L1.replace(/ /g, '  ')}`],
+  ];
+
+  it('gives identityText for a row with no lead-in, a lead-in and an empty one, and its bare text for any spacing', () => {
+    const home = makeRoot('identity-text-parity');
+    try {
+      const db = openHippoDb(home);
+      try {
+        const query = db.prepare(
+          `SELECT ${IDENTITY_TEXT_SQL} AS t, ${bareTextSql(IDENTITY_TEXT_SQL)} AS b ` +
+            'FROM (SELECT ? AS content, ? AS lead_in)',
+        );
+        for (const [content, leadIn] of pairs) {
+          // SAFETY: the SELECT names the two columns t and b.
+          const got = query.get(content, leadIn) as { t: string; b: string };
+          const js = identityText({ content, leadIn });
+          expect(got.b, `${content} + ${leadIn}`).toBe(bareText(js));
+          if (content === duplicateKey(content) && (leadIn ?? '') === duplicateKey(leadIn ?? '')) {
+            expect(got.t, `${content} + ${leadIn}`).toBe(js);
+          }
         }
       } finally {
         closeHippoDb(db);

@@ -3,10 +3,21 @@
 // count as a copy.
 import type { MemoryEntry } from '../memory/entry.js';
 
-type Text = Pick<MemoryEntry, 'content'> & { source?: string; pinned?: boolean };
+type Text = Pick<MemoryEntry, 'content' | 'leadIn'> & { source?: string; pinned?: boolean };
 
 export function duplicateKey(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/** Unit separator: no whitespace fold touches it, so "A" + "B" never equals "A B". */
+export const LEAD_IN_MARK = '\u001f';
+const part = (text: string): string => duplicateKey(text.replaceAll(LEAD_IN_MARK, ' '));
+
+/** What "the same memory" compares: the content, plus the lead-in when one is set. Each part is
+ * folded first, so spacing variants still fold ("Yes.\n" + L equals "Yes." + L). */
+export function identityText(e: Pick<MemoryEntry, 'content' | 'leadIn'>): string {
+  // SHORTCUT: only a no-lead-in content with a literal U+001F can equal a lead-in identity; a rehash fixes it.
+  return e.leadIn ? `${part(e.content)}${LEAD_IN_MARK}${part(e.leadIn)}` : e.content;
 }
 
 /** A 53-bit hash (cyrb53) of the text with every space removed: texts duplicateKey calls equal
@@ -48,10 +59,10 @@ export function heldTexts(entry: Text): string[] {
     .map((t) => t.replace(/\n {2}/g, '\n'));
 }
 
-/** Keys of every text a row holds word for word: its own, plus each source text inside a
+/** Keys of every text a row holds word for word: its identity, plus each source text inside a
  * sleep-merged row. */
 export function heldTextKeys(entry: Text): string[] {
-  return [duplicateKey(entry.content), ...heldTexts(entry).map(duplicateKey)];
+  return [duplicateKey(identityText(entry)), ...heldTexts(entry).map(duplicateKey)];
 }
 
 export function storedTextKeys(entries: Iterable<Text>): Set<string> {

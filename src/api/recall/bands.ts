@@ -3,7 +3,12 @@ import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import {
+  dropHeldCopies,
+  duplicateKey,
+  identityText,
+  storedTextKeys,
+} from '../../base/util/same-text.js';
 import { eligibleSummaryParents } from '../summary-parents.js';
 import { classifyOriginProject } from '../../base/scope/project-identity.js';
 import { passesScopeFilterForRecall } from '../../base/scope/recall-scope.js';
@@ -228,8 +233,9 @@ function freshTailBand(opts: RecallOptions, options: FreshTailBandOptions): Reca
   const shownKeys = storedTextKeys(shownEntries);
   const freshRanked: RecallResultItem[] = [];
   for (const m of recentScoped) {
-    if (seenIds.has(m.id) || shownKeys.has(duplicateKey(m.content))) continue;
-    shownKeys.add(duplicateKey(m.content));
+    const key = duplicateKey(identityText(m));
+    if (seenIds.has(m.id) || shownKeys.has(key)) continue;
+    shownKeys.add(key);
     const item: RecallResultItem = {
       id: m.id,
       content: m.content,

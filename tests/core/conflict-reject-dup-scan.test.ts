@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 const { StatementSync } = require('node:sqlite') as { StatementSync: { prototype: StatementProto } };
 
 /** The duplicate scan: every other row of the loser's tenant. */
-const DUP_SCAN = 'SELECT id, kind, content, scope FROM memories WHERE tenant_id = ?';
+const DUP_SCAN = 'SELECT id, kind, content, lead_in, scope FROM memories WHERE tenant_id = ?';
 const LOSER = 'Use && to chain commands in PowerShell';
 
 let root: string;

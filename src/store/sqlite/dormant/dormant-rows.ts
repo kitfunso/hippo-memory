@@ -254,11 +254,14 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
 interface DormantText {
   readonly id: string;
   readonly content: string;
+  readonly lead_in: string | null;
   readonly source: string | null;
   readonly scope: string | null;
 }
 
-const DORMANT_TEXT_COLUMNS = `id, content, ${entryField('source')} AS source, ${entryField('scope')} AS scope`;
+const DORMANT_TEXT_COLUMNS =
+  `id, content, ${entryField('lead_in')} AS lead_in, ${entryField('source')} AS source, ` +
+  `${entryField('scope')} AS scope`;
 
 /**
  * Up to `limit` of a tenant's dormant memories with ids after `afterId`, by id, with the columns a

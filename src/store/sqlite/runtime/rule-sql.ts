@@ -1,9 +1,9 @@
 // The SQL twins of the model's rules in src/base: strength.ts, keep-rules.ts, recall scope
-// (recall-scope.ts), and the bare text of src/store/rules/copies.ts. Each is held equal to its JS
-// half over seeded rows by a test: strength in tests/core/memory.test.ts and
+// (recall-scope.ts), and the bare and identity text of src/store/rules/copies.ts. Each is held
+// equal to its JS half over seeded rows by a test: strength in tests/core/memory.test.ts and
 // tests/store/rule-sql-parity.test.ts, keep in tests/core/keep-rule.test.ts, scope in
-// tests/db/scope-admit-parity.test.ts and tests/api/personal-read-sites.process.test.ts, bare text
-// in tests/store/rule-sql-parity.test.ts.
+// tests/db/scope-admit-parity.test.ts and tests/api/personal-read-sites.process.test.ts, bare and
+// identity text in tests/store/rule-sql-parity.test.ts.
 import { DAY_MS } from '../../../base/util/time.js';
 import {
   EMOTIONAL_MULTIPLIERS,
@@ -28,6 +28,14 @@ const UNIX_EPOCH_JULIAN_DAY = 2440587.5;
  * lists them. */
 export const bareTextSql = (column: string): string =>
   SPACE_CODES.reduce((sql, code) => `replace(${sql}, char(${code}), '')`, column);
+
+const foldMark = (column: string): string => `replace(${column}, char(31), ' ')`;
+
+/** `identityText` over `memories` columns, for bareTextSql to strip the spaces: no whitespace fold
+ * here. A NULL or '' lead_in gives the content. */
+export const IDENTITY_TEXT_SQL =
+  `(CASE WHEN COALESCE(lead_in, '') = '' THEN content ` +
+  `ELSE ${foldMark('content')} || char(31) || ${foldMark('lead_in')} END)`;
 
 /** calculateRewardFactor as SQL over `memories` columns; strengthSql and the context-candidate
  * rank both build on it, so the slope has one source. */

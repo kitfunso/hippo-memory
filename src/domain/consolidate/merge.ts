@@ -146,6 +146,7 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
       !keptAsWritten(e) &&
       !alreadyMergedIds.has(e.id) &&
       !e.pinned && // a pin merged with a look-alike would read as one of two values
+      !e.leadIn && // a merged row holds content only, so merging would drop the lead-in
       isReusable(e);
     const tokens = candidate ? tokenize(e.content) : [];
     // Two empty token sets overlap 1, so tokenless text would merge with any other.
