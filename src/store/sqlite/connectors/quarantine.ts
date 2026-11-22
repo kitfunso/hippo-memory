@@ -286,12 +286,15 @@ function editQuarantined(
     if (held.scope !== quarantineScopeFor(row.originalScope)) {
       return rollback({ outcome: 'scope_moved' });
     }
-    if (held.supersededBy)
+    if (held.supersededBy) {
       return rollback({ outcome: 'superseded', supersededBy: held.supersededBy });
+    }
     const options = { tenantId, baseHalfLifeDays: edit.baseHalfLifeDays, tags: [...edit.tags] };
     const successor = stampOriginProject(files, {
       ...createSuccessor(held, edit.content, options, handleNow(db)),
       scope: row.originalScope,
+      // A plain approve keeps the held row's tier, so an edit does too.
+      confidence: held.confidence,
       artifactRef: held.artifactRef,
       parents: [id],
       leadIn: edit.leadIn,

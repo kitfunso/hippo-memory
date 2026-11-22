@@ -6,11 +6,16 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../base/errors/api-errors.js';
+import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { QuarantineRefusal } from '../../base/ports/store.js';
 import { StoreNotPortedError } from '../../base/util/store-blocked.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import { detectInstructionIn } from '../instruction-detect.js';
+import {
+  detectInstruction,
+  detectInstructionIn,
+  UNTRUSTED_ORIGIN_TAG,
+} from '../instruction-detect.js';
 import type { ContextWith } from '../types.js';
 import type { QuarantineEditOutcome, QuarantineStatus } from '../../base/ports/store/quarantine.js';
 
@@ -120,8 +125,29 @@ export interface QuarantineEditResult {
   warnings?: string[];
 }
 
-/** Release a quarantined memory with the admin's text in place of the held text. Admin only; the
- * text runs the write screen again, and the held row stays as delivered. */
+/** The 400 or 404 a refused edit text answers before any write. A row the read missed is judged by
+ * the text alone, so a flagged text never reaches the store. */
+function screenEditText(id: string, text: string, held: MemoryEntry | undefined): void {
+  if (!held) {
+    if (detectInstruction(text).flagged) throw refusalError(id, { outcome: 'not_quarantined' });
+    return;
+  }
+  const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
+  if (lead?.flagged) {
+    throw new BadRequestError(
+      `the kept lead-in of memory ${id} reads as an instruction (${lead.reason ?? 'unknown'}); an edit keeps the lead-in, so reject the item instead; nothing was changed`,
+    );
+  }
+  const found = detectInstructionIn({ content: text, leadIn: held.leadIn });
+  if (found.flagged) {
+    throw new BadRequestError(
+      `edited text still reads as an instruction (${found.reason ?? 'unknown'}); nothing was changed`,
+    );
+  }
+}
+
+/** Release a quarantined memory with the admin's text, trimmed once, in place of the held text. Admin
+ * only; the text runs the write screen again, and the held row stays as delivered. */
 export async function quarantineEdit(
   ctx: ContextWith<'quarantine'>,
   id: string,
@@ -132,23 +158,17 @@ export async function quarantineEdit(
   }
   const edit = ctx.store.quarantine.editQuarantined?.bind(ctx.store.quarantine);
   if (!edit) throw new StoreNotPortedError(ctx.store.kind, 'quarantine.editQuarantined');
-  const vetted = vetSecrets(content);
+  const vetted = vetSecrets(content.trim());
   const [held] = await ctx.store.entriesByIds([id], ctx.tenantId);
+  screenEditText(id, vetted.content, held);
   const leadIn = held?.leadIn ?? null;
-  // A row the store cannot find is refused there, with its own 404 text, so no screen answers first.
-  const found = held ? detectInstructionIn({ content: vetted.content, leadIn }) : null;
-  if (found?.flagged) {
-    throw new BadRequestError(
-      `edited text still reads as an instruction (${found.reason ?? 'unknown'}); nothing was changed`,
-    );
-  }
   const result = await edit(
     ctx.tenantId,
     id,
     {
       content: vetted.content,
       leadIn,
-      tags: held?.tags ?? [],
+      tags: [...new Set([...(held?.tags ?? []), UNTRUSTED_ORIGIN_TAG])],
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
     },
     ctx.actor.subject,

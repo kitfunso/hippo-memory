@@ -208,10 +208,17 @@ export function detectInstruction(content: string): InstructionDetection {
   return { flagged: false, reason: null };
 }
 
-/** Screens what a row shows: the text as shown, and the lead-in and content joined by a space,
- * because the patterns stop at the newline that shows them apart. First flag wins. */
+/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing: the
+ * patterns stop at a newline and a word can split there. First flag wins; a heading-style lead-in
+ * can flag plain content into a hold, never a lost write. */
 export function detectInstructionIn(text: LeadInText): InstructionDetection {
   const shown = detectInstruction(shownText(text));
   if (shown.flagged || !text.leadIn) return shown;
-  return detectInstruction(`${text.leadIn} ${text.content}`);
+  const lead = text.leadIn.trimEnd();
+  const content = text.content.trimStart();
+  for (const joined of [`${lead} ${content}`, `${lead}${content}`]) {
+    const found = detectInstruction(joined);
+    if (found.flagged) return found;
+  }
+  return shown;
 }
