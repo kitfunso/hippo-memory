@@ -162,10 +162,12 @@ describe('GitHub App token source in backfillRepo', () => {
 
   it('A1. mints one token from a verifiable App JWT, and every API request carries that token', async () => {
     const f = await serve();
-    f.mintReplies.push({ status: 201, token: 'ghs_1', expiresAt: iso(T + HOUR) });
+    // github.com now issues stateless tokens shaped like a JWT, so dots, dashes and underscores must pass.
+    const stateless = 'ghs_123_eyJhbGc-iOi_J9.eyJpc3M-iOj_F9.c2ln-bmF0_dXJl';
+    f.mintReplies.push({ status: 201, token: stateless, expiresAt: iso(T + HOUR) });
     await run(f, sourceFor(f, clocks(), '42'));
 
-    expect(bearers(lists(f))).toEqual(['Bearer ghs_1', 'Bearer ghs_1', 'Bearer ghs_1']);
+    expect(bearers(lists(f))).toEqual(Array(3).fill(`Bearer ${stateless}`));
     const [mint] = mints(f);
     expect(mint.path).toBe(MINT_PATH);
     expect(mint.contentType).toBe('application/json');
@@ -241,7 +243,7 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(mints(f)).toHaveLength(2);
   });
 
-  it('A2f. a wall clock that stepped back still re-mints on the monotonic deadline', async () => {
+  it('A2f. with the wall clock stopped, the monotonic deadline still re-mints', async () => {
     const c = clocks();
     const f = await serve(
       atStream2(() => {
