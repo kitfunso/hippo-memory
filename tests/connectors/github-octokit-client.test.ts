@@ -249,4 +249,11 @@ describe('redactTokenWindows', () => {
   it('returns the text as given for a token under 8 characters', () => {
     expect(redactTokenWindows('t is a token', 't')).toBe('t is a token');
   });
+
+  it.each(['aa[token]aa', 'a]bcdefghij', 'abcdefgh[ijklmno'])(
+    'refuses the token %s, since a window could form from the marker',
+    (token) => {
+      expect(() => redactTokenWindows('aa[token]', token)).toThrow('a token to redact must not hold [ or ]');
+    },
+  );
 });

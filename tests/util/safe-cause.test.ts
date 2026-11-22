@@ -72,4 +72,56 @@ describe('safeCause', () => {
     expect(copy.message).toBe('plain [x] text');
     expect(copy.name).toBe('NonError');
   });
+
+  it('scrubs a name and a string code that hold the secret', () => {
+    const leaky = Object.assign(new Error('plain'), { name: 'SECRETError', code: 'E_SECRET_CODE' });
+    const copy = safeCause(leaky, hide);
+
+    expect(copy.name).toBe('[x]Error');
+    expect(Object.assign({}, copy)).toEqual({ name: '[x]Error', code: 'E_[x]_CODE' });
+    expect(inspect(copy, { depth: null })).not.toContain('SECRET');
+  });
+
+  describe('when a field cannot be read', () => {
+    const throwing = (field: string): Error =>
+      Object.defineProperty(new Error('kept'), field, {
+        get() {
+          throw new Error('SECRET getter');
+        },
+      });
+
+    it.each([
+      ['message', { message: 'the message could not be read', name: 'Error' }],
+      ['name', { message: 'kept', name: 'UnreadableError' }],
+      ['code', { message: 'kept', name: 'Error', code: 'UNREADABLE' }],
+    ])('gives a fixed text for a getter that throws on %s', (field, expected) => {
+      const copy = safeCause(throwing(field), hide);
+
+      expect(copy).toMatchObject(expected);
+      expect(inspect(copy, { depth: null })).not.toContain('SECRET');
+    });
+
+    it('gives a fixed cause for a getter that throws on cause', () => {
+      const copy = safeCause(throwing('cause'), hide);
+
+      expect(copy.message).toBe('kept');
+      expect(copy.cause).toMatchObject({ message: 'the cause could not be read' });
+    });
+
+    it('never reads the stack, so a getter on it changes nothing', () => {
+      const copy = safeCause(throwing('stack'), hide);
+
+      expect(copy.stack).toBe('Error: kept');
+    });
+
+    it('copies a thrown value with a null prototype under a fixed message', () => {
+      const bare = Object.assign(Object.create(null), { secret: 'SECRET' });
+      const copy = safeCause(bare, hide);
+
+      expect(copy).toBeInstanceOf(Error);
+      expect(copy.message).toBe('the message could not be read');
+      expect(copy.name).toBe('NonError');
+      expect(inspect(copy, { depth: null })).not.toContain('SECRET');
+    });
+  });
 });

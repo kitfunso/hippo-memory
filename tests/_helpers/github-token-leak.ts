@@ -1,7 +1,7 @@
 // Runs the real GitHub fetcher on a fake reply and reads what it throws, for tests that look for token text in an error.
 import { inspect } from 'node:util';
 import { vi } from 'vitest';
-import { realGitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
+import { realGitHubFetcher, type GitHubBackfillPage } from '../../src/surface/connectors/github/octokit-client.js';
 
 /** Every run of `size` characters of the token. */
 export function tokenWindows(token: string, size: number): string[] {
@@ -23,9 +23,37 @@ export async function failureFor(body: string, status: number, token: string): P
     vi.fn(async () => new Response(body, { status })),
   );
   try {
-    await realGitHubFetcher({ url: 'https://api.github.com/repos/acme/app/issues', token });
+    await realGitHubFetcher({
+      url: 'https://api.github.com/repos/acme/app/issues',
+      token,
+    });
   } catch (caught) {
     if (caught instanceof Error) return caught;
   }
   throw new Error('expected an error');
+}
+
+/** What one page fetch gives for a fake reply: the error it throws or the page it returns. */
+export interface FetchOutcome {
+  readonly err?: Error;
+  readonly page?: GitHubBackfillPage;
+}
+
+/** The fetch of `url` with `token` when the reply is `reply()`; the caller unstubs fetch. */
+export async function outcomeFor(reply: () => Response, url: string, token: string): Promise<FetchOutcome> {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => reply()),
+  );
+  try {
+    return { page: await realGitHubFetcher({ url, token }) };
+  } catch (caught) {
+    if (caught instanceof Error) return { err: caught };
+    throw caught;
+  }
+}
+
+/** Everything an operator could see of an outcome: the error chain as inspected, or the page as JSON. */
+export function outcomeText({ err, page }: FetchOutcome): string {
+  return err === undefined ? JSON.stringify(page) : chainText(err);
 }

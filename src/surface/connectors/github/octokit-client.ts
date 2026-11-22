@@ -53,8 +53,10 @@ const TOKEN_WINDOW_CHARS = 8;
 const TOKEN_MARK = '[token]';
 
 /** `text` with every run that an 8-character window of the token covers replaced by `[token]`, so
- * a whole copy, a cut copy and a partial echo all go, whatever the reply did to the token. */
+ * a whole copy, a cut copy and a partial echo all go, whatever the reply did to the token. A token
+ * with `[` or `]` throws, since a window could then form from the marker and the text beside it. */
 export function redactTokenWindows(text: string, token: string): string {
+  if (/[[\]]/.test(token)) throw new Error('a token to redact must not hold [ or ]');
   const windows = new Set<string>();
   for (let i = 0; i + TOKEN_WINDOW_CHARS <= token.length; i++) {
     windows.add(token.slice(i, i + TOKEN_WINDOW_CHARS));
@@ -71,6 +73,26 @@ export function redactTokenWindows(text: string, token: string): string {
     else if (i === 0 || covered[i - 1] === 0) out += TOKEN_MARK;
   }
   return out;
+}
+
+/** One scrub for every token in scope, applied in turn. */
+export function tokenScrub(...tokens: readonly string[]): Scrub {
+  return (text) => tokens.reduce((acc, token) => redactTokenWindows(acc, token), text);
+}
+
+/** The one exit for a thrown error: its message, stack and cause chain pass the scrub, whichever site threw it. */
+export function scrubFailure<E>(err: E, scrub: Scrub): Error {
+  if (!(err instanceof Error)) return safeCause(err, scrub);
+  err.message = scrub(err.message);
+  if (err.stack !== undefined) err.stack = scrub(err.stack);
+  if (err.cause !== undefined) err.cause = safeCause(err.cause, scrub);
+  if (err instanceof GitHubFetchError) {
+    Object.assign(err, {
+      bodyExcerpt: scrub(err.bodyExcerpt),
+      url: scrub(err.url),
+    });
+  }
+  return err;
 }
 
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
@@ -129,8 +151,8 @@ async function errorExcerpt(res: Response, scrub: Scrub): Promise<string> {
   const body = await readCappedText(res, ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
     (err) => {
       log.debug(
-        `github: could not read the ${res.status} error body: ${errorMessage(err)}`,
-        errorFields(err),
+        scrub(`github: could not read the ${res.status} error body: ${errorMessage(err)}`),
+        errorFields(err, scrub),
       );
       return '';
     },
@@ -138,12 +160,8 @@ async function errorExcerpt(res: Response, scrub: Scrub): Promise<string> {
   return scrub(body).slice(0, ERROR_BODY_SNIPPET_CHARS);
 }
 
-export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
-  // The window rule finds an echo only if the token's escaped form equals the token.
-  if (!isGitHubTokenText(token)) {
-    throw new Error("the GitHub token must use only letters, digits, '_', '.' and '-'");
-  }
-  const scrub: Scrub = (text) => redactTokenWindows(text, token);
+// SHORTCUT: the scrubs inside fetchPage repeat the exit scrub in realGitHubFetcher as defence in depth.
+async function fetchPage(url: string, token: string, scrub: Scrub): Promise<GitHubBackfillPage> {
   const res = await fetchWithRetry(
     url,
     {
@@ -174,7 +192,25 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   }
 
   const items = res.status === 200 ? await readItems(res, url, scrub) : [];
-  const link = res.headers.get('link') ?? '';
-  const next = parseNextLink(link);
+  const next = parseNextLink(res.headers.get('link') ?? '');
+  // A link that echoes the token is refused whole, before it is checked, fetched or logged anywhere.
+  if (next !== null && scrub(next) !== next) {
+    throw new Error(
+      `GitHub request to ${hostAndPath(url)} returned a next-page link that carries the token`,
+    );
+  }
   return { items, next, rateLimit };
+}
+
+export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
+  // The window rule finds an echo only if the token's escaped form equals the token.
+  if (!isGitHubTokenText(token)) {
+    throw new Error("the GitHub token must use only letters, digits, '_', '.' and '-'");
+  }
+  const scrub = tokenScrub(token);
+  try {
+    return await fetchPage(url, token, scrub);
+  } catch (err) {
+    throw scrubFailure(err, scrub);
+  }
 };

@@ -6,7 +6,8 @@ import { createPrivateKey, sign, type KeyObject } from 'node:crypto';
 import {
   hostAndPath,
   isGitHubTokenText,
-  redactTokenWindows,
+  scrubFailure,
+  tokenScrub,
   GITHUB_TIMEOUT_MS,
   type GitHubTokenSource,
 } from './octokit-client.js';
@@ -65,7 +66,11 @@ export function signAppJwt({ appId, privateKey, nowMs }: AppJwtInput): string {
   const nowS = Math.floor(nowMs / 1000);
   const iss = /^[0-9]+$/.test(appId) ? Number(appId) : appId;
   const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = { iat: nowS - JWT_BACKDATE_S, exp: nowS + JWT_LIFETIME_S, iss };
+  const claims = {
+    iat: nowS - JWT_BACKDATE_S,
+    exp: nowS + JWT_LIFETIME_S,
+    iss,
+  };
   const payload = base64url(JSON.stringify(claims));
   const signature = sign('sha256', Buffer.from(`${header}.${payload}`), privateKey);
   return `${header}.${payload}.${signature.toString('base64url')}`;
@@ -79,9 +84,8 @@ export function repoInstallationUrl(site: GitHubSite, repoFullName: string): str
   return `${site.apiBase}/repos/${repoFullName}/installation`;
 }
 
-function scrubJwt(jwt: string): (text: string) => string {
-  return (text) => redactTokenWindows(text, jwt);
-}
+// SHORTCUT: the scrubs on the sites below repeat the exit scrub in appTokenSource as defence in depth.
+const scrubJwt = (jwt: string): ((text: string) => string) => tokenScrub(jwt);
 
 const tokenRequestAt = (url: string): string => `GitHub App token request to ${hostAndPath(url)}`;
 const lookupAt = (url: string): string => `GitHub App installation lookup at ${hostAndPath(url)}`;
@@ -102,7 +106,12 @@ async function appRequest(
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return fetchWithRetry(
     url,
-    { method: body === undefined ? 'GET' : 'POST', headers, body, redirect: 'manual' },
+    {
+      method: body === undefined ? 'GET' : 'POST',
+      headers,
+      body,
+      redirect: 'manual',
+    },
     // A replayed mint only creates another short-lived token.
     { timeoutMs: GITHUB_TIMEOUT_MS, retryTransport: true },
   ).catch((err) => {
@@ -113,13 +122,14 @@ async function appRequest(
   });
 }
 
-async function cancelBody(res: Response): Promise<void> {
+async function cancelBody(res: Response, jwt: string): Promise<void> {
+  const scrub = scrubJwt(jwt);
   try {
     await res.body?.cancel();
   } catch (err) {
     log.debug(
-      `github app: could not cancel the reply body: ${errorMessage(err)}`,
-      errorFields(err),
+      scrub(`github app: could not cancel the reply body: ${errorMessage(err)}`),
+      errorFields(err, scrub),
     );
   }
 }
@@ -153,7 +163,7 @@ async function lookupInstallation(
   const url = repoInstallationUrl(site, repoFullName);
   const res = await appRequest(url, jwt, lookupAt(url));
   if (res.status !== 200) {
-    await cancelBody(res);
+    await cancelBody(res, jwt);
     throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${lookupHint(res.status)}`);
   }
   const failure = `GitHub App installation reply from ${hostAndPath(url)} has no installation id`;
@@ -202,7 +212,7 @@ async function mintInstallationToken(
   const body = JSON.stringify({ repositories: [repoName] });
   const res = await appRequest(url, jwt, tokenRequestAt(url), body);
   if (res.status !== 201) {
-    await cancelBody(res);
+    await cancelBody(res, jwt);
     throw new Error(`${tokenRequestAt(url)} failed: HTTP ${res.status}${mintHint(res.status)}`);
   }
   return readMintReply(res, url, wallAtMintStart, jwt);
@@ -246,14 +256,13 @@ export function appTokenSource(opts: AppTokenSourceOptions): GitHubTokenSource {
     const wallAtMintStart = wall();
     const monoAtMintStart = mono();
     const jwt = signAppJwt({ appId, privateKey, nowMs: wallAtMintStart });
-    installationId ??= await lookupInstallation(site, repoFullName, jwt);
-    const minted = await mintInstallationToken(
-      site,
-      installationId,
-      repoName,
-      jwt,
-      wallAtMintStart,
-    );
+    let minted: MintedToken;
+    try {
+      installationId ??= await lookupInstallation(site, repoFullName, jwt);
+      minted = await mintInstallationToken(site, installationId, repoName, jwt, wallAtMintStart);
+    } catch (err) {
+      throw scrubFailure(err, scrubJwt(jwt));
+    }
     const { token, ttlMs } = minted;
     cached = {
       token,

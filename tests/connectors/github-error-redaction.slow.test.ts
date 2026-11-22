@@ -1,7 +1,7 @@
-// No 8-character window of a token reaches a GitHub error body excerpt, whatever the reply echoes of it, however the read cap cuts it.
+// No 8-character window of a token reaches an error, a log line or a returned page, whichever reply field echoes it (body, Link next path, query or host, redirect target) and however the read cap cuts it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorFields, errorMessage, log } from '../../src/base/util/log.js';
-import { chainText, failureFor, tokenWindows } from '../_helpers/github-token-leak.js';
+import { chainText, failureFor, outcomeFor, outcomeText, tokenWindows } from '../_helpers/github-token-leak.js';
 import { forAll, mulberry32, type Gen, type Rng } from '../_helpers/property.js';
 
 const SEED = 20261122;
@@ -80,8 +80,49 @@ function pickKind(rng: Rng): Kind {
   return roll < 0.75 ? 'asciiPadding' : 'otherPadding';
 }
 
+type FieldKind = 'linkPath' | 'linkQuery' | 'linkHost' | 'location';
+const FIELD_KINDS: readonly FieldKind[] = ['linkPath', 'linkQuery', 'linkHost', 'location'];
+const ORIGIN = 'https://api.github.com';
+const LIST_URL = `${ORIGIN}/repos/acme/app/issues`;
+const FIELD_SHARE = 0.4;
+
+// A host label keeps the token characters and nothing a host cannot hold.
+const hostSafe = (text: string): string => text.replace(/[^A-Za-z0-9_.-]/g, 'x');
+
+/** Echo segments for a reply field the client reads; at least one holds a whole copy of the token. */
+function fieldSegments(rng: Rng, token: string): string[] {
+  const kinds = Array.from({ length: 1 + below(rng, 4) }, () => pickKind(rng));
+  if (kinds.every((k) => k.endsWith('Padding'))) kinds[kinds.length - 1] = 'whole';
+  return kinds.map((kind) => segmentText(rng, kind, token));
+}
+
+// The URL each reply field carries, built so that it still parses; segments are percent-encoded where a URL needs it.
+const FIELD_URLS = {
+  linkPath: (s) => `${ORIGIN}/repos/acme/app/issues/${s.map(encodeURIComponent).join('/')}?page=2`,
+  linkQuery: (s) => `${LIST_URL}?${s.map((t, i) => `q${i}=${encodeURIComponent(t)}`).join('&')}`,
+  linkHost: (s) => `https://${s.map(hostSafe).join('.')}.example.test/x`,
+  location: (s) => `https://${s.map(hostSafe).join('.')}.example.test/x`,
+} satisfies Record<FieldKind, (segments: string[]) => string>;
+
+// fetch follows a 3xx and reports the target as `res.url`, so a Location echo reaches the client there.
+function replyFor(kind: FieldKind, target: string): () => Response {
+  return () => {
+    if (kind !== 'location') {
+      return new Response('[]', {
+        status: 200,
+        headers: { link: `<${target}>; rel="next"` },
+      });
+    }
+    const res = new Response('[]', { status: 200 });
+    Object.defineProperty(res, 'url', { value: target });
+    return res;
+  };
+}
+
 interface Case {
   readonly token: string;
+  /** The URL for each reply field that echoes the token in this case. */
+  readonly fieldUrls: Partial<Record<FieldKind, string>>;
   readonly body: string;
   /** The byte range of each whole token copy in the body. */
   readonly copies: ReadonlyArray<readonly [number, number]>;
@@ -103,12 +144,16 @@ function makeCase(rng: Rng): Case {
       return text;
     })
     .join('');
-  return { token, body, copies, kinds: new Set(kinds) };
+  const fieldUrls: Partial<Record<FieldKind, string>> = {};
+  for (const kind of FIELD_KINDS) {
+    if (rng() < FIELD_SHARE) fieldUrls[kind] = FIELD_URLS[kind](fieldSegments(rng, token));
+  }
+  return { token, fieldUrls, body, copies, kinds: new Set(kinds) };
 }
 
 const cases: Gen<Case> = (rng) => ({ value: makeCase(rng), smaller: () => [] });
 
-describe('a GitHub error body that echoes the token', () => {
+describe('a GitHub reply that echoes the token', () => {
   const logged: string[] = [];
 
   beforeEach(() => {
@@ -134,8 +179,21 @@ describe('a GitHub error body that echoes the token', () => {
     return tokenWindows(token, WINDOW).filter((w) => text.includes(w));
   }
 
+  // What a failed or returned page shows: the error as inspected, the log lines, the CLI's warn line, the page itself.
+  async function leakedFromField(kind: FieldKind, target: string, token: string): Promise<string[]> {
+    logged.length = 0;
+    const outcome = await outcomeFor(replyFor(kind, target), LIST_URL, token);
+    if (outcome.err !== undefined) {
+      log.warn(`github backfill failed: ${errorMessage(outcome.err)}`, errorFields(outcome.err));
+    }
+    const text = `${outcomeText(outcome)}
+${logged.join('')}`;
+    return tokenWindows(token, WINDOW).filter((w) => text.includes(w));
+  }
+
   it(`leaves no ${WINDOW}-character window of the token in ${CASES} generated cases`, async () => {
     const seen = {
+      fields: new Map<FieldKind | 'body', number>(),
       overCap: 0,
       cutInCopy: 0,
       cutInChar: 0,
@@ -143,7 +201,18 @@ describe('a GitHub error body that echoes the token', () => {
       borderEndsInCopy: 0,
       kinds: new Map<Kind, number>(),
     };
-    await forAll(SEED, CASES, cases, async ({ token, body, copies, kinds }) => {
+    await forAll(SEED, CASES, cases, async ({ token, fieldUrls, body, copies, kinds }) => {
+      seen.fields.set('body', (seen.fields.get('body') ?? 0) + 1);
+      for (const kind of FIELD_KINDS) {
+        const target = fieldUrls[kind];
+        if (target === undefined) continue;
+        seen.fields.set(kind, (seen.fields.get(kind) ?? 0) + 1);
+        const leakedField = await leakedFromField(kind, target, token);
+        if (leakedField.length > 0) {
+          throw new Error(`${kind} echo of a ${token.length}-character token leaked ${leakedField[0]}
+target: ${target}`);
+        }
+      }
       const bytes = Buffer.from(body);
       for (const kind of kinds) seen.kinds.set(kind, (seen.kinds.get(kind) ?? 0) + 1);
       const readEnd = Math.min(bytes.length, ERROR_READ_CAP_BYTES);
@@ -173,6 +242,10 @@ describe('a GitHub error body that echoes the token', () => {
     // A token whose last character equals its first, copied whole at the end of the read text: the class a trim-first order broke.
     expect(seen.borderEndsInCopy).toBeGreaterThanOrEqual(50);
     for (const kind of KINDS) expect(seen.kinds.get(kind) ?? 0, `cases with ${kind}`).toBeGreaterThanOrEqual(100);
+    // Every reply field the client reads must carry an echo in many cases, or one of them is untested.
+    for (const field of ['body', ...FIELD_KINDS] as const) {
+      expect(seen.fields.get(field) ?? 0, `cases with an echo in ${field}`).toBeGreaterThanOrEqual(100);
+    }
   });
 
   const rng = mulberry32(511);
@@ -208,5 +281,13 @@ describe('a GitHub error body that echoes the token', () => {
     ['an exactly 8-character cut from the middle of a PAT', `see ${PAT.slice(10, 18)} here`, PAT],
   ])('leaves no window of the token for %s', async (_name, body, token) => {
     expect(await leakedWindows(body, token)).toEqual([]);
+  });
+
+  it('scrubs the origin a redirect ends at, a site that prints it without a scrub of its own', async () => {
+    const token = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789ab';
+    const outcome = await outcomeFor(replyFor('location', `https://${token}.example.test/x`), LIST_URL, token);
+
+    expect(outcome.err?.message).toBe(`GitHub request to ${LIST_URL} was redirected to https://[token].example.test`);
+    expect(await leakedFromField('location', `https://${token}.example.test/x`, token)).toEqual([]);
   });
 });
