@@ -81,8 +81,8 @@ export function isStringValue<T>(value: T): value is T & string {
   return String(value) === value;
 }
 
-/** An object guard that avoids `typeof`; every object, array and function counts, from any realm
- * and with any prototype, as for `typeof`. */
+/** An object guard that avoids `typeof`. It accepts what `typeof` calls "object" (other than null)
+ * or "function", from any realm and with any prototype, so it is not `typeof === 'object'`. */
 export function isObjectLike<T>(value: T): value is T & object {
   return Object(value) === value;
 }

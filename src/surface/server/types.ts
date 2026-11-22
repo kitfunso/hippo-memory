@@ -40,11 +40,13 @@ export interface ResolvedBearer {
 
 /** serve()'s OAuth setting: hippo is the protected resource, never the authorization server.
  * Rules: https unless loopback, path ends in /mcp, no query, fragment or encoded slash, no
- * offline_access scope; each issuer exactly as its server publishes it, printable ASCII, normal URL form. */
+ * offline_access scope; each issuer exactly as its server publishes it, printable ASCII, normal
+ * URL form. */
 export interface OAuthResource {
-  /** The public URL clients use for /mcp, in canonical form: https, or http on a loopback host. */
+  /** The public URL clients use for /mcp, in normal URL form: https, or http on a loopback host. */
   readonly resource: string;
-  /** Issuers the authResolver accepts, at least one; each as its server publishes it: printable ASCII, normal form. */
+  /** Issuers the authResolver accepts, at least one; each as its server publishes it: printable
+   * ASCII, normal URL form. */
   readonly authorizationServers: readonly string[];
   /** Scopes a client asks for, sent as scopes_supported and in the challenge's scope. */
   readonly scopes?: readonly string[];

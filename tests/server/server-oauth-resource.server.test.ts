@@ -21,8 +21,8 @@ const NO_RESOLVER = 'oauth needs an authResolver to check the tokens its authori
 const NO_OBJECT = 'oauth must be an object with resource and authorizationServers';
 const ISSUER_CHARS = (i: number): string =>
   `oauth.authorizationServers[${i}] must be printable ASCII only, with no space or control character`;
-const ISSUER_FORM = (i: number): string =>
-  `oauth.authorizationServers[${i}] must be in normal URL form: lower-case scheme and host, no default port, written as the URL parser writes it`;
+const ISSUER_FORM = (i: number, expected: string): string =>
+  `oauth.authorizationServers[${i}] must be written as ${expected}, in normal URL form`;
 const NOT_SERVERS_ARRAY = 'oauth.authorizationServers must be an array of strings';
 const NOT_SCOPES_ARRAY = 'oauth.scopes must be an array of strings';
 // SAFETY: an embedder that skips our types can pass any value; boot must refuse each of these.
@@ -278,14 +278,41 @@ describe('a refused oauth setting', () => {
       { authorizationServers: [AS[0]!, 'https://login.example.com/a b'] },
       ISSUER_CHARS(1),
     ],
-    ['server with an upper-case host', { authorizationServers: ['https://Login.example.com/'] }, ISSUER_FORM(0)],
-    ['server with a default port', { authorizationServers: ['https://login.example.com:443/t'] }, ISSUER_FORM(0)],
+    [
+      'server with an upper-case host',
+      { authorizationServers: ['https://Login.example.com/'] },
+      ISSUER_FORM(0, 'https://login.example.com/'),
+    ],
+    [
+      'server with a default port',
+      { authorizationServers: ['https://login.example.com:443/t'] },
+      ISSUER_FORM(0, 'https://login.example.com/t'),
+    ],
     [
       'server with a default port and no path',
       { authorizationServers: ['https://login.example.com:443'] },
-      ISSUER_FORM(0),
+      ISSUER_FORM(0, 'https://login.example.com'),
     ],
-    ['server with an upper-case scheme', { authorizationServers: ['HTTPS://login.example.com'] }, ISSUER_FORM(0)],
+    [
+      'server with an upper-case scheme',
+      { authorizationServers: ['HTTPS://login.example.com'] },
+      ISSUER_FORM(0, 'https://login.example.com'),
+    ],
+    [
+      'server with a dot segment',
+      { authorizationServers: ['https://login.example.com/a/../b'] },
+      ISSUER_FORM(0, 'https://login.example.com/b'),
+    ],
+    [
+      'server with a backslash',
+      { authorizationServers: ['https://login.example.com\\t'] },
+      ISSUER_FORM(0, 'https://login.example.com/t'),
+    ],
+    [
+      'server with a hex IP host',
+      { authorizationServers: ['https://0x08080808/t'] },
+      ISSUER_FORM(0, 'https://8.8.8.8/t'),
+    ],
     ['server with an IDN host', { authorizationServers: ['https://bücher.example'] }, ISSUER_CHARS(0)],
     ['server with a non-ASCII path', { authorizationServers: ['https://login.example.com/münchen'] }, ISSUER_CHARS(0)],
   ];

@@ -14,8 +14,6 @@ const ENCODED_SLASH = /%2f/i;
 // An issuer is compared byte for byte. The form check would refuse a space, a control character or a
 // non-ASCII character too; this check exists to say so in clear words.
 const ISSUER_TEXT = /^[\x21-\x7e]+$/;
-const ISSUER_FORM =
-  'must be in normal URL form: lower-case scheme and host, no default port, written as the URL parser writes it';
 
 /** What boot serves for the oauth setting: the document by path, and the frozen challenge. */
 export interface OAuthBoot {
@@ -53,7 +51,8 @@ function checkIssuer(raw: string, i: number): void {
   }
   // A path-less issuer serialises with a slash, yet the issuer is the string as its server wrote it.
   if (url.href !== raw && url.href !== `${raw}/`) {
-    throw new Error(`${setting} ${ISSUER_FORM}`);
+    const expected = url.pathname === '/' && !raw.endsWith('/') ? url.href.slice(0, -1) : url.href;
+    throw new Error(`${setting} must be written as ${expected}, in normal URL form`);
   }
 }
 
