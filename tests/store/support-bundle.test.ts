@@ -247,6 +247,40 @@ describe('buildSupportBundle', () => {
     expect(bundleText(bundle).filter((t) => t.includes(canary.toLowerCase()))).toEqual([]);
   });
 
+  it('A9. lists the GitHub App settings by name and never the key file, its path or its text', async () => {
+    const s = seed();
+    const keyCanary = `MIIE${randomUUID().replace(/-/g, '')}`;
+    const keyFile = join(s.home, 'app-key.pem');
+    writeFileSync(
+      keyFile,
+      `-----BEGIN PRIVATE KEY-----
+${keyCanary}
+-----END PRIVATE KEY-----
+`,
+    );
+    vi.stubEnv('GITHUB_APP_ID', '123');
+    vi.stubEnv('GITHUB_APP_PRIVATE_KEY_FILE', keyFile);
+    vi.stubEnv('GITHUB_APP_INSTALLATION_ID', '42');
+    const bundle = await buildSupportBundle({
+      diagnosticsBodies,
+      tenantId: 'default',
+      cwd: s.cwd,
+      home: s.home,
+      version: 'test',
+      includeLogs: false,
+      now: FIXED_NOW,
+    });
+    const parsed = JSON.parse(JSON.stringify(bundle));
+    expect(parsed.env).toEqual(
+      expect.arrayContaining(['GITHUB_APP_ID', 'GITHUB_APP_PRIVATE_KEY_FILE', 'GITHUB_APP_INSTALLATION_ID']),
+    );
+    const json = JSON.stringify(bundle);
+    expect(json).not.toContain('BEGIN');
+    expect(bundleText(bundle).filter((t) => t.includes(keyCanary.toLowerCase()) || t.includes('app-key.pem'))).toEqual(
+      [],
+    );
+  });
+
   it('swaps a short-name or symlinked form of the home that HIPPO_HOME passes through unresolved', async () => {
     const s = seed();
     // tmpdir() is often an 8.3 short form on Windows and a symlink on macOS; elsewhere this is the plain path.
