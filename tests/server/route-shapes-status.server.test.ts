@@ -32,6 +32,7 @@ const ROWS = [
   'GET /v1/quarantine',
   'POST /v1/quarantine/:id/approve',
   'POST /v1/quarantine/:id/reject',
+  'POST /v1/quarantine/:id/edit',
   'GET /v1/audit',
   'POST /v1/predictions',
   'GET /v1/predictions',
