@@ -19,6 +19,7 @@ import {
   type AuthRevokeResult,
 } from '../../src/api/index.js';
 import { ForbiddenError } from '../../src/base/errors/api-errors.js';
+import { VIEWER_REFUSAL } from '../../src/server.js';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -207,6 +208,13 @@ describe('authCreateSelf', () => {
     ['a member API key', { subject: 'api_key:hk_member', role: 'member' } satisfies Actor],
   ])('refuses %s with ForbiddenError and writes nothing', async (_name, actor) => {
     await expect(mintAs(actor)).rejects.toThrow(ForbiddenError);
+    expect(keyRows()).toEqual([]);
+    expect(auditRows()).toEqual([]);
+  });
+
+  it('refuses a viewer with the viewer text and writes nothing', async () => {
+    const viewer: Actor = { subject: 'vera@corp.example', role: 'viewer', viaAuthResolver: true };
+    await expect(mintAs(viewer)).rejects.toThrow(VIEWER_REFUSAL);
     expect(keyRows()).toEqual([]);
     expect(auditRows()).toEqual([]);
   });

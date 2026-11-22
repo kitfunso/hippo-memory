@@ -10,10 +10,17 @@ import {
   NotFoundError,
   captureSessionTexts,
   isReservedActor,
+  roleFromGroups,
   serve,
+  type AddonRoute,
   type Context,
   type CaptureContext,
   type HippoStore,
+  type JsonValue,
+  type Role,
+  type RoleFromGroups,
+  type RoleGroups,
+  type RoleLevel,
   type SessionCaptureRequest,
   type ServeOptions,
   type ServerHandle,
@@ -46,6 +53,15 @@ describe('hippo-memory/server entry types', () => {
     expectTypeOf<ServerHandle['port']>().toEqualTypeOf<number>();
     expectTypeOf<ServerHandle['url']>().toEqualTypeOf<string>();
     expectTypeOf<ServerHandle['stop']>().toEqualTypeOf<() => Promise<void>>();
+  });
+
+  it('roleFromGroups maps a claim to a stored role and an add-on route takes a level', () => {
+    expectTypeOf(roleFromGroups).toEqualTypeOf<
+      (claim: JsonValue | undefined, groups: RoleGroups, fallback: Role) => RoleFromGroups
+    >();
+    // @ts-expect-error 'editor' is a route level, not a stored role
+    typeOnly(() => roleFromGroups([], {}, 'editor'));
+    expectTypeOf<AddonRoute['level']>().toEqualTypeOf<RoleLevel | undefined>();
   });
 
   it('the error classes carry their HTTP status', () => {
