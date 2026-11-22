@@ -129,21 +129,30 @@ export interface QuarantineEditResult {
  * the text alone, so a flagged text never reaches the store. */
 function screenEditText(id: string, text: string, held: MemoryEntry | undefined): void {
   if (!held) {
-    if (detectInstruction(text).flagged) throw refusalError(id, { outcome: 'not_quarantined' });
+    if (detectInstruction(text).flagged) {
+      throw new NotFoundError(`memory ${id} could not be read; nothing was changed`);
+    }
     return;
   }
   const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
   if (lead?.flagged) {
     throw new BadRequestError(
-      `the kept lead-in of memory ${id} reads as an instruction (${lead.reason ?? 'unknown'}); an edit keeps the lead-in, so reject the item instead; nothing was changed`,
+      `the kept lead-in of memory ${id} reads as an instruction (${lead.reason ?? 'unknown'}); ` +
+        'an edit keeps the lead-in, so it cannot release this item; nothing was changed',
     );
   }
   const found = detectInstructionIn({ content: text, leadIn: held.leadIn });
-  if (found.flagged) {
+  if (!found.flagged) return;
+  const reason = found.reason ?? 'unknown';
+  if (detectInstruction(text).flagged) {
     throw new BadRequestError(
-      `edited text still reads as an instruction (${found.reason ?? 'unknown'}); nothing was changed`,
+      `edited text still reads as an instruction (${reason}); nothing was changed`,
     );
   }
+  throw new BadRequestError(
+    `the edited text of memory ${id} reads as an instruction when joined to its kept lead-in (${reason}); ` +
+      'nothing was changed',
+  );
 }
 
 /** Release a quarantined memory with the admin's text, trimmed once, in place of the held text. Admin

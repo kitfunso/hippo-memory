@@ -115,6 +115,17 @@ describe('an untrusted write, as a connector makes', () => {
     expect(result.quarantined).toEqual({ reason: 'pattern:override-instructions' });
   });
 
+  it('holds the same split when an invisible mark and a line break open the content', async () => {
+    const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
+    const result = await rememberUntrusted(ctx, {
+      content: `\u200B\n${SPLIT_TAIL}`,
+      leadIn: SPLIT_LEAD,
+      project: PROJECT,
+    });
+
+    expect(result.quarantined).toEqual({ reason: 'pattern:override-instructions' });
+  });
+
   it('frames a connector row written before the origin tag, by its connector source tag', async () => {
     const ctx = apiCtx(store, 'default', adminActor('cli'));
     await remember(ctx, { content: BENIGN, project: PROJECT, tags: ['source:github'] });

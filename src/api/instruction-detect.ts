@@ -208,15 +208,24 @@ export function detectInstruction(content: string): InstructionDetection {
   return { flagged: false, reason: null };
 }
 
-/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing: the
- * patterns stop at a newline and a word can split there. First flag wins; a heading-style lead-in
- * can flag plain content into a hold, never a lost write. */
+// A run of spaces and invisible marks at one edge: JS whitespace keeps U+200B, U+00AD and U+2060.
+const BLANK = `(?:\\s|${INVISIBLE_RE.source})+`;
+const BLANK_START_RE = new RegExp(`^${BLANK}`);
+const BLANK_END_RE = new RegExp(`${BLANK}$`);
+
+/** The lead-in joined to the content by a space and by nothing, blanks cut at the join. */
+function joinedForms(leadIn: string, content: string): string[] {
+  const lead = leadIn.replace(BLANK_END_RE, '');
+  const body = content.replace(BLANK_START_RE, '');
+  return [`${lead} ${body}`, `${lead}${body}`];
+}
+
+/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing.
+ * First flag wins; a heading-style lead-in can flag plain content into a hold, never a lost write. */
 export function detectInstructionIn(text: LeadInText): InstructionDetection {
   const shown = detectInstruction(shownText(text));
   if (shown.flagged || !text.leadIn) return shown;
-  const lead = text.leadIn.trimEnd();
-  const content = text.content.trimStart();
-  for (const joined of [`${lead} ${content}`, `${lead}${content}`]) {
+  for (const joined of joinedForms(text.leadIn, text.content)) {
     const found = detectInstruction(joined);
     if (found.flagged) return found;
   }
