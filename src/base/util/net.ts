@@ -50,9 +50,8 @@ export function parseOutboundUrl(
   // Plain http would put the key and the memory text on the wire, so only the local machine may use
   // it.
   if (parsed.protocol === 'http:' && !allowHttp && !isLoopbackHost(parsed.hostname)) {
-    throw new Error(
-      `${setting} must use https unless it is on this machine${allowHttpSetting ? `, or set ${allowHttpSetting}=1` : ''}`,
-    );
+    const hint = allowHttpSetting ? `, or set ${allowHttpSetting}=1` : '';
+    throw new Error(`${setting} must use https unless it is on this machine${hint}`);
   }
   return parsed;
 }

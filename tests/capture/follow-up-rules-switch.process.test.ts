@@ -32,9 +32,12 @@ function envWith(key: string | null): NodeJS.ProcessEnv {
   return env;
 }
 
-function sessionEnd(extra: string[], key: string | null = 'test-key') {
+function sessionEnd(extra: string[], key: string | null = 'test-key', more: NodeJS.ProcessEnv = {}) {
   const args = ['__session-end-worker', '--transcript', transcript, '--session-id', 'sess-follow-up', ...extra];
-  return runCliAs([...args, '--log-file', path.join(dir, 'session-end.log')], { cwd, env: envWith(key) });
+  return runCliAs([...args, '--log-file', path.join(dir, 'session-end.log')], {
+    cwd,
+    env: { ...envWith(key), ...more },
+  });
 }
 
 beforeEach(() => {
@@ -80,6 +83,30 @@ describe('capture.followUpRules', () => {
     // A harness prices the call from this line in the session-end log.
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
       'follow-up rules: model=claude-sonnet-5-5 input_tokens=812 output_tokens=37',
+    );
+  });
+
+  it('an endpoint route sends the call there and prices it under the endpoint model', async () => {
+    writeConfig('model');
+    initGitRepo(cwd);
+    const urls: string[] = [];
+    const reply = {
+      choices: [{ message: { content: '[{"i": 0, "s": [0]}]' } }],
+      usage: { prompt_tokens: 812, completion_tokens: 37 },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        urls.push(String(input instanceof Request ? input.url : input));
+        return new Response(JSON.stringify(reply), { status: 200, headers: { 'content-type': 'application/json' } });
+      }),
+    );
+    const endpoint = { HIPPO_LLM_BASE_URL: 'https://llm.internal/v1', HIPPO_LLM_MODEL: 'qwen-local' };
+    expect((await sessionEnd([], null, endpoint)).status).toBe(0);
+    expect(urls).toEqual(['https://llm.internal/v1/chat/completions']);
+    expect(contents()).toEqual([RULE_SENTENCE]);
+    expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
+      'follow-up rules: model=qwen-local input_tokens=812 output_tokens=37',
     );
   });
 

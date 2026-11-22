@@ -189,9 +189,11 @@ export async function followUpRules(
   return { rules: rulesOf(messages, read.picks), usage };
 }
 
-/** One line per model call, in key=value form, so a harness can price it from the capture log. */
-export function usageLine(usage: LlmUsage): string {
-  return `follow-up rules: model=${MODEL} input_tokens=${usage.inputTokens} output_tokens=${usage.outputTokens}`;
+/** One line per model call, in key=value form, so a harness can price it from the capture log;
+ * `endpointModel` is the model a customer endpoint ran, which the request's own `MODEL` never reaches. */
+export function usageLine(usage: LlmUsage, endpointModel?: string): string {
+  const model = endpointModel ?? MODEL;
+  return `follow-up rules: model=${model} input_tokens=${usage.inputTokens} output_tokens=${usage.outputTokens}`;
 }
 
 /** The pattern items but each one that is a whole sentence of a rule, then the rules; both read

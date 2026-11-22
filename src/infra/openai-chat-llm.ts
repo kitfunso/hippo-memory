@@ -51,7 +51,9 @@ function failureDetail(status: number): string {
     case 404:
       return 'no such path or model at the endpoint (HIPPO_LLM_BASE_URL, HIPPO_LLM_MODEL)';
     default:
-      return '';
+      return status >= 300 && status < 400
+        ? `the endpoint answered a redirect (${status}); hippo does not follow redirects`
+        : '';
   }
 }
 
@@ -144,6 +146,8 @@ function postChat(
         messages: [{ role: 'user', content: req.prompt }],
       }),
       signal: req.signal,
+      // A redirect would resend the memory text to a host no setting named.
+      redirect: 'manual',
     },
     // A chat call stores nothing on the far side, so a 429 or a 5xx is replayed.
     {

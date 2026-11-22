@@ -123,7 +123,7 @@ Storing the LoCoMo test chats took Mem0 5,882 language-model calls, one per turn
 
 The exception is `hippo sleep`, which sends text to Anthropic when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` turns it off. With `HIPPO_LLM_BASE_URL` and `HIPPO_LLM_MODEL` set, the text goes to that OpenAI-compatible endpoint instead, and never to Anthropic.
 
-Your own model needs four variables. `HIPPO_LLM_BASE_URL` is the endpoint, such as `https://llm.internal/v1`. Hippo posts to `<base>/chat/completions`. `HIPPO_LLM_MODEL` is the model name it sends on every call. `HIPPO_LLM_API_KEY` is optional and goes out as a Bearer token; it holds visible ASCII only, with no space or newline. The URL must use https unless it is on this machine. Set `HIPPO_LLM_ALLOW_HTTP=1` to allow plain http to another host, and set `NODE_EXTRA_CA_CERTS` to trust a private certificate authority. Hippo refuses to call a model, and says why, when the base URL has no model, when a model or key is set without a base URL, when the URL carries a query or a fragment, when plain http lacks the opt-in, or when a key cannot be a header. A refusal never falls back to Anthropic.
+Your own model needs two variables, and two more are optional. `HIPPO_LLM_BASE_URL` is the endpoint, such as `https://llm.internal/v1`. Hippo posts to `<base>/chat/completions`. `HIPPO_LLM_MODEL` is the model name it sends on every call. `HIPPO_LLM_API_KEY` is optional and goes out as a Bearer token; it holds visible ASCII only, with no space or newline. The URL must use https unless it is on this machine. Set `HIPPO_LLM_ALLOW_HTTP=1` to allow plain http to another host, and set `NODE_EXTRA_CA_CERTS` to trust a private certificate authority. Hippo refuses to call a model, and says why, when the base URL has no model, when a model or key is set without a base URL, when the URL carries a query or a fragment, when plain http lacks the opt-in, or when a key cannot be a header. A refusal never falls back to Anthropic.
 
 ---
 
@@ -285,7 +285,7 @@ Word patterns pin a later turn only when it holds a rule word (never, always, mu
 
 - **What it sends:** your turns after the first one in the session, the last 20, each cut to 1,000 characters. Pasted blocks, fenced code and log lines are removed first, and secrets, email addresses and home paths are masked. The assistant's replies are never sent.
 - **To whom:** your own endpoint when `HIPPO_LLM_BASE_URL` is set, else Anthropic with your `ANTHROPIC_API_KEY`, in one call per session capture. A failed call logs one line and capture keeps its pattern rules. A session with no project never makes the call.
-- **On and off:** the default is `"off"`. Set `"model"` to turn it on; set `"off"` again, or unset the key, to turn it off.
+- **On and off:** the default is `"off"`. Set `"model"` to turn it on; set `"off"` again, or unset `ANTHROPIC_API_KEY` and `HIPPO_LLM_BASE_URL`, to turn it off.
 
 #### What you type
 

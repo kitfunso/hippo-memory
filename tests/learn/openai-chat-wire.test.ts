@@ -30,7 +30,13 @@ afterEach(async () => {
   }
 });
 
-async function startStub(reply: (req: Recorded) => { status: number; body: string }): Promise<Stub> {
+interface StubAnswer {
+  status: number;
+  body: string;
+  headers?: Record<string, string>;
+}
+
+async function startStub(reply: (req: Recorded) => StubAnswer): Promise<Stub> {
   const requests: Recorded[] = [];
   const server = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -44,7 +50,7 @@ async function startStub(reply: (req: Recorded) => { status: number; body: strin
       };
       requests.push(seen);
       const answer = reply(seen);
-      res.writeHead(answer.status, { 'content-type': 'application/json' });
+      res.writeHead(answer.status, { 'content-type': 'application/json', ...answer.headers });
       res.end(answer.body);
     });
   });
@@ -193,6 +199,27 @@ describe('openAiChatLlm on a failed reply', () => {
     const failure = failureOf(await ask(stub));
     expect(failure).toMatchObject({ kind: 'http', status: 500 });
     expect(isPermanentFailure(failure)).toBe(false);
+  });
+
+  it.each([307, 308])('stops at a %i redirect and sends nothing to the host it names', async (status) => {
+    const target = await startStub(replying('facts'));
+    const redirecting = await startStub(() => ({
+      status,
+      body: '',
+      headers: { location: `${target.baseUrl.origin}/v1/chat/completions?token=${ZEBRA}` },
+    }));
+    const reply = await ask(redirecting, 'k-endpoint');
+    expect(target.requests).toHaveLength(0);
+    expect(reply).toEqual({
+      ok: false,
+      failure: {
+        kind: 'http',
+        status,
+        detail: `the endpoint answered a redirect (${status}); hippo does not follow redirects`,
+      },
+    });
+    expect(redirecting.requests).toHaveLength(1);
+    expect(replyText(reply)).not.toContain(ZEBRA);
   });
 
   it('gives a request failure when the connection is refused', async () => {

@@ -5,7 +5,7 @@ set -euo pipefail
 R="$1"; DATA="$2"
 W="$(cd "$(dirname "$0")/../.." && pwd)"
 : "${HIPPO_MODEL_CACHE:?set HIPPO_MODEL_CACHE so every store uses the same local model file}"
-unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY HIPPO_LLM_BASE_URL HIPPO_LLM_API_KEY
+unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY HIPPO_LLM_BASE_URL HIPPO_LLM_API_KEY HIPPO_LLM_MODEL HIPPO_LLM_ALLOW_HTTP
 mkdir -p "$R"
 
 # ingest.py runs a hippo binary once per session; point it at this checkout, not a global install.
