@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.15.1 - 2026-11-22
+
+### Documentation
+
+- **The npm page now shows the Comparison and Benchmarks sections.** The npm registry keeps only the first 64 KB of a README, and npmjs.com shows that copy. Both sections sat past 74 KB, so npm never showed them. They now come right after the results, before Setup in detail, and a new CI check (`check-readme-npm-window.mjs`) fails when either one ends past 64 KB.
+
 ## 3.15.0 - 2026-11-22
 
 ### Added
