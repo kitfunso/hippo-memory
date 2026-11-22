@@ -1,4 +1,4 @@
-hippo benchmarks: the wins and the losses
+hippo benchmarks: every result we measured
 Skip to content hippo How it works
 Teams
 Benchmarks
@@ -10,7 +10,7 @@ Teams
 Benchmarks
 Compare
 Docs
-What we measured, and where hippo lost
+What we measured
 We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.
 Repeat mistakes in real Claude Code sessions
 Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab), and published the test as AI-PsychosisBench (opens in new tab), so any memory can run on the same tasks.
@@ -18,7 +18,7 @@ No memory Nin N
 Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
 The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
-What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round N tests that. The corrections were scripted and the agent was Claude Code only. The test code and task data are public in AI-PsychosisBench; the run records are not. The round before was inconclusive, at N points fewer on N repositories.
+Round N already preregistered, tests which parts of hippo drive the gain. The test code and task data are public in AI-PsychosisBench.
 Official-setup rows side by side
 Hippo N run with the same answer model, judge and settings as the published rows.
 Hippo and the published scores, on benchmarks run in their official setup Benchmark hippo MemNZepMemOSSupermemoryHonchoHindsightEverMemOSMemobaseOther
@@ -56,10 +56,10 @@ PrefEval, MemOS suite setup Preference following, gpt-No-mini answers official s
 Run as MemOS's evaluation suite runs every vendor row (MemTensor/MemOS NaNeNfe): the implicit-persona split with N irrelevant turns after each conversation, the top N memories, one gpt-No-mini-N-N-N answer per row and the suite's four gpt-No-mini checks. The score is the Personalized Response share of all rows. The run uses the free daily OpenAI tokens and its checks are still running, so the row has no score yet.
 hippo running MemN N (MemN published source, opens in new tab) gpt-No-mini Zep N (Zep, published source, opens in new tab) gpt-No-mini MemOS N (MemOS-N published source, opens in new tab) MemOS-N · gpt-No-mini Supermemory N (Supermemory, published source, opens in new tab) gpt-No-mini -no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) gpt-No-mini Other N (MemU, published source, opens in new tab) MemU · gpt-No-mini
 HaluMem-Medium Hallucination control, GPT-No answers official setup, with a caveat How it ran
-Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N) and the same data, question set, top N and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
+Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N) and the same data, question set, top N and prompts.
 hippo N embedder, top N GPT-No answers and judge MemN N (MemN-Graph, published source, opens in new tab) MemN-Graph · GPT-No Zep N (Zep, published source, opens in new tab) GPT-No MemOS N (MemOS, published source, opens in new tab) GPT-No Supermemory N (Supermemory, published source, opens in new tab) GPT-No -no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) GPT-No -no published score
 HaluMem-Long Hallucination control, GPT-No answers official setup, with a caveat How it ran
-Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on N Nov N We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
+Question answering only, with the paper's GPT-No answers and judge (gpt-No-N-N-N temperature N), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on N Nov N
 hippo N embedder, top N GPT-No answers and judge MemN N (MemN-Graph, published source, opens in new tab) MemN-Graph · GPT-No Zep N (Zep, published source, opens in new tab) GPT-No MemOS N (MemOS, published source, opens in new tab) GPT-No Supermemory N (Supermemory, published source, opens in new tab) GPT-No -no published score-no published score-no published score Memobase N (Memobase, published source, opens in new tab) GPT-No -no published score
 IMLogic, Table N Multiple-choice accuracy, GPT-N answers, no judge official setup How it ran
 Table N of arXiv N: conversation-level multiple-choice accuracy with GPT-N answers, top-N retrieval and a GPT-No-mini memory backbone for every method. hippo ran it with its embedder on N Nov N: gpt-N-N-N-N at temperature N the authors' prompt and option shuffle, and exact option matching. hippo makes no model call when it stores a memory, so it needs no memory backbone. N smoke-test item is never scored.

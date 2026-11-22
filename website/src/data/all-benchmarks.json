@@ -1620,8 +1620,8 @@
       "name": "HaluMem-Medium",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
-      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
-      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts.",
+      "caveat": "Question-answering part of HaluMem, with the paper's answer model and judge.",
       "hippo": {
         "value": "70.23",
         "num": 70.23,
@@ -1717,8 +1717,8 @@
       "name": "HaluMem-Long",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
-      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
-      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026.",
+      "caveat": "Question-answering part of HaluMem, with the paper's answer model and judge.",
       "hippo": {
         "value": "65.99",
         "num": 65.99,

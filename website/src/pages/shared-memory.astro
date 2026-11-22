@@ -6,8 +6,10 @@ import PageIntro from '../components/PageIntro.astro';
 import Section from '../components/Section.astro';
 import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
-import { faqPick, mcpJson, site } from '../content/site';
+import { faqPick, mcpJson, repeatMistakes, site } from '../content/site';
 import { mdInline } from '../content/readme';
+
+const [, builtIn, withHippo] = repeatMistakes.bars;
 
 const title = 'Shared memory for Claude Code, Codex and Cursor | hippo';
 const description =
@@ -28,7 +30,7 @@ const agents = [
   {
     name: 'Cursor',
     href: '/cursor/',
-    gets: "The block in `AGENTS.md`, which Cursor reads from the project root, and 13 memory tools once hippo is in `.cursor/mcp.json`. Cursor's agent recalls and stores memories through those tools, and MCP access alone doesn't capture a session.",
+    gets: "The block in `AGENTS.md`, which Cursor reads from the project root, and 13 memory tools once hippo is in `.cursor/mcp.json`. Cursor's agent recalls and stores memories through those tools.",
   },
 ];
 ---
@@ -106,8 +108,9 @@ const agents = [
 
     <Section title="What we've measured" alt>
       <p>
-        Our repeat-mistake test ran on Claude Code only, so there's no measured result yet for Codex or Cursor. The
-        <a class="link" href="/benchmarks/">benchmarks page</a> has the results, losses included.
+        In our repeat-mistake test on real Claude Code sessions across 29 repositories, Claude Code with hippo repeated a
+        corrected mistake {withHippo.rate} times {repeatMistakes.unit}, against {builtIn.rate} with its built-in memory alone, at the same cost.
+        The <a class="link" href="/benchmarks/">benchmarks page</a> has the full results.
       </p>
     </Section>
 

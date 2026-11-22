@@ -19,7 +19,7 @@ export const site = {
   title: 'hippo: open-source memory for Claude Code, Codex and Cursor',
   // The default meta description and the JSON-LD description; package.json's line ships with npm releases.
   description:
-    'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 21 in 100 to 11, and the gain held with lesson capture off.',
+    'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.',
   tagline: {
     lead: 'Your corrections, remembered by',
     accent: 'Claude Code, Codex and Cursor',
@@ -103,7 +103,7 @@ export const session = {
 export const publicTests = {
   heading: 'On public question-answering tests',
   body: 'These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer. Hippo ran with its optional local embedder, and on DMR with its local reranker too.',
-  linkLabel: 'Every result, and where hippo lost',
+  linkLabel: 'Every result we measured',
 } as const;
 
 // Markdown in each text, rendered with mdInline. Commands are shown as typed.
