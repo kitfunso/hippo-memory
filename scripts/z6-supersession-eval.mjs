@@ -108,7 +108,7 @@ function pollLog(logPath, pattern, capMs) {
 // --- pre-flight (full run and --only; never selftest) ---
 
 function probeKeysGone(env) {
-  const keys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'HIPPO_LLM_RERANKER_KEY', 'TYPESAFE_API_KEY'];
+  const keys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'HIPPO_LLM_RERANKER_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_BASE_URL', 'HIPPO_LLM_API_KEY', 'HIPPO_LLM_MODEL', 'HIPPO_LLM_ALLOW_HTTP'];
   const code = `const k=${JSON.stringify(keys)};const leaked=k.filter((n)=>process.env[n]);if(leaked.length){console.log(leaked.join(','));process.exit(1);}`;
   const r = spawnSync(process.execPath, ['-e', code], { env, encoding: 'utf8', timeout: 30000, windowsHide: true });
   if (r.status !== 0) throw new Error(`paid key(s) leaked to child env: ${(r.stdout || '').trim()}`);

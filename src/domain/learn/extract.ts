@@ -16,7 +16,7 @@ import {
   type LlmFailure,
 } from '../../base/ports/llm.js';
 import { neverAutoShareTags } from '../sharing/share.js';
-import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { errorClassFields, log } from '../../base/util/log.js';
 import { isJsonString, type JsonValue } from '../../base/util/json.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
 
@@ -98,9 +98,10 @@ export async function extractFactsOutcome(
 
     return { facts: parseExtractedFacts(parsed), emptyArray: parsed.length === 0 };
   } catch (err) {
-    const msg = `unparseable response: ${errorMessage(err)}`;
+    // V8's parse error quotes the reply, which can hold memory text; only a fixed text and the class leave.
+    const msg = 'unparseable response: the reply is not a JSON array';
     if (opts.onError) opts.onError(msg);
-    else log.warn(`fact extraction failed: ${msg}`, errorFields(err));
+    else log.warn(`fact extraction failed: ${msg}`, errorClassFields(err));
     return { facts: [], emptyArray: false };
   }
 }

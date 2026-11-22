@@ -99,6 +99,8 @@ function describeRefineFailure(failure: LlmFailure): string {
       return `refine: API answered HTTP ${failure.status}${failure.detail ? `: ${failure.detail}` : ''}`;
     case 'unreadable':
       return `refine: unreadable response: ${failure.message}`;
+    case 'config':
+      return `refine: ${failure.message}`;
     case 'empty':
       return 'refine: response held no text';
   }

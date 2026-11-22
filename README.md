@@ -121,7 +121,9 @@ Other memory tools run what you save through a language model, an LLM on top of 
 
 Storing the LoCoMo test chats took Mem0 5,882 language-model calls, one per turn, and hippo none ([the count](benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json)). Counts come from each product's public code and docs, 13 Nov 2026.
 
-The exception is `hippo sleep`, which sends text to Anthropic when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` turns it off.
+The exception is `hippo sleep`, which sends text to Anthropic when `ANTHROPIC_API_KEY` is set, and `{"extraction":{"enabled":false}}` turns it off. With `HIPPO_LLM_BASE_URL` and `HIPPO_LLM_MODEL` set, the text goes to that OpenAI-compatible endpoint instead, and never to Anthropic.
+
+Your own model needs two variables, and two more are optional. `HIPPO_LLM_BASE_URL` is the endpoint, such as `https://llm.internal/v1`. Hippo posts to `<base>/chat/completions`. `HIPPO_LLM_MODEL` is the model name it sends on every call. `HIPPO_LLM_API_KEY` is optional and goes out as a Bearer token; it holds visible ASCII only, with no space or newline. The URL must use https unless it is on this machine. Set `HIPPO_LLM_ALLOW_HTTP=1` to allow plain http to another host, and set `NODE_EXTRA_CA_CERTS` to trust a private certificate authority. Hippo refuses to call a model, and says why, when the base URL has no model, when a model or key is set without a base URL, when the URL carries a query or a fragment, when plain http lacks the opt-in, or when a key cannot be a header. A refusal never falls back to Anthropic.
 
 ---
 
@@ -279,11 +281,11 @@ hippo capture --file conversation.md --dry-run
 
 #### Rules from follow-up turns (opt-in, uses a model)
 
-Word patterns pin a later turn only when it holds a rule word (never, always, must, make sure) or a preference word that names code or limits a choice. Any other statement that names code or limits a choice, such as "Run the tests with `pnpm test:unit`, not the bare `pnpm test`", stays an unpinned note that only a matching prompt or `hippo recall` brings back. Patterns store nothing from "That file is generated, so changes belong in the template it comes from." With `{"capture": {"followUpRules": "model"}}` in `.hippo/config.json` and `ANTHROPIC_API_KEY` set, a session capture also asks a model which of your sentences state a lasting rule. Hippo stores those sentences, in your own words, as pinned rules.
+Word patterns pin a later turn only when it holds a rule word (never, always, must, make sure) or a preference word that names code or limits a choice. Any other statement that names code or limits a choice, such as "Run the tests with `pnpm test:unit`, not the bare `pnpm test`", stays an unpinned note that only a matching prompt or `hippo recall` brings back. Patterns store nothing from "That file is generated, so changes belong in the template it comes from." With `{"capture": {"followUpRules": "model"}}` in `.hippo/config.json` and a model set (`ANTHROPIC_API_KEY`, or `HIPPO_LLM_BASE_URL` for your own endpoint), a session capture also asks a model which of your sentences state a lasting rule. Hippo stores those sentences, in your own words, as pinned rules.
 
 - **What it sends:** your turns after the first one in the session, the last 20, each cut to 1,000 characters. Pasted blocks, fenced code and log lines are removed first, and secrets, email addresses and home paths are masked. The assistant's replies are never sent.
-- **To whom:** Anthropic, with your `ANTHROPIC_API_KEY`, in one call per session capture. A failed call logs one line and capture keeps its pattern rules. A session with no project never makes the call.
-- **On and off:** the default is `"off"`. Set `"model"` to turn it on; set `"off"` again, or unset the key, to turn it off.
+- **To whom:** your own endpoint when `HIPPO_LLM_BASE_URL` is set, else Anthropic with your `ANTHROPIC_API_KEY`, in one call per session capture. A failed call logs one line and capture keeps its pattern rules. A session with no project never makes the call.
+- **On and off:** the default is `"off"`. Set `"model"` to turn it on; set `"off"` again, or unset `ANTHROPIC_API_KEY` and `HIPPO_LLM_BASE_URL`, to turn it off.
 
 #### What you type
 

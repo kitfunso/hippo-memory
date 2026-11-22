@@ -218,6 +218,7 @@ describe('published runtime exports', () => {
         formatAmbientVector
         generateId getEmbedding getGlobalRoot
         isCardStatus isEmbeddingAvailable isHandoffOutcome
+        llmRoute
         markRetrieved
         partitionLessons
         renderAmbientSummary resolveConfidence

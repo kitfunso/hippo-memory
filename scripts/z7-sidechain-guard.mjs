@@ -11,6 +11,7 @@ const pinHashes = (dir, names) => Object.fromEntries(names.map((n) => [n, fs.exi
 
 export function refuseApiKey(env) {
   if (env.ANTHROPIC_API_KEY !== undefined) throw new Error('ANTHROPIC_API_KEY is set; refusing every command that calls claude');
+  if (env.HIPPO_LLM_BASE_URL !== undefined) throw new Error('HIPPO_LLM_BASE_URL is set; refusing every command that calls a model');
 }
 
 export function git(repo, args) {

@@ -15,7 +15,7 @@ import { readCappedJson } from '../../base/util/capped-json.js';
 import { MAX_REPLY_BYTES } from '../../base/util/limits.js';
 import { type JsonValue, isJsonObject, isJsonString } from '../../base/util/json.js';
 import { errorFields, errorMessage } from '../../base/util/log.js';
-import { parseOutboundUrl } from '../../base/util/net.js';
+import { checkHeaderSafe, parseOutboundUrl } from '../../base/util/net.js';
 
 const RAY_ID_MAX_CHARS = 64;
 
@@ -44,14 +44,6 @@ function isNumber(v: JsonValue | undefined): v is number {
 
 function isRejection(v: ClefScores | string): v is string {
   return v.constructor === String;
-}
-
-// fetch quotes a rejected header value in its error, so a token it would reject must never reach
-// it.
-function checkHeaderSafe(name: string, token: string): void {
-  if (!/^[\x21-\x7e]+$/.test(token)) {
-    throw new Error(`${name} has characters a header cannot carry`);
-  }
 }
 
 /** Transport from the root's settings, never a request's: HIPPO_CLEF_ENDPOINT wins over hosted

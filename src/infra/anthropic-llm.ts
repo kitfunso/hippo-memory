@@ -69,10 +69,27 @@ async function errorSnippet(res: Response): Promise<string> {
 /** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'.
  * Never throws. */
 async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Promise<LlmReply> {
+  let headers: Headers;
+  // fetch's header error quotes the value, so the key; only a fixed text leaves.
+  try {
+    headers = new Headers({
+      'content-type': 'application/json',
+      'x-api-key': connection.apiKey,
+      'anthropic-version': API_VERSION,
+    });
+  } catch {
+    return {
+      ok: false,
+      failure: {
+        kind: 'config',
+        message: 'ANTHROPIC_API_KEY has characters a header cannot carry',
+      },
+    };
+  }
   const timeoutMs = llmTimeoutMs(envLlmTimeoutMs());
   let res: Response;
   try {
-    res = await postMessage(connection, req, timeoutMs);
+    res = await postMessage(connection, headers, req, timeoutMs);
   } catch (err) {
     return { ok: false, failure: { kind: 'request', message: errorMessage(err), cause: err } };
   }
@@ -97,12 +114,14 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
       text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
     return usage === undefined ? reply : { ...reply, usage };
   } catch (err) {
-    return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err), cause: err } };
+    // The parse error under this message quotes the reply.
+    return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
 }
 
 function postMessage(
   connection: AnthropicConnection,
+  headers: Headers,
   req: LlmRequest,
   timeoutMs: number,
 ): Promise<Response> {
@@ -110,11 +129,7 @@ function postMessage(
     MESSAGES_URL,
     {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': connection.apiKey,
-        'anthropic-version': API_VERSION,
-      },
+      headers,
       body: JSON.stringify({
         model: req.model ?? DEFAULT_MODEL,
         max_tokens: req.maxTokens,

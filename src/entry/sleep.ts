@@ -10,7 +10,7 @@ import {
 import { evalNow, evalSwitches } from '../infra/eval-switches.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
 import type { HippoConfig } from '../base/config/config.js';
-import { anthropicLlmFromEnv } from '../infra/ports.js';
+import { llmFromEnv } from '../infra/ports.js';
 import { loadConfig } from '../host/config-file.js';
 import { DEFAULT_TENANT_ID } from '../base/util/tenant.js';
 import type { ConsolidationResult } from '../domain/consolidate/run.js';
@@ -26,6 +26,7 @@ export type { RescueRank } from '../domain/consolidate/events.js';
 // variable.
 export type { SleepContext, SleepStore };
 export type { DetachedWork } from '../domain/search/detached-work.js';
+export { llmRoute, type LlmRoute } from '../infra/llm-route.js';
 
 /** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
 export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {
@@ -36,8 +37,8 @@ export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<Sle
   );
 }
 
-/** consolidate's options as published: the LLM phases call the model ANTHROPIC_API_KEY opens,
- * over `fetcher`. */
+/** consolidate's options as published: the LLM phases call the model the environment picks, over
+ * `fetcher`. */
 type PublishedConsolidateOptions = Omit<ConsolidateOptions, 'llm'> & { fetcher?: typeof fetch };
 
 /** Run a full consolidation pass on `store`, or on the hippo.db under a folder. With no
@@ -50,7 +51,7 @@ export async function consolidate(
   const { fetcher, ...rest } = options;
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
-  const llm = anthropicLlmFromEnv(fetcher);
+  const llm = llmFromEnv(fetcher);
   // One handle per store, for the reason `sleep` gives.
   return withSharedStoreHandles((session) =>
     runConsolidation(inStoreSession(store, session), {

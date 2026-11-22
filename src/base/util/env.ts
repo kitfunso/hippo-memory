@@ -29,6 +29,7 @@ const FLAGS = {
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
   HIPPO_ALLOW_CLEARTEXT: false,
+  HIPPO_LLM_ALLOW_HTTP: false,
   HIPPO_CAPTURE_SCRIPTED: false,
   HIPPO_READ_ONLY: true,
   SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
@@ -316,8 +317,12 @@ export const envMcpSseHeartbeatMs = posInt('MCP_SSE_HEARTBEAT_MS');
 export const envMcpSseMaxAgeSec = posInt('MCP_SSE_MAX_AGE_SEC');
 
 // LLM and reranker credentials and knobs.
-export const envAnthropicApiKey = text('ANTHROPIC_API_KEY');
+export const envAnthropicApiKey = trimmedText('ANTHROPIC_API_KEY');
 export const envLlmTimeoutMs = posInt('HIPPO_LLM_TIMEOUT_MS');
+export const envLlmBaseUrl = trimmedText('HIPPO_LLM_BASE_URL');
+export const envLlmApiKey = trimmedText('HIPPO_LLM_API_KEY');
+export const envLlmModel = trimmedText('HIPPO_LLM_MODEL');
+export const envLlmAllowHttp = bool('HIPPO_LLM_ALLOW_HTTP');
 export const envTypesafeApiKey = trimmedText('TYPESAFE_API_KEY');
 export const envJevTimeoutMs = posInt('HIPPO_JEV_TIMEOUT_MS');
 export const envJevModel = text('HIPPO_JEV_MODEL');
