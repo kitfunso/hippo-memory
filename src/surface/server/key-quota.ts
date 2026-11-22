@@ -19,21 +19,29 @@ const MAX_RETRY_AFTER_SEC = 86_400;
 // One slot for the process: a broken meter faults on every request, and a line a minute shows it.
 let faultLoggedAt = Number.NEGATIVE_INFINITY;
 
+// The logger prints a field with String() or JSON.stringify, which runs a plugin's toString or rejects a BigInt.
+function plainFields(built: LogFields): LogFields {
+  const plain: LogFields = {};
+  for (const [key, value] of Object.entries(built)) {
+    if (value !== undefined) plain[key] = String(value);
+  }
+  return plain;
+}
+
 function quotaFault(what: string, fields?: () => LogFields): void {
   const now = Date.now();
-  if (now - faultLoggedAt < FAULT_LOG_EVERY_MS) return;
+  // A clock stepped back sits behind the stamp, and that must not silence a later fault.
+  if (now >= faultLoggedAt && now - faultLoggedAt < FAULT_LOG_EVERY_MS) return;
   faultLoggedAt = now;
-  let built: LogFields | undefined;
+  const message = `key quota: ${what}; the request is admitted, and further faults this minute are not logged`;
+  let plain: LogFields | undefined;
   try {
-    built = fields?.();
+    plain = fields === undefined ? undefined : plainFields(fields());
   } catch {
     // Describing a plugin's thrown value reads its traps and getters, so this path must not throw.
-    built = { errorClass: 'unprintable' };
+    plain = { errorClass: 'unprintable' };
   }
-  log.error(
-    `key quota: ${what}; the request is admitted, and further faults this minute are not logged`,
-    built,
-  );
+  log.error(message, plain);
 }
 
 interface Refusal {
@@ -75,6 +83,7 @@ export function askKeyQuota(
     if (answer === null) return;
     // Every read of the answer runs plugin getters, so all of it sits inside the guard.
     // Mute a returned native promise so it cannot crash the process; Promise.resolve would adopt a thenable.
+    // SHORTCUT: a hostile promise subclass or a Proxy of a rejecting promise still rejects unhandled; off-contract.
     if (isPromise(answer)) Promise.prototype.then.call(answer, undefined, () => undefined);
     // SAFETY: a JS hook may return any value; refusalOf checks each field it reads.
     refusal = refusalOf(answer as JsonValue);

@@ -18,8 +18,9 @@ export function isHandled(expr) {
     expr.arguments.length >= 3 &&
     ts.isPropertyAccessExpression(callee) &&
     callee.name.text === 'then'
-  )
+  ) {
     return true;
+  }
   if (method === 'then' || method === 'finally') return isHandled(expr.expression.expression);
   return false;
 }

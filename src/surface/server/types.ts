@@ -82,7 +82,7 @@ export interface KeyQuotaRefusal {
   readonly message: string;
 }
 
-/** Never asked for the local CLI key; a throw or a malformed answer admits the request. */
+/** Never asked for the local CLI key. A throw or a malformed answer admits it; a promise answer is off-contract. */
 export type KeyQuota = (call: KeyQuotaCall) => KeyQuotaRefusal | null;
 
 export interface ServeOptions {

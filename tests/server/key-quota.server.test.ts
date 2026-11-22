@@ -25,6 +25,7 @@ const JSON_BODY = { 'content-type': 'application/json' };
 const TOOLS_LIST = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
 const REFUSAL = { retryAfterSec: 7, message: 'quota test' };
 const FAULT_LINE = /^\[hippo\] error: key quota: /;
+const JSON_FAULT_LINE = /"msg":"key quota: /;
 // Built at run time, so unicorn/no-thenable stays quiet about an object that must be a plain thenable.
 const THEN = ['th', 'en'].join('');
 
@@ -128,9 +129,9 @@ function setClock(iso: string): void {
   vi.setSystemTime(new Date(iso));
 }
 
-function captureStderr(): () => string[] {
+function captureStderr(pattern: RegExp = FAULT_LINE): () => string[] {
   const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  return () => stderr.mock.calls.map(([chunk]) => String(chunk)).filter((line) => FAULT_LINE.test(line));
+  return () => stderr.mock.calls.map(([chunk]) => String(chunk)).filter((line) => pattern.test(line));
 }
 
 function expectRefused(reply: Reply): void {
@@ -300,7 +301,7 @@ describe('a faulty hook', () => {
     expect(lines()).toHaveLength(2);
   });
 
-  it('C13: admits the request when reading the answer throws', async () => {
+  it('C13a: admits the request when reading the answer throws', async () => {
     setClock('2026-11-21T17:00:00Z');
     const lines = captureStderr();
     const k = mint({ ownerSubject: 'oid-a' });
@@ -315,7 +316,7 @@ describe('a faulty hook', () => {
     expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
   });
 
-  it('C13: admits the request when the hook returns a rejecting promise, with no unhandled rejection', async () => {
+  it('C13b: admits the request when the hook returns a rejecting promise, with no unhandled rejection', async () => {
     setClock('2026-11-21T18:00:00Z');
     const lines = captureStderr();
     const unhandled = vi.fn();
@@ -335,7 +336,7 @@ describe('a faulty hook', () => {
     }
   });
 
-  it('C13: admits the request when the hook returns a thenable that resolves to itself, and the loop keeps running', async () => {
+  it('C13c: admits the request when the hook returns a thenable that resolves to itself, and the loop keeps running', async () => {
     setClock('2026-11-21T19:00:00Z');
     const lines = captureStderr();
     const k = mint({ ownerSubject: 'oid-a' });
@@ -366,5 +367,77 @@ describe('a faulty hook', () => {
     await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
     expect((await recall(bearer(k))).status).toBe(200);
     expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
+  });
+
+  it('C15: admits the request when the thrown Error has a stack that throws on printing, and logs one line', async () => {
+    setClock('2026-11-21T21:00:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    const thrown = new Error('x');
+    Object.defineProperty(thrown, 'stack', {
+      value: {
+        toString(): never {
+          throw new Error('stack broke');
+        },
+      },
+    });
+    const { quota } = spy(() => {
+      throw thrown;
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
+    expect(lines()[0]).toContain('errorClass=unprintable');
+  });
+
+  it('C16: admits the request when the thrown Error class has a name that throws on printing, and logs one line', async () => {
+    setClock('2026-11-21T22:00:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    class OddError extends Error {}
+    Object.defineProperty(OddError, 'name', {
+      value: {
+        [Symbol.toPrimitive](): never {
+          throw new Error('name broke');
+        },
+      },
+    });
+    const { quota } = spy(() => {
+      throw new OddError('x');
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
+    expect(lines()[0]).toContain('errorClass=unprintable');
+  });
+
+  it('C17: admits the request with the json log format on when the thrown Error has a BigInt stack, and logs one line', async () => {
+    vi.stubEnv('HIPPO_LOG_FORMAT', 'json');
+    setClock('2026-11-21T22:30:00Z');
+    const lines = captureStderr(JSON_FAULT_LINE);
+    const k = mint({ ownerSubject: 'oid-a' });
+    const thrown = new Error('x');
+    Object.defineProperty(thrown, 'stack', { value: 10n });
+    const { quota } = spy(() => {
+      throw thrown;
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
+  });
+
+  it('C18: logs a fault after the clock steps back behind the last one', async () => {
+    setClock('2026-11-21T23:30:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    const { quota } = spy(() => {
+      throw new Error('meter broke');
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toHaveLength(1);
+    setClock('2026-11-21T23:00:00Z');
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toHaveLength(2);
   });
 });
