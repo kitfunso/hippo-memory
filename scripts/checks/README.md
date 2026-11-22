@@ -21,6 +21,7 @@ One line per gate. Each runs from the repo root as `node scripts/checks/<name>`.
 - `check-migration-line.mjs`: each migration version is the previous plus one, except the gaps listed for next/3.0.
 - `check-open-core.mjs`: a change adds no commercial-only file or identifier to the MIT repo.
 - `check-openclaw-dist.mjs`: each `.ts` openclaw.extensions entry has a compiled dist twin Node imports as ESM.
+- `check-readme-npm-window.mjs`: README.md's Comparison and Benchmarks sections end inside the first 64 KB, the part npm keeps and npmjs.com shows.
 - `check-repo-size.mjs`: tracked files stay under 200 MiB, since Anthropic's plugin directory refuses a repo over 256 MiB.
 - `check-request-path-timing.mjs`: request-path work at 10,000 memories per store stays inside its statement, row and store ceilings.
 - `check-roadmap.mjs`: ROADMAP.md holds unique initiative ids, valid references and local anchors.

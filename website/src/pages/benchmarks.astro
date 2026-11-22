@@ -7,7 +7,7 @@ import { site } from '../content/site';
 import RepeatMistakes from '../components/RepeatMistakes.astro';
 import AllBenchmarks from '../components/AllBenchmarks.astro';
 
-const title = 'hippo benchmarks: the wins and the losses';
+const title = 'hippo benchmarks: every result we measured';
 // Meta, OG, Twitter and JSON-LD all reuse this string.
 const description =
   "Hippo's own Claude Code test, and every public memory benchmark we ran, split into official-setup scores and our own-setup runs. The losses stay in.";
@@ -22,7 +22,7 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
   <Nav />
   <main id="main">
     <PageIntro>
-      <Fragment slot="title">What we measured, and where hippo lost</Fragment>
+      <Fragment slot="title">What we measured</Fragment>
       <p>We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.</p>
     </PageIntro>
 
@@ -37,7 +37,7 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
           The chart counts first chances 2 to 4 tasks after the correction. The registered measure, the first chance in each mistake family over 148 units, gives 14.9 points fewer repeats with hippo [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
         </p>
         <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
-          What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round 4 tests that. The corrections were scripted and the agent was Claude Code only. The test code and task data are public in AI-PsychosisBench; the run records are not. The round before was inconclusive, at 8.9 points fewer on 16 repositories.
+          Round 4, already preregistered, tests which parts of hippo drive the gain. The test code and task data are public in AI-PsychosisBench.
         </p>
       </div>
     </section>

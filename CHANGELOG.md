@@ -1,5 +1,29 @@
 # Changelog
 
+## 3.15.1 - 2026-11-22
+
+### Documentation
+
+- **The npm page now shows the Comparison and Benchmarks sections.** The npm registry keeps only the first 64 KB of a README, and npmjs.com shows that copy. Both sections sat past 74 KB, so npm never showed them. They now come right after the results, before Setup in detail, and a new CI check (`check-readme-npm-window.mjs`) fails when either one ends past 64 KB.
+
+## 3.15.0 - 2026-11-22
+
+### Added
+
+- **`serve({ oauth })` makes `/mcp` an OAuth 2.1 protected resource.** Hippo serves the RFC 9728 metadata at the path-suffixed URL, for example `/.well-known/oauth-protected-resource/mcp`, and names it in the `WWW-Authenticate` header of a `POST /mcp` 401, so an MCP client can find your authorization server. It issues no tokens: your `authResolver` checks them, and `hk_` keys keep working. Off by default.
+
+### Changed
+
+- **The VS Code Marketplace publish signs in with Trusted Publishing, not a token.** `vscode-publish.yml` now runs `vsce publish --oidc`, backed by Trusted Publishing policies on the `kitfunso` publisher, so the `VSCE_PAT` secret is gone. Azure DevOps retires global personal access tokens on 1 December 2026, so a token-based publish would have stopped working. Open VSX still uses `OVSX_PAT`.
+
+### Fixed
+
+- **A failed Open VSX publish no longer stops the VS Code Marketplace publish.** The Marketplace step in `vscode-publish.yml` now runs whenever the package step worked, and the job still fails if either store fails. Before, Open VSX refusing a version (for example while the `kitfunso` namespace waits for approval) skipped the Marketplace too.
+
+### Documentation
+
+- **The README's benchmark table adds MemFail, InMind, MEME and TriggerBench.** Eleven official-setup rows, each run with the paper's own answer model and judge: TriggerBench 54.29 (1st of 3), MEME 0.25 (2nd of 3), MemFail by task (1st on conditional hard, last on long-hop) and InMind by judge (2nd on target recall, last on the naive query). MemFail's product numbers come from its Figure 1, so those rows carry that caveat. hippo-memory.com shows the same rows.
+
 ## 3.14.0 - 2026-11-22
 
 ### Added

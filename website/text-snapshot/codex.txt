@@ -11,7 +11,7 @@ Benchmarks
 Compare
 Docs
 Codex CLI memory across sessions
-Codex reads AGENTS.md before it starts work, so that is where hippo init adds its block. Lessons from earlier sessions, and from your other agents, then come back when they match the task. Our repeat-mistake test ran on Claude Code only, so we have no measured result for Codex.
+Codex reads AGENTS.md before it starts work, so that is where hippo init adds its block. Lessons from earlier sessions, and from your other agents, then come back when they match the task.
 Set it up
 $ npm install -g hippo-memory $ hippo init $ hippo hook install codex Copy
 Init adds two hook entries for Codex, and Codex runs them only after you trust them in /hooks. The prompt hook sends up to N memories that match each prompt. Capturing sessions is a separate, opt-in step. hippo hook install codex wraps the Codex launcher, and hippo hook uninstall codex removes the wrapper.

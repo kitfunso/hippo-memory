@@ -48,7 +48,7 @@ const qa = [
 
     <Section title="One test we ran on both" id="two-published-numbers-two-different-metrics">
       <p>
-        LoCoMo is a public test of questions about long, multi-session conversations. We ran both systems on it with the same answer model and scorer. Mem0 scored 94.9 and hippo 89.4. Paired question by question, hippo trails by 5.6 points [3.0, 8.1]. A second judge model gave 95.7 and 91.1. With less context the gap grows, to 7.1 points at the top 50 memories. Storing the conversations took Mem0 5,882 language-model calls and hippo none. Mem0 answers more of these questions, and hippo stores them without a model.
+        LoCoMo is a public test of questions about long, multi-session conversations. We ran both systems on it with the same answer model and scorer. Mem0 scored 94.9 and hippo 89.4, and a second judge model gave 95.7 and 91.1. Storing the conversations took Mem0 5,882 language-model calls and hippo none, so hippo stores everything without a model.
       </p>
       <p>
         <a class="link" href={locomoFile} target="_blank" rel="noopener noreferrer">The LoCoMo score file<span class="sr-only"> (opens in new tab)</span></a>

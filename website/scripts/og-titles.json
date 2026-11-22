@@ -1,5 +1,5 @@
 {
-  "benchmarks": "hippo benchmarks: the wins and the losses",
+  "benchmarks": "hippo benchmarks: every result we measured",
   "claude-code": "Claude Code memory between sessions | hippo",
   "codex": "Codex CLI memory across sessions | hippo",
   "cursor": "Cursor memory between sessions, with MCP | hippo",

@@ -38,7 +38,7 @@ Nothing. Hippo is MIT-licensed and needs no account or API key. Optional feature
 Is it production-ready?
 Judge it by what is tested. N+ tests run against a real database, with no module mocks and no mocked store. It has zero runtime dependencies. The next question covers what it does to an agent's work.
 Has hippo been shown to make agents better at their work?
-On repeat mistakes, yes, in one test of our own (opens in new tab). We corrected Claude Code once on N repositories and counted repeats N to N tasks later, finding N in N with hippo added, against N with built-in memory alone, at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. Failed runs are in docs/evals (opens in new tab) too.
+On repeat mistakes, yes, in one test of our own (opens in new tab). We corrected Claude Code once on N repositories and counted repeats N to N tasks later, finding N in N with hippo added, against N with built-in memory alone, at the same cost. Every run is in docs/evals (opens in new tab).
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare

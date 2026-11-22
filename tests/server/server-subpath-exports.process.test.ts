@@ -67,6 +67,7 @@ const SERVER_TYPES = [
   'KeyQuota',
   'KeyQuotaCall',
   'KeyQuotaRefusal',
+  'OAuthResource',
   'ProjectWriteCall',
   'ProjectWriteGate',
   'RateLimitSpec',

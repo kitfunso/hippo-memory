@@ -22,6 +22,7 @@ import { assertCallerProject } from '../../base/scope/project-identity.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import { buildContextWithAuth, heartbeatVerdict, readAuthHeader, requireAuth } from './auth.js';
 import { clientLimitKey } from './client-ip.js';
+import { withOAuthChallenge } from './oauth-resource.js';
 import { endReply, noteAccess, writeChunk } from './request.js';
 import type { ResolvedServeOptions } from './types.js';
 import { type JsonValue, isJsonString, isJsonObject, tryParseJson } from '../../base/util/json.js';
@@ -35,7 +36,8 @@ const DEFAULT_SSE_MAX_AGE_SEC = 3600;
 // MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a
 // keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to
 // handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`); an SSE stream is
-// checked at open and again before every ping.
+// checked at open and again before every ping. With serve's oauth set, a POST /mcp 401 names the
+// protected-resource metadata; the stream's 401 stays bare.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -116,7 +118,9 @@ export async function handleMcpPost(
 ): Promise<void> {
   // Same Context the /v1/* routes use, so tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor;
   // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
-  const ctx = await buildContextWithAuth(req, opts);
+  const ctx = await withOAuthChallenge(req, res, opts.oauthChallenge, () =>
+    buildContextWithAuth(req, opts),
+  );
   noteAccess(req, { tenant: ctx.tenantId });
   const project = callerProjectFromHeaders(req, sharedStoreOf(ctx));
   const raw = await readBody(req, { deadlineMs: bodyDeadlineMs(envBodyTimeoutMs()) });

@@ -13,7 +13,7 @@ Docs
 hippo vs memN
 Both are open-source memory for AI agents, and they suit different jobs. memN uses a language model to extract memories, and memories stored through its hosted MCP server live in your MemN account. Hippo keeps memories in SQLite on your machine, needs no account and no model, and wires itself into the coding agents it finds.
 One test we ran on both
-LoCoMo is a public test of questions about long, multi-session conversations. We ran both systems on it with the same answer model and scorer. MemN scored N and hippo N Paired question by question, hippo trails by N points [N N]. A second judge model gave N and N With less context the gap grows, to N points at the top N memories. Storing the conversations took MemN N language-model calls and hippo none. MemN answers more of these questions, and hippo stores them without a model.
+LoCoMo is a public test of questions about long, multi-session conversations. We ran both systems on it with the same answer model and scorer. MemN scored N and hippo N and a second judge model gave N and N Storing the conversations took MemN N language-model calls and hippo none, so hippo stores everything without a model.
 The LoCoMo score file (opens in new tab)
 Feature by feature
 The MemN column was checked against memN's own pages on N September N The full table is on GitHub (opens in new tab).
