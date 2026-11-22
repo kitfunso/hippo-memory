@@ -18,13 +18,17 @@ for (const heading of SECTIONS) {
   const next = text.slice(start + heading.length).search(/^## /m);
   const end = bytesTo(next < 0 ? text.length : start + heading.length + next);
   if (end > LIMIT) {
-    console.error(`README.md "${heading}" ends at byte ${end}, past the ${LIMIT} bytes npm keeps, so npmjs.com cuts it.`);
+    console.error(
+      `README.md "${heading}" ends at byte ${end}, past the ${LIMIT} bytes npm keeps, so npmjs.com cuts it.`,
+    );
     failed = true;
   } else {
     console.log(`readme npm window ok: "${heading}" ends at byte ${end} of ${LIMIT}`);
   }
 }
 if (failed) {
-  console.error('Fix: move the section higher in README.md, or move long notes out of it, so it ends inside the first 64 KB.');
+  console.error(
+    'Fix: move the section higher in README.md, or move long notes out of it, so it ends inside the first 64 KB.',
+  );
   process.exit(1);
 }
