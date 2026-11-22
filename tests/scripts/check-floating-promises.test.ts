@@ -9,7 +9,8 @@ import { findFloatingPromises } from '../../scripts/checks/check-floating-promis
 // Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
 const MINIMAL_LIB = [
   'interface Array<T> { length: number; [n: number]: T }',
-  'interface Boolean {} interface Function {} interface CallableFunction {} interface NewableFunction {}',
+  'interface Boolean {} interface Function {} interface NewableFunction {}',
+  'interface CallableFunction { call<T, A extends unknown[], R>(this: (this: T, ...args: A) => R, thisArg: T, ...args: A): R }',
   'interface IArguments {} interface Number {} interface Object {} interface RegExp {} interface String {}',
   'interface PromiseLike<T> { then<A = T, B = never>(ok?: (v: T) => A | PromiseLike<A>, no?: (e: unknown) => B | PromiseLike<B>): PromiseLike<A | B> }',
   'interface Promise<T> {',
@@ -17,7 +18,10 @@ const MINIMAL_LIB = [
   '  catch<B = never>(no?: (e: unknown) => B | PromiseLike<B>): Promise<T | B>;',
   '  finally(done?: () => void): Promise<T>;',
   '}',
-  'interface PromiseConstructor { new <T>(run: (ok: (v: T) => void, no: (e: unknown) => void) => void): Promise<T> }',
+  'interface PromiseConstructor {',
+  '  new <T>(run: (ok: (v: T) => void, no: (e: unknown) => void) => void): Promise<T>;',
+  '  readonly prototype: Promise<unknown>;',
+  '}',
   'declare var Promise: PromiseConstructor;',
 ].join('\n');
 
@@ -81,6 +85,15 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
       'void 0;',
     ].join('\n');
     expect(hitsFor(body).map((h) => h.line)).toEqual([2, 3]);
+  });
+
+  it('passes then.call with a rejection handler and flags it without one', () => {
+    const body = [
+      'async function work(): Promise<number> { return 1; }',
+      'Promise.prototype.then.call(work(), undefined, () => 0);',
+      'Promise.prototype.then.call(work(), () => 0);',
+    ].join('\n');
+    expect(hitsFor(body).map((h) => h.line)).toEqual([3]);
   });
 
   it('flags a one-argument .then or a .finally with no handler before it', () => {
