@@ -11,6 +11,7 @@ import {
   envGitHubToken,
 } from '../../base/util/env.js';
 import { errorCode, errorMessage } from '../../base/util/log.js';
+import { checkHeaderSafe } from '../../base/util/net.js';
 import { appTokenSource, parseAppPrivateKey } from '../connectors/github/app-auth.js';
 import { staticTokenSource, type GitHubTokenSource } from '../connectors/github/octokit-client.js';
 import type { GitHubSite } from '../connectors/github/site.js';
@@ -91,6 +92,15 @@ function readAppKey(file: string): KeyObject {
   }
 }
 
+// fetch quotes a header value it rejects, so a token with such a character must not get that far.
+function checkPat(pat: string): void {
+  try {
+    checkHeaderSafe('GITHUB_TOKEN', pat);
+  } catch (err) {
+    throw new GitHubAuthSettingError(errorMessage(err));
+  }
+}
+
 /** A fully set App wins over GITHUB_TOKEN, which developers keep in env for other tools. */
 export function githubAuthFromEnv({ site, repoFullName }: GitHubAuthInput): GitHubAuth {
   const app = appSettingsFromEnv();
@@ -102,6 +112,7 @@ export function githubAuthFromEnv({ site, repoFullName }: GitHubAuthInput): GitH
           'or GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY_FILE for a GitHub App.',
       );
     }
+    checkPat(pat);
     return { route: 'GITHUB_TOKEN', source: staticTokenSource(pat) };
   }
   checkAppIds(app);

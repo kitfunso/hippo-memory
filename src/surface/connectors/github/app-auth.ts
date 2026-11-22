@@ -27,6 +27,7 @@ const INSTALLATION_HINT =
   "; set GITHUB_APP_INSTALLATION_ID, use the repository's current name, " +
   'or check that the App is installed on it.';
 const UNAUTHORIZED_HINT = "; check GITHUB_APP_ID, the key file and this machine's clock.";
+const RETRY_HINT = '; GitHub is unavailable or rate limited, so try again later.';
 // The token goes into an Authorization header, so a reply with any other character is broken.
 const HEADER_SAFE_TOKEN = /^[A-Za-z0-9_.-]+$/;
 
@@ -126,6 +127,12 @@ function mintHint(status: number): string {
   return status === 404 || status === 422 ? INSTALLATION_HINT : '';
 }
 
+function lookupHint(status: number): string {
+  if (status === 401) return UNAUTHORIZED_HINT;
+  if (status === 301 || status === 302 || status === 404) return INSTALLATION_HINT;
+  return status === 429 || status >= 500 ? RETRY_HINT : '';
+}
+
 /** The installation id of the App on this repository, as digits. */
 async function lookupInstallation(
   site: GitHubSite,
@@ -136,8 +143,7 @@ async function lookupInstallation(
   const res = await appRequest(url, jwt, lookupAt(url));
   if (res.status !== 200) {
     await cancelBody(res);
-    const hint = res.status === 401 ? UNAUTHORIZED_HINT : INSTALLATION_HINT;
-    throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${hint}`);
+    throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${lookupHint(res.status)}`);
   }
   const failure = `GitHub App installation reply from ${hostAndPath(url)} has no installation id`;
   const body = await readJsonReply(res, failure);

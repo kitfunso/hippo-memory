@@ -85,6 +85,22 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   return body;
 }
 
+// The status is the error reported, so a body that cannot be read only costs its snippet. A body
+// can echo the Authorization header, so the token is cut out before the snippet is built.
+async function errorExcerpt(res: Response, token: string): Promise<string> {
+  const body = await readCappedText(res, ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
+    (err) => {
+      log.debug(
+        `github: could not read the ${res.status} error body: ${errorMessage(err)}`,
+        errorFields(err),
+      );
+      return '';
+    },
+  );
+  const clean = token === '' ? body : body.replaceAll(token, '[token]');
+  return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
+}
+
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   const res = await fetchWithRetry(
     url,
@@ -112,22 +128,7 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
 
   // Don't silently turn 401/403/404/500 into empty pages.
   if (res.status !== 200 && rateLimit.reason === 'none') {
-    // The status is the error reported; a body that cannot be read only costs its snippet.
-    const body = await readCappedText(
-      res,
-      ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR,
-    ).catch((err) => {
-      log.debug(
-        `github: could not read the ${res.status} error body: ${errorMessage(err)}`,
-        errorFields(err),
-      );
-      return '';
-    });
-    throw new GitHubFetchError(
-      res.status,
-      body.slice(0, ERROR_BODY_SNIPPET_CHARS),
-      hostAndPath(url),
-    );
+    throw new GitHubFetchError(res.status, await errorExcerpt(res, token), hostAndPath(url));
   }
 
   const items = res.status === 200 ? await readItems(res, url) : [];

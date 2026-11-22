@@ -41,6 +41,7 @@ const LOOKUP_PATH = '/api/v3/repos/acme/demo/installation';
 const INSTALLATION_HINT =
   "; set GITHUB_APP_INSTALLATION_ID, use the repository's current name, or check that the App is installed on it.";
 const UNAUTHORIZED_HINT = "; check GITHUB_APP_ID, the key file and this machine's clock.";
+const RETRY_HINT = '; GitHub is unavailable or rate limited, so try again later.';
 
 let privateKey: KeyObject;
 let publicKey: KeyObject;
@@ -260,6 +261,26 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(mints(f)).toHaveLength(2);
   });
 
+  it('A2g. a machine that sleeps during the mint counts the wall deadline from the mint start', async () => {
+    const c = clocks();
+    let mintsSeen = 0;
+    const f = await serve({
+      onRequest: (method, path) => {
+        // The monotonic clock stays put, as when the machine sleeps with the first mint's reply unsent.
+        if (method === 'POST' && (mintsSeen += 1) === 1) c.state.wall += 30 * MINUTE;
+        if (method === 'GET' && path.includes('/issues/comments')) c.state.wall += 26 * MINUTE;
+      },
+    });
+    f.mintReplies.push(
+      { status: 201, token: 'ghs_1', expiresAt: iso(T + HOUR) },
+      { status: 201, token: 'ghs_2', expiresAt: iso(T + 56 * MINUTE + HOUR) },
+    );
+    await run(f, sourceFor(f, c, '42'));
+
+    expect(bearers(lists(f))).toEqual(['Bearer ghs_1', 'Bearer ghs_1', 'Bearer ghs_2']);
+    expect(mints(f)).toHaveLength(2);
+  });
+
   it('A2e. a rate-limited page asks the token source again before its retry', async () => {
     let asks = 0;
     const tokenSource: GitHubTokenSource = () => Promise.resolve(`t${(asks += 1)}`);
@@ -336,6 +357,21 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(mints(f)).toEqual([]);
     expect(elsewhere(f)).toEqual([]);
   });
+
+  it.each([503, 429])(
+    'A5. a lookup answered %i says to try again later, not to set the installation id',
+    async (status) => {
+      const f = await serve();
+      f.lookupReplies.splice(0, 1, { status, body: 'BODY-CANARY' });
+      const err = await failureOf(run(f, sourceFor(f, clocks())));
+
+      expect(err.message).toBe(
+        `GitHub App installation lookup at ${f.url}${LOOKUP_PATH} failed: HTTP ${status}${RETRY_HINT}`,
+      );
+      expect(err.message).not.toContain('BODY-CANARY');
+      expect(mints(f)).toEqual([]);
+    },
+  );
 
   it('A5. a lookup answered 401 points at the App ID, the key and the clock, without the body', async () => {
     const f = await serve();
@@ -477,6 +513,16 @@ describe('hippo github backfill with App settings', () => {
     expect(r.status).toBe(2);
     expect(r.stderr).toContain('GITHUB_APP_ID must be an App ID (digits) or a client ID (Iv...).');
     expect(r.stderr).not.toContain('BEGIN-ID-CANARY');
+    expect(fake?.requests).toEqual([]);
+  });
+
+  it('A4. a GITHUB_TOKEN with a character a header cannot carry exits 2 without quoting it', async () => {
+    const r = await backfillWith({ GITHUB_TOKEN: 'ghp_PATCANARY\nx' });
+
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('GITHUB_TOKEN has characters a header cannot carry');
+    expect(r.stderr).not.toContain('ghp_PATCANARY');
+    expect(r.stdout).not.toContain('ghp_PATCANARY');
     expect(fake?.requests).toEqual([]);
   });
 

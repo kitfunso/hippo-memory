@@ -28,6 +28,30 @@ describe('a GitHub error whose body cannot be read', () => {
   });
 });
 
+describe('a GitHub error whose body echoes the token', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('holds [token] in the message and the stack, never the token', async () => {
+    const canary = 'ghs_TOKENCANARY123';
+    const echoed = `you sent Bearer ${canary}, again ${canary}`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(echoed, { status: 400 })),
+    );
+    let err: GitHubFetchError | undefined;
+    try {
+      await realGitHubFetcher({ url: 'https://api.github.com/repos/acme/app/issues', token: canary });
+    } catch (caught) {
+      if (caught instanceof GitHubFetchError) err = caught;
+    }
+    if (!err) throw new Error('expected a GitHubFetchError');
+    expect(err.message).toContain('you sent Bearer [token], again [token]');
+    expect(err.message).not.toContain(canary);
+    expect(err.stack).toContain('[token]');
+    expect(err.stack).not.toContain(canary);
+  });
+});
+
 describe('isSleepReply', () => {
   it('accepts the two shapes sleep-child sends', () => {
     expect(isSleepReply({ ok: true, result: { consolidated: 1 } })).toBe(true);
