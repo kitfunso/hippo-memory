@@ -1007,6 +1007,8 @@ On a store whose `config.json` sets `"sharedStore": true`, `hippo serve` answers
 
 The headers are a filter the caller picks, not access control: any member key can name another project. The tenant is the security boundary, and binding a key to its projects is a backlog item.
 
+An embedder of `serve()` can set `oauth` to make `/mcp` an OAuth 2.1 protected resource for its own authorization server. Hippo then serves the metadata (RFC 9728) at the path-suffixed URL, for example `/.well-known/oauth-protected-resource/mcp`, and adds a `WWW-Authenticate` challenge that names it to a `POST /mcp` 401. The root `/.well-known/oauth-protected-resource` path stays 404, and `/mcp/stream` and `/v1` keep a bare 401. Hippo issues no tokens: the authorization server does, and the add-on `authResolver` checks them and must refuse a token whose audience does not include the `oauth.resource` URL. `oauth` needs an `authResolver`, so `hippo serve` alone cannot use it. `hk_` keys and the local key keep working, and the setting is off by default. `oauth.resource` is the public URL of `/mcp`: https, or http only on a loopback host, with no query or fragment, written in its canonical form. Each authorization server is https too, and a loopback http one is for development only. Core never builds the URL from `Host` or `X-Forwarded-*` headers. A proxy that mounts hippo under `/prefix` must forward `/.well-known/oauth-protected-resource/prefix/mcp` unchanged and map `/prefix/mcp` to `/mcp`.
+
 `hippo_peers` reads the server user's own global store, never the repos that share this one, which is why a shared store turns it off.
 
 ### OpenClaw Plugin
@@ -1272,7 +1274,7 @@ The interesting problems:
 
 ## Open source and commercial
 
-Hippo is open core. This repository is the MIT core for individual developers and self-hosted teams: the CLI, the MCP server, the supported hooks and adapters, and the dashboard. It includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, and one API call deletes a memory. Slack and GitHub connectors bring in what your team has already written down, with Jira and Notion connectors next. Automatic capture and delivery depend on the configured integration. Code published here stays MIT and stays here.
+Hippo is open core. This repository is the MIT core for individual developers and self-hosted teams: the CLI, the MCP server, the supported hooks and adapters, and the dashboard. It includes an HTTP server with tenants, API keys, admin and member roles, per-key scope grants and an audit log on every change. Keys are stored scrypt-hashed, one API call deletes a memory, and `/mcp` can act as an OAuth 2.1 protected resource for your own authorization server. Slack and GitHub connectors bring in what your team has already written down, with Jira and Notion connectors next. Automatic capture and delivery depend on the configured integration. Code published here stays MIT and stays here.
 
 The fair test for a team is a holdout, where a random share of sessions runs without memory and you compare cost per merged PR and repeat errors between the two groups. We have no team result to show. If your team wants to try, [open an issue](https://github.com/kitfunso/hippo-memory/issues/new) and tell us what you'd need. More on [hippo-memory.com/teams](https://hippo-memory.com/teams/).
 
