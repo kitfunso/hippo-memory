@@ -493,7 +493,7 @@ describe('edit over HTTP', () => {
     const split = await holdOne(
       home,
       `${SPLIT_LEAD}
-​`,
+\u200B`,
     );
     const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content: SPLIT_TAIL });
     expect(res.status).toBe(400);

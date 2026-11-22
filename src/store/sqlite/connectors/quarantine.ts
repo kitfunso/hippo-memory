@@ -6,6 +6,7 @@ import type { KeysetPosition } from '../../../base/util/keyset.js';
 import { keysetAfter } from '../../../db/sql.js';
 import { readEntriesByIds, readEntry } from '../entries/entry-reads.js';
 import { createSuccessor, type MemoryEntry } from '../../../base/memory/entry.js';
+import { isSuperseded } from '../../../base/memory/liveness.js';
 import { stampOriginProject } from '../entries/entry-row.js';
 import type {
   QuarantineApproval,
@@ -286,7 +287,7 @@ function editQuarantined(
     if (held.scope !== quarantineScopeFor(row.originalScope)) {
       return rollback({ outcome: 'scope_moved' });
     }
-    if (held.supersededBy) {
+    if (isSuperseded(held)) {
       return rollback({ outcome: 'superseded', supersededBy: held.supersededBy });
     }
     const options = { tenantId, baseHalfLifeDays: edit.baseHalfLifeDays, tags: [...edit.tags] };

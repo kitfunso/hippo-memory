@@ -108,8 +108,8 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
 
 // Drawn with no width, so one inside a word splits it for a pattern and not for a reader: soft
 // hyphen, joiners, zero-width and bidi format characters.
-const INVISIBLE_RE =
-  /[\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g;
+const INVISIBLE_CLASS = String.raw`\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF`;
+const INVISIBLE_RE = new RegExp(`[${INVISIBLE_CLASS}]`, 'g');
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or
 // Greek prose folds into no phrase a pattern names.
@@ -210,7 +210,7 @@ export function detectInstruction(content: string): InstructionDetection {
 
 // One class, tested a character at a time: a `+` run over `\s` and the marks overlaps on U+FEFF
 // and backtracks without bound.
-const BLANK_CHAR_RE = new RegExp(`[\\s${INVISIBLE_RE.source.slice(1, -1)}]`);
+const BLANK_CHAR_RE = new RegExp(`[\\s${INVISIBLE_CLASS}]`);
 
 function withoutBlankEnd(text: string): string {
   let end = text.length;

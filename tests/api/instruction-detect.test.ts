@@ -2,6 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { detectInstruction, detectInstructionIn } from '../../src/api/instruction-detect.js';
+import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';
 
 function reason(content: string): string | null {
   return detectInstruction(content).reason;
@@ -433,22 +434,17 @@ describe('detectInstruction on the text a reader sees', () => {
   });
 });
 
-describe('detectInstructionIn on a long blank run at the join', () => {
-  const MIXED = [' ', '​', '﻿', ' '].join('').repeat(5000);
-  const CASES: ReadonlyArray<[string, string, string]> = [
-    ['a lead-in ending in a run, then a visible character', `note ${'﻿'.repeat(20000)}x`, 'plain benign words'],
-    ['content opening on a run, then a visible character', 'plain benign words', `${'﻿'.repeat(20000)}y`],
-    ['a mixed run, then a visible character, on both sides', `note ${MIXED}x`, `${MIXED}y`],
-  ];
-
-  it.each(CASES)(
-    'stays linear: %s',
-    (_what, leadIn, content) => {
-      const started = performance.now();
-      const found = detectInstructionIn({ leadIn, content });
-      expect(performance.now() - started).toBeLessThan(100);
-      expect(found.flagged).toBe(false);
-    },
-    5000,
-  );
+// A test timeout cannot stop a synchronous regex; the watchdog can, so a backtracking cut fails instead of hanging.
+describe('detectInstructionIn on a 1 MiB blank run at the join', () => {
+  it.each([
+    ['U+FEFF', '\uFEFF'],
+    ['spaces, U+200B, U+FEFF and U+00A0', ' \u200B\uFEFF\u00A0'],
+  ])('finishes before the watchdog on a run of %s followed by a visible character', (_name, unit) => {
+    const screen = (run: string): boolean[] =>
+      [
+        detectInstructionIn({ leadIn: `note ${run}x`, content: 'plain benign words' }),
+        detectInstructionIn({ leadIn: 'plain benign words', content: `${run}y` }),
+      ].map((found) => found.flagged);
+    expect(scanWithinWatchdog(screen, fillTo(unit, ONE_MIB), WATCHDOG_MS)).toEqual([false, false]);
+  });
 });

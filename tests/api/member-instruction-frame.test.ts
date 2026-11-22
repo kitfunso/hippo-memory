@@ -131,7 +131,7 @@ describe('an untrusted write, as a connector makes', () => {
     const result = await rememberUntrusted(ctx, {
       content: SPLIT_TAIL,
       leadIn: `${SPLIT_LEAD}
-​`,
+\u200B`,
       project: PROJECT,
     });
 
