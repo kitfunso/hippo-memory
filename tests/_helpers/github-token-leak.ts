@@ -1,4 +1,5 @@
 // Runs the real GitHub fetcher on a fake reply and reads what it throws, for tests that look for token text in an error.
+import { inspect } from 'node:util';
 import { vi } from 'vitest';
 import { realGitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
 
@@ -7,10 +8,11 @@ export function tokenWindows(token: string, size: number): string[] {
   return Array.from({ length: Math.max(0, token.length - size + 1) }, (_, i) => token.slice(i, i + size));
 }
 
-/** The message and stack of an error and of every cause behind it. */
+/** The message and stack of an error and of every cause behind it, then what `util.inspect` prints, which shows every own field of every link. */
 export function chainText(err: Error): string {
   const parts: string[] = [];
   for (let e: unknown = err; e instanceof Error; e = e.cause) parts.push(e.message, e.stack ?? '');
+  parts.push(inspect(err, { depth: null }));
   return parts.join('\n');
 }
 
