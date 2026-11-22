@@ -10,6 +10,7 @@ import { HttpError } from '../../base/errors/http-errors.js';
 import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
+import { askKeyQuota } from './key-quota.js';
 import { LIMITER_MAX_KEYS } from './rate-limit.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../../base/util/json.js';
@@ -100,6 +101,7 @@ type AuthOptions = Pick<
   | 'callerLimiter'
   | 'localKey'
   | 'keyVerifier'
+  | 'keyQuota'
 > &
   Partial<Pick<ResolvedServeOptions, 'failedAuthLimiter'>>;
 
@@ -340,14 +342,23 @@ function warnCallerLimited({
   });
 }
 
-function chargeCaller(tenantId: string, actor: Actor, opts: AuthOptions): void {
+function chargeCaller(
+  req: IncomingMessage,
+  tenantId: string,
+  actor: Actor,
+  opts: AuthOptions,
+): void {
   const limiter = opts.callerLimiter;
-  if (!limiter) return;
-  const person = ownerOrSubject(actor);
-  const key = `${tenantId}\u0000${person}`;
-  if (limiter.check(key)) return;
-  warnCallerLimited({ key, tenantId, person });
-  throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
+  if (limiter) {
+    const person = ownerOrSubject(actor);
+    const key = `${tenantId}\u0000${person}`;
+    if (!limiter.check(key)) {
+      warnCallerLimited({ key, tenantId, person });
+      throw new HttpError(429, 'rate limit exceeded for this caller', limiter.retryAfterSec);
+    }
+  }
+  // After the charge, so a request the per-caller bucket refused never spends the key's quota.
+  askKeyQuota(req, tenantId, actor, opts.keyQuota);
 }
 
 /** Builds a per-request Context from the Authorization header and remote address; throws
@@ -359,7 +370,7 @@ export async function buildContextWithAuth(
 ): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts, requestClientKey(req));
-  chargeCaller(id.tenantId, ctx.actor, opts);
+  chargeCaller(req, id.tenantId, ctx.actor, opts);
   return ctx;
 }
 
@@ -411,7 +422,7 @@ function contextFor(id: BearerIdentity, opts: ContextOptions, clientKey: string)
  * own root): throws HttpError 401 like buildContextWithAuth. */
 export async function requireAuth(req: IncomingMessage, opts: AuthOptions): Promise<void> {
   const id = await checkAuth(req, opts);
-  chargeCaller(id.tenantId, bearerActor(id), opts);
+  chargeCaller(req, id.tenantId, bearerActor(id), opts);
 }
 
 /** Never rejects or charges a caller bucket: an outage (5xx) or a throttle (429) skips one tick;

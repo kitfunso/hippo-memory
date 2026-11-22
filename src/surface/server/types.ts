@@ -1,6 +1,6 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context, EntryContext } from '../../api/index.js';
+import type { Actor, Context, EntryContext } from '../../api/index.js';
 import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { RateLimiter } from './rate-limit.js';
@@ -66,6 +66,25 @@ export interface RateLimitSpec {
   burst: number;
 }
 
+/** What {@link KeyQuota} is asked about one request. */
+export interface KeyQuotaCall {
+  readonly tenantId: string;
+  readonly actor: Readonly<Actor>;
+  readonly method: string;
+  /** The URL path without its query. */
+  readonly path: string;
+  readonly requestId: string | undefined;
+}
+
+/** A 429 with `Retry-After`: a finite retryAfterSec above 0 (rounded up, at most 86400) and a non-empty message. */
+export interface KeyQuotaRefusal {
+  readonly retryAfterSec: number;
+  readonly message: string;
+}
+
+/** Never asked for the local CLI key. A throw or a malformed answer admits it; a promise answer is off-contract. */
+export type KeyQuota = (call: KeyQuotaCall) => KeyQuotaRefusal | null;
+
 export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
@@ -122,6 +141,8 @@ export interface ServeOptions {
   projectWriteGate?: ProjectWriteGate;
   /** Deadline for one projectWriteGate call; defaults to 5000 ms. */
   projectWriteGateTimeoutMs?: number;
+  /** Asked once per request after the per-caller charge; a throw or a malformed answer admits it: quota guards load. */
+  keyQuota?: KeyQuota;
 }
 
 /** Counts this server's /health reports, since it started. */
