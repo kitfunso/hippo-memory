@@ -41,6 +41,8 @@ const INVISIBLE_MARKS: ReadonlyArray<[string, string]> = [
 const KEPT_LEAD_IN_REFUSAL = (id: string): string =>
   `the kept lead-in of memory ${id} reads as an instruction (pattern:standing-order); ` +
   'an edit keeps the lead-in, so it cannot release this item; nothing was changed';
+const UNKNOWN_TEXT = (id: string): string =>
+  `memory ${id} is not quarantined or could not be read; nothing was changed`;
 const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
 
 function adminCtx(home: string): FullContext {
@@ -207,7 +209,7 @@ describe('edit writes a successor and releases the held text as cleaned', () => 
     const other = await holdOne(home);
     await api.quarantineReject(ctx, other);
     await expect(api.quarantineEdit(ctx, other, CLEAN)).rejects.toThrow(`${other} is already rejected`);
-    await expect(api.quarantineEdit(ctx, 'nope', CLEAN)).rejects.toThrow('not quarantined: nope');
+    await expect(api.quarantineEdit(ctx, 'nope', CLEAN)).rejects.toThrow(UNKNOWN_TEXT('nope'));
     expect(auditRows(home, 0, 'quarantine_edit')).toHaveLength(1);
   });
 
@@ -317,7 +319,7 @@ describe('edit writes a successor and releases the held text as cleaned', () => 
   it('A10: an unknown id with flagged text is a 404 that says the row could not be read, not the flag text', async () => {
     const edit = api.quarantineEdit(adminCtx(home), 'nope', INJECTION);
     await expect(edit).rejects.toThrow(api.NotFoundError);
-    await expect(edit).rejects.toThrow('memory nope could not be read; nothing was changed');
+    await expect(edit).rejects.toThrow(UNKNOWN_TEXT('nope'));
   });
 
   it('A6: an instruction split across the kept lead-in and the new text is a 400 and the item stays pending', async () => {
@@ -350,7 +352,7 @@ describe('edit writes a successor and releases the held text as cleaned', () => 
     const before = auditHighId(home);
     const edit = api.quarantineEdit(blindCtx(adminCtx(home)), id, INJECTION);
     await expect(edit).rejects.toThrow(api.NotFoundError);
-    await expect(edit).rejects.toThrow(`memory ${id} could not be read; nothing was changed`);
+    await expect(edit).rejects.toThrow(UNKNOWN_TEXT(id));
     expect(quarantineRow(home, id)?.status).toBe('pending');
     expect(auditRows(home, before)).toEqual([]);
     expect(loadAllEntries(home, 'default').filter((e) => e.parents.includes(id))).toEqual([]);
@@ -386,7 +388,7 @@ describe('edit writes a successor and releases the held text as cleaned', () => 
 
   it('another tenant cannot edit the row', async () => {
     const other: FullContext = apiCtx(home, 'other', api.adminActor('test'));
-    await expect(api.quarantineEdit(other, id, CLEAN)).rejects.toThrow(`not quarantined: ${id}`);
+    await expect(api.quarantineEdit(other, id, CLEAN)).rejects.toThrow(UNKNOWN_TEXT(id));
     expect(quarantineRow(home, id)?.status).toBe('pending');
   });
 });
@@ -481,6 +483,19 @@ describe('edit over HTTP', () => {
     const admin = mintKey('admin');
     const split = await holdOne(home, leadIn);
     const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content });
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('reads as an instruction when joined to its kept lead-in');
+    expect(quarantineRow(home, split)?.status).toBe('pending');
+  });
+
+  it('an invisible mark after a line break at the end of the kept lead-in is a 400 and the item stays pending', async () => {
+    const admin = mintKey('admin');
+    const split = await holdOne(
+      home,
+      `${SPLIT_LEAD}
+​`,
+    );
+    const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content: SPLIT_TAIL });
     expect(res.status).toBe(400);
     expect(await res.text()).toContain('reads as an instruction when joined to its kept lead-in');
     expect(quarantineRow(home, split)?.status).toBe('pending');

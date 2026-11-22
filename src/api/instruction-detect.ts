@@ -208,15 +208,26 @@ export function detectInstruction(content: string): InstructionDetection {
   return { flagged: false, reason: null };
 }
 
-// A run of spaces and invisible marks at one edge: JS whitespace keeps U+200B, U+00AD and U+2060.
-const BLANK = `(?:\\s|${INVISIBLE_RE.source})+`;
-const BLANK_START_RE = new RegExp(`^${BLANK}`);
-const BLANK_END_RE = new RegExp(`${BLANK}$`);
+// One class, tested a character at a time: a `+` run over `\s` and the marks overlaps on U+FEFF
+// and backtracks without bound.
+const BLANK_CHAR_RE = new RegExp(`[\\s${INVISIBLE_RE.source.slice(1, -1)}]`);
+
+function withoutBlankEnd(text: string): string {
+  let end = text.length;
+  while (end > 0 && BLANK_CHAR_RE.test(text.charAt(end - 1))) end -= 1;
+  return text.slice(0, end);
+}
+
+function withoutBlankStart(text: string): string {
+  let start = 0;
+  while (start < text.length && BLANK_CHAR_RE.test(text.charAt(start))) start += 1;
+  return text.slice(start);
+}
 
 /** The lead-in joined to the content by a space and by nothing, blanks cut at the join. */
 function joinedForms(leadIn: string, content: string): string[] {
-  const lead = leadIn.replace(BLANK_END_RE, '');
-  const body = content.replace(BLANK_START_RE, '');
+  const lead = withoutBlankEnd(leadIn);
+  const body = withoutBlankStart(content);
   return [`${lead} ${body}`, `${lead}${body}`];
 }
 

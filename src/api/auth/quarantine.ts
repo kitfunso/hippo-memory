@@ -100,6 +100,9 @@ export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: strin
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }
 
+// One answer for an id the edit cannot find, so a flagged text and a clean one tell a caller the same.
+const UNKNOWN_EDIT_ID = 'is not quarantined or could not be read; nothing was changed';
+
 type EditRefusal = Exclude<QuarantineEditOutcome, { outcome: 'edited' }>;
 
 function editRefusalError(id: string, refusal: EditRefusal): Error {
@@ -112,6 +115,8 @@ function editRefusalError(id: string, refusal: EditRefusal): Error {
       );
     case 'scope_moved':
       return new ConflictError(`memory ${id} scope changed since quarantine; refusing to edit`);
+    case 'not_quarantined':
+      return new NotFoundError(`memory ${id} ${UNKNOWN_EDIT_ID}`);
     default:
       return refusalError(id, refusal);
   }
@@ -130,7 +135,7 @@ export interface QuarantineEditResult {
 function screenEditText(id: string, text: string, held: MemoryEntry | undefined): void {
   if (!held) {
     if (detectInstruction(text).flagged) {
-      throw new NotFoundError(`memory ${id} could not be read; nothing was changed`);
+      throw new NotFoundError(`memory ${id} ${UNKNOWN_EDIT_ID}`);
     }
     return;
   }

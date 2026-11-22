@@ -1,7 +1,7 @@
 /** CD5: instruction-injection detection for untrusted content; pure function, no DB (mirrors secret-detect.ts). */
 
 import { describe, it, expect } from 'vitest';
-import { detectInstruction } from '../../src/api/instruction-detect.js';
+import { detectInstruction, detectInstructionIn } from '../../src/api/instruction-detect.js';
 
 function reason(content: string): string | null {
   return detectInstruction(content).reason;
@@ -431,4 +431,24 @@ describe('detectInstruction on the text a reader sees', () => {
   it.each(BENIGN)('leaves alone: %s', (_what, content) => {
     expect(reason(content)).toBeNull();
   });
+});
+
+describe('detectInstructionIn on a long blank run at the join', () => {
+  const MIXED = [' ', '​', '﻿', ' '].join('').repeat(5000);
+  const CASES: ReadonlyArray<[string, string, string]> = [
+    ['a lead-in ending in a run, then a visible character', `note ${'﻿'.repeat(20000)}x`, 'plain benign words'],
+    ['content opening on a run, then a visible character', 'plain benign words', `${'﻿'.repeat(20000)}y`],
+    ['a mixed run, then a visible character, on both sides', `note ${MIXED}x`, `${MIXED}y`],
+  ];
+
+  it.each(CASES)(
+    'stays linear: %s',
+    (_what, leadIn, content) => {
+      const started = performance.now();
+      const found = detectInstructionIn({ leadIn, content });
+      expect(performance.now() - started).toBeLessThan(100);
+      expect(found.flagged).toBe(false);
+    },
+    5000,
+  );
 });
