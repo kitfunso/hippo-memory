@@ -78,6 +78,13 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
   };
 }
 
+export interface GitHubPushEvent extends GitHubWebhookEnvelope {
+  ref: string;
+  deleted?: boolean;
+  repository: GitHubRepository & { default_branch: string };
+  commits: JsonValue[];
+}
+
 function isObjectOrArray(x: JsonValue): x is Record<string, JsonValue> {
   return x !== null && typeof x === 'object';
 }
@@ -151,4 +158,17 @@ export function isGitHubPullRequestReviewCommentEvent(
   if (!isJsonNumber(comment.id)) return false;
   if (!isGitHubSender(comment.user)) return false;
   return true;
+}
+
+export function isGitHubPushEvent(
+  x: JsonValue,
+  evtHeader: string,
+): x is JsonValue & GitHubPushEvent {
+  if (evtHeader !== 'push') return false;
+  if (!isObjectOrArray(x)) return false;
+  if (!isJsonString(x.ref)) return false;
+  const repo = x.repository;
+  if (!isObjectOrArray(repo)) return false;
+  if (!isJsonString(repo.full_name) || !isJsonString(repo.default_branch)) return false;
+  return Array.isArray(x.commits);
 }

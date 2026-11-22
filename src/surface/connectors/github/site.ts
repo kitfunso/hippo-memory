@@ -20,6 +20,11 @@ export const GITHUB_COM: GitHubSite = {
   ownsBareRefs: false,
 };
 
+/** The origin a person opens in a browser: the links in a lesson are built from it. */
+export function githubWebOrigin(site: GitHubSite): string {
+  return site.host === undefined ? 'https://github.com' : new URL(site.apiBase).origin;
+}
+
 const SETTING = 'GITHUB_ENTERPRISE_URL';
 const BARE_SETTING = 'GITHUB_ENTERPRISE_BARE_REFS_HOST';
 

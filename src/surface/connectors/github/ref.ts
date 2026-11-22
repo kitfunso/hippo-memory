@@ -44,6 +44,16 @@ export function githubArtifactRef(
   return `github://${githubRepoKey(repoFullName, host)}/${itemPath(item)}`;
 }
 
+/** The ref of a lesson a default-branch commit gives; its sha is the lesson's key on every path. */
+export function githubCommitLessonRef(
+  repoFullName: string | undefined,
+  sha: string,
+  lesson: 'revert' | 'codeowners',
+  host: string | undefined,
+): string {
+  return `github://${githubRepoKey(repoFullName, host)}/commit/${sha}/${lesson}`;
+}
+
 // Group 1 is the host, a segment with a dot or colon. The anchored tail also keeps a host ref
 // (5 or 7 segments) and a github.com ref (4 or 6) from ever fitting each other.
 const REF_RE =
