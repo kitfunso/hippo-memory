@@ -17,6 +17,8 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
+  isGitHubPushEvent,
+  type GitHubPushEvent,
   type GitHubWebhookEnvelope,
 } from './types.js';
 import {
@@ -33,6 +35,7 @@ import {
   type GitHubSite,
 } from './site.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
+import { ingestPushLessons } from './lessons.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
 import { resolveTenant } from '../tenant-route.js';
@@ -194,6 +197,7 @@ const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
   'issue_comment',
   'pull_request',
   'pull_request_review_comment',
+  'push',
 ]);
 
 type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
@@ -413,6 +417,8 @@ async function dispatchGitHubEvent({
       ownsBareRefs: d.site.ownsBareRefs,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, archivedCount: r.archivedCount });
+  } else if (action.kind === 'push-lessons') {
+    await answerPush(d, ctx, action.payload, deliveryId);
   } else {
     const r = await ingestGitHubEvent(ctx, {
       event: action.event,
@@ -426,11 +432,39 @@ async function dispatchGitHubEvent({
   return true;
 }
 
+/** Writes the lessons a push carries and answers with their count. */
+async function answerPush(
+  d: SignedDelivery,
+  ctx: ConnectorContext,
+  payload: GitHubPushEvent,
+  deliveryId: string,
+): Promise<void> {
+  const { ingested } = await ingestPushLessons(ctx, payload, { site: d.site, deliveryId });
+  sendJson(d.res, 200, {
+    ok: true,
+    status: ingested > 0 ? 'ingested' : 'skipped',
+    lessons: ingested,
+  });
+}
+
 /** What a signed delivery asks for once its body has matched its event header. */
 type DeliveryAction =
   | { kind: 'ingest'; event: GitHubIngestEvent }
+  | { kind: 'push-lessons'; payload: GitHubPushEvent }
   | { kind: 'archive-comment'; eventName: string; artifactRef: string; updatedAt: string | null }
   | { kind: 'manual-review' };
+
+function commentDeletedAction(
+  event: Extract<GitHubIngestEvent, { eventName: 'issue_comment' | 'pull_request_review_comment' }>,
+  host: string | undefined,
+): DeliveryAction {
+  return {
+    kind: 'archive-comment',
+    eventName: event.eventName,
+    artifactRef: githubEventRef(event, host),
+    updatedAt: event.payload.comment.updated_at ?? null,
+  };
+}
 
 // Dispatch by event header. Type guards cross-check the body shape against the header so a payload
 // of one event type cannot satisfy another's guard.
@@ -446,13 +480,7 @@ function deliveryAction(
 
   if (eventName === 'issue_comment' && isGitHubIssueCommentEvent(body, 'issue_comment')) {
     if (body.action === 'deleted') {
-      const artifactRef = githubEventRef({ eventName: 'issue_comment', payload: body }, host);
-      return {
-        kind: 'archive-comment',
-        eventName,
-        artifactRef,
-        updatedAt: body.comment.updated_at ?? null,
-      };
+      return commentDeletedAction({ eventName: 'issue_comment', payload: body }, host);
     }
     return { kind: 'ingest', event: { eventName: 'issue_comment', payload: body } };
   }
@@ -466,19 +494,17 @@ function deliveryAction(
     isGitHubPullRequestReviewCommentEvent(body, 'pull_request_review_comment')
   ) {
     if (body.action === 'deleted') {
-      const artifactRef = githubEventRef(
+      // Same "deleted:" key namespace as the issue_comment branch above.
+      return commentDeletedAction(
         { eventName: 'pull_request_review_comment', payload: body },
         host,
       );
-      // Same "deleted:" key namespace as the issue_comment branch above.
-      return {
-        kind: 'archive-comment',
-        eventName,
-        artifactRef,
-        updatedAt: body.comment.updated_at ?? null,
-      };
     }
     return { kind: 'ingest', event: { eventName: 'pull_request_review_comment', payload: body } };
+  }
+
+  if (eventName === 'push' && isGitHubPushEvent(body, 'push')) {
+    return { kind: 'push-lessons', payload: body };
   }
   return null;
 }
