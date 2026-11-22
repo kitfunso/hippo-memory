@@ -7,7 +7,7 @@ import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
-import { errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { errorClassFields, errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { tryParseUrl } from '../../../base/util/net.js';
 
 export class GitHubFetchError extends Error {
@@ -77,7 +77,9 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   try {
     body = await readCappedJson(res, GITHUB_MAX_REPLY_BYTES);
   } catch (err) {
-    throw new GitHubFetchError(res.status, errorMessage(err), path, { cause: err });
+    // V8's parse error quotes part of the body, which may echo the token, so no cause is kept.
+    log.debug(`github: list reply unreadable: ${errorMessage(err)}`, errorClassFields(err));
+    throw new GitHubFetchError(res.status, errorMessage(err), path);
   }
   if (!Array.isArray(body)) {
     throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
@@ -97,8 +99,16 @@ async function errorExcerpt(res: Response, token: string): Promise<string> {
       return '';
     },
   );
-  const clean = token === '' ? body : body.replaceAll(token, '[token]');
+  const clean = token === '' ? body : dropCutTokenCopy(body, token).replaceAll(token, '[token]');
   return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
+}
+
+// The read cap can cut a copy of the token in half, and replaceAll cannot match half a token.
+function dropCutTokenCopy(body: string, token: string): string {
+  for (let len = Math.min(token.length - 1, body.length); len > 0; len--) {
+    if (body.endsWith(token.slice(0, len))) return body.slice(0, body.length - len);
+  }
+  return body;
 }
 
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {

@@ -124,7 +124,8 @@ async function readJsonReply(res: Response, failure: string): Promise<JsonValue>
 
 function mintHint(status: number): string {
   if (status === 401) return UNAUTHORIZED_HINT;
-  return status === 404 || status === 422 ? INSTALLATION_HINT : '';
+  if (status === 404 || status === 422) return INSTALLATION_HINT;
+  return status === 429 || status >= 500 ? RETRY_HINT : '';
 }
 
 function lookupHint(status: number): string {

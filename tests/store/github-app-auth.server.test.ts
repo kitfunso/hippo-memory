@@ -3,6 +3,7 @@
 
 import { generateKeyPairSync, verify, type KeyObject } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -345,6 +346,7 @@ describe('GitHub App token source in backfillRepo', () => {
   it.each([
     [404, undefined],
     [302, '/elsewhere'],
+    [301, '/elsewhere'],
   ])('A5. a lookup answered %i fails with the fixed text, no mint, no redirect, no body', async (status, location) => {
     const f = await serve();
     f.lookupReplies.splice(0, 1, { status, body: 'BODY-CANARY', location });
@@ -372,6 +374,25 @@ describe('GitHub App token source in backfillRepo', () => {
       expect(mints(f)).toEqual([]);
     },
   );
+
+  it('A5. a lookup answered 403 gets no hint, since GitHub also uses it for other refusals', async () => {
+    const f = await serve();
+    f.lookupReplies.splice(0, 1, { status: 403, body: 'BODY-CANARY' });
+    const err = await failureOf(run(f, sourceFor(f, clocks())));
+
+    expect(err.message).toBe(`GitHub App installation lookup at ${f.url}${LOOKUP_PATH} failed: HTTP 403`);
+    expect(mints(f)).toEqual([]);
+  });
+
+  it.each([503, 429])('A5. a mint answered %i says to try again later, like a lookup does', async (status) => {
+    const f = await serve();
+    f.mintReplies.push({ status, body: 'BODY-CANARY' });
+    const err = await failureOf(run(f, sourceFor(f, clocks(), '42')));
+
+    expect(err.message).toBe(`GitHub App token request to ${f.url}${MINT_PATH} failed: HTTP ${status}${RETRY_HINT}`);
+    expect(err.message).not.toContain('BODY-CANARY');
+    expect(lists(f)).toEqual([]);
+  });
 
   it('A5. a lookup answered 401 points at the App ID, the key and the clock, without the body', async () => {
     const f = await serve();
@@ -524,6 +545,46 @@ describe('hippo github backfill with App settings', () => {
     expect(r.stderr).not.toContain('ghp_PATCANARY');
     expect(r.stdout).not.toContain('ghp_PATCANARY');
     expect(fake?.requests).toEqual([]);
+  });
+
+  it.each([
+    ['LF', '\n'],
+    ['CR', '\r'],
+    ['space', ' '],
+  ])('A4. a GITHUB_TOKEN that ends in a %s is trimmed and sent without it', async (_name, end) => {
+    const pat = 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab';
+    const r = await backfillWith({ GITHUB_TOKEN: `${pat}${end}` });
+
+    expect(r.status).toBe(0);
+    expect(fake?.requests.length).toBeGreaterThan(0);
+    expect(new Set(bearers(fake?.requests ?? []))).toEqual(new Set([`Bearer ${pat}`]));
+  });
+
+  it('A4. a 200 list reply that echoes the token and is not JSON leaves no part of it in the warn line', async () => {
+    const pat = 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab';
+    const server = createServer((_req, res) => res.writeHead(200).end(`${pat} not json`));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      // SAFETY: a server listening on TCP reports an AddressInfo.
+      const { port } = server.address() as { port: number };
+      const r = await runCliAs(['github', 'backfill', '--repo', REPO], {
+        cwd: base,
+        env: {
+          ...process.env,
+          HIPPO_HOME: hippoRoot,
+          GITHUB_ENTERPRISE_URL: `http://127.0.0.1:${port}`,
+          GITHUB_TOKEN: pat,
+        },
+      });
+
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toContain('github backfill failed');
+      const windows = Array.from({ length: pat.length - 11 }, (_, i) => pat.slice(i, i + 12));
+      expect(windows.filter((w) => r.stderr.includes(w) || r.stdout.includes(w))).toEqual([]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it('A4. an installation id that is not a number exits 2 without repeating it', async () => {

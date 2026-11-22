@@ -140,7 +140,7 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   it('throws on an HTML error page served with status 200', async () => {
     const err = await failure(new Response('<html><body>Whoa there!</body></html>', { status: 200 }));
     expectNamesTheReply(err, /reply is not JSON/);
-    expect(err.cause).toBeInstanceOf(Error);
+    expect(err.cause).toBeUndefined();
   });
 
   it('throws on a null body', async () => {
