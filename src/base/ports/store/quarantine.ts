@@ -35,6 +35,21 @@ export type QuarantineApproval =
 
 export type QuarantineRejection = { readonly outcome: 'rejected' } | QuarantineRefusal;
 
+/** An edit's text, already screened, the lead-in and tags it was screened with, and the half-life a
+ * new row starts from. */
+export interface QuarantineEditInput {
+  readonly content: string;
+  readonly leadIn: string | null;
+  readonly tags: readonly string[];
+  readonly baseHalfLifeDays: number;
+}
+
+/** 'edited': the successor `newId` is live under the record's originalScope. */
+export type QuarantineEditOutcome =
+  | { readonly outcome: 'edited'; readonly newId: string }
+  | QuarantineRefusal
+  | { readonly outcome: 'scope_moved' };
+
 /**
  * The review queue behind the quarantine routes. A refusal is a resolved value, never a rejection,
  * and writes nothing.
@@ -63,12 +78,24 @@ export interface Quarantine {
     decision: 'reject',
     actor: string,
   ): Promise<QuarantineRejection>;
+  /** In one transaction, all or none, on a pending record whose memory is in the tenant, under its
+   * quarantine scope and not superseded: writes a successor with `edit.content` under
+   * originalScope (parents [id], the held row's artifactRef); supersedes the held row by it; marks
+   * the record approved; appends one quarantine_edit row ({originalScope, newId}). scope_moved
+   * otherwise. */
+  editQuarantined(
+    tenantId: string,
+    id: string,
+    edit: QuarantineEditInput,
+    actor: string,
+  ): Promise<QuarantineEditOutcome>;
 }
 
 /** What each Quarantine method does to the store; every adapter honours it. */
 export const QUARANTINE_EFFECTS = {
   listQuarantined: 'read',
   decideQuarantined: 'write',
+  editQuarantined: 'write',
 } as const satisfies MethodEffects<Quarantine>;
 
 /** `Quarantine` as an adapter writes it; the port's overloads pair each decision with its
@@ -81,6 +108,7 @@ export interface QuarantineCalls {
     decision: 'approve' | 'reject',
     actor: string,
   ): Promise<QuarantineApproval | QuarantineRejection>;
+  editQuarantined: Quarantine['editQuarantined'];
 }
 
 export interface QuarantineRow {

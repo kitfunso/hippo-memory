@@ -5,6 +5,8 @@ import { withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
 import { keysetAfter } from '../../../db/sql.js';
 import { readEntriesByIds, readEntry } from '../entries/entry-reads.js';
+import { createSuccessor, type MemoryEntry } from '../../../base/memory/entry.js';
+import { stampOriginProject } from '../entries/entry-row.js';
 import type {
   QuarantineApproval,
   QuarantineListQuery,
@@ -16,6 +18,8 @@ import type {
 import {
   QUARANTINE_LIST_LIMIT,
   type QuarantineCalls,
+  type QuarantineEditInput,
+  type QuarantineEditOutcome,
   type QuarantineRow,
   type QuarantineStatus,
 } from '../../../base/ports/store/quarantine.js';
@@ -24,9 +28,14 @@ import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import { openStore } from '../runtime/handles.js';
 import { bound } from '../runtime/bound.js';
-import { writeEntryMirrors } from '../entries/entry-writes.js';
+import {
+  auditingRefusal,
+  supersedeInTx,
+  writeEntryDbOnly,
+  writeEntryMirrors,
+} from '../entries/entry-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
-import { handleStamp } from '../runtime/handle-clock.js';
+import { handleNow, handleStamp } from '../runtime/handle-clock.js';
 import { moveOneStatus } from '../runtime/status-transitions.js';
 
 export { QUARANTINE_SCOPE_PREFIX };
@@ -255,6 +264,53 @@ function rejectQuarantined(
   );
 }
 
+/** What editQuarantined answers inside the store; the successor rides along so its mirror can be
+ * written after the commit. */
+type EditDone =
+  | Exclude<QuarantineEditOutcome, { readonly outcome: 'edited' }>
+  | { readonly outcome: 'edited'; readonly newId: string; readonly successor: MemoryEntry };
+
+/** The admin's text as the held row's successor under its original scope; the held row stays as
+ * delivered. */
+function editQuarantined(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  { tenantId, id, actor }: DecisionOptions,
+  edit: QuarantineEditInput,
+): EditDone {
+  return withWriteScopeOr<EditDone, EditDone>(db, 'quarantine_edit', (rollback) => {
+    const row = pendingOrRefusal(db, tenantId, id);
+    if ('outcome' in row) return rollback(row);
+    const held = readEntry(db, id, tenantId);
+    if (!held || held.scope !== quarantineScopeFor(row.originalScope)) {
+      return rollback({ outcome: 'scope_moved' });
+    }
+    const options = { tenantId, baseHalfLifeDays: edit.baseHalfLifeDays, tags: [...edit.tags] };
+    const successor = stampOriginProject(files, {
+      ...createSuccessor(held, edit.content, options, handleNow(db)),
+      scope: row.originalScope,
+      artifactRef: held.artifactRef,
+      parents: [id],
+      leadIn: edit.leadIn,
+    });
+    if (!supersedeInTx(db, { tenantId, id, newId: successor.id, actor })) {
+      return rollback({ outcome: 'scope_moved' });
+    }
+    writeEntryDbOnly(db, successor, { actor });
+    approveQuarantineRow(db, { tenantId, id, actor });
+    appendAuditEvents(db, [
+      {
+        tenantId,
+        actor,
+        op: 'quarantine_edit',
+        targetId: id,
+        metadata: { originalScope: row.originalScope, newId: successor.id },
+      },
+    ]);
+    return { outcome: 'edited', newId: successor.id, successor };
+  });
+}
+
 /** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the
  * quarantine scope, which still hides the memory. */
 function rewriteMirror(
@@ -289,16 +345,34 @@ function decide(
   return result;
 }
 
+/** A tombstone refusal leaves its reject_refusal row after the rollback; the mirrors follow the
+ * commit. */
+function edit(
+  db: DatabaseSyncLike,
+  files: StoreFiles,
+  options: DecisionOptions,
+  input: QuarantineEditInput,
+): QuarantineEditOutcome {
+  const result = auditingRefusal(db, options.actor, () =>
+    editQuarantined(db, files, options, input),
+  );
+  if (result.outcome !== 'edited') return result;
+  writeEntryMirrors(files.hippoRoot, result.successor);
+  rewriteMirror(db, files, options.tenantId, options.id);
+  return { outcome: 'edited', newId: result.newId };
+}
+
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   const quarantine: QuarantineCalls = {
     ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
-    // An approval rewrites the memory's mirror, so the decision opens the store with its mirror
-    // folders.
-    ...bound<Pick<QuarantineCalls, 'decideQuarantined'>>(
+    // An approval or an edit rewrites a mirror, so each opens the store with its mirror folders.
+    ...bound<Pick<QuarantineCalls, 'decideQuarantined' | 'editQuarantined'>>(
       on,
       {
         decideQuarantined: (db, tenantId, id, decision, actor) =>
           decide(db, files, { tenantId, id, decision, actor }),
+        editQuarantined: (db, tenantId, id, input, actor) =>
+          edit(db, files, { tenantId, id, actor }, input),
       },
       openStore,
     ),
