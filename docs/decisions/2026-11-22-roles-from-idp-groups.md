@@ -33,9 +33,9 @@ Core knew two roles, admin and member. A resolver role other than admin became m
 - A viewer's reads still write recall bookkeeping rows, since that code sits in the recall layer.
 - Entra leaves the groups claim out above 200 groups (overage), so the fallback applies. A deployment that uses viewer passes fallback 'viewer', or an intended viewer can write; a null fallback refuses those users.
 - A person demoted in the IdP keeps self-minted member keys until they are revoked or expire. A demoted viewer can revoke the keys it minted itself, and an add-on revokes them through the exported `authRevoke` when the IdP deprovisions the person.
-- A resolver role outside admin, member and viewer now reads as viewer; it read as member before. Widening `Actor.role` breaks an exhaustive switch over it at compile time.
+- A resolver role that is missing, or outside admin, member and viewer, now reads as viewer; it read as member before. Widening `Actor.role` breaks an exhaustive switch over it at compile time.
 - An older core turns a resolver 'viewer' into a member, so an add-on that depends on viewer pins the core minor that ships this.
-- `Actor.role`, `ResolvedBearer.role`, `McpCaller.role` and `ScopeActor.role` gain 'viewer'. `ScopeActor` also reaches store-kit and the store port `GraphRead.reader`.
+- `Actor.role`, `ResolvedBearer.role`, `McpCaller.role` and `ScopeActor.role` gain 'viewer'. `ScopeActor` also reaches store-kit. The store port (`GraphViewQuery.reader`) still takes admin or member only (`StoreActor`), so an add-on store adapter never sees viewer.
 
 ## Follow-ups
 - The write check lives in three surface adapters: the route table, the MCP `writeRefusal` and `authCreateSelf`. It does not live in the api module's write helpers, so a new surface must call `canWrite` itself.

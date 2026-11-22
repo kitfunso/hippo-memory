@@ -5,7 +5,7 @@
 
 ### Changed
 
-- **`Actor.role`, `ResolvedBearer.role`, `McpCaller.role` and `ScopeActor.role` gain 'viewer'.** `ScopeActor` also reaches the store-kit entry and the store port.
+- **`Actor.role`, `ResolvedBearer.role`, `McpCaller.role` and `ScopeActor.role` gain 'viewer'.** `ScopeActor` also reaches the store-kit entry. The store port still takes admin or member only (`StoreActor`), as before, so an add-on store adapter never sees 'viewer'.
 - **A resolver role that is missing, or outside 'admin', 'member' and 'viewer', now reads as 'viewer'.** It read as 'member' before. The server logs one warning that leaves out the value. An MCP context with no role reads as 'viewer' too.
 - **Widening `Actor.role` breaks an exhaustive switch over it at compile time.** Add a 'viewer' case.
 - **`DELETE /v1/auth/keys/:keyId` is open to a viewer.** `authRevoke` still lets a resolver caller below admin revoke only the keys it minted.

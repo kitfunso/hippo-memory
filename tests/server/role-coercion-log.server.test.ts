@@ -40,6 +40,13 @@ async function stderrAfterTwoCalls(role: string | undefined): Promise<string[]> 
   return write.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read it as viewer'));
 }
 
+// Runs before the coercion case: the warn is one per process, so a later run would hide a false warn.
+describe('a valid resolver role', () => {
+  it.each(['admin', 'member', 'viewer'])('logs no coercion line for %s', async (role) => {
+    expect(await stderrAfterTwoCalls(role)).toHaveLength(0);
+  });
+});
+
 describe('a resolver role read as viewer', () => {
   it('logs one warn line for a cased admin, and the line leaves out the value', async () => {
     const lines = await stderrAfterTwoCalls('Admin');
