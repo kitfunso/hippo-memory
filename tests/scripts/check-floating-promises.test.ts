@@ -96,6 +96,19 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
     expect(hitsFor(body).map((h) => h.line)).toEqual([3]);
   });
 
+  it('flags then.call on a call result, and then.call whose handler is the undefined identifier', () => {
+    const body = [
+      'async function work(): Promise<number> { return 1; }',
+      'const other = work();',
+      'const p = work();',
+      'const h = () => 0;',
+      'work().then.call(other, undefined, h);',
+      'p.then.call(p, h, undefined);',
+      'p.then.call(p, undefined, h);',
+    ].join('\n');
+    expect(hitsFor(body).map((h) => h.line)).toEqual([5, 6]);
+  });
+
   it('flags a one-argument .then or a .finally with no handler before it', () => {
     const body = [
       'async function work(): Promise<number> { return 1; }',

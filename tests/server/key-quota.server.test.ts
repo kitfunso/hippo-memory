@@ -263,6 +263,8 @@ describe('a faulty hook', () => {
       expect.stringMatching(/^\[hippo\] error: key quota: the hook threw; the request is admitted/),
     ]);
     expect(lines()[0]).toContain(`requestId=${reply.requestId}`);
+    expect(lines()[0]).toContain('errorClass=Error');
+    expect(lines()[0]).toContain('stack=');
   });
 
   it.each([
@@ -439,5 +441,21 @@ describe('a faulty hook', () => {
     setClock('2026-11-21T23:00:00Z');
     expect((await recall(bearer(k))).status).toBe(200);
     expect(lines()).toHaveLength(2);
+  });
+
+  it('C19: admits the request when the thrown Error has a huge stack, and logs one capped line', async () => {
+    setClock('2026-11-21T23:50:00Z');
+    const lines = captureStderr();
+    const k = mint({ ownerSubject: 'oid-a' });
+    const thrown = new Error('x');
+    Object.defineProperty(thrown, 'stack', { value: 'x'.repeat(1_000_000) });
+    const { quota } = spy(() => {
+      throw thrown;
+    });
+    await start({ perCaller: WIDE, perAddress: WIDE }, { keyQuota: quota });
+    expect((await recall(bearer(k))).status).toBe(200);
+    expect(lines()).toEqual([expect.stringContaining('the hook threw')]);
+    expect(lines()[0]!.length).toBeLessThan(9000);
+    expect(lines()[0]).toContain('stack=x');
   });
 });

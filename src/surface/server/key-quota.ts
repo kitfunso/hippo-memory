@@ -18,12 +18,14 @@ const FAULT_LOG_EVERY_MS = MINUTE_MS;
 const MAX_RETRY_AFTER_SEC = 86_400;
 // One slot for the process: a broken meter faults on every request, and a line a minute shows it.
 let faultLoggedAt = Number.NEGATIVE_INFINITY;
+// V8 throws RangeError when a joined log line passes its maximum string length; the cap also bounds the line.
+const FAULT_FIELD_MAX = 8192;
 
 // The logger prints a field with String() or JSON.stringify, which runs a plugin's toString or rejects a BigInt.
 function plainFields(built: LogFields): LogFields {
   const plain: LogFields = {};
   for (const [key, value] of Object.entries(built)) {
-    if (value !== undefined) plain[key] = String(value);
+    if (value !== undefined) plain[key] = String(value).slice(0, FAULT_FIELD_MAX);
   }
   return plain;
 }
@@ -83,7 +85,8 @@ export function askKeyQuota(
     if (answer === null) return;
     // Every read of the answer runs plugin getters, so all of it sits inside the guard.
     // Mute a returned native promise so it cannot crash the process; Promise.resolve would adopt a thenable.
-    // SHORTCUT: a hostile promise subclass or a Proxy of a rejecting promise still rejects unhandled; off-contract.
+    // SHORTCUT: a promise whose `then` lookup throws (own constructor getter, subclass species, Proxy) still rejects
+    // unhandled; off-contract. Upgrade path: an async hook contract awaited under a deadline.
     if (isPromise(answer)) Promise.prototype.then.call(answer, undefined, () => undefined);
     // SAFETY: a JS hook may return any value; refusalOf checks each field it reads.
     refusal = refusalOf(answer as JsonValue);
