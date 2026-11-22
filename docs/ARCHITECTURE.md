@@ -276,7 +276,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleReject`: --reason is REQUIRED (plan §4, grill issue 4): the tombstone stores no content, so reason is its only human-readable identity.
 
 ### src/surface/cli/curate-held.ts
-- `handleQuarantine`: `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine reject <id>` (CD5 poisoning defence).
+- `handleQuarantine`: `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine edit <id> "<text>"`, `quarantine reject <id>` (CD5 poisoning defence).
 
 ### src/surface/cli/curate.ts
 - `cmdForget`: A3: raw memories (Slack / GitHub connector ingestion) are append-only - a BEFORE-DELETE trigger aborts any delete. rawArchive is the sanctioned removal path; it records ctx.actor as the archiver for provenance.
@@ -919,6 +919,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 - `handleCreateAuthKey`: POST /v1/auth/keys — mint a new API key. Plaintext lands in the response body (Task 8)
 - `handleCreateAuthKey`: v1.12.3: optional body.role mirrors the --role CLI flag.
 - `handleListQuarantine`: GET /v1/quarantine?status=&limit=&cursor=: CD5 review queue.
+- `handleEditQuarantine`: POST /v1/quarantine/:id/edit {content}: CD4 admin edit; the text runs the write screen again, the successor lists the held row in `parents` and keeps its lead-in and trust tags, and one transaction supersedes the held row and approves the record.
 
 ### src/surface/server/routes/customer-notes.ts
 - `section header`: ── E2 customer_note routes ──
