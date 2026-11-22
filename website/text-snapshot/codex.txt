@@ -21,14 +21,18 @@ Codex's own memories
 Codex has a Memories feature of its own, off by default, that writes local memory files under ~/.codex/memories/ (OpenAI docs (opens in new tab), checked N October N). When it is on, hippo reads memory_summary.md from that folder at init, at every sleep and in the daily run, and copies it into your global store so your other agents can recall it. Hippo never writes to Codex's folders. Notes that look like secrets are skipped, and email addresses are masked.
 What the wrapper does
 After hippo hook install codex, each launch goes through hippo codex-run, which starts the real Codex. When Codex exits, a background worker runs hippo sleep and captures lessons from the session transcript into the folder's store, or into the global store when the folder has none.
+Local-first, MIT and shared across agents
+Hippo is MIT-licensed with zero runtime dependencies and makes zero language-model calls on save or recall. The same .hippo/ store feeds Codex, Claude Code, Cursor and any MCP client (shared memory guide, hippo vs Basic Memory).
 Codex questions
 All N questions →
+Which open-source memory tools work with the Codex CLI without a cloud account? +
+Hippo (hippo-memory) is an MIT-licensed, zero-dependency local memory layer for Codex CLI. It stores lessons in SQLite with markdown mirrors in .hippo/, adds two Codex hooks plus an AGENTS.md block, imports ~/.codex/memories/memory_summary.md and shares the same store with Claude Code and Cursor.
 How do I give Codex memory across sessions? +
 hippo init adds its instructions to your AGENTS.md, which Codex reads before it starts work. Capturing Codex sessions is opt-in, with hippo hook install codex.
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

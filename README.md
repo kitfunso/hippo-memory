@@ -171,26 +171,26 @@ Hippo is for coding agents on machines you control. [Mem0](https://hippo-memory.
 | Decay by default | Yes | No | No | No | No | No | No | No | No |
 | Retrieval strengthening | Yes | No | No | No | No | No | Partial (recall tuning) | No | Partial (Skill Memory distills patterns) |
 | Reward-proportional decay | Yes | No | No | No | No | No | No | No | No |
-| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Yes (semantic + BM25 + entity) | No | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
-| Schema acceleration / knowledge graph | Yes (schema) | No | Partial (entity linking; graph memory on Pro) | No | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
+| Hybrid search (BM25 + embeddings) | Yes | Embeddings + spatial | Yes (semantic + BM25 + entity) | Yes (FTS5 + sqlite-vec) | Yes (graph + vec) | ? | Yes (GraphRAG) | Yes (vector + full-text) | Yes (mRAG, multi-modal) |
+| Schema acceleration / knowledge graph | Yes (schema) | No | Partial (entity linking; graph memory on Pro) | Yes (wikilink graph) | Yes (temporal KG) | No | Yes (auto-ontologies) | No (typed claims) | Yes (hierarchical: user/group/agent) |
 | Conflict detection + resolution | Yes | No | Partial (hosted platform marks superseded facts) | No | Yes (auto-invalidate stale facts) | No | No | Yes (auto-detect + quarantine) | Partial (temporal tracking) |
-| Multi-agent shared memory | Yes | No | No | No | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
+| Multi-agent shared memory | Yes | No | No | Yes (shared markdown folder / MCP) | Yes | Yes (shared memory blocks) | Yes | Yes (branch/merge across sessions) | Yes (multi-agent coordination) |
 | Transfer scoring | Yes | No | No | No | No | No | No | No | No |
 | Outcome tracking | Yes | No | No | No | No | No | No | No | Partial (Cases: agent trajectories) |
 | Confidence tiers | Yes | No | No | No | No | No | No | No | No |
 | Spatial organization | No | Yes (wings/halls/rooms) | No | No | No | No | No | No | No |
 | Lossless compression | No | Yes (AAAK, 30x) | No | No | No | No | No | No | No |
-| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | No | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
-| Auto-hook install | Yes | No | No | No | No | No | No | No | No |
-| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (first-party Claude/LangGraph) | Yes | ? |
-| Zero runtime deps | Yes | No (ChromaDB) | No | No | No (managed service) | No (npm deps) | No (Python deps) | Yes (single Rust binary) | No (managed + OSS) |
+| Cross-tool import (ChatGPT/Claude/Cursor) | Yes | No | No | Partial (ChatGPT/Claude exports) | ? | No | Partial (28 data sources) | No (Git ops) | Partial (mRAG: PDFs/images/URLs) |
+| Auto-hook install | Yes | No | No | Partial (Claude Code / Codex hooks) | No | No | Partial (Claude Code / Codex plugins) | No | No |
+| MCP server | Yes | Yes | Yes (hosted, needs an account) | Yes | Yes (hosted, needs an account) | Yes (hosted, needs an API key) | Yes (cognee-mcp, standalone or API) | Yes | ? |
+| Zero runtime deps | Yes | No (ChromaDB) | No | No (Python/uv) | No (managed service) | No (npm deps) | No (Python + SQLite/LanceDB/Ladybug) | Yes (single Rust binary) | No (managed + OSS) |
 | Git-friendly | Yes | No | No | Yes | No | Yes (memory tracked in git) | No | Yes (Git is the model) | ? |
 | Framework agnostic | Yes | Yes | Partial | Yes | Yes | Yes | Yes | Yes | Yes |
-| License | MIT | (open) | Apache-2.0 | (open) | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | MIT (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
+| License | MIT | (open) | Apache-2.0 | AGPL-3.0 | Proprietary cloud (Graphiti: Apache-2.0) | Apache-2.0 | Apache-2.0 (core) | Apache-2.0 | Apache-2.0 (OSS) + cloud |
 
-\* The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28.
+\* The Mem0, Zep and Letta columns were last checked against each vendor's own pages on 2026-09-28; Basic Memory and Cognee were checked on 2026-11-22.
 
-Side-by-side pages on the website: [hippo vs mem0](https://hippo-memory.com/vs/mem0/) · [hippo vs Zep](https://hippo-memory.com/vs/zep/) · [hippo vs Letta](https://hippo-memory.com/vs/letta/) · [CLAUDE.md vs MEMORY.md](https://hippo-memory.com/vs/claude-memory/).
+Side-by-side pages on the website: [hippo vs mem0](https://hippo-memory.com/vs/mem0/) · [hippo vs Basic Memory](https://hippo-memory.com/vs/basic-memory/) · [hippo vs claude-mem](https://hippo-memory.com/vs/claude-mem/) · [hippo vs Cognee](https://hippo-memory.com/vs/cognee/) · [hippo vs Supermemory](https://hippo-memory.com/vs/supermemory/) · [hippo vs Zep](https://hippo-memory.com/vs/zep/) · [hippo vs Letta](https://hippo-memory.com/vs/letta/) · [CLAUDE.md vs MEMORY.md](https://hippo-memory.com/vs/claude-memory/).
 
 ---
 

@@ -1,0 +1,116 @@
+---
+import Base from '../../layouts/Base.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import PageIntro from '../../components/PageIntro.astro';
+import Section from '../../components/Section.astro';
+import VsTable from '../../components/VsTable.astro';
+import RepeatMistakes from '../../components/RepeatMistakes.astro';
+import { REPO, site } from '../../content/site';
+import Faq from '../../components/Faq.astro';
+import { faqPageLd } from '../../content/readme';
+
+const title = 'hippo vs Basic Memory: outcome-ranked coding memory, MIT';
+const description =
+  'hippo and Basic Memory compared on 22 November 2026. Both are local-first and run with zero LLM calls on save; hippo is MIT with zero runtime dependencies, automatic error capture and outcome weakening.';
+const rows = [
+  ['Decay by default', 'Decay by default'],
+  ['Retrieval strengthening', 'Recall strengthens a memory'],
+  ['Outcome tracking', 'Outcome tracking'],
+  ['Conflict detection + resolution', 'Conflict detection'],
+  ['Hybrid search (BM25 + embeddings)', 'Hybrid search'],
+  ['Multi-agent shared memory', 'Shared between agents'],
+  ['Auto-hook install', 'Installs its own hooks'],
+  ['MCP server', 'MCP server'],
+  ['Zero runtime deps', 'Zero runtime dependencies'],
+  ['Git-friendly', 'Git-friendly'],
+  ['License', 'Licence'],
+] as const;
+
+const qa = [
+  {
+    q: 'How does hippo differ from Basic Memory for coding agents?',
+    a: 'Both run locally with markdown files, SQLite and zero LLM calls on save. Basic Memory is an AGPL-3.0 Python knowledge base where you or the agent author Obsidian-style notes. Hippo is MIT with zero runtime dependencies on Node.js, captures coding rules and tool failures from sessions, weakens wrong memories via hippo outcome --bad, supersedes stale facts and ships with pre-registered repeat-mistake results.',
+  },
+  {
+    q: 'Can I switch from Basic Memory to hippo without losing my notes?',
+    a: 'Yes. Basic Memory stores plain markdown files on disk, and hippo imports markdown folders directly while keeping your existing files untouched.',
+  },
+];
+---
+
+<Base title={title} description={description} crumb="hippo vs Basic Memory" published="2026-11-22" schema={[faqPageLd(qa)]}>
+  <Nav />
+  <main id="main">
+    <PageIntro>
+      <Fragment slot="title">hippo vs <span class="text-ink">Basic Memory</span></Fragment>
+      <p>
+        Both are local-first memory tools that work across Claude Code, Codex and Cursor with zero language-model calls
+        on save. Basic Memory is an AGPL-3.0 Python knowledge base built around Obsidian-style markdown notes that you or
+        the agent author explicitly. Hippo is MIT-licensed with zero runtime dependencies, automatic rule and tool-failure
+        capture, outcome tracking and fact supersession.
+      </p>
+    </PageIntro>
+
+    <Section title="Authored notes vs outcome-ranked coding memory">
+      <p>
+        In Basic Memory, notes sit in a markdown folder with wikilinks and YAML frontmatter, indexed by SQLite and
+        FastEmbed so humans and agents share a wiki. Every note keeps equal standing unless someone edits it by hand.
+      </p>
+      <p>
+        Hippo is built for coding agents that repeat mistakes across sessions. It captures stated rules and failed tool
+        calls, strengthens memories that get recalled, weakens memories behind a bad answer with
+        <code>hippo outcome --bad</code>, and retires outdated facts with <code>hippo supersede</code> while keeping
+        readable markdown mirrors in <code>.hippo/</code>.
+      </p>
+      <RepeatMistakes />
+      <p>
+        On real Claude Code sessions across 29 repositories, adding hippo cut repeat mistakes from 21 in 100 (built-in
+        memory alone) and 83 in 100 (no memory) down to 11 in 100, at the same token cost (<a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">Z0 round 3 result<span class="sr-only"> (opens in new tab)</span></a>).
+      </p>
+    </Section>
+
+    <Section title="Feature by feature" alt>
+      <p>
+        The Basic Memory column was checked against Basic Memory's repository and docs on 22 November 2026. The full table
+        is on <a class="link" href={`${REPO}#comparison`} target="_blank" rel="noopener noreferrer">GitHub<span class="sr-only"> (opens in new tab)</span></a>.
+      </p>
+      <VsTable system="Basic Memory" rows={rows} />
+    </Section>
+
+    <Section title="What Basic Memory ships today">
+      <p>
+        Basic Memory is released under AGPL-3.0 and runs on Python 3.12+ via <code>uv</code>, storing plain markdown files
+        indexed in SQLite with <code>sqlite-vec</code> (or optional Postgres/Milvus). It connects to Claude Code, Codex
+        and Cursor over MCP and provides <code>bm install</code> hooks for Claude Code and Codex. Optional Basic Memory
+        Cloud plans add hosted workspaces and scheduled agents (<a class="link" href="https://github.com/basicmachines-co/basic-memory" target="_blank" rel="noopener noreferrer">Basic Memory repo<span class="sr-only"> (opens in new tab)</span></a>,
+        <a class="link" href="https://basicmemory.com/pricing" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>, checked 22 November 2026).
+      </p>
+    </Section>
+
+    <Section title="When to pick which" alt>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick hippo when you want permissive MIT code with zero runtime dependencies, automatic rule and error capture
+            across Claude Code, Codex and Cursor, outcome weakening and measured repeat-mistake reduction.
+          </p>
+        </div>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Basic Memory</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick Basic Memory when you want an Obsidian-compatible markdown wiki with wikilink graphs that you and your
+            agents author together, and AGPL-3.0 plus Python fits your stack.
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3 pt-4">
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
+      </div>
+    </Section>
+
+    <Faq items={qa} heading="hippo and Basic Memory, asked directly" moreHref="/faq/" />
+  </main>
+  <Footer />
+</Base>

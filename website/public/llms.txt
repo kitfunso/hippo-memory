@@ -41,6 +41,10 @@ The commercial edition is planned; its private repository is a scaffold, not a r
 ## Compare
 
 - [hippo vs mem0](https://hippo-memory.com/vs/mem0/): a local, open-source mem0 alternative, feature by feature
+- [hippo vs Basic Memory](https://hippo-memory.com/vs/basic-memory/): MIT zero-dependency outcome-ranked coding memory vs AGPL-3.0 markdown wiki
+- [hippo vs claude-mem](https://hippo-memory.com/vs/claude-mem/): zero LLM calls, zero daemon and git-committable markdown mirrors vs async observer worker
+- [hippo vs Cognee](https://hippo-memory.com/vs/cognee/): single SQLite store with zero runtime dependencies vs three-database Python graph stack
+- [hippo vs Supermemory](https://hippo-memory.com/vs/supermemory/): 100% MIT open-source local memory with local MCP and no doc cap vs closed engine
 - [hippo vs Zep](https://hippo-memory.com/vs/zep/): Zep is a managed service and its self-hosted Community Edition is deprecated
 - [hippo vs Letta](https://hippo-memory.com/vs/letta/): Letta Code is a stateful agent harness with its own memory; hippo is memory for the agents you already use
 - [CLAUDE.md vs memory](https://hippo-memory.com/vs/claude-memory/): what CLAUDE.md, Claude Code's auto memory and hippo each hold

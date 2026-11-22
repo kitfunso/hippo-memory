@@ -171,7 +171,7 @@ Benchmark results (opens in new tab) Eval documents (opens in new tab) Report a 
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

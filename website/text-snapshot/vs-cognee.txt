@@ -1,0 +1,52 @@
+hippo vs Cognee: zero-dependency local memory vs graph stack
+Skip to content hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N Install
+How it works
+Teams
+Benchmarks
+Compare
+Docs
+hippo vs Cognee
+Both are open-source memory engines with Claude Code, Codex and MCP integrations. Cognee is a Python knowledge-graph platform built for documents, ontologies and enterprise data pipelines across three separate stores. Hippo is a zero-dependency Node.js CLI purpose-built for coding agents, using one SQLite file with readable markdown mirrors and zero language-model calls on save or recall.
+One SQLite file vs a three-database graph stack
+Locally, Cognee coordinates three embedded stores: SQLite for relational metadata, LanceDB for vectors and Ladybug for its embedded graph. Cognee's own docs note that local files cannot be shared across multiple processes, so multi-agent or production sharing requires external services such as NeoNj and Postgres/PGVector behind an API service (Cognee graph-store docs (opens in new tab), checked N November N).
+Hippo keeps everything in one SQLite store per repository (plus ~/.hippo/ globally) alongside plain markdown mirrors you can commit to git. Multiple coding agents read and write the same store on your machine, and hippo serve shares one store across a team with API keys, roles and an audit log.
+Feature by feature
+The Cognee column was checked against Cognee's repository and docs on N November N The full table is on GitHub (opens in new tab).
+hippo and Cognee, selected rows of the README comparison table Feature hippo Cognee
+Decay by default Yes No
+Recall strengthens a memory Yes Partial (recall tuning)
+Outcome tracking Yes No
+Conflict detection Yes No
+Knowledge graph Yes (schema) Yes (auto-ontologies)
+Shared between agents Yes Yes
+Installs its own hooks Yes Partial (Claude Code / Codex plugins)
+MCP server Yes Yes (cognee-mcp, standalone or API)
+Zero runtime dependencies Yes No (Python + SQLite/LanceDB/Ladybug)
+Git-friendly Yes No
+Licence MIT Apache-N (core)
+What Cognee ships today
+Cognee's core is Apache-N on Python N to N With LLM_API_KEY set, cognify() runs language-model extraction per chunk or batch to build entity-relationship graphs; without a key, vN+ falls back to a local CPU gliner_demo extractor and local embeddings. Cognee Cloud and Enterprise BYOC add managed workspaces, auto-ontologies and a licensed Postgres graph adapter (Cognee repo (opens in new tab), pricing (opens in new tab), checked N November N).
+When to pick which
+Pick hippo
+Pick hippo when you want fast, zero-dependency coding-agent memory in one SQLite file, zero LLM calls on save, git-reviewable rules, outcome weakening and verified repeat-mistake reduction.
+Pick Cognee
+Pick Cognee when you are building a Python GraphRAG pipeline over PDFs, audio, databases and custom OWL/RDF ontologies, and running NeoNj and Postgres fits your architecture.
+Get started with hippo
+hippo and Cognee, asked directly
+All N questions →
+How does hippo compare with Cognee for coding agents? +
+Cognee is a Python knowledge-graph engine that coordinates SQLite, LanceDB and Ladybug locally (or NeoNj and Postgres for multi-process sharing) and extracts entities via an LLM when an API key is set. Hippo is a zero-dependency MIT CLI backed by one SQLite file plus markdown mirrors that multiple coding agents share directly with zero LLM calls on save.
+Can multiple coding agents share one local store without running NeoNj or Postgres? +
+Yes. Hippo stores memories in a single SQLite file with WAL concurrency in .hippo/ so Claude Code, Codex, Cursor and MCP clients read and write the same repo store safely, and hippo serve shares one store across a team with no external graph database.
+hippo
+Agents
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

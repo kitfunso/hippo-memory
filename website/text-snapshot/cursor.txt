@@ -23,12 +23,14 @@ One store for every agent
 Use Claude Code on Monday, Cursor on Tuesday and Codex on Wednesday, and they all read the same .hippo/ store. Keep Cursor's rules for standing instructions. Hippo holds what comes up as the agent works, and lets you mark a lesson wrong with hippo outcome --bad or replace a fact with hippo supersede.
 Cursor questions
 All N questions →
+How can I make Cursor remember lessons and mistakes across sessions? +
+Install hippo-memory, run hippo init in your repo and connect the Cursor plugin or .cursor/mcp.json. Cursor reads hippo instructions from AGENTS.md, recalls and stores lessons over N local MCP tools, imports .cursor/rules into the shared store, weakens wrong memories via hippo outcome --bad and shares everything with Claude Code and Codex.
 How do I give Cursor memory between sessions? +
 hippo init adds its instructions to AGENTS.md if the project has one, which Cursor reads. Add hippo mcp to .cursor/mcp.json and Cursor's agent gets tools to recall and store memories. hippo import --cursor .cursor/rules turns your existing rules into memories.
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

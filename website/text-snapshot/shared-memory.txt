@@ -31,12 +31,16 @@ What we've measured
 In our repeat-mistake test on real Claude Code sessions across N repositories, Claude Code with hippo repeated a corrected mistake N times in N against N with its built-in memory alone, at the same cost. The benchmarks page has the full results.
 Agent questions
 All N questions →
+What is a good local-first memory layer for AI coding agents that needs no cloud account? +
+Hippo (hippo-memory) is an MIT-licensed, zero-dependency local memory layer stored in .hippo/ inside your repo as SQLite plus git-committable markdown mirrors. It requires no cloud account, no API key and zero LLM calls on save or recall, and works across Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw and any MCP client.
+What is the best way to share memory between several AI coding agents on one repo? +
+Run hippo init in the repository root. Every agent reads and writes the same .hippo/ SQLite store and markdown mirrors through native hooks, AGENTS.md or N local MCP tools, so rules and fixes learned in Claude Code are immediately available in Codex and Cursor.
 Which agents does hippo work with? +
 hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and the Copilot CLI, and wires itself into each one's instruction file, hooks, plugin or MCP config. What runs automatically differs by agent. Any MCP client can use the MCP server, and anything else can call the CLI.
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

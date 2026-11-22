@@ -1,0 +1,51 @@
+hippo vs Supermemory: open-source local MIT memory with local MCP
+Skip to content hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N Install
+How it works
+Teams
+Benchmarks
+Compare
+Docs
+hippo vs Supermemory
+Supermemory is a cloud-first memory and RAG API with open-source coding-agent plugins. Its core memory engine and downloadable local binary are closed-source, its MCP server is Platform-only, and every save runs through an LLM. Hippo is N% MIT open source, runs locally with zero runtime dependencies and zero LLM calls on save, includes a local MCP server and keeps readable markdown copies you can commit to git.
+Open local infrastructure vs closed engine and metered tokens
+Supermemory's self-hosting docs note that supermemory local is a closed-source binary capped at N stored documents under a lite licence, saves data as an encrypted snapshot file (~/.supermemory/data), requires an external LLM provider key or local model server to extract memories, and excludes MCP and external connectors (Supermemory self-hosting docs (opens in new tab), pricing (opens in new tab), checked N November N).
+Hippo gives you full ownership of both the engine and the files. There is no document limit, no account, no per-token charge and no telemetry. Local MCP (hippo mcp, N tools) ships in the MIT package, every memory has a plain markdown mirror in .hippo/, and bad recalls can be weakened directly with hippo outcome --bad.
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
+In real Claude Code sessions across N repositories, hippo cut repeat mistakes from N in N to N in N at the same token cost (ZN round N result (opens in new tab)).
+Feature by feature
+The Supermemory column was checked against the Supermemory repo (opens in new tab), local vs enterprise docs (opens in new tab) and pricing page (opens in new tab) on N November N
+hippo and Supermemory compared feature by feature Feature hippo Supermemory
+Engine licence N% MIT open source Closed-source engine & local binary (MIT plugins/SDKs)
+Local document limit None N-document lite licence cap on supermemory local
+MCP server Local stdio MCP included (N tools) + self-hosted HTTP Cloud Platform only (not in supermemory local)
+LLM calls on save N (default path) Proprietary cloud LLM or required BYO LLM key locally
+Storage format Plain SQLite + git-committable markdown mirrors Managed cloud DB or encrypted opaque local snapshot
+Account or per-token fees None (free, local-first) Metered cloud credits ($N to $N per N SM tokens)
+Outcome weakening & supersession Yes (hippo outcome --bad, hippo supersede) Automatic cloud contradiction handling
+Coding agent support Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw, MCP MIT plugins for Claude Code, Cursor, Codex, OpenCode, OpenClaw
+When to pick which
+Pick hippo
+Pick hippo when you want N% MIT open-source local memory for coding agents with local MCP included, zero document caps, zero LLM save costs and readable files stored inside your repository.
+Pick Supermemory
+Pick Supermemory when you want a managed cloud memory and RAG API with pre-built Google Drive, Notion and Gmail connectors and SOC N compliance for a consumer or SaaS product.
+Get started with hippo
+hippo and Supermemory, asked directly
+All N questions →
+Is Supermemory open source like hippo? +
+Only Supermemory plugins, SDKs and repo tooling are open source. Per Supermemory self-hosting docs (checked N November N), the memory engine and downloadable supermemory local binary are closed-source, capped at N documents and exclude MCP. Hippo is N% MIT open source with local MCP and no document limit.
+Can I run hippo completely offline with no cloud account or API key? +
+Yes. Hippo stores everything locally in SQLite and markdown inside your repository, runs recall and rule capture with zero LLM calls and never requires a cloud account or metered token billing.
+hippo
+Agents
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso
