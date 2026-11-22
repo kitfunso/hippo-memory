@@ -1,8 +1,16 @@
-// Quarantine review: list, approve and reject held memories.
+// Quarantine review: list, approve, edit and reject held memories.
 
-import { ConflictError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from '../../base/errors/api-errors.js';
 import type { QuarantineRefusal } from '../../base/ports/store.js';
+import { shownText } from '../../base/memory/lead-in.js';
+import { vetSecrets } from '../../base/util/secret-detect.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
+import { detectInstruction } from '../instruction-detect.js';
 import type { ContextWith } from '../types.js';
 import type { QuarantineStatus } from '../../base/ports/store/quarantine.js';
 
@@ -85,4 +93,52 @@ export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: strin
     ctx.actor.subject,
   );
   if (result.outcome !== 'rejected') throw refusalError(id, result);
+}
+
+export interface QuarantineEditResult {
+  edited: string;
+  newId: string;
+  /** The held memory's lead-in, which the edit keeps; absent when it has none. */
+  keptLeadIn?: string;
+  warnings?: string[];
+}
+
+/** Release a quarantined memory with the admin's text in place of the held text. Admin only; the
+ * text runs the write screen again, and the held row stays as delivered. */
+export async function quarantineEdit(
+  ctx: ContextWith<'quarantine'>,
+  id: string,
+  content: string,
+): Promise<QuarantineEditResult> {
+  if (ctx.actor.role !== 'admin') {
+    throw new ForbiddenError('Only an admin key can edit a quarantined memory');
+  }
+  const vetted = vetSecrets(content);
+  const [held] = await ctx.store.entriesByIds([id], ctx.tenantId);
+  const leadIn = held?.leadIn ?? null;
+  const found = detectInstruction(shownText({ content: vetted.content, leadIn }));
+  if (found.flagged) {
+    throw new BadRequestError(
+      `edited text still reads as an instruction (${found.reason ?? 'unknown'}); nothing was changed`,
+    );
+  }
+  const result = await ctx.store.quarantine.editQuarantined(
+    ctx.tenantId,
+    id,
+    {
+      content: vetted.content,
+      leadIn,
+      tags: held?.tags ?? [],
+      baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
+    },
+    ctx.actor.subject,
+  );
+  if (result.outcome === 'scope_moved') {
+    throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to edit`);
+  }
+  if (result.outcome !== 'edited') throw refusalError(id, result);
+  const done: QuarantineEditResult = { edited: id, newId: result.newId };
+  if (leadIn) done.keptLeadIn = leadIn;
+  if (vetted.warnings.length > 0) done.warnings = vetted.warnings;
+  return done;
 }
