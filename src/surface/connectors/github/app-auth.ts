@@ -4,8 +4,9 @@
 
 import { createPrivateKey, sign, type KeyObject } from 'node:crypto';
 import {
-  checkGitHubTokenText,
   hostAndPath,
+  isGitHubTokenText,
+  redactTokenWindows,
   GITHUB_TIMEOUT_MS,
   type GitHubTokenSource,
 } from './octokit-client.js';
@@ -18,7 +19,8 @@ import {
   isJsonString,
   type JsonValue,
 } from '../../../base/util/json.js';
-import { errorClassFields, errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { safeCause } from '../../../base/util/safe-cause.js';
 import { MINUTE_MS } from '../../../base/util/time.js';
 
 // A token is replaced this long before it ends, so a request in flight never meets its expiry.
@@ -77,6 +79,10 @@ export function repoInstallationUrl(site: GitHubSite, repoFullName: string): str
   return `${site.apiBase}/repos/${repoFullName}/installation`;
 }
 
+function scrubJwt(jwt: string): (text: string) => string {
+  return (text) => redactTokenWindows(text, jwt);
+}
+
 const tokenRequestAt = (url: string): string => `GitHub App token request to ${hostAndPath(url)}`;
 const lookupAt = (url: string): string => `GitHub App installation lookup at ${hostAndPath(url)}`;
 
@@ -100,7 +106,10 @@ async function appRequest(
     // A replayed mint only creates another short-lived token.
     { timeoutMs: GITHUB_TIMEOUT_MS, retryTransport: true },
   ).catch((err) => {
-    throw new Error(`${where} failed: ${errorMessage(err)}`, { cause: err });
+    const scrub = scrubJwt(jwt);
+    throw new Error(`${where} failed: ${scrub(errorMessage(err))}`, {
+      cause: safeCause(err, scrub),
+    });
   });
 }
 
@@ -115,13 +124,11 @@ async function cancelBody(res: Response): Promise<void> {
   }
 }
 
-async function readJsonReply(res: Response, failure: string): Promise<JsonValue> {
+async function readJsonReply(res: Response, failure: string, jwt: string): Promise<JsonValue> {
   try {
     return await readCappedJson(res, MAX_REPLY_BYTES);
   } catch (err) {
-    // capped-json's text is fixed (over the cap, or not JSON), so it names the cause, not the body.
-    log.debug(`GitHub App reply unreadable: ${errorMessage(err)}`, errorClassFields(err));
-    throw new Error(failure);
+    throw new Error(failure, { cause: safeCause(err, scrubJwt(jwt)) });
   }
 }
 
@@ -150,7 +157,7 @@ async function lookupInstallation(
     throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${lookupHint(res.status)}`);
   }
   const failure = `GitHub App installation reply from ${hostAndPath(url)} has no installation id`;
-  const body = await readJsonReply(res, failure);
+  const body = await readJsonReply(res, failure, jwt);
   const id = isJsonObject(body) ? body.id : undefined;
   if (!isJsonNumber(id) || !Number.isSafeInteger(id) || id <= 0) throw new Error(failure);
   return String(id);
@@ -161,28 +168,21 @@ interface MintedToken {
   readonly ttlMs: number;
 }
 
-// The shared rule's text names a variable, not this reply, so the fixed failure stands in for it.
-function checkMintedToken(token: string, failure: string): void {
-  try {
-    checkGitHubTokenText('the token', token);
-  } catch {
-    throw new Error(failure);
-  }
-}
-
 // The ttl counts from before the request left, so a slow reply or a clock behind GitHub's only
 // shortens it; a reply with no usable expiry is broken.
 async function readMintReply(
   res: Response,
   url: string,
   wallAtMintStart: number,
+  jwt: string,
 ): Promise<MintedToken> {
   const failure = `GitHub App token reply from ${hostAndPath(url)} has no token or expiry`;
-  const body = await readJsonReply(res, failure);
+  const body = await readJsonReply(res, failure, jwt);
   const token = isJsonObject(body) ? body.token : undefined;
   const expiresAt = isJsonObject(body) ? body.expires_at : undefined;
-  if (!isJsonString(token) || !isJsonString(expiresAt)) throw new Error(failure);
-  checkMintedToken(token, failure);
+  if (!isJsonString(token) || !isJsonString(expiresAt) || !isGitHubTokenText(token)) {
+    throw new Error(failure);
+  }
   const expiresMs = Date.parse(expiresAt);
   if (!Number.isFinite(expiresMs)) throw new Error(failure);
   const ttlMs = Math.min(expiresMs - wallAtMintStart, MAX_TOKEN_TTL_MS);
@@ -205,7 +205,7 @@ async function mintInstallationToken(
     await cancelBody(res);
     throw new Error(`${tokenRequestAt(url)} failed: HTTP ${res.status}${mintHint(res.status)}`);
   }
-  return readMintReply(res, url, wallAtMintStart);
+  return readMintReply(res, url, wallAtMintStart, jwt);
 }
 
 export interface AppTokenSourceOptions {

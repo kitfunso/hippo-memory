@@ -4,6 +4,7 @@
 import { generateKeyPairSync, verify, type KeyObject } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { inspect } from 'node:util';
 import { join } from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -410,7 +411,6 @@ describe('GitHub App token source in backfillRepo', () => {
     ['a 201 without a token', { status: 201, expiresAt: iso(T + HOUR) }],
     ['an expiry that is not a date', { status: 201, token: 'ghs_x', expiresAt: 'not-a-date' }],
     ['an expiry before the mint started', { status: 201, token: 'ghs_x', expiresAt: iso(T - MINUTE) }],
-    ['a body that is not JSON', { status: 201, body: 'not json BODY-CANARY' }],
   ])('A8. a mint reply with %s fails with the fixed text and no API request', async (_name, reply) => {
     const f = await serve();
     f.mintReplies.push(reply);
@@ -419,6 +419,28 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(err.message).toBe(`GitHub App token reply from ${f.url}${MINT_PATH} has no token or expiry`);
     expect(err.cause).toBeUndefined();
     expect(lists(f)).toEqual([]);
+  });
+
+  it('A8. a mint reply that is not JSON fails with the fixed text, naming why and quoting none of the body', async () => {
+    const f = await serve();
+    f.mintReplies.push({ status: 201, body: 'not json BODY-CANARY' });
+    const err = await failureOf(run(f, sourceFor(f, clocks(), '42')));
+
+    expect(err.message).toBe(`GitHub App token reply from ${f.url}${MINT_PATH} has no token or expiry`);
+    expect(err.cause).toMatchObject({ message: 'reply is not JSON' });
+    expect(err.cause).not.toHaveProperty('cause');
+    expect(inspect(err, { depth: null })).not.toContain('BODY-CANARY');
+    expect(lists(f)).toEqual([]);
+  });
+
+  it('A8. a lookup reply over the byte cap fails with the fixed text and names the cap', async () => {
+    const f = await serve();
+    f.lookupReplies.splice(0, 1, { status: 200, body: 'x'.repeat(1024 * 1024 + 1) });
+    const err = await failureOf(run(f, sourceFor(f, clocks())));
+
+    expect(err.message).toBe(`GitHub App installation reply from ${f.url}${LOOKUP_PATH} has no installation id`);
+    expect(err.cause).toMatchObject({ message: `reply over ${1024 * 1024} bytes` });
+    expect(mints(f)).toEqual([]);
   });
 
   it.each(['/', '+', '%', '"'])(

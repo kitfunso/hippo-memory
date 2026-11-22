@@ -9,6 +9,7 @@ import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { tryParseUrl } from '../../../base/util/net.js';
+import { safeCause } from '../../../base/util/safe-cause.js';
 
 export class GitHubFetchError extends Error {
   constructor(
@@ -33,18 +34,43 @@ export type GitHubFetcher = (args: { url: string; token: string }) => Promise<Gi
 /** Asked before every request, so a token that expires mid-run is replaced in time. */
 export type GitHubTokenSource = () => Promise<string>;
 
+type Scrub = (text: string) => string;
+
 export function staticTokenSource(token: string): GitHubTokenSource {
   return () => Promise.resolve(token);
 }
 
-// With only these characters an escaped echo of a token equals the token, so replaceAll finds it.
+// With only these characters an escaped echo of a token equals the token, so a window finds it.
 const GITHUB_TOKEN_TEXT = /^[A-Za-z0-9_.-]+$/;
 
-/** Refuses a token with a character GitHub tokens do not use, naming `name` and never the value. */
-export function checkGitHubTokenText(name: string, token: string): void {
-  if (!GITHUB_TOKEN_TEXT.test(token)) {
-    throw new Error(`${name} must use only letters, digits, '_', '.' and '-'`);
+/** True when the token uses only characters GitHub tokens use; the caller words its own refusal. */
+export function isGitHubTokenText(token: string): boolean {
+  return GITHUB_TOKEN_TEXT.test(token);
+}
+
+// A fragment under this many characters may pass: the promise is that no window of this size survives.
+const TOKEN_WINDOW_CHARS = 8;
+const TOKEN_MARK = '[token]';
+
+/** `text` with every run that an 8-character window of the token covers replaced by `[token]`, so
+ * a whole copy, a cut copy and a partial echo all go, whatever the reply did to the token. */
+export function redactTokenWindows(text: string, token: string): string {
+  const windows = new Set<string>();
+  for (let i = 0; i + TOKEN_WINDOW_CHARS <= token.length; i++) {
+    windows.add(token.slice(i, i + TOKEN_WINDOW_CHARS));
   }
+  if (windows.size === 0) return text;
+  const covered = new Uint8Array(text.length);
+  for (let i = 0; i + TOKEN_WINDOW_CHARS <= text.length; i++) {
+    const end = i + TOKEN_WINDOW_CHARS;
+    if (windows.has(text.slice(i, end))) covered.fill(1, i, end);
+  }
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    if (covered[i] === 0) out += text[i];
+    else if (i === 0 || covered[i - 1] === 0) out += TOKEN_MARK;
+  }
+  return out;
 }
 
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
@@ -80,14 +106,16 @@ const GITHUB_MAX_REPLY_BYTES = 32 * 1024 * 1024;
  * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array
  * throws, so it never reaches ingest as items.
  */
-async function readItems(res: Response, url: string): Promise<JsonValue[]> {
+async function readItems(res: Response, url: string, scrub: Scrub): Promise<JsonValue[]> {
   // The path only: a `next` link comes from the server, so its query string is not ours to print.
   const path = new URL(url).pathname;
   let body: JsonValue;
   try {
     body = await readCappedJson(res, GITHUB_MAX_REPLY_BYTES);
   } catch (err) {
-    throw new GitHubFetchError(res.status, errorMessage(err), path, { cause: err });
+    throw new GitHubFetchError(res.status, scrub(errorMessage(err)), path, {
+      cause: safeCause(err, scrub),
+    });
   }
   if (!Array.isArray(body)) {
     throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
@@ -97,7 +125,7 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
 
 // The status is the error reported, so a body that cannot be read only costs its snippet. A body
 // can echo the Authorization header, so the token is cut out before the snippet is built.
-async function errorExcerpt(res: Response, token: string): Promise<string> {
+async function errorExcerpt(res: Response, scrub: Scrub): Promise<string> {
   const body = await readCappedText(res, ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
     (err) => {
       log.debug(
@@ -107,20 +135,15 @@ async function errorExcerpt(res: Response, token: string): Promise<string> {
       return '';
     },
   );
-  const clean = token === '' ? body : dropCutTokenCopy(body.replaceAll(token, '[token]'), token);
-  return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
-}
-
-// replaceAll cannot match a copy the read cap cut in half, so this drops it, and only after replaceAll:
-// run first, it would cut the last character off a whole copy whose end equals its start.
-function dropCutTokenCopy(body: string, token: string): string {
-  for (let len = Math.min(token.length - 1, body.length); len > 0; len--) {
-    if (body.endsWith(token.slice(0, len))) return body.slice(0, body.length - len);
-  }
-  return body;
+  return scrub(body).slice(0, ERROR_BODY_SNIPPET_CHARS);
 }
 
 export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
+  // The window rule finds an echo only if the token's escaped form equals the token.
+  if (!isGitHubTokenText(token)) {
+    throw new Error("the GitHub token must use only letters, digits, '_', '.' and '-'");
+  }
+  const scrub: Scrub = (text) => redactTokenWindows(text, token);
   const res = await fetchWithRetry(
     url,
     {
@@ -133,8 +156,8 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
     { timeoutMs: GITHUB_TIMEOUT_MS },
   ).catch((err) => {
     // A GHES host that never answers must name itself; a bare "fetch failed" leaves the operator guessing.
-    throw new Error(`GitHub request to ${hostAndPath(url)} failed: ${errorMessage(err)}`, {
-      cause: err,
+    throw new Error(`GitHub request to ${hostAndPath(url)} failed: ${scrub(errorMessage(err))}`, {
+      cause: safeCause(err, scrub),
     });
   });
   // A redirect to another origin would feed that server's body into this server's refs.
@@ -147,10 +170,10 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
 
   // Don't silently turn 401/403/404/500 into empty pages.
   if (res.status !== 200 && rateLimit.reason === 'none') {
-    throw new GitHubFetchError(res.status, await errorExcerpt(res, token), hostAndPath(url));
+    throw new GitHubFetchError(res.status, await errorExcerpt(res, scrub), hostAndPath(url));
   }
 
-  const items = res.status === 200 ? await readItems(res, url) : [];
+  const items = res.status === 200 ? await readItems(res, url, scrub) : [];
   const link = res.headers.get('link') ?? '';
   const next = parseNextLink(link);
   return { items, next, rateLimit };

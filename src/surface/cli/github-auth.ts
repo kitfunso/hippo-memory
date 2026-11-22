@@ -14,7 +14,7 @@ import { errorCode, errorMessage } from '../../base/util/log.js';
 import { checkHeaderSafe } from '../../base/util/net.js';
 import { appTokenSource, parseAppPrivateKey } from '../connectors/github/app-auth.js';
 import {
-  checkGitHubTokenText,
+  isGitHubTokenText,
   staticTokenSource,
   type GitHubTokenSource,
 } from '../connectors/github/octokit-client.js';
@@ -101,9 +101,13 @@ function readAppKey(file: string): KeyObject {
 function checkPat(pat: string): void {
   try {
     checkHeaderSafe('GITHUB_TOKEN', pat);
-    checkGitHubTokenText('GITHUB_TOKEN', pat);
   } catch (err) {
     throw new GitHubAuthSettingError(errorMessage(err));
+  }
+  if (!isGitHubTokenText(pat)) {
+    throw new GitHubAuthSettingError(
+      "GITHUB_TOKEN must use only letters, digits, '_', '.' and '-'",
+    );
   }
 }
 

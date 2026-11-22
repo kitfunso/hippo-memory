@@ -114,7 +114,7 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
       text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
     return usage === undefined ? reply : { ...reply, usage };
   } catch (err) {
-    // The parse error under this message quotes the reply.
+    // readCappedJson's messages are fixed text, so none of them quotes the reply.
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
 }

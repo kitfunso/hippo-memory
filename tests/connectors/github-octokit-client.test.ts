@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  checkGitHubTokenText,
   GitHubFetchError,
+  isGitHubTokenText,
   parseNextLink,
   realGitHubFetcher,
+  redactTokenWindows,
 } from '../../src/surface/connectors/github/octokit-client.js';
 import { paddedJsonResponse } from '../_helpers/padded-response.js';
 
@@ -198,16 +199,54 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   });
 });
 
-describe('checkGitHubTokenText', () => {
+describe('isGitHubTokenText', () => {
   it('accepts the characters GitHub tokens use', () => {
-    expect(() => checkGitHubTokenText('T', 'ghp_AZaz09')).not.toThrow();
-    expect(() => checkGitHubTokenText('T', 'ghs_1.2-3_4')).not.toThrow();
+    expect(isGitHubTokenText('ghp_AZaz09')).toBe(true);
+    expect(isGitHubTokenText('ghs_1.2-3_4')).toBe(true);
   });
 
   it.each(['a+b', 'a/b', 'a%b', 'a"b', 'a b', 'a\nb', 'a=b', 'a\\b', 'a&b', 'a<b', 'a~b', ''])(
-    'refuses %j with a fixed text that names the variable and not the value',
+    'refuses %j',
     (token) => {
-      expect(() => checkGitHubTokenText('T', token)).toThrow(/^T must use only letters, digits, '_', '\.' and '-'$/);
+      expect(isGitHubTokenText(token)).toBe(false);
     },
   );
+});
+
+describe('realGitHubFetcher with a token that has a character GitHub tokens do not use', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('throws a fixed text that never echoes the token, and sends no request', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const err = await realGitHubFetcher({
+      url: 'https://api.github.com/repos/a/b/issues',
+      token: 'ghp_FETCHERCANARY+x',
+    }).then(
+      () => null,
+      (e: Error) => e,
+    );
+
+    expect(err?.message).toBe("the GitHub token must use only letters, digits, '_', '.' and '-'");
+    expect(err?.message).not.toContain('FETCHERCANARY');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('redactTokenWindows', () => {
+  const TOKEN = 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab';
+
+  it('replaces each run of echoed text with one [token]', () => {
+    expect(redactTokenWindows(`sent ${TOKEN}, again ${TOKEN.slice(10, 30)}.`, TOKEN)).toBe(
+      'sent [token], again [token].',
+    );
+  });
+
+  it('lets a fragment under 8 characters pass, as the property allows', () => {
+    expect(redactTokenWindows(`got ${TOKEN.slice(0, 7)} only`, TOKEN)).toBe(`got ${TOKEN.slice(0, 7)} only`);
+  });
+
+  it('returns the text as given for a token under 8 characters', () => {
+    expect(redactTokenWindows('t is a token', 't')).toBe('t is a token');
+  });
 });
