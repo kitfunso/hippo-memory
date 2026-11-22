@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.14.0 - 2026-11-22
+
+### Added
+
+- **`serve()` takes a `keyQuota` hook that can refuse a request with 429.** It is asked once per request, after the per-caller rate limit admits it, on gated /v1 rows (not the webhook-signature rows), add-on routes, POST /mcp and GET /mcp/stream. It is never asked for the local CLI key, the stream heartbeat or the auth recheck. The call holds `tenantId`, a frozen copy of the actor, `method`, `path` without its query, and `requestId`. A refusal `{ retryAfterSec, message }` with a finite `retryAfterSec` above 0 and a non-empty message answers 429 with that text and a `Retry-After` of `retryAfterSec` rounded up, at most 86400. A throw or any other answer admits the request and logs one error line at most once a minute, because a quota guards load, not access. The hook is synchronous. A promise answer is off-contract. `hippo-memory/server` exports the types `KeyQuota`, `KeyQuotaCall` and `KeyQuotaRefusal`.
+- **Send the LLM passes to your own OpenAI-compatible endpoint.** Set `HIPPO_LLM_BASE_URL` and `HIPPO_LLM_MODEL` (and `HIPPO_LLM_API_KEY` if the endpoint needs one) and sleep, `hippo refine`, local remember extraction and follow-up rules call that endpoint and never Anthropic. Plain http to a private host needs `HIPPO_LLM_ALLOW_HTTP=1`, and a half-set or unsafe setting is refused with a reason instead of falling back to Anthropic. `llmRoute()` reports which route a process takes. A redirect from the endpoint stops the run like a 401 does.
+
+### Security
+
+- **A model reply that is not JSON no longer reaches logs, events or errors.** A reply that is not JSON used to put V8's parse error, which quotes the reply, into the failure message and the log line. Both the Anthropic and the endpoint adapters now report a fixed text.
+- **A key that cannot be a header is refused without echo.** `ANTHROPIC_API_KEY` and `HIPPO_LLM_API_KEY` with a space, a newline or another character a header cannot carry give a named refusal. The value is never quoted. `ANTHROPIC_API_KEY` is now trimmed, so a key file's trailing newline keeps working.
+
 ## 3.13.1 - 2026-11-21
 
 ### Added
