@@ -178,6 +178,10 @@ describe('isPermanentFailure', () => {
     for (const status of [401, 402, 403, 404]) expect(isPermanentFailure(http(status))).toBe(true);
   });
 
+  it('is true for a redirect, which the fixed configured URL repeats on every call', () => {
+    for (const status of [301, 302, 303, 307, 308]) expect(isPermanentFailure(http(status))).toBe(true);
+  });
+
   it('is false for a failure a later call can clear or that belongs to one prompt', () => {
     for (const status of [400, 413, 429, 500, 529]) expect(isPermanentFailure(http(status))).toBe(false);
     expect(isPermanentFailure({ kind: 'request', message: 'fetch failed' })).toBe(false);

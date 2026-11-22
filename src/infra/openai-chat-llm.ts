@@ -40,6 +40,9 @@ function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
   return { inputTokens: Number(inputTokens), outputTokens: Number(outputTokens) };
 }
 
+// The statuses that carry a Location; a 304 or 305 is no redirect to name.
+const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
+
 // A failed reply's body is never read: a server that echoes the prompt would put memory text in a log.
 function failureDetail(status: number): string {
   switch (status) {
@@ -51,7 +54,7 @@ function failureDetail(status: number): string {
     case 404:
       return 'no such path or model at the endpoint (HIPPO_LLM_BASE_URL, HIPPO_LLM_MODEL)';
     default:
-      return status >= 300 && status < 400
+      return REDIRECT_STATUSES.has(status)
         ? `the endpoint answered a redirect (${status}); hippo does not follow redirects`
         : '';
   }

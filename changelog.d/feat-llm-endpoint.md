@@ -1,6 +1,6 @@
 ### Added
 
-- **Send the LLM passes to your own OpenAI-compatible endpoint.** Set `HIPPO_LLM_BASE_URL` and `HIPPO_LLM_MODEL` (and `HIPPO_LLM_API_KEY` if the endpoint needs one) and sleep, `hippo refine`, local remember extraction and follow-up rules call that endpoint and never Anthropic. Plain http to a private host needs `HIPPO_LLM_ALLOW_HTTP=1`, and a half-set or unsafe setting is refused with a reason instead of falling back to Anthropic. `llmRoute()` reports which route a process takes.
+- **Send the LLM passes to your own OpenAI-compatible endpoint.** Set `HIPPO_LLM_BASE_URL` and `HIPPO_LLM_MODEL` (and `HIPPO_LLM_API_KEY` if the endpoint needs one) and sleep, `hippo refine`, local remember extraction and follow-up rules call that endpoint and never Anthropic. Plain http to a private host needs `HIPPO_LLM_ALLOW_HTTP=1`, and a half-set or unsafe setting is refused with a reason instead of falling back to Anthropic. `llmRoute()` reports which route a process takes. A redirect from the endpoint stops the run like a 401 does.
 
 ### Security
 

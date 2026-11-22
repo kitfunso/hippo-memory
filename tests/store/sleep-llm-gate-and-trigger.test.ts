@@ -110,6 +110,27 @@ describe('the sleep LLM gate', () => {
       expect(details).toContain(`2 of ${TOPICS.length} candidates skipped`);
     });
 
+    it('stops the pass at a redirect from the endpoint as it does at a 401, and says how many it skipped', async () => {
+      const count = 10;
+      const root = newRoot();
+      for (let i = 0; i < count; i++) {
+        writeEntry(root, createMemory(`release note number ${i} about the staging cluster`));
+      }
+      vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      vi.stubEnv('HIPPO_LLM_BASE_URL', 'https://llm.internal/v1');
+      vi.stubEnv('HIPPO_LLM_MODEL', 'local-model');
+      const location = 'https://elsewhere.example/v1/chat/completions';
+      const fetcher = llmReturning(() => new Response(null, { status: 302, headers: { location } }));
+
+      const result = await consolidate(root, { fetcher });
+
+      // The pool launches four calls at once; the failure stops every launch after them.
+      expect(fetcher.mock.calls.length).toBeLessThanOrEqual(4);
+      const details = detailLines(result).join('\n');
+      expect(details).toContain('HTTP 302: the endpoint answered a redirect (302)');
+      expect(details).toContain(`${count - 1} of ${count} candidates skipped`);
+    });
+
     it('keeps going past a rate limit, which the next call can clear', async () => {
       const root = rootWithCandidates();
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);

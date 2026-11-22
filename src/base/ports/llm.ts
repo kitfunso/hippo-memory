@@ -36,15 +36,15 @@ export interface Llm {
 }
 
 // A bad or missing key, no credit, no permission, an unknown model: every later call gets the same
-// answer.
+// answer. So does a redirect from the fixed configured URL, which hippo never follows.
 const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 404]);
 
 /** True for a failure the next call would repeat, so a caller looping over items should stop
  * rather than retry. */
 export function isPermanentFailure(failure: LlmFailure): boolean {
-  return (
-    failure.kind === 'config' || (failure.kind === 'http' && PERMANENT_STATUSES.has(failure.status))
-  );
+  if (failure.kind === 'config') return true;
+  if (failure.kind !== 'http') return false;
+  return PERMANENT_STATUSES.has(failure.status) || (failure.status >= 300 && failure.status < 400);
 }
 
 /** The first errno name (ECONNRESET, ENOTFOUND) along a cause chain; fetch puts it one level

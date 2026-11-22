@@ -201,7 +201,7 @@ describe('openAiChatLlm on a failed reply', () => {
     expect(isPermanentFailure(failure)).toBe(false);
   });
 
-  it.each([307, 308])('stops at a %i redirect and sends nothing to the host it names', async (status) => {
+  it.each([301, 302, 303, 307, 308])('stops at a %i redirect and sends nothing to its target', async (status) => {
     const target = await startStub(replying('facts'));
     const redirecting = await startStub(() => ({
       status,
@@ -220,6 +220,11 @@ describe('openAiChatLlm on a failed reply', () => {
     });
     expect(redirecting.requests).toHaveLength(1);
     expect(replyText(reply)).not.toContain(ZEBRA);
+  });
+
+  it('names no redirect for a 304', async () => {
+    const stub = await startStub(() => ({ status: 304, body: '' }));
+    expect(failureOf(await ask(stub))).toEqual({ kind: 'http', status: 304, detail: '' });
   });
 
   it('gives a request failure when the connection is refused', async () => {
