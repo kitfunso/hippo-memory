@@ -4,7 +4,7 @@
 import { generateKeyPairSync, verify, type KeyObject } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
 import {
@@ -241,6 +241,23 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(mints(f)).toHaveLength(2);
   });
 
+  it('A2f. a wall clock that stepped back still re-mints on the monotonic deadline', async () => {
+    const c = clocks();
+    const f = await serve(
+      atStream2(() => {
+        c.state.mono += 56 * MINUTE;
+      }),
+    );
+    f.mintReplies.push(
+      { status: 201, token: 'ghs_1', expiresAt: iso(T + HOUR) },
+      { status: 201, token: 'ghs_2', expiresAt: iso(T + HOUR) },
+    );
+    await run(f, sourceFor(f, c, '42'));
+
+    expect(bearers(lists(f))).toEqual(['Bearer ghs_1', 'Bearer ghs_1', 'Bearer ghs_2']);
+    expect(mints(f)).toHaveLength(2);
+  });
+
   it('A2e. a rate-limited page asks the token source again before its retry', async () => {
     let asks = 0;
     const tokenSource: GitHubTokenSource = () => Promise.resolve(`t${(asks += 1)}`);
@@ -318,6 +335,18 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(elsewhere(f)).toEqual([]);
   });
 
+  it('A5. a lookup answered 401 points at the App ID, the key and the clock, without the body', async () => {
+    const f = await serve();
+    f.lookupReplies.splice(0, 1, { status: 401, body: 'BODY-CANARY' });
+    const err = await failureOf(run(f, sourceFor(f, clocks())));
+
+    expect(err.message).toBe(
+      `GitHub App installation lookup at ${f.url}${LOOKUP_PATH} failed: HTTP 401${UNAUTHORIZED_HINT}`,
+    );
+    expect(err.message).not.toContain('BODY-CANARY');
+    expect(mints(f)).toEqual([]);
+  });
+
   it.each([
     ['a 201 without a token', { status: 201, expiresAt: iso(T + HOUR) }],
     ['an expiry that is not a date', { status: 201, token: 'ghs_x', expiresAt: 'not-a-date' }],
@@ -331,6 +360,30 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(err.message).toBe(`GitHub App token reply from ${f.url}${MINT_PATH} has no token or expiry`);
     expect(err.cause).toBeUndefined();
     expect(lists(f)).toEqual([]);
+  });
+
+  it('A8. a mint reply whose token cannot go in a header fails with the fixed text and leaks no part of it', async () => {
+    vi.stubEnv('HIPPO_LOG', 'debug');
+    const written: string[] = [];
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      written.push(String(chunk));
+      return true;
+    });
+    const f = await serve();
+    f.mintReplies.push({ status: 201, token: 'ghs_a\nb', expiresAt: iso(T + HOUR) });
+    let err: Error;
+    try {
+      err = await failureOf(run(f, sourceFor(f, clocks(), '42')));
+    } finally {
+      stderr.mockRestore();
+      vi.unstubAllEnvs();
+    }
+
+    expect(err.message).toBe(`GitHub App token reply from ${f.url}${MINT_PATH} has no token or expiry`);
+    expect(err.cause).toBeUndefined();
+    expect(lists(f)).toEqual([]);
+    expect(err.message).not.toContain('ghs_a');
+    expect(written.join('')).not.toContain('ghs_a');
   });
 });
 

@@ -27,6 +27,8 @@ const INSTALLATION_HINT =
   "; set GITHUB_APP_INSTALLATION_ID, use the repository's current name, " +
   'or check that the App is installed on it.';
 const UNAUTHORIZED_HINT = "; check GITHUB_APP_ID, the key file and this machine's clock.";
+// The token goes into an Authorization header, so a reply with any other character is broken.
+const HEADER_SAFE_TOKEN = /^[A-Za-z0-9_.-]+$/;
 
 /** The key as a node KeyObject; the parser's own error can quote what it read, so it is dropped. */
 export function parseAppPrivateKey(pem: string): KeyObject {
@@ -134,7 +136,8 @@ async function lookupInstallation(
   const res = await appRequest(url, jwt, lookupAt(url));
   if (res.status !== 200) {
     await cancelBody(res);
-    throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${INSTALLATION_HINT}`);
+    const hint = res.status === 401 ? UNAUTHORIZED_HINT : INSTALLATION_HINT;
+    throw new Error(`${lookupAt(url)} failed: HTTP ${res.status}${hint}`);
   }
   const failure = `GitHub App installation reply from ${hostAndPath(url)} has no installation id`;
   const body = await readJsonReply(res, failure);
@@ -159,7 +162,9 @@ async function readMintReply(
   const body = await readJsonReply(res, failure);
   const token = isJsonObject(body) ? body.token : undefined;
   const expiresAt = isJsonObject(body) ? body.expires_at : undefined;
-  if (!isJsonString(token) || token === '' || !isJsonString(expiresAt)) throw new Error(failure);
+  if (!isJsonString(token) || !HEADER_SAFE_TOKEN.test(token) || !isJsonString(expiresAt)) {
+    throw new Error(failure);
+  }
   const expiresMs = Date.parse(expiresAt);
   if (!Number.isFinite(expiresMs)) throw new Error(failure);
   const ttlMs = Math.min(expiresMs - wallAtMintStart, MAX_TOKEN_TTL_MS);
