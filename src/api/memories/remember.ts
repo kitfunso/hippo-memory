@@ -246,10 +246,10 @@ function trustTagged(
   return marks.length > 0 ? [...(tags ?? []), ...marks] : tags;
 }
 
-/** A member key's write outside its personal scope reaches the other members' prompts, as
+/** A non-admin key's write outside its personal scope reaches the other members' prompts, as
  * connector text does. */
 function memberShares(ctx: Context, opts: RememberOptions): boolean {
-  return ctx.actor.role === 'member' && !opts.personal;
+  return ctx.actor.role !== 'admin' && !opts.personal;
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {

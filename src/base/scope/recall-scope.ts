@@ -7,6 +7,7 @@
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
+import type { Role } from './role.js';
 
 /**
  * Literal scopes excluded from recall by default-deny when the caller passes no `scope`; read by
@@ -172,7 +173,7 @@ export function isRestrictedScope(scope: string | null | undefined): boolean {
 /** The identity a scope check runs against: a role, any scope grants, and the person who owns
  * the key. */
 export interface ScopeActor {
-  role: 'admin' | 'member';
+  role: Role;
   scopes?: readonly string[];
   owner?: string;
 }
@@ -187,7 +188,9 @@ export interface ScopeReader {
 }
 
 export function scopeReaderOf(actor: ScopeActor): ScopeReader {
-  const reader: ScopeReader = { ownScope: personalScopeOf(actor), role: actor.role };
+  // A viewer reads what a member reads; every by-id write sits behind an editor-level gate.
+  const role = actor.role === 'admin' ? 'admin' : 'member';
+  const reader: ScopeReader = { ownScope: personalScopeOf(actor), role };
   const withGrants = actor.scopes === undefined ? reader : { ...reader, grants: actor.scopes };
   return actor.owner ? { ...withGrants, owner: actor.owner } : withGrants;
 }
