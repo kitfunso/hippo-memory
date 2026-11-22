@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
+import { SECRET, defaultHeaders, postWebhook, sign } from '../_helpers/github-webhook.js';
 import { log } from '../../src/base/util/log.js';
 import { hostMismatch, mismatchSender, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 
@@ -12,34 +12,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const SECRET = 'github-webhook-secret';
-
 /** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string): T {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
   // checked immediately by the assertions that follow.
   return db.prepare(sql).get() as T;
-}
-
-function sign(body: string, secret: string = SECRET): string {
-  return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
-}
-
-function postWebhook(port: number, body: string, headers: Record<string, string>): Promise<Response> {
-  return fetch(`http://127.0.0.1:${port}/v1/connectors/github/events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body,
-  });
-}
-
-function defaultHeaders(body: string, eventName: string, deliveryId: string) {
-  return {
-    'x-hub-signature-256': sign(body),
-    'x-github-event': eventName,
-    'x-github-delivery': deliveryId,
-  };
 }
 
 interface IssueBodyOptions {

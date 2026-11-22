@@ -2,6 +2,7 @@
 // streams, so App auth runs through the real fetcher with no network. Callers fill the reply queues before they run.
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { JsonValue } from '../../src/base/util/json.js';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ISSUE_TIME = '2026-11-22T11:00:00Z';
@@ -42,7 +43,16 @@ export interface FakeGitHub {
   close(): Promise<void>;
 }
 
+/** The commit routes: lists are keyed `<path>|<sha>` from the query ('' when absent), detail by sha. */
+export interface FakeCommits {
+  readonly lists?: Record<string, JsonValue[]>;
+  readonly detail?: Record<string, JsonValue>;
+  /** Answers 302 to `/elsewhere` on the list route or on the detail route. */
+  readonly redirect?: 'list' | 'detail';
+}
+
 export interface FakeGitHubOptions {
+  readonly commits?: FakeCommits;
   /** The installation id the default lookup reply names. */
   readonly installationId?: number;
   /** Runs before each reply, so a test can move a clock when a given request arrives. */
@@ -63,6 +73,26 @@ function item(kind: 'issue' | 'issueComment' | 'prComment', base: string) {
   return { id: 7, body: 'a comment', user, updated_at: ISSUE_TIME, ...link };
 }
 
+function commitsReply(
+  pathname: string,
+  search: URLSearchParams,
+  commits: FakeCommits,
+): { status: number; body: string; redirect: boolean } | undefined {
+  const m = /^\/api\/v3\/repos\/[^/]+\/[^/]+\/commits(?:\/([^/]+))?$/.exec(pathname);
+  if (m === null) return undefined;
+  const sha = m[1];
+  if (commits.redirect === (sha === undefined ? 'list' : 'detail')) {
+    return { status: 302, body: '', redirect: true };
+  }
+  if (sha === undefined) {
+    const key = `${search.get('path') ?? ''}|${search.get('sha') ?? ''}`;
+    return { status: 200, body: JSON.stringify(commits.lists?.[key] ?? []), redirect: false };
+  }
+  const detail = commits.detail?.[sha];
+  if (detail === undefined) return undefined;
+  return { status: 200, body: JSON.stringify(detail), redirect: false };
+}
+
 function listBody(pathname: string, base: string): string | undefined {
   if (pathname.endsWith('/issues/comments')) return JSON.stringify([item('issueComment', base)]);
   if (pathname.endsWith('/pulls/comments')) return JSON.stringify([item('prComment', base)]);
@@ -71,7 +101,7 @@ function listBody(pathname: string, base: string): string | undefined {
 }
 
 export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<FakeGitHub> {
-  const { installationId = 42, onRequest } = options;
+  const { installationId = 42, onRequest, commits } = options;
   const requests: FakeRequest[] = [];
   const mintReplies: MintReply[] = [];
   const lookupReplies: LookupReply[] = [{ status: 200, id: installationId }];
@@ -82,7 +112,7 @@ export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<
     req.on('end', () => {
       const method = req.method ?? 'GET';
       const path = req.url ?? '/';
-      const { pathname } = new URL(path, root);
+      const { pathname, searchParams } = new URL(path, root);
       requests.push({
         method,
         path,
@@ -111,6 +141,10 @@ export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<
         if (reply === undefined) return send(400, 'no lookup reply queued');
         const body = reply.id === undefined ? (reply.body ?? '') : JSON.stringify({ id: reply.id });
         return send(reply.status, body, reply.location);
+      }
+      const commit = method === 'GET' && commits ? commitsReply(pathname, searchParams, commits) : undefined;
+      if (commit !== undefined) {
+        return send(commit.status, commit.body, commit.redirect ? `${root}/elsewhere` : undefined);
       }
       const list = method === 'GET' ? listBody(pathname, `${root}/api/v3/repos/acme/demo`) : undefined;
       if (list !== undefined) return send(200, list);

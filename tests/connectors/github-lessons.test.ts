@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { JsonValue } from '../../src/base/util/json.js';
 import {
   codeownersLessonOpts,
   codeownersPatch,
@@ -130,7 +131,7 @@ describe('CODEOWNERS lessons', () => {
   });
 
   it('U8: finds the entry by its new or old name, and a rename is named', () => {
-    const files = [
+    const files: JsonValue[] = [
       { filename: 'README.md' },
       { filename: 'docs/CODEOWNERS', previous_filename: '.github/CODEOWNERS', patch: PATCH },
     ];
