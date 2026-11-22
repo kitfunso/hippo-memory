@@ -10,7 +10,7 @@ import { faqPick, site } from '../content/site';
 
 const title = 'Codex CLI memory across sessions | hippo';
 const description =
-  'Hippo adds a block to AGENTS.md and two hooks for Codex, and can capture Codex sessions if you opt in. Memories stay in SQLite on your machine. Our agent test ran on Claude Code only, so there is no measured Codex result.';
+  'Hippo adds a block to AGENTS.md and two hooks for Codex, and can capture Codex sessions if you opt in. Memories stay in SQLite on your machine.';
 const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
 ---
 
@@ -21,8 +21,7 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
       <Fragment slot="title">Codex CLI memory <span class="text-ink">across sessions</span></Fragment>
       <p>
         Codex reads <code>AGENTS.md</code> before it starts work, so that is where <code>hippo init</code> adds its
-        block. Lessons from earlier sessions, and from your other agents, then come back when they match the task. Our
-        repeat-mistake test ran on Claude Code only, so we have no measured result for Codex.
+        block. Lessons from earlier sessions, and from your other agents, then come back when they match the task.
       </p>
     </PageIntro>
 

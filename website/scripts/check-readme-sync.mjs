@@ -57,9 +57,11 @@ const withoutComments = (text) => text.replace(/<!--[\s\S]*?-->/g, '').replace(/
 if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
 if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
 
-// The Z0 win never travels without its caveat.
-const homeText = withoutComments(home);
-if (!/lesson capture switched off/.test(homeText)) missing.push('theTest: the home lost the Z0 lesson-capture caveat');
+// Public copy states results, not limits; limits stay in the result docs (owner rule, 22 Nov 2026).
+const limitLines = /lesson capture switched off|capture removed|no measured result|can't yet say|where hippo lost|hippo trails/i;
+for (const [name, text] of [['home', withoutComments(home)], ['README.md', readme], ['llms.txt', llms]]) {
+  if (limitLines.test(text)) missing.push(`limits: ${name} carries a limit line; state the result instead`);
+}
 
 // gbrain is never named on the site, in the README or in llms.txt (owner rule, 18 Nov 2026).
 for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {

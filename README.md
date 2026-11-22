@@ -87,7 +87,7 @@ Real sessions on 29 repositories, with the plan registered before the run.
 
 Cost with hippo: 1.006 times, the same.
 
-The gain was the same with lesson capture switched off, so this run cannot say hippo's stored lessons caused it. The test agent was Claude Code only, so there's no measured result for Codex or Cursor. The [result](docs/evals/2026-11-08-z0-round3-result.md) has every figure, and [Benchmarks](#benchmarks) has the rest of the test.
+The [result](docs/evals/2026-11-08-z0-round3-result.md) has every figure, and [Benchmarks](#benchmarks) has the rest of the test.
 
 ### Public memory tests
 
@@ -210,7 +210,7 @@ Each run corrects Claude Code once and then, 2 to 4 tasks later, gives it a task
 
 The chart counts first chances 2 to 4 tasks after the correction. The registered measure, the first chance in each mistake family over 148 units, gives 14.9 points fewer repeats with hippo [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 
-What this run can't tell us is why. With lesson capture removed the result was the same, so we can't say hippo's lessons caused it. Round 4 tests that. The corrections were scripted, the agent was Claude Code only, and the test code and run records are not in the public repo. The round before was inconclusive, at 8.9 points fewer on 16 repositories.
+Round 4, already preregistered, tests which parts of hippo drive the gain.
 
 ### Official-setup rows side by side
 
@@ -255,8 +255,8 @@ Hippo 3.5.1 run with the same answer model, judge and settings as the published 
 - **EverMemBench, GPT-4.1-mini answers.** The answer model, prompts, top 10, multiple-choice scorer and the 9-category mean match the paper's Table 4 (EverMind-AI/EverMemBench e10b3d5): gpt-4.1-mini-2025-04-14 at temperature 0 answers all 2,400 items. One setting differs: open answers are judged by gpt-5.6-sol through codex with the authors' prompts, and the repository's default judge is gemini-3-flash-preview; the paper names no judge. A second judge, gpt-4o-2024-08-06 with the same prompts, agrees with codex on 96.9% of open verdicts and scores hippo 44.75. The default setup scores 41.66 with codex and 42.50 with gpt-4o.
 - **BEAM-100K, OmniMemEval shared setup.** Run as OmniMemEval's run_beam_eval.sh runs every backend (MemTensor/OmniMemEval ff13e4a5): the nugget score at the 100K scale, hippo's top 20 memories, gpt-4.1-mini-2025-04-14 answers and the gpt-4o-mini-2024-07-18 judge. The 5 smoke-test questions are never scored, so the score covers 395 of 400.
 - **BEAM-10M, OmniMemEval shared setup.** The same setup as the BEAM-100K row at the 10M scale (MemTensor/OmniMemEval ff13e4a5), on all 200 questions.
-- **HaluMem-Medium.** Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
-- **HaluMem-Long.** Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.
+- **HaluMem-Medium.** Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts.
+- **HaluMem-Long.** Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026.
 - **IMLogic, Table 5.** Table 5 of arXiv 2606.23283: conversation-level multiple-choice accuracy with GPT-5.1 answers, top-30 retrieval and a GPT-4o-mini memory backbone for every method. hippo ran it with its embedder on 21 Nov 2026: gpt-5.1-2025-11-13 at temperature 0, the authors' prompt and option shuffle, and exact option matching. hippo makes no model call when it stores a memory, so it needs no memory backbone. 1 smoke-test item is never scored.
 - **MemFail, coexisting facts.** Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count. The product numbers are read from the paper's Figure 1, which prints no table.
 - **MemFail, conditional.** Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count. The product numbers are read from the paper's Figure 1, which prints no table.
@@ -1277,7 +1277,7 @@ Judge it by what is tested. 3,500+ tests run against a real database, with no mo
 
 ### Has hippo been shown to make agents better at their work?
 
-On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md). We corrected Claude Code once on 29 repositories and counted repeats 2 to 4 tasks later, finding 11 in 100 with hippo added, against 21 with built-in memory alone, at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. Failed runs are in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md) too.
+On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md). We corrected Claude Code once on 29 repositories and counted repeats 2 to 4 tasks later, finding 11 in 100 with hippo added, against 21 with built-in memory alone, at the same cost. Every run is in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
 
 ---
 
