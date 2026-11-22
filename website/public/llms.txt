@@ -34,6 +34,7 @@ The commercial edition is planned; its private repository is a scaffold, not a r
 - [Claude Code](https://hippo-memory.com/claude-code/): memory between sessions through a CLAUDE.md block and session hooks
 - [Cursor](https://hippo-memory.com/cursor/): memory between sessions through the MCP server and the project's AGENTS.md
 - [Codex CLI](https://hippo-memory.com/codex/): memory across sessions through AGENTS.md and Codex's own hooks, with optional session capture
+- [Shared memory](https://hippo-memory.com/shared-memory/): one store in your repo that Claude Code, Codex and Cursor all read, and what each agent gets
 - [MCP server](https://hippo-memory.com/mcp/): `hippo mcp`, 13 tools over stdio for Claude Code, Cursor, Windsurf (now Devin Desktop), Cline and Claude Desktop
 - [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension): session hooks for Pi
 

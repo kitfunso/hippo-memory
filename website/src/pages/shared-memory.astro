@@ -1,0 +1,117 @@
+---
+import Base from '../layouts/Base.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import PageIntro from '../components/PageIntro.astro';
+import Section from '../components/Section.astro';
+import Cmd from '../components/Cmd.astro';
+import Faq from '../components/Faq.astro';
+import { faqPick, mcpJson, site } from '../content/site';
+import { mdInline } from '../content/readme';
+
+const title = 'Shared memory for Claude Code, Codex and Cursor | hippo';
+const description =
+  'Hippo keeps one memory store in your repo that Claude Code, Codex and Cursor all read, so a lesson one agent learns is there for the others. It runs on your machine with no account, and what happens by itself differs by agent.';
+
+// Each row restates README "Framework Integrations" and that agent's page; change them together.
+const agents = [
+  {
+    name: 'Claude Code',
+    href: '/claude-code/',
+    gets: 'A block in `CLAUDE.md` and 9 hooks. Your pinned rules load at session start, and each prompt gets up to 5 memories that share its words. The hooks also save your task before compaction, store failed tool calls and capture lessons when the session ends.',
+  },
+  {
+    name: 'Codex',
+    href: '/codex/',
+    gets: 'A block in `AGENTS.md` and two hooks, which Codex runs once you trust them in `/hooks`. The prompt hook sends your pinned rules and up to 5 matching memories with each prompt. Capturing Codex sessions is opt-in, with `hippo hook install codex`.',
+  },
+  {
+    name: 'Cursor',
+    href: '/cursor/',
+    gets: "The block in `AGENTS.md`, which Cursor reads from the project root, and 13 memory tools once hippo is in `.cursor/mcp.json`. Cursor's agent recalls and stores memories through those tools, and MCP access alone doesn't capture a session.",
+  },
+];
+---
+
+<Base title={title} description={description} crumb="Shared memory" published="2026-11-22">
+  <Nav />
+  <main id="main">
+    <PageIntro>
+      <Fragment slot="title">Shared memory for <span class="text-ink">Claude Code, Codex and Cursor</span></Fragment>
+      <p>
+        Switch from Claude Code to Codex or Cursor and the new agent can't see what the last one picked up in its
+        sessions. Hippo keeps one store in your repo that all three use. Claude Code and Codex load from it through
+        hooks, and Cursor reads and writes it through MCP tools. It runs on your machine, with no account and no API key.
+      </p>
+    </PageIntro>
+
+    <Section title="Set up the project">
+      <Cmd lines={[site.installCmd, 'hippo init']} copy />
+      <p>
+        Run init in the project. It adds a short block to <code>CLAUDE.md</code> and <code>AGENTS.md</code> if they're
+        already there, and never creates either file. Codex and Cursor both read <code>AGENTS.md</code>. If the project
+        has <code>AGENTS.md</code> and Codex is installed, init adds Codex's two hooks too. For Cursor, add hippo to
+        <code>.cursor/mcp.json</code>.
+      </p>
+      <Cmd lines={mcpJson} prompt={false} copy />
+    </Section>
+
+    <Section title="What each agent gets" id="what-each-agent-gets" alt>
+      <div class="overflow-x-auto rounded-xl border border-rule" data-scroll-x>
+        <table class="w-full text-left text-sm">
+          <caption class="sr-only">What hippo adds to each agent</caption>
+          <thead class="border-b border-rule-strong text-xs text-ink-3">
+            <tr>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Agent</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">What hippo adds</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-rule">
+            {agents.map((a) => (
+              <tr class="align-top">
+                <th scope="row" class="px-3 py-3 text-left font-normal sm:whitespace-nowrap sm:px-5">
+                  <a class="link" href={a.href}>{a.name}</a>
+                </th>
+                <td class="copy px-3 py-3 text-ink-2 sm:px-5" set:html={mdInline(a.gets)} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section title="Where the memory lives">
+      <p>
+        Each project gets its own store in <code>.hippo/</code>, and a global store in <code>~/.hippo/</code> holds the
+        memories you share across projects. Hippo writes markdown copies beside them, so you can grep what your agents
+        have been told, commit it and review a rule in a pull request. Recall makes no network call by default.
+      </p>
+    </Section>
+
+    <Section title="When a memory is wrong" alt>
+      <p>
+        After a bad answer, <code>hippo outcome --bad</code> weakens the memories from the last recall. <code>hippo supersede</code>
+        replaces an old fact with a new one, and the old one leaves recall but stays on record. It doesn't matter which
+        agent saved the memory, because they all share one store.
+      </p>
+    </Section>
+
+    <Section title="Import your notes and Cursor rules">
+      <Cmd lines={['hippo import --agents', 'hippo import --cursor .cursor/rules']} />
+      <p>
+        The first brings in the notes your agents already keep. The second turns Cursor's rules into memories that
+        Claude Code and Codex can recall too.
+      </p>
+    </Section>
+
+    <Section title="What we've measured" alt>
+      <p>
+        Our repeat-mistake test ran on Claude Code only, so there's no measured result yet for Codex or Cursor. The
+        <a class="link" href="/benchmarks/">benchmarks page</a> has the results, losses included.
+      </p>
+    </Section>
+
+    <Faq items={faqPick(['Which agents does hippo work with?'])} heading="Agent questions" moreHref="/faq/" />
+  </main>
+  <Footer />
+</Base>

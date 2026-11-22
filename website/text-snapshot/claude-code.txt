@@ -39,7 +39,7 @@ How do I give Claude Code memory between sessions? +
 Run npm install -g hippo-memory, then hippo init in the project. Init adds a short block to an existing CLAUDE.md and installs hooks that keep pinned memories in context, save your task before compaction, store failed tool calls and run hippo sleep when the session ends.
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
+Claude CodeCursorCodexShared memoryMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
