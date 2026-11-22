@@ -309,6 +309,8 @@ GitHub webhooks land the same way at `POST /v1/connectors/github/events`. Backfi
 
 `hippo github backfill` signs in with a personal access token in `GITHUB_TOKEN`, or as a GitHub App. For an App, set `GITHUB_APP_ID` (the App ID or the client ID) and `GITHUB_APP_PRIVATE_KEY_FILE` (the path to its `.pem` file). The key stays in that file and never goes in env. `GITHUB_APP_INSTALLATION_ID` is optional; without it, hippo looks up the installation for the repository. Hippo trades a short-lived signed token for an installation token limited to that repository, and mints a new one before the old one expires, so a long backfill can run past one hour. A fully set App wins over `GITHUB_TOKEN`. The webhook route and `hippo github dlq replay` make no GitHub API call, so they need no token.
 
+Subscribe the GitHub webhook to Pushes, and each revert commit on the default branch becomes a memory with links to the commit and to the original. A push to any branch already adds one delivery hold row, kept for 100 years, and it parks as unhandled today. After this change a push writes its lessons and no longer parks. Run `hippo github backfill --repo <owner/name> --lessons` to read default-branch commits for reverts and CODEOWNERS changes. It reads from `--since` on every run, else from 30 days ago, and the token needs Contents read. CODEOWNERS lessons come from backfill only. The webhook refuses a body over 1 MiB with a 413 and writes no lesson for it; backfill with `--lessons` still finds that commit.
+
 ### Active task snapshots
 
 Hippo can save the task in progress, so a later session can pick it up where this one stopped.
