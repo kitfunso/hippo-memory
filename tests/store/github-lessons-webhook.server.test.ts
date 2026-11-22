@@ -39,7 +39,7 @@ interface PushCommit {
 const revertMsg = (title: string, sha: string, extra = ''): string =>
   `Revert "${title}"\n\nThis reverts commit ${sha}.${extra}`;
 
-function repository(): Record<string, JsonValue> {
+function repository() {
   return {
     full_name: 'acme/repo',
     private: false,

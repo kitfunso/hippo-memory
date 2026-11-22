@@ -150,7 +150,8 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
 const REDIRECT_REFUSED =
   'the redirect was refused; if the repository was renamed, pass its new name to --repo';
 const NEEDS_CONTENTS_READ =
-  "the token needs Contents read on this repository, or GitHub's secondary rate limit refused the request; check the token, then retry later";
+  "the token needs Contents read on this repository, or GitHub's secondary rate limit refused " +
+  'the request; check the token, then retry later';
 
 /** The error for a non-200 the strict fetchers refuse; its text is fixed, so no reply text or
  * token can reach it. */
