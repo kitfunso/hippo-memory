@@ -8,6 +8,7 @@
   "home": "hippo: one memory for every agent you&#39;ll ever use",
   "mcp": "MCP memory server for Claude Code, Cursor and Windsurf | hippo",
   "quickstart": "hippo quickstart: two commands",
+  "shared-memory": "Shared memory for Claude Code, Codex and Cursor | hippo",
   "teams": "hippo for teams: what exists today and what is planned",
   "vs-claude-memory": "CLAUDE.md vs MEMORY.md vs hippo: what goes where",
   "vs-letta": "hippo vs Letta: memory for the agents you already run",

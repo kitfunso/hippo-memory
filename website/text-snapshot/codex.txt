@@ -27,7 +27,7 @@ How do I give Codex memory across sessions? +
 hippo init adds its instructions to your AGENTS.md, which Codex reads before it starts work. Capturing Codex sessions is opt-in, with hippo hook install codex.
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
+Claude CodeCursorCodexShared memoryMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)

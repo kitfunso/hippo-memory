@@ -41,7 +41,7 @@ Has hippo been shown to make agents better at their work?
 On repeat mistakes, yes, in one test of our own (opens in new tab). We corrected Claude Code once on N repositories and counted repeats N to N tasks later, finding N in N with hippo added, against N with built-in memory alone, at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. Failed runs are in docs/evals (opens in new tab) too.
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
+Claude CodeCursorCodexShared memoryMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)

@@ -137,7 +137,7 @@ The score files for five of these public tests and their write-ups are in the re
 Benchmark results (opens in new tab) Eval documents (opens in new tab) Report a mistake (opens in new tab)
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
+Claude CodeCursorCodexShared memoryMCP server Compare
 hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
