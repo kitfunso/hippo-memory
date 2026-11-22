@@ -10,6 +10,7 @@ import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
 import { type ResolveProjectIdentityOptions } from '../../base/scope/project-identity.js';
+import type { Role } from '../../base/scope/role.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
@@ -89,7 +90,7 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   actor: string;
   /** The caller's authenticated role. Required so no transport can forget it; only stdio, which
    * passes no context, is admin without one. */
-  role: 'admin' | 'member';
+  role: Role;
   /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
   viaAuthResolver?: true;
@@ -140,14 +141,19 @@ export interface McpContext<S extends RequiredStore = RequiredStore> extends Mcp
   tools: McpTools<S>;
 }
 
+/** A context's role: admin and viewer stay, and any other value, a missing role included, runs as
+ * a member so an untyped caller fails closed. */
+export function mcpRole(ctx: McpCaller): Role {
+  return ctx.role === 'admin' || ctx.role === 'viewer' ? ctx.role : 'member';
+}
+
 /** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator,
- * host admin. Any context runs as its own role, and an untyped caller that sends none runs as a
- * member, so a missing role fails closed. */
+ * host admin. Any context runs as its own role, and a viewer stays a viewer. */
 export function mcpActor(ctx: McpCaller | undefined): ApiActor {
   if (ctx === undefined) return { subject: 'mcp', role: 'admin', hostAdmin: true };
   const actor: ApiActor = {
     subject: ctx.actor ?? 'mcp',
-    role: ctx.role === 'admin' ? 'admin' : 'member',
+    role: mcpRole(ctx),
     scopes: ctx.scopes,
   };
   if (ctx.viaAuthResolver) actor.viaAuthResolver = true;

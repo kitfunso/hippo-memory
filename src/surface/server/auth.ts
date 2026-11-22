@@ -11,6 +11,7 @@ import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
 import { askKeyQuota } from './key-quota.js';
+import { noteAccess } from './request.js';
 import { LIMITER_MAX_KEYS } from './rate-limit.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../../base/util/json.js';
@@ -166,7 +167,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   const clean: ResolvedBearer = {
     tenantId: tenant,
     subject,
-    role: role === 'admin' ? 'admin' : 'member',
+    role: role === 'admin' || role === 'viewer' ? role : 'member',
   };
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;
@@ -370,6 +371,7 @@ export async function buildContextWithAuth(
 ): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts, requestClientKey(req));
+  noteAccess(req, { role: ctx.actor.role });
   chargeCaller(req, id.tenantId, ctx.actor, opts);
   return ctx;
 }
