@@ -1241,7 +1241,7 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 
 ### Where does hippo keep my data?
 
-On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set or your own endpoint (`HIPPO_LLM_BASE_URL`) is. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
+On your machine, in SQLite, as `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read and commit. Recall makes no network call by default. Text leaves your machine only through an API embedder, a reranker, model-read rule capture (`capture.followUpRules`), `hippo refine`, or `hippo sleep` when `ANTHROPIC_API_KEY` is set. `{"extraction":{"enabled":false}}` in `.hippo/config.json` turns that last one off.
 
 ### What does hippo cost?
 
