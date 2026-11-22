@@ -1,7 +1,7 @@
 /** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering
  * main(); the verb table in verbs/health.ts dispatches to handleGitHub. */
 
-import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
+import { envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
@@ -23,6 +23,12 @@ import type { JsonValue } from '../../base/util/json.js';
 import { type CliFlags, type CommandContext, stringFlag } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
+import {
+  githubAuthFromEnv,
+  GitHubAuthSettingError,
+  type GitHubAuth,
+  type GitHubAuthInput,
+} from './github-auth.js';
 import { CliExit } from './exit.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
@@ -54,7 +60,11 @@ export function printGitHubBackfillUsage(): void {
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
   console.log('  --since  Initial high-water-mark for first run (optional, ISO 8601)');
   console.log('  --max    Cap items per stream (optional, integer)');
-  console.log('  Requires GITHUB_TOKEN env var with repo read scope.');
+  console.log('  Auth: GITHUB_TOKEN with repo read scope, or a GitHub App: GITHUB_APP_ID,');
+  console.log(
+    '  GITHUB_APP_PRIVATE_KEY_FILE (the path to its .pem) and GITHUB_APP_INSTALLATION_ID',
+  );
+  console.log('  (optional; else looked up for the repo). A fully set App wins over GITHUB_TOKEN.');
   console.log(
     '  Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.',
   );
@@ -82,20 +92,26 @@ function githubSiteOrExit(): GitHubSite {
   }
 }
 
+/** The backfill's credential; a setting the operator can fix exits 2 with its fixed text. */
+function githubAuthOrExit(input: GitHubAuthInput): GitHubAuth {
+  try {
+    return githubAuthFromEnv(input);
+  } catch (e) {
+    if (!(e instanceof GitHubAuthSettingError)) throw e;
+    console.error(e.message);
+    throw new CliExit(2);
+  }
+}
+
 async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const repo = stringFlag(flags, 'repo');
   if (repo === undefined || !isGitHubRepoFullName(repo)) {
     printGitHubBackfillUsage();
     throw new CliExit(2);
   }
-  const token = envGitHubToken();
-  if (!token) {
-    console.error(
-      'GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.',
-    );
-    throw new CliExit(2);
-  }
   const site = githubSiteOrExit();
+  const { route, source } = githubAuthOrExit({ site, repoFullName: repo });
+  console.error(`GitHub auth: ${route}`);
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
 
@@ -104,7 +120,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
       fetcher: realGitHubFetcher,
-      token,
+      tokenSource: source,
       maxPerStream,
       sinceIso,
       site,

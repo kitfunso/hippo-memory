@@ -17,7 +17,11 @@ import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../../src/db/index.
 import { compareSemver, PACKAGE_VERSION } from '../../src/base/util/version.js';
 import { handleCommentDeleted } from '../../src/surface/connectors/github/deletion.js';
 import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
-import type { GitHubFetcher, GitHubBackfillPage } from '../../src/surface/connectors/github/octokit-client.js';
+import {
+  staticTokenSource,
+  type GitHubFetcher,
+  type GitHubBackfillPage,
+} from '../../src/surface/connectors/github/octokit-client.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -265,7 +269,7 @@ describe('backfill HWM stays put on capped streams', () => {
     await backfillRepo(ctx(home), {
       repoFullName: 'acme/demo',
       fetcher,
-      token: 'fake-token',
+      tokenSource: staticTokenSource('fake-token'),
       maxPerStream: 1,
     });
 
@@ -334,7 +338,7 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
     const result = await backfillRepo(ctx(home), {
       repoFullName: 'acme/demo',
       fetcher,
-      token: 'fake-token',
+      tokenSource: staticTokenSource('fake-token'),
     });
 
     expect(result.ingested.issues).toBe(0); // all skipped (PRs)

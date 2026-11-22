@@ -6,7 +6,7 @@ import type { ConnectorContext } from '../ingest.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import { githubRepoKey } from './ref.js';
 import { GITHUB_COM, type GitHubSite } from './site.js';
-import type { GitHubFetcher, GitHubBackfillPage } from './octokit-client.js';
+import type { GitHubFetcher, GitHubBackfillPage, GitHubTokenSource } from './octokit-client.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -23,7 +23,8 @@ export interface BackfillOptions {
   /** e.g. 'acme/repo'. */
   repoFullName: string;
   fetcher: GitHubFetcher;
-  token: string;
+  /** Asked before every request; a PAT goes in through staticTokenSource. */
+  tokenSource: GitHubTokenSource;
   /** Optional cap on items per stream. Useful for tests. */
   maxPerStream?: number;
   /** First-run `--since`; seeds all three HWMs, keeping any HWM a stream already saved. */
@@ -114,7 +115,7 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
-  readonly token: string;
+  readonly tokenSource: GitHubTokenSource;
   readonly sleep: (ms: number) => Promise<void>;
   readonly maxItems?: number;
   readonly host: string | undefined;
@@ -208,9 +209,10 @@ async function fetchPagePastRateLimit(
   options: DrainStreamOptions,
   url: string,
 ): Promise<GitHubBackfillPage> {
-  const { fetcher, token, sleep } = options;
+  const { fetcher, tokenSource, sleep } = options;
   let waitedMs = 0;
   for (let attempt = 1; ; attempt++) {
+    const token = await tokenSource();
     const page = await fetcher({ url, token });
     if (page.rateLimit.reason === 'none') return page;
     const waitMs = page.rateLimit.sleepSeconds * 1000;
@@ -341,7 +343,7 @@ async function backfillStream(
   const res = await drainStream(ctx, stream.url, {
     toIngestEvent: stream.toIngestEvent,
     fetcher: opts.fetcher,
-    token: opts.token,
+    tokenSource: opts.tokenSource,
     sleep,
     maxItems: opts.maxPerStream,
     host: site.host,

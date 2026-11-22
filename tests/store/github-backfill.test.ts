@@ -17,6 +17,7 @@ import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
 import {
   GitHubFetchError,
   realGitHubFetcher,
+  staticTokenSource,
   type GitHubFetcher,
   type GitHubBackfillPage,
 } from '../../src/surface/connectors/github/octokit-client.js';
@@ -214,7 +215,7 @@ describe('backfillRepo', () => {
     const r = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     expect(r.ingested.issues).toBe(3);
@@ -258,12 +259,12 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(buildPlan()),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
     const r2 = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(buildPlan()),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     // Second run sees zero new memories — every event already in
@@ -298,7 +299,7 @@ describe('backfillRepo', () => {
     const r = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     expect(r.ingested.issues).toBe(3);
@@ -335,7 +336,7 @@ describe('backfillRepo', () => {
     const r = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       sleepMs: async (ms) => {
         sleeps.push(ms);
       },
@@ -370,7 +371,7 @@ describe('backfillRepo', () => {
       backfillRepo(ctx(root), {
         repoFullName: REPO,
         fetcher,
-        token: 't',
+        tokenSource: staticTokenSource('t'),
       }),
     ).rejects.toThrow(GitHubFetchError);
 
@@ -396,7 +397,7 @@ describe('backfillRepo', () => {
     const r = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       maxPerStream: 5,
     });
 
@@ -425,7 +426,7 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
@@ -438,7 +439,7 @@ describe('backfillRepo', () => {
     const r = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher,
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     expect(r.ingested.issues).toBe(0);
@@ -468,7 +469,7 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(plan, capture),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       site: GHES_SITE,
     });
 
@@ -491,13 +492,13 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(onePage('2026-05-01T10:00:00Z')),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       site: GHES_SITE,
     });
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(onePage('2026-06-01T10:00:00Z')),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
     });
 
     expect(readCursorRows(root)).toEqual([
@@ -514,7 +515,7 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher({}, capture),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       site: GHES_SITE,
     });
     const issuesCall = capture.calls.find((c) => c.url.includes('/issues?') && !c.url.includes('/issues/comments'));
@@ -526,7 +527,11 @@ describe('backfillRepo', () => {
       issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
     });
     const capture: CallCapture = { calls: [] };
-    await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan(), capture), token: 't' });
+    await backfillRepo(ctx(root), {
+      repoFullName: REPO,
+      fetcher: makeFakeFetcher(plan(), capture),
+      tokenSource: staticTokenSource('t'),
+    });
     for (const { url } of capture.calls) {
       expect(url.startsWith('https://api.github.com/repos/acme/demo/')).toBe(true);
     }
@@ -535,7 +540,7 @@ describe('backfillRepo', () => {
     await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(plan()),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       sinceIso: '2026-01-01T00:00:00Z',
     });
     expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
@@ -557,7 +562,7 @@ describe('backfillRepo', () => {
       backfillRepo(ctx(root), {
         repoFullName: REPO,
         fetcher: makeFakeFetcher(plan, capture),
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         site: GHES_SITE,
       }),
     ).rejects.toThrow(/leaves https:\/\/ghes\.example\.com for https:\/\/evil\.example\.net/);
@@ -581,7 +586,7 @@ describe('backfillRepo', () => {
     const failure = await backfillRepo(ctx(root), {
       repoFullName: REPO,
       fetcher: makeFakeFetcher(plan, capture),
-      token: 't',
+      tokenSource: staticTokenSource('t'),
       site: GHES_SITE,
     }).then(
       () => null,
@@ -603,7 +608,11 @@ describe('backfillRepo', () => {
       const plan = (): FakePlan => ({
         issues: [{ items: [issueItem(1, '2026-05-01T10:00:00Z')], next: null, rateLimit: NO_RATE }],
       });
-      await backfillRepo(ctx(root), { repoFullName: REPO, fetcher: makeFakeFetcher(plan()), token: 't' });
+      await backfillRepo(ctx(root), {
+        repoFullName: REPO,
+        fetcher: makeFakeFetcher(plan()),
+        tokenSource: staticTokenSource('t'),
+      });
       const sources = () => loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
       expect(sources().map((e) => e.artifactRef)).toEqual(['github://acme/demo/issue/1']);
 
@@ -612,7 +621,7 @@ describe('backfillRepo', () => {
       const r = await backfillRepo(ctx(root), {
         repoFullName: REPO,
         fetcher: makeFakeFetcher(plan()),
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         site: githubSiteFromEnv(),
       });
 
@@ -642,7 +651,7 @@ describe('backfillRepo', () => {
       const failure = await backfillRepo(ctx(root), {
         repoFullName: REPO,
         fetcher: realGitHubFetcher,
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         site: GHES_SITE,
       }).then(
         () => null,
@@ -677,7 +686,7 @@ describe('backfillRepo', () => {
       const r = await backfillRepo(ctx(root), {
         repoFullName: REPO,
         fetcher: realGitHubFetcher,
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         site: GHES_SITE,
       });
 

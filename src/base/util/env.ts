@@ -363,3 +363,6 @@ export const envGitHubAllowUnknownInstallationFallback = bool(
 );
 export const envGitHubEnterpriseUrl = trimmedText('GITHUB_ENTERPRISE_URL');
 export const envGitHubEnterpriseBareRefsHost = trimmedText('GITHUB_ENTERPRISE_BARE_REFS_HOST');
+export const envGitHubAppId = trimmedText('GITHUB_APP_ID');
+export const envGitHubAppPrivateKeyFile = trimmedText('GITHUB_APP_PRIVATE_KEY_FILE');
+export const envGitHubAppInstallationId = trimmedText('GITHUB_APP_INSTALLATION_ID');

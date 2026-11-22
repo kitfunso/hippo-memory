@@ -30,6 +30,13 @@ export interface GitHubBackfillPage {
 
 export type GitHubFetcher = (args: { url: string; token: string }) => Promise<GitHubBackfillPage>;
 
+/** Asked before every request, so a token that expires mid-run is replaced in time. */
+export type GitHubTokenSource = () => Promise<string>;
+
+export function staticTokenSource(token: string): GitHubTokenSource {
+  return () => Promise.resolve(token);
+}
+
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
 export function parseNextLink(linkHeader: string): string | null {
   if (!linkHeader) return null;
@@ -47,12 +54,12 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
 }
 
 /** Host and path only: the query string can carry a cursor or filter that is not ours to print. */
-function hostAndPath(url: string): string {
+export function hostAndPath(url: string): string {
   const { origin, pathname } = new URL(url);
   return origin + pathname;
 }
 
-const GITHUB_TIMEOUT_MS = 30_000;
+export const GITHUB_TIMEOUT_MS = 30_000;
 const ERROR_BODY_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;
 // A page is at most 100 items (per_page=100), each with a body of up to 65,536 characters at 4

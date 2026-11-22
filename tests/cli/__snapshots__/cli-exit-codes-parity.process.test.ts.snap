@@ -130,6 +130,7 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > github
 "$ hippo github backfill --repo acme/widgets -> 3
 --- stdout
 --- stderr
+GitHub auth: GITHUB_TOKEN
 backfill failed: GitHub 401 on https://api.github.com/repos/acme/widgets/issues: {"message":"Bad credentials"}
 [hippo] warn: github backfill failed: GitHub 401 on https://api.github.com/repos/acme/widgets/issues: {"message":"Bad credentials"} <fields>
 "
@@ -142,7 +143,9 @@ hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
   --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)
   --since  Initial high-water-mark for first run (optional, ISO 8601)
   --max    Cap items per stream (optional, integer)
-  Requires GITHUB_TOKEN env var with repo read scope.
+  Auth: GITHUB_TOKEN with repo read scope, or a GitHub App: GITHUB_APP_ID,
+  GITHUB_APP_PRIVATE_KEY_FILE (the path to its .pem) and GITHUB_APP_INSTALLATION_ID
+  (optional; else looked up for the repo). A fully set App wins over GITHUB_TOKEN.
   Set GITHUB_ENTERPRISE_URL=https://<host> to backfill from GitHub Enterprise Server.
   Also set GITHUB_ENTERPRISE_BARE_REFS_HOST=<host> only if the store took webhooks from that server
   before you set the URL and never took github.com ones.
@@ -154,7 +157,7 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > github
 "$ hippo github backfill --repo acme/widgets -> 2
 --- stdout
 --- stderr
-GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope.
+GITHUB_TOKEN is not set. Backfill requires a personal access token with repo read scope, or GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY_FILE for a GitHub App.
 "
 `;
 

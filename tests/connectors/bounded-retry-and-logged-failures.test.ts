@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { backfillRepo } from '../../src/surface/connectors/github/backfill.js';
-import type { GitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
+import { staticTokenSource, type GitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
 import {
   closeHippoDb,
   openHippoDb,
@@ -49,7 +49,7 @@ describe('GitHub backfill rate-limit bound', () => {
       backfillRepo(ctx(), {
         repoFullName: 'acme/demo',
         fetcher,
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         sleepMs: async (ms) => {
           sleeps.push(ms);
         },
@@ -70,7 +70,7 @@ describe('GitHub backfill rate-limit bound', () => {
       backfillRepo(ctx(), {
         repoFullName: 'acme/demo',
         fetcher,
-        token: 't',
+        tokenSource: staticTokenSource('t'),
         sleepMs: async (ms) => {
           sleeps.push(ms);
         },
