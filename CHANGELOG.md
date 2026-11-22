@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.14.1 - 2026-11-22
+
+### Documentation
+
+- **The README's benchmark table adds MemFail, InMind, MEME and TriggerBench.** Eleven official-setup rows, each run with the paper's own answer model and judge: TriggerBench 54.29 (1st of 3), MEME 0.25 (2nd of 3), MemFail by task (1st on conditional hard, last on long-hop) and InMind by judge (2nd on target recall, last on the naive query). MemFail's product numbers come from its Figure 1, so those rows carry that caveat. hippo-memory.com shows the same rows.
+
 ## 3.14.0 - 2026-11-22
 
 ### Added
