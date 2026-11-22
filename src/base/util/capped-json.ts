@@ -21,8 +21,9 @@ export async function readCappedJson(resp: Response, maxBytes: number): Promise<
   raw += decoder.decode();
   try {
     return JSON.parse(raw);
-  } catch (err) {
-    throw new Error('reply is not JSON', { cause: err });
+  } catch {
+    // V8's parse error quotes part of the body, which may echo a secret, so it is not kept as a cause.
+    throw new Error('reply is not JSON');
   }
 }
 

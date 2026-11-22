@@ -13,7 +13,11 @@ import {
 import { errorCode, errorMessage } from '../../base/util/log.js';
 import { checkHeaderSafe } from '../../base/util/net.js';
 import { appTokenSource, parseAppPrivateKey } from '../connectors/github/app-auth.js';
-import { staticTokenSource, type GitHubTokenSource } from '../connectors/github/octokit-client.js';
+import {
+  checkGitHubTokenText,
+  staticTokenSource,
+  type GitHubTokenSource,
+} from '../connectors/github/octokit-client.js';
 import type { GitHubSite } from '../connectors/github/site.js';
 
 /** A setting the operator can fix; the CLI prints its text and exits 2. */
@@ -92,10 +96,12 @@ function readAppKey(file: string): KeyObject {
   }
 }
 
-// fetch quotes a header value it rejects, so a token with such a character must not get that far.
+// fetch quotes a header value it rejects, so a token with such a character must not get that far;
+// the GitHub character rule then keeps an escaped echo equal to the token, which redaction finds.
 function checkPat(pat: string): void {
   try {
     checkHeaderSafe('GITHUB_TOKEN', pat);
+    checkGitHubTokenText('GITHUB_TOKEN', pat);
   } catch (err) {
     throw new GitHubAuthSettingError(errorMessage(err));
   }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GitHubFetchError, realGitHubFetcher } from '../../src/surface/connectors/github/octokit-client.js';
 import { isSleepReply } from '../../src/surface/server/sleep-offload.js';
+import { chainText, failureFor, tokenWindows } from '../_helpers/github-token-leak.js';
 
 describe('a GitHub error whose body cannot be read', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -49,6 +50,22 @@ describe('a GitHub error whose body echoes the token', () => {
     expect(err.message).not.toContain(canary);
     expect(err.stack).toContain('[token]');
     expect(err.stack).not.toContain(canary);
+  });
+});
+
+const PAT = 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab';
+
+describe('a 200 list reply that is not JSON', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('keeps why it was unreadable, and no part of an echoed token', async () => {
+    const err = await failureFor(`${PAT} not json`, 200, PAT);
+
+    expect(err).toBeInstanceOf(GitHubFetchError);
+    expect(err.message).toContain('reply is not JSON');
+    expect(err.cause).toMatchObject({ message: 'reply is not JSON' });
+    expect(err.cause).not.toHaveProperty('cause');
+    expect(tokenWindows(PAT, 8).filter((w) => chainText(err).includes(w))).toEqual([]);
   });
 });
 

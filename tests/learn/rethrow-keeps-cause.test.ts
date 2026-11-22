@@ -110,7 +110,7 @@ describe('rethrown errors keep their cause', () => {
       expect(err.cause).toBeInstanceOf(Error);
     });
 
-    it('keeps the parse error when a 200 answer is not JSON', async () => {
+    it('keeps the reason, not the parser text, when a 200 answer is not JSON', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'test-key');
       const port = portOf(
         await listen((_req, res) => {
@@ -122,7 +122,7 @@ describe('rethrown errors keep their cause', () => {
       const err = await caught(() => provider.embed(['hello']));
       expect(err.message).toContain('returned invalid JSON');
       expect(err.cause).toBeInstanceOf(Error);
-      expect(err.cause instanceof Error ? err.cause.name : '').toBe('SyntaxError');
+      expect(err.cause instanceof Error ? err.cause.message : '').toBe('reply is not JSON');
     });
 
     it('keeps the key out of the cause when the transport refuses the header', async () => {

@@ -37,6 +37,16 @@ export function staticTokenSource(token: string): GitHubTokenSource {
   return () => Promise.resolve(token);
 }
 
+// With only these characters an escaped echo of a token equals the token, so replaceAll finds it.
+const GITHUB_TOKEN_TEXT = /^[A-Za-z0-9_.-]+$/;
+
+/** Refuses a token with a character GitHub tokens do not use, naming `name` and never the value. */
+export function checkGitHubTokenText(name: string, token: string): void {
+  if (!GITHUB_TOKEN_TEXT.test(token)) {
+    throw new Error(`${name} must use only letters, digits, '_', '.' and '-'`);
+  }
+}
+
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
 export function parseNextLink(linkHeader: string): string | null {
   if (!linkHeader) return null;
@@ -97,8 +107,17 @@ async function errorExcerpt(res: Response, token: string): Promise<string> {
       return '';
     },
   );
-  const clean = token === '' ? body : body.replaceAll(token, '[token]');
+  const clean = token === '' ? body : dropCutTokenCopy(body.replaceAll(token, '[token]'), token);
   return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
+}
+
+// replaceAll cannot match a copy the read cap cut in half, so this drops it, and only after replaceAll:
+// run first, it would cut the last character off a whole copy whose end equals its start.
+function dropCutTokenCopy(body: string, token: string): string {
+  for (let len = Math.min(token.length - 1, body.length); len > 0; len--) {
+    if (body.endsWith(token.slice(0, len))) return body.slice(0, body.length - len);
+  }
+  return body;
 }
 
 /** One GET with the GitHub headers; `redirect` says whether a 3xx is followed. */
