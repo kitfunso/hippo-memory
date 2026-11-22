@@ -81,6 +81,8 @@ export interface GitHubPullRequestReviewCommentEvent extends GitHubWebhookEnvelo
 export interface GitHubPushEvent extends GitHubWebhookEnvelope {
   ref: string;
   deleted?: boolean;
+  /** The sha of the push head. */
+  after?: string;
   repository: GitHubRepository & { default_branch: string };
   commits: JsonValue[];
 }

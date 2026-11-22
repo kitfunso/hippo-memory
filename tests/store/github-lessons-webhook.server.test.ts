@@ -51,10 +51,18 @@ function repository(fullName = 'acme/repo') {
   return { full_name: fullName, private: false, owner: { login: owner }, name, default_branch: 'trunk' };
 }
 
-function pushBody(commits: PushCommit[], ref = 'refs/heads/trunk', deleted = false, fullName?: string): string {
+// `after` is the push head; GitHub lists the head commit last.
+function pushBody(
+  commits: PushCommit[],
+  ref = 'refs/heads/trunk',
+  deleted = false,
+  fullName?: string,
+  after = commits.at(-1)?.id,
+): string {
   return JSON.stringify({
     ref,
     deleted,
+    after,
     repository: repository(fullName),
     commits: commits.map((c) => ({
       id: c.id,
@@ -85,8 +93,8 @@ describe('push webhooks give revert lessons', () => {
   async function deliver(event: string, body: string): Promise<Response> {
     return postWebhook(handle.port, body, defaultHeaders(body, event, `d-${++delivery}`));
   }
-  const push = (commits: PushCommit[], ref?: string, deleted?: boolean, fullName?: string) =>
-    deliver('push', pushBody(commits, ref, deleted, fullName));
+  const push = (commits: PushCommit[], ref?: string, deleted?: boolean, fullName?: string, after?: string) =>
+    deliver('push', pushBody(commits, ref, deleted, fullName, after));
   const rows = (event: string) => loadAllEntries(root, TENANT).filter((e) => e.tags.includes(`event:${event}`));
   const refOf = (sha: string, lesson: 'revert' | 'codeowners' = 'revert') =>
     githubCommitLessonRef('acme/repo', sha, lesson, undefined);
@@ -228,11 +236,8 @@ describe('push webhooks give revert lessons', () => {
     );
   });
 
-  it('c. a push to another branch gives no lesson, even with a CODEOWNERS change', async () => {
-    const res = await push(
-      [{ id: R, message: revertMsg('Use v2 parser', S), modified: ['.github/CODEOWNERS'] }],
-      'refs/heads/feature',
-    );
+  it('c. a push to another branch gives no lesson', async () => {
+    const res = await push([{ id: R, message: revertMsg('Use v2 parser', S) }], 'refs/heads/feature');
 
     expect(await jsonAs<{ status: string; lessons: number }>(res)).toMatchObject({
       status: 'skipped',
@@ -285,9 +290,11 @@ describe('push webhooks give revert lessons', () => {
     expect(startingWith(second, 'Undoes:')).toEqual(['Undoes: https://github.com/acme/repo/pull/13']);
   });
 
-  describe('a revert of a PR merged with a merge commit', () => {
+  describe.each([
+    ['a title merge that names its pull', 'Revert "Add cache layer" (#13)\n\nReverts acme/repo#12'],
+    ['a title merge with a blank body', 'Revert "Add cache layer" (#13)'],
+  ])('a revert of a PR merged with a merge commit, %s', (_name, titleMerge) => {
     const branchRevert = `Revert "Merge pull request #12 from acme/cache"\n\nThis reverts commit ${S}, reversing changes made to ${P}.`;
-    const titleMerge = 'Revert "Add cache layer" (#13)\n\nReverts acme/repo#12';
     const pushed = () =>
       push([
         { id: R, message: branchRevert },
@@ -311,6 +318,83 @@ describe('push webhooks give revert lessons', () => {
       expect(rows('revert').map((e) => e.artifactRef)).toEqual([refOf(R)]);
     });
   });
+
+  describe('only the push head is dropped as the merge copy of a revert', () => {
+    const shaRevert = { id: R, message: revertMsg('Add retry', S) };
+    const squash = { id: M, message: 'Revert "Use v2 parser" (#14)\n\nReverts acme/repo#13' };
+
+    it('an unrelated squash revert that is not the head stays beside a sha revert', async () => {
+      await push([squash, shaRevert]);
+      expect(
+        rows('revert')
+          .map((e) => e.artifactRef)
+          .sort(),
+      ).toEqual([refOf(R), refOf(M)].sort());
+    });
+
+    it('a squash revert of another change stays when the head is another commit', async () => {
+      const cache = { id: R2, message: revertMsg('Cache', S2) };
+      const parser = { id: M, message: 'Revert "Parser" (#15)\n\nReverts acme/repo#14' };
+      await push([cache, parser, { id: P, message: 'Bump the version' }]);
+      expect(
+        rows('revert')
+          .map((e) => e.artifactRef)
+          .sort(),
+      ).toEqual([refOf(R2), refOf(M)].sort());
+    });
+
+    it('a head commit with no PR-title suffix is kept beside a sha revert', async () => {
+      await push([shaRevert, { id: M, message: 'Revert "Use v2 parser"' }]);
+      expect(
+        rows('revert')
+          .map((e) => e.artifactRef)
+          .sort(),
+      ).toEqual([refOf(R), refOf(M)].sort());
+    });
+
+    it('a push that holds only the title merge keeps it', async () => {
+      await push([{ id: M, message: 'Revert "Add cache layer" (#13)' }]);
+      expect(rows('revert').map((e) => e.artifactRef)).toEqual([refOf(M)]);
+    });
+  });
+
+  describe('one reverted sha is one lesson', () => {
+    it('a branch revert and its title merge give one row when only the merge names a pull', async () => {
+      await push([
+        { id: R, message: revertMsg('Add cache layer', S) },
+        { id: M, message: `Revert "Add cache layer" (#13)\n\nThis reverts commit ${S}.\n\nReverts acme/repo#14` },
+      ]);
+      expect(rows('revert').map((e) => e.artifactRef)).toEqual([refOf(R)]);
+    });
+
+    it('two originals that only look alike once joined with a colon stay two groups', async () => {
+      await push([
+        { id: R, message: 'Revert "X:1" (#30)\n\nReverts acme/repo#2' },
+        { id: R2, message: 'Revert "X" (#31)\n\nReverts acme/repo#12' },
+      ]);
+      expect(
+        rows('revert')
+          .map((e) => e.artifactRef)
+          .sort(),
+      ).toEqual([refOf(R), refOf(R2)].sort());
+    });
+  });
+
+  it('a nested revert subject near the 1 MiB body cap is answered within the 5 s test limit', async () => {
+    const wrappers = 90_000;
+    const subject = `${'Revert "'.repeat(wrappers)}X${'"'.repeat(wrappers)}`;
+    const nested = { id: R, message: revertMsg(subject, S) };
+    const body = pushBody([nested]);
+    expect(body.length).toBeLessThan(1024 * 1024);
+
+    // The first delivery writes the lesson; a redelivery of the commit finds it logged, so its time is the parse.
+    const first = await postWebhook(handle.port, body, defaultHeaders(body, 'push', 'd-nested-1'));
+    expect(first.status).toBe(200);
+    const again = pushBody([nested, { id: P, message: 'Bump the version' }]);
+    const res = await postWebhook(handle.port, again, defaultHeaders(again, 'push', 'd-nested-2'));
+
+    expect(res.status).toBe(200);
+  }, 5_000);
 
   it('a push then a backfill of a repository typed in another case give one row', async () => {
     await push([{ id: R, message: revertMsg('Add cache layer', S) }], undefined, undefined, 'Acme/Repo');

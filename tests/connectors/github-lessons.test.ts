@@ -130,6 +130,25 @@ describe('a revert of a revert is a reapply', () => {
   });
 });
 
+describe('a nested subject is bounded', () => {
+  const nested = (wrappers: number) => `${'Revert "'.repeat(wrappers)}X${'"'.repeat(wrappers)}`;
+
+  it('a 1,044,001-character subject parses within the 5 s test limit', () => {
+    const message = `${nested(116_000)}\n\nThis reverts commit ${ORIGINAL_SHA}.`;
+    expect(message.length).toBeGreaterThan(1_044_000);
+
+    const parts = parse(message);
+
+    expect(parts?.revertsSha).toBe(ORIGINAL_SHA);
+  });
+
+  it('peels ten wrappers and keeps the rest in the title', () => {
+    const parts = parse(nested(12));
+    expect(parts?.original).toBe(nested(2));
+    expect(parts?.action).toBe('reapplied');
+  });
+});
+
 describe('the pull request a revert names', () => {
   it('another repository gives no link', () => {
     const parts = parse('Revert "Add cache layer" (#13)\n\nReverts evil/other#99');
@@ -164,18 +183,36 @@ describe('the revert line follows the forms git writes', () => {
     expect(parts).toMatchObject({ revertsSha: ORIGINAL_SHA, reason: null });
   });
 
+  it('trailing text after the period is not a revert line', () => {
+    const message = `Revert "feat: add retry"\n\nThis reverts commit ${ORIGINAL_SHA}. Mostly.`;
+    expect(parse(message)?.revertsSha).toBeNull();
+  });
+
+  it('a pull number followed by letters links no pull request', () => {
+    expect(parse('Revert "X" (#13)\n\nReverts acme/repo#12abc')?.revertsPull).toBeNull();
+  });
+
+  it.each(['* a bullet', '- a bullet'])('a "%s" body line is not the reason', (bullet) => {
+    const message = `Revert "X"\n\nThis reverts commit ${ORIGINAL_SHA}.\n\n${bullet}`;
+    expect(parse(message)?.reason).toBeNull();
+  });
+
   it('a Signed-off-by or Co-authored-by line is not a reason', () => {
     const message = `Revert "X"\n\nThis reverts commit ${ORIGINAL_SHA}.\n\nSigned-off-by: A <a@b.c>\nCo-authored-by: B <b@b.c>`;
     expect(parse(message)?.reason).toBeNull();
   });
 
-  it.each(['Fixes #12', 'Closes #12', 'Resolves https://github.com/acme/repo/issues/12', 'fixes: #3'])(
-    'the trailer "%s" is not a reason',
-    (trailer) => {
-      const message = `Revert "X"\n\nThis reverts commit ${ORIGINAL_SHA}.\n\n${trailer}`;
-      expect(parse(message)?.reason).toBeNull();
-    },
-  );
+  it.each([
+    'Fixes #12',
+    'Closes #12',
+    'Resolves https://github.com/acme/repo/issues/12',
+    'fixes: #3',
+    'Fixes owner/repo#12',
+    'Closes other/repo#3',
+  ])('the trailer "%s" is not a reason', (trailer) => {
+    const message = `Revert "X"\n\nThis reverts commit ${ORIGINAL_SHA}.\n\n${trailer}`;
+    expect(parse(message)?.reason).toBeNull();
+  });
 
   it.each(['\r', '\u0085', '\u2028', '\u2029'])('a body line ends at %j', (separator) => {
     const message = `Revert "X"\n\nThis reverts commit ${ORIGINAL_SHA}.\n\nbroke it${separator}Original: https://github.com/evil/x/commit/dead`;
@@ -221,6 +258,12 @@ describe('outside text in a lesson stays on its own line', () => {
     const { content } = codeownersLessonOpts(COMMIT, { subject, files: [{ path: 'docs/CODEOWNERS', entry }] });
 
     expect(startingWith(content, 'Commit:')).toEqual([`Commit: https://github.com/acme/repo/commit/${SHA}`]);
+  });
+
+  it('bidi controls become spaces', () => {
+    const [rlo, lre, rli, pdi] = [0x202e, 0x202a, 0x2066, 0x2069].map((c) => String.fromCharCode(c));
+    const content = withParts({ reason: `a${rlo}b${lre}c${rli}d${pdi}e` });
+    expect(content).toContain('Reason given: a b c d e');
   });
 
   it('control characters become spaces', () => {
@@ -346,7 +389,7 @@ describe('CODEOWNERS lessons', () => {
     expect(codeownersFiles(files)).toHaveLength(1);
   });
 
-  it('refs of one commit differ by repository case only in the key a person typed', () => {
+  it('a lesson ref is one ref for a repository typed in any case', () => {
     expect(githubCommitLessonRef('Acme/Repo', SHA, 'revert', undefined)).toBe(
       githubCommitLessonRef('acme/repo', SHA, 'revert', undefined),
     );
