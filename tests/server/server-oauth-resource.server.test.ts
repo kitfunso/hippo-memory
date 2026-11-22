@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { isJsonObject, parseJson, type JsonObject, type JsonValue } from '../../src/base/util/json.js';
 import type { OAuthResource, ResolvedBearer, ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
 import { mintAdminKey } from '../_helpers/admin-server.js';
@@ -65,7 +66,7 @@ interface Reply {
   text: string;
 }
 
-async function send(method: string, path: string, authorization?: string, body?: unknown): Promise<Reply> {
+async function send(method: string, path: string, authorization?: string, body?: JsonValue): Promise<Reply> {
   const headers = new Headers();
   if (authorization !== undefined) headers.set('authorization', authorization);
   if (body !== undefined) headers.set('content-type', 'application/json');
@@ -75,6 +76,12 @@ async function send(method: string, path: string, authorization?: string, body?:
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
   return { status: res.status, challenge: res.headers.get('www-authenticate'), text: await res.text() };
+}
+
+function jsonOf(text: string): JsonObject {
+  const value = parseJson(text);
+  if (!isJsonObject(value)) throw new Error(`not a JSON object: ${text}`);
+  return value;
 }
 
 const callMcp = (authorization?: string): Promise<Reply> => send('POST', '/mcp', authorization, CALL);
@@ -113,7 +120,7 @@ describe('the protected-resource metadata', () => {
 
   it('leaves scopes out of the document and the challenge when none are set', async () => {
     await startOAuth({ resource: RESOURCE, authorizationServers: AS });
-    const doc = JSON.parse((await send('GET', META)).text) as Record<string, unknown>;
+    const doc = jsonOf((await send('GET', META)).text);
     expect(Object.keys(doc)).not.toContain('scopes_supported');
     expect((await callMcp()).challenge).toBe(`Bearer resource_metadata="${METADATA_URL}"`);
   });
@@ -123,7 +130,7 @@ describe('the protected-resource metadata', () => {
     await startOAuth(live);
     live.resource = 'https://evil.example.com/other/mcp';
     live.scopes = ['evil.scope'];
-    const doc = JSON.parse((await send('GET', META)).text) as Record<string, unknown>;
+    const doc = jsonOf((await send('GET', META)).text);
     expect(doc.resource).toBe(RESOURCE);
     expect(doc.scopes_supported).toEqual(SCOPES);
     expect((await callMcp()).challenge).toBe(CHALLENGE);
@@ -151,7 +158,7 @@ describe('the /mcp challenge', () => {
     await startOAuth();
     const reply = await callMcp('Bearer ext.good');
     expect(reply.status).toBe(200);
-    expect((JSON.parse(reply.text) as { result?: unknown }).result).toBeDefined();
+    expect(jsonOf(reply.text).result).toBeDefined();
     expect(reply.challenge).toBeNull();
   });
 
@@ -181,7 +188,7 @@ describe('the /mcp challenge', () => {
     await startOAuth();
     const reply = await callMcp(`Bearer ${key}`);
     expect(reply.status).toBe(200);
-    expect((JSON.parse(reply.text) as { result?: unknown }).result).toBeDefined();
+    expect(jsonOf(reply.text).result).toBeDefined();
     expect(reply.challenge).toBeNull();
   });
 });
@@ -256,7 +263,7 @@ describe('a refused oauth setting', () => {
     await boot({ resource, authorizationServers: AS });
     const res = await fetch(`${handle!.url}${META}`);
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { resource: string }).resource).toBe(resource);
+    expect(jsonOf(await res.text()).resource).toBe(resource);
   });
 });
 
