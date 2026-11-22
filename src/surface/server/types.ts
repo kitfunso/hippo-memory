@@ -38,8 +38,30 @@ export interface ResolvedBearer {
   scopes?: readonly string[];
 }
 
+/** serve()'s OAuth setting: hippo is the protected resource, never the authorization server.
+ * Rules: https unless loopback, path ends in /mcp, no query, fragment or encoded slash, no
+ * offline_access scope; each issuer exactly as its server publishes it, printable ASCII, normal
+ * URL form. */
+export interface OAuthResource {
+  /** The public URL clients use for /mcp, in normal URL form: https, or http on a loopback host. */
+  readonly resource: string;
+  /** Issuers the authResolver accepts, at least one; each as its server publishes it: printable
+   * ASCII, normal URL form. */
+  readonly authorizationServers: readonly string[];
+  /** Scopes a client asks for, sent as scopes_supported and in the challenge's scope. */
+  readonly scopes?: readonly string[];
+}
+
+/** The two `WWW-Authenticate` values a /mcp 401 can carry, built once at boot. */
+export interface OAuthChallenge {
+  readonly withError: string;
+  readonly withoutError: string;
+}
+
 /** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so
- * throw only when upstream is down. */
+ * throw only when upstream is down. With serve's oauth set core checks none of the token, so answer
+ * null unless its signature, issuer (in oauth.authorizationServers), audience (includes
+ * oauth.resource) and expiry all pass. */
 export type AuthResolver = (
   token: string,
   /** Aborted when the deadline passes, so a slow upstream call can stop. */
@@ -91,6 +113,8 @@ export interface ServeOptions {
   authResolver?: AuthResolver;
   /** Deadline for one authResolver call; defaults to 5000 ms. */
   authResolverTimeoutMs?: number;
+  /** OAuth metadata for /mcp, named in a POST /mcp 401 only; boot refuses it without an authResolver. */
+  oauth?: OAuthResource;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
@@ -169,6 +193,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
   publicJsonBodies: ReadonlyMap<string, string>;
+  /** The /mcp 401 challenge, frozen at boot from the checked oauth setting. */
+  readonly oauthChallenge?: OAuthChallenge;
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */

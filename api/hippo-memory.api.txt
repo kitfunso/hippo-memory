@@ -474,6 +474,7 @@ server.d.ts: KeyQuotaCall re-export
 server.d.ts: KeyQuotaRefusal re-export
 server.d.ts: LOOPBACK_HOST_HEADER re-export
 server.d.ts: NotFoundError re-export
+server.d.ts: OAuthResource re-export
 server.d.ts: ProjectWriteCall re-export
 server.d.ts: ProjectWriteGate re-export
 server.d.ts: RateLimitSpec re-export

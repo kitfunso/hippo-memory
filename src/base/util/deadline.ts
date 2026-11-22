@@ -9,6 +9,7 @@ export class DeadlineError extends Error {
   }
 }
 
+// Local, since capture-contract imports util and a return import would close a feature cycle.
 function isCallable<F>(value: F | undefined): value is F {
   return typeof value === 'function';
 }
