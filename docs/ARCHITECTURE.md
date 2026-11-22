@@ -891,6 +891,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/auth.ts
 - `checkAuth` (src/surface/server/auth.ts): A request with no key is refused 401, from loopback too. 3.0 removed `HIPPO_ALLOW_KEYLESS_LOCAL`, which let a loopback caller with no proxy header in as a member: a port forwarder sends no such header, so the header list could never prove a caller local. The CLI now sends the key `serve()` writes to `server.key`. The 401 says where that key is only for a caller that passes `isLocalCaller`; a proxied caller or a browser page gets the plain `auth required`. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
+- `sanitiseResolved`, `buildContextWithAuth`: a resolver role of 'viewer' stays a viewer, and any other value but 'admin' is a member. `buildContextWithAuth` notes the caller's role once, so a /v1, add-on or MCP request line all carry `role=`.
 
 ### src/surface/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
@@ -914,6 +915,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/route-table.ts
 - `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
+- `assertLevel`: each /v1 row declares viewer, editor or admin. A viewer on an editor row gets 403 with `VIEWER_REFUSAL`, and an add-on route with no `level` takes editor. A new by-id write surface must take the editor level, since `scopeReaderOf` reads a viewer as a member.
 
 ### src/surface/server/routes/admin.ts
 - `handleCreateAuthKey`: POST /v1/auth/keys — mint a new API key. Plaintext lands in the response body (Task 8)
