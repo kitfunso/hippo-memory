@@ -81,9 +81,15 @@ export function isStringValue<T>(value: T): value is T & string {
   return String(value) === value;
 }
 
-/** An object guard that avoids `typeof`; arrays count as objects, as they do for `typeof`. */
+/** An object guard that avoids `typeof`; every object, array and function counts, from any realm
+ * and with any prototype, as for `typeof`. */
 export function isObjectLike<T>(value: T): value is T & object {
-  return value !== null && value instanceof Object;
+  return Object(value) === value;
+}
+
+/** A function guard, kept beside the other guards so a caller needs no inline `typeof`. */
+export function isCallable<F>(value: F | undefined): value is F {
+  return typeof value === 'function';
 }
 
 /** The hook runtimes a `--runtime` flag names; absent means Claude Code. */

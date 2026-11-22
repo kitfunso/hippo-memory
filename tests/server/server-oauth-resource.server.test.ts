@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { isJsonObject, parseJson, type JsonObject, type JsonValue } from '../../src/base/util/json.js';
 import type { OAuthResource, ResolvedBearer, ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
@@ -18,10 +19,14 @@ const INVALID = `${CHALLENGE}, error="invalid_token"`;
 const GOOD: OAuthResource = { resource: RESOURCE, authorizationServers: AS, scopes: SCOPES };
 const NO_RESOLVER = 'oauth needs an authResolver to check the tokens its authorization servers issue';
 const NO_OBJECT = 'oauth must be an object with resource and authorizationServers';
-const ISSUER_CHARS = (i: number): string => `oauth.authorizationServers[${i}] must have no space or control character`;
-const ISSUER_FORM = (i: number): string => `oauth.authorizationServers[${i}] must be written in its normal URL form`;
+const ISSUER_CHARS = (i: number): string =>
+  `oauth.authorizationServers[${i}] must be printable ASCII only, with no space or control character`;
+const ISSUER_FORM = (i: number): string =>
+  `oauth.authorizationServers[${i}] must be in normal URL form: lower-case scheme and host, no default port, written as the URL parser writes it`;
+const NOT_SERVERS_ARRAY = 'oauth.authorizationServers must be an array of strings';
+const NOT_SCOPES_ARRAY = 'oauth.scopes must be an array of strings';
 // SAFETY: an embedder that skips our types can pass any value; boot must refuse each of these.
-const UNTYPED = { nothing: null as never, object: {} as never };
+const UNTYPED = { nothing: null as never, object: {} as never, text: 'hippo.memory' as never };
 const CALL = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } };
 const MEMBER: ResolvedBearer = { tenantId: 'default', subject: 'user-1', role: 'member' };
 
@@ -275,6 +280,14 @@ describe('a refused oauth setting', () => {
     ],
     ['server with an upper-case host', { authorizationServers: ['https://Login.example.com/'] }, ISSUER_FORM(0)],
     ['server with a default port', { authorizationServers: ['https://login.example.com:443/t'] }, ISSUER_FORM(0)],
+    [
+      'server with a default port and no path',
+      { authorizationServers: ['https://login.example.com:443'] },
+      ISSUER_FORM(0),
+    ],
+    ['server with an upper-case scheme', { authorizationServers: ['HTTPS://login.example.com'] }, ISSUER_FORM(0)],
+    ['server with an IDN host', { authorizationServers: ['https://bücher.example'] }, ISSUER_CHARS(0)],
+    ['server with a non-ASCII path', { authorizationServers: ['https://login.example.com/münchen'] }, ISSUER_CHARS(0)],
   ];
 
   it.each(refused)('refuses %s at boot with its fixed message and leaves no pidfile', async (_name, patch, message) => {
@@ -293,8 +306,44 @@ describe('a refused oauth setting', () => {
     ['null authResolver', GOOD, { authResolver: UNTYPED.nothing }, NO_RESOLVER],
     ['authResolver that is no function', GOOD, { authResolver: UNTYPED.object }, NO_RESOLVER],
     ['null oauth', UNTYPED.nothing, { authResolver: resolver }, NO_OBJECT],
+    ['string scopes', { ...GOOD, scopes: UNTYPED.text }, { authResolver: resolver }, NOT_SCOPES_ARRAY],
+    [
+      'string authorizationServers',
+      { ...GOOD, authorizationServers: UNTYPED.text },
+      { authResolver: resolver },
+      NOT_SERVERS_ARRAY,
+    ],
   ])('refuses a %s with its fixed message', async (_name, oauth, extra, message) => {
     expect((await bootError(oauth, extra))?.message).toBe(message);
+  });
+
+  describe('a setting from outside this realm or prototype chain', () => {
+    // SAFETY: Object.create(null) and runInNewContext answer `any`; both hold exactly the GOOD fields.
+    const bare: OAuthResource = Object.assign(Object.create(null), GOOD);
+    const foreign: OAuthResource = runInNewContext(
+      `({ resource: ${JSON.stringify(RESOURCE)}, authorizationServers: ${JSON.stringify(AS)}, scopes: ${JSON.stringify(SCOPES)} })`,
+    );
+
+    async function publishedDocument(oauth: OAuthResource): Promise<string> {
+      await startOAuth(oauth);
+      const text = (await send('GET', META)).text;
+      await handle?.stop();
+      handle = null;
+      return text;
+    }
+
+    it.each([
+      ['a null-prototype object', bare],
+      ['an object made in another realm', foreign],
+    ])('boots %s and publishes the document a plain object does', async (_name, oauth) => {
+      expect(await publishedDocument(oauth)).toBe(await publishedDocument(GOOD));
+    });
+
+    it('accepts an authResolver made in another realm', async () => {
+      // SAFETY: runInNewContext answers `any`; the function takes no argument and resolves to nothing.
+      const authResolver: Overrides['authResolver'] = runInNewContext('(async () => undefined)');
+      expect(await bootError(GOOD, { authResolver })).toBeNull();
+    });
   });
 
   it('checks the setting before it claims the pidfile', async () => {
