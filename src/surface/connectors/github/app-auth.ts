@@ -3,7 +3,12 @@
  */
 
 import { createPrivateKey, sign, type KeyObject } from 'node:crypto';
-import { hostAndPath, GITHUB_TIMEOUT_MS, type GitHubTokenSource } from './octokit-client.js';
+import {
+  checkGitHubTokenText,
+  hostAndPath,
+  GITHUB_TIMEOUT_MS,
+  type GitHubTokenSource,
+} from './octokit-client.js';
 import type { GitHubSite } from './site.js';
 import { fetchWithRetry } from '../../../infra/http-retry.js';
 import { readCappedJson } from '../../../base/util/capped-json.js';
@@ -28,8 +33,6 @@ const INSTALLATION_HINT =
   'or check that the App is installed on it.';
 const UNAUTHORIZED_HINT = "; check GITHUB_APP_ID, the key file and this machine's clock.";
 const RETRY_HINT = '; GitHub is unavailable or rate limited, so try again later.';
-// The token goes into an Authorization header, so a reply with any other character is broken.
-const HEADER_SAFE_TOKEN = /^[A-Za-z0-9_.-]+$/;
 
 /** The key as a node KeyObject; the parser's own error can quote what it read, so it is dropped. */
 export function parseAppPrivateKey(pem: string): KeyObject {
@@ -158,6 +161,15 @@ interface MintedToken {
   readonly ttlMs: number;
 }
 
+// The shared rule's text names a variable, not this reply, so the fixed failure stands in for it.
+function checkMintedToken(token: string, failure: string): void {
+  try {
+    checkGitHubTokenText('the token', token);
+  } catch {
+    throw new Error(failure);
+  }
+}
+
 // The ttl counts from before the request left, so a slow reply or a clock behind GitHub's only
 // shortens it; a reply with no usable expiry is broken.
 async function readMintReply(
@@ -169,9 +181,8 @@ async function readMintReply(
   const body = await readJsonReply(res, failure);
   const token = isJsonObject(body) ? body.token : undefined;
   const expiresAt = isJsonObject(body) ? body.expires_at : undefined;
-  if (!isJsonString(token) || !HEADER_SAFE_TOKEN.test(token) || !isJsonString(expiresAt)) {
-    throw new Error(failure);
-  }
+  if (!isJsonString(token) || !isJsonString(expiresAt)) throw new Error(failure);
+  checkMintedToken(token, failure);
   const expiresMs = Date.parse(expiresAt);
   if (!Number.isFinite(expiresMs)) throw new Error(failure);
   const ttlMs = Math.min(expiresMs - wallAtMintStart, MAX_TOKEN_TTL_MS);

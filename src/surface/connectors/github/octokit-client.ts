@@ -7,7 +7,7 @@ import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
-import { errorClassFields, errorFields, errorMessage, log } from '../../../base/util/log.js';
+import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { tryParseUrl } from '../../../base/util/net.js';
 
 export class GitHubFetchError extends Error {
@@ -35,6 +35,16 @@ export type GitHubTokenSource = () => Promise<string>;
 
 export function staticTokenSource(token: string): GitHubTokenSource {
   return () => Promise.resolve(token);
+}
+
+// With only these characters an escaped echo of a token equals the token, so replaceAll finds it.
+const GITHUB_TOKEN_TEXT = /^[A-Za-z0-9_.-]+$/;
+
+/** Refuses a token with a character GitHub tokens do not use, naming `name` and never the value. */
+export function checkGitHubTokenText(name: string, token: string): void {
+  if (!GITHUB_TOKEN_TEXT.test(token)) {
+    throw new Error(`${name} must use only letters, digits, '_', '.' and '-'`);
+  }
 }
 
 /** Parse the rel="next" URL from an RFC 5988 `Link` header, or null. */
@@ -77,9 +87,7 @@ async function readItems(res: Response, url: string): Promise<JsonValue[]> {
   try {
     body = await readCappedJson(res, GITHUB_MAX_REPLY_BYTES);
   } catch (err) {
-    // V8's parse error quotes part of the body, which may echo the token, so no cause is kept.
-    log.debug(`github: list reply unreadable: ${errorMessage(err)}`, errorClassFields(err));
-    throw new GitHubFetchError(res.status, errorMessage(err), path);
+    throw new GitHubFetchError(res.status, errorMessage(err), path, { cause: err });
   }
   if (!Array.isArray(body)) {
     throw new GitHubFetchError(res.status, 'the reply is not a JSON array', path);
@@ -99,11 +107,12 @@ async function errorExcerpt(res: Response, token: string): Promise<string> {
       return '';
     },
   );
-  const clean = token === '' ? body : dropCutTokenCopy(body, token).replaceAll(token, '[token]');
+  const clean = token === '' ? body : dropCutTokenCopy(body.replaceAll(token, '[token]'), token);
   return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
 }
 
-// The read cap can cut a copy of the token in half, and replaceAll cannot match half a token.
+// replaceAll cannot match a copy the read cap cut in half, so this drops it, and only after replaceAll:
+// run first, it would cut the last character off a whole copy whose end equals its start.
 function dropCutTokenCopy(body: string, token: string): string {
   for (let len = Math.min(token.length - 1, body.length); len > 0; len--) {
     if (body.endsWith(token.slice(0, len))) return body.slice(0, body.length - len);

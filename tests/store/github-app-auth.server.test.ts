@@ -421,6 +421,20 @@ describe('GitHub App token source in backfillRepo', () => {
     expect(lists(f)).toEqual([]);
   });
 
+  it.each(['/', '+', '%', '"'])(
+    'A8. a mint reply whose token holds %s fails with the fixed text and leaks no part of it',
+    async (char) => {
+      const f = await serve();
+      f.mintReplies.push({ status: 201, token: `ghs_MINTCANARY${char}x`, expiresAt: iso(T + HOUR) });
+      const err = await failureOf(run(f, sourceFor(f, clocks(), '42')));
+
+      expect(err.message).toBe(`GitHub App token reply from ${f.url}${MINT_PATH} has no token or expiry`);
+      expect(err.cause).toBeUndefined();
+      expect(err.message).not.toContain('MINTCANARY');
+      expect(lists(f)).toEqual([]);
+    },
+  );
+
   it('A8. a mint reply whose token cannot go in a header fails with the fixed text and leaks no part of it', async () => {
     vi.stubEnv('HIPPO_LOG', 'debug');
     const written: string[] = [];
@@ -475,8 +489,12 @@ describe('hippo github backfill with App settings', () => {
     return file;
   };
 
-  async function backfillWith(env: Record<string, string>): ReturnType<typeof runCliAs> {
+  async function backfillWith(
+    env: Record<string, string>,
+    onStart?: (f: FakeGitHub) => void,
+  ): ReturnType<typeof runCliAs> {
     fake = await startFakeGitHub();
+    onStart?.(fake);
     return runCliAs(['github', 'backfill', '--repo', REPO], {
       cwd: base,
       env: { ...process.env, HIPPO_HOME: hippoRoot, GITHUB_ENTERPRISE_URL: fake.url, ...env },
@@ -547,6 +565,45 @@ describe('hippo github backfill with App settings', () => {
     expect(fake?.requests).toEqual([]);
   });
 
+  it.each(['+', '/', '%', '"'])(
+    'A4. a GITHUB_TOKEN with %s exits 2 naming the characters a token may use, without quoting it',
+    async (char) => {
+      const r = await backfillWith({ GITHUB_TOKEN: `ghp_PATCANARY${char}x` });
+
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain("GITHUB_TOKEN must use only letters, digits, '_', '.' and '-'");
+      expect(r.stderr).not.toContain('PATCANARY');
+      expect(r.stdout).not.toContain('PATCANARY');
+      expect(fake?.requests).toEqual([]);
+    },
+  );
+
+  it('A4. an all-space GITHUB_TOKEN is unset: with no App it exits 2 saying so', async () => {
+    const r = await backfillWith({ GITHUB_TOKEN: '   ' });
+
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain('GITHUB_TOKEN is not set.');
+    expect(fake?.requests).toEqual([]);
+  });
+
+  it('A4. an all-space GITHUB_TOKEN is unset: with an App the route has no unused-token note', async () => {
+    const r = await backfillWith(
+      {
+        GITHUB_APP_ID: '123',
+        GITHUB_APP_PRIVATE_KEY_FILE: keyFile(),
+        GITHUB_APP_INSTALLATION_ID: '42',
+        GITHUB_TOKEN: '   ',
+      },
+      (f) => {
+        f.mintReplies.push({ status: 201, token: 'ghs_1', expiresAt: iso(Date.now() + HOUR) });
+      },
+    );
+
+    expect(r.status).toBe(0);
+    expect(r.stderr).toContain('GitHub auth: GitHub App 123');
+    expect(r.stderr).not.toContain('GITHUB_TOKEN is set and not used');
+  });
+
   it.each([
     ['LF', '\n'],
     ['CR', '\r'],
@@ -579,7 +636,9 @@ describe('hippo github backfill with App settings', () => {
 
       expect(r.status).not.toBe(0);
       expect(r.stderr).toContain('github backfill failed');
-      const windows = Array.from({ length: pat.length - 11 }, (_, i) => pat.slice(i, i + 12));
+      expect(r.stderr).toContain('reply is not JSON');
+      expect(r.stderr).not.toMatch(/SyntaxError|is not valid JSON|Unexpected token/);
+      const windows = Array.from({ length: pat.length - 7 }, (_, i) => pat.slice(i, i + 8));
       expect(windows.filter((w) => r.stderr.includes(w) || r.stdout.includes(w))).toEqual([]);
     } finally {
       server.closeAllConnections();

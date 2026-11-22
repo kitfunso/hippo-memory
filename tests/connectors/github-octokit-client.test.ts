@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  checkGitHubTokenText,
   GitHubFetchError,
   parseNextLink,
   realGitHubFetcher,
@@ -140,7 +141,19 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
   it('throws on an HTML error page served with status 200', async () => {
     const err = await failure(new Response('<html><body>Whoa there!</body></html>', { status: 200 }));
     expectNamesTheReply(err, /reply is not JSON/);
-    expect(err.cause).toBeUndefined();
+    expect(err.cause).toBeInstanceOf(Error);
+  });
+
+  it('keeps the reason a reply stopped in mid-body', async () => {
+    const stopped = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('[{"id":'));
+        controller.error(new Error('socket hang up'));
+      },
+    });
+    const err = await failure(new Response(stopped, { status: 200 }));
+
+    expect(err.cause).toMatchObject({ message: 'socket hang up' });
   });
 
   it('throws on a null body', async () => {
@@ -183,4 +196,18 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
     expect(err?.status).toBe(500);
     expect(err?.bodyExcerpt).toBe('x'.repeat(256));
   });
+});
+
+describe('checkGitHubTokenText', () => {
+  it('accepts the characters GitHub tokens use', () => {
+    expect(() => checkGitHubTokenText('T', 'ghp_AZaz09')).not.toThrow();
+    expect(() => checkGitHubTokenText('T', 'ghs_1.2-3_4')).not.toThrow();
+  });
+
+  it.each(['a+b', 'a/b', 'a%b', 'a"b', 'a b', 'a\nb', 'a=b', 'a\\b', 'a&b', 'a<b', 'a~b', ''])(
+    'refuses %j with a fixed text that names the variable and not the value',
+    (token) => {
+      expect(() => checkGitHubTokenText('T', token)).toThrow(/^T must use only letters, digits, '_', '\.' and '-'$/);
+    },
+  );
 });
