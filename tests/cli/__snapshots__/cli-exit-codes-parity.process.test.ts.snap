@@ -139,10 +139,12 @@ backfill failed: GitHub 401 on https://api.github.com/repos/acme/widgets/issues:
 exports[`hippo exit codes and output of failing invocations (built CLI) > github backfill without a repo 1`] = `
 "$ hippo github backfill -> 2
 --- stdout
-hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]
+hippo github backfill --repo <owner/name> [--since ISO] [--max <N>] [--lessons]
   --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)
   --since  Initial high-water-mark for first run (optional, ISO 8601)
   --max    Cap items per stream (optional, integer)
+  --lessons  Also write revert and CODEOWNERS lessons from default-branch commits.
+           Window: --since on every run, else 30 days; the three streams use --since on their first run only.
   Auth: GITHUB_TOKEN with repo read scope, or a GitHub App: GITHUB_APP_ID,
   GITHUB_APP_PRIVATE_KEY_FILE (the path to its .pem) and GITHUB_APP_INSTALLATION_ID
   (optional; else looked up for the repo). A fully set App wins over GITHUB_TOKEN.

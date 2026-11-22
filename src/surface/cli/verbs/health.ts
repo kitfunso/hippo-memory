@@ -52,11 +52,11 @@ export const HEALTH_VERBS = {
   }),
   github: verb(() => import('../github.js'), 'handleGitHub', {
     needs: ['connectorWrites', 'connectorEvents'],
-    flags: { switches: ['force'], values: ['max', 'repo', 'since'] },
+    flags: { switches: ['force', 'lessons'], values: ['max', 'repo', 'since'] },
     usage: [
       `
   github                   GitHub connector subcommands (backfill, dlq)
-    backfill --repo <owner/name> [--since ISO] [--max <N>]
+    backfill --repo <owner/name> [--since ISO] [--max <N>] [--lessons]
                            Paginated backfill of issues + comments
     dlq list               List DLQ entries for the active tenant
     dlq replay <id> [--force]

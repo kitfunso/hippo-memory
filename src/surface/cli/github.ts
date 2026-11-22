@@ -3,8 +3,15 @@
 
 import { envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
-import { backfillRepo } from '../connectors/github/backfill.js';
-import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
+import { backfillRepo, type BackfillResult } from '../connectors/github/backfill.js';
+import { backfillLessons } from '../connectors/github/lesson-backfill.js';
+import { ingestPushLessons } from '../connectors/github/lessons.js';
+import {
+  noRedirectGitHubFetcher,
+  realGitHubCommitFetcher,
+  realGitHubFetcher,
+  type GitHubTokenSource,
+} from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
 import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, githubEventRef, type IngestEvent } from '../connectors/github/ingest.js';
@@ -18,9 +25,12 @@ import {
   isGitHubIssueCommentEvent,
   isGitHubPullRequestEvent,
   isGitHubPullRequestReviewCommentEvent,
+  isGitHubPushEvent,
+  type GitHubPushEvent,
 } from '../connectors/github/types.js';
 import type { JsonValue } from '../../base/util/json.js';
-import { type CliFlags, type CommandContext, stringFlag } from './flag-values.js';
+import type { ConnectorContext } from '../connectors/ingest.js';
+import { type CliFlags, type CommandContext, boolFlag, stringFlag } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import {
@@ -56,10 +66,14 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
 // Console lines below are the `hippo github` command's printed result and usage text, so they stay
 // off the logger.
 export function printGitHubBackfillUsage(): void {
-  console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
+  console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>] [--lessons]');
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
   console.log('  --since  Initial high-water-mark for first run (optional, ISO 8601)');
   console.log('  --max    Cap items per stream (optional, integer)');
+  console.log('  --lessons  Also write revert and CODEOWNERS lessons from default-branch commits.');
+  console.log(
+    '           Window: --since on every run, else 30 days; the three streams use --since on their first run only.',
+  );
   console.log('  Auth: GITHUB_TOKEN with repo read scope, or a GitHub App: GITHUB_APP_ID,');
   console.log(
     '  GITHUB_APP_PRIVATE_KEY_FILE (the path to its .pem) and GITHUB_APP_INSTALLATION_ID',
@@ -103,6 +117,36 @@ function githubAuthOrExit(input: GitHubAuthInput): GitHubAuth {
   }
 }
 
+interface LessonPassInput {
+  readonly repo: string;
+  readonly source: GitHubTokenSource;
+  readonly sinceIso: string | undefined;
+  readonly site: GitHubSite;
+}
+
+/** Prints the three streams' result with the lesson counts; a failed pass prints it with `lessons`
+ * null and rethrows, so the run still exits 3. */
+async function printWithLessons(
+  ctx: ConnectorContext,
+  input: LessonPassInput,
+  result: BackfillResult,
+): Promise<void> {
+  try {
+    const lessons = await backfillLessons(ctx, {
+      repoFullName: input.repo,
+      listFetcher: noRedirectGitHubFetcher,
+      commitFetcher: realGitHubCommitFetcher,
+      tokenSource: input.source,
+      sinceIso: input.sinceIso,
+      site: input.site,
+    });
+    console.log(JSON.stringify({ ...result, lessons }, null, 2));
+  } catch (e) {
+    console.log(JSON.stringify({ ...result, lessons: null }, null, 2));
+    throw e;
+  }
+}
+
 async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   const repo = stringFlag(flags, 'repo');
   if (repo === undefined || !isGitHubRepoFullName(repo)) {
@@ -125,7 +169,11 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
       sinceIso,
       site,
     });
-    console.log(JSON.stringify(result, null, 2));
+    if (boolFlag(flags, 'lessons')) {
+      await printWithLessons(ctx, { repo, source, sinceIso, site }, result);
+    } else {
+      console.log(JSON.stringify(result, null, 2));
+    }
   } catch (e) {
     console.error('backfill failed:', errorMessage(e));
     log.warn(`github backfill failed: ${errorMessage(e)}`, errorFields(e));
@@ -172,10 +220,23 @@ export function parseParkedPayload(rawPayload: string): JsonValue {
   }
 }
 
+async function replayPush(
+  ctx: ConnectorContext,
+  payload: GitHubPushEvent,
+  deliveryId: string,
+  site: GitHubSite,
+): Promise<{ memoryId: string | null }> {
+  const { memoryIds } = await ingestPushLessons(ctx, payload, { site, deliveryId });
+  return { memoryId: memoryIds[0] ?? null };
+}
+
 function reingestParkedDelivery(site: GitHubSite): IngestHook {
   const { host, ownsBareRefs } = site;
   return async (innerCtx, args) => {
     const parsed = parseParkedPayload(args.rawPayload);
+    if (args.eventName === 'push' && isGitHubPushEvent(parsed, 'push')) {
+      return replayPush(innerCtx, parsed, args.deliveryId, site);
+    }
     const event = parsedToIngestEvent(parsed, args.eventName);
     if (!event) {
       return { memoryId: null };
