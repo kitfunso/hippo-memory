@@ -1,6 +1,6 @@
 {
   "name": "hippo-memory",
-  "version": "3.15.0",
+  "version": "3.15.1",
   "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
   "mcpServers": {
     "hippo-memory": {

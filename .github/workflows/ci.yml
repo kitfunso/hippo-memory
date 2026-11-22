@@ -95,6 +95,7 @@ jobs:
       - run: node scripts/checks/check-repo-size.mjs
       - run: node scripts/checks/check-agent-inventory.mjs
       - run: node website/scripts/check-readme-sync.mjs
+      - run: node scripts/checks/check-readme-npm-window.mjs
       - run: npm run build
       # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
       - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
