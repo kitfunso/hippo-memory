@@ -272,7 +272,7 @@ function assertMayRevoke(
     actor.viaAuthResolver &&
     (row?.tenantId !== ctx.tenantId || row.ownerSubject !== actor.subject)
   ) {
-    throw new ForbiddenError('A member can revoke only the keys it minted');
+    throw new ForbiddenError('A caller below admin can revoke only the keys it minted');
   }
   // Cross-tenant access denied: same message as missing key, no info leak.
   if (!row || row.tenantId !== ctx.tenantId) {
@@ -280,7 +280,7 @@ function assertMayRevoke(
   }
   if (actor.viaAuthResolver && row.role === 'admin') {
     throw new ForbiddenError(
-      'An auth resolver admin cannot revoke an admin key, which outranks it',
+      'A caller signed in through an auth resolver cannot revoke an admin key',
     );
   }
 }

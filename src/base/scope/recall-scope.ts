@@ -182,14 +182,28 @@ export interface ScopeActor {
  * restricted-scope grants and the person behind its key, who may change the team rows they own. */
 export interface ScopeReader {
   readonly ownScope: string | null;
-  readonly role: 'admin' | 'member';
+  readonly role: ReaderRole;
   readonly grants?: readonly string[];
   readonly owner?: string;
 }
 
+/** The roles a store port tells apart: a viewer reads what a member reads. */
+export type ReaderRole = 'admin' | 'member';
+
+/** The actor a store port takes, with the viewer already folded into member. */
+export type StoreActor = ScopeActor & { readonly role: ReaderRole };
+
+function readerRoleOf(actor: ScopeActor): ReaderRole {
+  // Every by-id write sits behind an editor-level gate, so only admin reads wider.
+  return actor.role === 'admin' ? 'admin' : 'member';
+}
+
+export function storeActorOf(actor: ScopeActor): StoreActor {
+  return { ...actor, role: readerRoleOf(actor) };
+}
+
 export function scopeReaderOf(actor: ScopeActor): ScopeReader {
-  // A viewer reads what a member reads; every by-id write sits behind an editor-level gate.
-  const role = actor.role === 'admin' ? 'admin' : 'member';
+  const role = readerRoleOf(actor);
   const reader: ScopeReader = { ownScope: personalScopeOf(actor), role };
   const withGrants = actor.scopes === undefined ? reader : { ...reader, grants: actor.scopes };
   return actor.owner ? { ...withGrants, owner: actor.owner } : withGrants;

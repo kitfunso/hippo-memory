@@ -152,6 +152,17 @@ function hasControlChar(s: string): boolean {
 // refused, never cut short.
 const MAX_RESOLVED_SCOPES = 1024;
 
+// SHORTCUT: one line per process, so a resolver with a typo cannot flood the log; no per-tenant count.
+let roleCoercionWarned = false;
+
+function warnRoleCoerced(): void {
+  if (roleCoercionWarned) return;
+  roleCoercionWarned = true;
+  log.warn(
+    'auth resolver returned no role or one outside viewer, member and admin; read it as viewer',
+  );
+}
+
 /** Core owns the checks so a resolver cannot mint an actor that collides with a built-in one. */
 function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Each field is read once: a getter on plugin code could answer differently the second time.
@@ -170,6 +181,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
     subject,
     role: roleOrViewer(role),
   };
+  if (clean.role !== role) warnRoleCoerced();
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;
     const kept = scopes.filter((s) => isJsonString(s));

@@ -337,7 +337,7 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
     const bobs = await selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
       await expect(revokeAs(ALICE, keyId)).rejects.toThrow(
-        new ForbiddenError('A member can revoke only the keys it minted'),
+        new ForbiddenError('A caller below admin can revoke only the keys it minted'),
       );
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
@@ -368,8 +368,28 @@ describe('DELETE /v1/auth/keys/:keyId by a viewer demoted from editor', () => {
     const bobs = await selfMint('tok.bob');
     const res = await deleteKey(VERA, bobs.keyId);
     expect(res.status).toBe(403);
-    expect(await res.text()).toContain('A member can revoke only the keys it minted');
+    expect(await res.text()).toContain('A caller below admin can revoke only the keys it minted');
     expect(await readWith(bobs.plaintext)).toBe(200);
+  });
+
+  it("is refused the same person's key in another tenant, which stays live", async () => {
+    await start();
+    const elsewhere = await authCreateSelf(apiCtx(home, 'other-tenant', { ...actorOf(VERA), role: 'member' }), OPTS);
+    const res = await deleteKey(VERA, elsewhere.keyId);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('A caller below admin can revoke only the keys it minted');
+    expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
+  });
+
+  it('is refused an admin key it owns, which stays live', async () => {
+    await start();
+    const adminKey = withDb((db) =>
+      createApiKey(db, { tenantId: TENANT, label: 'owned-admin', role: 'admin', ownerSubject: 'vera@corp.example' }),
+    );
+    const res = await deleteKey(VERA, adminKey.keyId);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('cannot revoke an admin key');
+    expect(withDb((db) => validateApiKey(db, adminKey.plaintext)).valid).toBe(true);
   });
 });
 

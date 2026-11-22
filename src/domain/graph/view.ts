@@ -3,7 +3,7 @@
  * `scripts/checks/check-graph-writes.mjs` stays green). Shared by `hippo graph show|view` and the HTTP
  * `GET /v1/graph` route, which all build the same `GraphModel`. */
 
-import type { ScopeActor } from '../../base/scope/recall-scope.js';
+import type { StoreActor } from '../../base/scope/recall-scope.js';
 import type { GraphReads, GraphRows } from '../../base/ports/store.js';
 import type { EntityType, RelationType } from '../../base/ports/store/graph.js';
 
@@ -37,7 +37,7 @@ export const DEFAULT_VIEW_LIMIT = 500;
 export async function buildGraphModel(
   graphReads: Pick<GraphReads, 'graphRows'>,
   tenantId: string,
-  opts: { entity?: string; limit?: number; reader?: ScopeActor } = {},
+  opts: { entity?: string; limit?: number; reader?: StoreActor } = {},
 ): Promise<GraphModel> {
   const limit = opts.limit ?? DEFAULT_VIEW_LIMIT;
   return graphModelOf(

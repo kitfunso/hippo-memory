@@ -1,7 +1,7 @@
 // GraphReads answers: the same rows, the same order, the same rows hidden and the same truncated flag.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
-import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
+import type { StoreActor } from '../../src/base/scope/recall-scope.js';
 import type { GraphRows, GraphViewQuery, GraphWalkQuery } from '../../src/base/ports/store.js';
 import type { GraphOp } from '../../src/base/ports/store/graph.js';
 import {
@@ -33,10 +33,10 @@ interface RowIds {
   readonly truncated: boolean;
 }
 
-const ADMIN: ScopeActor = { role: 'admin' };
-const MEMBER: ScopeActor = { role: 'member' };
-const GRANTED: ScopeActor = { role: 'member', scopes: [HELD_SCOPE] };
-const ALICE: ScopeActor = { role: 'member', owner: 'alice' };
+const ADMIN: StoreActor = { role: 'admin' };
+const MEMBER: StoreActor = { role: 'member' };
+const GRANTED: StoreActor = { role: 'member', scopes: [HELD_SCOPE] };
+const ALICE: StoreActor = { role: 'member', owner: 'alice' };
 const EMPTY: RowIds = { entities: [], relations: [], truncated: false };
 
 let fixture: TwoTenantFixture;
