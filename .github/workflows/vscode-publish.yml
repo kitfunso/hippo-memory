@@ -33,11 +33,14 @@ jobs:
         with:
           node-version: '24'
       # The extension has no dependencies; without the flag vsce runs npm list on the repo root and fails.
-      - run: npx --yes @vscode/vsce@4.1.1 package --no-dependencies --out hippo-memory.vsix
+      - id: package
+        run: npx --yes @vscode/vsce@4.1.1 package --no-dependencies --out hippo-memory.vsix
       - name: Publish to Open VSX
         run: |
           if [ -z "$OVSX_PAT" ]; then echo "::warning::OVSX_PAT is not set, so Open VSX was skipped"; exit 0; fi
           npx --yes ovsx@1.4.0 publish hippo-memory.vsix --skip-duplicate
       # Azure DevOps retires global PATs on 1 Dec 2026, so the Marketplace uses Trusted Publishing.
+      # Runs even if Open VSX failed, so one store never blocks the other; the job still goes red.
       - name: Publish to the VS Code Marketplace
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         run: npx --yes @vscode/vsce@4.1.1 publish --packagePath hippo-memory.vsix --skip-duplicate --oidc
