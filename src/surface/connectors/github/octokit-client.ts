@@ -5,7 +5,7 @@
 
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../../infra/http-retry.js';
-import type { JsonValue } from '../../../base/util/json.js';
+import { isJsonObject, type JsonValue } from '../../../base/util/json.js';
 import { readCappedJson, readCappedText } from '../../../base/util/capped-json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { tryParseUrl } from '../../../base/util/net.js';
@@ -101,8 +101,13 @@ async function errorExcerpt(res: Response, token: string): Promise<string> {
   return clean.slice(0, ERROR_BODY_SNIPPET_CHARS);
 }
 
-export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
-  const res = await fetchWithRetry(
+/** One GET with the GitHub headers; `redirect` says whether a 3xx is followed. */
+async function githubRequest(
+  url: string,
+  token: string,
+  redirect: RequestRedirect,
+): Promise<Response> {
+  return fetchWithRetry(
     url,
     {
       headers: {
@@ -110,6 +115,7 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
       },
+      redirect,
     },
     { timeoutMs: GITHUB_TIMEOUT_MS },
   ).catch((err) => {
@@ -118,6 +124,10 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
       cause: err,
     });
   });
+}
+
+export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
+  const res = await githubRequest(url, token, 'follow');
   // A redirect to another origin would feed that server's body into this server's refs.
   const finalOrigin = res.url ? tryParseUrl(res.url)?.origin : undefined;
   if (finalOrigin !== undefined && finalOrigin !== new URL(url).origin) {
@@ -135,4 +145,75 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   const link = res.headers.get('link') ?? '';
   const next = parseNextLink(link);
   return { items, next, rateLimit };
+};
+
+const REDIRECT_REFUSED =
+  'the redirect was refused; if the repository was renamed, pass its new name to --repo';
+const NEEDS_CONTENTS_READ =
+  "the token needs Contents read on this repository, or GitHub's secondary rate limit refused the request; check the token, then retry later";
+
+/** The error for a non-200 the strict fetchers refuse; its text is fixed, so no reply text or
+ * token can reach it. */
+function strictStatusError(status: number, url: string): GitHubFetchError {
+  let text = 'the request failed';
+  if (status >= 300 && status < 400) text = REDIRECT_REFUSED;
+  else if (status === 403 || status === 404) text = NEEDS_CONTENTS_READ;
+  return new GitHubFetchError(status, text, hostAndPath(url));
+}
+
+/** A 200 reply, or null res when GitHub rate limited; any other status throws fixed text. A 3xx is
+ * never followed. */
+async function strictReply(
+  url: string,
+  token: string,
+): Promise<{ res: Response | null; rateLimit: RateLimitInfo }> {
+  const res = await githubRequest(url, token, 'manual');
+  const rateLimit = parseRateLimit(headersToRecord(res.headers), res.status);
+  if (res.status === 200) return { res, rateLimit };
+  await res.body?.cancel().catch((err) => {
+    log.debug(`github: could not cancel the ${res.status} reply body`, errorFields(err));
+  });
+  if (rateLimit.reason !== 'none') return { res: null, rateLimit };
+  throw strictStatusError(res.status, url);
+}
+
+// No cause is kept: a JSON parse error carries a piece of the reply.
+async function readStrictJson(res: Response, url: string): Promise<JsonValue> {
+  try {
+    return await readCappedJson(res, GITHUB_MAX_REPLY_BYTES);
+  } catch (err) {
+    throw new GitHubFetchError(res.status, errorMessage(err), hostAndPath(url));
+  }
+}
+
+/** A list fetcher that never follows a redirect and puts no reply text in an error. */
+export const noRedirectGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
+  const { res, rateLimit } = await strictReply(url, token);
+  if (res === null) return { items: [], next: null, rateLimit };
+  const body = await readStrictJson(res, url);
+  if (!Array.isArray(body)) {
+    throw new GitHubFetchError(res.status, 'the reply is not a JSON array', hostAndPath(url));
+  }
+  return { items: body, next: parseNextLink(res.headers.get('link') ?? ''), rateLimit };
+};
+
+/** The reply to one commit request; commit is null only when GitHub rate limited. */
+export interface GitHubCommitReply {
+  readonly commit: Record<string, JsonValue> | null;
+  readonly rateLimit: RateLimitInfo;
+}
+
+export type GitHubCommitFetcher = (args: {
+  url: string;
+  token: string;
+}) => Promise<GitHubCommitReply>;
+
+export const realGitHubCommitFetcher: GitHubCommitFetcher = async ({ url, token }) => {
+  const { res, rateLimit } = await strictReply(url, token);
+  if (res === null) return { commit: null, rateLimit };
+  const body = await readStrictJson(res, url);
+  if (!isJsonObject(body)) {
+    throw new GitHubFetchError(res.status, 'the reply is not a JSON object', hostAndPath(url));
+  }
+  return { commit: body, rateLimit };
 };

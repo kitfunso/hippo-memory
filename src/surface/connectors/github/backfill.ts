@@ -6,7 +6,8 @@ import type { ConnectorContext } from '../ingest.js';
 import { ingestEvent, type IngestEvent } from './ingest.js';
 import { githubRepoKey } from './ref.js';
 import { GITHUB_COM, type GitHubSite } from './site.js';
-import type { GitHubFetcher, GitHubBackfillPage, GitHubTokenSource } from './octokit-client.js';
+import type { GitHubFetcher, GitHubTokenSource } from './octokit-client.js';
+import type { RateLimitInfo } from './ratelimit.js';
 import type {
   GitHubIssueEvent,
   GitHubIssueCommentEvent,
@@ -48,7 +49,7 @@ export interface BackfillResult {
 
 /** Build a synthetic `repository` from the known repo full name, because REST list items often omit it.
  *  `private` stays undefined so scopeFromRepository falls through to private. */
-function syntheticRepository(repoFullName: string): GitHubRepository {
+export function syntheticRepository(repoFullName: string): GitHubRepository {
   const [owner, name] = repoFullName.split('/');
   return {
     full_name: repoFullName,
@@ -124,7 +125,7 @@ interface DrainStreamOptions {
 
 /** The next page's URL. A link to another origin or with credentials throws, so the token never
  * leaves the server the backfill started on and no link text is printed. */
-function sameOriginNext(next: string | null, origin: string): string | null {
+export function sameOriginNext(next: string | null, origin: string): string | null {
   if (next === null) return null;
   const link = tryParseUrl(next);
   if (link !== undefined && (link.username !== '' || link.password !== '')) {
@@ -150,7 +151,11 @@ async function drainStream(
   let maxUpdatedAt: string | null = null;
 
   while (url) {
-    const page = await fetchPagePastRateLimit(options, url);
+    const pageUrl = url;
+    const page = await fetchPastRateLimit(
+      (token) => options.fetcher({ url: pageUrl, token }),
+      options,
+    );
     pages++;
 
     for (const item of page.items) {
@@ -205,17 +210,18 @@ async function ingestBackfillItem(
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
-async function fetchPagePastRateLimit(
-  options: DrainStreamOptions,
-  url: string,
-): Promise<GitHubBackfillPage> {
-  const { fetcher, tokenSource, sleep } = options;
+/** Runs one request, asking the token source before each attempt and pausing while GitHub rate
+ * limits it; throws when the limit outlasts the attempts or the wait cap. */
+export async function fetchPastRateLimit<T extends { readonly rateLimit: RateLimitInfo }>(
+  fetchOnce: (token: string) => Promise<T>,
+  opts: Pick<DrainStreamOptions, 'tokenSource' | 'sleep'>,
+): Promise<T> {
+  const { tokenSource, sleep } = opts;
   let waitedMs = 0;
   for (let attempt = 1; ; attempt++) {
-    const token = await tokenSource();
-    const page = await fetcher({ url, token });
-    if (page.rateLimit.reason === 'none') return page;
-    const waitMs = page.rateLimit.sleepSeconds * 1000;
+    const reply = await fetchOnce(await tokenSource());
+    if (reply.rateLimit.reason === 'none') return reply;
+    const waitMs = reply.rateLimit.sleepSeconds * 1000;
     if (attempt >= MAX_RATE_LIMIT_ATTEMPTS || waitedMs + waitMs > MAX_RATE_LIMIT_WAIT_MS) {
       const resetAt = new Date(Date.now() + waitMs).toISOString();
       throw new Error(
