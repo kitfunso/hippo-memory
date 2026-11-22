@@ -282,9 +282,12 @@ function editQuarantined(
     const row = pendingOrRefusal(db, tenantId, id);
     if ('outcome' in row) return rollback(row);
     const held = readEntry(db, id, tenantId);
-    if (!held || held.scope !== quarantineScopeFor(row.originalScope)) {
+    if (!held) return rollback({ outcome: 'deleted' });
+    if (held.scope !== quarantineScopeFor(row.originalScope)) {
       return rollback({ outcome: 'scope_moved' });
     }
+    if (held.supersededBy)
+      return rollback({ outcome: 'superseded', supersededBy: held.supersededBy });
     const options = { tenantId, baseHalfLifeDays: edit.baseHalfLifeDays, tags: [...edit.tags] };
     const successor = stampOriginProject(files, {
       ...createSuccessor(held, edit.content, options, handleNow(db)),
@@ -347,7 +350,7 @@ function decide(
 
 /** A tombstone refusal leaves its reject_refusal row after the rollback; the mirrors follow the
  * commit. */
-function edit(
+function editThenMirror(
   db: DatabaseSyncLike,
   files: StoreFiles,
   options: DecisionOptions,
@@ -372,7 +375,7 @@ export function sqliteQuarantine({ on, files }: Handles): Quarantine {
         decideQuarantined: (db, tenantId, id, decision, actor) =>
           decide(db, files, { tenantId, id, decision, actor }),
         editQuarantined: (db, tenantId, id, input, actor) =>
-          edit(db, files, { tenantId, id, actor }, input),
+          editThenMirror(db, files, { tenantId, id, actor }, input),
       },
       openStore,
     ),

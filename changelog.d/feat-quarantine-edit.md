@@ -5,4 +5,4 @@
 ### Changed
 
 - **`hippo quarantine` shows a held item as pending review.** The stored status stays `pending`, so `GET /v1/quarantine` is unchanged.
-- **Store port:** `Quarantine` gains a required `editQuarantined`; a store that sets the quarantine group must implement it.
+- **Store port:** `Quarantine` gains an optional `editQuarantined`; a store without it answers 501 for an edit.

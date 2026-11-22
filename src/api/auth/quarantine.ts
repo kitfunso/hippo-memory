@@ -7,12 +7,12 @@ import {
   NotFoundError,
 } from '../../base/errors/api-errors.js';
 import type { QuarantineRefusal } from '../../base/ports/store.js';
-import { shownText } from '../../base/memory/lead-in.js';
+import { StoreNotPortedError } from '../../base/util/store-blocked.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
-import { detectInstruction } from '../instruction-detect.js';
+import { detectInstructionIn } from '../instruction-detect.js';
 import type { ContextWith } from '../types.js';
-import type { QuarantineStatus } from '../../base/ports/store/quarantine.js';
+import type { QuarantineEditOutcome, QuarantineStatus } from '../../base/ports/store/quarantine.js';
 
 export interface QuarantineListItem {
   id: string;
@@ -95,6 +95,23 @@ export async function quarantineReject(ctx: ContextWith<'quarantine'>, id: strin
   if (result.outcome !== 'rejected') throw refusalError(id, result);
 }
 
+type EditRefusal = Exclude<QuarantineEditOutcome, { outcome: 'edited' }>;
+
+function editRefusalError(id: string, refusal: EditRefusal): Error {
+  switch (refusal.outcome) {
+    case 'deleted':
+      return new NotFoundError(`memory ${id} was deleted after it was held; nothing was changed`);
+    case 'superseded':
+      return new ConflictError(
+        `memory ${id} was already replaced by ${refusal.supersededBy}; nothing was changed`,
+      );
+    case 'scope_moved':
+      return new ConflictError(`memory ${id} scope changed since quarantine; refusing to edit`);
+    default:
+      return refusalError(id, refusal);
+  }
+}
+
 export interface QuarantineEditResult {
   edited: string;
   newId: string;
@@ -113,16 +130,19 @@ export async function quarantineEdit(
   if (ctx.actor.role !== 'admin') {
     throw new ForbiddenError('Only an admin key can edit a quarantined memory');
   }
+  const edit = ctx.store.quarantine.editQuarantined?.bind(ctx.store.quarantine);
+  if (!edit) throw new StoreNotPortedError(ctx.store.kind, 'quarantine.editQuarantined');
   const vetted = vetSecrets(content);
   const [held] = await ctx.store.entriesByIds([id], ctx.tenantId);
   const leadIn = held?.leadIn ?? null;
-  const found = detectInstruction(shownText({ content: vetted.content, leadIn }));
-  if (found.flagged) {
+  // A row the store cannot find is refused there, with its own 404 text, so no screen answers first.
+  const found = held ? detectInstructionIn({ content: vetted.content, leadIn }) : null;
+  if (found?.flagged) {
     throw new BadRequestError(
       `edited text still reads as an instruction (${found.reason ?? 'unknown'}); nothing was changed`,
     );
   }
-  const result = await ctx.store.quarantine.editQuarantined(
+  const result = await edit(
     ctx.tenantId,
     id,
     {
@@ -133,10 +153,7 @@ export async function quarantineEdit(
     },
     ctx.actor.subject,
   );
-  if (result.outcome === 'scope_moved') {
-    throw new ConflictError(`memory ${id} scope changed since quarantine; refusing to edit`);
-  }
-  if (result.outcome !== 'edited') throw refusalError(id, result);
+  if (result.outcome !== 'edited') throw editRefusalError(id, result);
   const done: QuarantineEditResult = { edited: id, newId: result.newId };
   if (leadIn) done.keptLeadIn = leadIn;
   if (vetted.warnings.length > 0) done.warnings = vetted.warnings;

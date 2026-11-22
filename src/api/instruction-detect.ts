@@ -4,6 +4,8 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
+import { shownText, type LeadInText } from '../base/memory/lead-in.js';
+
 /** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
  * untrusted. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
@@ -204,4 +206,12 @@ export function detectInstruction(content: string): InstructionDetection {
   if (disguised !== null) return { flagged: true, reason: disguised };
   if (BIDI_CONTROL_RE.test(content)) return { flagged: true, reason: 'pattern:bidi-control' };
   return { flagged: false, reason: null };
+}
+
+/** Screens what a row shows: the text as shown, and the lead-in and content joined by a space,
+ * because the patterns stop at the newline that shows them apart. First flag wins. */
+export function detectInstructionIn(text: LeadInText): InstructionDetection {
+  const shown = detectInstruction(shownText(text));
+  if (shown.flagged || !text.leadIn) return shown;
+  return detectInstruction(`${text.leadIn} ${text.content}`);
 }
