@@ -1,6 +1,14 @@
 # Changelog
 
-## 3.14.1 - 2026-11-22
+## 3.15.0 - 2026-11-22
+
+### Added
+
+- **`serve({ oauth })` makes `/mcp` an OAuth 2.1 protected resource.** Hippo serves the RFC 9728 metadata at the path-suffixed URL, for example `/.well-known/oauth-protected-resource/mcp`, and names it in the `WWW-Authenticate` header of a `POST /mcp` 401, so an MCP client can find your authorization server. It issues no tokens: your `authResolver` checks them, and `hk_` keys keep working. Off by default.
+
+### Changed
+
+- **The VS Code Marketplace publish signs in with Trusted Publishing, not a token.** `vscode-publish.yml` now runs `vsce publish --oidc`, backed by Trusted Publishing policies on the `kitfunso` publisher, so the `VSCE_PAT` secret is gone. Azure DevOps retires global personal access tokens on 1 December 2026, so a token-based publish would have stopped working. Open VSX still uses `OVSX_PAT`.
 
 ### Documentation
 
