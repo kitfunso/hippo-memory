@@ -9,7 +9,7 @@ export class DeadlineError extends Error {
   }
 }
 
-function isCallable<F>(value: F | undefined): value is F {
+export function isCallable<F>(value: F | undefined): value is F {
   return typeof value === 'function';
 }
 

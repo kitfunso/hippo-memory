@@ -16,6 +16,12 @@ const METADATA_URL = `https://memory.example.com${META}`;
 const CHALLENGE = `Bearer resource_metadata="${METADATA_URL}", scope="hippo.memory"`;
 const INVALID = `${CHALLENGE}, error="invalid_token"`;
 const GOOD: OAuthResource = { resource: RESOURCE, authorizationServers: AS, scopes: SCOPES };
+const NO_RESOLVER = 'oauth needs an authResolver to check the tokens its authorization servers issue';
+const NO_OBJECT = 'oauth must be an object with resource and authorizationServers';
+const ISSUER_CHARS = (i: number): string => `oauth.authorizationServers[${i}] must have no space or control character`;
+const ISSUER_FORM = (i: number): string => `oauth.authorizationServers[${i}] must be written in its normal URL form`;
+// SAFETY: an embedder that skips our types can pass any value; boot must refuse each of these.
+const UNTYPED = { nothing: null as never, object: {} as never };
 const CALL = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'hippo_status', arguments: {} } };
 const MEMBER: ResolvedBearer = { tenantId: 'default', subject: 'user-1', role: 'member' };
 
@@ -87,13 +93,16 @@ function jsonOf(text: string): JsonObject {
 const callMcp = (authorization?: string): Promise<Reply> => send('POST', '/mcp', authorization, CALL);
 
 /** The error serve() throws for this setting, or null when it started; a started server is stopped. */
-async function bootError(oauth: OAuthResource | undefined, withResolver = true): Promise<Error | null> {
+async function bootError(
+  oauth: OAuthResource | undefined,
+  extra: Overrides = { authResolver: resolver },
+): Promise<Error | null> {
   return serve({
     hippoRoot: root,
     host: '127.0.0.1',
     port: 0,
-    ...(withResolver && { authResolver: resolver }),
     ...(oauth !== undefined && { oauth }),
+    ...extra,
   }).then(
     async (h) => {
       await h.stop();
@@ -116,6 +125,18 @@ describe('the protected-resource metadata', () => {
       scopes_supported: SCOPES,
     });
     expect((await send('GET', '/.well-known/oauth-protected-resource')).status).toBe(404);
+  });
+
+  it('derives the document path and the challenge from a prefixed resource', async () => {
+    const resource = 'https://memory.example.com/prefix/mcp';
+    const prefixed = '/.well-known/oauth-protected-resource/prefix/mcp';
+    await boot({ resource, authorizationServers: AS, scopes: SCOPES });
+    const doc = await send('GET', prefixed);
+    expect(doc.status).toBe(200);
+    expect(jsonOf(doc.text).resource).toBe(resource);
+    const challenge = `Bearer resource_metadata="https://memory.example.com${prefixed}", scope="hippo.memory"`;
+    expect((await callMcp()).challenge).toBe(challenge);
+    expect((await send('GET', META)).status).toBe(404);
   });
 
   it('leaves scopes out of the document and the challenge when none are set', async () => {
@@ -244,6 +265,16 @@ describe('a refused oauth setting', () => {
       { authorizationServers: ['http://login.example.com/'] },
       'oauth.authorizationServers[0] must use https unless it is on this machine',
     ],
+    ['server with a leading space', { authorizationServers: [' https://login.example.com'] }, ISSUER_CHARS(0)],
+    ['server with a trailing newline', { authorizationServers: ['https://login.example.com\n'] }, ISSUER_CHARS(0)],
+    ['server with an inner tab', { authorizationServers: ['https://login.exa\tmple.com'] }, ISSUER_CHARS(0)],
+    [
+      'second server with a space',
+      { authorizationServers: [AS[0]!, 'https://login.example.com/a b'] },
+      ISSUER_CHARS(1),
+    ],
+    ['server with an upper-case host', { authorizationServers: ['https://Login.example.com/'] }, ISSUER_FORM(0)],
+    ['server with a default port', { authorizationServers: ['https://login.example.com:443/t'] }, ISSUER_FORM(0)],
   ];
 
   it.each(refused)('refuses %s at boot with its fixed message and leaves no pidfile', async (_name, patch, message) => {
@@ -253,9 +284,23 @@ describe('a refused oauth setting', () => {
   });
 
   it('refuses oauth with no authResolver', async () => {
-    const error = await bootError(GOOD, false);
-    expect(error?.message).toBe('oauth needs an authResolver to check the tokens its authorization servers issue');
+    const error = await bootError(GOOD, {});
+    expect(error?.message).toBe(NO_RESOLVER);
     expect(existsSync(join(root, 'server.pid'))).toBe(false);
+  });
+
+  it.each([
+    ['null authResolver', GOOD, { authResolver: UNTYPED.nothing }, NO_RESOLVER],
+    ['authResolver that is no function', GOOD, { authResolver: UNTYPED.object }, NO_RESOLVER],
+    ['null oauth', UNTYPED.nothing, { authResolver: resolver }, NO_OBJECT],
+  ])('refuses a %s with its fixed message', async (_name, oauth, extra, message) => {
+    expect((await bootError(oauth, extra))?.message).toBe(message);
+  });
+
+  it('checks the setting before it claims the pidfile', async () => {
+    await boot(GOOD);
+    const error = await bootError({ ...GOOD, authorizationServers: [] });
+    expect(error?.message).toBe('oauth.authorizationServers must list at least one authorization server');
   });
 
   it('boots a loopback http resource and serves its document', async () => {

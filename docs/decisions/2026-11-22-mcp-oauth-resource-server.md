@@ -19,7 +19,7 @@ A client that follows the MCP authorization spec (revision 2026-07-28) expects a
 - Core serves the RFC 9728 document at `/.well-known/oauth-protected-resource` plus the resource path, through `publicJsonBodies`, so it needs no `HOST_ROUTES` row and exists only when the setting is on. The root path stays 404.
 - A 401 on `POST /mcp` carries `Bearer resource_metadata="<url>"`, plus `scope` when scopes are set, plus `error="invalid_token"` only when a Bearer token came (RFC 6750 section 3.1). A 429 and the resolver's 503 carry none.
 - `/mcp/stream` and `/v1` keep a bare 401. A document fetched from a challenge there names the /mcp resource, which is a different resource for that URL (RFC 9728 section 3.3), so a strict client would discard it.
-- The audience rule stays in the add-on: the `AuthResolver` TSDoc says that with `oauth` set it accepts only tokens whose audience includes `oauth.resource`. Core cannot check it.
+- Every token check stays in the add-on, and core checks none of them. With `oauth` set the `authResolver` must verify the token's signature, that its issuer is one of `oauth.authorizationServers`, that its audience includes `oauth.resource`, and that it has not expired, and answer `null` for any token that fails; core then answers 401. The `AuthResolver` TSDoc and the README say the same.
 - A loopback http resource or authorization server is for development only. The spec says authorization server endpoints MUST use HTTPS.
 - The 403 `insufficient_scope` challenge (a SHOULD in the spec) is a non-goal.
 

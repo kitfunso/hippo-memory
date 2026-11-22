@@ -17,7 +17,6 @@ import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import type { DetachedWork } from '../../domain/search/detached-work.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
-import type { OAuthChallenge } from './oauth-resource.js';
 
 export interface ServerHandle {
   port: number;
@@ -39,7 +38,9 @@ export interface ResolvedBearer {
   scopes?: readonly string[];
 }
 
-/** serve()'s OAuth setting: hippo is the protected resource, never the authorization server. */
+/** serve()'s OAuth setting: hippo is the protected resource, never the authorization server.
+ * Rules: https unless loopback, path ends in /mcp, no query, fragment or encoded slash, no
+ * offline_access scope. */
 export interface OAuthResource {
   /** The public URL clients use for /mcp, in canonical form: https, or http on a loopback host. */
   readonly resource: string;
@@ -49,9 +50,16 @@ export interface OAuthResource {
   readonly scopes?: readonly string[];
 }
 
+/** The two `WWW-Authenticate` values a /mcp 401 can carry, built once at boot. */
+export interface OAuthChallenge {
+  readonly withError: string;
+  readonly withoutError: string;
+}
+
 /** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so
- * throw only when upstream is down. With serve's oauth set, accept only tokens whose audience
- * includes oauth.resource. */
+ * throw only when upstream is down. With serve's oauth set core checks none of the token, so answer
+ * null unless its signature, issuer (in oauth.authorizationServers), audience (includes
+ * oauth.resource) and expiry all pass. */
 export type AuthResolver = (
   token: string,
   /** Aborted when the deadline passes, so a slow upstream call can stop. */
@@ -103,7 +111,7 @@ export interface ServeOptions {
   authResolver?: AuthResolver;
   /** Deadline for one authResolver call; defaults to 5000 ms. */
   authResolverTimeoutMs?: number;
-  /** OAuth metadata for /mcp, named in a POST /mcp 401 only; needs authResolver for non-`hk_` tokens. */
+  /** OAuth metadata for /mcp, named in a POST /mcp 401 only; boot refuses it without an authResolver. */
   oauth?: OAuthResource;
   port?: number;
   host?: string;

@@ -53,7 +53,7 @@ import { bootLimiters } from './rate-limits.js';
 import type { RateLimiter } from './rate-limit.js';
 import { githubSiteFromEnv, warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
 import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
-import { oauthBoot, type OAuthChallenge } from './oauth-resource.js';
+import { oauthBoot } from './oauth-resource.js';
 import {
   bindAddonRoutes,
   bindV1Routes,
@@ -64,6 +64,7 @@ import {
   HOST_ROUTES,
 } from './route-table.js';
 import type {
+  OAuthChallenge,
   ResolvedServeOptions,
   RouteRequest,
   ServeOptions,

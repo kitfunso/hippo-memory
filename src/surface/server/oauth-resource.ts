@@ -1,21 +1,19 @@
 // The OAuth protected-resource metadata and the /mcp 401 challenge, both frozen at boot.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError } from '../../base/errors/http-errors.js';
+import { isObjectLike } from '../../base/session/capture-contract.js';
+import { isCallable } from '../../base/util/deadline.js';
 import { isJsonString } from '../../base/util/json.js';
 import { parseOutboundUrl } from '../../base/util/net.js';
 import { readAuthHeader } from './auth.js';
-import type { ServeOptions } from './types.js';
+import type { OAuthChallenge, ServeOptions } from './types.js';
 
 const WELL_KNOWN = '/.well-known/oauth-protected-resource';
 // RFC 6749 scope token: printable ASCII but space, quote and backslash.
 const SCOPE_TOKEN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
 const ENCODED_SLASH = /%2f/i;
-
-/** The two `WWW-Authenticate` values a /mcp 401 can carry, built once at boot. */
-export interface OAuthChallenge {
-  readonly withError: string;
-  readonly withoutError: string;
-}
+// An issuer is compared byte for byte, and URL parsing drops a space or control character silently.
+const ISSUER_TEXT = /^[\x21-\x7e]+$/;
 
 /** What boot serves for the oauth setting: the document by path, and the frozen challenge. */
 export interface OAuthBoot {
@@ -45,26 +43,38 @@ function checkResource(raw: string): URL {
   return url;
 }
 
-function checkAuthorizationServers(list: readonly string[]): void {
-  if (!Array.isArray(list) || list.length === 0) {
-    throw new Error('oauth.authorizationServers must list at least one authorization server');
+function checkIssuer(raw: string, i: number): void {
+  const setting = `oauth.authorizationServers[${i}]`;
+  const url = checkOAuthUrl(raw, setting);
+  if (!ISSUER_TEXT.test(raw)) throw new Error(`${setting} must have no space or control character`);
+  // A path-less issuer serialises with a slash, yet the issuer is the string as its server wrote it.
+  if (url.href !== raw && url.href !== `${raw}/`) {
+    throw new Error(`${setting} must be written in its normal URL form`);
   }
-  list.forEach((raw, i) => checkOAuthUrl(raw, `oauth.authorizationServers[${i}]`));
 }
 
-function checkScopes(scopes: readonly string[] | undefined): void {
-  if (scopes === undefined) return;
-  if (!Array.isArray(scopes) || scopes.length === 0) {
-    throw new Error('oauth.scopes must list at least one scope when set');
+function checkAuthorizationServers(list: readonly string[]): readonly string[] {
+  const servers = Array.isArray(list) ? [...list] : [];
+  if (servers.length === 0) {
+    throw new Error('oauth.authorizationServers must list at least one authorization server');
   }
-  scopes.forEach((scope, i) => {
+  servers.forEach(checkIssuer);
+  return servers;
+}
+
+function checkScopes(scopes: readonly string[] | undefined): readonly string[] | undefined {
+  if (scopes === undefined) return undefined;
+  const copy = Array.isArray(scopes) ? [...scopes] : [];
+  if (copy.length === 0) throw new Error('oauth.scopes must list at least one scope when set');
+  copy.forEach((scope, i) => {
     if (!isJsonString(scope) || !SCOPE_TOKEN.test(scope)) {
       throw new Error(`oauth.scopes[${i}] must be one scope token: no space, quote or backslash`);
     }
   });
-  if (scopes.includes('offline_access')) {
+  if (copy.includes('offline_access')) {
     throw new Error('oauth.scopes must not ask for offline_access');
   }
+  return copy;
 }
 
 function metadataPathOf(resource: URL): string {
@@ -85,18 +95,18 @@ function challengeOf(resource: URL, scopes: readonly string[] | undefined): OAut
 export function oauthBoot(opts: Pick<ServeOptions, 'oauth' | 'authResolver'>): OAuthBoot {
   const { oauth } = opts;
   if (oauth === undefined) return { bodies: new Map(), challenge: undefined };
-  if (opts.authResolver === undefined) {
+  if (!isObjectLike(oauth)) {
+    throw new Error('oauth must be an object with resource and authorizationServers');
+  }
+  if (!isCallable(opts.authResolver)) {
     throw new Error(
       'oauth needs an authResolver to check the tokens its authorization servers issue',
     );
   }
   const { resource: rawResource, authorizationServers, scopes } = oauth;
-  const servers = [...(Array.isArray(authorizationServers) ? authorizationServers : [])];
-  const copiedScopes =
-    scopes === undefined ? undefined : [...(Array.isArray(scopes) ? scopes : [])];
   const url = checkResource(rawResource);
-  checkAuthorizationServers(servers);
-  checkScopes(copiedScopes);
+  const servers = checkAuthorizationServers(authorizationServers);
+  const copiedScopes = checkScopes(scopes);
   const text = JSON.stringify({
     resource: rawResource,
     authorization_servers: servers,
