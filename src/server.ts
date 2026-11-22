@@ -64,6 +64,7 @@ export type {
   KeyQuota,
   KeyQuotaCall,
   KeyQuotaRefusal,
+  OAuthResource,
   RateLimitSpec,
   ResolvedBearer,
   ServeOptions,
