@@ -43,12 +43,25 @@ export interface FakeGitHub {
   close(): Promise<void>;
 }
 
+/** A canned answer a commit route gives its first `times` requests, before its real reply. */
+export interface FakeRefusal {
+  readonly route: 'list' | 'detail';
+  readonly status: number;
+  readonly headers?: Record<string, string>;
+  readonly times: number;
+}
+
 /** The commit routes: lists are keyed `<path>|<sha>` from the query ('' when absent), detail by sha. */
 export interface FakeCommits {
   readonly lists?: Record<string, JsonValue[]>;
   readonly detail?: Record<string, JsonValue>;
+  /** A commit's reply in pages: `?page=N` picks one and every page but the last links to the next. */
+  readonly detailPages?: Record<string, JsonValue[]>;
   /** Answers 302 to `/elsewhere` on the list route or on the detail route. */
   readonly redirect?: 'list' | 'detail';
+  /** A rel="next" link every list reply carries. */
+  readonly listNext?: string;
+  readonly refuse?: FakeRefusal;
 }
 
 export interface FakeGitHubOptions {
@@ -73,24 +86,53 @@ function item(kind: 'issue' | 'issueComment' | 'prComment', base: string) {
   return { id: 7, body: 'a comment', user, updated_at: ISSUE_TIME, ...link };
 }
 
-function commitsReply(
+interface CommitsReply {
+  readonly status: number;
+  readonly body: string;
+  readonly headers: Record<string, string>;
+}
+
+const OK = 200;
+
+type CommitsState = FakeCommits & { root: string; refused: { count: number } };
+
+function detailReply(
+  sha: string,
   pathname: string,
   search: URLSearchParams,
-  commits: FakeCommits,
-): { status: number; body: string; redirect: boolean } | undefined {
+  commits: CommitsState,
+): CommitsReply | undefined {
+  const pages = commits.detailPages?.[sha];
+  if (pages === undefined) {
+    const detail = commits.detail?.[sha];
+    return detail === undefined ? undefined : { status: OK, body: JSON.stringify(detail), headers: {} };
+  }
+  const page = Number(search.get('page') ?? '1');
+  const more = page < pages.length;
+  const headers: Record<string, string> = more
+    ? { link: `<${commits.root}${pathname}?page=${page + 1}>; rel="next"` }
+    : {};
+  return { status: OK, body: JSON.stringify(pages[page - 1] ?? {}), headers };
+}
+
+function commitsReply(pathname: string, search: URLSearchParams, commits: CommitsState): CommitsReply | undefined {
   const m = /^\/api\/v3\/repos\/[^/]+\/[^/]+\/commits(?:\/([^/]+))?$/.exec(pathname);
   if (m === null) return undefined;
   const sha = m[1];
-  if (commits.redirect === (sha === undefined ? 'list' : 'detail')) {
-    return { status: 302, body: '', redirect: true };
+  const route = sha === undefined ? 'list' : 'detail';
+  if (commits.redirect === route) {
+    return { status: 302, body: '', headers: { location: `${commits.root}/elsewhere` } };
   }
-  if (sha === undefined) {
-    const key = `${search.get('path') ?? ''}|${search.get('sha') ?? ''}`;
-    return { status: 200, body: JSON.stringify(commits.lists?.[key] ?? []), redirect: false };
+  const { refuse } = commits;
+  if (refuse?.route === route && commits.refused.count < refuse.times) {
+    commits.refused.count++;
+    return { status: refuse.status, body: '{"message":"secret-reply-text"}', headers: refuse.headers ?? {} };
   }
-  const detail = commits.detail?.[sha];
-  if (detail === undefined) return undefined;
-  return { status: 200, body: JSON.stringify(detail), redirect: false };
+  if (sha !== undefined) return detailReply(sha, pathname, search, commits);
+  const key = `${search.get('path') ?? ''}|${search.get('sha') ?? ''}`;
+  const headers: Record<string, string> =
+    commits.listNext === undefined ? {} : { link: `<${commits.listNext}>; rel="next"` };
+  return { status: OK, body: JSON.stringify(commits.lists?.[key] ?? []), headers };
 }
 
 function listBody(pathname: string, base: string): string | undefined {
@@ -105,6 +147,7 @@ export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<
   const requests: FakeRequest[] = [];
   const mintReplies: MintReply[] = [];
   const lookupReplies: LookupReply[] = [{ status: 200, id: installationId }];
+  const refused = { count: 0 };
   let root = '';
   const server = createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -121,8 +164,8 @@ export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<
         body: Buffer.concat(chunks).toString('utf8'),
       });
       onRequest?.(method, path);
-      const send = (status: number, body: string, location?: string): void => {
-        res.writeHead(status, location === undefined ? {} : { location }).end(body);
+      const send = (status: number, body: string, headers: Record<string, string> = {}): void => {
+        res.writeHead(status, headers).end(body);
       };
       if (pathname === '/elsewhere') {
         if (method === 'GET') return send(200, JSON.stringify({ id: 99 }));
@@ -134,18 +177,17 @@ export async function startFakeGitHub(options: FakeGitHubOptions = {}): Promise<
         if (reply === undefined) return send(400, 'no mint reply queued');
         const json = reply.token !== undefined || reply.expiresAt !== undefined;
         const body = json ? JSON.stringify({ token: reply.token, expires_at: reply.expiresAt }) : (reply.body ?? '');
-        return send(reply.status, body, reply.location);
+        return send(reply.status, body, reply.location === undefined ? {} : { location: reply.location });
       }
       if (method === 'GET' && /^\/api\/v3\/repos\/[^/]+\/[^/]+\/installation$/.test(pathname)) {
         const reply = nextReply(lookupReplies);
         if (reply === undefined) return send(400, 'no lookup reply queued');
         const body = reply.id === undefined ? (reply.body ?? '') : JSON.stringify({ id: reply.id });
-        return send(reply.status, body, reply.location);
+        return send(reply.status, body, reply.location === undefined ? {} : { location: reply.location });
       }
-      const commit = method === 'GET' && commits ? commitsReply(pathname, searchParams, commits) : undefined;
-      if (commit !== undefined) {
-        return send(commit.status, commit.body, commit.redirect ? `${root}/elsewhere` : undefined);
-      }
+      const state = commits && { ...commits, root, refused };
+      const commit = method === 'GET' && state ? commitsReply(pathname, searchParams, state) : undefined;
+      if (commit !== undefined) return send(commit.status, commit.body, commit.headers);
       const list = method === 'GET' ? listBody(pathname, `${root}/api/v3/repos/acme/demo`) : undefined;
       if (list !== undefined) return send(200, list);
       send(404, '{"message":"Not Found"}');

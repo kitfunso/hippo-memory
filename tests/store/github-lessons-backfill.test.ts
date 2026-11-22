@@ -38,6 +38,10 @@ const CODEOWNERS_PATCH = '@@ -1 +1 @@\n-/api/ @alice\n+/api/ @acme/api-team';
 const NEEDS_CONTENTS_READ =
   "the token needs Contents read on this repository, or GitHub's secondary rate limit refused the request; check the token, then retry later";
 const REDIRECT_REFUSED = 'the redirect was refused; if the repository was renamed, pass its new name to --repo';
+const PRIMARY = { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '0' } };
+// The transport retries a 429 three times on its own, so a limit reaches the lesson pass only when all three are 429.
+const SECONDARY = { status: 429, headers: { 'retry-after': '1' } };
+const DOCS_PATCH = '@@ -1 +1 @@\n-/docs/ @carol\n+/docs/ @dave';
 
 function commit(sha: string, message: string, parents = 1): JsonValue {
   return {
@@ -54,6 +58,7 @@ const mergeM = commit(M, 'Revert "Add cache layer" (#13)\n\nReverts acme/demo#12
 describe('backfillLessons against a fake GitHub', () => {
   let root: string;
   let fake: FakeGitHub | undefined;
+  let other: FakeGitHub | undefined;
 
   beforeEach(() => {
     root = makeRoot('gh-lessons-backfill');
@@ -61,13 +66,16 @@ describe('backfillLessons against a fake GitHub', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await fake?.close();
+    await other?.close();
     fake = undefined;
+    other = undefined;
   });
 
   const ctx = (): FullContext => apiCtx(root, TENANT, { subject: 'connector:github', role: 'admin' });
   const rows = (event: string) => loadAllEntries(root, TENANT).filter((e) => e.tags.includes(`event:${event}`));
 
-  async function run(commits: FakeCommits) {
+  async function run(commits: FakeCommits, sleepMs?: (ms: number) => Promise<void>) {
+    await fake?.close();
     fake = await startFakeGitHub({ commits });
     const site = parseGitHubEnterpriseUrl(fake.url);
     const result = await backfillLessons(ctx(), {
@@ -76,10 +84,13 @@ describe('backfillLessons against a fake GitHub', () => {
       commitFetcher: realGitHubCommitFetcher,
       tokenSource: staticTokenSource('tok'),
       sinceIso: SINCE,
+      sleepMs,
       site,
     });
     return { result, site };
   }
+  const detailRequests = (sha: string) =>
+    fake?.requests.filter((r) => r.path.startsWith(`/api/v3/repos/${REPO}/commits/${sha}`)) ?? [];
 
   it('a revert commit gives one lesson keyed on it, and the merge that repeats it gives none', async () => {
     const { result, site } = await run({ lists: { '|': [mergeM, revertR] } });
@@ -184,6 +195,152 @@ describe('backfillLessons against a fake GitHub', () => {
     expect(err.message).not.toContain('Not Found');
   });
 
+  it('a revert of a revert gives a Reapply lesson with an Undoes link', async () => {
+    const reapply = commit(R, `Revert "Revert "Add cache layer""\n\nThis reverts commit ${REVERTED_SHA}.`);
+    await run({ lists: { '|': [reapply] } });
+
+    const [row] = rows('revert');
+    expect(row.content).toContain('Reapplied on the default branch of acme/demo: "Add cache layer".');
+    expect(row.content).toContain(`Reapply: ${fake?.url}/acme/demo/commit/${R}`);
+    expect(row.content).toContain(`Undoes: ${fake?.url}/acme/demo/commit/${REVERTED_SHA}`);
+  });
+
+  it("a CODEOWNERS entry on the second page of a commit's files gives the owner lines", async () => {
+    const { result } = await run({
+      lists: { '.github/CODEOWNERS|': [commit(C, 'Hand the API to its team')] },
+      detailPages: {
+        [C]: [
+          { files: [{ filename: 'README.md', patch: '+x' }] },
+          { files: [{ filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH }] },
+        ],
+      },
+    });
+
+    expect(result.codeowners).toBe(1);
+    const [row] = rows('codeowners');
+    expect(row.content).toContain('Owner lines added:\n+ /api/ @acme/api-team');
+    expect(row.content).not.toContain('GitHub sent no diff');
+    expect(detailRequests(C)).toHaveLength(2);
+  });
+
+  it('one commit that edits two CODEOWNERS files gives one lesson with both, from one detail read', async () => {
+    const both = commit(C, 'Hand the API and the docs over');
+    const { result } = await run({
+      lists: { '.github/CODEOWNERS|': [both], 'docs/CODEOWNERS|': [both] },
+      detail: {
+        [C]: {
+          files: [
+            { filename: 'docs/CODEOWNERS', patch: DOCS_PATCH },
+            { filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH },
+          ],
+        },
+      },
+    });
+
+    expect(result.codeowners).toBe(1);
+    const [row, ...rest] = rows('codeowners');
+    expect(rest).toEqual([]);
+    expect(row.content).toContain('File: .github/CODEOWNERS');
+    expect(row.content).toContain('+ /api/ @acme/api-team');
+    expect(row.content).toContain('File: docs/CODEOWNERS');
+    expect(row.content).toContain('+ /docs/ @dave');
+    expect(detailRequests(C)).toHaveLength(1);
+  });
+
+  it('a rename between two CODEOWNERS paths gives one file block', async () => {
+    const moved = commit(C, 'Move the owners file');
+    await run({
+      lists: { '.github/CODEOWNERS|': [moved], 'docs/CODEOWNERS|': [moved] },
+      detail: {
+        [C]: {
+          files: [{ filename: 'docs/CODEOWNERS', previous_filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH }],
+        },
+      },
+    });
+
+    const [row] = rows('codeowners');
+    expect(row.content.match(/^File: /gm)).toHaveLength(1);
+    expect(row.content).toContain('Renamed from .github/CODEOWNERS.');
+  });
+
+  it('a second run reads no commit detail for a lesson it already holds', async () => {
+    const commits = {
+      lists: { '.github/CODEOWNERS|': [commit(C, 'Hand the API to its team')] },
+      detail: { [C]: { files: [{ filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH }] } },
+    };
+    expect((await run(commits)).result.codeowners).toBe(1);
+    expect(detailRequests(C)).toHaveLength(1);
+
+    expect((await run(commits)).result.codeowners).toBe(0);
+    expect(detailRequests(C)).toEqual([]);
+    expect(rows('codeowners')).toHaveLength(1);
+  });
+
+  it.each([
+    ['list', 'a 403 with no calls left', PRIMARY, 1],
+    ['detail', 'a 403 with no calls left', PRIMARY, 1],
+    ['list', 'a 429 with Retry-After', SECONDARY, 3],
+    ['detail', 'a 429 with Retry-After', SECONDARY, 3],
+  ] as const)('k. the %s answers %s, the pass pauses once and writes the row', async (route, _name, limit, times) => {
+    const sleeps: number[] = [];
+    const { result } = await run(
+      {
+        lists:
+          route === 'list' ? { '|': [revertR] } : { '.github/CODEOWNERS|': [commit(C, 'Hand the API to its team')] },
+        detail: { [C]: { files: [{ filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH }] } },
+        refuse: { route, ...limit, times },
+      },
+      (ms) => {
+        sleeps.push(ms);
+        return Promise.resolve();
+      },
+    );
+
+    expect(sleeps).toEqual([1000]);
+    expect(route === 'list' ? result.reverts : result.codeowners).toBe(1);
+    expect(rows(route === 'list' ? 'revert' : 'codeowners')).toHaveLength(1);
+  });
+
+  it('k. a 403 that is no rate limit fails with the fixed Contents-read text and none of the reply', async () => {
+    fake = await startFakeGitHub({
+      commits: { lists: { '|': [revertR] }, refuse: { route: 'list', status: 403, times: 1 } },
+    });
+    const err = await failureOf(
+      backfillLessons(ctx(), {
+        repoFullName: REPO,
+        listFetcher: noRedirectGitHubFetcher,
+        commitFetcher: realGitHubCommitFetcher,
+        tokenSource: staticTokenSource('tok'),
+        sinceIso: SINCE,
+        site: parseGitHubEnterpriseUrl(fake.url),
+      }),
+    );
+
+    expect(err).toBeInstanceOf(GitHubFetchError);
+    expect(err).toMatchObject({ status: 403, bodyExcerpt: NEEDS_CONTENTS_READ });
+    expect(err.message).not.toContain('secret-reply-text');
+  });
+
+  it('k. a next link to another origin is refused and that origin gets no request', async () => {
+    other = await startFakeGitHub({});
+    fake = await startFakeGitHub({
+      commits: { listNext: `${other.url}/api/v3/repos/acme/demo/commits?page=2` },
+    });
+    const err = await failureOf(
+      backfillLessons(ctx(), {
+        repoFullName: REPO,
+        listFetcher: noRedirectGitHubFetcher,
+        commitFetcher: realGitHubCommitFetcher,
+        tokenSource: staticTokenSource('tok'),
+        sinceIso: SINCE,
+        site: parseGitHubEnterpriseUrl(fake.url),
+      }),
+    );
+
+    expect(err.message).toBe(`GitHub next-page link leaves ${fake.url} for ${other.url}; backfill stopped`);
+    expect(other.requests).toEqual([]);
+  });
+
   it('starts the window 30 days before now when no --since is given', async () => {
     fake = await startFakeGitHub({ commits: {} });
     await backfillLessons(ctx(), {
@@ -219,9 +376,10 @@ describe('backfillLessons with injected fetchers', () => {
   it('j. a rate-limited commit call pauses once, then writes the lesson', async () => {
     const sleeps: number[] = [];
     const replies: GitHubCommitReply[] = [
-      { commit: null, rateLimit: { reason: 'primary', sleepSeconds: 1 } },
+      { commit: null, next: null, rateLimit: { reason: 'primary', sleepSeconds: 1 } },
       {
         commit: { files: [{ filename: '.github/CODEOWNERS', patch: CODEOWNERS_PATCH }] },
+        next: null,
         rateLimit: NONE,
       },
     ];
@@ -253,7 +411,7 @@ describe('backfillLessons with injected fetchers', () => {
     await backfillLessons(ctx(), {
       repoFullName: REPO,
       listFetcher,
-      commitFetcher: () => Promise.resolve({ commit: {}, rateLimit: NONE }),
+      commitFetcher: () => Promise.resolve({ commit: {}, next: null, rateLimit: NONE }),
       tokenSource: staticTokenSource('tok'),
       sinceIso: SINCE,
     });
@@ -261,6 +419,62 @@ describe('backfillLessons with injected fetchers', () => {
     expect(warn.mock.calls.map((c) => c[0])).toEqual([
       `github lessons: docs/CODEOWNERS has more than one page of commits since ${SINCE}; older ones were not read`,
     ]);
+  });
+
+  it('a commit page whose next link leaves the origin is refused before any request to it', async () => {
+    const urls: string[] = [];
+    const listFetcher: GitHubFetcher = ({ url }) =>
+      Promise.resolve(page(url.includes('path=.github') ? [commit(C, 'Move owners')] : []));
+
+    const err = await failureOf(
+      backfillLessons(ctx(), {
+        repoFullName: REPO,
+        listFetcher,
+        commitFetcher: ({ url }) => {
+          urls.push(url);
+          return Promise.resolve({
+            commit: { files: [] },
+            next: 'https://evil.example/repos/acme/demo/commits/x?page=2',
+            rateLimit: NONE,
+          });
+        },
+        tokenSource: staticTokenSource('tok'),
+        sinceIso: SINCE,
+      }),
+    );
+
+    expect(err.message).toBe(
+      'GitHub next-page link leaves https://api.github.com for https://evil.example; backfill stopped',
+    );
+    expect(urls).toHaveLength(1);
+  });
+
+  it("stops a commit's files at 10 pages and says so", async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    let reads = 0;
+    const listFetcher: GitHubFetcher = ({ url }) =>
+      Promise.resolve(page(url.includes('path=.github') ? [commit(C, 'Move owners')] : []));
+
+    const result = await backfillLessons(ctx(), {
+      repoFullName: REPO,
+      listFetcher,
+      commitFetcher: () => {
+        reads++;
+        return Promise.resolve({
+          commit: { files: [{ filename: 'README.md' }] },
+          next: `https://api.github.com/repos/acme/demo/commits/${C}?page=${reads + 1}`,
+          rateLimit: NONE,
+        });
+      },
+      tokenSource: staticTokenSource('tok'),
+      sinceIso: SINCE,
+    });
+
+    expect(reads).toBe(10);
+    expect(result.codeowners).toBe(1);
+    expect(warn.mock.calls.map((c) => c[0])).toContain(
+      `github lessons: read 10 pages of files for commit ${C}; later files were not read`,
+    );
   });
 
   it('stops the revert pass at 10 pages and says so', async () => {
@@ -275,7 +489,7 @@ describe('backfillLessons with injected fetchers', () => {
     const result = await backfillLessons(ctx(), {
       repoFullName: REPO,
       listFetcher,
-      commitFetcher: () => Promise.resolve({ commit: {}, rateLimit: NONE }),
+      commitFetcher: () => Promise.resolve({ commit: {}, next: null, rateLimit: NONE }),
       tokenSource: staticTokenSource('tok'),
       sinceIso: SINCE,
     });

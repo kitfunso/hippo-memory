@@ -4,8 +4,9 @@
 import type { RememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../../base/util/json.js';
+import { vetSecrets } from '../../../base/util/secret-detect.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
-import { githubCommitLessonRef, githubRepoKey, isGitHubRepoFullName } from './ref.js';
+import { githubCommitLessonRef, githubRepoKey } from './ref.js';
 import { scopeFromRepository } from './scope.js';
 import { computeIdempotencyKey } from './signature.js';
 import { githubWebOrigin, type GitHubSite } from './site.js';
@@ -16,16 +17,22 @@ export const SHA_RE = /^[0-9a-f]{40}$/;
 
 const MERGE_SUBJECT = /^Merge (pull request #|branch |remote-tracking branch )/;
 const REVERT_SUBJECT = /^(Revert|Reapply) "(.+)"(?: \(#\d+\))?$/;
-const REVERTS_COMMIT = /^This reverts commit ([0-9a-f]{7,40})\b/m;
-const REVERTS_REFERENCE = /^This reverts commit [0-9a-f]{7,40} \((.+), (\d{4}-\d{2}-\d{2})\)\.?$/m;
-const REVERTS_PULL = /^Reverts ([^\s#]+)#(\d+)\s*$/m;
+// Git's own revert lines; for a merge it wraps after "reversing", and "changes made to" starts the next line.
+const REVERTS_COMMIT =
+  /^This reverts commit ([0-9a-f]{7,40})(?:\.|, reversing(?: changes made to [0-9a-f]{7,40}\.)?)$/;
+const REVERTS_REFERENCE = /^This reverts commit ([0-9a-f]{7,40}) \((.+), (\d{4}-\d{2}-\d{2})\)\.?$/;
+const REVERTS_PULL = /^Reverts ([^\s#]+)#(\d+)$/;
+const SQUASH_BULLET = /^[*-] /;
 const NOT_A_REASON = [
   /^This reverts commit /,
   /^changes made to [0-9a-f]{7,40}\.?$/,
   /^Reverts [^\s#]+#\d+\s*$/,
   /^[A-Z][A-Za-z-]*-by: /,
+  /^(?:Fixes|Closes|Resolves):? (?:#\d+|https?:\/\/\S+)$/i,
   /^\* /,
 ];
+const LINE_BREAK = /\r\n|[\n\r\u0085\u2028\u2029]/;
+const CONTROL_TEXT = /[\p{Cc}\u0085\u2028\u2029]/gu;
 const MAX_TEXT_CHARS = 200;
 const MAX_OWNER_LINES = 40;
 
@@ -34,7 +41,18 @@ export interface RevertParts {
   readonly original: string;
   readonly reason: string | null;
   readonly revertsSha: string | null;
-  readonly revertsPull: { readonly repo: string; readonly number: number } | null;
+  /** The number of a pull request of this repository that the commit says it reverts. */
+  readonly revertsPull: number | null;
+}
+
+/** A message's lines, split on every break a terminal or a reader shows as a new line. */
+function messageLines(message: string): string[] {
+  return message.split(LINE_BREAK);
+}
+
+/** The first line of a commit message. */
+export function commitSubject(message: string): string {
+  return messageLines(message)[0].trim();
 }
 
 function reasonOf(bodyLines: readonly string[]): string | null {
@@ -44,29 +62,57 @@ function reasonOf(bodyLines: readonly string[]): string | null {
   return line === undefined ? null : line.trim();
 }
 
-function pullOf(body: string): RevertParts['revertsPull'] {
-  const m = REVERTS_PULL.exec(body);
-  if (m === null || !isGitHubRepoFullName(m[1])) return null;
-  return { repo: m[1], number: Number(m[2]) };
+/** Only this repository's own pull request counts: a "Reverts owner/repo#N" line can name any repository. */
+function pullOf(lines: readonly string[], repoFullName: string): number | null {
+  for (const raw of lines) {
+    const m = REVERTS_PULL.exec(raw.trimEnd());
+    if (m !== null && m[1].toLowerCase() === repoFullName.toLowerCase()) return Number(m[2]);
+  }
+  return null;
+}
+
+/** The sha a body's revert line names, and the title when it is git's --reference form. */
+function revertLine(lines: readonly string[]): { sha: string; title: string | null } | null {
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const plain = REVERTS_COMMIT.exec(line);
+    if (plain !== null) return { sha: plain[1], title: null };
+    const reference = REVERTS_REFERENCE.exec(line);
+    if (reference !== null) return { sha: reference[1], title: reference[2] };
+  }
+  return null;
+}
+
+/** `Revert "X"` or `Reapply "X"` with every wrapper peeled; an even count of Revert wrappers leaves
+ * the change applied, so a revert of a revert is a reapply of X. */
+function subjectParts(subject: string): Pick<RevertParts, 'action' | 'original'> | null {
+  let m = REVERT_SUBJECT.exec(subject);
+  if (m === null) return null;
+  let reverts = 0;
+  let original = subject;
+  while (m !== null) {
+    if (m[1] === 'Revert') reverts++;
+    original = m[2];
+    m = REVERT_SUBJECT.exec(original);
+  }
+  return { action: reverts % 2 === 1 ? 'reverted' : 'reapplied', original };
 }
 
 /** The parts of a revert or reapply commit message; null when the message is neither. */
-export function parseRevertMessage(message: string): RevertParts | null {
-  const [first, ...rest] = message.split(/\r?\n/);
+export function parseRevertMessage(message: string, repoFullName: string): RevertParts | null {
+  const [first, ...rest] = messageLines(message);
   const subject = first.trim();
-  const body = rest.join('\n');
   if (MERGE_SUBJECT.test(subject)) return null;
-  const s = REVERT_SUBJECT.exec(subject);
-  const b = REVERTS_COMMIT.exec(body);
-  // A squash body lists each branch commit as "* <subject>", so its revert line is not this commit's.
-  if (s === null && (b === null || /^\* /m.test(body))) return null;
-  const reference = REVERTS_REFERENCE.exec(body);
+  const s = subjectParts(subject);
+  const line = revertLine(rest);
+  // A squash body lists each branch commit as a bullet, so its revert line is not this commit's.
+  if (s === null && (line === null || rest.some((l) => SQUASH_BULLET.test(l)))) return null;
   return {
-    action: s?.[1] === 'Reapply' ? 'reapplied' : 'reverted',
-    original: reference?.[1] ?? s?.[2] ?? subject,
+    action: s?.action ?? 'reverted',
+    original: line?.title ?? s?.original ?? subject,
     reason: reasonOf(rest),
-    revertsSha: b?.[1] ?? null,
-    revertsPull: pullOf(body),
+    revertsSha: line?.sha ?? null,
+    revertsPull: pullOf(rest, repoFullName),
   };
 }
 
@@ -123,7 +169,23 @@ export interface LessonCommit {
 
 export type LessonOpts = RememberOptions & { artifactRef: string };
 
-const cap = (text: string): string => text.slice(0, MAX_TEXT_CHARS);
+/** Cuts at `max` code points, so a surrogate pair is never split. */
+function cutCodePoints(text: string, max: number): string {
+  let end = 0;
+  let count = 0;
+  for (const ch of text) {
+    if (count === max) break;
+    end += ch.length;
+    count++;
+  }
+  return text.slice(0, end);
+}
+
+/** An outside one-line field: control text folded to a space, secrets redacted over the whole
+ * text, then cut, so a token that crosses the cut is redacted before it. */
+function oneLine(text: string): string {
+  return cutCodePoints(vetSecrets(text.replace(CONTROL_TEXT, ' ')).content, MAX_TEXT_CHARS);
+}
 
 function lessonOpts(
   commit: LessonCommit,
@@ -152,48 +214,72 @@ export function revertLessonOpts(commit: LessonCommit, parts: RevertParts): Less
   const full = commit.repository.full_name;
   const again = parts.action === 'reapplied';
   const lines = [
-    `${again ? 'Reapplied' : 'Reverted'} on the default branch of ${full}: "${cap(parts.original)}".`,
+    `${again ? 'Reapplied' : 'Reverted'} on the default branch of ${full}: "${oneLine(parts.original)}".`,
   ];
-  if (parts.reason !== null) lines.push(`Reason given: ${cap(parts.reason)}`);
+  if (parts.reason !== null) lines.push(`Reason given: ${oneLine(parts.reason)}`);
   lines.push(`${again ? 'Reapply' : 'Revert'}: ${web}/${full}/commit/${commit.sha}`);
   const original = again ? 'Undoes' : 'Original';
   if (parts.revertsSha !== null) {
     lines.push(`${original}: ${web}/${full}/commit/${parts.revertsSha}`);
   }
   if (parts.revertsPull !== null) {
-    lines.push(`${original}: ${web}/${parts.revertsPull.repo}/pull/${parts.revertsPull.number}`);
+    lines.push(`${original}: ${web}/${full}/pull/${parts.revertsPull}`);
   }
   return lessonOpts(commit, 'revert', lines.join('\n'));
 }
 
 function ownerLines(label: string, marker: '+' | '-', lines: readonly string[]): string {
   if (lines.length === 0) return `${label} none`;
-  const shown = lines.slice(0, MAX_OWNER_LINES).map((l) => `${marker} ${cap(l)}`);
+  const shown = lines.slice(0, MAX_OWNER_LINES).map((l) => `${marker} ${oneLine(l)}`);
   const more = lines.length - shown.length;
   if (more > 0) shown.push(`(${more} more lines; see the commit)`);
   return `${label}\n${shown.join('\n')}`;
 }
 
-/** What a CODEOWNERS commit changed: its subject and the file's entry, null when GitHub gave none. */
-export interface CodeownersChange {
+/** A CODEOWNERS file a commit changed; entry is null when GitHub gave none. */
+export interface CodeownersFile {
   readonly path: string;
-  readonly subject: string;
   readonly entry: CodeownersEntry | null;
+}
+
+/** What a CODEOWNERS commit changed: its subject and every CODEOWNERS file it touched. */
+export interface CodeownersChange {
+  readonly subject: string;
+  readonly files: readonly CodeownersFile[];
+}
+
+/** Every CODEOWNERS entry in a commit's files, once each; a rename matches under both names. */
+export function codeownersFiles(files: JsonValue | undefined): CodeownersFile[] {
+  const found: CodeownersFile[] = [];
+  for (const path of CODEOWNERS_PATHS) {
+    const entry = codeownersPatch(files, path);
+    if (entry === null) continue;
+    const same = (f: CodeownersFile): boolean =>
+      f.entry?.filename === entry.filename && f.entry.previousFilename === entry.previousFilename;
+    if (!found.some(same)) found.push({ path: entry.filename, entry });
+  }
+  return found;
+}
+
+function fileLines({ path, entry }: CodeownersFile): string[] {
+  const lines = [`File: ${oneLine(path)}`];
+  const previous = entry?.previousFilename;
+  if (previous != null) lines.push(`Renamed from ${oneLine(previous)}.`);
+  if (entry?.patch == null) {
+    lines.push('GitHub sent no diff for this file, so the owner lines are not listed.');
+    return lines;
+  }
+  const { added, removed } = codeownersLineChanges(entry.patch);
+  lines.push(ownerLines('Owner lines added:', '+', added));
+  lines.push(ownerLines('Owner lines removed:', '-', removed));
+  return lines;
 }
 
 export function codeownersLessonOpts(commit: LessonCommit, change: CodeownersChange): LessonOpts {
   const web = githubWebOrigin(commit.site);
   const full = commit.repository.full_name;
-  const { path, subject, entry } = change;
-  const lines = [`CODEOWNERS changed on the default branch of ${full} (${path}): ${cap(subject)}`];
-  if (entry?.previousFilename != null) lines.push(`Renamed from ${entry.previousFilename}.`);
-  if (entry?.patch == null) {
-    lines.push('GitHub sent no diff for this file, so the owner lines are not listed.');
-  } else {
-    const { added, removed } = codeownersLineChanges(entry.patch);
-    lines.push(ownerLines('Owner lines added:', '+', added));
-    lines.push(ownerLines('Owner lines removed:', '-', removed));
-  }
+  const lines = [`CODEOWNERS changed on the default branch of ${full}: ${oneLine(change.subject)}`];
+  for (const file of change.files) lines.push(...fileLines(file));
   lines.push(`Commit: ${web}/${full}/commit/${commit.sha}`);
   return lessonOpts(commit, 'codeowners', lines.join('\n'));
 }
@@ -234,17 +320,17 @@ interface PushRevert {
 
 const PR_SUFFIX = / \(#\d+\)$/;
 
-function pushReverts(commits: readonly JsonValue[]): PushRevert[] {
+function pushReverts(commits: readonly JsonValue[], repoFullName: string): PushRevert[] {
   const out: PushRevert[] = [];
   for (const c of commits) {
     if (!isJsonObject(c) || !isJsonString(c.id) || !SHA_RE.test(c.id)) continue;
     if (!isJsonString(c.message)) continue;
-    const parts = parseRevertMessage(c.message);
+    const parts = parseRevertMessage(c.message, repoFullName);
     if (parts === null) continue;
     const username = isJsonObject(c.author) ? c.author.username : undefined;
     out.push({
       sha: c.id,
-      subject: c.message.split(/\r?\n/, 1)[0].trim(),
+      subject: commitSubject(c.message),
       parts,
       authorLogin: isJsonString(username) ? username : null,
     });
@@ -252,29 +338,35 @@ function pushReverts(commits: readonly JsonValue[]): PushRevert[] {
   return out;
 }
 
-/** One commit per original and action: each distinct reverted sha once, else the first commit
- * that is not a PR-title merge. A push gives no order, so no rule here reads one. */
+const plainFirst = (group: readonly PushRevert[]): PushRevert =>
+  group.find((r) => !PR_SUFFIX.test(r.subject)) ?? group[0];
+
+/** The merge commit of a revert PR whose title is the message: it names the PR and no sha. */
+const isTitleOnly = (r: PushRevert): boolean =>
+  PR_SUFFIX.test(r.subject) && r.parts.revertsSha === null && r.parts.revertsPull !== null;
+
+/** One commit of a group: each distinct reverted sha once, else the first commit. */
+function keepOnes(group: readonly PushRevert[]): PushRevert[] {
+  const bySha = new Map<string, PushRevert[]>();
+  for (const r of group) {
+    const sha = r.parts.revertsSha;
+    if (sha !== null) bySha.set(sha, [...(bySha.get(sha) ?? []), r]);
+  }
+  return bySha.size === 0 ? [plainFirst(group)] : [...bySha.values()].map(plainFirst);
+}
+
+/** One commit per action, original and reverted pull request. A revert PR merged with its title as
+ * the message adds a second commit for the same revert; once the push holds a revert that names a
+ * sha, a commit that names only a pull request is that second commit. A push gives no order. */
 function onePerOriginal(reverts: readonly PushRevert[]): PushRevert[] {
+  const namesSha = reverts.some((r) => r.parts.revertsSha !== null);
   const groups = new Map<string, PushRevert[]>();
   for (const r of reverts) {
-    const key = `${r.parts.action}:${r.parts.original}`;
+    if (namesSha && isTitleOnly(r)) continue;
+    const key = `${r.parts.action}:${r.parts.original}:${r.parts.revertsPull ?? ''}`;
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
-  const kept = new Set<PushRevert>();
-  for (const group of groups.values()) {
-    const withSha = group.filter((r) => r.parts.revertsSha !== null);
-    if (withSha.length === 0) {
-      kept.add(group.find((r) => !PR_SUFFIX.test(r.subject)) ?? group[0]);
-      continue;
-    }
-    const shas = new Set<string>();
-    for (const r of withSha) {
-      if (r.parts.revertsSha !== null && !shas.has(r.parts.revertsSha)) {
-        shas.add(r.parts.revertsSha);
-        kept.add(r);
-      }
-    }
-  }
+  const kept = new Set([...groups.values()].flatMap(keepOnes));
   return reverts.filter((r) => kept.has(r));
 }
 
@@ -288,7 +380,7 @@ export async function ingestPushLessons(
   if (evt.deleted === true || evt.ref !== `refs/heads/${evt.repository.default_branch}`) {
     return { ingested: 0, memoryIds };
   }
-  for (const r of onePerOriginal(pushReverts(evt.commits))) {
+  for (const r of onePerOriginal(pushReverts(evt.commits, evt.repository.full_name))) {
     const commit: LessonCommit = {
       repository: evt.repository,
       sha: r.sha,

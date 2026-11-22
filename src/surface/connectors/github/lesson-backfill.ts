@@ -9,8 +9,9 @@ import { fetchPastRateLimit, sameOriginNext, syntheticRepository } from './backf
 import {
   CODEOWNERS_PATHS,
   SHA_RE,
+  codeownersFiles,
   codeownersLessonOpts,
-  codeownersPatch,
+  commitSubject,
   ingestLesson,
   lessonSeen,
   parseRevertMessage,
@@ -24,17 +25,17 @@ import { GITHUB_COM, type GitHubSite } from './site.js';
 
 export interface LessonBackfillOptions {
   /** e.g. 'acme/repo'. */
-  repoFullName: string;
+  readonly repoFullName: string;
   /** Lists commits; must not follow a redirect (noRedirectGitHubFetcher). */
-  listFetcher: GitHubFetcher;
+  readonly listFetcher: GitHubFetcher;
   /** Reads one commit object, for the diff of a CODEOWNERS change. */
-  commitFetcher: GitHubCommitFetcher;
-  tokenSource: GitHubTokenSource;
+  readonly commitFetcher: GitHubCommitFetcher;
+  readonly tokenSource: GitHubTokenSource;
   /** Window start; 30 days before now when absent. */
-  sinceIso?: string;
-  sleepMs?: (ms: number) => Promise<void>;
-  site?: GitHubSite;
-  nowMs?: number;
+  readonly sinceIso?: string;
+  readonly sleepMs?: (ms: number) => Promise<void>;
+  readonly site?: GitHubSite;
+  readonly nowMs?: number;
 }
 
 export interface LessonBackfillResult {
@@ -45,6 +46,7 @@ export interface LessonBackfillResult {
 
 const WINDOW_DAYS = 30;
 const MAX_REVERT_PAGES = 10;
+const MAX_FILE_PAGES = 10;
 
 interface LessonRun {
   readonly ctx: ConnectorContext;
@@ -104,7 +106,7 @@ async function revertsOnPage(run: LessonRun, items: readonly JsonValue[]): Promi
     const item = commitItem(raw);
     // A merge commit repeats the revert its branch holds; the branch's own commit is the key.
     if (item === null || item.parents > 1) continue;
-    const parts = parseRevertMessage(item.message);
+    const parts = parseRevertMessage(item.message, run.opts.repoFullName);
     if (parts === null) continue;
     const lesson = revertLessonOpts(lessonCommit(run, item), parts);
     if (await writeLesson(run, item, lesson)) written++;
@@ -135,24 +137,51 @@ async function revertPass(run: LessonRun): Promise<{ written: number; pages: num
   return { written, pages };
 }
 
-async function codeownersLesson(run: LessonRun, path: string, item: CommitItem): Promise<boolean> {
+/** The files of one commit, across every page GitHub gives it. */
+async function commitFiles(run: LessonRun, item: CommitItem): Promise<JsonValue[]> {
+  let url: string | null = `${run.site.apiBase}/repos/${run.opts.repoFullName}/commits/${item.sha}`;
+  const origin = new URL(url).origin;
+  const files: JsonValue[] = [];
+  let pages = 0;
+  while (url !== null && pages < MAX_FILE_PAGES) {
+    const pageUrl: string = url;
+    const reply = await fetchPastRateLimit(
+      (token) => run.opts.commitFetcher({ url: pageUrl, token }),
+      run,
+    );
+    if (reply.commit === null) throw new Error(`GitHub sent no commit object for ${item.sha}`);
+    pages++;
+    if (Array.isArray(reply.commit.files)) files.push(...reply.commit.files);
+    url = sameOriginNext(reply.next, origin);
+  }
+  if (url !== null) {
+    log.warn(
+      `github lessons: read ${MAX_FILE_PAGES} pages of files for commit ${item.sha}; later files were not read`,
+    );
+  }
+  return files;
+}
+
+/** One lesson for a commit, from every CODEOWNERS file it changed; `listed` are the paths whose
+ * commit list named it, which stand in when the detail holds no entry. */
+async function codeownersLesson(
+  run: LessonRun,
+  item: CommitItem,
+  listed: readonly string[],
+): Promise<boolean> {
   const { repoFullName } = run.opts;
   const ref = githubCommitLessonRef(repoFullName, item.sha, 'codeowners', run.site.host);
   if (await lessonSeen(run.ctx, ref)) return false;
-  const url = `${run.site.apiBase}/repos/${repoFullName}/commits/${item.sha}`;
-  const reply = await fetchPastRateLimit((token) => run.opts.commitFetcher({ url, token }), run);
-  if (reply.commit === null) throw new Error(`GitHub sent no commit object for ${item.sha}`);
-  const entry = codeownersPatch(reply.commit.files, path);
+  const found = codeownersFiles(await commitFiles(run, item));
   const change = {
-    path: entry?.filename ?? path,
-    subject: item.message.split(/\r?\n/, 1)[0].trim(),
-    entry,
+    subject: commitSubject(item.message),
+    files: found.length > 0 ? found : listed.map((path) => ({ path, entry: null })),
   };
   return writeLesson(run, item, codeownersLessonOpts(lessonCommit(run, item), change));
 }
 
 async function codeownersPass(run: LessonRun): Promise<{ written: number; pages: number }> {
-  let written = 0;
+  const listed = new Map<string, { item: CommitItem; paths: string[] }>();
   let pages = 0;
   for (const path of CODEOWNERS_PATHS) {
     const url = commitsUrl(run, `path=${encodeURIComponent(path)}&`);
@@ -165,8 +194,15 @@ async function codeownersPass(run: LessonRun): Promise<{ written: number; pages:
     }
     for (const raw of page.items) {
       const item = commitItem(raw);
-      if (item !== null && (await codeownersLesson(run, path, item))) written++;
+      if (item === null) continue;
+      const held = listed.get(item.sha);
+      if (held === undefined) listed.set(item.sha, { item, paths: [path] });
+      else held.paths.push(path);
     }
+  }
+  let written = 0;
+  for (const { item, paths } of listed.values()) {
+    if (await codeownersLesson(run, item, paths)) written++;
   }
   return { written, pages };
 }

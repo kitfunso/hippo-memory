@@ -217,9 +217,11 @@ export const noRedirectGitHubFetcher: GitHubFetcher = async ({ url, token }) => 
   return { items: body, next: parseNextLink(res.headers.get('link') ?? ''), rateLimit };
 };
 
-/** The reply to one commit request; commit is null only when GitHub rate limited. */
+/** The reply to one commit request; commit is null only when GitHub rate limited. `next` is the
+ * link to the commit's next page of files, which GitHub pages past 300 files. */
 export interface GitHubCommitReply {
   readonly commit: Record<string, JsonValue> | null;
+  readonly next: string | null;
   readonly rateLimit: RateLimitInfo;
 }
 
@@ -230,10 +232,10 @@ export type GitHubCommitFetcher = (args: {
 
 export const realGitHubCommitFetcher: GitHubCommitFetcher = async ({ url, token }) => {
   const { res, rateLimit } = await strictReply(url, token);
-  if (res === null) return { commit: null, rateLimit };
+  if (res === null) return { commit: null, next: null, rateLimit };
   const body = await readStrictJson(res, url);
   if (!isJsonObject(body)) {
     throw new GitHubFetchError(res.status, 'the reply is not a JSON object', hostAndPath(url));
   }
-  return { commit: body, rateLimit };
+  return { commit: body, next: parseNextLink(res.headers.get('link') ?? ''), rateLimit };
 };

@@ -126,7 +126,7 @@ interface LessonPassInput {
 
 /** Prints the three streams' result with the lesson counts; a failed pass prints it with `lessons`
  * null and rethrows, so the run still exits 3. */
-async function printWithLessons(
+async function runLessonPass(
   ctx: ConnectorContext,
   input: LessonPassInput,
   result: BackfillResult,
@@ -170,7 +170,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
       site,
     });
     if (boolFlag(flags, 'lessons')) {
-      await printWithLessons(ctx, { repo, source, sinceIso, site }, result);
+      await runLessonPass(ctx, { repo, source, sinceIso, site }, result);
     } else {
       console.log(JSON.stringify(result, null, 2));
     }

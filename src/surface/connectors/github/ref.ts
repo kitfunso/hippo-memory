@@ -44,14 +44,15 @@ export function githubArtifactRef(
   return `github://${githubRepoKey(repoFullName, host)}/${itemPath(item)}`;
 }
 
-/** The ref of a lesson a default-branch commit gives; its sha is the lesson's key on every path. */
+/** The ref of a lesson a default-branch commit gives; its sha is the lesson's key on every path.
+ * The repo is lower-cased: a webhook names it as GitHub does and a backfill as the operator typed it. */
 export function githubCommitLessonRef(
   repoFullName: string | undefined,
   sha: string,
   lesson: 'revert' | 'codeowners',
   host: string | undefined,
 ): string {
-  return `github://${githubRepoKey(repoFullName, host)}/commit/${sha}/${lesson}`;
+  return `github://${githubRepoKey(repoFullName?.toLowerCase(), host)}/commit/${sha}/${lesson}`;
 }
 
 // Group 1 is the host, a segment with a dot or colon. The anchored tail also keeps a host ref

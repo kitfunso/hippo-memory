@@ -57,7 +57,7 @@ export const HEALTH_VERBS = {
       `
   github                   GitHub connector subcommands (backfill, dlq)
     backfill --repo <owner/name> [--since ISO] [--max <N>] [--lessons]
-                           Paginated backfill of issues + comments
+                           Backfill issues + comments; --lessons adds revert and CODEOWNERS lessons
     dlq list               List DLQ entries for the active tenant
     dlq replay <id> [--force]
                            Re-ingest a DLQ entry (--force skips sig check)`,
