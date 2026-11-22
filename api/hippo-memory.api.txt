@@ -466,6 +466,7 @@ server.d.ts: ConflictError re-export
 server.d.ts: Context re-export
 server.d.ts: DetachedWork re-export
 server.d.ts: ForbiddenError re-export
+server.d.ts: GROUPS_CLAIM_TOO_LONG re-export
 server.d.ts: HippoStore re-export
 server.d.ts: HttpError re-export
 server.d.ts: JsonValue re-export
@@ -478,10 +479,15 @@ server.d.ts: ProjectWriteCall re-export
 server.d.ts: ProjectWriteGate re-export
 server.d.ts: RateLimitSpec re-export
 server.d.ts: ResolvedBearer re-export
+server.d.ts: Role re-export
+server.d.ts: RoleFromGroups re-export
+server.d.ts: RoleGroups re-export
+server.d.ts: RoleLevel re-export
 server.d.ts: ServeOptions re-export
 server.d.ts: ServerHandle re-export
 server.d.ts: SessionCaptureRequest re-export
 server.d.ts: SessionCaptureResult re-export
+server.d.ts: VIEWER_REFUSAL re-export
 server.d.ts: WorkingState re-export
 server.d.ts: admitProjectWrite re-export
 server.d.ts: authCreate function
@@ -500,6 +506,7 @@ server.d.ts: isReservedActor re-export
 server.d.ts: ownerOrSubject re-export
 server.d.ts: preCompactForCaller re-export
 server.d.ts: promptHookContext re-export
+server.d.ts: roleFromGroups re-export
 server.d.ts: saveCompactionItemsForCaller re-export
 server.d.ts: serve re-export
 server.d.ts: sessionEndHandoffForCaller re-export
