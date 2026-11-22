@@ -10,7 +10,7 @@ import { currentRequestId } from '../../base/util/request-scope.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import type { Actor as ApiActor, Context as ApiContext, ContextReach } from '../../api/index.js';
 import { type ResolveProjectIdentityOptions } from '../../base/scope/project-identity.js';
-import type { Role } from '../../base/scope/role.js';
+import { roleOrViewer, type Role } from '../../base/scope/role.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { findHippoStoreDir } from '../../host/project-identity.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
@@ -141,10 +141,10 @@ export interface McpContext<S extends RequiredStore = RequiredStore> extends Mcp
   tools: McpTools<S>;
 }
 
-/** A context's role: admin and viewer stay, and any other value, a missing role included, runs as
- * a member so an untyped caller fails closed. */
+/** A context's role: any value outside the ladder, a missing role included, runs as a viewer so
+ * an untyped caller fails closed. */
 export function mcpRole(ctx: McpCaller): Role {
-  return ctx.role === 'admin' || ctx.role === 'viewer' ? ctx.role : 'member';
+  return roleOrViewer(ctx.role);
 }
 
 /** The api-layer actor for a tool call. Only stdio passes no context: it is the local operator,

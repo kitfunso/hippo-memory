@@ -252,7 +252,7 @@ describe('published runtime exports', () => {
         GROUPS_CLAIM_TOO_LONG
         HttpError
         LOOPBACK_HOST_HEADER
-        NotFoundError
+        NO_MAPPED_GROUP NotFoundError
         VIEWER_REFUSAL
         admitProjectWrite authCreate authCreateSelf authRevoke
         bindSessionOwner

@@ -232,7 +232,7 @@ function prepareRemember(
   };
 }
 
-/** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row
+/** `tags` plus the marks that make the row print framed: its untrusted origin, and a non-admin row
  * the check flagged. */
 function trustTagged(
   tags: string[] | undefined,

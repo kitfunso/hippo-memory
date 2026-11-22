@@ -57,7 +57,7 @@ describe('hippo-memory/server entry types', () => {
 
   it('roleFromGroups maps a claim to a stored role and an add-on route takes a level', () => {
     expectTypeOf(roleFromGroups).toEqualTypeOf<
-      (claim: JsonValue | undefined, groups: RoleGroups, fallback: Role) => RoleFromGroups
+      (claim: JsonValue | undefined, groups: RoleGroups, fallback: Role | null) => RoleFromGroups
     >();
     // @ts-expect-error 'editor' is a route level, not a stored role
     typeOnly(() => roleFromGroups([], {}, 'editor'));

@@ -5,7 +5,7 @@ import type { ServerHandle } from '../../src/server.js';
 import { ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { ADMIN_LEVEL, READ_POSTS, V1_ROWS, viewerWriteRows } from '../_helpers/v1-route-rows.js';
+import { ADMIN_LEVEL, READ_POSTS, V1_ROWS, VIEWER_WRITES, viewerWriteRows } from '../_helpers/v1-route-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 const KNOWN_AUTH: ReadonlySet<string> = new Set(['viewer', 'editor', 'admin', 'host-admin-local', 'webhook-signature']);
@@ -108,7 +108,11 @@ describe('the /v1 route levels', () => {
   it('gives each row the level its method and kind call for', () => {
     const expected = (key: string, method: string): string =>
       ADMIN_LEVEL.get(key) ??
-      (WEBHOOKS.includes(key) ? 'webhook-signature' : method === 'GET' || READ_POSTS.has(key) ? 'viewer' : 'editor');
+      (WEBHOOKS.includes(key)
+        ? 'webhook-signature'
+        : method === 'GET' || READ_POSTS.has(key) || VIEWER_WRITES.has(key)
+          ? 'viewer'
+          : 'editor');
     const wrong = V1_ROWS.filter(({ key, route }) => route.auth !== expected(key, route.method)).map(
       ({ key, route }) => `${key} is ${route.auth}, wanted ${expected(key, route.method)}`,
     );

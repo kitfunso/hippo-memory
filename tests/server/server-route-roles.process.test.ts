@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
+  authCreateSelf,
   VIEWER_REFUSAL,
   type AddonRoute,
   type AuthResolver,
@@ -12,29 +13,40 @@ import {
 import { ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
-import { ADMIN_LEVEL, READ_POSTS, V1_ROWS } from '../_helpers/v1-route-rows.js';
+import { ADMIN_LEVEL, READ_POSTS, V1_ROWS, VIEWER_WRITES } from '../_helpers/v1-route-rows.js';
 import { routeLabel } from '../../src/surface/server/route-table.js';
 
 const TENANT = 't-roles';
-const TOKENS = new Map([
+// A role outside the ladder is deliberately wrong, to prove the core reads it as a viewer.
+const OUTSIDE_LADDER = ['ext.owner', 'ext.cased', 'ext.editor-name', 'ext.none'];
+const TOKENS = new Map<string, string | undefined>([
   ['ext.viewer', 'viewer'],
   ['ext.editor', 'member'],
   ['ext.admin', 'admin'],
-  ['ext.odd', 'owner'],
+  ['ext.owner', 'owner'],
+  ['ext.cased', 'Viewer'],
+  ['ext.editor-name', 'editor'],
+  ['ext.none', undefined],
 ]);
 
 const resolver: AuthResolver = (token) => {
-  const role = TOKENS.get(token);
-  if (role === undefined) return null;
-  // SAFETY: the odd role is a deliberately wrong value, to prove the core downgrades it to member.
-  return { tenantId: TENANT, subject: `user-${token}`, role, scopes: [] } as ResolvedBearer;
+  if (!TOKENS.has(token)) return null;
+  // SAFETY: a role outside the ladder, or none, is the case under test, and the type would refuse it.
+  return { tenantId: TENANT, subject: `user-${token}`, role: TOKENS.get(token), scopes: [] } as ResolvedBearer;
 };
 
 function addon(path: string, level?: AddonRoute['level']): AddonRoute {
   const handler = async (): Promise<JsonValue> => ({ ok: true });
   return level === undefined ? { path, handler } : { path, handler, level };
 }
-const ROUTES = [addon('/v1/x-write'), addon('/v1/x-read', 'viewer'), addon('/v1/x-admin', 'admin')];
+
+// A viewer-level route that mints for the caller, so the role check inside authCreateSelf is the one under test.
+const MINT_OWN: AddonRoute = {
+  path: '/v1/x-mint',
+  level: 'viewer',
+  handler: async ({ ctx }) => ({ keyId: (await authCreateSelf(ctx, { ttlDays: 1, perSubject: 1 })).keyId }),
+};
+const ROUTES = [addon('/v1/x-write'), addon('/v1/x-read', 'viewer'), addon('/v1/x-admin', 'admin'), MINT_OWN];
 
 const SERVE_OPTIONS = {
   host: '127.0.0.1',
@@ -70,7 +82,12 @@ const ADMIN_ROWS = V1_ROWS.filter(({ key }) => ADMIN_LEVEL.has(key));
 const isWebhook = (auth: string): boolean => auth === 'webhook-signature';
 // Built from the method rule, so a row set to the wrong level shows up here as well as in the levels check.
 const EDITOR_ROWS = V1_ROWS.filter(
-  ({ key, route }) => !ADMIN_LEVEL.has(key) && !isWebhook(route.auth) && route.method !== 'GET' && !READ_POSTS.has(key),
+  ({ key, route }) =>
+    !ADMIN_LEVEL.has(key) &&
+    !isWebhook(route.auth) &&
+    route.method !== 'GET' &&
+    !READ_POSTS.has(key) &&
+    !VIEWER_WRITES.has(key),
 );
 
 interface McpReply {
@@ -103,7 +120,7 @@ afterAll(async () => {
 
 describe('a viewer signed in through an auth resolver', () => {
   it('is refused on every editor row with the viewer text', async () => {
-    expect(EDITOR_ROWS).toHaveLength(31);
+    expect(EDITOR_ROWS).toHaveLength(30);
     const seen: Record<string, { status: number; text: string }> = {};
     for (const { key } of EDITOR_ROWS) seen[key] = await statusAndText(await rowCall('ext.viewer', key));
     const wanted = Object.fromEntries(
@@ -160,10 +177,20 @@ describe('an editor and an admin', () => {
   });
 });
 
-describe('a resolver role outside the ladder (guard)', () => {
-  it('still runs as an editor', async () => {
-    const res = await call('ext.odd', 'POST', '/v1/memories', { content: 'an odd-role note' });
-    expect(res.status).toBe(200);
+describe('a resolver role outside the ladder, or none', () => {
+  it.each(OUTSIDE_LADDER)('reads as a viewer for %s: refused every write, still reads', async (token) => {
+    const writes = [
+      await statusAndText(await call(token, 'POST', '/v1/memories', { content: 'an odd-role note' })),
+      await statusAndText(await call(token, 'POST', '/v1/outcome', { good: true })),
+      await statusAndText(await call(token, 'POST', '/v1/x-mint')),
+    ];
+    const refused = { status: 403, text: expect.stringContaining(VIEWER_REFUSAL) };
+    expect(writes).toEqual([refused, refused, refused]);
+    expect((await call(token, 'GET', '/v1/memories?q=x')).status).toBe(200);
+  });
+
+  it('lets an editor mint its own key, so the refusals above come from the role', async () => {
+    expect((await call('ext.editor', 'POST', '/v1/x-mint')).status).toBe(200);
   });
 });
 
@@ -209,7 +236,7 @@ describe('the request trail', () => {
     );
   });
 
-  it('never writes the groups claim to the log, on a 200 or a 403 (guard)', async () => {
+  it('never writes the groups claim to the log, on a 200 or a 403', async () => {
     expect((await send('GET', '/v1/memories?q=x', 'role-2')).status).toBe(200);
     expect((await send('POST', '/v1/memories', 'role-3')).status).toBe(403);
     await vi.waitFor(() => expect(lines().some((l) => l.includes('role-3'))).toBe(true));

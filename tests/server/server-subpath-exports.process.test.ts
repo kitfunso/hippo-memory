@@ -23,6 +23,7 @@ const SERVER_VALUES = [
   'isLoopback',
   'isReservedActor',
   'LOOPBACK_HOST_HEADER',
+  'NO_MAPPED_GROUP',
   'ownerOrSubject',
   'preCompactForCaller',
   'promptHookContext',

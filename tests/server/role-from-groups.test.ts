@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GROUPS_CLAIM_TOO_LONG,
+  NO_MAPPED_GROUP,
   roleFromGroups,
   type JsonValue,
   type Role,
@@ -60,5 +61,45 @@ describe('the size cap', () => {
     expect(roleOf(Array.from({ length: 1025 }, (_, i) => i))).toEqual({ refused: GROUPS_CLAIM_TOO_LONG });
     expect(GROUPS_CLAIM_TOO_LONG).toBe('groups claim lists more than 1024 groups');
     expect(GROUPS_CLAIM_TOO_LONG).not.toContain('g-secret-');
+  });
+});
+
+describe('a mapping that leaves out a level', () => {
+  const adminOnly = { admin: ['Admins'] };
+
+  it('gives admin for a match and the fallback for none', () => {
+    expect(roleFromGroups(['Admins'], adminOnly, 'viewer')).toEqual({ role: 'admin' });
+    expect(roleFromGroups(['Other'], adminOnly, 'viewer')).toEqual({ role: 'viewer' });
+  });
+
+  it('counts a list that is not an array as empty', () => {
+    // SAFETY: plugin code may pass a non-array list despite the type.
+    const castList = { admin: 'Admins', editor: null } as never;
+    expect(roleFromGroups(['Admins'], castList, 'viewer')).toEqual({ role: 'viewer' });
+  });
+
+  it('gives the fallback for an empty claim', () => {
+    expect(roleOf([], 'viewer')).toEqual({ role: 'viewer' });
+    expect(roleFromGroups([], adminOnly, 'member')).toEqual({ role: 'member' });
+  });
+});
+
+describe('a null fallback', () => {
+  it.each([[['Other']], [[]], [undefined], [null], [42], ['Other'], [['x', 1, null]]])(
+    'refuses a claim of %j that matches no group',
+    (claim) => {
+      expect(roleFromGroups(claim, MAPPING, null)).toEqual({ refused: NO_MAPPED_GROUP });
+    },
+  );
+
+  it('still gives the role of a match, and keeps the size refusal apart', () => {
+    expect(roleFromGroups(['Readers'], MAPPING, null)).toEqual({ role: 'viewer' });
+    expect(roleFromGroups('Admins', MAPPING, null)).toEqual({ role: 'admin' });
+    const over = Array.from({ length: 1025 }, (_, i) => `g-${i}`);
+    expect(roleFromGroups(over, MAPPING, null)).toEqual({ refused: GROUPS_CLAIM_TOO_LONG });
+  });
+
+  it('words the refusal with no role or claim in it', () => {
+    expect(NO_MAPPED_GROUP).toBe('groups claim holds no mapped group');
   });
 });

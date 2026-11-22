@@ -33,9 +33,9 @@ export interface ServerHandle {
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** 'viewer' reads only; any other value means 'member'. Admin is tenant-only, yet can mint member
-   * API keys (POST /v1/auth/keys); an add-on revokes them through the exported authRevoke when the
-   * IdP deprovisions the minter. */
+  /** 'admin', 'member' or 'viewer'; any other value, or none, reads as 'viewer'. Admin is
+   * tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through
+   * the exported authRevoke when the IdP deprovisions the minter. */
   role: Role;
   scopes?: readonly string[];
 }

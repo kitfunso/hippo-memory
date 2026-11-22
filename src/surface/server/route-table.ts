@@ -188,7 +188,9 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
-    auth: 'editor',
+    // authRevoke lets a resolver caller revoke only the keys it minted, so a demoted viewer can
+    // still revoke its own.
+    auth: 'viewer',
     handler: handleRevokeAuthKey,
   },
   {

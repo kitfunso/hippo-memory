@@ -69,7 +69,12 @@ export type {
   ServeOptions,
   ServerHandle,
 } from './surface/server/types.js';
-export { GROUPS_CLAIM_TOO_LONG, roleFromGroups, VIEWER_REFUSAL } from './base/scope/role.js';
+export {
+  GROUPS_CLAIM_TOO_LONG,
+  NO_MAPPED_GROUP,
+  roleFromGroups,
+  VIEWER_REFUSAL,
+} from './base/scope/role.js';
 export type { Role, RoleFromGroups, RoleGroups, RoleLevel } from './base/scope/role.js';
 export { admitProjectWrite } from './api/project-write-gate.js';
 export type { ProjectWriteCall, ProjectWriteGate } from './api/types.js';

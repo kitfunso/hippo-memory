@@ -10,10 +10,16 @@ export const OBJECT_ROW =
 /** POST rows that only read, so they stay at the viewer level. */
 export const READ_POSTS: ReadonlySet<string> = new Set(['POST /v1/vectors/nearest']);
 
-/** The keys of viewer-level rows that write: not a GET and not a known read POST. */
+/** Writes a viewer may make because they only lower access: a resolver caller revokes only the keys it minted. */
+export const VIEWER_WRITES: ReadonlySet<string> = new Set(['DELETE /v1/auth/keys/:keyId']);
+
+/** The keys of viewer-level rows that write: not a GET, not a known read POST, not a known lowering write. */
 export function viewerWriteRows(rows: readonly { key: string; route: { method: string; auth: string } }[]): string[] {
   return rows
-    .filter(({ key, route }) => route.auth === 'viewer' && route.method !== 'GET' && !READ_POSTS.has(key))
+    .filter(
+      ({ key, route }) =>
+        route.auth === 'viewer' && route.method !== 'GET' && !READ_POSTS.has(key) && !VIEWER_WRITES.has(key),
+    )
     .map(({ key }) => key);
 }
 

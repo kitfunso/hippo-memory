@@ -891,7 +891,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/auth.ts
 - `checkAuth` (src/surface/server/auth.ts): A request with no key is refused 401, from loopback too. 3.0 removed `HIPPO_ALLOW_KEYLESS_LOCAL`, which let a loopback caller with no proxy header in as a member: a port forwarder sends no such header, so the header list could never prove a caller local. The CLI now sends the key `serve()` writes to `server.key`. The 401 says where that key is only for a caller that passes `isLocalCaller`; a proxied caller or a browser page gets the plain `auth required`. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
-- `sanitiseResolved`, `buildContextWithAuth`: a resolver role of 'viewer' stays a viewer, and any other value but 'admin' is a member. `buildContextWithAuth` notes the caller's role once, so a /v1, add-on or MCP request line all carry `role=`.
+- `sanitiseResolved`, `buildContextWithAuth`: 'admin', 'member' and 'viewer' stay, and any other resolver role, or none, reads as a viewer through `roleOrViewer`, so it fails closed. `buildContextWithAuth` notes the caller's role once, so a /v1, add-on or MCP request line all carry `role=`.
 
 ### src/surface/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.

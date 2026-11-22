@@ -28,7 +28,8 @@ import type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
  *  for admin gating; a viewer reads only.
- *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
+ *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate, authCreateSelf and
+ *  authRevoke (ForbiddenError).
  */
 export interface Actor {
   /** 'cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */

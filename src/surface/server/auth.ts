@@ -7,6 +7,7 @@ import { LOCAL_KEY_SUBJECT } from './local-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
 import { HttpError } from '../../base/errors/http-errors.js';
+import { roleOrViewer } from '../../base/scope/role.js';
 import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
@@ -167,7 +168,7 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   const clean: ResolvedBearer = {
     tenantId: tenant,
     subject,
-    role: role === 'admin' || role === 'viewer' ? role : 'member',
+    role: roleOrViewer(role),
   };
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;

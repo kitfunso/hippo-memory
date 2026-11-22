@@ -73,13 +73,17 @@ describe('a viewer context', () => {
   });
 });
 
-describe('a context with no role (guard)', () => {
-  it('still runs as a member and writes', async () => {
-    const reply = await callTool(contextWith(undefined), 'hippo_remember', { text: 'a roleless note' });
+describe('a context with no role, or a role outside the ladder', () => {
+  it.each([[undefined], ['owner'], ['Viewer'], ['editor']])('reads as a viewer for %s', async (role) => {
+    const reply = await callTool(contextWith(role), 'hippo_remember', { text: 'a roleless note' });
+    expect({ error: isError(reply), text: textOf(reply) }).toEqual({ error: true, text: VIEWER_REFUSAL });
+    expect(mcpActor(contextWith(role)).role).toBe('viewer');
+  });
+
+  it.each([['member'], ['admin']] as const)('keeps the %s role and writes', async (role) => {
+    const reply = await callTool(contextWith(role), 'hippo_remember', { text: 'a note from a known role' });
     expect(isError(reply)).toBe(false);
-    expect(textOf(reply)).toContain('Remembered [mem_');
-    expect(mcpActor(contextWith(undefined)).role).toBe('member');
-    expect(mcpActor(contextWith('owner')).role).toBe('member');
+    expect(mcpActor(contextWith(role)).role).toBe(role);
   });
 });
 
