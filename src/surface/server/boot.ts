@@ -53,6 +53,7 @@ import { bootLimiters } from './rate-limits.js';
 import type { RateLimiter } from './rate-limit.js';
 import { githubSiteFromEnv, warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
 import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
+import { oauthBoot, type OAuthChallenge } from './oauth-resource.js';
 import {
   bindAddonRoutes,
   bindV1Routes,
@@ -252,7 +253,8 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const host = opts.host ?? DEFAULT_SERVER_HOST;
   const requestedPort = opts.port ?? Number(envPort() ?? DEFAULT_SERVER_PORT);
   const routes = frozenAddonRoutes(opts.routes);
-  const publicJsonBodies = assertPublicJson(opts.publicJson ?? {});
+  const oauth = oauthBoot(opts);
+  const publicJsonBodies = new Map([...assertPublicJson(opts.publicJson ?? {}), ...oauth.bodies]);
   const limiters = bootLimiters(opts.rateLimits);
   assertClientIpHeaderPinned();
   assertFlagsValid();
@@ -280,6 +282,7 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
       requestedPort,
       routes,
       publicJsonBodies,
+      oauthChallenge: oauth.challenge,
       limiters,
       startedAt,
     });
@@ -294,6 +297,7 @@ interface BootPlan {
   requestedPort: number;
   routes: ReturnType<typeof frozenAddonRoutes>;
   publicJsonBodies: ReturnType<typeof assertPublicJson>;
+  oauthChallenge: OAuthChallenge | undefined;
   limiters: ReturnType<typeof bootLimiters>;
   startedAt: string;
 }
@@ -372,7 +376,7 @@ function frozenAddonRoutes(
 
 function servedOptsFor(
   opts: ServeOptions,
-  { routes, publicJsonBodies, limiters }: BootPlan,
+  { routes, publicJsonBodies, oauthChallenge, limiters }: BootPlan,
   runtime: ServerRuntime,
   localKey: LocalKey,
 ): ResolvedServeOptions {
@@ -394,6 +398,7 @@ function servedOptsFor(
     ...opts,
     routes,
     publicJsonBodies,
+    oauthChallenge,
     v1Routes: bindV1Routes(store, runtime.onHippoDb),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     mcpTools: bindMcpTools(store),

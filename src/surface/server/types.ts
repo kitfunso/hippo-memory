@@ -17,6 +17,7 @@ import type { SleepQueue } from './sleep-offload.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import type { DetachedWork } from '../../domain/search/detached-work.js';
 import type { ConnectorStore } from '../connectors/ingest.js';
+import type { OAuthChallenge } from './oauth-resource.js';
 
 export interface ServerHandle {
   port: number;
@@ -38,8 +39,19 @@ export interface ResolvedBearer {
   scopes?: readonly string[];
 }
 
+/** serve()'s OAuth setting: hippo is the protected resource, never the authorization server. */
+export interface OAuthResource {
+  /** The public URL clients use for /mcp, in canonical form: https, or http on a loopback host. */
+  readonly resource: string;
+  /** Issuer URLs of the authorization servers whose tokens the authResolver accepts; at least one. */
+  readonly authorizationServers: readonly string[];
+  /** Scopes a client asks for, sent as scopes_supported and in the challenge's scope. */
+  readonly scopes?: readonly string[];
+}
+
 /** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so
- * throw only when upstream is down. */
+ * throw only when upstream is down. With serve's oauth set, accept only tokens whose audience
+ * includes oauth.resource. */
 export type AuthResolver = (
   token: string,
   /** Aborted when the deadline passes, so a slow upstream call can stop. */
@@ -91,6 +103,8 @@ export interface ServeOptions {
   authResolver?: AuthResolver;
   /** Deadline for one authResolver call; defaults to 5000 ms. */
   authResolverTimeoutMs?: number;
+  /** OAuth metadata for /mcp, named in a POST /mcp 401 only; needs authResolver for non-`hk_` tokens. */
+  oauth?: OAuthResource;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
@@ -169,6 +183,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
   publicJsonBodies: ReadonlyMap<string, string>;
+  /** The /mcp 401 challenge, frozen at boot from the checked oauth setting. */
+  readonly oauthChallenge?: OAuthChallenge;
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */
