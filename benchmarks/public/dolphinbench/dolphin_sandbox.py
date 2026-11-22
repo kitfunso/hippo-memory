@@ -68,7 +68,8 @@ def bwrap(binds: list[str], cwd: str, *, root: bool = False) -> list[str]:
     args += mount_parents(targets)
     for path in config["ro"]:
         args += ["--ro-bind", path, path]
-    return [*args, "--tmpfs", "/tmp", "--dev", "/dev", "--proc", "/proc", *binds, "--chdir", cwd]
+    # 1777 as on a host: a root bwrap makes its tmpfs root 0755, which locks out the uid a test drops to
+    return [*args, "--perms", "1777", "--tmpfs", "/tmp", "--dev", "/dev", "--proc", "/proc", *binds, "--chdir", cwd]
 
 
 def persona_home(home: str) -> str:

@@ -12,6 +12,7 @@ import urllib.request
 import winreg
 
 NAMES = ("Z0_SUB_TOKEN_1", "Z0_SUB_TOKEN_2", "Z0_SUB_TOKEN_3")  # Keith 16 Nov: any of the three with room
+ROOM = ("allowed", "allowed_warning")  # past 75% of the week the API says allowed_warning and still serves
 BODY = json.dumps({"model": "claude-sonnet-5-5", "max_tokens": 1,
                    "system": "You are Claude Code, Anthropic's official CLI for Claude.",
                    "messages": [{"role": "user", "content": "Reply OK"}]}).encode()
@@ -41,7 +42,7 @@ def main() -> int:
         seen.add(h)
         code, rl = ping(token)
         print(json.dumps({"name": name, "sha": h, "http": code, **rl}), file=sys.stderr)
-        ok = code == 200 and rl.get("7d-status", "allowed") == "allowed" and rl.get("5h-status", "allowed") == "allowed"
+        ok = code == 200 and rl.get("7d-status", "allowed") in ROOM and rl.get("5h-status", "allowed") in ROOM
         if ok:
             room.append((float(rl.get("7d-utilization", 1)), name))
         resets += [int(rl[k]) for k in ("7d-reset", "5h-reset") if rl.get(k, "").isdigit()]
