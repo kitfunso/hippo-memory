@@ -1,0 +1,128 @@
+---
+import Base from '../../layouts/Base.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import PageIntro from '../../components/PageIntro.astro';
+import Section from '../../components/Section.astro';
+import RepeatMistakes from '../../components/RepeatMistakes.astro';
+import { site } from '../../content/site';
+import Faq from '../../components/Faq.astro';
+import { faqPageLd } from '../../content/readme';
+
+const title = 'hippo vs Supermemory: open-source local MIT memory with local MCP';
+const description =
+  'hippo and Supermemory compared on 22 November 2026. Supermemory ships a closed-source engine with Platform-only MCP and a 10,000-doc local cap; hippo is 100% MIT with local MCP, no cap and zero LLM calls.';
+
+const rows = [
+  { feature: 'Engine licence', hippo: '100% MIT open source', them: 'Closed-source engine & local binary (MIT plugins/SDKs)' },
+  { feature: 'Local document limit', hippo: 'None', them: '10,000-document lite licence cap on supermemory local' },
+  { feature: 'MCP server', hippo: 'Local stdio MCP included (13 tools) + self-hosted HTTP', them: 'Cloud Platform only (not in supermemory local)' },
+  { feature: 'LLM calls on save', hippo: '0 (default path)', them: 'Proprietary cloud LLM or required BYO LLM key locally' },
+  { feature: 'Storage format', hippo: 'Plain SQLite + git-committable markdown mirrors', them: 'Managed cloud DB or encrypted opaque local snapshot' },
+  { feature: 'Account or per-token fees', hippo: 'None (free, local-first)', them: 'Metered cloud credits ($5 to $10 per 1M SM tokens)' },
+  { feature: 'Outcome weakening & supersession', hippo: 'Yes (hippo outcome --bad, hippo supersede)', them: 'Automatic cloud contradiction handling' },
+  { feature: 'Coding agent support', hippo: 'Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw, MCP', them: 'MIT plugins for Claude Code, Cursor, Codex, OpenCode, OpenClaw' },
+] as const;
+
+const qa = [
+  {
+    q: 'Is Supermemory open source like hippo?',
+    a: 'Only Supermemory plugins, SDKs and repo tooling are open source. Per Supermemory self-hosting docs (checked 22 November 2026), the memory engine and downloadable supermemory local binary are closed-source, capped at 10,000 documents and exclude MCP. Hippo is 100% MIT open source with local MCP and no document limit.',
+  },
+  {
+    q: 'Can I run hippo completely offline with no cloud account or API key?',
+    a: 'Yes. Hippo stores everything locally in SQLite and markdown inside your repository, runs recall and rule capture with zero LLM calls and never requires a cloud account or metered token billing.',
+  },
+];
+---
+
+<Base title={title} description={description} crumb="hippo vs Supermemory" published="2026-11-22" schema={[faqPageLd(qa)]}>
+  <Nav />
+  <main id="main">
+    <PageIntro>
+      <Fragment slot="title">hippo vs <span class="text-ink">Supermemory</span></Fragment>
+      <p>
+        Supermemory is a cloud-first memory and RAG API with open-source coding-agent plugins. Its core memory engine and
+        downloadable local binary are closed-source, its MCP server is Platform-only, and every save runs through an LLM.
+        Hippo is 100% MIT open source, runs locally with zero runtime dependencies and zero LLM calls on save, includes a
+        local MCP server and keeps readable markdown copies you can commit to git.
+      </p>
+    </PageIntro>
+
+    <Section title="Open local infrastructure vs closed engine and metered tokens">
+      <p>
+        Supermemory's self-hosting docs note that <code>supermemory local</code> is a closed-source binary capped at
+        10,000 stored documents under a lite licence, saves data as an encrypted snapshot file
+        (<code>~/.supermemory/data</code>), requires an external LLM provider key or local model server to extract
+        memories, and excludes MCP and external connectors (<a class="link" href="https://supermemory.ai/docs/self-hosting/overview.md" target="_blank" rel="noopener noreferrer">Supermemory self-hosting docs<span class="sr-only"> (opens in new tab)</span></a>,
+        <a class="link" href="https://supermemory.ai/pricing/" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>, checked 22 November 2026).
+      </p>
+      <p>
+        Hippo gives you full ownership of both the engine and the files. There is no document limit, no account, no
+        per-token charge and no telemetry. Local MCP (<code>hippo mcp</code>, 13 tools) ships in the MIT package, every
+        memory has a plain markdown mirror in <code>.hippo/</code>, and bad recalls can be weakened directly with
+        <code>hippo outcome --bad</code>.
+      </p>
+      <RepeatMistakes />
+      <p>
+        In real Claude Code sessions across 29 repositories, hippo cut repeat mistakes from 21 in 100 to 11 in 100 at the
+        same token cost (<a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">Z0 round 3 result<span class="sr-only"> (opens in new tab)</span></a>).
+      </p>
+    </Section>
+
+    <Section title="Feature by feature" alt>
+      <p>
+        The Supermemory column was checked against the <a class="link" href="https://github.com/supermemoryai/supermemory" target="_blank" rel="noopener noreferrer">Supermemory repo<span class="sr-only"> (opens in new tab)</span></a>,
+        <a class="link" href="https://supermemory.ai/docs/self-hosting/local-vs-enterprise.md" target="_blank" rel="noopener noreferrer">local vs enterprise docs<span class="sr-only"> (opens in new tab)</span></a> and
+        <a class="link" href="https://supermemory.ai/pricing/" target="_blank" rel="noopener noreferrer">pricing page<span class="sr-only"> (opens in new tab)</span></a> on 22 November 2026.
+      </p>
+      <div class="relative overflow-hidden rounded-xl border border-rule">
+        <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
+          <caption class="sr-only">hippo and Supermemory compared feature by feature</caption>
+          <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
+          <thead class="border-b border-rule-strong text-xs text-ink-3">
+            <tr>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Feature</th>
+              <th scope="col" class="px-3 py-3 font-medium text-ink sm:px-5">hippo</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Supermemory</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-rule">
+            {rows.map((r) => (
+              <tr class="align-top text-ink-2">
+                <th scope="row" class="px-3 py-3 text-left font-normal text-ink-2 sm:px-5">{r.feature}</th>
+                <td class="px-3 py-3 font-medium text-ink sm:px-5">{r.hippo}</td>
+                <td class="px-3 py-3 sm:px-5">{r.them}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section title="When to pick which">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick hippo when you want 100% MIT open-source local memory for coding agents with local MCP included, zero
+            document caps, zero LLM save costs and readable files stored inside your repository.
+          </p>
+        </div>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Supermemory</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick Supermemory when you want a managed cloud memory and RAG API with pre-built Google Drive, Notion and
+            Gmail connectors and SOC 2 compliance for a consumer or SaaS product.
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3 pt-4">
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
+      </div>
+    </Section>
+
+    <Faq items={qa} heading="hippo and Supermemory, asked directly" moreHref="/faq/" />
+  </main>
+  <Footer />
+</Base>

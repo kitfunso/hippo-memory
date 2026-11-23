@@ -1,0 +1,127 @@
+---
+import Base from '../../layouts/Base.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import PageIntro from '../../components/PageIntro.astro';
+import Section from '../../components/Section.astro';
+import RepeatMistakes from '../../components/RepeatMistakes.astro';
+import { site } from '../../content/site';
+import Faq from '../../components/Faq.astro';
+import { faqPageLd } from '../../content/readme';
+
+const title = 'hippo vs claude-mem: zero LLM calls and git-readable memory';
+const description =
+  'hippo and claude-mem compared on 22 November 2026. claude-mem runs a background worker with observer LLM calls; hippo runs with zero runtime dependencies, zero LLM calls on save and git-committable markdown mirrors.';
+
+const rows = [
+  { feature: 'LLM calls on save / capture', hippo: '0 (default path)', them: 'Async observer LLM on PostToolUse + Stop summary' },
+  { feature: 'Runtime requirements', hippo: 'Node.js 22.16+, zero runtime dependencies', them: 'Node.js + Bun worker daemon + Python/uv for Chroma' },
+  { feature: 'Storage format', hippo: 'SQLite + readable markdown mirrors in .hippo/', them: 'SQLite (~/.claude-mem/claude-mem.db) + optional Chroma' },
+  { feature: 'Git-committable per repo', hippo: 'Yes (.hippo/ markdown mirrors)', them: 'Binary SQLite store (export or folder CLAUDE.md)' },
+  { feature: 'Outcome weakening', hippo: 'Yes (hippo outcome --bad)', them: 'No' },
+  { feature: 'Fact supersession & conflicts', hippo: 'Yes (hippo supersede + conflict resolution)', them: 'No' },
+  { feature: 'Account or telemetry', hippo: 'No account, zero telemetry', them: 'Interactive installer prompts sign-in; telemetry opt-out' },
+  { feature: 'Shared across agents', hippo: 'Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw, MCP', them: '15+ coding agents + local MCP server' },
+  { feature: 'Licence', hippo: 'MIT', them: 'Apache-2.0' },
+] as const;
+
+const qa = [
+  {
+    q: 'Why pick hippo over claude-mem?',
+    a: 'Pick hippo if you want zero background LLM spend, zero daemon processes and plain markdown mirrors you can review in git pull requests. Hippo also ranks memories by outcome via hippo outcome --bad, supersedes outdated facts and cut repeat mistakes from 21 in 100 to 11 in 100 across 29 repositories at the same token cost.',
+  },
+  {
+    q: 'Does hippo need an Anthropic API key or extra model calls like claude-mem?',
+    a: 'No. Saving, capturing rules and errors, and recalling memories in hippo make zero language-model calls and need no API key or cloud account.',
+  },
+];
+---
+
+<Base title={title} description={description} crumb="hippo vs claude-mem" published="2026-11-22" schema={[faqPageLd(qa)]}>
+  <Nav />
+  <main id="main">
+    <PageIntro>
+      <Fragment slot="title">hippo vs <span class="text-ink">claude-mem</span></Fragment>
+      <p>
+        Both capture coding-agent sessions locally into SQLite and connect across Claude Code, Codex, Cursor and MCP.
+        claude-mem runs a persistent Bun worker daemon that sends tool executions through an observer language model to
+        compress them into a session timeline. Hippo runs with zero background daemon, zero runtime dependencies and zero
+        language-model calls on save or recall, writing git-readable markdown mirrors beside SQLite.
+      </p>
+    </PageIntro>
+
+    <Section title="Zero LLM spend vs background observer calls">
+      <p>
+        claude-mem hooks into <code>PostToolUse</code> and <code>Stop</code> events, forwarding tool activity to a local
+        Bun worker that runs an observer model (defaulting to Haiku on your plan, an API key, Ollama or hosted tokens) to
+        summarise observations into SQLite and optional Chroma (<a class="link" href="https://docs.claude-mem.ai/architecture/worker-service.md" target="_blank" rel="noopener noreferrer">claude-mem worker docs<span class="sr-only"> (opens in new tab)</span></a>, checked 22 November 2026).
+      </p>
+      <p>
+        Hippo saves rules, failed commands and project lessons with zero extra model calls and zero telemetry. Every
+        memory lives in <code>.hippo/</code> as SQLite plus a plain markdown mirror you can grep, diff and review in a
+        pull request. When a recalled memory leads to a bad answer, <code>hippo outcome --bad</code> pushes it down, and
+        <code>hippo supersede</code> replaces stale facts cleanly.
+      </p>
+      <RepeatMistakes />
+      <p>
+        Measured in real Claude Code sessions across 29 repositories, hippo cut repeat mistakes from 21 in 100 to 11 in
+        100 at the same token cost (<a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">Z0 round 3 result<span class="sr-only"> (opens in new tab)</span></a>).
+      </p>
+    </Section>
+
+    <Section title="Feature by feature" alt>
+      <p>
+        The claude-mem column was checked against the <a class="link" href="https://github.com/thedotmack/claude-mem" target="_blank" rel="noopener noreferrer">claude-mem repo<span class="sr-only"> (opens in new tab)</span></a>,
+        <a class="link" href="https://docs.claude-mem.ai/architecture/overview.md" target="_blank" rel="noopener noreferrer">architecture docs<span class="sr-only"> (opens in new tab)</span></a> and
+        <a class="link" href="https://cmem.ai/pricing" target="_blank" rel="noopener noreferrer">pricing page<span class="sr-only"> (opens in new tab)</span></a> on 22 November 2026.
+      </p>
+      <div class="relative overflow-hidden rounded-xl border border-rule">
+        <table class="w-full table-fixed text-left text-[13px] leading-snug sm:text-sm">
+          <caption class="sr-only">hippo and claude-mem compared feature by feature</caption>
+          <colgroup><col class="w-[30%]" /><col class="w-[35%]" /><col class="w-[35%]" /></colgroup>
+          <thead class="border-b border-rule-strong text-xs text-ink-3">
+            <tr>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">Feature</th>
+              <th scope="col" class="px-3 py-3 font-medium text-ink sm:px-5">hippo</th>
+              <th scope="col" class="px-3 py-3 font-medium sm:px-5">claude-mem</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-rule">
+            {rows.map((r) => (
+              <tr class="align-top text-ink-2">
+                <th scope="row" class="px-3 py-3 text-left font-normal text-ink-2 sm:px-5">{r.feature}</th>
+                <td class="px-3 py-3 font-medium text-ink sm:px-5">{r.hippo}</td>
+                <td class="px-3 py-3 sm:px-5">{r.them}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Section>
+
+    <Section title="When to pick which">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick hippo when you want zero extra LLM calls, zero background daemon, MIT code with zero runtime
+            dependencies, git-reviewable markdown rules and outcome-based ranking that cuts repeat mistakes in half.
+          </p>
+        </div>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick claude-mem</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick claude-mem when you want an always-on observer model compressing every tool execution into a searchable
+            chronological timeline with a live web viewer, and extra model calls fit your workflow.
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3 pt-4">
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
+      </div>
+    </Section>
+
+    <Faq items={qa} heading="hippo and claude-mem, asked directly" moreHref="/faq/" />
+  </main>
+  <Footer />
+</Base>

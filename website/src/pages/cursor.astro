@@ -7,13 +7,22 @@ import Section from '../components/Section.astro';
 import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, mcpJson, site } from '../content/site';
+import { faqPageLd } from '../content/readme';
 
 const title = 'Cursor memory between sessions, with MCP | hippo';
 const description =
-  "Hippo gives Cursor's agent a local memory store over MCP, shared with Claude Code and Codex, with no account. Cursor gets an instruction block and the memory tools, and MCP access alone does not capture a session.";
+  "Hippo gives Cursor's agent a local memory store over MCP and its Cursor plugin, shared with Claude Code and Codex, with no account and zero LLM calls on save.";
+
+const buyerQa = [
+  {
+    q: 'How can I make Cursor remember lessons and mistakes across sessions?',
+    a: 'Install hippo-memory, run hippo init in your repo and connect the Cursor plugin or .cursor/mcp.json. Cursor reads hippo instructions from AGENTS.md, recalls and stores lessons over 13 local MCP tools, imports .cursor/rules into the shared store, weakens wrong memories via hippo outcome --bad and shares everything with Claude Code and Codex.',
+  },
+  ...faqPick(['How do I give Cursor memory between sessions?']),
+];
 ---
 
-<Base title={title} description={description} crumb="Cursor" published="2026-09-28">
+<Base title={title} description={description} crumb="Cursor" published="2026-09-28" schema={[faqPageLd(buyerQa)]}>
   <Nav />
   <main id="main">
     <PageIntro>
@@ -57,7 +66,7 @@ const description =
     </Section>
 
     <Faq
-      items={faqPick(['How do I give Cursor memory between sessions?'])}
+      items={buyerQa}
       heading="Cursor questions"
       moreHref="/faq/"
     />

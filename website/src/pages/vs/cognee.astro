@@ -1,0 +1,111 @@
+---
+import Base from '../../layouts/Base.astro';
+import Nav from '../../components/Nav.astro';
+import Footer from '../../components/Footer.astro';
+import PageIntro from '../../components/PageIntro.astro';
+import Section from '../../components/Section.astro';
+import VsTable from '../../components/VsTable.astro';
+import { REPO } from '../../content/site';
+import Faq from '../../components/Faq.astro';
+import { faqPageLd } from '../../content/readme';
+
+const title = 'hippo vs Cognee: zero-dependency local memory vs graph stack';
+const description =
+  'hippo and Cognee compared on 22 November 2026. Cognee builds knowledge graphs across SQLite, LanceDB and Ladybug (or Neo4j and Postgres); hippo runs as one zero-dependency SQLite store with markdown mirrors.';
+const rows = [
+  ['Decay by default', 'Decay by default'],
+  ['Retrieval strengthening', 'Recall strengthens a memory'],
+  ['Outcome tracking', 'Outcome tracking'],
+  ['Conflict detection + resolution', 'Conflict detection'],
+  ['Schema acceleration / knowledge graph', 'Knowledge graph'],
+  ['Multi-agent shared memory', 'Shared between agents'],
+  ['Auto-hook install', 'Installs its own hooks'],
+  ['MCP server', 'MCP server'],
+  ['Zero runtime deps', 'Zero runtime dependencies'],
+  ['Git-friendly', 'Git-friendly'],
+  ['License', 'Licence'],
+] as const;
+
+const qa = [
+  {
+    q: 'How does hippo compare with Cognee for coding agents?',
+    a: 'Cognee is a Python knowledge-graph engine that coordinates SQLite, LanceDB and Ladybug locally (or Neo4j and Postgres for multi-process sharing) and extracts entities via an LLM when an API key is set. Hippo is a zero-dependency MIT CLI backed by one SQLite file plus markdown mirrors that multiple coding agents share directly with zero LLM calls on save.',
+  },
+  {
+    q: 'Can multiple coding agents share one local store without running Neo4j or Postgres?',
+    a: 'Yes. Hippo stores memories in a single SQLite file with WAL concurrency in .hippo/ so Claude Code, Codex, Cursor and MCP clients read and write the same repo store safely, and hippo serve shares one store across a team with no external graph database.',
+  },
+];
+---
+
+<Base title={title} description={description} crumb="hippo vs Cognee" published="2026-11-22" schema={[faqPageLd(qa)]}>
+  <Nav />
+  <main id="main">
+    <PageIntro>
+      <Fragment slot="title">hippo vs <span class="text-ink">Cognee</span></Fragment>
+      <p>
+        Both are open-source memory engines with Claude Code, Codex and MCP integrations. Cognee is a Python knowledge-graph
+        platform built for documents, ontologies and enterprise data pipelines across three separate stores. Hippo is a
+        zero-dependency Node.js CLI purpose-built for coding agents, using one SQLite file with readable markdown mirrors
+        and zero language-model calls on save or recall.
+      </p>
+    </PageIntro>
+
+    <Section title="One SQLite file vs a three-database graph stack">
+      <p>
+        Locally, Cognee coordinates three embedded stores: SQLite for relational metadata, LanceDB for vectors and Ladybug
+        for its embedded graph. Cognee's own docs note that local files cannot be shared across multiple processes, so
+        multi-agent or production sharing requires external services such as Neo4j and Postgres/PGVector behind an API
+        service (<a class="link" href="https://docs.cognee.ai/setup-configuration/graph-stores.md" target="_blank" rel="noopener noreferrer">Cognee graph-store docs<span class="sr-only"> (opens in new tab)</span></a>, checked 22 November 2026).
+      </p>
+      <p>
+        Hippo keeps everything in one SQLite store per repository (plus <code>~/.hippo/</code> globally) alongside plain
+        markdown mirrors you can commit to git. Multiple coding agents read and write the same store on your machine, and
+        <code>hippo serve</code> shares one store across a team with API keys, roles and an audit log.
+      </p>
+    </Section>
+
+    <Section title="Feature by feature" alt>
+      <p>
+        The Cognee column was checked against Cognee's repository and docs on 22 November 2026. The full table is on
+        <a class="link" href={`${REPO}#comparison`} target="_blank" rel="noopener noreferrer">GitHub<span class="sr-only"> (opens in new tab)</span></a>.
+      </p>
+      <VsTable system="Cognee" rows={rows} />
+    </Section>
+
+    <Section title="What Cognee ships today">
+      <p>
+        Cognee's core is Apache-2.0 on Python 3.10 to 3.14. With <code>LLM_API_KEY</code> set, <code>cognify()</code>
+        runs language-model extraction per chunk or batch to build entity-relationship graphs; without a key, v1.6.0+
+        falls back to a local CPU <code>gliner_demo</code> extractor and local embeddings. Cognee Cloud and Enterprise
+        BYOC add managed workspaces, auto-ontologies and a licensed Postgres graph adapter (<a class="link" href="https://github.com/topoteretes/cognee" target="_blank" rel="noopener noreferrer">Cognee repo<span class="sr-only"> (opens in new tab)</span></a>,
+        <a class="link" href="https://www.cognee.ai/pricing" target="_blank" rel="noopener noreferrer">pricing<span class="sr-only"> (opens in new tab)</span></a>, checked 22 November 2026).
+      </p>
+    </Section>
+
+    <Section title="When to pick which" alt>
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick hippo</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick hippo when you want fast, zero-dependency coding-agent memory in one SQLite file, zero LLM calls on save,
+            git-reviewable rules, outcome weakening and verified repeat-mistake reduction.
+          </p>
+        </div>
+        <div class="rounded-xl border border-rule bg-paper-2 p-6">
+          <h3 class="text-base font-medium text-ink">Pick Cognee</h3>
+          <p class="mt-2 text-sm leading-relaxed">
+            Pick Cognee when you are building a Python GraphRAG pipeline over PDFs, audio, databases and custom OWL/RDF
+            ontologies, and running Neo4j and Postgres fits your architecture.
+          </p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3 pt-4">
+        <a href="/quickstart/" class="btn">Get started with hippo</a>
+      </div>
+    </Section>
+
+    <Faq items={qa} heading="hippo and Cognee, asked directly" moreHref="/faq/" />
+  </main>
+  <Footer />
+</Base>

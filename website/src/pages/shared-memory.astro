@@ -7,13 +7,25 @@ import Section from '../components/Section.astro';
 import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, mcpJson, repeatMistakes, site } from '../content/site';
-import { mdInline } from '../content/readme';
+import { faqPageLd, mdInline } from '../content/readme';
 
 const [, builtIn, withHippo] = repeatMistakes.bars;
 
 const title = 'Shared memory for Claude Code, Codex and Cursor | hippo';
 const description =
-  'Hippo keeps one memory store in your repo that Claude Code, Codex and Cursor all read, so a lesson one agent learns is there for the others. It runs on your machine with no account, and what happens by itself differs by agent.';
+  'Hippo keeps one local-first SQLite and markdown memory store in your repo that Claude Code, Codex and Cursor all read, with no cloud account and zero LLM calls on save.';
+
+const buyerQa = [
+  {
+    q: 'What is a good local-first memory layer for AI coding agents that needs no cloud account?',
+    a: 'Hippo (hippo-memory) is an MIT-licensed, zero-dependency local memory layer stored in .hippo/ inside your repo as SQLite plus git-committable markdown mirrors. It requires no cloud account, no API key and zero LLM calls on save or recall, and works across Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw and any MCP client.',
+  },
+  {
+    q: 'What is the best way to share memory between several AI coding agents on one repo?',
+    a: 'Run hippo init in the repository root. Every agent reads and writes the same .hippo/ SQLite store and markdown mirrors through native hooks, AGENTS.md or 13 local MCP tools, so rules and fixes learned in Claude Code are immediately available in Codex and Cursor.',
+  },
+  ...faqPick(['Which agents does hippo work with?']),
+];
 
 // Each row restates README "Framework Integrations" and that agent's page; change them together.
 const agents = [
@@ -35,7 +47,7 @@ const agents = [
 ];
 ---
 
-<Base title={title} description={description} crumb="Shared memory" published="2026-11-22">
+<Base title={title} description={description} crumb="Shared memory" published="2026-11-22" schema={[faqPageLd(buyerQa)]}>
   <Nav />
   <main id="main">
     <PageIntro>
@@ -114,7 +126,7 @@ const agents = [
       </p>
     </Section>
 
-    <Faq items={faqPick(['Which agents does hippo work with?'])} heading="Agent questions" moreHref="/faq/" />
+    <Faq items={buyerQa} heading="Agent questions" moreHref="/faq/" />
   </main>
   <Footer />
 </Base>

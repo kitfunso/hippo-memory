@@ -1,0 +1,56 @@
+hippo vs Basic Memory: outcome-ranked coding memory, MIT
+Skip to content hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N Install
+How it works
+Teams
+Benchmarks
+Compare
+Docs
+hippo vs Basic Memory
+Both are local-first memory tools that work across Claude Code, Codex and Cursor with zero language-model calls on save. Basic Memory is an AGPL-N Python knowledge base built around Obsidian-style markdown notes that you or the agent author explicitly. Hippo is MIT-licensed with zero runtime dependencies, automatic rule and tool-failure capture, outcome tracking and fact supersession.
+Authored notes vs outcome-ranked coding memory
+In Basic Memory, notes sit in a markdown folder with wikilinks and YAML frontmatter, indexed by SQLite and FastEmbed so humans and agents share a wiki. Every note keeps equal standing unless someone edits it by hand.
+Hippo is built for coding agents that repeat mistakes across sessions. It captures stated rules and failed tool calls, strengthens memories that get recalled, weakens memories behind a bad answer with hippo outcome --bad, and retires outdated facts with hippo supersede while keeping readable markdown mirrors in .hippo/.
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
+On real Claude Code sessions across N repositories, adding hippo cut repeat mistakes from N in N (built-in memory alone) and N in N (no memory) down to N in N at the same token cost (ZN round N result (opens in new tab)).
+Feature by feature
+The Basic Memory column was checked against Basic Memory's repository and docs on N November N The full table is on GitHub (opens in new tab).
+hippo and Basic Memory, selected rows of the README comparison table Feature hippo Basic Memory
+Decay by default Yes No
+Recall strengthens a memory Yes No
+Outcome tracking Yes No
+Conflict detection Yes No
+Hybrid search Yes Yes (FTSN + sqlite-vec)
+Shared between agents Yes Yes (shared markdown folder / MCP)
+Installs its own hooks Yes Partial (Claude Code / Codex hooks)
+MCP server Yes Yes
+Zero runtime dependencies Yes No (Python/uv)
+Git-friendly Yes Yes
+Licence MIT AGPL-N
+What Basic Memory ships today
+Basic Memory is released under AGPL-N and runs on Python N+ via uv, storing plain markdown files indexed in SQLite with sqlite-vec (or optional Postgres/Milvus). It connects to Claude Code, Codex and Cursor over MCP and provides bm install hooks for Claude Code and Codex. Optional Basic Memory Cloud plans add hosted workspaces and scheduled agents (Basic Memory repo (opens in new tab), pricing (opens in new tab), checked N November N).
+When to pick which
+Pick hippo
+Pick hippo when you want permissive MIT code with zero runtime dependencies, automatic rule and error capture across Claude Code, Codex and Cursor, outcome weakening and measured repeat-mistake reduction.
+Pick Basic Memory
+Pick Basic Memory when you want an Obsidian-compatible markdown wiki with wikilink graphs that you and your agents author together, and AGPL-N plus Python fits your stack.
+Get started with hippo
+hippo and Basic Memory, asked directly
+All N questions →
+How does hippo differ from Basic Memory for coding agents? +
+Both run locally with markdown files, SQLite and zero LLM calls on save. Basic Memory is an AGPL-N Python knowledge base where you or the agent author Obsidian-style notes. Hippo is MIT with zero runtime dependencies on Node.js, captures coding rules and tool failures from sessions, weakens wrong memories via hippo outcome --bad, supersedes stale facts and ships with pre-registered repeat-mistake results.
+Can I switch from Basic Memory to hippo without losing my notes? +
+Yes. Basic Memory stores plain markdown files on disk, and hippo imports markdown folders directly while keeping your existing files untouched.
+hippo
+Agents
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

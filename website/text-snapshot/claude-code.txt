@@ -35,12 +35,14 @@ MCP, and where CLAUDE.md fits
 claude mcp add hippo-memory -- hippo mcp gives Claude Code hippo's memory tools over MCP. Keep CLAUDE.md for short standing rules. The CLAUDE.md vs memory page covers what goes where, and hippo import --claude CLAUDE.md turns notes that piled up there into memories.
 Claude Code questions
 All N questions →
+How do I stop my AI coding agent from repeating the same mistakes? +
+Install hippo-memory and run hippo init in your repository. Hippo captures rules you state and failed tool calls, prints your pinned rules at session start before your first prompt, weakens wrong memories via hippo outcome --bad, and replaces stale facts via hippo supersede. Across N repositories, adding hippo cut repeat mistakes from N in N to N in N at the same cost.
 How do I give Claude Code memory between sessions? +
 Run npm install -g hippo-memory, then hippo init in the project. Init adds a short block to an existing CLAUDE.md and installs hooks that keep pinned memories in context, save your task before compaction, store failed tool calls and run hippo sleep when the session ends.
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

@@ -1,0 +1,52 @@
+hippo vs claude-mem: zero LLM calls and git-readable memory
+Skip to content hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N Install
+How it works
+Teams
+Benchmarks
+Compare
+Docs
+hippo vs claude-mem
+Both capture coding-agent sessions locally into SQLite and connect across Claude Code, Codex, Cursor and MCP. claude-mem runs a persistent Bun worker daemon that sends tool executions through an observer language model to compress them into a session timeline. Hippo runs with zero background daemon, zero runtime dependencies and zero language-model calls on save or recall, writing git-readable markdown mirrors beside SQLite.
+Zero LLM spend vs background observer calls
+claude-mem hooks into PostToolUse and Stop events, forwarding tool activity to a local Bun worker that runs an observer model (defaulting to Haiku on your plan, an API key, Ollama or hosted tokens) to summarise observations into SQLite and optional Chroma (claude-mem worker docs (opens in new tab), checked N November N).
+Hippo saves rules, failed commands and project lessons with zero extra model calls and zero telemetry. Every memory lives in .hippo/ as SQLite plus a plain markdown mirror you can grep, diff and review in a pull request. When a recalled memory leads to a bad answer, hippo outcome --bad pushes it down, and hippo supersede replaces stale facts cleanly.
+No memory Nin N
+Claude Code's built-in memory Nin N
+Built-in memory plus hippo Nin N
+Measured in real Claude Code sessions across N repositories, hippo cut repeat mistakes from N in N to N in N at the same token cost (ZN round N result (opens in new tab)).
+Feature by feature
+The claude-mem column was checked against the claude-mem repo (opens in new tab), architecture docs (opens in new tab) and pricing page (opens in new tab) on N November N
+hippo and claude-mem compared feature by feature Feature hippo claude-mem
+LLM calls on save / capture N (default path) Async observer LLM on PostToolUse + Stop summary
+Runtime requirements Node.js N+, zero runtime dependencies Node.js + Bun worker daemon + Python/uv for Chroma
+Storage format SQLite + readable markdown mirrors in .hippo/ SQLite (~/.claude-mem/claude-mem.db) + optional Chroma
+Git-committable per repo Yes (.hippo/ markdown mirrors) Binary SQLite store (export or folder CLAUDE.md)
+Outcome weakening Yes (hippo outcome --bad) No
+Fact supersession & conflicts Yes (hippo supersede + conflict resolution) No
+Account or telemetry No account, zero telemetry Interactive installer prompts sign-in; telemetry opt-out
+Shared across agents Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw, MCP N+ coding agents + local MCP server
+Licence MIT Apache-N
+When to pick which
+Pick hippo
+Pick hippo when you want zero extra LLM calls, zero background daemon, MIT code with zero runtime dependencies, git-reviewable markdown rules and outcome-based ranking that cuts repeat mistakes in half.
+Pick claude-mem
+Pick claude-mem when you want an always-on observer model compressing every tool execution into a searchable chronological timeline with a live web viewer, and extra model calls fit your workflow.
+Get started with hippo
+hippo and claude-mem, asked directly
+All N questions →
+Why pick hippo over claude-mem? +
+Pick hippo if you want zero background LLM spend, zero daemon processes and plain markdown mirrors you can review in git pull requests. Hippo also ranks memories by outcome via hippo outcome --bad, supersedes outdated facts and cut repeat mistakes from N in N to N in N across N repositories at the same token cost.
+Does hippo need an Anthropic API key or extra model calls like claude-mem? +
+No. Saving, capturing rules and errors, and recalling memories in hippo make zero language-model calls and need no API key or cloud account.
+hippo
+Agents
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso
