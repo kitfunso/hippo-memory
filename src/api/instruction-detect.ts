@@ -33,14 +33,23 @@ export interface InstructionDetection {
   reason: string | null;
 }
 
-const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
+// `needs` is a phrase every match holds: a text without it skips a pattern that backtracks long on a repeated keyword.
+interface InstructionPattern {
+  name: string;
+  re: RegExp;
+  needs?: RegExp;
+}
+
+const INSTRUCTION_PATTERNS: readonly InstructionPattern[] = [
   {
     name: 'override-instructions',
     re: /\b(?:ignore|disregard|forget)\b[^.\n]{0,40}\b(?:previous|prior|above)\b[^.\n]{0,40}\binstructions?\b/i,
+    needs: /instruction/i,
   },
   {
     name: 'role-reassignment',
     re: /\b(?:you are now|act as|pretend to be)\b[^.\n]{0,40}\b(?:an?\s+)?(?:ai|assistant|agent|system)\b/i,
+    needs: /you are now|act as|pretend to be/i,
   },
   {
     name: 'chat-role-markup',
@@ -53,6 +62,7 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
         String.raw`(?:system prompt|developer message)\b[^.\n]{0,40}\b(?:override|ignore|bypass|replace|reveal))\b`,
       'i',
     ),
+    needs: /system prompt|developer message/i,
   },
   // "always"/"never" alone (ordinary PR prose) doesn't flag without an agent-facing target nearby
   // too.
@@ -63,10 +73,12 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
         String.raw`(?:the ai|the assistant|the agent|claude|copilot)\s+(?:must|should|will)\b)`,
       'i',
     ),
+    needs: /from now on|whenever you|always|never/i,
   },
   {
     name: 'concealment',
     re: /\b(?:do not|never|don't)\b[^.\n]{0,40}\b(?:tell|mention|reveal)\b[^.\n]{0,40}\bthe user\b/i,
+    needs: /the user/i,
   },
   {
     name: 'remote-script-exec',
@@ -83,6 +95,7 @@ const INSTRUCTION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
         String.raw`(?:secrets?|tokens?|api[- ]?keys?|credentials?|env(?:ironment)? variables?)\b`,
       'i',
     ),
+    needs: /secret|token|api|credential|env/i,
   },
   { name: 'unicode-tag-chars', re: /[\u{E0000}-\u{E007F}]/u },
 ];
@@ -95,9 +108,15 @@ const ZERO_WIDTH_RUN_RE = /[\u200B-\u200F\u2060-\u2064]{3,}/;
 // never needs one.
 const BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/;
 
-// A renderer draws a reference as the character it names: decimal, hex, or one of the five names
-// XML defines.
-const CHARACTER_REFERENCE_RE = /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|(amp|lt|gt|quot|apos));/g;
+// One placeholder for every hidden mark: a noncharacter, so no word, no space, and NFKC keeps it.
+const MARK = '\uFDD0';
+const MARK_SOURCE = String.raw`\uFDD0`;
+
+// HTML reads every digit of a numeric reference; the bound on a name keeps the scan linear.
+const CHARACTER_REFERENCE_RE =
+  /&(?:#(\d+);?|#[xX]([0-9a-fA-F]+);?|([A-Za-z][A-Za-z0-9]{0,31});|(amp|lt|gt|quot|nbsp|shy))/g;
+const LEADING_ZEROS_RE = /^0+/;
+const MAX_REFERENCE_DIGITS = 7;
 const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['amp', '&'],
   ['lt', '<'],
@@ -105,16 +124,47 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['quot', '"'],
   ['apos', "'"],
 ]);
+// The WHATWG names whose characters are all White_Space, Default_Ignorable, Cf or Cc.
+const BLANK_REFERENCES: ReadonlyMap<string, string> = new Map([
+  ['ApplyFunction', '\u2061'],
+  ['InvisibleComma', '\u2063'],
+  ['InvisibleTimes', '\u2062'],
+  ['MediumSpace', '\u205F'],
+  ['NegativeMediumSpace', '\u200B'],
+  ['NegativeThickSpace', '\u200B'],
+  ['NegativeThinSpace', '\u200B'],
+  ['NegativeVeryThinSpace', '\u200B'],
+  ['NewLine', MARK],
+  ['NoBreak', '\u2060'],
+  ['NonBreakingSpace', '\u00A0'],
+  ['Tab', '\t'],
+  ['ThickSpace', '\u205F\u200A'],
+  ['ThinSpace', '\u2009'],
+  ['VeryThinSpace', '\u200A'],
+  ['ZeroWidthSpace', '\u200B'],
+  ['af', '\u2061'],
+  ['emsp13', '\u2004'],
+  ['emsp14', '\u2005'],
+  ['emsp', '\u2003'],
+  ['ensp', '\u2002'],
+  ['hairsp', '\u200A'],
+  ['ic', '\u2063'],
+  ['it', '\u2062'],
+  ['lrm', '\u200E'],
+  ['nbsp', '\u00A0'],
+  ['numsp', '\u2007'],
+  ['puncsp', '\u2008'],
+  ['rlm', '\u200F'],
+  ['shy', '\u00AD'],
+  ['thinsp', '\u2009'],
+  ['zwj', '\u200D'],
+  ['zwnj', '\u200C'],
+]);
 
-// Tag block stays for unicode-tag-chars; U+2800 draws blank with no property; White_Space stays a separator.
-const JOINER_RE =
-  /(?![\p{White_Space}\u{E0000}-\u{E007F}])[\p{Default_Ignorable_Code_Point}\p{Cf}\u2800]/gu;
-
-// Controls draw nothing either, so each is read both ways like a joiner; White_Space stays a separator.
-const CONTROL_RE = /(?!\p{White_Space})\p{Cc}/gu;
-
-// One reading cannot serve a mark inside a word and a mark between words, so each class is read both ways.
-const MARK_READINGS: readonly string[] = ['', ' '];
+// Tag block stays for unicode-tag-chars; U+2800 draws blank with no property, and controls draw nothing
+// either; White_Space stays a separator. One class, a run at a time, so a mark-heavy text is scanned once.
+const MARK_RE =
+  /(?:(?![\p{White_Space}\u{E0000}-\u{E007F}])[\p{Default_Ignorable_Code_Point}\p{Cf}\u2800\p{Cc}])+/gu;
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or
 // Greek prose folds into no phrase a pattern names.
@@ -161,75 +211,181 @@ const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 // A line break stays as the sentence bound the patterns need; by property, so U+0085 folds too.
 const SPACE_RUN_RE = /(?:(?!\n)\p{White_Space})+/gu;
 
+// A mark beside a space reads as a space both ways, and a run of marks as one mark. Plain
+// substitutions, since a callback per run costs seconds on a megabyte of alternating marks.
+const MARK_RUN_RE = /\uFDD0{2,}/g;
+const MARK_BY_SPACE_RE = /\uFDD0(?= )|(?<= )\uFDD0/g;
+const SPACE_PAIR_RE = / {2,}/g;
+
 function referencedCharacter(
   reference: string,
   decimal?: string,
   hex?: string,
   name?: string,
+  legacy?: string,
 ): string {
-  if (name !== undefined) return NAMED_REFERENCES.get(name) ?? reference;
-  const code =
-    decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16);
-  // NUL, half a surrogate pair and a number past Unicode name no character, so the reference is
-  // read as written.
+  const named = name ?? legacy;
+  if (named !== undefined) {
+    return NAMED_REFERENCES.get(named) ?? BLANK_REFERENCES.get(named) ?? reference;
+  }
+  const digits = (decimal ?? hex ?? '').replace(LEADING_ZEROS_RE, '');
+  // HTML draws U+FFFD for a number with no character, and the mark stands for both readings of it.
+  if (digits.length > MAX_REFERENCE_DIGITS) return MARK;
+  const code = digits === '' ? 0 : Number.parseInt(digits, decimal === undefined ? 16 : 10);
   const drawn = code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
-  return drawn ? String.fromCodePoint(code) : reference;
+  // A referenced line break stays a mark: read as a break it would shut a gap the raw text leaves open.
+  return drawn && code !== 10 ? String.fromCodePoint(code) : MARK;
 }
 
-type Reading = readonly [joiner: string, control: string];
-
-// Decode references once and fold full-width, mathematical and enclosed letters to plain ones.
-function decodedText(text: string): string {
-  return text.replace(CHARACTER_REFERENCE_RE, referencedCharacter).normalize('NFKC');
-}
-
-/** The readings of every mark class that some text holds; a text with no mark has one. */
-function readingsOf(...texts: string[]): Reading[] {
-  const joiners = texts.some((t) => t.search(JOINER_RE) >= 0) ? MARK_READINGS : [''];
-  const controls = texts.some((t) => t.search(CONTROL_RE) >= 0) ? MARK_READINGS : [''];
-  return joiners.flatMap((joiner) => controls.map((control): Reading => [joiner, control]));
-}
-
-function readMarks(decoded: string, [joiner, control]: Reading): string {
-  return decoded
-    .replace(JOINER_RE, joiner)
-    .replace(CONTROL_RE, control)
+/** `text` as a reader or a model takes it in, each hidden mark one MARK. For matching only. */
+function screeningForm(text: string): string {
+  return text
+    .replace(CHARACTER_REFERENCE_RE, referencedCharacter)
+    .normalize('NFKC')
+    .replace(MARK_RE, MARK)
     .replace(GREEK_OR_CYRILLIC_RE, (letter) => LOOKALIKES.get(letter) ?? letter)
-    .replace(SPACE_RUN_RE, ' ');
+    .replace(SPACE_RUN_RE, ' ')
+    .replace(MARK_RUN_RE, MARK)
+    .replace(MARK_BY_SPACE_RE, '')
+    .replace(SPACE_PAIR_RE, ' ');
 }
 
-/** `content` as a reader or a model takes it in, once for each reading of its hidden marks. For
- * matching only: what is stored is never this. */
-function screeningForms(content: string): string[] {
-  const decoded = decodedText(content);
-  return [...new Set(readingsOf(decoded).map((reading) => readMarks(decoded, reading)))];
+type Atom = { readonly source: string; readonly kind: 'consuming' | 'blank' | 'zero-width' };
+
+// A word, a mark, then a non-word still bounds the word when the mark is read as nothing.
+const BOUNDARY = String.raw`(?:\b|(?<=\w${MARK_SOURCE})(?!\w))`;
+const ESCAPABLE = '\\^$.*+?()[]{}|/-';
+const QUANTIFIER_RE = /^(?:\{\d+(?:,\d*)?\}|[?*+])\??/;
+
+function unsupported(source: string, at: number): never {
+  throw new Error(`markTolerant: unsupported syntax at ${at} in ${source}`);
+}
+
+function readQuantifier(source: string, at: number): string {
+  return QUANTIFIER_RE.exec(source.slice(at))?.[0] ?? '';
+}
+
+function readClass(source: string, at: number): [Atom, number] {
+  const negated = source.charAt(at + 1) === '^';
+  let close = at + (negated ? 2 : 1);
+  while (close < source.length && source.charAt(close) !== ']') {
+    close += source.charAt(close) === '\\' ? 2 : 1;
+  }
+  if (close >= source.length) return unsupported(source, at);
+  // Only the placeholder after an atom may take a mark, or one mark could be taken two ways.
+  const open = source.slice(at, close);
+  return [{ source: `${open}${negated ? MARK_SOURCE : ''}]`, kind: 'consuming' }, close + 1];
+}
+
+function readEscape(source: string, at: number): [Atom, number] {
+  const next = source.charAt(at + 1);
+  if (next === 'b') return [{ source: BOUNDARY, kind: 'zero-width' }, at + 2];
+  if (next === 's') return [{ source: String.raw`[\s${MARK_SOURCE}]`, kind: 'blank' }, at + 2];
+  if (next !== '' && ESCAPABLE.includes(next)) {
+    return [{ source: `\\${next}`, kind: 'consuming' }, at + 2];
+  }
+  return unsupported(source, at);
+}
+
+function readAtom(source: string, at: number): [Atom, number] {
+  const ch = source.charAt(at);
+  if (ch === '[') return readClass(source, at);
+  if (ch === '\\') return readEscape(source, at);
+  if (ch === ' ') return [{ source: `[ ${MARK_SOURCE}]`, kind: 'blank' }, at + 1];
+  if (ch === '^' || ch === '$') return [{ source: ch, kind: 'zero-width' }, at + 1];
+  if (ch > '~' || '.*+?{}()|]'.includes(ch)) return unsupported(source, at);
+  return [{ source: ch, kind: 'consuming' }, at + 1];
+}
+
+function withQuantifier(atom: Atom, quantifier: string): string {
+  if (atom.kind === 'zero-width') {
+    return quantifier === '' ? atom.source : unsupported(atom.source, 0);
+  }
+  if (atom.kind === 'blank') return `${atom.source}${quantifier}`;
+  const marked = `${atom.source}${MARK_SOURCE}?`;
+  return quantifier === '' ? marked : `(?:${marked})${quantifier}`;
+}
+
+function groupOpener(source: string, at: number): string {
+  if (source.startsWith('(?:', at)) return '(?:';
+  return source.charAt(at + 1) === '?' ? unsupported(source, at) : '(';
+}
+
+function rewriteSequence(source: string, from: number, nested: boolean): [string, number] {
+  let out = '';
+  let at = from;
+  while (at < source.length) {
+    const ch = source.charAt(at);
+    if (ch === ')') return nested ? [out, at] : unsupported(source, at);
+    if (ch === '|') {
+      out += ch;
+      at += 1;
+    } else if (ch === '(') {
+      const opener = groupOpener(source, at);
+      const [inner, close] = rewriteSequence(source, at + opener.length, true);
+      const quantifier = readQuantifier(source, close + 1);
+      out += `${opener}${inner})${quantifier}`;
+      at = close + 1 + quantifier.length;
+    } else {
+      const [atom, next] = readAtom(source, at);
+      const quantifier = readQuantifier(source, next);
+      out += withQuantifier(atom, quantifier);
+      at = next + quantifier.length;
+    }
+  }
+  return nested ? unsupported(source, at) : [out, at];
+}
+
+/** `re` with a MARK allowed after each atom and in place of each space; throws on syntax it does not model. */
+export function markTolerant(re: RegExp): RegExp {
+  return new RegExp(rewriteSequence(re.source, 0, false)[0], re.flags);
+}
+
+const TOLERANT_PATTERNS: readonly InstructionPattern[] = INSTRUCTION_PATTERNS.map(
+  ({ name, re, needs }) => ({
+    name,
+    re: markTolerant(re),
+    ...(needs && { needs: markTolerant(needs) }),
+  }),
+);
+
+/** The patterns in plain form, or in the form that reads a MARK, for a text that holds one. */
+export function instructionPatterns(marked: boolean): readonly InstructionPattern[] {
+  return marked ? TOLERANT_PATTERNS : INSTRUCTION_PATTERNS;
 }
 
 function matchedPattern(text: string): string | null {
-  for (const { name, re } of INSTRUCTION_PATTERNS) {
+  for (const { name, re, needs } of instructionPatterns(text.includes(MARK))) {
+    if (needs && !needs.test(text)) continue;
     if (re.test(text)) return `pattern:${name}`;
   }
   return null;
 }
 
-export function detectInstruction(content: string): InstructionDetection {
+// `formOf` is a thunk so a phrase in plain sight never pays for the screening form.
+function detectWithForm(content: string, formOf: () => string): InstructionDetection {
   // The text as written goes first: a phrase in plain sight is named before any smuggling rule, and
-  // the screened forms only add flags.
+  // the screened form only adds flags.
   const plain = matchedPattern(content);
   if (plain !== null) return { flagged: true, reason: plain };
   if (ZERO_WIDTH_RUN_RE.test(content)) {
     return { flagged: true, reason: 'pattern:zero-width-smuggling' };
   }
-  for (const screened of screeningForms(content)) {
-    const disguised = screened === content ? null : matchedPattern(screened);
-    if (disguised !== null) return { flagged: true, reason: disguised };
-  }
+  const screened = formOf();
+  const disguised = screened === content ? null : matchedPattern(screened);
+  if (disguised !== null) return { flagged: true, reason: disguised };
   if (BIDI_CONTROL_RE.test(content)) return { flagged: true, reason: 'pattern:bidi-control' };
   return { flagged: false, reason: null };
 }
 
+export function detectInstruction(content: string): InstructionDetection {
+  return detectWithForm(content, () => screeningForm(content));
+}
+
 // One class, tested a code point at a time: a `+` run backtracks and a UTF-16 unit misses an astral mark.
 const BLANK_CHAR_RE = /[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\u2800]/u;
+// The end of a reference the join may complete: an ampersand, then a hash, an x, digits or letters.
+const PARTIAL_REFERENCE_RE = /&[#xX0-9a-zA-Z]*$/;
 
 function withoutBlankEnd(text: string): string {
   let end = text.length;
@@ -263,36 +419,63 @@ function isLowSurrogate(unit: number): boolean {
   return unit >= 0xdc00 && unit <= 0xdfff;
 }
 
-/** The lead-in joined to the content by a space and by nothing, blanks cut at the join. */
-function joinedForms(leadIn: string, content: string): string[] {
+interface JoinedForms {
+  /** The parts around one MARK, which reads as a space and as nothing. */
+  marked: string;
+  /** The parts joined by nothing, when a reference or an astral mark may form across the join. */
+  bare: string | null;
+}
+
+/** The lead-in joined to the content, blanks cut at the join. */
+function joinedForms(leadIn: string, content: string): JoinedForms {
   const lead = withoutBlankEnd(leadIn);
   const body = withoutBlankStart(content);
-  return [`${lead} ${body}`, `${lead}${body}`];
+  const pair =
+    isHighSurrogate(lead.charCodeAt(lead.length - 1)) && isLowSurrogate(body.charCodeAt(0));
+  const formsAcross = pair || PARTIAL_REFERENCE_RE.test(lead);
+  return { marked: `${lead}${MARK}${body}`, bare: formsAcross ? `${lead}${body}` : null };
 }
 
-/** Matches the screened lead-in and content across the join under one reading, with no second decode. */
-function screenedJoinPattern(leadIn: string, content: string): string | null {
-  const lead = decodedText(leadIn);
-  const body = decodedText(content);
-  for (const reading of readingsOf(lead, body)) {
-    const head = withoutBlankEnd(readMarks(lead, reading));
-    const tail = withoutBlankStart(readMarks(body, reading));
-    const found = matchedPattern(`${head} ${tail}`) ?? matchedPattern(`${head}${tail}`);
-    if (found !== null) return found;
-  }
-  return null;
+// A screening form has three blanks, each one UTF-16 unit, so an index loop cuts them.
+function isFormBlank(unit: string): boolean {
+  return unit === ' ' || unit === '\n' || unit === MARK;
 }
 
-/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing,
- * as written and then screened part by part. First flag wins; a heading-style lead-in can flag plain
- * content into a hold, never a lost write. */
+function withoutFormBlankEnd(form: string): string {
+  let end = form.length;
+  while (end > 0 && isFormBlank(form.charAt(end - 1))) end -= 1;
+  return form.slice(0, end);
+}
+
+function withoutFormBlankStart(form: string): string {
+  let start = 0;
+  while (start < form.length && isFormBlank(form.charAt(start))) start += 1;
+  return form.slice(start);
+}
+
+function once(compute: () => string): () => string {
+  let value: string | undefined;
+  return () => (value ??= compute());
+}
+
+/** The text as shown, then the raw join, then each part screened: a phrase split any way across the parts is caught. */
 export function detectInstructionIn(text: LeadInText): InstructionDetection {
-  const shown = detectInstruction(shownText(text));
-  if (shown.flagged || !text.leadIn) return shown;
-  for (const joined of joinedForms(text.leadIn, text.content)) {
-    const found = detectInstruction(joined);
-    if (found.flagged) return found;
-  }
-  const reason = screenedJoinPattern(text.leadIn, text.content);
+  const { leadIn, content } = text;
+  if (!leadIn) return detectInstruction(content);
+  // Screening works one line at a time, so the shown form is the two part forms around the line break.
+  const leadForm = once(() => screeningForm(leadIn));
+  const contentForm = once(() => screeningForm(content));
+  const shown = detectWithForm(shownText(text), () => `${leadForm()}\n${contentForm()}`);
+  if (shown.flagged) return shown;
+  const { marked, bare } = joinedForms(leadIn, content);
+  const rawReason = matchedPattern(marked);
+  if (rawReason !== null) return { flagged: true, reason: rawReason };
+  // A reference or a pair cut by the join forms only in the bare join, screened as one text.
+  const joined = bare === null ? null : detectInstruction(bare);
+  if (joined?.flagged) return joined;
+  // One MARK at the join stands for a space and for nothing at once.
+  const head = withoutFormBlankEnd(leadForm());
+  const tail = withoutFormBlankStart(contentForm());
+  const reason = matchedPattern(`${head}${MARK}${tail}`);
   return reason === null ? shown : { flagged: true, reason };
 }
