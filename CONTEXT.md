@@ -360,7 +360,7 @@ _Avoid_: instruction, pinned rule (any pin is one; only a captured, stated rule 
 
 **Prompt recall**:
 The per-prompt hook's search for memories that share words with the prompt. The overlap gate admits
-a candidate, `rankBm25` orders the rows that clear it as `hippo recall` does, and
+a candidate, `rankBm25`, the word ranker of `hippo recall`, orders the rows that clear it, and
 `pinnedInject.promptRecallMaxItems` cuts the list. The rows print under `## Prompt-Relevant Memory`.
 _Avoid_: prompt search, smart recall, backfill (the recent-N list is the other backfill)
 

@@ -63,7 +63,11 @@ describe('pinsWithinCap', () => {
 });
 
 describe('newestWithin', () => {
-  const rule = (id: string, day: number, tokens: number) => ({ id, created: row(id, day, 1, tokens).entry.created, tokens });
+  const rule = (id: string, day: number, tokens: number) => ({
+    id,
+    created: row(id, day, 1, tokens).entry.created,
+    tokens,
+  });
   const price = (r: { tokens: number }): number => r.tokens;
   const idList = (rows: ReadonlyArray<{ id: string }>): string[] => rows.map((r) => r.id);
 

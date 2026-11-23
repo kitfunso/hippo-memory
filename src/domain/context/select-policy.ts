@@ -37,9 +37,8 @@ export const finiteOr = (
   { fallback, min }: { readonly fallback: number; readonly min: number },
 ): number => (Number.isFinite(v) && v >= min ? v : fallback);
 
-/** The pins that fit `cap`: strongest first, then newest, each id once. A pin that does not fit is
- * skipped, not a stop, so a large pin never blocks smaller ones. Returned in `ranked` order, so the
- * block's display order does not change. */
+/** The pins that fit `cap`, strongest then newest, each id once; a pin that does not fit is skipped,
+ * not a stop. Returned in `ranked` order, so the block's display order does not change. */
 export function pinsWithinCap<T extends PricedRow>(
   ranked: readonly T[],
   cap: number,
@@ -143,8 +142,8 @@ export function promptRecallShareOf(inject: HippoConfig['pinnedInject']): number
   );
 }
 
-/** The most tokens `hippo session-rules` prints; a config built in code with no key reads the
- * default. */
+/** The most tokens the rule lines of `hippo session-rules` use; a config built in code with no key
+ * reads the default. */
 export function sessionRulesBudgetOf(inject: HippoConfig['pinnedInject']): number {
   return finiteOr(inject.sessionRulesBudget ?? Number.NaN, {
     fallback: DEFAULT_SESSION_RULES_BUDGET,

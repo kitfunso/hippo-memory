@@ -34,9 +34,10 @@ async function printSessionRules(
     printedTokens(userRuleLine(e)),
   );
   const left = rules.length - kept.length;
+  const counted = `${left}${kept.length > 0 ? ' more' : ''} ${left === 1 ? 'rule is' : 'rules are'}`;
   const lines = [
     ...userRuleLines(kept),
-    ...(left > 0 ? [`(${left} more ${left === 1 ? 'rule is' : 'rules are'} not shown. hippo recall finds them.)`] : []),
+    ...(left > 0 ? [`(${counted} not shown. hippo recall finds them.)`] : []),
   ];
   const text = lines.join('\n').trim();
   if (text === '') return;

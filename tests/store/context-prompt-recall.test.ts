@@ -425,10 +425,24 @@ describe('contextGet prompt recall (api-level)', () => {
   });
 
   it('ranks a long row that holds most prompt words above short rows that each share two', async () => {
-    const words = ['ledger', 'quarter', 'closeout', 'revenue', 'margin', 'forecast', 'variance', 'accrual', 'invoice', 'payroll'];
+    const words = [
+      'ledger',
+      'quarter',
+      'closeout',
+      'revenue',
+      'margin',
+      'forecast',
+      'variance',
+      'accrual',
+      'invoice',
+      'payroll',
+    ];
     const prompt = `${words.join(' ')} audit budget`;
     // Ninety distinct filler words keep the long row's overlap share (10 of 102) under each short row's (2 of 14).
-    const filler = Array.from({ length: 90 }, (_, i) => `lorem${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`);
+    const filler = Array.from(
+      { length: 90 },
+      (_, i) => `lorem${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
+    );
     enablePromptRecall(local, { promptRecallThreshold: 0.05, promptRecallMinShared: 2, promptRecallMaxItems: 3 });
     const long = seed(local, `${words.join(' ')} ${filler.join(' ')}`, { created: '2026-01-01T00:00:00.000Z' });
     for (let i = 0; i < words.length; i += 2) {
@@ -440,6 +454,29 @@ describe('contextGet prompt recall (api-level)', () => {
     const matched = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
     expect(matched).toHaveLength(3);
     expect(matched[0]).toBe(long.id);
+  });
+
+  it('keeps a cleared source row the ranker drops for its extract, after the ranked rows', async () => {
+    enablePromptRecall(local, { promptRecallMaxItems: 5 });
+    const source = seed(local, 'deploy checklist: run migrations, warm the cache, then flip the canary flag', {
+      created: '2026-01-01T00:00:00.000Z',
+    });
+    const extract = seed(local, 'deploy checklist: warm the cache before the canary flag', {
+      extractedFrom: source.id,
+      created: '2026-01-02T00:00:00.000Z',
+    });
+    const other = seed(local, 'the canary flag lives in the deploy config', { created: '2026-01-03T00:00:00.000Z' });
+
+    const result = await contextGet(ctx, {
+      pinnedOnly: true,
+      currentProject: PROJECT,
+      prompt: 'deploy checklist warm cache canary flag',
+    });
+
+    // rankBm25 drops the source for its extract; the gate cleared it, so it still follows in gate order.
+    const matched = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
+    expect(new Set(matched)).toEqual(new Set([source.id, extract.id, other.id]));
+    expect(matched.at(-1)).toBe(source.id);
   });
 });
 
@@ -526,7 +563,12 @@ describe('pins and prompt recall share one budget (api-level)', () => {
 
     const result = await hook(50, PROMPT_A);
 
-    expect(pinnedIds(result).sort()).toEqual(pins.slice(3).map((p) => p.id).sort());
+    expect(pinnedIds(result).sort()).toEqual(
+      pins
+        .slice(3)
+        .map((p) => p.id)
+        .sort(),
+    );
   });
 
   it('leaves room for the Prompt-Relevant Memory rows when many pins fill the block', async () => {

@@ -106,6 +106,25 @@ describe('hippo session-rules in a project with its own store', () => {
     );
   });
 
+  it('counts one hidden rule in the singular, and leaves out "more" when no rule fits', async () => {
+    const rule = (n: number) => `Rule ${n}: always run the linter first.`;
+    for (const n of [0, 1, 2]) writeEntry(local, ruleRow(rule(n), n));
+
+    setBudget(20);
+    const one = await sessionRules('s-one');
+    expect(one.stdout).toBe(
+      reply(
+        [HEADING, `- ${rule(1)}`, `- ${rule(2)}`, '', '(1 more rule is not shown. hippo recall finds them.)'].join(
+          '\n',
+        ),
+      ),
+    );
+
+    setBudget(5);
+    const none = await sessionRules('s-none');
+    expect(none.stdout).toBe(reply('(3 rules are not shown. hippo recall finds them.)'));
+  });
+
   it('keeps the newest rules that fit the budget, prints them oldest first, and counts the rest', async () => {
     // Each line prints as `- Rule n: always run the linter first.`, 10 tokens, so a budget of 20 holds two.
     const rule = (n: number) => `Rule ${n}: always run the linter first.`;
@@ -117,18 +136,16 @@ describe('hippo session-rules in a project with its own store', () => {
     expect(status).toBe(0);
     expect(stdout).toBe(
       reply(
-        [
-          HEADING,
-          `- ${rule(3)}`,
-          `- ${rule(4)}`,
-          '',
-          '(3 more rules are not shown. hippo recall finds them.)',
-        ].join('\n'),
+        [HEADING, `- ${rule(3)}`, `- ${rule(4)}`, '', '(3 more rules are not shown. hippo recall finds them.)'].join(
+          '\n',
+        ),
       ),
     );
     const db = openHippoDb(local);
     try {
-      const row = db.prepare(`SELECT items FROM token_ledger WHERE session_id = ? AND surface = 'session_start'`).get('s-cut');
+      const row = db
+        .prepare(`SELECT items FROM token_ledger WHERE session_id = ? AND surface = 'session_start'`)
+        .get('s-cut');
       expect(row).toEqual({ items: 2 });
     } finally {
       closeHippoDb(db);

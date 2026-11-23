@@ -95,9 +95,8 @@ export function selectPinned({
   const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pins and the backfill share ONE budget and the backfill runs first, so pins are capped here and
-  // the rest is the backfill's. The cap reads the budget and the share only, never what recall used,
-  // so the pinned block stays byte-stable from prompt to prompt (skipUnchanged).
+  // The cap reads only the budget and the share, never what recall used, so the pinned block stays
+  // byte-stable from prompt to prompt (skipUnchanged).
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
@@ -232,7 +231,7 @@ function orderLikeRecall(
   );
   const ordered: GatedCandidates = [];
   for (const { entry } of ranked) {
-    // A DAG child the ranker added is no cleared row.
+    // The ranker's pool is the cleared rows, so a miss is an id it returned twice.
     const g = waiting.get(entry.id);
     if (g === undefined) continue;
     ordered.push(g);

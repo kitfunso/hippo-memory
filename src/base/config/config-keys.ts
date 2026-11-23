@@ -89,7 +89,7 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     promptRecallCandidates: read('promptRecallCandidates', count(P.promptRecallCandidates)),
     excludeTags: read('excludeTags', textList([])),
     promptRecallShare: read('promptRecallShare', fraction(DEFAULT_PROMPT_RECALL_SHARE)),
-    sessionRulesBudget: read('sessionRulesBudget', count(DEFAULT_SESSION_RULES_BUDGET)),
+    sessionRulesBudget: read('sessionRulesBudget', positive(DEFAULT_SESSION_RULES_BUDGET)),
   };
 }
 
