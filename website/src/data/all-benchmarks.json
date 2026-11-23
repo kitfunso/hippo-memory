@@ -1620,8 +1620,8 @@
       "name": "HaluMem-Medium",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
-      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
-      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0) and the same data, question set, top 20 and prompts.",
+      "caveat": "Question-answering part of HaluMem, with the paper's answer model and judge.",
       "hippo": {
         "value": "70.23",
         "num": 70.23,
@@ -1717,8 +1717,8 @@
       "name": "HaluMem-Long",
       "task": "Hallucination control, GPT-4o answers",
       "tag": "official setup, with a caveat",
-      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
-      "caveat": "Question answering only. We do not produce the extraction and update scores, so we cannot enter the HaluMem board yet.",
+      "reason": "Question answering only, with the paper's GPT-4o answers and judge (gpt-4o-2024-08-06, temperature 0), the same setup as the HaluMem-Medium row. hippo ran it with its embedder on 20 Nov 2026.",
+      "caveat": "Question-answering part of HaluMem, with the paper's answer model and judge.",
       "hippo": {
         "value": "65.99",
         "num": 65.99,
@@ -1912,6 +1912,737 @@
           "system": null,
           "model": "GPT-5.1",
           "url": "https://arxiv.org/abs/2606.23283"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, coexisting facts",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "10/100",
+        "num": 10.0,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "35/100",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "25/100",
+          "system": "A-Mem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Mem0",
+          "value": "35/100",
+          "num": 35.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "25/100",
+          "num": 25.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "StructMem",
+          "value": "25/100",
+          "num": 25.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "7/100",
+          "num": 7.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, conditional",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "93/100",
+        "num": 93.0,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "58/100",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "95/100",
+          "system": "A-Mem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "A-Mem",
+          "value": "95/100",
+          "num": 95.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "StructMem",
+          "value": "88/100",
+          "num": 88.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "85/100",
+          "num": 85.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "58/100",
+          "num": 58.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, conditional hard",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "38/100",
+        "num": 38.0,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "13/100",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "35/100",
+          "system": "A-Mem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "A-Mem",
+          "value": "35/100",
+          "num": 35.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "StructMem",
+          "value": "31/100",
+          "num": 31.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "27/100",
+          "num": 27.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "13/100",
+          "num": 13.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, persona base",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "120/143",
+        "num": 83.9161,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "14/143",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "125/143",
+          "system": "A-Mem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "A-Mem",
+          "value": "125/143",
+          "num": 87.4126,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "108/143",
+          "num": 75.5245,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "StructMem",
+          "value": "108/143",
+          "num": 75.5245,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "14/143",
+          "num": 9.7902,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, persona misleading",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "146/157",
+        "num": 92.9936,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "137/157",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "156/157",
+          "system": "StructMem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "StructMem",
+          "value": "156/157",
+          "num": 99.3631,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "149/157",
+          "num": 94.9045,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "138/157",
+          "num": 87.8981,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "137/157",
+          "num": 87.2611,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "MemFail, long-hop",
+      "task": "Tests passed, gpt-5-mini answers and judge",
+      "tag": "official setup, with a caveat",
+      "reason": "Run as MemFail's task scripts run it (MemFail 61ab3028): the same data and seed, top 5, a gpt-5-mini test-taker and each task's own gpt-5-mini judge, on all items. hippo ran it with its embedder on 22 Nov 2026, one run. The products run GPT-4.1-mini inside to write memories; hippo makes no model call when it stores a memory and keeps raw turns. The paper plots the product scores in Figure 1 and prints no table, so each product number is read from the figure's vector SVG, where every error bar equals the 95% Wilson interval of its count.",
+      "caveat": "The product numbers are read from the paper's Figure 1, which prints no table.",
+      "hippo": {
+        "value": "3/92",
+        "num": 3.2609,
+        "setting": "embedder, top 5, all items",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "13/92",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "23/92",
+          "system": "StructMem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.26667v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "StructMem",
+          "value": "23/92",
+          "num": 25.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "SimpleMem",
+          "value": "21/92",
+          "num": 22.8261,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "14/92",
+          "num": 15.2174,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "13/92",
+          "num": 14.1304,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2605.26667v1"
+        }
+      ]
+    },
+    {
+      "name": "InMind, naive query",
+      "task": "Share of tasks judged right, gpt-5-mini answers and judges",
+      "tag": "official setup",
+      "reason": "Run as InMind's evaluation package runs it (InMind 5a2ab268): all 125 tasks, gpt-5-mini answers with 16,384 completion tokens, and the three binary gpt-5-mini judges with the repo's prompts. hippo ran it with its embedder on 22 Nov 2026, one run, top 10, as Mem0 and A-Mem use. The product rows are the paper's MiniLM block, the same embedder hippo uses (all-MiniLM-L6-v2).",
+      "caveat": null,
+      "hippo": {
+        "value": "59.20",
+        "num": 59.2,
+        "setting": "embedder, top 10, all 125 tasks",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "76.0",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "99.2",
+          "system": "A-Mem",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "A-Mem",
+          "value": "99.2",
+          "num": 99.2,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "A-RAG",
+          "value": "97.6",
+          "num": 97.6,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "HippoRAG",
+          "value": "93.6",
+          "num": 93.6,
+          "system": "HippoRAG 2",
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "MemoryOS",
+          "value": "87.2",
+          "num": 87.2,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "xMemory",
+          "value": "84.8",
+          "num": 84.8,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "76.0",
+          "num": 76.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        }
+      ]
+    },
+    {
+      "name": "InMind, target recall",
+      "task": "Share of tasks judged right, gpt-5-mini answers and judges",
+      "tag": "official setup",
+      "reason": "Run as InMind's evaluation package runs it (InMind 5a2ab268): all 125 tasks, gpt-5-mini answers with 16,384 completion tokens, and the three binary gpt-5-mini judges with the repo's prompts. hippo ran it with its embedder on 22 Nov 2026, one run, top 10, as Mem0 and A-Mem use. The product rows are the paper's MiniLM block, the same embedder hippo uses (all-MiniLM-L6-v2).",
+      "caveat": null,
+      "hippo": {
+        "value": "4.00",
+        "num": 4.0,
+        "setting": "embedder, top 10, all 125 tasks",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "2.4",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "5.6",
+          "system": "A-RAG",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "A-RAG",
+          "value": "5.6",
+          "num": 5.6,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "xMemory",
+          "value": "3.2",
+          "num": 3.2,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "2.4",
+          "num": 2.4,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "2.4",
+          "num": 2.4,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "MemoryOS",
+          "value": "2.4",
+          "num": 2.4,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "HippoRAG",
+          "value": "0.8",
+          "num": 0.8,
+          "system": "HippoRAG 2",
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        }
+      ]
+    },
+    {
+      "name": "InMind, application",
+      "task": "Share of tasks judged right, gpt-5-mini answers and judges",
+      "tag": "official setup",
+      "reason": "Run as InMind's evaluation package runs it (InMind 5a2ab268): all 125 tasks, gpt-5-mini answers with 16,384 completion tokens, and the three binary gpt-5-mini judges with the repo's prompts. hippo ran it with its embedder on 22 Nov 2026, one run, top 10, as Mem0 and A-Mem use. The product rows are the paper's MiniLM block, the same embedder hippo uses (all-MiniLM-L6-v2).",
+      "caveat": null,
+      "hippo": {
+        "value": "4.80",
+        "num": 4.8,
+        "setting": "embedder, top 10, all 125 tasks",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "3.2",
+          "system": null,
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "8.8",
+          "system": "HippoRAG 2",
+          "model": "gpt-5-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2607.24368v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "HippoRAG",
+          "value": "8.8",
+          "num": 8.8,
+          "system": "HippoRAG 2",
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "MemoryOS",
+          "value": "8.0",
+          "num": 8.0,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "6.4",
+          "num": 6.4,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "A-RAG",
+          "value": "4.8",
+          "num": 4.8,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "xMemory",
+          "value": "4.8",
+          "num": 4.8,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        },
+        {
+          "name": "Mem0",
+          "value": "3.2",
+          "num": 3.2,
+          "system": null,
+          "model": "gpt-5-mini",
+          "url": "https://arxiv.org/html/2607.24368v1"
+        }
+      ]
+    },
+    {
+      "name": "MEME, Table 2",
+      "task": "Mean of six task accuracies, gpt-4.1-mini answers, gpt-4o judge",
+      "tag": "official setup",
+      "reason": "Run as MEME's run_main_experiment.sh runs it (MEME cb8164d8): the 32K filler set, top 20, gpt-4.1-mini-2025-04-14 answers at temperature 0, the gpt-4o-2024-08-06 judge, and the paper's trivial-pass filter. hippo ran it with its embedder on 22 Nov 2026, one run. Mem0 extracts facts with gpt-4.1-mini; hippo stores each turn whole with no model call. The 5 smoke-test questions are never scored.",
+      "caveat": null,
+      "hippo": {
+        "value": "0.25",
+        "num": 25.0,
+        "setting": "embedder, top 20, 32K filler",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "0.28",
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.12477v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "0.03",
+          "system": "Graphiti",
+          "model": "gpt-4.1-mini",
+          "detail": null,
+          "url": "https://arxiv.org/html/2605.12477v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Mem0",
+          "value": "0.28",
+          "num": 28.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://arxiv.org/html/2605.12477v1"
+        },
+        {
+          "name": "Graphiti",
+          "value": "0.03",
+          "num": 3.0,
+          "system": null,
+          "model": "gpt-4.1-mini",
+          "url": "https://arxiv.org/html/2605.12477v1"
+        }
+      ]
+    },
+    {
+      "name": "TriggerBench, Table 3 Base",
+      "task": "Prospective memory accuracy, gpt-4.1 answers, gpt-4o judge",
+      "tag": "official setup",
+      "reason": "Run as TriggerBench's run_mem0.sh runs the Mem0 row (TriggerBench 9e2185c3): Base context, top 6, gpt-4.1 answers at temperature 0.6 with 1,024 tokens, and the paper's PMJudge on gpt-4o-2024-08-06. hippo ran it with its embedder on 22 Nov 2026, one run. 5 smoke-test tasks are never scored, so hippo's score covers 1,260 of 1,265 tasks.",
+      "caveat": null,
+      "hippo": {
+        "value": "54.29",
+        "num": 54.29,
+        "setting": "embedder, top 6, 1,260 of 1,265 (5 test items never scored)",
+        "status": null
+      },
+      "cells": {
+        "Mem0": {
+          "value": "53.20",
+          "system": null,
+          "model": "gpt-4.1",
+          "detail": null,
+          "url": "https://arxiv.org/html/2606.23459v1",
+          "muted": false
+        },
+        "Other": {
+          "value": "41.42",
+          "system": "A-Mem",
+          "model": "gpt-4.1",
+          "detail": null,
+          "url": "https://arxiv.org/html/2606.23459v1",
+          "muted": false
+        }
+      },
+      "rivals": [
+        {
+          "name": "Mem0",
+          "value": "53.20",
+          "num": 53.2,
+          "system": null,
+          "model": "gpt-4.1",
+          "url": "https://arxiv.org/html/2606.23459v1"
+        },
+        {
+          "name": "A-Mem",
+          "value": "41.42",
+          "num": 41.42,
+          "system": null,
+          "model": "gpt-4.1",
+          "url": "https://arxiv.org/html/2606.23459v1"
         }
       ]
     },

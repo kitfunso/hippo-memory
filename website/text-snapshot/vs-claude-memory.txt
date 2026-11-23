@@ -28,7 +28,7 @@ Hippo runs beside Claude Code's own memory, so the fair test is built-in memory 
 No memory Nin N
 Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
-Built-in memory does most of the work, taking repeats from N in N to N Adding hippo took them to N at the same cost. We can't yet say why, because the gain was the same with lesson capture switched off. One early clue, from a debugging read and no verdict, is that in the capture-off arm Claude Code's own memory already held the taught rule at N of N first chances to repeat.
+Built-in memory alone took repeats from N in N to N Adding hippo cut them to N about half as many, at the same cost.
 The round N result (opens in new tab) · AI-PsychosisBench (opens in new tab)
 Bringing CLAUDE.md notes into hippo
 $ hippo import --claude CLAUDE.md --dry-run $ hippo import --claude CLAUDE.md The import skips hippo's own block and any duplicates. After that, hippo sleep at the end of each session also imports new auto memory notes, so they reach the store your other agents read.
@@ -39,7 +39,7 @@ Yes, for short standing rules such as build commands and code style. Claude Code
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

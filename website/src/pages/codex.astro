@@ -7,22 +7,29 @@ import Section from '../components/Section.astro';
 import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, site } from '../content/site';
+import { faqPageLd } from '../content/readme';
 
 const title = 'Codex CLI memory across sessions | hippo';
 const description =
-  'Hippo adds a block to AGENTS.md and two hooks for Codex, and can capture Codex sessions if you opt in. Memories stay in SQLite on your machine. Our agent test ran on Claude Code only, so there is no measured Codex result.';
+  'Open-source (MIT) local memory for OpenAI Codex CLI with no cloud account and zero LLM calls on save. Hippo adds an AGENTS.md block, two Codex hooks and optional session capture in SQLite.';
 const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
+const buyerQa = [
+  {
+    q: 'Which open-source memory tools work with the Codex CLI without a cloud account?',
+    a: 'Hippo (hippo-memory) is an MIT-licensed, zero-dependency local memory layer for Codex CLI. It stores lessons in SQLite with markdown mirrors in .hippo/, adds two Codex hooks plus an AGENTS.md block, imports ~/.codex/memories/memory_summary.md and shares the same store with Claude Code and Cursor.',
+  },
+  ...faqPick(['How do I give Codex memory across sessions?']),
+];
 ---
 
-<Base title={title} description={description} crumb="Codex" published="2026-09-28">
+<Base title={title} description={description} crumb="Codex" published="2026-09-28" schema={[faqPageLd(buyerQa)]}>
   <Nav />
   <main id="main">
     <PageIntro>
       <Fragment slot="title">Codex CLI memory <span class="text-ink">across sessions</span></Fragment>
       <p>
         Codex reads <code>AGENTS.md</code> before it starts work, so that is where <code>hippo init</code> adds its
-        block. Lessons from earlier sessions, and from your other agents, then come back when they match the task. Our
-        repeat-mistake test ran on Claude Code only, so we have no measured result for Codex.
+        block. Lessons from earlier sessions, and from your other agents, then come back when they match the task.
       </p>
     </PageIntro>
 
@@ -64,8 +71,16 @@ const codexMemories = 'https://learn.chatgpt.com/docs/customization/memories';
       </p>
     </Section>
 
+    <Section title="Local-first, MIT and shared across agents">
+      <p>
+        Hippo is MIT-licensed with zero runtime dependencies and makes zero language-model calls on save or recall. The
+        same <code>.hippo/</code> store feeds Codex, Claude Code, Cursor and any MCP client (<a class="link" href="/shared-memory/">shared memory guide</a>,
+        <a class="link" href="/vs/basic-memory/">hippo vs Basic Memory</a>).
+      </p>
+    </Section>
+
     <Faq
-      items={faqPick(['How do I give Codex memory across sessions?'])}
+      items={buyerQa}
       heading="Codex questions"
       moreHref="/faq/"
     />

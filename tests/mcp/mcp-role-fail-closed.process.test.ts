@@ -7,6 +7,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { loadConfig } from '../../src/host/config-file.js';
+import { VIEWER_REFUSAL } from '../../src/server.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { mcpActor, mcpApiContext } from '../../src/surface/mcp/protocol.js';
 import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
@@ -59,9 +60,9 @@ describe('mcpActor', () => {
     expect(mcpActor(undefined)).toMatchObject({ subject: 'mcp', role: 'admin', hostAdmin: true });
   });
 
-  it('runs a context with no role as a member and never as host admin', () => {
+  it('runs a context with no role as a viewer and never as host admin', () => {
     const actor = mcpActor(roleless('/unused'));
-    expect(actor.role).toBe('member');
+    expect(actor.role).toBe('viewer');
     expect(actor.hostAdmin).toBeUndefined();
   });
 
@@ -113,10 +114,9 @@ describe('hippo_learn scans the server cwd only for stdio or a host admin', () =
     fs.rmSync(repoDir, { recursive: true, force: true });
   });
 
-  it('refuses an HTTP-MCP context with no role, so it cannot run the admin-only tool', async () => {
-    await expect(callTool('hippo_learn', { days: 3650 }, roleless(hippoRoot))).rejects.toThrow(
-      'hippo_learn requires a host admin',
-    );
+  it('refuses an HTTP-MCP context with no role as a viewer, so it cannot run the admin-only tool', async () => {
+    const reply = await callTool('hippo_learn', { days: 3650 }, roleless(hippoRoot));
+    expect(contextText(reply)).toBe(VIEWER_REFUSAL);
     expect(loadEveryTenantEntries(hippoRoot)).toEqual([]);
   });
 

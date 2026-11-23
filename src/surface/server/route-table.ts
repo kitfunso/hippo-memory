@@ -18,6 +18,7 @@ import {
 } from '../http/http-util.js';
 import { assertCrossTenantAdmin, buildContextWithAuth, isLocalCaller } from './auth.js';
 import { INT_PARAM, matchPath, noteAccess } from './request.js';
+import { canWrite, VIEWER_REFUSAL, type RoleLevel } from '../../base/scope/role.js';
 import { routeLookup, type RouteLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
@@ -91,52 +92,52 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'POST',
     path: '/v1/memories',
-    auth: 'caller',
+    auth: 'editor',
     handler: handleCreateMemory,
   },
   {
     method: 'GET',
     path: '/v1/graph',
-    auth: 'caller',
+    auth: 'viewer',
     storeReady: 'graphReads',
     handler: handleGetGraph,
   },
   {
     method: 'GET',
     path: '/v1/memories',
-    auth: 'caller',
+    auth: 'viewer',
     handler: handleRecallMemories,
   },
   {
     method: 'GET',
     pattern: '/v1/sessions/:id/assemble',
-    auth: 'caller',
+    auth: 'viewer',
     storeReady: 'dagReads',
     handler: handleAssembleSession,
   },
   {
     method: 'GET',
     pattern: '/v1/recall/drill/:id',
-    auth: 'caller',
+    auth: 'viewer',
     storeReady: 'dagReads',
     handler: handleDrillRecall,
   },
   {
     method: 'POST',
     pattern: '/v1/memories/:id/archive',
-    auth: 'caller',
+    auth: 'editor',
     handler: handleArchiveMemory,
   },
   {
     method: 'POST',
     pattern: '/v1/memories/:id/supersede',
-    auth: 'caller',
+    auth: 'editor',
     handler: handleSupersedeMemory,
   },
   {
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
-    auth: 'caller',
+    auth: 'editor',
     // No group: a shared store promotes in place through base methods; elsewhere the copy needs
     // folderFiles.
     handler: handlePromoteMemory,
@@ -144,25 +145,25 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'DELETE',
     pattern: '/v1/memories/:id',
-    auth: 'caller',
+    auth: 'editor',
     handler: handleForgetMemory,
   },
   {
     method: 'POST',
     path: '/v1/outcome',
-    auth: 'caller',
+    auth: 'editor',
     handler: handleApplyOutcome,
   },
   {
     method: 'GET',
     path: '/v1/context',
-    auth: 'caller',
+    auth: 'viewer',
     handler: handleGetContext,
   },
   {
     method: 'POST',
     path: '/v1/vectors/nearest',
-    auth: 'caller',
+    auth: 'viewer',
     storeReady: 'vectors',
     handler: handleNearestVectors,
   },
@@ -182,13 +183,15 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'GET',
     path: '/v1/auth/keys',
-    auth: 'caller',
+    auth: 'viewer',
     handler: handleListAuthKeys,
   },
   {
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
-    auth: 'caller',
+    // authRevoke lets a resolver caller revoke only the keys it minted, so a demoted viewer can
+    // still revoke its own.
+    auth: 'viewer',
     handler: handleRevokeAuthKey,
   },
   {
@@ -314,11 +317,18 @@ async function passAuthGate(
   }
   const ctx = await buildContextWithAuth(req, opts);
   if (route.unported) await notPorted();
-  if (route.auth === 'admin' && ctx.actor.role !== 'admin') {
-    throw new HttpError(403, `${label} requires admin role`);
-  }
+  if (route.auth === 'editor' || route.auth === 'admin') assertLevel(route.auth, ctx, label);
   if (route.auth === 'host-admin-local') assertCrossTenantAdmin(ctx, label);
   return ctx;
+}
+
+/** Refuses a caller below the route's level: an admin row needs admin, an editor row needs a role
+ * that can write. */
+function assertLevel(level: RoleLevel, ctx: Context, label: string): void {
+  if (level === 'admin' && ctx.actor.role !== 'admin') {
+    throw new HttpError(403, `${label} requires admin role`);
+  }
+  if (level === 'editor' && !canWrite(ctx.actor.role)) throw new HttpError(403, VIEWER_REFUSAL);
 }
 
 /** The route as the access line names it: params by name without their type, so no line carries
@@ -461,6 +471,7 @@ export async function dispatchAddonRoute(
   const ctx = await buildContextWithAuth(req, opts);
   if (!ported) throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
   noteAccess(req, { tenant: ctx.tenantId });
+  assertLevel(route.level ?? 'editor', ctx, route.path);
   const body = await parseJsonBody(req, ctx);
   sendJson(res, 200, await route.handler({ ctx, body }));
   return true;

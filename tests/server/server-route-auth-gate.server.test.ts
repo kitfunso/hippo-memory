@@ -5,10 +5,10 @@ import type { ServerHandle } from '../../src/server.js';
 import { ROUTE_GROUPS, serve } from '../_helpers/store-switch.js';
 import { V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { makeRoot } from '../_helpers/make-root.js';
-import { V1_ROWS } from '../_helpers/v1-route-rows.js';
+import { ADMIN_LEVEL, READ_POSTS, V1_ROWS, VIEWER_WRITES, viewerWriteRows } from '../_helpers/v1-route-rows.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
-const KNOWN_AUTH: ReadonlySet<string> = new Set(['caller', 'admin', 'host-admin-local', 'webhook-signature']);
+const KNOWN_AUTH: ReadonlySet<string> = new Set(['viewer', 'editor', 'admin', 'host-admin-local', 'webhook-signature']);
 const WEBHOOKS = ['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
 
 // What a request with no credential gets today, route by route; a new route fails the coverage check until it is listed.
@@ -102,6 +102,29 @@ describe('the /v1 route table declares every auth need', () => {
   it('lets only the signed webhooks skip the key check', () => {
     const signed = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(({ key }) => key);
     expect(signed.sort()).toEqual([...WEBHOOKS].sort());
+  });
+});
+
+describe('the /v1 route levels', () => {
+  it('gives each row the level its method and kind call for', () => {
+    const expected = (key: string, method: string): string =>
+      ADMIN_LEVEL.get(key) ??
+      (WEBHOOKS.includes(key)
+        ? 'webhook-signature'
+        : method === 'GET' || READ_POSTS.has(key) || VIEWER_WRITES.has(key)
+          ? 'viewer'
+          : 'editor');
+    const wrong = V1_ROWS.filter(({ key, route }) => route.auth !== expected(key, route.method)).map(
+      ({ key, route }) => `${key} is ${route.auth}, wanted ${expected(key, route.method)}`,
+    );
+    expect(wrong).toEqual([]);
+    expect(V1_ROWS.filter(({ key }) => ADMIN_LEVEL.has(key))).toHaveLength(9);
+  });
+
+  it('keeps every write off the viewer level, and the check sees a planted one', () => {
+    expect(viewerWriteRows(V1_ROWS)).toEqual([]);
+    const planted = { key: 'POST /v1/planted', route: { method: 'POST', auth: 'viewer' } };
+    expect(viewerWriteRows([...V1_ROWS, planted])).toEqual(['POST /v1/planted']);
   });
 });
 

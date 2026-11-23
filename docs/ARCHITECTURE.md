@@ -82,9 +82,11 @@ Nothing caches these env vars. The readers here read them on each call, so a tes
 
 `serve(opts)` boots the HTTP daemon on host:port and writes the local key (`server.key`) and the pidfile under `hippoRoot`. A non-loopback host needs TLS or an explicit cleartext allowance; auth is the same on every bind.
 
-Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset) and any `publicJson` GET path.
+Every `/v1` row in `V1_ROUTES` declares its `auth` need, and dispatch runs that gate before the handler. The auth middleware (`buildContextWithAuth` / `requireAuth`) is checked by every route except `GET /health` (public by design, for platform health checks), the two connector webhooks whose rows declare `webhook-signature` (HMAC-gated by their own signing secrets, and 404 when those secrets are unset), and any `publicJson` GET path, which includes the protected-resource metadata path when `oauth` is set.
 
 There is no keyless path. A loopback socket proves nothing: `ssh -L`, `socat` and `kubectl port-forward` deliver remote traffic from loopback with no proxy header. So each start of `serve()` writes a fresh 256-bit local key (`hl_` prefix) to `<hippoRoot>/server.key`, mode 0600, beside the pidfile, and holds only its SHA-256. The CLI and hooks on the machine send `HIPPO_API_KEY` when it is set, else that file's key (`callerKey` in `src/surface/server/local-key.ts`). The local key signs a member of the server's tenant, audited as `localhost:cli`, and is charged by the per-caller limiter like any key. It is checked before the auth-resolver routing, so the secret never reaches resolver code, and the key of an earlier run stops working at the next start. `isLocalCaller` (loopback socket, no proxy header, local Host, not cross-site) is never the auth boundary: it only picks the 401 text, the `/health` body and the `host-admin-local` defence in depth.
+
+With `oauth` set (`src/surface/server/oauth-resource.ts`), `/mcp` is an OAuth 2.1 protected resource and hippo stays the resource server only: the operator's authorization server issues tokens and the `authResolver` checks them. `oauthBoot` checks the setting before the pidfile claim, so a bad one leaves no pidfile. It adds one entry to `publicJsonBodies`: the RFC 9728 document at `/.well-known/oauth-protected-resource` plus the resource's path, which the public JSON path sends as `application/json` with no auth. The root path stays 404, because a client rejects a root document whose `resource` ends in `/mcp`. It also freezes two `WWW-Authenticate` values on the served options (`oauthChallenge`), with and without `error="invalid_token"`. `withOAuthChallenge` adds one to a 401 from the POST /mcp auth check, and `error` only when a Bearer token came, per RFC 6750. A 429 and the resolver's 503 get none. `/mcp/stream` and `/v1` keep a bare 401, because a client that fetches the document from a challenge there would find a different resource. The resource URL is the public URL the operator writes; core never derives it from `Host` or `X-Forwarded-*`.
 
 Tests use `port: 0` to bind an ephemeral port and read the actual port back via `server.address()` after listen.
 
@@ -891,6 +893,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/auth.ts
 - `checkAuth` (src/surface/server/auth.ts): A request with no key is refused 401, from loopback too. 3.0 removed `HIPPO_ALLOW_KEYLESS_LOCAL`, which let a loopback caller with no proxy header in as a member: a port forwarder sends no such header, so the header list could never prove a caller local. The CLI now sends the key `serve()` writes to `server.key`. The 401 says where that key is only for a caller that passes `isLocalCaller`; a proxied caller or a browser page gets the plain `auth required`. `GET /health` uses the same `isLocalCaller` test for its version and pid, so a rebound Host or a cross-site page reads liveness only.
+- `sanitiseResolved`, `buildContextWithAuth`: 'admin', 'member' and 'viewer' stay, and any other resolver role, or none, reads as a viewer through `roleOrViewer`, so it fails closed. `buildContextWithAuth` notes the caller's role once, so a /v1, add-on or MCP request line all carry `role=`.
 
 ### src/surface/server/boot.ts
 - `handleRequest`: v1.6.4: pre-decode raw-URL slash check.
@@ -914,6 +917,7 @@ Design provenance for src/: which roadmap item or release added a behaviour, sch
 
 ### src/surface/server/route-table.ts
 - `dispatchPublicJson`: E4 (2026-10-06): the `publicJson` seam sits beside the add-on route seam (`dispatchAddonRoute`) so hippo-enterprise can serve its connect info with no key; it is a dispatcher, not an inline `if (method === ...)` line, so the bearer-lockdown parser still counts every route, and it has no add-on collision check because add-ons are POST only (E4 plan review r1, finding 5).
+- `assertLevel`: each /v1 row declares viewer, editor or admin. A viewer on an editor row gets 403 with `VIEWER_REFUSAL`, and an add-on route with no `level` takes editor. A new by-id write surface must take the editor level, since `scopeReaderOf` reads a viewer as a member.
 
 ### src/surface/server/routes/admin.ts
 - `handleCreateAuthKey`: POST /v1/auth/keys — mint a new API key. Plaintext lands in the response body (Task 8)

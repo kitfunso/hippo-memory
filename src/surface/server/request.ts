@@ -8,6 +8,7 @@ import { HttpError } from '../../base/errors/http-errors.js';
 import { sendJson } from '../http/http-util.js';
 import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
+import type { Role } from '../../base/scope/role.js';
 
 // The caller's id lands in a response header and in logs, so only a short plain token is echoed
 // back.
@@ -82,6 +83,7 @@ function watchSlowRequest(
 interface AccessNote {
   route?: string;
   tenant?: string;
+  role?: Role;
 }
 
 const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
@@ -90,7 +92,7 @@ const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
 const UNMATCHED_ROUTE = 'unmatched';
 
 /**
- * Names the matched route (the table's pattern, never the path sent) or the caller's tenant for the
+ * Names the matched route (the table's pattern, never the path sent), the caller's tenant or its role for the
  * request's access line.
  */
 export function noteAccess(req: IncomingMessage, note: AccessNote): void {
@@ -120,6 +122,7 @@ function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, reques
       status: res.statusCode,
       durationMs: Math.round(performance.now() - startedAt),
       tenant: note.tenant,
+      role: note.role,
     });
   });
 }

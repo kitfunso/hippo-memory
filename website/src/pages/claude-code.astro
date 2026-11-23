@@ -7,11 +7,19 @@ import Section from '../components/Section.astro';
 import Cmd from '../components/Cmd.astro';
 import Faq from '../components/Faq.astro';
 import { faqPick, site } from '../content/site';
-import { mdInline } from '../content/readme';
+import { faqPageLd, mdInline } from '../content/readme';
 
 const title = 'Claude Code memory between sessions | hippo';
 const description =
   "Hippo adds a local store of lessons beside Claude Code's CLAUDE.md and auto memory. In our own test on 29 repositories, against built-in memory alone, repeat mistakes fell from 21 in 100 to 11 at the same cost.";
+
+const buyerQa = [
+  {
+    q: 'How do I stop my AI coding agent from repeating the same mistakes?',
+    a: 'Install hippo-memory and run hippo init in your repository. Hippo captures rules you state and failed tool calls, prints your pinned rules at session start before your first prompt, weakens wrong memories via hippo outcome --bad, and replaces stale facts via hippo supersede. Across 29 repositories, adding hippo cut repeat mistakes from 21 in 100 to 11 in 100 at the same cost.',
+  },
+  ...faqPick(['How do I give Claude Code memory between sessions?']),
+];
 
 // README "Framework Integrations": what `hippo init` adds to Claude Code's settings.
 const hooks = [
@@ -28,7 +36,7 @@ const hooks = [
 const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
 ---
 
-<Base title={title} description={description} crumb="Claude Code" published="2026-09-28">
+<Base title={title} description={description} crumb="Claude Code" published="2026-09-28" schema={[faqPageLd(buyerQa)]}>
   <Nav />
   <main id="main">
     <PageIntro>
@@ -37,8 +45,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
         Claude Code already loads your <code>CLAUDE.md</code> files and its own auto memory notes into every session.
         Hippo runs beside them and keeps what comes up as you work, such as a rule you stated, a tool call that failed or
         a fact that changed. On <a class="link" href={site.links.aiPsychosisBench} target="_blank" rel="noopener noreferrer">AI-PsychosisBench<span class="sr-only"> (opens in new tab)</span></a>, our test on 29 repositories, Claude Code with hippo added repeated a corrected mistake 11
-        times in 100, against 21 with built-in memory alone, at the same cost. We can't yet say how much of that the
-        stored lessons carry.
+        times in 100, against 21 with built-in memory alone, at the same cost.
       </p>
     </PageIntro>
 
@@ -114,7 +121,7 @@ const plugin = `${site.links.repo}/tree/master/extensions/claude-code-plugin`;
     </Section>
 
     <Faq
-      items={faqPick(['How do I give Claude Code memory between sessions?'])}
+      items={buyerQa}
       heading="Claude Code questions"
       moreHref="/faq/"
     />

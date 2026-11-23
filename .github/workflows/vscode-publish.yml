@@ -1,14 +1,13 @@
 # Lists the VS Code extension (extensions/vscode) on Open VSX and the VS Code Marketplace.
 # npm-publish.yml calls this after a `latest` publish; run it by hand to list a version already on npm.
-# One-time setup: repo secrets OVSX_PAT (open-vsx.org token) and VSCE_PAT (Azure DevOps, Marketplace Manage).
+# Setup: repo secret OVSX_PAT (open-vsx.org token). The Marketplace needs no secret: the kitfunso
+# publisher has Trusted Publishing policies for this file and npm-publish.yml, so vsce signs in with OIDC.
 name: Publish the VS Code extension
 
 on:
   workflow_call:
     secrets:
       OVSX_PAT:
-        required: false
-      VSCE_PAT:
         required: false
   workflow_dispatch:
 
@@ -19,10 +18,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Both CLIs read their token from these variables, so no token goes on a command line.
+    permissions:
+      contents: read
+      id-token: write
+    # ovsx reads its token from this variable, so no token goes on a command line.
     env:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
     defaults:
       run:
         working-directory: extensions/vscode
@@ -32,12 +33,14 @@ jobs:
         with:
           node-version: '24'
       # The extension has no dependencies; without the flag vsce runs npm list on the repo root and fails.
-      - run: npx --yes @vscode/vsce@4.1.1 package --no-dependencies --out hippo-memory.vsix
+      - id: package
+        run: npx --yes @vscode/vsce@4.1.1 package --no-dependencies --out hippo-memory.vsix
       - name: Publish to Open VSX
         run: |
           if [ -z "$OVSX_PAT" ]; then echo "::warning::OVSX_PAT is not set, so Open VSX was skipped"; exit 0; fi
           npx --yes ovsx@1.4.0 publish hippo-memory.vsix --skip-duplicate
+      # Azure DevOps retires global PATs on 1 Dec 2026, so the Marketplace uses Trusted Publishing.
+      # Runs even if Open VSX failed, so one store never blocks the other; the job still goes red.
       - name: Publish to the VS Code Marketplace
-        run: |
-          if [ -z "$VSCE_PAT" ]; then echo "::warning::VSCE_PAT is not set, so the VS Code Marketplace was skipped"; exit 0; fi
-          npx --yes @vscode/vsce@4.1.1 publish --packagePath hippo-memory.vsix --skip-duplicate
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: npx --yes @vscode/vsce@4.1.1 publish --packagePath hippo-memory.vsix --skip-duplicate --oidc

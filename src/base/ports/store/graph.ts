@@ -1,5 +1,5 @@
 // The graph groups: the entity graph's reads and the rebuild's writes.
-import type { ScopeActor } from '../../scope/recall-scope.js';
+import type { StoreActor } from '../../scope/recall-scope.js';
 import type { MethodEffects } from './effects.js';
 
 /** How many ids one graph read takes at a time: results come back in this order per batch, and a
@@ -17,7 +17,7 @@ export interface GraphViewQuery {
    * ids held, until `limit` ids are held. */
   readonly entity?: string;
   readonly limit: number;
-  readonly reader?: ScopeActor;
+  readonly reader?: StoreActor;
 }
 
 /** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per

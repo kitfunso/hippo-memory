@@ -34,7 +34,7 @@ hippo_peers Lists the projects that feed the global store.
 hippo_predict_baserate Base rates for past predictions, to check a new one against.
 Where the memories live
 The question to ask of any MCP memory server is where the memories live and who runs it. The servers from MemN Zep and Letta are hosted and need an account or an API key. In memN's words (opens in new tab), memories stored that way "live in your MemN account, not on your computer". Hippo keeps them on your machine. It also adds the ability to mark a recalled memory wrong, replace an old fact and list contradictions.
-hippo vs memN hippo vs Zep, hippo vs Letta
+hippo vs memN hippo vs Basic Memory, hippo vs claude-mem, hippo vs Cognee, hippo vs Supermemory, hippo vs Zep, hippo vs Letta
 MCP questions
 All N questions →
 Can I use hippo as an MCP memory server? +
@@ -42,7 +42,7 @@ Yes. hippo mcp runs the server over stdio. Add it to the MCP config of Cursor, C
 hippo
 Agents
 Claude CodeCursorCodexShared memoryMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso
