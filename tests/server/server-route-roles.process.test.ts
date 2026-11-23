@@ -130,7 +130,7 @@ describe('a viewer signed in through an auth resolver', () => {
   });
 
   it('is refused on every admin-level row with the admin text of that row', async () => {
-    expect(ADMIN_ROWS).toHaveLength(8);
+    expect(ADMIN_ROWS).toHaveLength(9);
     for (const { key, route } of ADMIN_ROWS) {
       const { status, text } = await statusAndText(await rowCall('ext.viewer', key));
       expect({ key, status }).toEqual({ key, status: 403 });

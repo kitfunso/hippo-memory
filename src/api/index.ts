@@ -196,8 +196,13 @@ export { NO_QUERY } from './context/context-plan.js';
 export { contextProjectFor, type ProjectFacts } from './context/context-project.js';
 export { failureSummary, recordTokens, tokenSummary } from './tokens.js';
 export { dormantForget, isDormant, dormantList, dormantRestore } from './sleep/dormant.js';
-export { quarantineApprove, quarantineList, quarantineReject } from './auth/quarantine.js';
-export type { QuarantineListItem } from './auth/quarantine.js';
+export {
+  quarantineApprove,
+  quarantineEdit,
+  quarantineList,
+  quarantineReject,
+} from './auth/quarantine.js';
+export type { QuarantineEditResult, QuarantineListItem } from './auth/quarantine.js';
 export { sleepWholeStore } from './sleep/sleep.js';
 export type { SleepOptions, SleepResult } from './sleep/sleep.js';
 export { goalComplete, goalList, goalPush, goalResume, goalSuspend } from './objects/goals.js';

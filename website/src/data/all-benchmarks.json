@@ -2849,69 +2849,6 @@
       }
     },
     {
-      "name": "PrefEval",
-      "task": "Preference following, Sonnet 5 answers",
-      "tag": "our own setup",
-      "reason": "The paper's RAG rows keep the whole chat in the prompt; ours shows 5 retrieved turns. The vendor rows use another data split, top 10 and gpt-4o-mini.",
-      "caveat": null,
-      "hippo": {
-        "value": "95.8",
-        "num": 95.8,
-        "setting": "embedder, top 5",
-        "status": null
-      },
-      "cells": {
-        "Mem0": {
-          "value": "63.7",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": true
-        },
-        "Zep": {
-          "value": "39.9",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": true
-        },
-        "MemOS": {
-          "value": "71.9",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": true
-        },
-        "Supermemory": {
-          "value": "56.7",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": true
-        },
-        "Memobase": {
-          "value": "34.1",
-          "system": null,
-          "model": "gpt-4o-mini",
-          "detail": null,
-          "url": "https://arxiv.org/html/2507.03724v4",
-          "muted": true
-        },
-        "Other": {
-          "value": "92.15",
-          "system": "Claude 3 Sonnet + RAG",
-          "model": "Claude 3 Sonnet",
-          "detail": null,
-          "url": "https://arxiv.org/html/2502.09597",
-          "muted": true
-        }
-      }
-    },
-    {
       "name": "EverMemBench",
       "task": "Changing facts, Sonnet 5 answers",
       "tag": "our own setup",
@@ -3188,45 +3125,6 @@
           "model": "not stated",
           "detail": null,
           "url": "https://www.cognee.ai/knowledge-graph-memory-benchmarks",
-          "muted": true
-        }
-      }
-    },
-    {
-      "name": "DolphinBench, shortcut run",
-      "task": "Agent memory, Claude Code with Sonnet 5",
-      "tag": "our own setup",
-      "reason": "Our run wrote each message straight to the store with no agent turn, used a recall hook we wrote, and judged through codex, which the official validator rejects.",
-      "caveat": null,
-      "hippo": {
-        "value": "45.0",
-        "num": 45.0,
-        "setting": "270/600 · Claude Code, Sonnet 5",
-        "status": null
-      },
-      "cells": {
-        "Mem0": {
-          "value": "32.3",
-          "system": null,
-          "model": "Claude Code, Sonnet 5",
-          "detail": "194/600",
-          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/mem0/README.md",
-          "muted": true
-        },
-        "Honcho": {
-          "value": "35.8",
-          "system": null,
-          "model": "Claude Code, Sonnet 5",
-          "detail": "215/600",
-          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/honcho/README.md",
-          "muted": true
-        },
-        "Other": {
-          "value": "26.3",
-          "system": "Built-in",
-          "model": "Claude Code, Sonnet 5",
-          "detail": "158/600",
-          "url": "https://github.com/mem0ai/dolphinbench/blob/81cb6f8405b40a9e76089cef650806a80af06ea2/results/claude-code/claude-sonnet-5/builtin/README.md",
           "muted": true
         }
       }

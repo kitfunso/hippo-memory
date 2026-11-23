@@ -7,7 +7,7 @@ import type {
   ConnectorWriteOutcome,
 } from '../../base/ports/store.js';
 import {
-  detectInstruction,
+  detectInstructionIn,
   INSTRUCTION_LIKE_TAG,
   UNTRUSTED_ORIGIN_TAG,
 } from '../instruction-detect.js';
@@ -21,7 +21,6 @@ import {
   type TraceOutcome,
   withoutCaptureTags,
 } from '../../base/memory/entry.js';
-import { shownText } from '../../base/memory/lead-in.js';
 import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { MAX_LEAD_IN_CHARS } from '../../base/util/limits.js';
 import { identityText } from '../../base/util/same-text.js';
@@ -193,9 +192,9 @@ function prepareRemember(
   const vetted = vetSecrets(opts.content);
   const lead = normalizeLeadIn(opts.leadIn);
   // Recall shows the lead-in to an agent, so the check reads it with the content.
-  const checked = shownText({ content: vetted.content, leadIn: lead.leadIn });
-  const detection = untrusted ? detectInstruction(checked) : { flagged: false, reason: null };
-  const flagged = !untrusted && memberShares(ctx, opts) && detectInstruction(checked).flagged;
+  const checked = { content: vetted.content, leadIn: lead.leadIn };
+  const detection = untrusted ? detectInstructionIn(checked) : { flagged: false, reason: null };
+  const flagged = !untrusted && memberShares(ctx, opts) && detectInstructionIn(checked).flagged;
   const tags = trustTagged(opts.tags && withoutCaptureTags(opts.tags), untrusted, flagged);
   const local = opts.local ?? {};
   const created = createMemory(

@@ -108,6 +108,7 @@ const KEPT_READS = {
     reads: 2,
     why: 'the already-superseded and the refused-promote messages name the successor id',
   },
+  'api/auth/quarantine.ts': { reads: 1, why: 'the edit refusal message names the successor id' },
   'api/recall/rows.ts': { reads: 2, why: 'the wire row copies the link: assignment target and value' },
   'base/memory/half-life-plan.ts': { reads: 1, why: 'collects successor ids so a move skips their copies' },
   'base/memory/markdown.ts': { reads: 1, why: 'frontmatter mapper from the wire field' },
@@ -121,6 +122,10 @@ const KEPT_READS = {
   'domain/graph/extract.ts': { reads: 4, why: `entity rows: ${RECORD}` },
   'domain/graph/recall.ts': { reads: 2, why: 'successor id lookups, after the isSuperseded check' },
   'domain/search/as-of.ts': { reads: 1, why: 'successor lookup, after the isSuperseded check' },
+  'store/sqlite/connectors/quarantine.ts': {
+    reads: 1,
+    why: 'the superseded refusal carries the successor id, after the isSuperseded check',
+  },
   'store/sqlite/entries/entry-row.ts': { reads: 1, why: 'the row writer passes the stored link through' },
   'store/sqlite/recall/candidates.ts': { reads: 1, why: 'search row to entry mapper' },
   'store/sqlite/records/object-rows.ts': { reads: 2, why: `object rows: ${RECORD}` },

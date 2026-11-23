@@ -63,6 +63,7 @@ export const AUDIT_OPS = [
   'quarantine', // emitted by recordQuarantine inside remember's write transaction
   'quarantine_approve', // emitted by api.quarantineApprove
   'quarantine_reject', // emitted by api.quarantineReject
+  'quarantine_edit', // emitted by api.quarantineEdit
   'agent_memory_restore', // emitted by the agent memory sync when a deleted note comes back
   'agent_memory_set_aside', // emitted by the agent memory sync when a note is deleted or refused
   'project_merge', // emitted by `hippo projects merge --apply` with every id it touched

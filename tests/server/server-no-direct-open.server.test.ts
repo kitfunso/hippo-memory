@@ -92,6 +92,10 @@ const SENDS = {
   'GET /v1/quarantine': {},
   'POST /v1/quarantine/:id/approve': { path: '/v1/quarantine/mem_000000000000/approve' },
   'POST /v1/quarantine/:id/reject': { path: '/v1/quarantine/mem_000000000000/reject' },
+  'POST /v1/quarantine/:id/edit': {
+    path: '/v1/quarantine/mem_000000000000/edit',
+    body: { content: 'deploy the eu cluster on tuesday' },
+  },
   'GET /v1/audit': {},
   'POST /v1/predictions': { body: { claim: 'the cutover takes two days', classTag: 'cutover', estimate: 2 } },
   'GET /v1/predictions': {},

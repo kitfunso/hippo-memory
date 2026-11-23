@@ -63,3 +63,8 @@ targetRules = ["generic-api-key"]
 description = "stored-source test: made-up token and password in import strings it must scrub"
 paths = ['''^tests/(?:[\w-]+/)*stored-source[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "quarantine edit test: a made-up AWS key the edit's secret scrub must remove"
+paths = ['''^tests/store/quarantine-edit[\w.-]*\.test\.ts$''']
+targetRules = ["aws-access-token"]

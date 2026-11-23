@@ -431,6 +431,7 @@ const EXEMPT_ROUTES: ReadonlyMap<string, string> = new Map([
   ['DELETE /v1/auth/keys/:keyId/grants', 'a key id, tested in auth-grant-routes.server.test.ts'],
   ['POST /v1/quarantine/:id/approve', 'admin only at the route row'],
   ['POST /v1/quarantine/:id/reject', 'admin only at the route row'],
+  ['POST /v1/quarantine/:id/edit', 'admin only at the route row'],
 ]);
 const EXEMPT_TOOLS: ReadonlyMap<string, string> = new Map();
 
