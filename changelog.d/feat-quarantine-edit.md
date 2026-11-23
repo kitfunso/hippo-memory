@@ -5,5 +5,5 @@
 ### Changed
 
 - **`hippo quarantine` shows a held item as pending review.** The stored status stays `pending`, so `GET /v1/quarantine` is unchanged.
-- **`remember` screens the lead-in joined to the content.** A connector write whose instruction splits across the two is held, and a member's shared write split the same way is framed. Spaces and invisible marks at the join are ignored.
+- **`remember` screens the lead-in joined to the content.** A connector write whose instruction splits across the two is held, and a member's shared write split the same way is framed. Any Unicode space, invisible mark (Default_Ignorable_Code_Point) or control character at the join is ignored.
 - **Store port:** `Quarantine` gains an optional `editQuarantined`; a store without it answers 501 for an edit.

@@ -106,10 +106,12 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['apos', "'"],
 ]);
 
-// Drawn with no width, so one inside a word splits it for a pattern and not for a reader: soft
-// hyphen, joiners, zero-width and bidi format characters.
-const INVISIBLE_CLASS = String.raw`\u034F\u00AD\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF`;
-const INVISIBLE_RE = new RegExp(`[${INVISIBLE_CLASS}]`, 'g');
+// Drawn with no width, so one inside a word splits it for a pattern and not for a reader. Chosen by
+// Unicode property, not a list: a list missed marks in three review rounds. White_Space is kept, so
+// a space or a line break still separates two words; so is the tag block, which the
+// unicode-tag-chars pattern flags once a character reference has decoded to one.
+const INVISIBLE_RE =
+  /(?![\p{White_Space}\u{E0000}-\u{E007F}])[\p{Default_Ignorable_Code_Point}\p{Cc}]/gu;
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or
 // Greek prose folds into no phrase a pattern names.
@@ -154,8 +156,8 @@ const LOOKALIKES: ReadonlyMap<string, string> = new Map([
 const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 
 // A line break stays: it is the sentence bound the patterns rely on where a list or a chat message
-// ends a line with no full stop.
-const SPACE_RUN_RE = /[^\S\n]+/g;
+// ends a line with no full stop. By property, so U+0085 (NEL), which `\s` lacks, folds too.
+const SPACE_RUN_RE = /(?:(?!\n)\p{White_Space})+/gu;
 
 function referencedCharacter(
   reference: string,
@@ -208,20 +210,40 @@ export function detectInstruction(content: string): InstructionDetection {
   return { flagged: false, reason: null };
 }
 
-// One class, tested a character at a time: a `+` run over `\s` and the marks overlaps on U+FEFF
-// and backtracks without bound.
-const BLANK_CHAR_RE = new RegExp(`[\\s${INVISIBLE_CLASS}]`);
+// One class, tested a code point at a time: a `+` run over overlapping classes backtracks without
+// bound, and a UTF-16 unit would miss an astral mark such as U+E0100.
+const BLANK_CHAR_RE = /[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cc}]/u;
 
 function withoutBlankEnd(text: string): string {
   let end = text.length;
-  while (end > 0 && BLANK_CHAR_RE.test(text.charAt(end - 1))) end -= 1;
+  while (end > 0) {
+    const pair =
+      end >= 2 &&
+      isLowSurrogate(text.charCodeAt(end - 1)) &&
+      isHighSurrogate(text.charCodeAt(end - 2));
+    const from = pair ? end - 2 : end - 1;
+    if (!BLANK_CHAR_RE.test(text.slice(from, end))) break;
+    end = from;
+  }
   return text.slice(0, end);
 }
 
 function withoutBlankStart(text: string): string {
   let start = 0;
-  while (start < text.length && BLANK_CHAR_RE.test(text.charAt(start))) start += 1;
+  while (start < text.length) {
+    const to = start + ((text.codePointAt(start) ?? 0) > 0xffff ? 2 : 1);
+    if (!BLANK_CHAR_RE.test(text.slice(start, to))) break;
+    start = to;
+  }
   return text.slice(start);
+}
+
+function isHighSurrogate(unit: number): boolean {
+  return unit >= 0xd800 && unit <= 0xdbff;
+}
+
+function isLowSurrogate(unit: number): boolean {
+  return unit >= 0xdc00 && unit <= 0xdfff;
 }
 
 /** The lead-in joined to the content by a space and by nothing, blanks cut at the join. */

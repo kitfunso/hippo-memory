@@ -37,6 +37,9 @@ const INVISIBLE_MARKS: ReadonlyArray<[string, string]> = [
   ['U+200B', '\u200B'],
   ['U+00AD', '\u00AD'],
   ['U+2060', '\u2060'],
+  ['U+FE0F', '\uFE0F'],
+  ['U+E0100', '\u{E0100}'],
+  ['U+0085', '\u0085'],
 ];
 const KEPT_LEAD_IN_REFUSAL = (id: string): string =>
   `the kept lead-in of memory ${id} reads as an instruction (pattern:standing-order); ` +
@@ -488,18 +491,19 @@ describe('edit over HTTP', () => {
     expect(quarantineRow(home, split)?.status).toBe('pending');
   });
 
-  it('an invisible mark after a line break at the end of the kept lead-in is a 400 and the item stays pending', async () => {
-    const admin = mintKey('admin');
-    const split = await holdOne(
-      home,
-      `${SPLIT_LEAD}
-\u200B`,
-    );
-    const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content: SPLIT_TAIL });
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain('reads as an instruction when joined to its kept lead-in');
-    expect(quarantineRow(home, split)?.status).toBe('pending');
-  });
+  it.each(INVISIBLE_MARKS)(
+    'an invisible %s after a line break at the end of the kept lead-in is a 400 and the item stays pending',
+    async (_name, mark) => {
+      const admin = mintKey('admin');
+      const split = await holdOne(home, `${SPLIT_LEAD}\n${mark}`);
+      const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content: SPLIT_TAIL });
+      expect(res.status).toBe(400);
+      const text = await res.text();
+      expect(text).toContain('reads as an instruction when joined to its kept lead-in');
+      expect(text).toContain('pattern:override-instructions');
+      expect(quarantineRow(home, split)?.status).toBe('pending');
+    },
+  );
 
   it.each(INVISIBLE_MARKS)(
     'an invisible %s before a line break at the join is a 400 and the item stays pending',
@@ -509,7 +513,9 @@ describe('edit over HTTP', () => {
       const content = `${mark}\n${SPLIT_TAIL}`;
       const res = await post(`/v1/quarantine/${split}/edit`, admin.plaintext, { content });
       expect(res.status).toBe(400);
-      expect(await res.text()).toContain('reads as an instruction when joined to its kept lead-in');
+      const text = await res.text();
+      expect(text).toContain('reads as an instruction when joined to its kept lead-in');
+      expect(text).toContain('pattern:override-instructions');
       expect(quarantineRow(home, split)?.status).toBe('pending');
     },
   );

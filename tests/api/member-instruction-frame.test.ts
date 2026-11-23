@@ -121,10 +121,16 @@ describe('an untrusted write, as a connector makes', () => {
     expect(result.quarantined).toEqual({ reason: 'pattern:override-instructions' });
   });
 
-  it('holds the same split when an invisible mark and a line break open the content', async () => {
+  const INVISIBLE_MARKS: ReadonlyArray<[string, string]> = [
+    ['U+200B', '\u200B'],
+    ['U+FE0F', '\uFE0F'],
+    ['U+E0100', '\u{E0100}'],
+  ];
+
+  it.each(INVISIBLE_MARKS)('holds the same split when %s and a line break open the content', async (_name, mark) => {
     const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
     const result = await rememberUntrusted(ctx, {
-      content: `\u200B\n${SPLIT_TAIL}`,
+      content: `${mark}\n${SPLIT_TAIL}`,
       leadIn: SPLIT_LEAD,
       project: PROJECT,
     });
@@ -132,12 +138,11 @@ describe('an untrusted write, as a connector makes', () => {
     expect(result.quarantined).toEqual({ reason: 'pattern:override-instructions' });
   });
 
-  it('holds the same split when a line break and an invisible mark end the lead-in', async () => {
+  it.each(INVISIBLE_MARKS)('holds the same split when a line break and %s end the lead-in', async (_name, mark) => {
     const ctx = apiCtx(store, 'default', adminActor('connector:slack'));
     const result = await rememberUntrusted(ctx, {
       content: SPLIT_TAIL,
-      leadIn: `${SPLIT_LEAD}
-\u200B`,
+      leadIn: `${SPLIT_LEAD}\n${mark}`,
       project: PROJECT,
     });
 
