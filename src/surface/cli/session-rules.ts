@@ -36,7 +36,7 @@ async function printSessionRules(
   const left = rules.length - kept.length;
   const lines = [
     ...userRuleLines(kept),
-    ...(left > 0 ? [`(${left} more rules are not shown. hippo recall finds them.)`] : []),
+    ...(left > 0 ? [`(${left} more ${left === 1 ? 'rule is' : 'rules are'} not shown. hippo recall finds them.)`] : []),
   ];
   const text = lines.join('\n').trim();
   if (text === '') return;
