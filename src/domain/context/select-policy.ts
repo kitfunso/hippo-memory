@@ -3,9 +3,13 @@
 
 import { isRecallOnly, type MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
-import { compareScoredResults } from '../../base/rank/compare.js';
+import { compareScoredResults, compareScoresDesc } from '../../base/rank/compare.js';
 import type { PromptRecallGate, PromptRecallMetric } from '../../base/rank/prompt-recall.js';
-import type { HippoConfig } from '../../base/config/config.js';
+import {
+  DEFAULT_PROMPT_RECALL_SHARE,
+  DEFAULT_SESSION_RULES_BUDGET,
+  type HippoConfig,
+} from '../../base/config/config.js';
 
 /** A row with its score and what it costs the budget. */
 export interface PricedRow {
@@ -33,20 +37,58 @@ export const finiteOr = (
   { fallback, min }: { readonly fallback: number; readonly min: number },
 ): number => (Number.isFinite(v) && v >= min ? v : fallback);
 
-// Mirrors the pin loop's continue-not-break so a big pin cannot block smaller ones from reserving,
-// and dedupes by id because a synced pin sits in both stores. A pin also in the recent slice is
-// counted twice: recents under-fill, safely.
-export function reservePinned(rankedPinned: readonly PricedRow[], budget: number): number {
-  let reserve = 0;
-  const reservedIds = new Set<string>();
-  for (const r of rankedPinned) {
-    if (reservedIds.has(r.entry.id)) continue;
-    if (reserve + r.tokens <= budget) {
-      reserve += r.tokens;
-      reservedIds.add(r.entry.id);
+/** The pins that fit `cap`: strongest first, then newest, each id once. A pin that does not fit is
+ * skipped, not a stop, so a large pin never blocks smaller ones. Returned in `ranked` order, so the
+ * block's display order does not change. */
+export function pinsWithinCap<T extends PricedRow>(
+  ranked: readonly T[],
+  cap: number,
+  onOverCap?: (row: T) => void,
+): T[] {
+  const walk = ranked
+    .map((row, index) => ({ row, index }))
+    .sort(
+      (a, b) =>
+        compareScoresDesc(a.row.score, b.row.score) ||
+        Date.parse(b.row.entry.created) - Date.parse(a.row.entry.created) ||
+        a.index - b.index,
+    );
+  const kept = new Set<T>();
+  const keptIds = new Set<string>();
+  let used = 0;
+  for (const { row } of walk) {
+    // A synced pin sits in both stores.
+    if (keptIds.has(row.entry.id)) continue;
+    if (used + row.tokens > cap) {
+      onOverCap?.(row);
+      continue;
     }
+    kept.add(row);
+    keptIds.add(row.entry.id);
+    used += row.tokens;
   }
-  return reserve;
+  return ranked.filter((row) => kept.has(row));
+}
+
+/** The newest rows that fit `budget`, in `rows` order; of equal age the later row is newer. A row
+ * that does not fit is skipped, not a stop, so a long rule never hides the shorter ones before it. */
+export function newestWithin<T extends { created: string }>(
+  rows: readonly T[],
+  budget: number,
+  price: (row: T) => number,
+): T[] {
+  const walk = rows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => Date.parse(b.row.created) - Date.parse(a.row.created) || b.index - a.index);
+  const kept = new Set<T>();
+  let used = 0;
+  for (const { row } of walk) {
+    const tokens = price(row);
+    if (used + tokens > budget) continue;
+    kept.add(row);
+    used += tokens;
+  }
+  return rows.filter((row) => kept.has(row));
 }
 
 /** Skips ids already picked and rows past the budget, so a large row never blocks smaller ones
@@ -87,6 +129,27 @@ export function promptRecallGateOf(inject: HippoConfig['pinnedInject']): PromptR
       min: 1,
     }),
   };
+}
+
+/** The share of the block budget that prompt recall keeps before pins spend it; a config built in
+ * code with no key reads the default. */
+export function promptRecallShareOf(inject: HippoConfig['pinnedInject']): number {
+  return Math.min(
+    1,
+    finiteOr(inject.promptRecallShare ?? Number.NaN, {
+      fallback: DEFAULT_PROMPT_RECALL_SHARE,
+      min: 0,
+    }),
+  );
+}
+
+/** The most tokens `hippo session-rules` prints; a config built in code with no key reads the
+ * default. */
+export function sessionRulesBudgetOf(inject: HippoConfig['pinnedInject']): number {
+  return finiteOr(inject.sessionRulesBudget ?? Number.NaN, {
+    fallback: DEFAULT_SESSION_RULES_BUDGET,
+    min: 1,
+  });
 }
 
 /** The newest `limit` rows worth surfacing; a pin always is, a recall-only row never is. */

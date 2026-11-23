@@ -17,7 +17,13 @@ import {
   type FieldReader,
   type Reader,
 } from './config-rules.js';
-import { DEFAULT_CONFIG, type ConfigFile, type HippoConfig } from './config.js';
+import {
+  DEFAULT_CONFIG,
+  DEFAULT_PROMPT_RECALL_SHARE,
+  DEFAULT_SESSION_RULES_BUDGET,
+  type ConfigFile,
+  type HippoConfig,
+} from './config.js';
 
 type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
 
@@ -82,6 +88,8 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     promptRecallMaxItems: read('promptRecallMaxItems', count(P.promptRecallMaxItems)),
     promptRecallCandidates: read('promptRecallCandidates', count(P.promptRecallCandidates)),
     excludeTags: read('excludeTags', textList([])),
+    promptRecallShare: read('promptRecallShare', fraction(DEFAULT_PROMPT_RECALL_SHARE)),
+    sessionRulesBudget: read('sessionRulesBudget', count(DEFAULT_SESSION_RULES_BUDGET)),
   };
 }
 

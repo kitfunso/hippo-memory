@@ -14,8 +14,9 @@ import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
   admitWithinBudget,
   newestWorthSurfacing,
+  pinsWithinCap,
   promptRecallGateOf,
-  reservePinned,
+  promptRecallShareOf,
   strongestWithin,
   type Picked,
 } from '../../domain/context/select-policy.js';
@@ -88,13 +89,16 @@ export function selectPinned({
   const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE
-  // budget and the recent loop runs first, so pins are ranked here and reserve their share before
-  // it can spend.
+  // Pins and the backfill share ONE budget and the backfill runs first, so pins are capped here and
+  // the rest is the backfill's. The cap reads the budget and the share only, never what recall used,
+  // so the pinned block stays byte-stable from prompt to prompt (skipUnchanged).
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
-  const recentBudget = Math.max(0, effBudget - reservePinned(rankedPinned, effBudget));
+  const share = plan.promptRecallPending ? promptRecallShareOf(pinnedCfg.pinnedInject) : 0;
+  const cap = effBudget - Math.floor(effBudget * share);
+  const pins = pinsWithinCap(rankedPinned, cap, rejectOverBudget(obs));
+  const recentBudget = Math.max(0, effBudget - pins.reduce((sum, r) => sum + r.tokens, 0));
 
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
@@ -105,7 +109,7 @@ export function selectPinned({
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
   }
 
-  admitWithinBudget(rankedPinned, picked, effBudget, rejectOverBudget(obs));
+  admitWithinBudget(pins, picked, effBudget, rejectOverBudget(obs));
   return picked.items;
 }
 

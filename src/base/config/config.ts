@@ -13,6 +13,10 @@ import type { JsonValue } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
+// The two pinnedInject keys that are optional in the type, so a config built in code can omit them.
+export const DEFAULT_PROMPT_RECALL_SHARE = 0.25;
+export const DEFAULT_SESSION_RULES_BUDGET = 2000;
+
 export interface HippoConfig {
   defaultHalfLifeDays: number;
   defaultBudget: number;
@@ -90,6 +94,10 @@ export interface HippoConfig {
     promptRecallCandidates: number;
     /** Tags the hook block leaves out: a row carrying any is no pin, recent or recall candidate. Default []. */
     excludeTags?: string[];
+    /** Share of the block budget prompt recall keeps before pins spend it, 0 to 1. Default 0.25. */
+    promptRecallShare?: number;
+    /** Most tokens `hippo session-rules` prints at session start. Default 2000. */
+    sessionRulesBudget?: number;
   };
   /** Memory scope isolation (default true): ambient context (`hippo context`, the hook,
    * /v1/context, MCP hippo_context) excludes OTHER projects' memories; explicit recall is
@@ -278,6 +286,8 @@ export const DEFAULT_CONFIG: HippoConfig = {
     promptRecallMaxItems: 5,
     promptRecallCandidates: 100,
     excludeTags: [],
+    promptRecallShare: DEFAULT_PROMPT_RECALL_SHARE,
+    sessionRulesBudget: DEFAULT_SESSION_RULES_BUDGET,
   },
   contextProjectIsolation: true,
   extraction: {

@@ -9,9 +9,12 @@ import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { type HippoConfig } from '../../src/base/config/config.js';
 import { loadConfig } from '../../src/host/config-file.js';
-import { contextGet } from '../../src/api/index.js';
+import { contextGet, type ContextOptions } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
+import { createDeliveryRecorder } from '../../src/api/delivery/delivery-recorder.js';
+import { shownText } from '../../src/base/memory/lead-in.js';
+import { evalNow } from '../../src/infra/eval-switches.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { initTestStore } from '../_helpers/store-template.js';
@@ -20,7 +23,7 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-const { writeEntry, apiCtx } = sessionPerTest();
+const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
 
 const PROJECT = 'proj-a';
 
@@ -421,6 +424,114 @@ describe('contextGet prompt recall (api-level)', () => {
     const recallIds = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
     expect(recallIds).not.toContain(big.id);
     expect(recallIds).toContain(small.id);
+  });
+});
+
+describe('pins and prompt recall share one budget (api-level)', () => {
+  const PROMPT_A = 'how should the postgres migration rollback plan work';
+  const PROMPT_B = 'kubernetes ingress certificate renewal canary rollout';
+  const ROW_A = 'the postgres migration script needs a rollback plan before deploy';
+  const ROW_B = 'kubernetes ingress certificate renewal needs a canary rollout before friday';
+
+  /** `n` pins of 10 tokens each; a higher index is newer, and sorts later by content. */
+  function seedPins(n: number): MemoryEntry[] {
+    return Array.from({ length: n }, (_, i) =>
+      seed(local, `pinned rule ${String(i).padStart(2, '0')}`.padEnd(40, '-'), {
+        pinned: true,
+        created: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+      }),
+    );
+  }
+
+  const pinnedIds = (r: Awaited<ReturnType<typeof contextGet>>) =>
+    r.entries.filter((e) => !e.promptRecall).map((e) => e.entry.id);
+  const matchedIds = (r: Awaited<ReturnType<typeof contextGet>>) =>
+    r.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
+  const staticText = (r: Awaited<ReturnType<typeof contextGet>>) =>
+    r.entries
+      .filter((e) => !e.promptRecall)
+      .map((e) => shownText(e.entry))
+      .join('\n');
+
+  const hook = (budget: number, prompt: string, extra: Partial<ContextOptions> = {}) =>
+    contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, budget, prompt, ...extra });
+
+  it('keeps the same pins and the same matched rows at share 0 and share 0.25 when the pins fit the cap', async () => {
+    const pins = seedPins(5);
+    const rowA = seed(local, ROW_A);
+    const rowB = seed(local, 'a migration rollback plan should name the owner and the restore point');
+
+    enablePromptRecall(local, { promptRecallShare: 0 });
+    const before = await hook(200, PROMPT_A);
+    enablePromptRecall(local, { promptRecallShare: 0.25 });
+    const after = await hook(200, PROMPT_A);
+
+    expect(pinnedIds(after).sort()).toEqual(pins.map((p) => p.id).sort());
+    expect(pinnedIds(after)).toEqual(pinnedIds(before));
+    expect(matchedIds(after)).toEqual(matchedIds(before));
+    expect(matchedIds(after).sort()).toEqual([rowA.id, rowB.id].sort());
+  });
+
+  it('with pins between the cap and the budget, the newest tied pins stay and each dropped pin gets a budget rejection', async () => {
+    enablePromptRecall(local, { promptRecallShare: 0.25 });
+    const pins = seedPins(9);
+    seed(local, ROW_A);
+    seed(local, ROW_B);
+    // Budget 100, share 0.25: the cap is 75 tokens, so seven of the nine 10-token pins stay.
+    const oldest = pins.slice(0, 2).map((p) => p.id);
+    const newest = pins.slice(2).map((p) => p.id);
+
+    const runs: Array<Awaited<ReturnType<typeof contextGet>>> = [];
+    for (const prompt of [PROMPT_A, PROMPT_B]) {
+      const rec = createDeliveryRecorder({
+        now: evalNow(),
+        ledger: sqliteStore(local).ledger,
+        storeHash: 'aaaaaaaaaaaaaaaa',
+        writeStore: 'local',
+        tenantId: 'default',
+        stdinText: JSON.stringify({ session_id: 's1', prompt, hook_event_name: 'UserPromptSubmit' }),
+      });
+      runs.push(await hook(100, prompt, { deliveryObserver: rec }));
+      const event = rec.takeEvent();
+      const dropped = (event?.candidates ?? [])
+        .filter((c) => c.outcome === 'rejected' && c.pool === 'pin')
+        .map((c) => [c.memoryId, c.stage, c.reason]);
+      expect(dropped.sort()).toEqual(oldest.map((id) => [id, 'budget', 'budget']).sort());
+    }
+
+    expect(runs.map(pinnedIds)).toEqual([newest, newest]);
+    expect(matchedIds(runs[0]!)).not.toEqual(matchedIds(runs[1]!));
+    expect(staticText(runs[0]!)).toBe(staticText(runs[1]!));
+  });
+
+  it('keeps the newest tied pins when prompt recall is off and the pins pass the budget', async () => {
+    enablePromptRecall(local, { promptRecall: false });
+    const pins = seedPins(8);
+
+    const result = await hook(50, PROMPT_A);
+
+    expect(pinnedIds(result).sort()).toEqual(pins.slice(3).map((p) => p.id).sort());
+  });
+
+  it('leaves room for the Prompt-Relevant Memory rows when many pins fill the block', async () => {
+    seedPins(40);
+    const row = seed(local, ROW_A);
+
+    enablePromptRecall(local, { promptRecallShare: 0 });
+    expect(matchedIds(await hook(100, PROMPT_A))).toEqual([]);
+
+    enablePromptRecall(local);
+    expect(matchedIds(await hook(100, PROMPT_A))).toEqual([row.id]);
+  });
+
+  it('reads a config built in code with no promptRecallShare key as 0.25', async () => {
+    seedPins(40);
+    const row = seed(local, ROW_A);
+    enablePromptRecall(local);
+    const { promptRecallShare: _share, ...withoutShare } = ctx.config.pinnedInject;
+    ctx = { ...ctx, config: { ...ctx.config, pinnedInject: withoutShare } };
+
+    expect(matchedIds(await hook(100, PROMPT_A))).toEqual([row.id]);
   });
 });
 
