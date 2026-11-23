@@ -352,6 +352,24 @@ session's task snapshot or session handoff. It names the command that prints the
 session's own snapshot and handoff print whole, as do JSON, MCP and shared stores.
 _Avoid_: stub, teaser, short handoff
 
+**User rule**:
+A pinned memory that capture saved from a rule the person stated, carrying the `user-rule` tag. It
+prints under `## Rules from the user` as the person's own words, with no strength or date, and
+`hippo session-rules` sends the newest of them that fit `pinnedInject.sessionRulesBudget`.
+_Avoid_: instruction, pinned rule (any pin is one; only a captured, stated rule is a user rule)
+
+**Prompt recall**:
+The per-prompt hook's search for memories that share words with the prompt. The overlap gate admits
+a candidate, `rankBm25` orders the rows that clear it as `hippo recall` does, and
+`pinnedInject.promptRecallMaxItems` cuts the list. The rows print under `## Prompt-Relevant Memory`.
+_Avoid_: prompt search, smart recall, backfill (the recent-N list is the other backfill)
+
+**Prompt-recall share**:
+The part of the hook's token budget that pins cannot spend, `pinnedInject.promptRecallShare`
+(default 0.25). Only prompt recall spends it, so a store with many pins still shows its matched
+memories. It reads 0 when prompt recall is off.
+_Avoid_: reserve, recall quota
+
 ### Record status
 
 **Status transition**:
