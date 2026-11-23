@@ -106,12 +106,15 @@ const NAMED_REFERENCES: ReadonlyMap<string, string> = new Map([
   ['apos', "'"],
 ]);
 
-// Drawn with no width, so one inside a word splits it for a pattern and not for a reader. Chosen by
-// Unicode property, not a list: a list missed marks in three review rounds. White_Space is kept, so
-// a space or a line break still separates two words; so is the tag block, which the
-// unicode-tag-chars pattern flags once a character reference has decoded to one.
-const INVISIBLE_RE =
-  /(?![\p{White_Space}\u{E0000}-\u{E007F}])[\p{Default_Ignorable_Code_Point}\p{Cc}]/gu;
+// Tag block stays for unicode-tag-chars; U+2800 draws blank with no property; White_Space stays a separator.
+const JOINER_RE =
+  /(?![\p{White_Space}\u{E0000}-\u{E007F}])[\p{Default_Ignorable_Code_Point}\p{Cf}\u2800]/gu;
+
+// Controls draw nothing either, so each is read both ways like a joiner; White_Space stays a separator.
+const CONTROL_RE = /(?!\p{White_Space})\p{Cc}/gu;
+
+// One reading cannot serve a mark inside a word and a mark between words, so each class is read both ways.
+const MARK_READINGS: readonly string[] = ['', ' '];
 
 // Cyrillic, then Greek, letters drawn like a c e i j o p s x y; closed at those, so Russian or
 // Greek prose folds into no phrase a pattern names.
@@ -155,8 +158,7 @@ const LOOKALIKES: ReadonlyMap<string, string> = new Map([
 ]);
 const GREEK_OR_CYRILLIC_RE = /[\u0370-\u03FF\u0400-\u04FF]/g;
 
-// A line break stays: it is the sentence bound the patterns rely on where a list or a chat message
-// ends a line with no full stop. By property, so U+0085 (NEL), which `\s` lacks, folds too.
+// A line break stays as the sentence bound the patterns need; by property, so U+0085 folds too.
 const SPACE_RUN_RE = /(?:(?!\n)\p{White_Space})+/gu;
 
 function referencedCharacter(
@@ -174,18 +176,33 @@ function referencedCharacter(
   return drawn ? String.fromCodePoint(code) : reference;
 }
 
-/** `content` as a reader or a model takes it in. For matching only: what is stored is never
- * this. */
-function screeningForm(content: string): string {
-  return (
-    content
-      .replace(CHARACTER_REFERENCE_RE, referencedCharacter)
-      // Full-width, mathematical and enclosed letters become the plain ones, and every space character a U+0020.
-      .normalize('NFKC')
-      .replace(INVISIBLE_RE, '')
-      .replace(GREEK_OR_CYRILLIC_RE, (letter) => LOOKALIKES.get(letter) ?? letter)
-      .replace(SPACE_RUN_RE, ' ')
-  );
+type Reading = readonly [joiner: string, control: string];
+
+// Decode references once and fold full-width, mathematical and enclosed letters to plain ones.
+function decodedText(text: string): string {
+  return text.replace(CHARACTER_REFERENCE_RE, referencedCharacter).normalize('NFKC');
+}
+
+/** The readings of every mark class that some text holds; a text with no mark has one. */
+function readingsOf(...texts: string[]): Reading[] {
+  const joiners = texts.some((t) => t.search(JOINER_RE) >= 0) ? MARK_READINGS : [''];
+  const controls = texts.some((t) => t.search(CONTROL_RE) >= 0) ? MARK_READINGS : [''];
+  return joiners.flatMap((joiner) => controls.map((control): Reading => [joiner, control]));
+}
+
+function readMarks(decoded: string, [joiner, control]: Reading): string {
+  return decoded
+    .replace(JOINER_RE, joiner)
+    .replace(CONTROL_RE, control)
+    .replace(GREEK_OR_CYRILLIC_RE, (letter) => LOOKALIKES.get(letter) ?? letter)
+    .replace(SPACE_RUN_RE, ' ');
+}
+
+/** `content` as a reader or a model takes it in, once for each reading of its hidden marks. For
+ * matching only: what is stored is never this. */
+function screeningForms(content: string): string[] {
+  const decoded = decodedText(content);
+  return [...new Set(readingsOf(decoded).map((reading) => readMarks(decoded, reading)))];
 }
 
 function matchedPattern(text: string): string | null {
@@ -197,22 +214,22 @@ function matchedPattern(text: string): string | null {
 
 export function detectInstruction(content: string): InstructionDetection {
   // The text as written goes first: a phrase in plain sight is named before any smuggling rule, and
-  // the screening form only adds flags.
+  // the screened forms only add flags.
   const plain = matchedPattern(content);
   if (plain !== null) return { flagged: true, reason: plain };
   if (ZERO_WIDTH_RUN_RE.test(content)) {
     return { flagged: true, reason: 'pattern:zero-width-smuggling' };
   }
-  const screened = screeningForm(content);
-  const disguised = screened === content ? null : matchedPattern(screened);
-  if (disguised !== null) return { flagged: true, reason: disguised };
+  for (const screened of screeningForms(content)) {
+    const disguised = screened === content ? null : matchedPattern(screened);
+    if (disguised !== null) return { flagged: true, reason: disguised };
+  }
   if (BIDI_CONTROL_RE.test(content)) return { flagged: true, reason: 'pattern:bidi-control' };
   return { flagged: false, reason: null };
 }
 
-// One class, tested a code point at a time: a `+` run over overlapping classes backtracks without
-// bound, and a UTF-16 unit would miss an astral mark such as U+E0100.
-const BLANK_CHAR_RE = /[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cc}]/u;
+// One class, tested a code point at a time: a `+` run backtracks and a UTF-16 unit misses an astral mark.
+const BLANK_CHAR_RE = /[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cf}\p{Cc}\u2800]/u;
 
 function withoutBlankEnd(text: string): string {
   let end = text.length;
@@ -253,8 +270,22 @@ function joinedForms(leadIn: string, content: string): string[] {
   return [`${lead} ${body}`, `${lead}${body}`];
 }
 
-/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing.
- * First flag wins; a heading-style lead-in can flag plain content into a hold, never a lost write. */
+/** Matches the screened lead-in and content across the join under one reading, with no second decode. */
+function screenedJoinPattern(leadIn: string, content: string): string | null {
+  const lead = decodedText(leadIn);
+  const body = decodedText(content);
+  for (const reading of readingsOf(lead, body)) {
+    const head = withoutBlankEnd(readMarks(lead, reading));
+    const tail = withoutBlankStart(readMarks(body, reading));
+    const found = matchedPattern(`${head} ${tail}`) ?? matchedPattern(`${head}${tail}`);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
+/** Screens the text as shown, then the lead-in joined to the content by a space and by nothing,
+ * as written and then screened part by part. First flag wins; a heading-style lead-in can flag plain
+ * content into a hold, never a lost write. */
 export function detectInstructionIn(text: LeadInText): InstructionDetection {
   const shown = detectInstruction(shownText(text));
   if (shown.flagged || !text.leadIn) return shown;
@@ -262,5 +293,6 @@ export function detectInstructionIn(text: LeadInText): InstructionDetection {
     const found = detectInstruction(joined);
     if (found.flagged) return found;
   }
-  return shown;
+  const reason = screenedJoinPattern(text.leadIn, text.content);
+  return reason === null ? shown : { flagged: true, reason };
 }

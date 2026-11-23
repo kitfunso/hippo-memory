@@ -21,7 +21,7 @@ export class StoreNotPortedError extends StoreBlockedError {
   ) {
     super(
       storeKind,
-      `the '${storeKind}' store has no '${group}'; this code path is not ported to the store yet`,
+      `the '${storeKind}' store has no port for '${group}'; this code path is not ported to the store yet`,
     );
     this.name = 'StoreNotPortedError';
   }
