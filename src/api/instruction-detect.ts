@@ -419,7 +419,9 @@ function detectWithForm(content: string, formOf: () => string): InstructionDetec
     return { flagged: true, reason: 'pattern:zero-width-smuggling' };
   }
   const screened = formOf();
-  const disguised = screened === content ? null : matchedPattern(screened, true);
+  // A raw MARK is a mark in any form, so only a form with no MARK that equals the text skips the tolerant set.
+  const unchanged = screened === content && !screened.includes(MARK);
+  const disguised = unchanged ? null : matchedPattern(screened, true);
   if (disguised !== null) return { flagged: true, reason: disguised };
   if (BIDI_CONTROL_RE.test(content)) return { flagged: true, reason: 'pattern:bidi-control' };
   return { flagged: false, reason: null };
