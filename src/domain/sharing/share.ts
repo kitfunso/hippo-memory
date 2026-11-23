@@ -25,7 +25,6 @@ import {
   type ScopeActor,
 } from '../../base/scope/recall-scope.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
-import { INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../../base/trust/instruction-detect.js';
 import {
   embedMemoryDetached,
   embedAll,
@@ -98,13 +97,6 @@ export const NEVER_AUTO_SHARE_TAGS: ReadonlySet<string> = new Set([
 
 export function neverAutoShareTags(sources: readonly MemoryEntry[]): string[] {
   return [...NEVER_AUTO_SHARE_TAGS].filter((tag) => sources.some((s) => s.tags.includes(tag)));
-}
-
-/** The frame marks a row derived from these sources keeps, so text built from a framed row prints framed too. */
-export function frameTags(sources: readonly MemoryEntry[]): string[] {
-  return [INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG].filter((tag) =>
-    sources.some((s) => s.tags.includes(tag)),
-  );
 }
 
 /** Tags whose rows sleep keeps as written: never merged, never sent to LLM extraction. Conflict

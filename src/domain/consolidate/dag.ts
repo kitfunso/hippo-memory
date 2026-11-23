@@ -10,7 +10,7 @@ import { generateDagSummary, type DagSummaryOptions } from './dag-summary.js';
 import { rebuildRetryAfter } from './retry-holds.js';
 import { overlapPartners } from './overlap-index.js';
 import { derivationScope, derivationPartitionKey } from '../../base/scope/recall-scope.js';
-import { frameTags, neverAutoShareTags } from '../sharing/share.js';
+import { neverAutoShareTags } from '../sharing/share.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import type { LlmFailure } from '../../base/ports/llm.js';
@@ -123,12 +123,7 @@ function createClusterSummaryEntry(
     summary,
     {
       layer: Layer.Semantic,
-      tags: [
-        ...cluster.entityTags,
-        ...neverAutoShareTags(cluster.members),
-        ...frameTags(cluster.members),
-        'dag-summary',
-      ],
+      tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-summary'],
       confidence: 'inferred',
       dagLevel: DAG_LEVEL.topic,
       tenantId: home.tenantId,
@@ -468,12 +463,7 @@ function createProfileEntry(
     summary,
     {
       layer: Layer.Semantic,
-      tags: [
-        ...cluster.entityTags,
-        ...neverAutoShareTags(cluster.members),
-        ...frameTags(cluster.members),
-        'dag-entity-profile',
-      ],
+      tags: [...cluster.entityTags, ...neverAutoShareTags(cluster.members), 'dag-entity-profile'],
       confidence: 'inferred',
       dagLevel: DAG_LEVEL.entity,
       tenantId: home.tenantId,
