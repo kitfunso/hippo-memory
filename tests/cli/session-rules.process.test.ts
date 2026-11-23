@@ -64,6 +64,10 @@ function setRate(rateBp: number): void {
   fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: rateBp } }));
 }
 
+function setBudget(tokens: number): void {
+  fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pinnedInject: { sessionRulesBudget: tokens } }));
+}
+
 beforeEach(() => {
   dir = makeRoot('session-rules', { init: false });
   cwd = path.join(dir, 'work');
@@ -100,6 +104,35 @@ describe('hippo session-rules in a project with its own store', () => {
         ].join('\n'),
       ),
     );
+  });
+
+  it('keeps the newest rules that fit the budget, prints them oldest first, and counts the rest', async () => {
+    // Each line prints as `- Rule n: always run the linter first.`, 10 tokens, so a budget of 20 holds two.
+    const rule = (n: number) => `Rule ${n}: always run the linter first.`;
+    for (const n of [2, 0, 4, 1, 3]) writeEntry(local, ruleRow(rule(n), n));
+    setBudget(20);
+
+    const { status, stdout } = await sessionRules('s-cut');
+
+    expect(status).toBe(0);
+    expect(stdout).toBe(
+      reply(
+        [
+          HEADING,
+          `- ${rule(3)}`,
+          `- ${rule(4)}`,
+          '',
+          '(3 more rules are not shown. hippo recall finds them.)',
+        ].join('\n'),
+      ),
+    );
+    const db = openHippoDb(local);
+    try {
+      const row = db.prepare(`SELECT items FROM token_ledger WHERE session_id = ? AND surface = 'session_start'`).get('s-cut');
+      expect(row).toEqual({ items: 2 });
+    } finally {
+      closeHippoDb(db);
+    }
   });
 
   it('books the block under the session_start surface', async () => {
