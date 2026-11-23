@@ -95,6 +95,7 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['GET', '/v1/quarantine', [401, 'invalid api key'], [200]],
   ['POST', '/v1/quarantine/:m/approve', [401, 'invalid api key'], [404, 'not quarantined: mem_parity_missing']],
   ['POST', '/v1/quarantine/:m/reject', [401, 'invalid api key'], [404, 'not quarantined: mem_parity_missing']],
+  ['POST', '/v1/quarantine/:m/edit', [401, 'invalid api key'], [400, 'content is required']],
   ['GET', '/v1/audit', [401, 'invalid api key'], [200]],
   ['POST', '/v1/predictions', [401, 'invalid api key'], [400, 'claim is required (non-empty string)']],
   ['GET', '/v1/predictions', [401, 'invalid api key'], [200]],

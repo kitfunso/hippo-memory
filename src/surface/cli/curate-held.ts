@@ -115,7 +115,7 @@ function printDormantRows(
 }
 
 /** `hippo quarantine [list] [--all] [--json] [--global]`, `quarantine approve <id>`, `quarantine
- * reject <id>` (poisoning defence). */
+ * edit <id> "<text>"`, `quarantine reject <id>` (poisoning defence). */
 export async function handleQuarantine({
   hippoRoot,
   tenantId,
@@ -130,6 +130,10 @@ export async function handleQuarantine({
     await decideQuarantined(ctx, sub, (args[1] ?? '').trim());
     return;
   }
+  if (sub === 'edit') {
+    await editHeld(ctx, (args[1] ?? '').trim(), args.slice(2).join(' ').trim());
+    return;
+  }
 
   const status = boolFlag(flags, 'all') ? 'all' : 'pending';
   const rows = await api.quarantineList(ctx, { status });
@@ -139,7 +143,7 @@ export async function handleQuarantine({
     return;
   }
   if (rows.length === 0) {
-    console.log(status === 'all' ? 'No quarantined memories.' : 'No pending quarantined memories.');
+    console.log(status === 'all' ? 'No quarantined memories.' : 'No memories pending review.');
     return;
   }
   printQuarantineRows(rows);
@@ -166,12 +170,26 @@ async function decideQuarantined(
   }
 }
 
+async function editHeld(ctx: ContextWith<'quarantine'>, id: string, text: string): Promise<void> {
+  if (!id || !text) {
+    fail('Usage: hippo quarantine edit <id> "<text>"');
+  }
+  try {
+    const done = await api.quarantineEdit(ctx, id, text);
+    console.log(`Edited ${id}: approved as ${done.newId} under its original scope.`);
+    if (done.keptLeadIn) console.log(`Kept lead-in: ${done.keptLeadIn}`);
+    for (const w of done.warnings ?? []) console.error(`warning: ${w}`);
+  } catch (err) {
+    fail(`Could not edit ${id}: ${errorMessage(err)}`);
+  }
+}
+
 function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>>): void {
   console.log(
     `${rows.length} quarantined memor${rows.length === 1 ? 'y' : 'ies'} (newest first):\n`,
   );
   for (const row of rows) {
-    console.log(`--- ${row.id} [${row.status}]`);
+    console.log(`--- ${row.id} [${row.status === 'pending' ? 'pending review' : row.status}]`);
     if (row.leadInPreview) console.log(`    ${row.leadInPreview}`);
     console.log(`    ${row.contentPreview}`);
     console.log(
@@ -180,5 +198,8 @@ function printQuarantineRows(rows: Awaited<ReturnType<typeof api.quarantineList>
     );
     console.log('');
   }
-  console.log('Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>');
+  console.log(
+    'Approve: hippo quarantine approve <id>   Reject: hippo quarantine reject <id>   ' +
+      'Edit: hippo quarantine edit <id> "<text>"',
+  );
 }

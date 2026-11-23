@@ -32,5 +32,6 @@ export const ADMIN_LEVEL = new Map([
   ['GET /v1/quarantine', 'admin'],
   ['POST /v1/quarantine/:id/approve', 'admin'],
   ['POST /v1/quarantine/:id/reject', 'admin'],
+  ['POST /v1/quarantine/:id/edit', 'admin'],
   ['GET /v1/audit', 'admin'],
 ]);

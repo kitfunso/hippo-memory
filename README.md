@@ -1038,6 +1038,10 @@ The command runs with no shell, so each argument reaches the program as written.
 | `hippo dormant [<query>]` | List faded memories sleep kept instead of deleting |
 | `hippo dormant restore <id>` | Bring a dormant memory back to active memory |
 | `hippo dormant forget <id>` | Delete a dormant memory permanently |
+| `hippo quarantine [--all] [--json]` | List memories pending review: connector text held because it read as an instruction |
+| `hippo quarantine approve <id>` | Release a held memory under its original scope (admin) |
+| `hippo quarantine reject <id>` | Keep a held memory hidden for good (admin) |
+| `hippo quarantine edit <id> "<text>"` | Approve a held memory with your cleaned text (admin). The text is checked again, the new memory lists the held one in `parents`, and the successor keeps the lead-in of the held row the edit read. A reject drops the whole item, lead-in included. HTTP: `POST /v1/quarantine/:id/edit` |
 | `hippo doctor [--json]` | Check the install: Node, store, schema, sleep, agent hooks; each problem names its fix. It never changes `hippo.db`, though SQLite may leave empty `hippo.db-wal` and `hippo.db-shm` files beside it |
 | `hippo support-bundle [--out <file>] [--include-logs]` | Write a redacted JSON file for a support ticket: versions, doctor checks, config, store counts and log names, never memory text; `--include-logs` adds each log's last 200 lines, which can quote it |
 | `hippo tokens [--days n]` | Estimated tokens of memory text handed to agents, per surface, what later model calls re-read of the hook and compact-resume blocks, and what skipping unchanged hook blocks saved |

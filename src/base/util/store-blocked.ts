@@ -13,7 +13,7 @@ export class StoreBlockedError extends Error {
   }
 }
 
-/** A store that lacks a whole group of port methods; the same 501, and the log names the group. */
+/** A store that lacks a port method or a whole group of them; the same 501, and the log names it. */
 export class StoreNotPortedError extends StoreBlockedError {
   constructor(
     storeKind: string,
@@ -21,7 +21,7 @@ export class StoreNotPortedError extends StoreBlockedError {
   ) {
     super(
       storeKind,
-      `the '${storeKind}' store has no '${group}' group; this code path is not ported to the store yet`,
+      `the '${storeKind}' store has no port for '${group}'; this code path is not ported to the store yet`,
     );
     this.name = 'StoreNotPortedError';
   }
