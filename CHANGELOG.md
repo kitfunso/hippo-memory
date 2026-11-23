@@ -1,5 +1,28 @@
 # Changelog
 
+## 3.16.0 - 2026-11-23
+
+### Added
+
+- **A viewer role, and one rule that maps an IdP groups claim onto it.** `roleFromGroups` from `hippo-memory/server` turns a groups claim into viewer, editor (stored as `member`) or admin; each resolver keeps its own group lists. Pass a null fallback to refuse a caller in no mapped group; Entra drops the claim above 200 groups, so a null fallback refuses those users. Map a team-admin IdP group to editor, never admin, until team admin ships: admin covers the whole tenant. A viewer signed in through an auth resolver can read and cannot write.
+- **Add-on routes take a `level`.** `AddonRoute.level` is 'viewer', 'editor' or 'admin', and an unset level means 'editor'.
+- **`pinnedInject.promptRecallShare` keeps room for prompt-matched memories.** In the prompt hook (`hippo context --pinned-only`), pinned memories now use at most 75% of the budget left (default share 0.25, from 0 to 1). The other quarter stays free for the memories that share words with the prompt. When the pins do not fit, the strongest stay, then the newest, and each dropped pin gets a `budget` row in the delivery ledger. The cap reads only the budget and the share, so the pinned block stays byte-identical from prompt to prompt. With prompt recall off, the share is 0 and pins use the whole budget as before.
+- **`pinnedInject.sessionRulesBudget` sets how many tokens `hippo session-rules` sends.** The SessionStart hook now sends the newest rules that fit 2,000 tokens (the default), oldest first, and then one line that counts the rules it did not show. A value of 0 or below warns and reads as 2,000.
+
+### Changed
+
+- **`Actor.role`, `ResolvedBearer.role`, `McpCaller.role` and `ScopeActor.role` gain 'viewer'.** `ScopeActor` also reaches the store-kit entry. The store port still takes admin or member only (`StoreActor`), as before, so an add-on store adapter never sees 'viewer'.
+- **A resolver role that is missing, or outside 'admin', 'member' and 'viewer', now reads as 'viewer'.** It read as 'member' before. The server logs one warning that leaves out the value. An MCP context with no role reads as 'viewer' too.
+- **Widening `Actor.role` breaks an exhaustive switch over it at compile time.** Add a 'viewer' case.
+- **`DELETE /v1/auth/keys/:keyId` is open to a viewer.** `authRevoke` still lets a resolver caller below admin revoke only the keys it minted.
+- **Add-on routes refuse a viewer by default.** Set `level: 'viewer'` on a route that writes nothing.
+- **The request line carries `role=`** for /v1, add-on and MCP calls.
+- **The prompt hook orders matched memories with `hippo recall`'s word ranker.** The overlap gate still picks which memories match. Then `rankBm25` orders them, and `pinnedInject.promptRecallMaxItems` cuts the list after that order. A long memory that holds most of the prompt's words now ranks above short memories that share only two. A cleared memory that `rankBm25` does not return still follows, in gate order. Memories cut by the limit keep the `gate-max-items` reason in the delivery ledger.
+
+### Security
+
+- **Self-mint and the MCP write tools refuse a viewer.** A viewer cannot mint its own member key or call `hippo_remember`, `hippo_outcome`, `hippo_learn`, `hippo_resolve` or `hippo_share`. A key minted while its owner was an editor keeps its role until it is revoked or expires; a viewer can revoke the keys it minted itself.
+
 ## 3.15.1 - 2026-11-22
 
 ### Documentation
