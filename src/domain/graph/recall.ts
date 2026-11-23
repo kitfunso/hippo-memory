@@ -13,6 +13,8 @@ import {
   type SearchResult,
 } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
+import { identityText } from '../../base/util/same-text.js';
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import type { Entity, GraphRows, Relation } from '../../base/ports/store/graph.js';
 import type { RequiredStore, StoreGroups, StoreWith } from '../../base/ports/store.js';
@@ -231,7 +233,7 @@ async function produceHitsForStore(
     const mem = loadedById.get(ent.memoryId);
     if (!mem) continue; // not found / wrong tenant / already in base
     if (seenMemoryIds.has(mem.id)) continue; // another reached entity already added it
-    if (seenContent.has(mem.content)) continue; // share/promote copy: same text, another id
+    if (seenContent.has(identityText(mem))) continue; // share/promote copy: same text, another id
     const via = walk.reached.get(ent.id)!;
     if (!passesRecallFilters(mem, via, successorValidFrom, opts)) continue;
     const origin = walk.originMemByEntityId.get(ent.id) ?? baseResults[0].entry.id;
@@ -243,7 +245,7 @@ async function produceHitsForStore(
 function addHit(accumulators: HitAccumulators, origin: string, hit: GraphHit): void {
   const { seenMemoryIds, seenContent, hitsByOrigin } = accumulators;
   seenMemoryIds.add(hit.entry.id);
-  seenContent.add(hit.entry.content);
+  seenContent.add(identityText(hit.entry));
   if (!hitsByOrigin.has(origin)) hitsByOrigin.set(origin, []);
   hitsByOrigin.get(origin)!.push(hit);
 }
@@ -259,7 +261,7 @@ function buildGraphHit(
     score: originScore * (1 - HOP_DISCOUNT * via.hops),
     bm25: 0,
     cosine: 0,
-    tokens: estimateTokens(mem.content),
+    tokens: estimateTokens(shownText(mem)),
     graphVia: via,
     isGlobal,
   };
@@ -318,7 +320,7 @@ export async function graphExpandRecall(
 
   const baseScoreByMemId = new Map(baseResults.map((r) => [r.entry.id, r.score]));
   const seenMemoryIds = new Set<string>(baseResults.map((r) => r.entry.id));
-  const seenContent = new Set<string>(baseResults.map((r) => r.entry.content));
+  const seenContent = new Set<string>(baseResults.map((r) => identityText(r.entry)));
   const hitsByOrigin = new Map<string, GraphHit[]>();
 
   // Expand against each distinct store the seeds may live in (local + global).

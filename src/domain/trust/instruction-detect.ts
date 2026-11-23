@@ -16,6 +16,16 @@ export const UNTRUSTED_ORIGIN_TAG = 'untrusted-origin';
  * frames them too. */
 export const CONNECTOR_SOURCE_TAGS: readonly string[] = ['source:slack', 'source:github'];
 
+/** True for a row that prints framed as untrusted: connector text, or a member row the check
+ * flagged. A prompt with no frame of its own keeps such a row's lead-in out. */
+export function isUntrustedSource(tags: readonly string[]): boolean {
+  return (
+    tags.includes(UNTRUSTED_ORIGIN_TAG) ||
+    tags.includes(INSTRUCTION_LIKE_TAG) ||
+    tags.some((t) => CONNECTOR_SOURCE_TAGS.includes(t))
+  );
+}
+
 export interface InstructionDetection {
   flagged: boolean;
   reason: string | null;

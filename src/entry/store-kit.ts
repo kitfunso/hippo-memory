@@ -144,10 +144,15 @@ export function entryAfterOutcome(
     withLossAversion(PRODUCTION_STRENGTH, rules.lossAversionRatio),
   );
 }
-export { normalizeValueForRejection, rejectionDigest } from '../base/records/rejection-digest.js';
+export {
+  normalizeValueForRejection,
+  rejectionDigest,
+  rowDigests,
+  tombstoneDigest,
+} from '../base/records/rejection-digest.js';
 // An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule, and its row
 // writes keep hippo.db's duplicate hash.
-export { duplicateHash, heldTexts } from '../base/util/same-text.js';
+export { duplicateHash, heldTexts, identityText } from '../base/util/same-text.js';
 // An add-on store stamps (`isoInstant(stamp) ?? stamp`), searches and windows its rows as hippo.db
 // does, so both return the same rows in the same order.
 export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';
@@ -169,10 +174,12 @@ export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memo
 export { RejectedValueError } from '../base/errors/api-errors.js';
 export {
   assertWriteRight,
+  canReadScope,
   ownScopeTouches,
   readerMayChange,
   readerReaches,
   targetReader,
+  type ScopeActor,
   type ScopeReader,
   type WrittenRow,
   passesScopeFilterForRecall,
@@ -256,6 +263,8 @@ export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date)
 // An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's
 // rule.
 export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
+// An add-on's graph reads batch ids as hippo.db's do.
+export { GRAPH_ID_BATCH } from '../base/ports/store/graph.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
 // store copy --db writes the marker into the other store's folder.
 // An add-on that serves a team store checks the flag before it starts.

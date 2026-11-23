@@ -3,6 +3,7 @@
 
 import { confidenceFacets } from '../../base/memory/strength.js';
 import { Layer } from '../../base/memory/entry.js';
+import { leadInField } from '../../base/memory/lead-in.js';
 import type { ResultCost, SearchResult } from '../../base/rank/search-types.js';
 import type { ClefSettings } from '../../base/config/config.js';
 import { rerankerOf } from '../infra.js';
@@ -168,6 +169,7 @@ export interface RecallJsonRow {
   tokens: number;
   tags: SearchResult['entry']['tags'];
   content: string;
+  leadIn?: string;
   layer: SearchResult['entry']['layer'];
   trace_outcome?: SearchResult['entry']['traceOutcome'];
   superseded?: boolean;
@@ -205,6 +207,7 @@ export function recallJsonRow({
     tokens: r.tokens,
     tags: r.entry.tags,
     content: r.entry.content,
+    ...leadInField(r.entry),
     layer: r.entry.layer,
   };
   if (r.entry.layer === Layer.Trace) {

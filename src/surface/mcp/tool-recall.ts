@@ -2,7 +2,12 @@
 // hints and the Cutoff block that describe that list.
 
 import type { SearchResult } from '../../base/rank/search-types.js';
-import { dropHeldCopies, duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import {
+  dropHeldCopies,
+  duplicateKey,
+  identityText,
+  storedTextKeys,
+} from '../../base/util/same-text.js';
 import { estimateTokens, tokenPurse } from '../../base/util/token-text.js';
 import type { CallerProject } from '../../api/prompt-hook.js';
 import type { Context } from '../../api/types.js';
@@ -101,7 +106,7 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
   const unshown = tailRows.filter(
-    (r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(r.content)),
+    (r) => !shownIds.has(r.id) && !shownKeys.has(duplicateKey(identityText(r))),
   );
   return dropHeldCopies(unshown, (r) => r);
 }

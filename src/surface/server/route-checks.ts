@@ -1,4 +1,5 @@
 import type { JsonValue } from '../../base/util/json.js';
+import { ROLE_LEVELS } from '../../base/scope/role.js';
 import { V1_ROUTES, routeServes } from './route-table.js';
 import type { AddonRoute } from './types.js';
 
@@ -26,11 +27,14 @@ function isCorePath(method: string, path: string): boolean {
  */
 export function assertAddonRoutes(routes: readonly AddonRoute[]): void {
   const seen = new Set<string>();
-  for (const { path } of routes) {
+  for (const { path, level } of routes) {
     if (!isPlainV1Path(path)) {
       throw new Error(
         `add-on route '${path}' is not a plain /v1/ path (segments use A-Z a-z 0-9 . _ ~ -)`,
       );
+    }
+    if (level !== undefined && !ROLE_LEVELS.has(level)) {
+      throw new Error(`add-on route '${path}' has an unknown level; use viewer, editor or admin`);
     }
     if (seen.has(path)) throw new Error(`add-on route '${path}' is registered twice`);
     if (isCorePath('POST', path)) {

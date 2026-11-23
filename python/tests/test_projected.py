@@ -58,3 +58,12 @@ def test_projected_optional_fields_pass_through_as_none():
     assert projected["confidence"] is None
     # tags defaults to [] (Field(default_factory=list)), not None
     assert projected["tags"] == []
+
+
+def test_projected_carries_lead_in_only_when_set():
+    led = MemoryEnvelope.model_validate({"id": "mem_led", "content": "Three times a week", "leadIn": "user: How often?"})
+    projected = ContextEntry(entry=led, score=0.5, tokens=5).projected()
+    assert projected["lead_in"] == "user: How often?"
+    assert list(projected).index("lead_in") == list(projected).index("content") + 1
+    plain = MemoryEnvelope(id="mem_plain", content="no lead-in")
+    assert "lead_in" not in ContextEntry(entry=plain, score=0.5, tokens=5).projected()

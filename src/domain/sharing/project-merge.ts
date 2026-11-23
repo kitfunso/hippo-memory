@@ -14,7 +14,7 @@ import type { Machine } from '../../base/util/agent-homes.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { READ_PAGE_ROWS, readPages } from '../../base/util/pages.js';
 import { projectNames, type ProjectIdentity } from '../../base/scope/project-identity.js';
-import { duplicateKey } from '../../base/util/same-text.js';
+import { duplicateKey, identityText } from '../../base/util/same-text.js';
 import type {
   ProjectFold,
   ProjectTagReads,
@@ -114,7 +114,7 @@ async function copiesByOrigin(
 ): Promise<Map<string | null, number>> {
   const holders = new Map<string, Map<string | null, number>>();
   for await (const e of imports) {
-    const key = duplicateKey(e.content);
+    const key = duplicateKey(identityText(e));
     const origin = e.originProject ?? null;
     const byOrigin = holders.get(key) ?? new Map<string | null, number>();
     holders.set(key, byOrigin.set(origin, (byOrigin.get(origin) ?? 0) + 1));
@@ -173,12 +173,12 @@ export async function mergeProjects(
 async function importCopies(r: Reader): Promise<MemoryEntry[]> {
   const userGlobal = new Set<string>();
   for await (const e of liveRows(r, AGENT_MEMORY_SOURCE_PREFIX)) {
-    if (e.originProject === '') userGlobal.add(duplicateKey(e.content));
+    if (e.originProject === '') userGlobal.add(duplicateKey(identityText(e)));
   }
   const copies: MemoryEntry[] = [];
   for await (const e of liveRows(r, AGENT_MEMORY_SOURCE_PREFIX)) {
     const movable = e.originProject && e.kind !== 'raw' && !e.pinned && toolTag(e.source) !== null;
-    if (movable && userGlobal.has(duplicateKey(e.content))) copies.push(e);
+    if (movable && userGlobal.has(duplicateKey(identityText(e)))) copies.push(e);
   }
   return copies;
 }

@@ -15,7 +15,7 @@ const LEARNED: Ran = {
   stdout: '',
   stderr: `${STDERR}\nHippo learned from failure: "connection refused on port 5432"\n`,
 };
-const NO_KEY = '  (extraction skipped: ANTHROPIC_API_KEY not set)\n';
+const NO_KEY = '  (extraction skipped: no model set; set HIPPO_LLM_BASE_URL or ANTHROPIC_API_KEY)\n';
 
 /** The part of `config.json` a case sets. */
 interface StoreConfig {

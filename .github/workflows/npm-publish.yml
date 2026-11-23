@@ -47,6 +47,8 @@ jobs:
     permissions:
       contents: read
       id-token: write   # OIDC token for npm trusted publishing and provenance
+    outputs:
+      dist-tag: ${{ steps.disttag.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,3 +87,14 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+  # Only a `latest` release updates the extension stores, so a backport never replaces a newer listing.
+  vscode:
+    needs: [publish]
+    if: needs.publish.outputs.dist-tag == 'latest'
+    uses: ./.github/workflows/vscode-publish.yml
+    permissions:
+      contents: read
+      id-token: write
+    secrets:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}

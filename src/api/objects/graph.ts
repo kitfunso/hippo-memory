@@ -2,6 +2,7 @@ import { BadRequestError } from '../../base/errors/api-errors.js';
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
 import { extractGraph, type ExtractResult } from '../../domain/graph/extract.js';
 import { buildGraphModel, type GraphModel } from '../../domain/graph/view.js';
+import { storeActorOf } from '../../base/scope/recall-scope.js';
 import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
 
 export {
@@ -30,7 +31,7 @@ export function graphView(
   const { role, scopes, owner } = ctx.actor;
   return buildGraphModel(ctx.store.graphReads, ctx.tenantId, {
     ...query,
-    reader: { role, scopes, owner },
+    reader: storeActorOf({ role, scopes, owner }),
   });
 }
 

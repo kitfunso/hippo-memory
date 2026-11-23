@@ -116,6 +116,18 @@ describe('api domain — recall/forget/promote/supersede', () => {
     }
   });
 
+  it('promote keeps the lead-in on the global copy', async () => {
+    const lead = 'user: How often do you and Mel run?';
+    const { id } = await remember(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), {
+      content: 'Three times a week; it keeps us on track.',
+      leadIn: lead,
+    });
+
+    const result = await promote(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), id);
+
+    expect(readEntry(globalHome, result.globalId)?.leadIn).toBe(lead);
+  });
+
   it.each([
     [
       'quarantined',
@@ -134,6 +146,14 @@ describe('api domain — recall/forget/promote/supersede', () => {
       'secret',
       {},
       'service api key sk_vendor_deadbeef123456 for the ingest worker',
+      (id: string) =>
+        `Refusing to promote ${id} to the global store: content matches secret material ` +
+        `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`,
+    ],
+    [
+      'secret-in-lead-in',
+      { leadIn: 'service api key sk_vendor_deadbeef123456 for the ingest worker' },
+      'promote-veto lead-in row',
       (id: string) =>
         `Refusing to promote ${id} to the global store: content matches secret material ` +
         `(pattern:sk-underscore-key). Secrets stay in their owning project's store.`,

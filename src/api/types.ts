@@ -18,6 +18,7 @@ import type {
 } from '../base/ports/store.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { CallerState } from './callers.js';
+import type { Role } from '../base/scope/role.js';
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { FailureNotices } from '../base/util/failure-notices.js';
 import { strengthModelFor } from '../base/memory/eval-switches.js';
@@ -26,13 +27,14 @@ import type { EmbedderFor } from '../base/ports/embedder.js';
 import type { DetachedWork } from '../domain/search/detached-work.js';
 
 /** Actor identity + role for a Context: the audit-log subject (pass `ctx.actor.subject` to audit helpers) and the role
- *  for admin gating.
- *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate and authRevoke (ForbiddenError).
+ *  for admin gating; a viewer reads only.
+ *  Role checks happen at the request boundary (e.g. /v1/sleep), except in authCreate, authCreateSelf and
+ *  authRevoke (ForbiddenError).
  */
 export interface Actor {
   /** 'cli' | 'api_key:<key_id>' | 'mcp' | 'connector:slack' | 'connector:github' */
   subject: string;
-  role: 'admin' | 'member';
+  role: Role;
   /** Restricted scopes a member key may read (auth.ts grantScope). Unused for admin actors. */
   scopes?: readonly string[];
   /** An auth resolver vouched for this caller, so its admin role stops at its own tenant. */

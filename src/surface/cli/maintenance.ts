@@ -1,6 +1,7 @@
 // Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
 
-import { anthropicLlmFromEnv } from '../../infra/ports.js';
+import { llmRoute } from '../../infra/llm-route.js';
+import { llmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
 import { groupDedupPairs } from '../../base/memory/dedup-pairs.js';
 import type { EmbeddingProvider } from '../../base/ports/embedder.js';
@@ -33,9 +34,13 @@ const PAIR_PREVIEW_CHARS = 90;
 export async function handleRefine({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  const llm = anthropicLlmFromEnv();
+  const route = llmRoute();
+  if (route.kind === 'refused') fail(`hippo refine: ${route.reason}`);
+  const llm = llmFromEnv();
   if (!llm) {
-    fail('hippo refine needs ANTHROPIC_API_KEY in the environment.');
+    fail(
+      'hippo refine needs a model: set HIPPO_LLM_BASE_URL and HIPPO_LLM_MODEL, or ANTHROPIC_API_KEY.',
+    );
   }
 
   const dryRun = boolFlag(flags, 'dry-run');

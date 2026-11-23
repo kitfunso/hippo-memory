@@ -286,6 +286,7 @@ function selftestGuard(t) {
     fs.rmSync(distDir, { recursive: true, force: true });
   }
   t('ANTHROPIC_API_KEY refusal', throws(() => refuseApiKey({ ANTHROPIC_API_KEY: 'x' }), /ANTHROPIC_API_KEY/) && refuseApiKey({}) === undefined);
+  t('HIPPO_LLM_BASE_URL refusal', throws(() => refuseApiKey({ HIPPO_LLM_BASE_URL: 'x' }), /HIPPO_LLM_BASE_URL/));
 }
 
 export const libSelftests = [selftestSub, selftestParent, selftestEvidence, selftestDrawAndChunks, selftestStats, selftestFrozen, selftestDrawPinned, selftestControlAndAudit, selftestGuard];

@@ -13,6 +13,8 @@ import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { assemble } from '../../src/api/index.js';
+import { assembleLine } from '../../src/api/context/context-render.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadSessionRawMemories } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
@@ -220,5 +222,25 @@ describe('api.assemble', () => {
     expect(r.summarized).toBe(0);
     expect(r.items.every((it) => !it.isSummary)).toBe(true);
     expect(r.items.length).toBe(3);
+  });
+
+  it('9. a row with a lead-in carries it on its item, and the budget prices the text shown', async () => {
+    const led = makeRaw('Three times a week', 'sess-lead');
+    led.leadIn = 'user: How often do you and Mel run?';
+    led.created = '2026-01-01T00:00:00.000Z';
+    const plain = makeRaw('Mel signed up for the spring run', 'sess-lead');
+    plain.created = '2026-01-02T00:00:00.000Z';
+    writeEntry(root, led);
+    writeEntry(root, plain);
+    const r = await assemble(ctxFor(root), 'sess-lead');
+    const item = r.items.find((it) => it.id === led.id);
+    expect(item?.leadIn).toBe(led.leadIn);
+    expect(item && assembleLine(item)).toContain(`- ${led.leadIn}
+${led.content}`);
+    expect(Object.hasOwn(r.items.find((it) => it.id === plain.id) ?? {}, 'leadIn')).toBe(false);
+    expect(r.tokens).toBe(
+      estimateTokens(`${led.leadIn}
+${led.content}`) + estimateTokens(plain.content),
+    );
   });
 });

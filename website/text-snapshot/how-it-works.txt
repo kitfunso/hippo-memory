@@ -40,8 +40,8 @@ Is this just RAG? +
 Partly. Recall is search, BMN plus embeddings if you install them. The difference is that the store changes as your agent works. A memory you mark wrong drops down the results, a newer fact replaces an old one, and unused memories fade.
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

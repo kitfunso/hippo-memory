@@ -43,8 +43,8 @@ Can I still self-host Zep? +
 Not Zep itself. Zep's FAQ says Community Edition, the version you could host locally, is deprecated and no longer supported (checked N September N). Graphiti, the open-source framework under Zep, runs anywhere, and needs a graph database and a language-model key.
 hippo
 Agents
-Claude CodeCursorCodexMCP server Compare
-hippo vs memNhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
 QuickstartHow it worksBenchmarksTeamsFAQ Resources
 GitHubnpmDocsChangelogLicence (MIT)
 hippo-memory vN MIT, built by kitfunso

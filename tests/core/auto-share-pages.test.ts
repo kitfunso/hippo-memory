@@ -137,6 +137,55 @@ describe('autoShare across pages', () => {
   });
 });
 
+describe('the same text under two lead-ins', () => {
+  const L1 = 'user: Is the flight booked?';
+  const L2 = 'user: Did Mel get the job?';
+  const yes = (leadIn: string): MemoryEntry =>
+    createMemory('Yes.', { tags: [], emotionalValence: 'neutral', leadIn, tenantId: 'default' });
+
+  it('autoShare skips the row the global store holds with its lead-in and picks the other', async () => {
+    const [one, two] = [yes(L1), yes(L2)];
+    writeEntry(root, one);
+    writeEntry(root, two);
+    writeEntry(getGlobalRoot(), yes(L1));
+
+    const picked = await autoShare(...sharingStores(root), {
+      embed: TEST_RUN,
+      detached: TEST_DETACHED,
+      minScore: 0.3,
+      dryRun: true,
+      tenantId: 'default',
+    });
+
+    expect(picked.map((e) => e.id)).toEqual([two.id]);
+  });
+
+  it('shareMemory names the twin with the same lead-in only, and shares the row with another', async () => {
+    const held = yes(L1);
+    writeEntry(getGlobalRoot(), held);
+    const [same, other] = [yes(L1), yes(L2)];
+    writeEntry(root, same);
+    writeEntry(root, other);
+    const share = (id: string) =>
+      shareMemory(...sharingStores(root), id, {
+        actor: TEST_ACTOR,
+        embed: TEST_RUN,
+        detached: TEST_DETACHED,
+        skipEmbed: true,
+        force: true,
+        tenantId: 'default',
+      });
+
+    expect(await share(same.id)).toEqual({ kind: 'already-shared', existingId: held.id });
+    expect(await share(other.id)).toEqual({ kind: 'shared', entry: expect.objectContaining({ leadIn: L2 }) });
+    expect(
+      loadEveryTenantEntries(getGlobalRoot())
+        .map((e) => e.leadIn)
+        .sort(),
+    ).toEqual([L2, L1]);
+  });
+});
+
 describe('shareMemory of a text the global store already holds', () => {
   const HELD = text('already shared by hand');
   const LOW_SCORE_TAGS = ['file-path', 'config'];

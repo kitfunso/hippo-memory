@@ -19,6 +19,7 @@ import { globalTargetOf } from '../../api/infra.js';
 import { recordTokens } from '../../api/tokens.js';
 import {
   mcpApiContext,
+  mcpRole,
   type GroupToolHandler,
   type LocalToolHandler,
   type McpCaller,
@@ -33,6 +34,7 @@ import {
 } from './protocol.js';
 import { TOOLS, TOOLS_BY_NAME, ARGS_CHECKED_BY_API, WRITE_TOOLS } from './tools.js';
 import { READ_ONLY_REFUSAL } from '../../base/errors/read-only.js';
+import { canWrite, VIEWER_REFUSAL } from '../../base/scope/role.js';
 import { readOnlyOf } from '../../api/types.js';
 import { runRecallTool, runAssembleTool, runDrillTool, runContextTool } from './recall-tools.js';
 import { runRememberTool, runOutcomeTool, runLearnTool } from './memory-tools.js';
@@ -194,6 +196,16 @@ async function runTool(
   return text;
 }
 
+/** Why a write tool is refused before it runs: a viewer first, then a read-only store. */
+function writeRefusal<S extends RequiredStore>(
+  name: string,
+  ctx: McpContext<S>,
+): string | undefined {
+  if (!WRITE_TOOLS.has(name)) return undefined;
+  if (!canWrite(mcpRole(ctx))) return VIEWER_REFUSAL;
+  return readOnlyOf(ctx) ? READ_ONLY_REFUSAL : undefined;
+}
+
 async function callTool<S extends RequiredStore>(
   id: McpRequest['id'],
   params: McpRequest['params'],
@@ -208,10 +220,7 @@ async function callTool<S extends RequiredStore>(
   // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
   const run = toolRun(toolName, ctx);
   if (run === undefined) return errorReply(id, INTERNAL_ERROR, STORE_NOT_PORTED_MESSAGE);
-  const refusal =
-    WRITE_TOOLS.has(toolName) && readOnlyOf(ctx)
-      ? READ_ONLY_REFUSAL
-      : sharedStoreRefusal(toolName, ctx);
+  const refusal = writeRefusal(toolName, ctx) ?? sharedStoreRefusal(toolName, ctx);
   if (refusal !== undefined) {
     return resultReply(id, { content: [{ type: 'text', text: refusal }], isError: true });
   }

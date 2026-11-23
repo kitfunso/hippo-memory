@@ -6,6 +6,7 @@ export interface RejectionCheck {
   readonly tenantId: string;
   readonly entryId: string;
   readonly content: string;
+  readonly leadIn?: string | null;
 }
 
 export interface Rejections {
@@ -74,6 +75,8 @@ export interface AppliedRejection {
    * dormant one. */
   successorIds: string[];
   dormantSuccessorIds: string[];
+  /** True when an id reject named a row with a lead-in: its tombstone refuses that lead-in only. */
+  leadInOnly?: boolean;
 }
 
 export type LiftedRejection =

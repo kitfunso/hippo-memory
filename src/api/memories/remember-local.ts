@@ -11,6 +11,7 @@ import {
 } from '../../domain/search/embed-memories.js';
 import { captureError, type FailedCommand } from '../../domain/learn/autolearn.js';
 import { extractFacts, storeExtractedFacts } from '../../domain/learn/extract.js';
+import { isUntrustedSource } from '../../domain/trust/instruction-detect.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { withDetached } from '../detached.js';
 import { memoryGet } from './memories.js';
@@ -32,6 +33,8 @@ export interface LocalRememberInput {
   readonly scope?: string;
   readonly owner?: string;
   readonly artifactRef?: string;
+  /** The conversation text that led into `content`; remember trims, redacts and caps it. */
+  readonly leadIn?: string;
   readonly layer?: Layer;
   readonly pinned?: boolean;
   readonly confidence?: ConfidenceLevel;
@@ -103,6 +106,7 @@ export async function rememberLocally(
     scope: input.scope,
     owner: input.owner,
     artifactRef: input.artifactRef,
+    leadIn: input.leadIn,
     tags: [...input.tags],
     salienceGate: input.force !== true,
     local: {
@@ -154,7 +158,7 @@ export async function extractRememberedFacts(
   const failures: string[] = [];
   let facts = 0;
   try {
-    const found = await extractFacts(entry.content, {
+    const found = await extractFacts(extractionText(entry), {
       llm,
       model: extraction.model,
       signal: ctx.signal,
@@ -176,6 +180,13 @@ export async function extractRememberedFacts(
     failures.push(errorMessage(cause));
   }
   return { status: 'ran', facts, failures };
+}
+
+/** The memory with its lead-in marked as context, so the model can resolve who and what. */
+function extractionText(entry: MemoryEntry): string {
+  // An untrusted row's lead-in stays out: this prompt has no quarantine frame.
+  if (!entry.leadIn || isUntrustedSource(entry.tags)) return entry.content;
+  return `Earlier in the conversation (context only):\n${entry.leadIn}\n\nThe memory:\n${entry.content}`;
 }
 
 /** What `hippo watch` keeps of a command that failed: its redacted stderr as an episodic row,

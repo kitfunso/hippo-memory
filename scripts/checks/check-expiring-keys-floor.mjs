@@ -10,6 +10,7 @@ const MIGRATIONS_INDEX = 'src/db/migrations/index.ts';
 const FLOORS = [
   ['EXPIRING_KEYS_MIN_BINARY', 53],
   ['TASK_OWNER_MIN_BINARY', 54],
+  ['LEAD_IN_MIN_BINARY', 64],
 ];
 
 function fail(message) {

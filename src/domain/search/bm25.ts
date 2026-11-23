@@ -1,4 +1,5 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
+import { findableText } from '../../base/memory/lead-in.js';
 import { indexTokenize } from '../../base/util/tokenize.js';
 
 /** Tokenized BM25 corpus; build it once with `buildCorpus` and reuse it across queries on the
@@ -13,9 +14,9 @@ export interface BM25Corpus {
 const BM25_K1 = 1.5;
 const BM25_B = 0.75;
 
-/** The text BM25 indexes for an entry: its content followed by its tags. */
+/** The text BM25 indexes for an entry: its findable text followed by its tags. */
 export function entryText(entry: MemoryEntry): string {
-  return `${entry.content} ${entry.tags.join(' ')}`;
+  return `${findableText(entry)} ${entry.tags.join(' ')}`;
 }
 
 export function buildCorpus(texts: string[]): BM25Corpus {

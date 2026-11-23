@@ -7,6 +7,7 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
+import { estimateTokens } from '../../src/base/util/token-text.js';
 
 const savedCwd = process.cwd();
 let root: string;
@@ -218,5 +219,48 @@ describe('hippo status', () => {
     ).toBe(true);
     expect(out).toContain('Last sleep:        never');
     expect(out).toMatch(/\nEmbeddings: {8}\S/);
+  });
+});
+
+describe('a memory with a lead-in', () => {
+  const LEAD = 'user: How often do you and Mel run?';
+  const REPLY = 'Three times a week; it keeps us on track.';
+  interface JsonRow {
+    readonly leadIn?: string;
+    readonly tokens?: number;
+  }
+
+  it('recall prints the lead-in above the content, and --json puts the key after content and prices both', async () => {
+    await remember(REPLY, '--lead-in', LEAD);
+    expect((await run('recall', 'Mel')).stdout).toContain(`\n\n${LEAD}\n${REPLY}\n`);
+    const json: { results: JsonRow[] } = JSON.parse((await run('recall', 'Mel', '--json')).stdout);
+    const keys = Object.keys(json.results[0]);
+    expect(keys.slice(keys.indexOf('content'), keys.indexOf('content') + 3)).toEqual(['content', 'leadIn', 'layer']);
+    expect(json.results[0].tokens).toBe(estimateTokens(`${LEAD}\n${REPLY}`));
+  });
+
+  it('prints a row with no lead-in as before, with no key', async () => {
+    await remember('Mel runs three times a week');
+    expect((await run('recall', 'Mel')).stdout).toContain('\n\nMel runs three times a week\n');
+    const json: { results: object[] } = JSON.parse((await run('recall', 'Mel', '--json')).stdout);
+    expect(Object.hasOwn(json.results[0], 'leadIn')).toBe(false);
+  });
+
+  it('explain, trace, inspect and the markdown export show it too', async () => {
+    const id = await remember(REPLY, '--lead-in', LEAD);
+    // The table's 48-character preview shows the memory, so a lead-in cannot fill it.
+    const table = (await run('explain', 'Mel')).stdout;
+    expect(table).toContain(REPLY);
+    expect(table).not.toContain(LEAD);
+    const explained: { results: JsonRow[] } = JSON.parse((await run('explain', 'Mel', '--json')).stdout);
+    expect(explained.results[0].leadIn).toBe(LEAD);
+
+    expect((await run('trace', id)).stdout).toContain(`Lead-in:   ${LEAD}\nContent:   ${REPLY}\n`);
+    const traced: JsonRow = JSON.parse((await run('trace', id, '--json')).stdout);
+    const keys = Object.keys(traced);
+    expect(keys.slice(keys.indexOf('content'), keys.indexOf('content') + 2)).toEqual(['content', 'leadIn']);
+
+    expect((await run('inspect', id)).stdout).toContain(`${'-'.repeat(40)}\n${LEAD}\n${REPLY}\n`);
+    expect((await run('export', '--format', 'markdown')).stdout).toContain(`### ${id}\n\n${LEAD}\n${REPLY}\n\n_`);
   });
 });

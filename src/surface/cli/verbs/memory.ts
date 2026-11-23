@@ -63,13 +63,14 @@ export const MEMORY_VERBS = {
     repairsCodexWrapper: true,
     flags: {
       switches: ['error', 'extract', 'force', 'global', 'inferred', 'observed', 'pin', 'verified'],
-      values: ['artifact-ref', 'kind', 'layer', 'owner', 'scope'],
+      values: ['artifact-ref', 'kind', 'layer', 'lead-in', 'owner', 'scope'],
       lists: ['tag'],
     },
     usage: [
       `
   remember <text>          Store a memory
     --tag <tag>            Add a tag (repeatable)
+    --lead-in <text>       The conversation text that led into the memory
     --error                Tag as error (boosts retention)
     --pin                  Pin memory (never decays)
     --verified             Set confidence: verified (default)
@@ -243,13 +244,13 @@ export const MEMORY_VERBS = {
     flags: { switches: ['all', 'dry-run', 'json'], values: ['model'], numbers: ['limit'] },
     usage: [
       `
-  refine                   Rewrite consolidated semantic memories with Claude
+  refine                   Rewrite consolidated semantic memories with a model
     --limit <n>            Cap the number of memories processed this run
     --all                  Ignore \`llm-refined\` tag and re-refine everything
     --dry-run              Call the API but don't write results back
-    --model <id>           Override the default model (claude-sonnet-4-6)
+    --model <id>           Override the Anthropic model (claude-sonnet-4-6); an endpoint uses HIPPO_LLM_MODEL
     --json                 Output summary as JSON
-    (requires ANTHROPIC_API_KEY in env)`,
+    (requires HIPPO_LLM_BASE_URL or ANTHROPIC_API_KEY in env)`,
     ],
   }),
   eval: verb(() => import('../eval.js'), 'handleEval', {
@@ -314,8 +315,9 @@ export const MEMORY_VERBS = {
       `
   sleep                    Run consolidation pass (auto-learns + dedup + auto-shares)
                            Runs at Claude Code and OpenCode session end and in the daily job.
-                           With ANTHROPIC_API_KEY set it sends memory text to Anthropic for
-                           fact extraction; {"extraction":{"enabled":false}} turns that off
+                           With HIPPO_LLM_BASE_URL set it sends memory text to that endpoint for fact
+                           extraction, else with ANTHROPIC_API_KEY set to Anthropic;
+                           {"extraction":{"enabled":false}} turns that off
     --dry-run              Preview without writing
     --no-learn             Skip auto git-learn and the agent memory import before consolidation
     --no-share             Skip auto-sharing to global store

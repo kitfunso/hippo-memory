@@ -11,9 +11,9 @@ import type { EntryTextKey } from '../../../base/ports/store/sharing.js';
 import { bareText } from '../../rules/copies.js';
 import { narrowingAnd } from '../entries/entry-filter.js';
 import { ftsPhrase } from '../recall/fts-phrase.js';
-import { bareTextSql } from '../runtime/rule-sql.js';
+import { bareTextSql, IDENTITY_TEXT_SQL } from '../runtime/rule-sql.js';
 import { tenantAnd, TENANT_IS } from '../runtime/tenant.js';
-import { duplicateKey } from '../../../base/util/same-text.js';
+import { duplicateKey, LEAD_IN_MARK } from '../../../base/util/same-text.js';
 
 // Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew,
 // Arabic, Devanagari, Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
@@ -25,7 +25,12 @@ const PHRASE_WORDS = 32;
 /** The first words of `text`, which a row holding the text word for word holds in a row; null
  * when they might name no token, since an empty phrase matches no row. */
 function openingPhrase(text: string): string | null {
-  const opening = duplicateKey(text).split(' ').slice(0, PHRASE_WORDS).join(' ');
+  // The index holds the content first, then the lead-in, so the content part of the identity finds
+  // a lead-in row.
+  const opening = duplicateKey(text.split(LEAD_IN_MARK)[0])
+    .split(' ')
+    .slice(0, PHRASE_WORDS)
+    .join(' ');
   return SURE_TOKEN_CHAR.test(opening) ? opening : null;
 }
 
@@ -39,7 +44,7 @@ function holdingPhrase(text: string): string | null {
 
 // mayHoldCopy over `memories` columns; binds the JSON list of bare texts twice.
 const MAY_HOLD_COPY_SQL =
-  `(${bareTextSql('content')} IN (SELECT value FROM json_each(?)) OR (source = 'consolidation' AND ` +
+  `(${bareTextSql(IDENTITY_TEXT_SQL)} IN (SELECT value FROM json_each(?)) OR (source = 'consolidation' AND ` +
   `EXISTS (SELECT 1 FROM json_each(?) WHERE instr(${bareTextSql('content')}, value) > 0)))`;
 
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
@@ -47,6 +52,7 @@ export type CopyDbRow = {
   id: string;
   tenant_id: string | null;
   content: string;
+  lead_in: string | null;
   source: string;
   origin_project: string | null;
   pinned: number;
@@ -72,7 +78,7 @@ function copyChunk(
   const bares = JSON.stringify([...new Set(texts.map(bareText))]);
   return cachedStatement(
     db,
-    `SELECT id, tenant_id, content, source, origin_project, pinned, tags_json, superseded_by, confidence ` +
+    `SELECT id, tenant_id, content, lead_in, source, origin_project, pinned, tags_json, superseded_by, confidence ` +
       `FROM memories ` +
       `WHERE ${phrases ? IN_PHRASE_HITS : '1'}` +
       `${tenant.sql}${read.filter.sql} AND ${MAY_HOLD_COPY_SQL}`,
@@ -135,6 +141,7 @@ export function listTextKeysHolding(
       id: row.id,
       tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
       content: row.content,
+      leadIn: row.lead_in,
       source: row.source,
     }),
   );

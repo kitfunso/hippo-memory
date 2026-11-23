@@ -4,6 +4,7 @@ import { compareScoresDesc } from '../../base/rank/compare.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { CrossEncoderFn, CrossEncoderLoad } from '../../base/ports/cross-encoder.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
+import { findableText } from '../../base/memory/lead-in.js';
 
 const DEFAULT_CROSS_ENCODER_TOP_K = 50;
 
@@ -32,7 +33,7 @@ async function scoreHead(
     head.map(async (r, i) => {
       let ceScore: number;
       try {
-        ceScore = await pipe(query, r.entry.content);
+        ceScore = await pipe(query, findableText(r.entry));
         succeeded++;
       } catch (err) {
         firstError ??= err instanceof Error ? err : new Error(errorMessage(err));

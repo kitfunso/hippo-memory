@@ -5,8 +5,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { cliStdioHost } from '../../src/surface/cli/api-context.js';
-import { deserializeEntry } from '../../src/base/memory/markdown.js';
+import { deserializeEntry, serializeEntry } from '../../src/base/memory/markdown.js';
+import { fromWire, toWire } from '../../src/base/memory/memory-wire.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { handleMcpRequest } from '../../src/surface/mcp/server.js';
 import { insertDormantRow } from '../../src/store/sqlite/dormant/dormant-rows.js';
@@ -141,5 +143,30 @@ describe('memory wire goldens', () => {
     // SAFETY: a tools/call result is written by src/surface/mcp/request.ts as { content: [{ text }], isError? }.
     const result = res?.result as { content?: { text: string }[] } | undefined;
     expect(result?.content?.[0]?.text ?? JSON.stringify(res?.error)).toMatchSnapshot();
+  });
+});
+
+describe('a lead-in on the wire', () => {
+  it('survives toWire, fromWire and the mirror round trip, and sits last on the wire', () => {
+    const entry = everyFieldEntry();
+    expect(Object.keys(toWire(entry)).at(-1)).toBe('lead_in');
+    expect(toWire(entry).lead_in).toBe(entry.leadIn);
+    expect(fromWire(toWire(entry)).leadIn).toBe(entry.leadIn);
+    expect(deserializeEntry(serializeEntry(entry), evalNow())?.leadIn).toBe(entry.leadIn);
+  });
+
+  it('survives the mirror when it holds a newline, a colon, a quote and edge spaces', () => {
+    const leadIn = ' user: "Is it booked?"\nassistant: not yet ';
+    const entry = createMemory('Yes.', { leadIn });
+    expect(deserializeEntry(serializeEntry(entry), evalNow())?.leadIn).toBe(leadIn);
+  });
+
+  it('leaves the key off the wire and the mirror of a row with no lead-in', () => {
+    for (const leadIn of [undefined, '', null]) {
+      const entry = { ...createMemory('Yes.'), leadIn };
+      expect(Object.hasOwn(toWire(entry), 'lead_in')).toBe(false);
+      expect(serializeEntry(entry)).not.toContain('lead_in');
+      expect(Object.hasOwn(deserializeEntry(serializeEntry(entry), evalNow()) ?? {}, 'leadIn')).toBe(false);
+    }
   });
 });

@@ -1,0 +1,46 @@
+Shared memory for Claude Code, Codex and Cursor | hippo
+Skip to content hippo How it works
+Teams
+Benchmarks
+Compare
+Docs
+N Install
+How it works
+Teams
+Benchmarks
+Compare
+Docs
+Shared memory for Claude Code, Codex and Cursor
+Switch from Claude Code to Codex or Cursor and the new agent can't see what the last one picked up in its sessions. Hippo keeps one store in your repo that all three use. Claude Code and Codex load from it through hooks, and Cursor reads and writes it through MCP tools. It runs on your machine, with no account and no API key.
+Set up the project
+$ npm install -g hippo-memory $ hippo init Copy
+Run init in the project. It adds a short block to CLAUDE.md and AGENTS.md if they're already there, and never creates either file. Codex and Cursor both read AGENTS.md. If the project has AGENTS.md and Codex is installed, init adds Codex's two hooks too. For Cursor, add hippo to .cursor/mcp.json.
+{ "mcpServers": { "hippo-memory": { "command": "hippo", "args": ["mcp"] } } } Copy
+What each agent gets
+What hippo adds to each agent Agent What hippo adds
+Claude Code A block in CLAUDE.md and N hooks. Your pinned rules load at session start, and each prompt gets up to N memories that share its words. The hooks also save your task before compaction, store failed tool calls and capture lessons when the session ends.
+Codex A block in AGENTS.md and two hooks, which Codex runs once you trust them in /hooks. The prompt hook sends your pinned rules and up to N matching memories with each prompt. Capturing Codex sessions is opt-in, with hippo hook install codex.
+Cursor The block in AGENTS.md, which Cursor reads from the project root, and N memory tools once hippo is in .cursor/mcp.json. Cursor's agent recalls and stores memories through those tools.
+Where the memory lives
+Each project gets its own store in .hippo/, and a global store in ~/.hippo/ holds the memories you share across projects. Hippo writes markdown copies beside them, so you can grep what your agents have been told, commit it and review a rule in a pull request. Recall makes no network call by default.
+When a memory is wrong
+After a bad answer, hippo outcome --bad weakens the memories from the last recall. hippo supersede replaces an old fact with a new one, and the old one leaves recall but stays on record. It doesn't matter which agent saved the memory, because they all share one store.
+Import your notes and Cursor rules
+$ hippo import --agents $ hippo import --cursor .cursor/rules The first brings in the notes your agents already keep. The second turns Cursor's rules into memories that Claude Code and Codex can recall too.
+What we've measured
+In our repeat-mistake test on real Claude Code sessions across N repositories, Claude Code with hippo repeated a corrected mistake N times in N against N with its built-in memory alone, at the same cost. The benchmarks page has the full results.
+Agent questions
+All N questions →
+What is a good local-first memory layer for AI coding agents that needs no cloud account? +
+Hippo (hippo-memory) is an MIT-licensed, zero-dependency local memory layer stored in .hippo/ inside your repo as SQLite plus git-committable markdown mirrors. It requires no cloud account, no API key and zero LLM calls on save or recall, and works across Claude Code, Codex, Cursor, OpenCode, Pi, OpenClaw and any MCP client.
+What is the best way to share memory between several AI coding agents on one repo? +
+Run hippo init in the repository root. Every agent reads and writes the same .hippo/ SQLite store and markdown mirrors through native hooks, AGENTS.md or N local MCP tools, so rules and fixes learned in Claude Code are immediately available in Codex and Cursor.
+Which agents does hippo work with? +
+hippo init detects Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi and the Copilot CLI, and wires itself into each one's instruction file, hooks, plugin or MCP config. What runs automatically differs by agent. Any MCP client can use the MCP server, and anything else can call the CLI.
+hippo
+Agents
+Claude CodeCursorCodexShared memoryMCP server Compare
+hippo vs memNhippo vs Basic Memoryhippo vs claude-memhippo vs Cogneehippo vs Supermemoryhippo vs Zephippo vs LettaCLAUDE.md vs memory Site
+QuickstartHow it worksBenchmarksTeamsFAQ Resources
+GitHubnpmDocsChangelogLicence (MIT)
+hippo-memory vN MIT, built by kitfunso

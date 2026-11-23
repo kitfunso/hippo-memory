@@ -1,5 +1,5 @@
 {
-  "benchmarks": "hippo benchmarks: the wins and the losses",
+  "benchmarks": "hippo benchmarks: every result we measured",
   "claude-code": "Claude Code memory between sessions | hippo",
   "codex": "Codex CLI memory across sessions | hippo",
   "cursor": "Cursor memory between sessions, with MCP | hippo",
@@ -8,9 +8,14 @@
   "home": "hippo: one memory for every agent you&#39;ll ever use",
   "mcp": "MCP memory server for Claude Code, Cursor and Windsurf | hippo",
   "quickstart": "hippo quickstart: two commands",
+  "shared-memory": "Shared memory for Claude Code, Codex and Cursor | hippo",
   "teams": "hippo for teams: what exists today and what is planned",
+  "vs-basic-memory": "hippo vs Basic Memory: outcome-ranked coding memory, MIT",
+  "vs-claude-mem": "hippo vs claude-mem: zero LLM calls and git-readable memory",
   "vs-claude-memory": "CLAUDE.md vs MEMORY.md vs hippo: what goes where",
+  "vs-cognee": "hippo vs Cognee: zero-dependency local memory vs graph stack",
   "vs-letta": "hippo vs Letta: memory for the agents you already run",
   "vs-mem0": "hippo vs mem0: a local, open-source alternative",
+  "vs-supermemory": "hippo vs Supermemory: open-source local MIT memory with local MCP",
   "vs-zep": "hippo vs Zep: a local Zep alternative"
 }

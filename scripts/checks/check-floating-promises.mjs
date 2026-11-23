@@ -6,12 +6,23 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
-/** Handled: a `.catch` or a two-argument `.then`; a `.finally` or one-argument `.then` inherits. */
+/** Handled: a `.catch`, a two-argument `.then`, or `p.then.call(p, ok, no)` (p not a call, no not `undefined`); `.finally` and a one-argument `.then` inherit. */
 export function isHandled(expr) {
   if (!ts.isCallExpression(expr) || !ts.isPropertyAccessExpression(expr.expression)) return false;
   const method = expr.expression.name.text;
   if (method === 'catch') return true;
   if (method === 'then' && expr.arguments.length >= 2) return true;
+  const callee = expr.expression.expression;
+  if (
+    method === 'call' &&
+    expr.arguments.length >= 3 &&
+    ts.isPropertyAccessExpression(callee) &&
+    callee.name.text === 'then' &&
+    !ts.isCallExpression(callee.expression) &&
+    !(ts.isIdentifier(expr.arguments[2]) && expr.arguments[2].text === 'undefined')
+  ) {
+    return true;
+  }
   if (method === 'then' || method === 'finally') return isHandled(expr.expression.expression);
   return false;
 }

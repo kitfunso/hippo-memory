@@ -5,7 +5,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo last-sleep || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "last-sleep"
+            ],
             "timeout": 5
           }
         ]
@@ -14,7 +18,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo session-rules 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "session-rules"
+            ],
             "timeout": 5
           }
         ]
@@ -24,7 +32,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo compact-resume 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "compact-resume"
+            ],
             "timeout": 10
           }
         ]
@@ -35,7 +47,16 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo context --pinned-only --include-recent 5 --format additional-context 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "context",
+              "--pinned-only",
+              "--include-recent",
+              "5",
+              "--format",
+              "additional-context"
+            ],
             "timeout": 5
           }
         ]
@@ -46,7 +67,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo pre-compact 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "pre-compact"
+            ],
             "timeout": 30
           }
         ]
@@ -57,7 +82,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo post-compact 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "post-compact"
+            ],
             "timeout": 10
           }
         ]
@@ -69,7 +98,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo capture-error 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "capture-error"
+            ],
             "timeout": 10
           }
         ]
@@ -81,13 +114,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo note-written 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "note-written"
+            ],
             "timeout": 10,
             "if": "Write(//**/projects/*/memory/*.md)"
           },
           {
             "type": "command",
-            "command": "hippo note-written 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "note-written"
+            ],
             "timeout": 10,
             "if": "Edit(//**/projects/*/memory/*.md)"
           }
@@ -99,7 +140,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "hippo session-end --log-file \"$HOME/.hippo/logs/last-sleep.log\" 2>/dev/null || true",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/hook.mjs",
+              "session-end"
+            ],
             "timeout": 5
           }
         ]

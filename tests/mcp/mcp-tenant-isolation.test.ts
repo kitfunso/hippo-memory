@@ -512,6 +512,7 @@ describe('mcp tenant + client-key isolation', () => {
       mcpContext({
         hippoRoot: home,
         tenantId: 'alpha',
+        role: 'member',
         clientKey: 'http:no-actor:addr',
         store,
         config: loadConfig(home),

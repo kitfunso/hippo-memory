@@ -1,6 +1,7 @@
 // Recall composition: from the loaded candidates and the plan's reads to the reply and its rows;
 // touches no store. The bands are placed in bands.ts.
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { formatHandoffEvidenceLine } from '../../base/session/handoff.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { GoalStackBoostOptions } from '../../domain/search/goal-boost.js';
@@ -197,7 +198,7 @@ function recallResult(
   return {
     results: rankedOut,
     total: window.entries.length,
-    tokens: rankedOut.reduce((acc, r) => acc + estimateTokens(r.content), 0),
+    tokens: rankedOut.reduce((acc, r) => acc + estimateTokens(shownText(r)), 0),
     continuity,
     continuityTokens: continuity ? continuityTokensOf(continuity) : undefined,
     windowSize,

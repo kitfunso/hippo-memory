@@ -23,6 +23,7 @@ import {
 } from '../../base/rank/search-types.js';
 import { rankBothStores } from '../../domain/sharing/search-both.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import type { HybridVectorCandidates } from '../../domain/search/vector.js';
 import type { RecallProfile } from './profiles.js';
 import type {
@@ -229,7 +230,7 @@ export async function searchPool(
     score: 1 - i / order.length,
     bm25: 0,
     cosine: 0,
-    tokens: estimateTokens(entry.content),
+    tokens: estimateTokens(shownText(entry)),
   }));
 }
 

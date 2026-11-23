@@ -5,6 +5,7 @@ import { AGENT_MEMORY_SOURCE_PREFIX } from '../../base/memory/agent-memory-tools
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
+import { identityText } from '../../base/util/same-text.js';
 import { classifyOriginProject, type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedAll, folderEmbedTarget, type EmbedRun } from '../search/embed-memories.js';
@@ -43,7 +44,8 @@ interface SyncEmbed {
   readonly detached: DetachedWork;
 }
 
-const textKey = (e: { tenantId: string; content: string }): string => `${e.tenantId}\n${e.content}`;
+const textKey = (e: { tenantId: string; content: string; leadIn?: string | null }): string =>
+  `${e.tenantId}\n${identityText(e)}`;
 
 /** Global rows of every tenant that the local store holds by neither id nor tenant and text,
  * oldest first; each page asks the local store about its own ids and texts only. */
@@ -57,10 +59,7 @@ async function missingRows(local: Sharing, from: Sharing): Promise<EntryTextKey[
       (k) => !taken.has(k.id) && !k.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX),
     );
     if (open.length === 0) continue;
-    const held = await local.textKeysHolding(
-      { tenantId: ALL_TENANTS },
-      open.map((k) => k.content),
-    );
+    const held = await local.textKeysHolding({ tenantId: ALL_TENANTS }, open.map(identityText));
     const heldKeys = new Set(held.map(textKey));
     missing.push(...open.filter((k) => !heldKeys.has(textKey(k))));
   }
@@ -93,7 +92,13 @@ function copiesOf(
   for (const key of candidates) {
     const entry = byId.get(key.id);
     // A row the global store dropped or edited between the two reads waits for the next sync.
-    if (!entry || entry.content !== key.content) continue;
+    if (
+      !entry ||
+      entry.content !== key.content ||
+      (entry.leadIn || null) !== (key.leadIn || null)
+    ) {
+      continue;
+    }
     if (copied.has(textKey(entry))) {
       twins.add(textKey(entry));
       continue;
@@ -116,7 +121,12 @@ function copiesOf(
 async function refusedTexts(store: SharingStore, { copies, twins }: Copies): Promise<Set<string>> {
   const firsts = copies.filter((e) => twins.has(textKey(e)));
   const refused = await store.rejections.refusedAmong(
-    firsts.map((e) => ({ tenantId: e.tenantId, entryId: e.id, content: e.content })),
+    firsts.map((e) => ({
+      tenantId: e.tenantId,
+      entryId: e.id,
+      content: e.content,
+      leadIn: e.leadIn,
+    })),
   );
   return new Set(firsts.filter((_, i) => refused[i]).map(textKey));
 }

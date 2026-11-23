@@ -19,7 +19,7 @@ import {
   type AuthRevokeResult,
 } from '../../src/api/index.js';
 import { ForbiddenError } from '../../src/base/errors/api-errors.js';
-import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
+import { serve, VIEWER_REFUSAL, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { DAY_MS } from '../../src/base/util/time.js';
@@ -29,6 +29,7 @@ const PEOPLE = new Map<string, ResolvedBearer>([
   ['tok.alice', { tenantId: TENANT, subject: 'alice@corp.example', role: 'member' }],
   ['tok.bob', { tenantId: TENANT, subject: 'bob@corp.example', role: 'member' }],
   ['tok.boss', { tenantId: TENANT, subject: 'boss@corp.example', role: 'admin' }],
+  ['tok.vera', { tenantId: TENANT, subject: 'vera@corp.example', role: 'viewer' }],
 ]);
 const ALICE = 'tok.alice';
 const OPTS: AuthCreateSelfOptions = { ttlDays: 90, perSubject: 3 };
@@ -211,6 +212,13 @@ describe('authCreateSelf', () => {
     expect(auditRows()).toEqual([]);
   });
 
+  it('refuses a viewer with the viewer text and writes nothing', async () => {
+    const viewer: Actor = { subject: 'vera@corp.example', role: 'viewer', viaAuthResolver: true };
+    await expect(mintAs(viewer)).rejects.toThrow(VIEWER_REFUSAL);
+    expect(keyRows()).toEqual([]);
+    expect(auditRows()).toEqual([]);
+  });
+
   it('revokes the oldest live keys over the cap and audits each one with the mint', async () => {
     const cap = { perSubject: 2 };
     const first = await selfMint(ALICE, 'one', cap);
@@ -329,10 +337,59 @@ describe('authRevoke by a member signed in through the auth resolver', () => {
     const bobs = await selfMint('tok.bob');
     for (const keyId of [elsewhere.keyId, 'hk_unknown', bobs.keyId]) {
       await expect(revokeAs(ALICE, keyId)).rejects.toThrow(
-        new ForbiddenError('A member can revoke only the keys it minted'),
+        new ForbiddenError('A caller below admin can revoke only the keys it minted'),
       );
     }
     expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
+  });
+});
+
+describe('DELETE /v1/auth/keys/:keyId by a viewer demoted from editor', () => {
+  const VERA = 'tok.vera';
+  const deleteKey = (token: string, keyId: string): Promise<Response> =>
+    fetch(`${handle!.url}/v1/auth/keys/${keyId}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+  const readWith = async (plaintext: string): Promise<number> => {
+    const res = await fetch(`${handle!.url}/v1/memories?q=x`, { headers: { authorization: `Bearer ${plaintext}` } });
+    await res.body?.cancel();
+    return res.status;
+  };
+
+  it('revokes the member key it minted while it was an editor, and the key then answers 401', async () => {
+    await start();
+    const minted = await mintAs({ ...actorOf(VERA), role: 'member' });
+    expect(await readWith(minted.plaintext)).toBe(200);
+    expect((await deleteKey(VERA, minted.keyId)).status).toBe(200);
+    expect(await readWith(minted.plaintext)).toBe(401);
+    expect(liveOwned('vera@corp.example')).toEqual([]);
+  });
+
+  it("is refused another subject's key, which stays live", async () => {
+    await start();
+    const bobs = await selfMint('tok.bob');
+    const res = await deleteKey(VERA, bobs.keyId);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('A caller below admin can revoke only the keys it minted');
+    expect(await readWith(bobs.plaintext)).toBe(200);
+  });
+
+  it("is refused the same person's key in another tenant, which stays live", async () => {
+    await start();
+    const elsewhere = await authCreateSelf(apiCtx(home, 'other-tenant', { ...actorOf(VERA), role: 'member' }), OPTS);
+    const res = await deleteKey(VERA, elsewhere.keyId);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('A caller below admin can revoke only the keys it minted');
+    expect(withDb((db) => validateApiKey(db, elsewhere.plaintext)).valid).toBe(true);
+  });
+
+  it('is refused an admin key it owns, which stays live', async () => {
+    await start();
+    const adminKey = withDb((db) =>
+      createApiKey(db, { tenantId: TENANT, label: 'owned-admin', role: 'admin', ownerSubject: 'vera@corp.example' }),
+    );
+    const res = await deleteKey(VERA, adminKey.keyId);
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain('cannot revoke an admin key');
+    expect(withDb((db) => validateApiKey(db, adminKey.plaintext)).valid).toBe(true);
   });
 });
 

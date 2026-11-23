@@ -146,11 +146,11 @@ describe('the access line', () => {
         l.replace(/ ts=\S+/, '').replace(/durationMs=\d+/, 'durationMs=N'),
       );
       expect(lines).toEqual([
-        '[hippo] info: request requestId=acc-1 method=GET route=/v1/recall/drill/:id status=404 durationMs=N\n',
-        '[hippo] info: request requestId=acc-5 method=GET route=/v1/predictions/:id status=404 durationMs=N\n',
+        '[hippo] info: request requestId=acc-1 method=GET route=/v1/recall/drill/:id status=404 durationMs=N role=member\n',
+        '[hippo] info: request requestId=acc-5 method=GET route=/v1/predictions/:id status=404 durationMs=N role=member\n',
         '[hippo] info: request requestId=acc-2 method=GET route=/health status=200 durationMs=N\n',
         '[hippo] info: request requestId=acc-3 method=GET route=unmatched status=404 durationMs=N\n',
-        '[hippo] info: request requestId=acc-4 method=POST route=/mcp status=200 durationMs=N tenant=default\n',
+        '[hippo] info: request requestId=acc-4 method=POST route=/mcp status=200 durationMs=N tenant=default role=member\n',
       ]);
       expect(lines.join('')).not.toMatch(/private|987654321/);
     } finally {

@@ -55,6 +55,16 @@ describe('embeddingInputText', () => {
     expect(text).toBe('hello world');
   });
 
+  it('puts the lead-in after the content and before the tags, and ignores an empty or null one', () => {
+    const entry = { content: 'Three times a week', tags: ['conv:x', 'path:a'] };
+    expect(embeddingInputText({ ...entry, leadIn: 'user: how often?' })).toBe(
+      'Three times a week\nuser: how often? conv:x',
+    );
+    for (const leadIn of [undefined, null, '']) {
+      expect(embeddingInputText({ ...entry, leadIn })).toBe('Three times a week conv:x');
+    }
+  });
+
   it('excludes multiple path: tags interleaved with kept tags', () => {
     const text = embeddingInputText({
       content: 'note',

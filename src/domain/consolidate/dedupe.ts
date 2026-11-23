@@ -10,7 +10,7 @@ import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { derivationPartitionKey } from '../../base/scope/recall-scope.js';
-import { duplicateKey } from '../../base/util/same-text.js';
+import { duplicateKey, identityText } from '../../base/util/same-text.js';
 import type { StoreWith } from '../../base/ports/store.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
@@ -148,7 +148,7 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));
-      addRow(groups, duplicateKey(entry.content), dedupRow(entry));
+      addRow(groups, duplicateKey(identityText(entry)), dedupRow(entry));
     }
   }
   return partitions;

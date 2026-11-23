@@ -61,11 +61,22 @@ export type {
   AddonCall,
   AddonRoute,
   AuthResolver,
+  KeyQuota,
+  KeyQuotaCall,
+  KeyQuotaRefusal,
+  OAuthResource,
   RateLimitSpec,
   ResolvedBearer,
   ServeOptions,
   ServerHandle,
 } from './surface/server/types.js';
+export {
+  GROUPS_CLAIM_TOO_LONG,
+  NO_MAPPED_GROUP,
+  roleFromGroups,
+  VIEWER_REFUSAL,
+} from './base/scope/role.js';
+export type { Role, RoleFromGroups, RoleGroups, RoleLevel } from './base/scope/role.js';
 export { admitProjectWrite } from './api/project-write-gate.js';
 export type { ProjectWriteCall, ProjectWriteGate } from './api/types.js';
 // ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.

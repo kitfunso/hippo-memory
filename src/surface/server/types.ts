@@ -1,8 +1,9 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Context, EntryContext } from '../../api/index.js';
+import type { Actor, Context, EntryContext } from '../../api/index.js';
 import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
+import type { Role, RoleLevel } from '../../base/scope/role.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
@@ -27,19 +28,41 @@ export interface ServerHandle {
   server?: import('node:http').Server;
 }
 
-/** Identity an {@link AuthResolver} vouches for. The core sanitises it before use. */
+/** Identity an {@link AuthResolver} vouches for. The core sanitises it before use. Map an IdP groups
+ * claim with `roleFromGroups`; on `refused`, return null, log the reason and never log the claim. */
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST
-   * /v1/auth/keys); an add-on revokes them through the exported authRevoke when the IdP
-   * deprovisions the minter. */
-  role: 'admin' | 'member';
+  /** 'admin', 'member' or 'viewer'; any other value, or none, reads as 'viewer'. Admin is
+   * tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through
+   * the exported authRevoke when the IdP deprovisions the minter. */
+  role: Role;
   scopes?: readonly string[];
 }
 
-/** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so
- * throw only when upstream is down. */
+/** serve()'s OAuth setting: hippo is the protected resource, never the authorization server.
+ * Rules: https unless loopback, path ends in /mcp, no query, fragment or encoded slash, no
+ * offline_access scope; each issuer exactly as its server publishes it, printable ASCII, normal
+ * URL form. */
+export interface OAuthResource {
+  /** The public URL clients use for /mcp, in normal URL form: https, or http on a loopback host. */
+  readonly resource: string;
+  /** Issuers the authResolver accepts, at least one; each as its server publishes it: printable
+   * ASCII, normal URL form. */
+  readonly authorizationServers: readonly string[];
+  /** Scopes a client asks for, sent as scopes_supported and in the challenge's scope. */
+  readonly scopes?: readonly string[];
+}
+
+/** The two `WWW-Authenticate` values a /mcp 401 can carry, built once at boot. */
+export interface OAuthChallenge {
+  readonly withError: string;
+  readonly withoutError: string;
+}
+
+/** Sole judge of non-`hk_` bearer tokens: null is 401, throw/deadline is 503 (throw only when upstream is down).
+ * Return null if `roleFromGroups` refuses (log reason, never claim); with `oauth`, verify signature, issuer
+ * (in `oauth.authorizationServers`), audience (includes `oauth.resource`) and expiry, as core checks none. */
 export type AuthResolver = (
   token: string,
   /** Aborted when the deadline passes, so a slow upstream call can stop. */
@@ -59,6 +82,9 @@ export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
   readonly storeReady?: StoreGroup;
+  /** The least role let in; unset means 'editor'. Set 'viewer' only on a route that writes nothing,
+   * since the exported write helpers trust this level. */
+  readonly level?: RoleLevel;
 }
 
 export interface RateLimitSpec {
@@ -66,12 +92,33 @@ export interface RateLimitSpec {
   burst: number;
 }
 
+/** What {@link KeyQuota} is asked about one request. */
+export interface KeyQuotaCall {
+  readonly tenantId: string;
+  readonly actor: Readonly<Actor>;
+  readonly method: string;
+  /** The URL path without its query. */
+  readonly path: string;
+  readonly requestId: string | undefined;
+}
+
+/** A 429 with `Retry-After`: a finite retryAfterSec above 0 (rounded up, at most 86400) and a non-empty message. */
+export interface KeyQuotaRefusal {
+  readonly retryAfterSec: number;
+  readonly message: string;
+}
+
+/** Never asked for the local CLI key. A throw or a malformed answer admits it; a promise answer is off-contract. */
+export type KeyQuota = (call: KeyQuotaCall) => KeyQuotaRefusal | null;
+
 export interface ServeOptions {
   hippoRoot: string;
   /** Runs on every request and SSE heartbeat, so keep it cache-backed; API keys never reach it. */
   authResolver?: AuthResolver;
   /** Deadline for one authResolver call; defaults to 5000 ms. */
   authResolverTimeoutMs?: number;
+  /** OAuth metadata for /mcp, named in a POST /mcp 401 only; boot refuses it without an authResolver. */
+  oauth?: OAuthResource;
   port?: number;
   host?: string;
   /** Stop and exit on SIGINT/SIGTERM, and drain then exit 1 on an uncaught exception or
@@ -122,6 +169,8 @@ export interface ServeOptions {
   projectWriteGate?: ProjectWriteGate;
   /** Deadline for one projectWriteGate call; defaults to 5000 ms. */
   projectWriteGateTimeoutMs?: number;
+  /** Asked once per request after the per-caller charge; a throw or a malformed answer admits it: quota guards load. */
+  keyQuota?: KeyQuota;
 }
 
 /** Counts this server's /health reports, since it started. */
@@ -148,6 +197,8 @@ export type ResolvedServeOptions = ServeOptions & {
   /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
   publicJsonBodies: ReadonlyMap<string, string>;
+  /** The /mcp 401 challenge, frozen at boot from the checked oauth setting. */
+  readonly oauthChallenge?: OAuthChallenge;
   /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
   /** The MCP tools this store serves, each tool's store need settled at boot. */
@@ -198,11 +249,12 @@ export interface WebhookRouteRequest extends RouteRequest {
   readonly store: ConnectorStore;
 }
 
-/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on
- * loopback, nothing, for a route whose handler checks the sender's signature itself, or the
- * dashboard's session, which only its rows take. */
+/** What the dispatch gate proves before a handler runs: a reader, a writer or an admin, a host
+ * admin on loopback, nothing, for a route whose handler checks the sender's signature itself, or
+ * the dashboard's session, which only its rows take. */
 export type RouteAuth =
-  | 'caller'
+  | 'viewer'
+  | 'editor'
   | 'admin'
   | 'host-admin-local'
   | 'webhook-signature'

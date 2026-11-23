@@ -56,6 +56,8 @@ export {
   sleep,
   consolidate,
   strengthBucket,
+  llmRoute,
+  type LlmRoute,
 } from './entry/sleep.js';
 export {
   captureError,

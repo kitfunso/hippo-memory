@@ -21,7 +21,7 @@ export function reviewerOf(ctx: ContextWith<never, ReviewGroup>): ConnectorWrite
 }
 
 export interface ScreenInput {
-  /** The text the row stores. */
+  /** The text recall shows of the row: its content, under its lead-in when it has one. Only the check reads it. */
   readonly content: string;
   /** The tag list the row stores, screened like the content, before the marks this call adds. Supersede passes
    * the inherited tags, which can hold code marks no pattern matches. */
@@ -72,10 +72,10 @@ export function markedTags(
   return added.length > 0 ? [...(tags ?? []), ...added] : tags;
 }
 
-/** A member key's write outside a personal scope reaches the other members' prompts, as connector text does;
- * the local key is the operator's own CLI. */
+/** A non-admin key's write outside a personal scope reaches the other members' prompts, as connector text
+ * does; the local key is the operator's own CLI. */
 function sharesAsMember(actor: Actor, scope: string | null): boolean {
-  return actor.role === 'member' && actor.localKey !== true && !isPersonalScope(scope);
+  return actor.role !== 'admin' && actor.localKey !== true && !isPersonalScope(scope);
 }
 
 /** Why a write is held: the check's match, the connector's rule, or both; null when neither. */

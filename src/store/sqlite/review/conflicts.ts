@@ -3,9 +3,11 @@ import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../../base/uti
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { insertRejectedValue } from './rejection.js';
 import {
-  rejectionDigest,
   normalizeValueForRejection,
+  rowDigests,
+  tombstoneDigest,
 } from '../../../base/records/rejection-digest.js';
+import { identityText } from '../../../base/util/same-text.js';
 import { archiveRawMemory, markMirrorCleaned } from '../entries/raw-archive.js';
 import {
   MEMORY_CONFLICT_COLUMNS,
@@ -474,6 +476,7 @@ interface LoserRemoval {
 interface LoserRow {
   kind: string;
   content: string;
+  lead_in: string | null;
   tenant_id: string;
 }
 
@@ -514,7 +517,7 @@ function removeConflictLoser(
   const loserId = r.loser.id;
   const loserRow = cachedStatement(
     db,
-    `SELECT kind, content, tenant_id FROM memories WHERE id = ? AND tenant_id = ?`,
+    `SELECT kind, content, lead_in, tenant_id FROM memories WHERE id = ? AND tenant_id = ?`,
   ).get(loserId, tenantId) as LoserRow | undefined;
   // The claim in this transaction saw the row, so it is there.
   if (!loserRow) return removal;
@@ -549,7 +552,9 @@ function recordRejectedLoserValue(
     rejectedBy: r.actor,
     rejectedAt: r.at,
     sourceMemoryId: r.loser.id,
-    normalizedChars: normalizeValueForRejection(loserRow.content).length,
+    normalizedChars: normalizeValueForRejection(
+      identityText({ content: loserRow.content, leadIn: loserRow.lead_in }),
+    ).length,
   });
 }
 
@@ -576,18 +581,18 @@ function removeDuplicatesOfRejectedValue(
   // (tenant_id, digest) index would read just those.
   const dupRows = cachedStatement(
     db,
-    `SELECT id, kind, content, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`,
+    `SELECT id, kind, content, lead_in, scope FROM memories WHERE tenant_id = ? AND id != ? AND id != ?`,
   ).iterate(loserTenantId, r.loser.id, r.keep.id) as Iterable<{
     id: string;
     kind: string;
     content: string;
+    lead_in: string | null;
     scope: string | null;
   }>;
   const dups: Array<{ id: string; kind: string }> = [];
   for (const dup of dupRows) {
-    if (rejectionDigest(dup.content) !== rejectedDigest || !ownScopeTouches(ownScope, dup.scope)) {
-      continue;
-    }
+    const held = rowDigests({ content: dup.content, leadIn: dup.lead_in }).includes(rejectedDigest);
+    if (!held || !ownScopeTouches(ownScope, dup.scope)) continue;
     dups.push({ id: dup.id, kind: dup.kind });
   }
   const { actor, reason } = r;
@@ -606,7 +611,8 @@ function removeDuplicatesOfRejectedValue(
 /** Tombstones the loser's digest and removes its same-tenant duplicates into `removal`; returns
  * the digest. */
 function tombstoneLoserValue(db: DatabaseSyncLike, loser: RejectedLoser): string {
-  const rejectedDigest = rejectionDigest(loser.loserRow.content);
+  const { content, lead_in: leadIn } = loser.loserRow;
+  const rejectedDigest = tombstoneDigest({ content, leadIn });
   recordRejectedLoserValue(db, loser.r, loser.loserRow, rejectedDigest);
   removeDuplicatesOfRejectedValue(db, loser, rejectedDigest);
   return rejectedDigest;

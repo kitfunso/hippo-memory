@@ -1,5 +1,6 @@
 // hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
 // and the shared entry write path.
+import { deleteMemoryOnlyGraphRows } from '../graph/graph-writes.js';
 import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
 import {
@@ -352,6 +353,10 @@ export function setEntryTagsInTx(db: DatabaseSyncLike, entry: MemoryEntry): void
 /** Removes a row from `memories` and full-text search on the caller's transaction, as sleep's
  * dormant move does, and marks its summary parent dirty. */
 export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, actor: string): void {
+  deleteMemoryOnlyGraphRows(db, {
+    sql: 'SELECT id FROM memories WHERE id = ? AND tenant_id = ?',
+    params: [entry.id, entry.tenantId],
+  });
   cachedStatement(db, 'DELETE FROM memories WHERE id = ? AND tenant_id = ?').run(
     entry.id,
     entry.tenantId,

@@ -5,7 +5,7 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { insertEntityAt, insertRelationAt } from '../_helpers/graph-seed.js';
 import { buildGraphModel } from '../../src/domain/graph/view.js';
-import type { ScopeActor } from '../../src/base/scope/recall-scope.js';
+import type { StoreActor } from '../../src/base/scope/recall-scope.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { objectsAt } from '../_helpers/objects-at.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -35,8 +35,8 @@ const names = (m: { nodes: { name: string }[] }): string[] => m.nodes.map((n) =>
 
 describe('graph-view personal scope', () => {
   let home: string;
-  const alice: ScopeActor = { role: 'member', owner: 'alice' };
-  const bob: ScopeActor = { role: 'member', owner: 'bob' };
+  const alice: StoreActor = { role: 'member', owner: 'alice' };
+  const bob: StoreActor = { role: 'member', owner: 'bob' };
 
   beforeEach(async () => {
     home = makeRoot('graphview-scope');

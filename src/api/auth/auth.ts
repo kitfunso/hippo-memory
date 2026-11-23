@@ -2,6 +2,7 @@
 
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
 import { isRestrictedScope } from '../../base/scope/recall-scope.js';
+import { canWrite, VIEWER_REFUSAL } from '../../base/scope/role.js';
 import { DEFAULT_KEY_TTL_DAYS, mintApiKey } from '../../base/scope/api-key.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import type { KeyMint, SelfKeyMint, RequiredStore } from '../../base/ports/store.js';
@@ -161,7 +162,7 @@ function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): voi
   }
 }
 
-/** Mint a member key for the caller an auth resolver vouched for, whatever its role; the binary
+/** Mint a member key for the editor or admin an auth resolver vouched for (a viewer is refused); the binary
  * floor, the cap's revokes, the mint and its audit rows commit or fail together. */
 export async function authCreateSelf(
   ctx: Context,
@@ -179,6 +180,7 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<Sel
       'Only a caller signed in through the auth resolver can mint its own key',
     );
   }
+  if (!canWrite(ctx.actor.role)) throw new ForbiddenError(VIEWER_REFUSAL);
   assertSelfMintOpts(opts);
   const { subject } = ctx.actor;
   const label = opts.label ?? null;
@@ -270,7 +272,7 @@ function assertMayRevoke(
     actor.viaAuthResolver &&
     (row?.tenantId !== ctx.tenantId || row.ownerSubject !== actor.subject)
   ) {
-    throw new ForbiddenError('A member can revoke only the keys it minted');
+    throw new ForbiddenError('A caller below admin can revoke only the keys it minted');
   }
   // Cross-tenant access denied: same message as missing key, no info leak.
   if (!row || row.tenantId !== ctx.tenantId) {
@@ -278,7 +280,7 @@ function assertMayRevoke(
   }
   if (actor.viaAuthResolver && row.role === 'admin') {
     throw new ForbiddenError(
-      'An auth resolver admin cannot revoke an admin key, which outranks it',
+      'A caller signed in through an auth resolver cannot revoke an admin key',
     );
   }
 }

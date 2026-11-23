@@ -83,7 +83,10 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
   const childrenByParent = groupByParent(entries);
 
   if (profiles.length === 0 && orphanL2.length === 0) {
-    console.log('No DAG summaries yet. Run `hippo sleep` with ANTHROPIC_API_KEY set.');
+    console.log(
+      'No DAG summaries yet. Run `hippo sleep` with a model set: ' +
+        'HIPPO_LLM_BASE_URL and HIPPO_LLM_MODEL, or ANTHROPIC_API_KEY.',
+    );
     return;
   }
 

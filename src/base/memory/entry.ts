@@ -2,6 +2,7 @@
 // schema fit.
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
+import { MAX_LEAD_IN_CHARS } from '../util/limits.js';
 import { randomUUID } from 'node:crypto';
 import { isJsonString } from '../util/json.js';
 import { tokenizeMin } from '../util/tokenize.js';
@@ -99,6 +100,8 @@ export interface MemoryEntry {
    * (legacy or unnamed write), denied by ambient context. Stamped at write time by
    * stampOriginProject (sqlite/entries/entry-row.ts); undefined only before the first write. */
   originProject?: string | null;
+  /** The conversation text that led into this memory; null, empty or absent means none. */
+  leadIn?: string | null;
 }
 
 /** Named dag_level values; level 0 is a raw leaf. */
@@ -210,6 +213,7 @@ export interface CreateMemoryOptions {
   owner?: string | null;
   artifactRef?: string | null;
   tenantId?: string;
+  leadIn?: string | null;
 }
 
 /** A new memory entry created at `now`; hippo's own writers name the half-life base, so the type
@@ -250,6 +254,7 @@ export function createMemory(
     ...newLineage(options, at),
   };
 
+  if (options.leadIn) entry.leadIn = options.leadIn;
   entry.strength = calculateStrength(entry, now, PRODUCTION_STRENGTH);
   return entry;
 }
@@ -305,6 +310,12 @@ function assertValidMemoryInput(content: string, options: Partial<CreateMemoryOp
       `Invalid trace_outcome: ${options.traceOutcome}. Must be 'success', 'failure', 'partial', or null.`,
     );
   }
+
+  if (options.leadIn && options.leadIn.length > MAX_LEAD_IN_CHARS) {
+    throw new BadRequestError(
+      `Lead-in too long (${options.leadIn.length} chars, maximum ${MAX_LEAD_IN_CHARS})`,
+    );
+  }
 }
 
 /** What createSuccessor takes beyond the old row, the new text and the time. */
@@ -317,7 +328,7 @@ export interface SuccessorOptions {
 }
 
 /** The row that replaces `old`, created at `now`: a supersede never changes where a memory
- * belongs or whose it is, so source, scope, owner, session and a stamped origin carry over. */
+ * belongs or whose it is, so source, scope, owner, session, lead-in and a stamped origin carry over. */
 export function createSuccessor(
   old: MemoryEntry,
   content: string,
@@ -334,6 +345,7 @@ export function createSuccessor(
     scope: old.scope,
     owner: old.owner,
     sourceSessionId: old.sourceSessionId,
+    leadIn: old.leadIn,
     baseHalfLifeDays: opts.baseHalfLifeDays,
   };
   const next = createMemory(content, fields, now);

@@ -1,6 +1,7 @@
 // Which rows a store read may answer as holding a text: equal once every space is gone, or a
 // sleep-merged row holding it. Every copy heldTextKeys finds passes, so a caller that checks again
 // keeps its answer.
+import { identityText } from '../../base/util/same-text.js';
 
 /** The code points JavaScript's \s matches, which duplicateKey folds; the SQL twin removes the
  * same list. */
@@ -17,13 +18,17 @@ const SPACES = new RegExp(
 /** `text` with every space removed: two texts duplicateKey calls equal are equal here too. */
 export const bareText = (text: string): string => text.replace(SPACES, '');
 
-/** True when `row` may hold one of the texts whose bare forms are `bares`: its own bare text is
- * one, or it is a sleep-merged row whose bare text contains one. */
+/** True when `row` may hold one of the texts whose bare forms are `bares`: its own bare identity
+ * text is one, or it is a sleep-merged row whose bare text contains one. */
 export function mayHoldCopy(
-  row: { readonly content: string; readonly source?: string | null },
+  row: {
+    readonly content: string;
+    readonly leadIn?: string | null;
+    readonly source?: string | null;
+  },
   bares: ReadonlySet<string>,
 ): boolean {
-  const bare = bareText(row.content);
+  const bare = bareText(identityText(row));
   if (bares.has(bare)) return true;
   if (row.source !== 'consolidation') return false;
   for (const held of bares) if (bare.includes(held)) return true;

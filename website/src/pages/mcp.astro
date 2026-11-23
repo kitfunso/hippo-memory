@@ -10,7 +10,7 @@ import { faqPick, mcpJson } from '../content/site';
 
 const title = 'MCP memory server for Claude Code, Cursor and Windsurf | hippo';
 const description =
-  'hippo mcp runs a local memory server over stdio for any MCP client. Memories stay in SQLite on your machine, with no account and no API key. MCP access alone does not capture sessions.';
+  'hippo mcp runs a local-first memory server over stdio for any MCP client. Memories stay in SQLite with markdown mirrors on your machine, with no cloud account, no API key and zero LLM calls on save.';
 
 // README "MCP Server" names the 13 tools; each line paraphrases its description in src/surface/mcp/server.ts.
 const tools = [
@@ -90,7 +90,9 @@ const tools = [
         also adds the ability to mark a recalled memory wrong, replace an old fact and list contradictions.
       </p>
       <p>
-        <a class="link" href="/vs/mem0/">hippo vs mem0</a>, <a class="link" href="/vs/zep/">hippo vs Zep</a>,
+        <a class="link" href="/vs/mem0/">hippo vs mem0</a>, <a class="link" href="/vs/basic-memory/">hippo vs Basic Memory</a>,
+        <a class="link" href="/vs/claude-mem/">hippo vs claude-mem</a>, <a class="link" href="/vs/cognee/">hippo vs Cognee</a>,
+        <a class="link" href="/vs/supermemory/">hippo vs Supermemory</a>, <a class="link" href="/vs/zep/">hippo vs Zep</a>,
         <a class="link" href="/vs/letta/">hippo vs Letta</a>
       </p>
     </Section>

@@ -218,6 +218,7 @@ describe('published runtime exports', () => {
         formatAmbientVector
         generateId getEmbedding getGlobalRoot
         isCardStatus isEmbeddingAvailable isHandoffOutcome
+        llmRoute
         markRetrieved
         partitionLessons
         renderAmbientSummary resolveConfidence
@@ -248,9 +249,11 @@ describe('published runtime exports', () => {
           "./server": "BadRequestError
         ConflictError
         ForbiddenError
+        GROUPS_CLAIM_TOO_LONG
         HttpError
         LOOPBACK_HOST_HEADER
-        NotFoundError
+        NO_MAPPED_GROUP NotFoundError
+        VIEWER_REFUSAL
         admitProjectWrite authCreate authCreateSelf authRevoke
         bindSessionOwner
         captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
@@ -259,6 +262,7 @@ describe('published runtime exports', () => {
         isCrossSite isLoopback isReservedActor
         ownerOrSubject
         preCompactForCaller promptHookContext
+        roleFromGroups
         saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
           "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
         WORKING_STATE_CAPS
@@ -270,6 +274,7 @@ describe('published runtime exports', () => {
         transcriptWorkingState",
           "./store-kit": "ALL_TENANTS
         EMBEDDING_MODEL_META_KEY
+        GRAPH_ID_BATCH
         LIKE_WINDOW_ROWS LIKE_WINDOW_TERMS
         OPTIONAL_GROUPS OTHER_STORE_MARKER
         PROTECTED_ROWS
@@ -277,19 +282,19 @@ describe('published runtime exports', () => {
         SCHEMA_FIT_WINDOW_ROWS SECRET_TAGS StoreBusyError
         ambientRefusal assertWriteRight auditRowsRead
         bufferToFloat32
-        cjkIndexTerms
+        canReadScope cjkIndexTerms
         decodeVector descendantAdmits diffGraph duplicateHash
         encodeVector entryAfterOutcome
         float32ToBuffer ftsTermParts
         hasGroup heldTexts
-        initStore interleaveRows isSharedStore isoInstant
+        identityText initStore interleaveRows isSharedStore isoInstant
         loadConfig
         normalizeValueForRejection
         ownScopeTouches
         partitionCjkTerms passesScopeFilterForRecall physicsSearch
-        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup runStoreConformance
+        rankVectorRows rarestFtsQuery readerMayChange readerReaches rejectionDigest repairKeeps replacesIndex requireGroup rowDigests runStoreConformance
         sortableStamp splitLikeTerms sqliteStore
-        tallyAmbientEntries targetReader",
+        tallyAmbientEntries targetReader tombstoneDigest",
           "./testing": "ambientSecretAdmit ambientSecretAdmitWire
         batchWriteAndDeleteWire buildIndexFromDb
         calculateStrengthWire createMemoryWire

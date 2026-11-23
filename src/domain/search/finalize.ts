@@ -1,5 +1,6 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { compareScoredResults } from '../../base/rank/compare.js';
 import { churnStaleFactor } from './boosts.js';
 import {
@@ -60,7 +61,7 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
       score: childScore,
       bm25: 0,
       cosine: 0,
-      tokens: estimateTokens(child.content),
+      tokens: estimateTokens(shownText(child)),
     };
     results.push(added);
     resultById.set(child.id, added);

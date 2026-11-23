@@ -8,6 +8,14 @@ The plugin keeps what comes up as you work, such as a rule you stated, a tool ca
 
 ### From the marketplace
 
+On Claude Code 2.1.275 or later, one line:
+
+```
+/plugin install hippo-memory --marketplace kitfunso/hippo-memory
+```
+
+On an older Claude Code:
+
 ```
 /plugin marketplace add kitfunso/hippo-memory
 /plugin install hippo-memory
@@ -41,6 +49,8 @@ hippo init --no-hooks
 ```
 
 ## What It Does
+
+Each hook and the MCP server start `node` on a script in the plugin's `scripts/` folder, which runs the `hippo` it finds on your PATH (never one in the project folder). A hook never fails a session: when hippo is missing or errors, the hook exits 0 and prints nothing. This form needs Claude Code 2.1.139 or later.
 
 The per-prompt hook injects pinned rules and matching memories, so the plugin no longer runs a context call at session start.
 
@@ -87,7 +97,11 @@ claude-code-plugin/
       SKILL.md           # Memory skill (auto-invoked)
   hooks/
     hooks.json           # SessionStart, UserPromptSubmit, PreCompact, PostCompact, PostToolUseFailure, PostToolUse, SessionEnd
-  .mcp.json              # Starts hippo mcp as the hippo-memory MCP server
+  scripts/
+    hook.mjs             # Runs one hippo hook verb, always exits 0
+    mcp.mjs              # Runs hippo mcp on the plugin's stdio
+    spawn-hippo.mjs      # Starts hippo from PATH with no shell parsing
+  .mcp.json              # Starts scripts/mcp.mjs as the hippo-memory MCP server
   README.md
 ```
 

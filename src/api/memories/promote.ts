@@ -15,6 +15,7 @@ import {
   type Layer,
   type MemoryEntry,
 } from '../../base/memory/entry.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
@@ -206,7 +207,8 @@ async function supersedeScreened(
   const reviewer = reviewerOf(ctx);
   const tags = withoutCaptureTags(overrides.tags ?? target.tags);
   const verdict = screenWrite(ctx.actor, {
-    content: newContent,
+    // The successor keeps the old row's lead-in, and recall shows it above the new content.
+    content: shownText({ content: newContent, leadIn: target.leadIn }),
     tags,
     scope: target.scope ?? null,
     untrusted: false,

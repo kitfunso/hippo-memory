@@ -1,6 +1,7 @@
 // Which model and text format built a vector index, and when a provider change means a rebuild:
 // pure rules that every store and the search side apply alike.
 
+import { findableText } from '../memory/lead-in.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local.js';
 
 /** What a store's vector index was built by: the stored identity, and whether any vector exists. */
@@ -19,11 +20,15 @@ export function embeddingIndexIdentity(providerId: string): string {
   return `${providerId}#t${EMBED_TEXT_FORMAT}`;
 }
 
-/** Content plus tags minus `path:*`, which derive from cwd and would embed one text differently
- * per store folder. */
-export function embeddingInputText(entry: { content: string; tags: string[] }): string {
+/** The findable text plus tags minus `path:*`, which derive from cwd and would embed one text
+ * differently per store folder. */
+export function embeddingInputText(entry: {
+  content: string;
+  tags: string[];
+  leadIn?: string | null;
+}): string {
   const tags = entry.tags.filter((t) => !t.startsWith('path:'));
-  return `${entry.content} ${tags.join(' ')}`.trim();
+  return `${findableText(entry)} ${tags.join(' ')}`.trim();
 }
 
 /** The one rebuild rule every store applies to its indexed model. */

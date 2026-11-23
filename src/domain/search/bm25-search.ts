@@ -1,6 +1,7 @@
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import { estimateTokens } from '../../base/util/token-text.js';
+import { shownText } from '../../base/memory/lead-in.js';
 import { tokenize } from '../../base/util/tokenize.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { pathTagsOf } from './path-context.js';
@@ -98,7 +99,7 @@ export function rankBm25(
       score,
       bm25,
       cosine: 0,
-      tokens: estimateTokens(pool[i].content),
+      tokens: estimateTokens(shownText(pool[i])),
     });
   }
   scored.sort(compareScoredResults);

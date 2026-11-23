@@ -96,6 +96,24 @@ describe('sync down from the global store', () => {
     },
   );
 
+  it.each([false, true])(
+    'keeps "Yes." under two lead-ins apart: only the texts the local store lacks are copied, index in sync: %s',
+    async (inSync) => {
+      const [L1, L2] = ['user: Is the flight booked?', 'user: Did Mel get the job?'];
+      write(globalRoot, [row('Yes.', 0, { leadIn: L1 }), row('Yes.', 1, { leadIn: L2 }), row('Yes.', 2)]);
+      write(localRoot, [row('Yes.', 3, { leadIn: L1 })]);
+      localFtsInSync(inSync);
+
+      expect(
+        await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), { embed: TEST_RUN, detached: TEST_DETACHED }),
+      ).toBe(2);
+
+      const local = loadAllEntries(localRoot, 'default');
+      expect(local).toHaveLength(3);
+      expect(new Set(local.map((e) => e.leadIn ?? null))).toEqual(new Set([L1, L2, null]));
+    },
+  );
+
   it('reads no more rows with 300 local rows that hold none of the global texts', async () => {
     const rowsRead = async (bystanders: number): Promise<number> => {
       localRoot = makeStore('global-sync-reads').root;

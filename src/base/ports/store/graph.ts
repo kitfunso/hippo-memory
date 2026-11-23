@@ -1,5 +1,5 @@
 // The graph groups: the entity graph's reads and the rebuild's writes.
-import type { ScopeActor } from '../../scope/recall-scope.js';
+import type { StoreActor } from '../../scope/recall-scope.js';
 import type { MethodEffects } from './effects.js';
 
 /** How many ids one graph read takes at a time: results come back in this order per batch, and a
@@ -7,7 +7,7 @@ import type { MethodEffects } from './effects.js';
 export const GRAPH_ID_BATCH = 400;
 
 /** What one graph view reads. `limit` is a positive integer capping each read on its own; newest
- * means createdAt, then id, both descending. A row shows when it cites no memory, or its memory
+ * means createdAt, then id, both descending. A row shows when it cites no memory but a source object, or its memory
  * is in the tenant with a null scope or one `canReadScope(reader, scope)` admits; no `reader`
  * shows every row. */
 export interface GraphViewQuery {
@@ -17,7 +17,7 @@ export interface GraphViewQuery {
    * ids held, until `limit` ids are held. */
   readonly entity?: string;
   readonly limit: number;
-  readonly reader?: ScopeActor;
+  readonly reader?: StoreActor;
 }
 
 /** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per
@@ -75,7 +75,8 @@ export interface Entity {
   entityType: EntityType;
   name: string;
   /** The consolidated source memory this entity came from; null once the mirror is
-   * forgotten/pruned, then provenance is source_object. */
+   * forgotten/pruned, then provenance is source_object; a memory-only entity goes with its memory, and so does
+   * every relation that ends at it, whoever backs that relation (the FK cascade), as a rebuild drops them. */
   memoryId: string | null;
   sourceKind: SourceKind;
   /** The authoritative object this entity is anchored to (object-provenance path).
@@ -91,7 +92,8 @@ export interface Relation {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  /** NULL once the mirror is forgotten/pruned; the relation survives via source_object. */
+  /** NULL once the mirror is forgotten/pruned; the relation survives via source_object; a memory-only relation
+   * goes with its memory, and any relation goes with an entity it ends at. */
   memoryId: string | null;
   sourceKind: SourceKind;
   sourceObjectType?: SourceObjectType;

@@ -65,6 +65,7 @@ interface StoredColumns extends Pick<
   readonly latestAt?: Text;
   readonly lastRebuiltAt?: Text;
   readonly dagLevel3BuiltAt?: Text;
+  readonly leadIn?: Text;
 }
 
 function retrievalFields(c: StoredColumns) {
@@ -88,6 +89,7 @@ function retrievalFields(c: StoredColumns) {
     pinned: Boolean(c.pinned),
     confidence: c.confidence ?? 'observed',
     content: c.content,
+    leadIn: c.leadIn ?? null,
     parents: c.parents,
     starred: Boolean(c.starred),
     traceOutcome: c.traceOutcome ?? null,
@@ -164,6 +166,7 @@ export interface MemoryRow {
   pinned: number;
   confidence: ConfidenceLevel;
   content: string;
+  lead_in: string | null;
   parents_json: string;
   starred: number;
   trace_outcome: MemoryEntry['traceOutcome'];
@@ -269,6 +272,7 @@ export const MEMORY_ROW_COLUMNS = [
   'pinned',
   'confidence',
   'content',
+  'lead_in',
   'parents_json',
   'starred',
   'trace_outcome',
@@ -327,6 +331,7 @@ function retrievalColumnsOf(row: MemoryRow) {
     pinned: row.pinned,
     confidence: row.confidence,
     content: row.content,
+    leadIn: row.lead_in,
     parents: parseJsonArray(row.parents_json, site('parents_json')),
     starred: row.starred,
     traceOutcome: row.trace_outcome as MemoryEntry['traceOutcome'],

@@ -29,6 +29,7 @@ const FLAGS = {
   HIPPO_REQUIRE_SERVER: false,
   HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL: false,
   HIPPO_ALLOW_CLEARTEXT: false,
+  HIPPO_LLM_ALLOW_HTTP: false,
   HIPPO_CAPTURE_SCRIPTED: false,
   HIPPO_READ_ONLY: true,
   SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK: false,
@@ -205,6 +206,32 @@ export function envHomeDir(): string | undefined {
 export const envPath = text('PATH');
 /** The extensions win32 tries on a bare command name, in order. */
 export const envPathExt = text('PATHEXT');
+
+/** PATH's folders in order with empty entries dropped. On win32 it reads PATH as cmd.exe does: a
+ * `;` inside quotes stays in its folder and the quotes go, so `"C:\Program Files\x"` is found. */
+export function splitPathList(
+  value: string,
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  if (platform !== 'win32') return value.split(':').filter((dir) => dir.length > 0);
+  const dirs: string[] = [];
+  let dir = '';
+  let quoted = false;
+  for (const ch of value) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === ';' && !quoted) {
+      dirs.push(dir);
+      dir = '';
+    } else dir += ch;
+  }
+  dirs.push(dir);
+  return dirs.filter((entry) => entry.length > 0);
+}
+
+/** The folders of this process's PATH, read by {@link splitPathList}. */
+export function envPathDirs(): string[] {
+  return splitPathList(envPath() ?? '');
+}
 /** The Windows folder; its System32 holds the tools hippo starts by full path. */
 export const envSystemRoot = text('SystemRoot');
 export const envModelCache = trimmedText('HIPPO_MODEL_CACHE');
@@ -290,8 +317,12 @@ export const envMcpSseHeartbeatMs = posInt('MCP_SSE_HEARTBEAT_MS');
 export const envMcpSseMaxAgeSec = posInt('MCP_SSE_MAX_AGE_SEC');
 
 // LLM and reranker credentials and knobs.
-export const envAnthropicApiKey = text('ANTHROPIC_API_KEY');
+export const envAnthropicApiKey = trimmedText('ANTHROPIC_API_KEY');
 export const envLlmTimeoutMs = posInt('HIPPO_LLM_TIMEOUT_MS');
+export const envLlmBaseUrl = trimmedText('HIPPO_LLM_BASE_URL');
+export const envLlmApiKey = trimmedText('HIPPO_LLM_API_KEY');
+export const envLlmModel = trimmedText('HIPPO_LLM_MODEL');
+export const envLlmAllowHttp = bool('HIPPO_LLM_ALLOW_HTTP');
 export const envTypesafeApiKey = trimmedText('TYPESAFE_API_KEY');
 export const envJevTimeoutMs = posInt('HIPPO_JEV_TIMEOUT_MS');
 export const envJevModel = text('HIPPO_JEV_MODEL');

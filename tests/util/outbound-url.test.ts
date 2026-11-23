@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseOutboundUrl } from '../../src/base/util/net.js';
+import { checkHeaderSafe, parseOutboundUrl } from '../../src/base/util/net.js';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createLlmReranker } from '../../src/infra/rerankers/llm.js';
 import { processHttp } from '../../src/infra/http.js';
@@ -27,6 +27,44 @@ describe('parseOutboundUrl', () => {
     ['an unparseable value', 'not a url', 'SETTING is not a valid URL'],
   ])('refuses %s', (_label, url, message) => {
     expect(() => parseOutboundUrl(url, { setting: 'SETTING', keySetting: 'KEY' })).toThrow(message);
+  });
+
+  it('names no opt-in by default, so the other callers keep their text', () => {
+    expect(() => parseOutboundUrl('http://llm.internal:8000/v1', { setting: 'SETTING' })).toThrow(
+      /^SETTING must use https unless it is on this machine$/,
+    );
+  });
+
+  it('lets plain http reach a private host only with allowHttp', () => {
+    const url = 'http://llm.internal:8000/v1';
+    expect(parseOutboundUrl(url, { setting: 'SETTING', allowHttp: true }).href).toBe(new URL(url).href);
+    expect(() => parseOutboundUrl(url, { setting: 'SETTING', allowHttp: false })).toThrow('must use https');
+  });
+
+  it('names the opt-in setting when the caller gives one', () => {
+    expect(() =>
+      parseOutboundUrl('http://llm.internal:8000/v1', { setting: 'SETTING', allowHttpSetting: 'OPT_IN' }),
+    ).toThrow(/^SETTING must use https unless it is on this machine, or set OPT_IN=1$/);
+  });
+
+  it('still refuses credentials and other schemes with allowHttp', () => {
+    expect(() => parseOutboundUrl('http://u:p@llm.internal/v1', { setting: 'SETTING', allowHttp: true })).toThrow(
+      'must not embed credentials',
+    );
+    expect(() => parseOutboundUrl('ftp://llm.internal/v1', { setting: 'SETTING', allowHttp: true })).toThrow(
+      'must be an http or https URL',
+    );
+  });
+});
+
+describe('checkHeaderSafe', () => {
+  it.each(['zebra-7731\nb', 'a b', 'a\tb', 'café', ''])('refuses %j without echoing it', (token) => {
+    expect(() => checkHeaderSafe('X', token)).toThrow(/^X has characters a header cannot carry$/);
+  });
+
+  it('lets visible ASCII through', () => {
+    expect(() => checkHeaderSafe('X', 'k-1')).not.toThrow();
+    expect(() => checkHeaderSafe('X', 'sk-ant-api03-AbC_123~.+/=')).not.toThrow();
   });
 });
 

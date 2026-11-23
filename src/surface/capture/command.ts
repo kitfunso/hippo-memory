@@ -88,6 +88,8 @@ export interface CaptureTarget {
   readonly embed: (entry: MemoryEntry) => void;
   /** Picks the rules in the person's follow-up turns; without it capture reads word patterns only. */
   readonly llm?: Llm;
+  /** The model a customer-endpoint `llm` always calls, named in the usage line; unset for Anthropic's. */
+  readonly llmModel?: string;
   /** Why no `llm` came when the config asked for one; printed inside the capture's log. */
   readonly llmMissing?: string;
 }
@@ -184,7 +186,7 @@ const warnLine: LineLog = (line, opts) => log.warn(line, opts?.fields);
 
 /** The rules the model finds in the person's later turns, when the target has one. */
 async function modelRules(
-  { llm, llmMissing }: CaptureTarget,
+  { llm, llmModel, llmMissing }: CaptureTarget,
   { ruleProject = [] }: CaptureDedup,
   followUps: readonly string[],
 ): Promise<readonly FollowUpRule[]> {
@@ -195,7 +197,7 @@ async function modelRules(
   // A rule with no project to belong to would pin into every project.
   if (ruleProject.length === 0) return [];
   const { rules, usage } = await followUpRules(followUps, llm, warnLine);
-  if (usage) console.log(usageLine(usage));
+  if (usage) console.log(usageLine(usage, llmModel));
   return rules;
 }
 

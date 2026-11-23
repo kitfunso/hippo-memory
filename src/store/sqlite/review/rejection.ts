@@ -3,7 +3,7 @@
  * `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the
  * reverse is a cycle). */
 
-import { rejectionDigest } from '../../../base/records/rejection-digest.js';
+import { rowDigests, tombstoneDigest } from '../../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
 import type { RejectedValueRow, RejectionCheck } from '../../../base/ports/store/rejections.js';
@@ -129,32 +129,37 @@ export function listRejectedValues(db: DatabaseSyncLike, tenantId: string): Reje
   return rows.map(rowToRejectedValue);
 }
 
-/** Write-path guard check: fires when the digest matches a tombstone AND the write introduces
- * that content (a new row, or a same-id UPSERT changing it). Unchanged same-id re-persists
- * (recall boost, decay, star toggle) are exempt. A miss costs ONE indexed point query; only a
- * hit SELECTs the stored row. */
+/** Write-path guard check: fires when a digest of the row matches a tombstone AND the write
+ * introduces that content (a new row, or a same-id UPSERT changing it). Unchanged same-id
+ * re-persists (recall boost, decay, star toggle) are exempt. A row with no lead-in has one digest,
+ * so a miss costs ONE indexed point query; only a hit SELECTs the stored row. */
 export function checkRejectionGuard(
   db: DatabaseSyncLike,
-  { tenantId, entryId, content }: RejectionCheck,
+  { tenantId, entryId, content, leadIn }: RejectionCheck,
 ): void {
-  const incomingDigest = rejectionDigest(content);
-  const tombstone = readRejectedValue(db, tenantId, incomingDigest);
-  if (!tombstone) return; // miss ends the guard — the overwhelmingly common case
+  const identity = leadIn ? tombstoneDigest({ content, leadIn }) : null;
+  const hits = rowDigests({ content, leadIn }).flatMap((digest) => {
+    const tombstone = readRejectedValue(db, tenantId, digest);
+    return tombstone ? [{ digest, tombstone, leadInScoped: digest === identity }] : [];
+  });
+  if (hits.length === 0) return; // miss ends the guard — the overwhelmingly common case
 
   // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is
   // read as a tenantId-only upsert introduces content there.
-  const storedRow = cachedStatement(db, `SELECT content, tenant_id FROM memories WHERE id = ?`).get(
-    entryId,
-  ) as StoredContentRow | undefined;
+  const storedRow = cachedStatement(
+    db,
+    `SELECT content, lead_in, tenant_id FROM memories WHERE id = ?`,
+  ).get(entryId) as StoredContentRow | undefined;
   // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
-  if (!introducesContent(storedRow, tenantId, incomingDigest)) return;
-  throw rejectedValueError(tombstone, entryId);
+  const refusing = hits.find((hit) => introducesContent(storedRow, tenantId, hit.digest));
+  if (refusing) throw rejectedValueError(refusing.tombstone, entryId, refusing.leadInScoped);
 }
 
 /** The columns of the row an id holds now that say whether a write to it introduces content. */
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface StoredContentRow {
   readonly content: string;
+  readonly lead_in: string | null;
   readonly tenant_id: string | null;
 }
 
@@ -169,17 +174,22 @@ export function introducesContent(
   return (
     stored === undefined ||
     stored.tenant_id !== tenantId ||
-    rejectionDigest(stored.content) !== digest
+    !rowDigests({ content: stored.content, leadIn: stored.lead_in }).includes(digest)
   );
 }
 
 /** The refusal of a write to `entryId` that `tombstone` matched. */
-function rejectedValueError(tombstone: RejectedValueRow, entryId: string): RejectedValueError {
+function rejectedValueError(
+  tombstone: RejectedValueRow,
+  entryId: string,
+  leadInScoped: boolean,
+): RejectedValueError {
   return new RejectedValueError({
     digest: tombstone.digest,
     tenantId: tombstone.tenantId,
     entryId,
     reason: tombstone.reason,
     rejectedAt: tombstone.rejectedAt,
+    leadInScoped,
   });
 }

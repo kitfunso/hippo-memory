@@ -119,6 +119,7 @@ export interface MemoryDetail {
   snapshotId: number;
   id: string;
   content: string;
+  leadIn?: string;
   layer: Layer;
   band: Band;
   tags: string[];

@@ -35,7 +35,9 @@ const MCP_WRITE_TOOLS = {
   hippo_share: 'no new text',
 } satisfies Record<string, string>;
 
-const memberWrites = V1_ROUTES.filter((route) => route.auth === 'caller' && route.method !== 'GET');
+const memberWrites = V1_ROUTES.filter(
+  (route) => (route.auth === 'viewer' || route.auth === 'editor') && route.method !== 'GET',
+);
 const isObjectRoute = (route: (typeof V1_ROUTES)[number]): boolean => route.storeReady === 'objects';
 
 describe('the member write inventory', () => {

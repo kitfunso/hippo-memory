@@ -180,6 +180,8 @@ export type { ContinuityBlock } from '../../base/ports/store.js';
 export interface RecallResultItem {
   id: string;
   content: string;
+  /** The conversation text that led into the memory; absent when unset. */
+  leadIn?: string;
   score: number;
   layer: string;
   strength: number;
