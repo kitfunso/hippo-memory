@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { mdText, parseComparison, parseFaq } from '../src/content/readme-parse.mjs';
+import { withPublicTests } from './readme-public-tests.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -61,6 +62,17 @@ if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push(
 const limitLines = /lesson capture switched off|capture removed|no measured result|can't yet say|where hippo lost|hippo trails/i;
 for (const [name, text] of [['home', withoutComments(home)], ['README.md', readme], ['llms.txt', llms]]) {
   if (limitLines.test(text)) missing.push(`limits: ${name} carries a limit line; state the result instead`);
+}
+
+// README's "Public memory tests" table is built from the home table's data, never typed by hand.
+const board = JSON.parse(await readFile(join(root, 'src', 'data', 'all-benchmarks.json'), 'utf8'));
+try {
+  const readmeLf = readme.replace(/\r\n/g, '\n');
+  if (withPublicTests(readmeLf, board) !== readmeLf) {
+    missing.push('public tests: README.md table differs from all-benchmarks.json; run node website/scripts/readme-public-tests.mjs --write');
+  }
+} catch (err) {
+  missing.push(`public tests: ${err.message}`);
 }
 
 // gbrain is never named on the site, in the README or in llms.txt (owner rule, 18 Nov 2026).
