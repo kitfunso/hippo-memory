@@ -21,6 +21,9 @@ What hippo adds to each agent Agent What hippo adds
 Claude Code A block in CLAUDE.md and N hooks. Your pinned rules load at session start, and each prompt gets up to N memories that share its words. The hooks also save your task before compaction, store failed tool calls and capture lessons when the session ends.
 Codex A block in AGENTS.md and two hooks, which Codex runs once you trust them in /hooks. The prompt hook sends your pinned rules and up to N matching memories with each prompt. Capturing Codex sessions is opt-in, with hippo hook install codex.
 Cursor The block in AGENTS.md, which Cursor reads from the project root, and N memory tools once hippo is in .cursor/mcp.json. Cursor's agent recalls and stores memories through those tools.
+Recall a Claude Code lesson in Codex and Cursor
+Save a project convention once and check that the next agent can find it. In a practice repo with hippo set up, ask Claude Code to run this command:
+$ hippo remember "Invoice fixtures use pence: N means GBP N" Open Codex in the same folder and ask it to run hippo recall "invoice fixtures" --limit N Then start a fresh chat in Cursor and ask it to call hippo_recall with the query invoice fixtures. Look for the amount, N pence, in both results. Neither prompt gives it away.
 Where the memory lives
 Each project gets its own store in .hippo/, and a global store in ~/.hippo/ holds the memories you share across projects. Hippo writes markdown copies beside them, so you can grep what your agents have been told, commit it and review a rule in a pull request. Recall makes no network call by default.
 When a memory is wrong
