@@ -94,6 +94,19 @@ const agents = [
       </div>
     </Section>
 
+    <Section title="Recall a Claude Code lesson in Codex and Cursor" id="try-a-handoff">
+      <p>
+        Save a project convention once and check that the next agent can find it. In a practice repo with hippo set up,
+        ask Claude Code to run this command:
+      </p>
+      <Cmd lines={['hippo remember "Invoice fixtures use pence: 1250 means GBP 12.50."']} />
+      <p>
+        Open Codex in the same folder and ask it to run <code>hippo recall "invoice fixtures" --limit 1</code>.
+        Then start a fresh chat in Cursor and ask it to call <code>hippo_recall</code> with the query
+        <code>invoice fixtures</code>. Look for the amount, 1250 pence, in both results. Neither prompt gives it away.
+      </p>
+    </Section>
+
     <Section title="Where the memory lives">
       <p>
         Each project gets its own store in <code>.hippo/</code>, and a global store in <code>~/.hippo/</code> holds the
