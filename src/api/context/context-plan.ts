@@ -1,5 +1,6 @@
 // Which stores a context call reaches and what it may spend.
 import type { StrengthModel } from '../../base/memory/strength.js';
+import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { ContextReads, RequiredStore, StoreWith } from '../../base/ports/store.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -61,6 +62,8 @@ export interface ContextPlan {
   /** The instant the whole read scores strength at, by the model its Context runs under. */
   now: Date;
   strength: StrengthModel;
+  /** The rank switches the root runs under; absent, production ranking. */
+  switches: EvalSwitches | undefined;
 }
 
 /** The operator's global store, which planContext proved present before it set hasGlobal. */
@@ -206,6 +209,7 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
     obs: opts.deliveryObserver,
     now: ctx.infra.clock(),
     strength: strengthOf(ctx),
+    switches: ctx.infra.evalSwitches,
   };
 }
 

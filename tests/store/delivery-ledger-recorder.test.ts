@@ -217,6 +217,7 @@ describe('rejection reasons', () => {
 
   it('gate-below-threshold with its overlap score, and gate-max-items past the item cap', async () => {
     configure({ promptRecall: true, promptRecallMinShared: 2, promptRecallMaxItems: 1 });
+    // The recall order puts the first row ahead: it holds four prompt words, `second` three.
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
     const second = seed(local, 'a migration rollback plan should name the owner and the restore point');
     const weak = seed(local, 'postgres connection pooling settings need tuning for the reporting cluster');

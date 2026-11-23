@@ -12,7 +12,7 @@ export interface PromptRecallGate {
 }
 
 // Latency bound, not tuned: fixed in the prereg regardless of gate config.
-const PROMPT_RECALL_MAX_CHARS = 4000;
+export const PROMPT_RECALL_MAX_CHARS = 4000;
 
 /** Distinct content tokens: longer than 2 chars or CJK, not a stop word. */
 export function contentTokens(text: string): Set<string> {

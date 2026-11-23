@@ -8,7 +8,13 @@ import { compareScoredResults } from '../../base/rank/compare.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
 import { scopeBoostFor } from '../../domain/search/boosts.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { promptTokens, memoryTokens, gatePromptRecall } from '../../base/rank/prompt-recall.js';
+import {
+  promptTokens,
+  memoryTokens,
+  gatePromptRecall,
+  PROMPT_RECALL_MAX_CHARS,
+} from '../../base/rank/prompt-recall.js';
+import { rankBm25 } from '../../domain/search/bm25-search.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
@@ -186,9 +192,15 @@ function backfillFromPrompt(
   const p = promptTokens(opts.prompt ?? '');
   if (p.size === 0) return;
   const candidateItems = candidates(p);
-  const gated = gatePromptRecall(p, candidateItems, gate);
-  plan.obs?.gated(p, candidateItems, gate, gated);
-  const rows = gated.map((g) => ({
+  // The gate admits, the recall ranker orders, and maxItems cuts last, so a long row that holds most
+  // of the prompt is not cut by short rows that share fewer of its words.
+  const cleared = gatePromptRecall(p, candidateItems, {
+    ...gate,
+    maxItems: Number.POSITIVE_INFINITY,
+  });
+  const kept = orderLikeRecall(opts.prompt ?? '', cleared, plan).slice(0, gate.maxItems);
+  plan.obs?.gated(p, candidateItems, gate, kept);
+  const rows = kept.map((g) => ({
     entry: g.item.entry,
     score: g.score,
     tokens: plan.price(g.item.entry, g.item.isGlobal, true),
@@ -196,6 +208,38 @@ function backfillFromPrompt(
     promptRecall: true,
   }));
   admitWithinBudget(rows, picked, recentBudget, rejectOverBudget(plan.obs));
+}
+
+type GatedCandidates = ReturnType<typeof gatePromptRecall<PromptCandidate>>;
+
+// No cwd: the api reads no working folder, and on the served hook route the machine's is the daemon's.
+function orderLikeRecall(
+  prompt: string,
+  cleared: GatedCandidates,
+  plan: ContextPlan,
+): GatedCandidates {
+  const waiting = new Map(cleared.map((g) => [g.item.entry.id, g]));
+  const ranked = rankBm25(
+    prompt.slice(0, PROMPT_RECALL_MAX_CHARS),
+    cleared.map((g) => g.item.entry),
+    {
+      scope: plan.activeScope,
+      runtime: plan.config.runtime,
+      switches: plan.switches,
+      now: plan.now,
+      budget: Number.POSITIVE_INFINITY,
+    },
+  );
+  const ordered: GatedCandidates = [];
+  for (const { entry } of ranked) {
+    // A DAG child the ranker added is no cleared row.
+    const g = waiting.get(entry.id);
+    if (g === undefined) continue;
+    ordered.push(g);
+    waiting.delete(entry.id);
+  }
+  // A cleared row the ranker scored 0 or dropped as a copy still follows, in gate order.
+  return [...ordered, ...cleared.filter((g) => waiting.has(g.item.entry.id))];
 }
 
 interface PromptRecallCandidatesOptions {

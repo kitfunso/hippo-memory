@@ -401,10 +401,10 @@ describe('contextGet prompt recall (api-level)', () => {
 
   it('skips an over-budget candidate without blocking a smaller one behind it (skip-not-break)', async () => {
     enablePromptRecall(local, { promptRecallMaxItems: 2 });
-    // Same distinct content-token set as `small` (repetition adds no new
-    // tokens), so both tie on score and the id tie-break puts `big` first.
+    // `big` also holds the two prompt words `small` lacks, so the recall ranker puts it first.
     const shared = 'deploy rollback plan for service payments-api2026';
-    const big = seed(local, (shared + ' ').repeat(50), {
+    const extra = 'checklist owner';
+    const big = seed(local, `${(shared + ' ').repeat(50)}${extra}`, {
       id: 'aaa-big',
       created: '2026-01-01T00:00:00.000Z',
     });
@@ -412,18 +412,34 @@ describe('contextGet prompt recall (api-level)', () => {
       id: 'bbb-small',
       created: '2026-01-02T00:00:00.000Z',
     });
+    const opts = { pinnedOnly: true, includeRecent: 5, currentProject: PROJECT, prompt: `${shared} ${extra}` };
 
-    const result = await contextGet(ctx, {
-      pinnedOnly: true,
-      includeRecent: 5,
-      currentProject: PROJECT,
-      budget: 60,
-      prompt: shared,
-    });
+    const roomy = await contextGet(ctx, { ...opts, budget: 5000 });
+    expect(roomy.entries.filter((e) => e.promptRecall).map((e) => e.entry.id)).toEqual([big.id, small.id]);
+
+    const result = await contextGet(ctx, { ...opts, budget: 60 });
 
     const recallIds = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
     expect(recallIds).not.toContain(big.id);
     expect(recallIds).toContain(small.id);
+  });
+
+  it('ranks a long row that holds most prompt words above short rows that each share two', async () => {
+    const words = ['ledger', 'quarter', 'closeout', 'revenue', 'margin', 'forecast', 'variance', 'accrual', 'invoice', 'payroll'];
+    const prompt = `${words.join(' ')} audit budget`;
+    // Ninety distinct filler words keep the long row's overlap share (10 of 102) under each short row's (2 of 14).
+    const filler = Array.from({ length: 90 }, (_, i) => `lorem${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`);
+    enablePromptRecall(local, { promptRecallThreshold: 0.05, promptRecallMinShared: 2, promptRecallMaxItems: 3 });
+    const long = seed(local, `${words.join(' ')} ${filler.join(' ')}`, { created: '2026-01-01T00:00:00.000Z' });
+    for (let i = 0; i < words.length; i += 2) {
+      seed(local, `${words[i]} ${words[i + 1]} summary pending signoff`, { created: '2026-01-02T00:00:00.000Z' });
+    }
+
+    const result = await contextGet(ctx, { pinnedOnly: true, currentProject: PROJECT, prompt });
+
+    const matched = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
+    expect(matched).toHaveLength(3);
+    expect(matched[0]).toBe(long.id);
   });
 });
 
