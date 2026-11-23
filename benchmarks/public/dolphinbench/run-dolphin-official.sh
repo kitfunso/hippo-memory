@@ -16,8 +16,10 @@ as_root() {
 
 start_judge() {
   export DOLPHIN_CODEX_HOME="${DOLPHIN_CODEX_HOME:-$win_home/.dolphin-codex}"
-  if [ ! -f "$DOLPHIN_CODEX_HOME/auth.json" ]; then
-    mkdir -p "$DOLPHIN_CODEX_HOME" && cp "$win_home/.codex/auth.json" "$DOLPHIN_CODEX_HOME/auth.json"
+  mkdir -p "$DOLPHIN_CODEX_HOME"
+  # a refresh of the main login voids the old copy (401), so take the newer file at every start
+  if [ "$win_home/.codex/auth.json" -nt "$DOLPHIN_CODEX_HOME/auth.json" ]; then
+    cp "$win_home/.codex/auth.json" "$DOLPHIN_CODEX_HOME/auth.json"
   fi
   mkdir -p "$DOLPHIN_BENCH_HOME/logs"
   "$DOLPHIN_BENCH_HOME/.venv-dolphin-wsl/bin/python" "$here/dolphin_official.py" judge --kind "${JUDGE:-codex}" \
