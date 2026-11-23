@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Actor, Context, EntryContext } from '../../api/index.js';
 import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
+import type { Role, RoleLevel } from '../../base/scope/role.js';
 import type { RateLimiter } from './rate-limit.js';
 import type { RouteLookup } from './route-lookup.js';
 import type { BoundAddonRoute } from './route-table.js';
@@ -27,14 +28,15 @@ export interface ServerHandle {
   server?: import('node:http').Server;
 }
 
-/** Identity an {@link AuthResolver} vouches for. The core sanitises it before use. */
+/** Identity an {@link AuthResolver} vouches for. The core sanitises it before use. Map an IdP groups
+ * claim with `roleFromGroups`; on `refused`, return null, log the reason and never log the claim. */
 export interface ResolvedBearer {
   tenantId: string;
   subject: string;
-  /** Not 'admin' means 'member'. Admin is tenant-only, yet can mint member API keys (POST
-   * /v1/auth/keys); an add-on revokes them through the exported authRevoke when the IdP
-   * deprovisions the minter. */
-  role: 'admin' | 'member';
+  /** 'admin', 'member' or 'viewer'; any other value, or none, reads as 'viewer'. Admin is
+   * tenant-only, yet can mint member API keys (POST /v1/auth/keys); an add-on revokes them through
+   * the exported authRevoke when the IdP deprovisions the minter. */
+  role: Role;
   scopes?: readonly string[];
 }
 
@@ -58,10 +60,9 @@ export interface OAuthChallenge {
   readonly withoutError: string;
 }
 
-/** Sole judge of non-`hk_` bearer tokens: null is a 401; a throw or missed deadline is a 503, so
- * throw only when upstream is down. With serve's oauth set core checks none of the token, so answer
- * null unless its signature, issuer (in oauth.authorizationServers), audience (includes
- * oauth.resource) and expiry all pass. */
+/** Sole judge of non-`hk_` bearer tokens: null is 401, throw/deadline is 503 (throw only when upstream is down).
+ * Return null if `roleFromGroups` refuses (log reason, never claim); with `oauth`, verify signature, issuer
+ * (in `oauth.authorizationServers`), audience (includes `oauth.resource`) and expiry, as core checks none. */
 export type AuthResolver = (
   token: string,
   /** Aborted when the deadline passes, so a slow upstream call can stop. */
@@ -81,6 +82,9 @@ export interface AddonRoute {
   readonly path: string;
   readonly handler: (call: AddonCall) => Promise<JsonValue>;
   readonly storeReady?: StoreGroup;
+  /** The least role let in; unset means 'editor'. Set 'viewer' only on a route that writes nothing,
+   * since the exported write helpers trust this level. */
+  readonly level?: RoleLevel;
 }
 
 export interface RateLimitSpec {
@@ -245,11 +249,12 @@ export interface WebhookRouteRequest extends RouteRequest {
   readonly store: ConnectorStore;
 }
 
-/** What the dispatch gate proves before a handler runs: any caller, an admin, a host admin on
- * loopback, nothing, for a route whose handler checks the sender's signature itself, or the
- * dashboard's session, which only its rows take. */
+/** What the dispatch gate proves before a handler runs: a reader, a writer or an admin, a host
+ * admin on loopback, nothing, for a route whose handler checks the sender's signature itself, or
+ * the dashboard's session, which only its rows take. */
 export type RouteAuth =
-  | 'caller'
+  | 'viewer'
+  | 'editor'
   | 'admin'
   | 'host-admin-local'
   | 'webhook-signature'

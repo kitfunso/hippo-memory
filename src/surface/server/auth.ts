@@ -7,10 +7,12 @@ import { LOCAL_KEY_SUBJECT } from './local-key.js';
 import { API_KEY_PREFIX } from '../../base/scope/api-key.js';
 import { type Actor, type Context, contextReach, ownerOrSubject } from '../../api/index.js';
 import { HttpError } from '../../base/errors/http-errors.js';
+import { roleOrViewer } from '../../base/scope/role.js';
 import { isCrossSite, isHeaderString, LOOPBACK_HOST_HEADER } from '../http/http-util.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
 import { clientKeyOf, clientLimitKey } from './client-ip.js';
 import { askKeyQuota } from './key-quota.js';
+import { noteAccess } from './request.js';
 import { LIMITER_MAX_KEYS } from './rate-limit.js';
 import type { AuthResolver, ResolvedBearer, ResolvedServeOptions } from './types.js';
 import { isJsonString } from '../../base/util/json.js';
@@ -150,6 +152,17 @@ function hasControlChar(s: string): boolean {
 // refused, never cut short.
 const MAX_RESOLVED_SCOPES = 1024;
 
+// SHORTCUT: one line per process, so a resolver with a typo cannot flood the log; no per-tenant count.
+let roleCoercionWarned = false;
+
+function warnRoleCoerced(): void {
+  if (roleCoercionWarned) return;
+  roleCoercionWarned = true;
+  log.warn(
+    'auth resolver returned no role or one outside viewer, member and admin; read it as viewer',
+  );
+}
+
 /** Core owns the checks so a resolver cannot mint an actor that collides with a built-in one. */
 function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   // Each field is read once: a getter on plugin code could answer differently the second time.
@@ -166,8 +179,9 @@ function sanitiseResolved(r: ResolvedBearer): ResolvedBearer | null {
   const clean: ResolvedBearer = {
     tenantId: tenant,
     subject,
-    role: role === 'admin' ? 'admin' : 'member',
+    role: roleOrViewer(role),
   };
+  if (clean.role !== role) warnRoleCoerced();
   if (Array.isArray(scopes)) {
     if (scopes.length > MAX_RESOLVED_SCOPES) return null;
     const kept = scopes.filter((s) => isJsonString(s));
@@ -370,6 +384,7 @@ export async function buildContextWithAuth(
 ): Promise<Context> {
   const id = await checkAuth(req, opts);
   const ctx = contextFor(id, opts, requestClientKey(req));
+  noteAccess(req, { role: ctx.actor.role });
   chargeCaller(req, id.tenantId, ctx.actor, opts);
   return ctx;
 }

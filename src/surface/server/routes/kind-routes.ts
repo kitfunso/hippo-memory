@@ -36,20 +36,26 @@ function byId(handler: IdHandler): (rr: ObjectRequest, params: RouteParams) => P
   return (rr, { id }) => handler(rr, Number.parseInt(id, 10));
 }
 
-/** Every row of one kind, each gated as any caller's and on a store with objects. */
+/** Every row of one kind, each gated by its method (reads viewer, writes editor) and on a store with objects. */
 export function kindRows(kind: KindRoutes): Route[] {
   const { base } = kind;
   return [
-    { method: 'POST', path: base, auth: 'caller', storeReady: 'objects', handler: kind.create },
-    { method: 'GET', path: base, auth: 'caller', storeReady: 'objects', handler: kind.list },
+    { method: 'POST', path: base, auth: 'editor', storeReady: 'objects', handler: kind.create },
+    { method: 'GET', path: base, auth: 'viewer', storeReady: 'objects', handler: kind.list },
     ...(kind.named ?? []).map(({ method, sub, handler }): Route => {
-      return { method, path: `${base}/${sub}`, auth: 'caller', storeReady: 'objects', handler };
+      return {
+        method,
+        path: `${base}/${sub}`,
+        auth: method === 'GET' ? 'viewer' : 'editor',
+        storeReady: 'objects',
+        handler,
+      };
     }),
     ...Object.entries(kind.actions).map(([action, handler]): Route => {
       return {
         method: 'POST',
         pattern: `${base}/${ID}/${action}`,
-        auth: 'caller',
+        auth: 'editor',
         storeReady: 'objects',
         handler: byId(handler),
       };
@@ -57,7 +63,7 @@ export function kindRows(kind: KindRoutes): Route[] {
     {
       method: 'GET',
       pattern: `${base}/${ID}`,
-      auth: 'caller',
+      auth: 'viewer',
       storeReady: 'objects',
       handler: byId(kind.get),
     },

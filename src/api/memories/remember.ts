@@ -232,7 +232,7 @@ function prepareRemember(
   };
 }
 
-/** `tags` plus the marks that make the row print framed: its untrusted origin, and a member row
+/** `tags` plus the marks that make the row print framed: its untrusted origin, and a non-admin row
  * the check flagged. */
 function trustTagged(
   tags: string[] | undefined,
@@ -246,10 +246,10 @@ function trustTagged(
   return marks.length > 0 ? [...(tags ?? []), ...marks] : tags;
 }
 
-/** A member key's write outside its personal scope reaches the other members' prompts, as
+/** A non-admin key's write outside its personal scope reaches the other members' prompts, as
  * connector text does. */
 function memberShares(ctx: Context, opts: RememberOptions): boolean {
-  return ctx.actor.role === 'member' && !opts.personal;
+  return ctx.actor.role !== 'admin' && !opts.personal;
 }
 
 function weakened(entry: MemoryEntry, weaken: NonNullable<RememberLocal['weaken']>): MemoryEntry {

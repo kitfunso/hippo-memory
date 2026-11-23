@@ -249,9 +249,11 @@ describe('published runtime exports', () => {
           "./server": "BadRequestError
         ConflictError
         ForbiddenError
+        GROUPS_CLAIM_TOO_LONG
         HttpError
         LOOPBACK_HOST_HEADER
-        NotFoundError
+        NO_MAPPED_GROUP NotFoundError
+        VIEWER_REFUSAL
         admitProjectWrite authCreate authCreateSelf authRevoke
         bindSessionOwner
         captureFailureForCaller captureSessionTexts clientIpForRateLimit compactResumeForCaller
@@ -260,6 +262,7 @@ describe('published runtime exports', () => {
         isCrossSite isLoopback isReservedActor
         ownerOrSubject
         preCompactForCaller promptHookContext
+        roleFromGroups
         saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
           "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
         WORKING_STATE_CAPS
