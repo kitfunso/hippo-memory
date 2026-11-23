@@ -178,9 +178,9 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const currentProject = opts.currentProject;
   const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
   // Decided before the ambient loads so the pinned-only FTS candidate query can share their
-  // connection.
+  // connection. A blank prompt counts as a prompt with no matches, so its pinned block is the same.
   const promptRecallPending =
-    pinnedOnly && Boolean(opts.prompt?.trim()) && config.pinnedInject.promptRecall === true;
+    pinnedOnly && opts.prompt !== undefined && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
   const userRule: ContextPlan['isUserRule'] = (entry, isGlobal) =>
     isUserRule(entry, { tenantId: ctx.tenantId, project: currentProject, isGlobal });

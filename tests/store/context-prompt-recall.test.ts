@@ -557,6 +557,20 @@ describe('pins and prompt recall share one budget (api-level)', () => {
     expect(staticText(runs[0]!)).toBe(staticText(runs[1]!));
   });
 
+  it('gives a blank prompt the pinned block of a real prompt, with no recent rows', async () => {
+    enablePromptRecall(local, { promptRecallShare: 0.25 });
+    seedPins(9);
+    seed(local, ROW_A);
+    seed(local, ROW_B);
+
+    const real = await hook(100, PROMPT_A, { includeRecent: 5 });
+    const blank = await hook(100, '   ', { includeRecent: 5 });
+
+    expect(pinnedIds(real)).toHaveLength(7);
+    expect(staticText(blank)).toBe(staticText(real));
+    expect(matchedIds(blank)).toEqual([]);
+  });
+
   it('keeps the newest tied pins when prompt recall is off and the pins pass the budget', async () => {
     enablePromptRecall(local, { promptRecall: false });
     const pins = seedPins(8);

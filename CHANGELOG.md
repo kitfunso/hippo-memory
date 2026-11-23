@@ -18,6 +18,7 @@
 - **Add-on routes refuse a viewer by default.** Set `level: 'viewer'` on a route that writes nothing.
 - **The request line carries `role=`** for /v1, add-on and MCP calls.
 - **The prompt hook orders matched memories with `hippo recall`'s word ranker.** The overlap gate still picks which memories match. Then `rankBm25` orders them, and `pinnedInject.promptRecallMaxItems` cuts the list after that order. A long memory that holds most of the prompt's words now ranks above short memories that share only two. A cleared memory that `rankBm25` does not return still follows, in gate order. Memories cut by the limit keep the `gate-max-items` reason in the delivery ledger.
+- **A blank prompt counts as a prompt with no matching words.** With `pinnedInject.promptRecall` on, the prompt hook gives a blank prompt the same pins as any other prompt and adds no recent memories, so it can reuse the pinned block. Before, a blank prompt fell back to the newest memories, and the next prompt sent the pinned block again. A hook call with no prompt field still gets the newest memories.
 
 ### Security
 
