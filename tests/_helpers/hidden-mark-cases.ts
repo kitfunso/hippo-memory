@@ -37,6 +37,32 @@ export const markedText: Gen<string> = map(
       .replace(/[ \uFDD0]+/g, (run) => (run.includes(' ') ? ' ' : MARK)),
 );
 
+// A raw run of one to three placeholders, or a reference that the screening form decodes to a character a pattern reads.
+const RAW_PIECES = [
+  MARK,
+  MARK.repeat(2),
+  MARK.repeat(3),
+  '&#46;',
+  '&#x2E;',
+  '&#124;',
+  '&#46',
+  '&#x2E',
+  '&#82',
+  '&#000000082;',
+];
+
+/** `markFreeText` with two to six raw pieces placed anywhere, and where a split could cut it. */
+export const rawMarkedText: Gen<{ text: string; cut: number }> = map(
+  both(both(markFreeText, arr(both(int(0, 999), pick(RAW_PIECES)), 2, 6)), int(0, 999)),
+  ([[base, pieces], cut]) => {
+    const text = pieces.reduce((out, [at, piece]) => {
+      const i = at % (out.length + 1);
+      return `${out.slice(0, i)}${piece}${out.slice(i)}`;
+    }, base);
+    return { text, cut: cut % (text.length + 1) };
+  },
+);
+
 /** Every text a reader could take `text` for, each MARK read as nothing or as a space; none past eight marks. */
 export function readings(text: string): string[] {
   const parts = text.split(MARK);
