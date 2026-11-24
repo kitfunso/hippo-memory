@@ -1,0 +1,28 @@
+GET /v1/quarantine/1/edit -> 404 not found
+POST /v1/quarantine/1/edit -> 400 content is required
+DELETE /v1/quarantine/1/edit -> 404 not found
+PUT /v1/quarantine/1/edit -> 404 not found
+GET /v1/quarantine/007/edit -> 404 not found
+POST /v1/quarantine/007/edit -> 400 content is required
+DELETE /v1/quarantine/007/edit -> 404 not found
+PUT /v1/quarantine/007/edit -> 404 not found
+GET /v1/quarantine/abc/edit -> 404 not found
+POST /v1/quarantine/abc/edit -> 400 content is required
+DELETE /v1/quarantine/abc/edit -> 404 not found
+PUT /v1/quarantine/abc/edit -> 404 not found
+GET /v1/quarantine/-1/edit -> 404 not found
+POST /v1/quarantine/-1/edit -> 400 content is required
+DELETE /v1/quarantine/-1/edit -> 404 not found
+PUT /v1/quarantine/-1/edit -> 404 not found
+GET /v1/quarantine/%31/edit -> 404 not found
+POST /v1/quarantine/%31/edit -> 400 content is required
+DELETE /v1/quarantine/%31/edit -> 404 not found
+PUT /v1/quarantine/%31/edit -> 404 not found
+GET /v1/quarantine//edit -> 404 not found
+POST /v1/quarantine//edit -> 404 not found
+DELETE /v1/quarantine//edit -> 404 not found
+PUT /v1/quarantine//edit -> 404 not found
+GET /v1/quarantine/1/edit/ -> 404 not found
+POST /v1/quarantine/1/edit/ -> 404 not found
+DELETE /v1/quarantine/1/edit/ -> 404 not found
+PUT /v1/quarantine/1/edit/ -> 404 not found

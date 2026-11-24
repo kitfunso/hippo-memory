@@ -303,7 +303,9 @@ function mergedTags(
   const tags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
   if (isPersonalScope(scope) || tags.includes(INSTRUCTION_LIKE_TAG)) return tags;
   // The merged tags and contents can form a pattern no source row holds.
-  return instructionIn(mergedContent, tags).flagged ? [...tags, INSTRUCTION_LIKE_TAG].sort() : tags;
+  return instructionIn({ content: mergedContent }, tags).flagged
+    ? [...tags, INSTRUCTION_LIKE_TAG].sort()
+    : tags;
 }
 
 /** The later conflict check reads the survivors, so it sees the post-demotion half-life. */

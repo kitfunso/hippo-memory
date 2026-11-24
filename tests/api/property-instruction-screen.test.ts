@@ -3,8 +3,9 @@ import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, beforeAll, describe, it, expect } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';
-import { detectInstruction } from '../../src/domain/trust/instruction-detect.js';
+import { detectInstruction, markTolerant } from '../../src/domain/trust/instruction-detect.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { scanWithinWatchdog } from '../_helpers/scan-watchdog.js';
 import { arr, both, forAll, int, map, oneOf, pick, type Gen } from '../_helpers/property.js';
 import { apiCtx, onSession } from '../_helpers/api-ctx.js';
 import { withSharedStoreHandles } from '../../src/db/index.js';
@@ -146,5 +147,16 @@ describe('injection screening leaves the stored text alone', () => {
         expect(stored?.content).toBe(content);
       });
     });
+  });
+});
+
+describe('markTolerant on a gap whose marks could be read two ways', () => {
+  it('finishes a failed match over forty letters with a mark after each one', () => {
+    const gap = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmn'.replaceAll(/./g, `$&${String.fromCodePoint(0xfdd0)}`);
+    // A fresh pattern runs cold, as a pattern the other tests have not warmed.
+    const tolerant = markTolerant(/\bignore\b[^.\n]{0,40}\bprevious\b[^.\n]{0,40}\binstructions?\b/i);
+    const text = `ignore ${gap} previous ${gap}. instructions`;
+    // The real class needs about a millisecond; one that takes the mark two ways never finishes.
+    expect(scanWithinWatchdog((t) => tolerant.test(t), text, 2000)).toBe(false);
   });
 });

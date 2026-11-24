@@ -14,7 +14,6 @@ import {
   type TraceOutcome,
   withoutCaptureTags,
 } from '../../base/memory/entry.js';
-import { shownText } from '../../base/memory/lead-in.js';
 import { computeSalience, type SalienceResult } from '../../base/memory/salience.js';
 import { MAX_LEAD_IN_CHARS } from '../../base/util/limits.js';
 import { identityText } from '../../base/util/same-text.js';
@@ -189,7 +188,7 @@ function prepareRemember(
   const tags = opts.tags && withoutCaptureTags(opts.tags);
   const verdict = screenWrite(ctx.actor, {
     // Recall shows the lead-in to an agent, so the check reads it with the content.
-    content: shownText({ content: vetted.content, leadIn: lead.leadIn }),
+    text: { content: vetted.content, leadIn: lead.leadIn },
     tags,
     scope: requestedScope,
     untrusted: screen.untrusted,

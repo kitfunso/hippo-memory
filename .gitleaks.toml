@@ -68,3 +68,8 @@ targetRules = ["generic-api-key"]
 description = "github-webhook-route test: made-up hex token pasted into GITHUB_TRUSTED_USER_IDS that the error must never print"
 paths = ['''^tests/(?:[\w-]+/)*github-webhook-route[\w.-]*\.test\.ts$''']
 targetRules = ["generic-api-key"]
+
+[[allowlists]]
+description = "quarantine edit test: a made-up AWS key the edit's secret scrub must remove"
+paths = ['''^tests/store/quarantine-edit[\w.-]*\.test\.ts$''']
+targetRules = ["aws-access-token"]

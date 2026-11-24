@@ -241,12 +241,14 @@ export const HEALTH_VERBS = {
     flags: { switches: ['all', 'global', 'json'] },
     usage: [
       `
-  quarantine [list]       List memories a connector flagged as an instruction attempt, pending review
+  quarantine [list]       List memories pending review (a connector flagged them as an instruction attempt)
     --all                  Include approved and rejected rows too (default: pending only)
     --json                 Output as JSON
     --global               Operate on the global store
     quarantine approve <id> Restore a quarantined memory to its original scope
-    quarantine reject <id>  Keep a quarantined memory hidden for good`,
+    quarantine reject <id>  Keep a quarantined memory hidden for good
+    quarantine edit <id> "<text>"
+                           Approve it with your cleaned text, checked again`,
     ],
   }),
   'capture-error': verb(() => import('../hooks/capture-error.js'), 'handleCaptureError', {

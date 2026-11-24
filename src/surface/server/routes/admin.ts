@@ -1,5 +1,10 @@
 // Admin routes: API keys, quarantine and the audit log.
-import { DEFAULT_LIST_LIMIT, MAX_AUDIT_LIMIT, MAX_ID_LEN } from '../../../base/util/limits.js';
+import {
+  DEFAULT_LIST_LIMIT,
+  MAX_AUDIT_LIMIT,
+  MAX_CONTENT_LEN,
+  MAX_ID_LEN,
+} from '../../../base/util/limits.js';
 import {
   auditList,
   authCreate,
@@ -8,6 +13,7 @@ import {
   authRevoke,
   authUngrant,
   quarantineApprove,
+  quarantineEdit,
   quarantineList,
   quarantineReject,
 } from '../../../api/index.js';
@@ -20,6 +26,7 @@ import type { AuthedRouteRequest, GroupRequest, RouteParams } from '../types.js'
 import {
   getString,
   isSetMember,
+  parseJsonBody,
   parseJsonObjectText,
   parseLimitParam,
   requiredString,
@@ -208,6 +215,20 @@ export async function handleRejectQuarantine(
   validateIdSegment(id, 'memory id');
   await quarantineReject(ctx, id);
   sendJson(res, 200, { rejected: id });
+  return;
+}
+
+// POST /v1/quarantine/:id/edit {content}: admin only; the text runs the write screen again.
+export async function handleEditQuarantine(
+  { req, res, ctx }: GroupRequest<'quarantine'>,
+  { id }: RouteParams,
+): Promise<void> {
+  validateIdSegment(id, 'memory id');
+  const content = getString(await parseJsonBody(req, ctx), 'content', MAX_CONTENT_LEN);
+  if (!content) {
+    throw new HttpError(400, 'content is required');
+  }
+  sendJson(res, 200, await quarantineEdit(ctx, id, content));
   return;
 }
 

@@ -1,5 +1,6 @@
 // The one screen every caller's write of new text runs: who is screened, what the instruction check finds, and
 // whether the row is held for review or kept framed. remember, rememberUntrusted and supersede call it.
+import type { LeadInText } from '../../base/memory/lead-in.js';
 import type { ConnectorWrite, ConnectorWrites } from '../../base/ports/store.js';
 import { isPersonalScope } from '../../base/scope/recall-scope.js';
 import { quarantineScopeFor } from '../../domain/trust/quarantine.js';
@@ -21,8 +22,8 @@ export function reviewerOf(ctx: ContextWith<never, ReviewGroup>): ConnectorWrite
 }
 
 export interface ScreenInput {
-  /** The text recall shows of the row: its content, under its lead-in when it has one. Only the check reads it. */
-  readonly content: string;
+  /** The row's content and its normalized lead-in, kept apart so the check reads their join both ways. */
+  readonly text: LeadInText;
   /** The tag list the row stores, screened like the content, before the marks this call adds. Supersede passes
    * the inherited tags, which can hold code marks no pattern matches. */
   readonly tags?: readonly string[];
@@ -50,8 +51,8 @@ const NOT_FLAGGED: InstructionDetection = { flagged: false, reason: null };
 export function screenWrite(actor: Actor, input: ScreenInput): ScreenVerdict {
   const screened = input.untrusted || sharesAsMember(actor, input.scope);
   const tags = input.tags ?? [];
-  // The hook prints content and tags as one line, so a pattern can span the join.
-  const detection = screened ? instructionIn(input.content, tags) : NOT_FLAGGED;
+  // A pattern can span the lead-in and the content, or the content and the tags the hook prints after it.
+  const detection = screened ? instructionIn(input.text, tags) : NOT_FLAGGED;
   // Only a connector's rule may hold a write; a client body never reaches `rule`.
   const reason = holdReason(detection, input.untrusted ? input.rule : undefined);
   const quarantine =

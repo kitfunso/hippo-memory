@@ -34,6 +34,7 @@ const NO_CREDENTIAL = {
   'GET /v1/quarantine': 401,
   'POST /v1/quarantine/:id/approve': 401,
   'POST /v1/quarantine/:id/reject': 401,
+  'POST /v1/quarantine/:id/edit': 401,
   'GET /v1/audit': 401,
   'POST /v1/predictions': 401,
   'GET /v1/predictions': 401,
@@ -117,7 +118,7 @@ describe('the /v1 route levels', () => {
       ({ key, route }) => `${key} is ${route.auth}, wanted ${expected(key, route.method)}`,
     );
     expect(wrong).toEqual([]);
-    expect(V1_ROWS.filter(({ key }) => ADMIN_LEVEL.has(key))).toHaveLength(8);
+    expect(V1_ROWS.filter(({ key }) => ADMIN_LEVEL.has(key))).toHaveLength(9);
   });
 
   it('keeps every write off the viewer level, and the check sees a planted one', () => {

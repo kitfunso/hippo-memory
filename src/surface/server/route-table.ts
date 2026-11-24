@@ -23,6 +23,7 @@ import { routeLookup, type RouteLookup } from './route-lookup.js';
 import {
   handleApproveQuarantine,
   handleCreateAuthKey,
+  handleEditQuarantine,
   handleGrantAuthKeyScope,
   handleListAudit,
   handleListAuthKeys,
@@ -225,6 +226,13 @@ export const V1_ROUTES: readonly Route[] = [
     auth: 'admin',
     storeReady: 'quarantine',
     handler: handleRejectQuarantine,
+  },
+  {
+    method: 'POST',
+    pattern: '/v1/quarantine/:id/edit',
+    auth: 'admin',
+    storeReady: 'quarantine',
+    handler: handleEditQuarantine,
   },
   {
     method: 'GET',
