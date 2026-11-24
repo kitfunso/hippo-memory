@@ -30,6 +30,7 @@ const TEACH_TURNS = TEACH_RULES.flatMap((rule) => [
   },
 ]);
 const PATTERN_RULE = 'Never commit generated files from dist/ to the repository';
+const DETECTOR_PROMPT_LEAD = 'Each rule below was given by a person to a coding agent.';
 
 interface FakeModel extends Llm {
   readonly prompts: string[];
@@ -40,7 +41,7 @@ function fakeModel(reply: () => LlmReply | Promise<LlmReply>): FakeModel {
   return {
     prompts,
     send: async (request) => {
-      prompts.push(request.prompt);
+      if (!request.prompt.startsWith(DETECTOR_PROMPT_LEAD)) prompts.push(request.prompt);
       return reply();
     },
   };

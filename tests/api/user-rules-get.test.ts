@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { adminActor, userRulesGet } from '../../src/api/index.js';
 import { USER_RULE_TAG } from '../../src/api/context/user-rule.js';
+import { userRulesRead } from '../../src/api/context/user-rules-get.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -82,10 +83,12 @@ describe('userRulesGet', () => {
     expect(idsOf(await userRulesGet(ctx(), { currentProject: PROJECT }))).toEqual(idsOf([oldest, middle, newest]));
   });
 
-  it('returns nothing when pinned injection is off', async () => {
-    writeEntry(store, ruleRow(0));
+  it('returns nothing when pinned injection is off, while userRulesRead still returns the rule', async () => {
+    const rule = ruleRow(0);
+    writeEntry(store, rule);
     fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ pinnedInject: { enabled: false } }));
 
     expect(await userRulesGet(ctx(), { currentProject: PROJECT })).toEqual([]);
+    expect(idsOf(await userRulesRead(ctx(), { currentProject: PROJECT }))).toEqual([rule.id]);
   });
 });

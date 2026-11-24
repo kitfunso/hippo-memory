@@ -339,6 +339,40 @@ describe('hippo doctor', () => {
     ).toBe('pass');
   });
 
+  describe('the end-check Stop hook', () => {
+    const endCheckSettings = JSON.stringify({
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'hippo end-check', timeout: 10 }] }] },
+    });
+
+    async function endCheckOf(settings: string, config?: string) {
+      const cwd = tmp('doctor-end-check-');
+      vi.stubEnv('HIPPO_HOME', join(cwd, 'global'));
+      initTestStore(join(cwd, '.hippo'));
+      if (config !== undefined) writeFileSync(join(cwd, '.hippo', 'config.json'), config);
+      mkdirSync(join(cwd, '.claude'));
+      writeFileSync(join(cwd, '.claude', 'settings.json'), settings);
+      const r = await runDoctor({ diagnosticsBodies, tenantId: 'default', cwd, home: cwd, version: 'test' });
+      return r.checks.find((c) => c.id === 'end-check');
+    }
+
+    it('warns that no detectors are written when the hook is on and capture.followUpRules is off', async () => {
+      expect(await endCheckOf(endCheckSettings)).toMatchObject({
+        status: 'warn',
+        detail:
+          'the end-check hook is on but capture.followUpRules is off, so no detectors are written and the check lists nothing',
+        fix: expect.stringContaining('followUpRules'),
+      });
+    });
+
+    it('stays quiet when capture.followUpRules is model', async () => {
+      expect(await endCheckOf(endCheckSettings, '{"capture":{"followUpRules":"model"}}')).toBeUndefined();
+    });
+
+    it('stays quiet when the hook is not installed, which is the default', async () => {
+      expect(await endCheckOf('{}')).toBeUndefined();
+    });
+  });
+
   it('exits 1 with --json when a check fails', async () => {
     const cwd = tmp('doctor-cli-');
     const { stdout: out, status } = await runCliAs(['doctor', '--json'], {

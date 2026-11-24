@@ -13,7 +13,10 @@ export type UserRulesOptions = Pick<ContextOptions, 'currentProject' | 'currentS
  * oldest first, each id once; empty when pinned injection is off. Skips the budgeted selection, so
  * this list is never cut; session-rules cuts it at pinnedInject.sessionRulesBudget. */
 export async function userRulesGet(ctx: Context, opts: UserRulesOptions): Promise<MemoryEntry[]> {
-  if (!ctx.config.pinnedInject.enabled) return [];
+  return ctx.config.pinnedInject.enabled ? userRulesRead(ctx, opts) : [];
+}
+
+export async function userRulesRead(ctx: Context, opts: UserRulesOptions): Promise<MemoryEntry[]> {
   const pinned: ContextOptions = { ...opts, pinnedOnly: true, includeRecent: 0 };
   const plan = planContext(ctx, pinned, sourceOf(ctx.store));
   const admission = ambientAdmission(pinned, plan, null);

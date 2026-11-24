@@ -1,4 +1,5 @@
 import { PACKAGE_VERSION, compareSemver } from '../base/util/version.js';
+import { DETECT_TAG_PREFIX } from '../base/memory/detect-tags.js';
 import { FINDABLE_TEXT_SQL } from '../base/memory/lead-in.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { importLegacyEmbeddingIndex } from './vector-store.js';
@@ -349,6 +350,11 @@ export function setFtsInSync(db: DatabaseSyncLike, inSync: boolean): void {
   if (getMeta(db, META_KEY.ftsInSync) !== flag) setMeta(db, META_KEY.ftsInSync, flag);
 }
 
+const FTS_TAGS_SQL =
+  `CASE WHEN json_valid(m.tags_json) AND json_type(m.tags_json) = 'array' THEN ` +
+  `(SELECT group_concat(value, ' ') FROM json_each(m.tags_json) WHERE value NOT GLOB '${DETECT_TAG_PREFIX}*') ` +
+  `ELSE m.tags_json END`;
+
 /** Re-syncs `memories_fts` with `memories` when their counts differ and returns whether it did;
  * sleep runs it because a fast open does not. Leaves the in-sync flag true. */
 export function repairFtsDrift(db: DatabaseSyncLike): boolean {
@@ -364,7 +370,7 @@ export function repairFtsDrift(db: DatabaseSyncLike): boolean {
   // match nothing.
   db.exec(`
     INSERT INTO memories_fts(id, content, tags)
-    SELECT m.id, ${FINDABLE_TEXT_SQL('m')}, m.tags_json
+    SELECT m.id, ${FINDABLE_TEXT_SQL('m')}, ${FTS_TAGS_SQL}
     FROM memories m
     WHERE m.id NOT IN (SELECT id FROM memories_fts WHERE id IS NOT NULL)
   `);

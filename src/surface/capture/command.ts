@@ -9,6 +9,7 @@ import {
   type MemoryEntry,
 } from '../../base/memory/entry.js';
 import { duplicateKey, storedTextKeys } from '../../base/util/same-text.js';
+import { detectorTags } from '../../base/memory/detect-tags.js';
 import { ruleReplaces } from '../../base/memory/rule-replaces.js';
 import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
@@ -26,6 +27,7 @@ import {
   type BoldTwin,
   type ExtractedItem,
 } from './extract.js';
+import { detectorUsageLine, ruleDetectors } from './detector.js';
 import { followUpRules, usageLine, withFollowUpRules, type FollowUpRule } from './follow-up.js';
 import {
   type SessionTurn,
@@ -178,8 +180,9 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
   }
 
   const held = await storedKeysInView(target.store, dedup, extracted, boldTwins(scrubbed, scrub));
+  const detected = await withRuleDetectors(target, options, extracted, held);
 
-  printCaptureTally(options, await captureFromCli(target, options, dedup, extracted, held));
+  printCaptureTally(options, await captureFromCli(target, options, dedup, detected, held));
 }
 
 const warnLine: LineLog = (line, opts) => log.warn(line, opts?.fields);
@@ -199,6 +202,29 @@ async function modelRules(
   const { rules, usage } = await followUpRules(followUps, llm, warnLine);
   if (usage) console.log(usageLine(usage, llmModel));
   return rules;
+}
+
+async function withRuleDetectors(
+  { llm, llmModel }: CaptureTarget,
+  options: CaptureOptions,
+  extracted: readonly ExtractedItem[],
+  { keys, ruleKeys }: HeldKeys,
+): Promise<readonly ExtractedItem[]> {
+  if (!llm || options.dryRun) return extracted;
+  const isHeld = heldCheck(keys, ruleKeys);
+  const fresh = extracted.filter((item) => isStatedRule(item) && !isHeld(item, laneKey(item)));
+  if (fresh.length === 0) return extracted;
+  const { detectors, usage } = await ruleDetectors(
+    fresh.map((item) => item.content),
+    llm,
+    warnLine,
+  );
+  if (usage) console.log(detectorUsageLine(usage, llmModel));
+  const detectorOf = new Map(fresh.map((item, i) => [item, detectors[i]]));
+  return extracted.map((item) => {
+    const detector = detectorOf.get(item);
+    return detector ? { ...item, tags: [...item.tags, ...detectorTags(detector)] } : item;
+  });
 }
 
 async function captureFromCli(

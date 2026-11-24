@@ -139,6 +139,7 @@ describe('installJsonHooks(claude-code) settings shape', () => {
         {
           "installedCaptureError": true,
           "installedCompactResume": true,
+          "installedEndCheck": false,
           "installedNoteWritten": true,
           "installedPostCompact": true,
           "installedPreCompact": true,

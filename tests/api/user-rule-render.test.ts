@@ -18,6 +18,7 @@ import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { planContext, sourceOf } from '../../src/api/context/context-plan.js';
 import { userRuleReserve } from '../../src/api/context/context-pools.js';
 import { isUserRule, USER_RULE_TAG, type UserRuleViewer } from '../../src/api/context/user-rule.js';
+import { detectorTags } from '../../src/base/memory/detect-tags.js';
 import { withoutCaptureTags, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { handleContext } from '../../src/surface/cli/context.js';
 import type { CliFlags } from '../../src/surface/cli/flag-values.js';
@@ -37,6 +38,7 @@ const RULE =
   "No: Clean build: `./mvnw clean package -DskipTests --batch-mode`, because the project's maintainers require it.";
 const NOTE = 'Deploys go through the staging queue before the production queue';
 const HEADING = '## Rules from the user';
+const DETECT = detectorTags({ applies: ['**/*.py'], commands: [['pytest']] });
 
 /** The row capture writes for a rule the person stated. */
 function ruleRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
@@ -283,6 +285,33 @@ describe('a typed tag cannot make a user rule', () => {
   it('strips the tag from a list and keeps the rest in order', () => {
     expect(withoutCaptureTags(['a', USER_RULE_TAG, 'b'])).toEqual(['a', 'b']);
     expect(withoutCaptureTags(['a'])).toEqual(['a']);
+  });
+
+  it('strips detect: tags from a list with the other capture tags', () => {
+    expect(withoutCaptureTags(['a', ...DETECT, USER_RULE_TAG, 'b'])).toEqual(['a', 'b']);
+    expect(withoutCaptureTags(DETECT)).toEqual([]);
+  });
+
+  it('strips typed detect: tags from remember, so only capture writes a detector', async () => {
+    const written = await remember(ctx(), { content: RULE, project: PROJECT, tags: [...DETECT, 'rule'] });
+    expect(written.tags).toEqual(['rule']);
+    expect(readEntry(store, written.id)!.tags).toEqual(['rule']);
+  });
+
+  it('strips detect: tags from a supersede of a user rule, typed or inherited', async () => {
+    const detected = ['rule', 'captured', USER_RULE_TAG, ...DETECT];
+    const row = ruleRow({ tags: detected });
+    const other = ruleRow({ content: 'No: Run the linter before every commit.', tags: detected });
+    writeEntry(store, row);
+    writeEntry(store, other);
+
+    const inherited = await supersede(ctx(), row.id, `${RULE} Always.`);
+    const typed = await supersede(ctx(), other.id, 'No: Run the linter and the formatter before every commit.', {
+      tags: detected,
+    });
+
+    expect(readEntry(store, inherited.newId)!.tags).toEqual(['rule', 'captured']);
+    expect(readEntry(store, typed.newId)!.tags).toEqual(['rule', 'captured']);
   });
 });
 

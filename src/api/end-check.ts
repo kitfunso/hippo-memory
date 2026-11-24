@@ -18,9 +18,12 @@ export interface DetectedRule {
   readonly detector: Detector;
 }
 
-const RUNNERS = 'sudo|time|env|npx|bunx|yarn|uv run|poetry run|pipenv run|pnpm exec|pnpm dlx|python3? -m|py -m';
+const RUNNERS =
+  'sudo|time|env|npx|bunx|yarn|uv run|poetry run|pipenv run|pnpm exec|pnpm dlx|python3? -m|py -m';
 const RUNNER_PREFIX = new RegExp(`^(?:\\w+=\\S*\\s+|(?:${RUNNERS})\\s+)`);
 const SEGMENT_SPLIT = /&&|\|\||;|\||\n/;
+const GROUPING = /[(){}]/g;
+const PATH_WORD = /^[\w.@~/\\:-]*\w\.[a-z0-9]{1,8}$/i;
 const BASH_WRITE =
   /(?:^|[\s;&|])(?:sed\s+-i|tee|mv|cp|rm|touch|patch|git\s+apply)\b|(?:^|[^\d&>])>>?\s*(?!\/dev\/null\b|&)[^\s|&;]+/;
 
@@ -32,23 +35,48 @@ export function isBashWrite(command: string): boolean {
   return BASH_WRITE.test(command);
 }
 
-function withoutRunners(segment: string): string {
-  let rest = segment.trim();
-  let next = rest.replace(RUNNER_PREFIX, '');
-  while (next !== rest) {
-    rest = next;
-    next = rest.replace(RUNNER_PREFIX, '');
-  }
-  return rest;
+export function bashWritePaths(command: string): string[] {
+  return command
+    .split(SEGMENT_SPLIT)
+    .filter(isBashWrite)
+    .flatMap((segment) => segment.split(/[\s'"`<>]+/).filter((word) => PATH_WORD.test(word)));
 }
 
-export function startsSegment(ran: string, key: string): boolean {
-  if (key === '') return false;
-  const bare = withoutRunners(key);
-  return ran.split(SEGMENT_SPLIT).some((segment) => {
-    const head = withoutRunners(segment);
-    return head.startsWith(bare) && (head.length === bare.length || head[bare.length] === ' ');
-  });
+function wordsOf(text: string): string[] {
+  const key = commandKey(text.replace(GROUPING, ' '));
+  return key === '' ? [] : key.split(' ');
+}
+
+function runnerForms(segment: string): string[][] {
+  const forms: string[][] = [];
+  let rest = wordsOf(segment).join(' ');
+  for (;;) {
+    if (rest !== '') forms.push(rest.split(' '));
+    const next = rest.replace(RUNNER_PREFIX, '');
+    if (next === rest) return forms;
+    rest = next;
+  }
+}
+
+function sameWord(ran: string, wanted: string): boolean {
+  return ran === wanted || ran.startsWith(`${wanted}=`);
+}
+
+function hasInOrder(ran: readonly string[], wanted: readonly string[]): boolean {
+  if (ran.length === 0 || !sameWord(ran[0], wanted[0])) return false;
+  let found = 1;
+  for (const word of ran.slice(1)) {
+    if (found < wanted.length && sameWord(word, wanted[found])) found += 1;
+  }
+  return found === wanted.length;
+}
+
+function ranCommand(ran: string, command: string): boolean {
+  const wanted = wordsOf(command);
+  if (wanted.length === 0) return false;
+  return ran
+    .split(SEGMENT_SPLIT)
+    .some((segment) => runnerForms(segment).some((form) => hasInOrder(form, wanted)));
 }
 
 function globPattern(glob: string): RegExp {
@@ -72,7 +100,8 @@ export function globMatch(glob: string, filePath: string): boolean {
 }
 
 function globHits(rule: DetectedRule, scan: EndCheckScan): number {
-  return scan.editsSincePrompt.filter((p) => rule.detector.applies.some((g) => globMatch(g, p))).length;
+  return scan.editsSincePrompt.filter((p) => rule.detector.applies.some((g) => globMatch(g, p)))
+    .length;
 }
 
 export function applies(detector: Detector, scan: EndCheckScan): boolean {
@@ -83,7 +112,7 @@ export function applies(detector: Detector, scan: EndCheckScan): boolean {
 
 export function done(detector: Detector, scan: EndCheckScan): boolean {
   return detector.commands.every((group) =>
-    group.some((command) => scan.commands.some((ran) => startsSegment(ran, commandKey(command)))),
+    group.some((command) => scan.commands.some((ran) => ranCommand(ran, command))),
   );
 }
 

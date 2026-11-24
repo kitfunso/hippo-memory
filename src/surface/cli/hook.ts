@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import {
   checkUninstallable,
   forgetInstalledHooks,
-  installJsonHooks,
+  installJsonHooksWith,
   resolveJsonHookPaths,
   uninstallJsonHooks,
 } from '../hooks-install/json-hooks.js';
@@ -41,7 +41,9 @@ export function handleHook({ args, flags }: CommandContext): void {
   const subcommand = args[0];
   const target = args[1];
   if (subcommand === 'list') return hookList();
-  if (subcommand === 'install') return hookInstall(target, boolFlag(flags, 'force'));
+  if (subcommand === 'install') {
+    return hookInstall(target, boolFlag(flags, 'force'), boolFlag(flags, 'end-check'));
+  }
   if (subcommand === 'uninstall') return hookUninstall(target);
 
   fail('Usage: hippo hook <install|uninstall|list> [target]');
@@ -66,7 +68,12 @@ function hookList(): void {
   console.log('       hippo hook uninstall <name>');
 }
 
-function hookInstall(target: string | undefined, force: boolean): void {
+function hookInstall(target: string | undefined, force: boolean, endCheck: boolean): void {
+  if (endCheck && target !== 'claude-code') {
+    fail(
+      '--end-check adds a Claude Code Stop hook; run: hippo hook install claude-code --end-check',
+    );
+  }
   // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS
   // entry.
   if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
@@ -82,7 +89,7 @@ function hookInstall(target: string | undefined, force: boolean): void {
 
   // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
-    printClaudeHookInstall(installJsonHooks(target));
+    printClaudeHookInstall(installJsonHooksWith(target, { endCheck }));
   } else if (target === 'opencode') {
     installOpencodeHook();
   } else if (target === 'codex') {
@@ -139,7 +146,7 @@ function patchAgentFile(hook: HookSpec, target: string, force: boolean): void {
   }
 }
 
-function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): void {
+function printClaudeHookInstall(result: ReturnType<typeof installJsonHooksWith>): void {
   warnClaudeSettingsUnusable(result, '');
   printLeftOutHooks(result, '');
   if (result.installedSessionEnd) {
@@ -172,6 +179,9 @@ function printClaudeHookInstall(result: ReturnType<typeof installJsonHooks>): vo
   }
   if (result.installedNoteWritten) {
     console.log(`Installed hippo note-written PostToolUse hook in ${result.target} settings`);
+  }
+  if (result.installedEndCheck) {
+    console.log(`Installed hippo end-check Stop hook in ${result.target} settings`);
   }
   if (result.migratedFromStop) {
     console.log(

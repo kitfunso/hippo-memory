@@ -424,6 +424,14 @@ export const SESSION_VERBS = {
       flags: { values: ['cwd', 'from', 'log-file', 'transcript'] },
     },
   ),
+  'end-check': verb(() => import('../hooks/end-check.js'), 'handleEndCheck', {
+    flags: {},
+    usage: [
+      `
+  end-check                Stop hook: list the person's command rules that this session shows no
+                           sign of, once each`,
+    ],
+  }),
   'codex-run': verb(() => import('../hooks/codex-run.js'), 'handleCodexRun', {
     flags: {},
     usage: [
@@ -440,7 +448,7 @@ export const SESSION_VERBS = {
     },
   ),
   hook: verb(() => import('../hook.js'), 'handleHook', {
-    flags: { switches: ['force'] },
+    flags: { switches: ['force', 'end-check'] },
     usage: [
       `
   hook <sub> [target]      Manage framework integrations
@@ -454,6 +462,7 @@ export const SESSION_VERBS = {
                            block under $COPILOT_HOME (~/.copilot by default); all but
                            claude-code and copilot also patch an existing AGENTS.md
     hook install <target> --force  Also replace an edited hippo block and add back hooks you removed
+    hook install claude-code --end-check  Also add the Stop hook that runs the end-of-task rule check
     hook uninstall <target> Remove hook; for copilot, only what hippo wrote`,
     ],
   }),

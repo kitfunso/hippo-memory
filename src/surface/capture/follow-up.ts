@@ -23,7 +23,7 @@ import { detectInstruction } from '../../domain/trust/instruction-detect.js';
 const FOLLOW_UP_TURNS = 20;
 const TURN_CHARS = 1000;
 // The prompt was measured on this model; the adapter's default picked task orders as rules (gate 2).
-const MODEL = 'claude-sonnet-5-5';
+export const MODEL = 'claude-sonnet-5-5';
 // Adaptive thinking spends from the same cap as the reply.
 const MAX_TOKENS = 4096;
 // One attempt: the session-end cursor moves only when capture returns, so a hung call must not hold it.
@@ -139,19 +139,24 @@ function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]):
     });
 }
 
-interface Asked {
+export interface Asked {
   readonly text: string | null;
   readonly usage: LlmUsage | undefined;
 }
 
-async function ask(llm: Llm, prompt: string, log: LineLog): Promise<Asked> {
+export async function askModel(
+  llm: Llm,
+  prompt: string,
+  log: LineLog,
+  what: string,
+): Promise<Asked> {
   const signal = AbortSignal.timeout(CALL_MS);
   let reply: LlmReply;
   try {
     reply = await llm.send({ model: MODEL, maxTokens: MAX_TOKENS, prompt, signal });
   } catch (err) {
     // The port never throws, but capture must outlive an adapter that does.
-    log(`follow-up rules skipped: the model call threw: ${errorMessage(err)}`, {
+    log(`${what} skipped: the model call threw: ${errorMessage(err)}`, {
       fields: errorFields(err),
     });
     return { text: null, usage: undefined };
@@ -160,7 +165,7 @@ async function ask(llm: Llm, prompt: string, log: LineLog): Promise<Asked> {
   const cause = signal.aborted
     ? `the model call passed ${CALL_MS / 1000} s`
     : describeLlmFailure(reply.failure);
-  log(`follow-up rules skipped: ${cause}`, { fields: llmFailureFields(reply.failure) });
+  log(`${what} skipped: ${cause}`, { fields: llmFailureFields(reply.failure) });
   return { text: null, usage: reply.usage };
 }
 
@@ -179,7 +184,7 @@ export async function followUpRules(
 ): Promise<FollowUpRules> {
   const messages = turns.slice(-FOLLOW_UP_TURNS).map(sentencesOf);
   if (messages.every((sentences) => sentences.length === 0)) return { rules: [], usage: undefined };
-  const { text, usage } = await ask(llm, promptOf(messages), log);
+  const { text, usage } = await askModel(llm, promptOf(messages), log, 'follow-up rules');
   if (text === null) return { rules: [], usage };
   const read = readPicks(text);
   if ('problem' in read) {

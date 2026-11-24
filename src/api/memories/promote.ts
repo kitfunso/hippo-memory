@@ -11,10 +11,12 @@ import { assertCallerProject, classifyOriginProject } from '../../base/scope/pro
 import {
   createSuccessor,
   generateId,
+  USER_RULE_TAG,
   withoutCaptureTags,
   type Layer,
   type MemoryEntry,
 } from '../../base/memory/entry.js';
+import { withoutDetectTags } from '../../base/memory/detect-tags.js';
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
@@ -89,6 +91,7 @@ function globalCopyOf(local: StoreHome, entry: MemoryEntry): MemoryEntry {
   return {
     ...entry,
     id: generateId('g'),
+    tags: entry.tags.includes(USER_RULE_TAG) ? entry.tags : withoutDetectTags(entry.tags),
     source: `promoted:${local.folder}`,
     originProject: entry.originProject ?? local.project.name,
   };

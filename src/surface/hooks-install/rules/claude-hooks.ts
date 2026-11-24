@@ -14,6 +14,7 @@ import {
   HIPPO_CAPTURE_ERROR_MARKER,
   HIPPO_POST_COMPACT_MARKER,
   HIPPO_NOTE_WRITTEN_MARKER,
+  HIPPO_END_CHECK_MARKER,
 } from './shared.js';
 import {
   type JsonValue,
@@ -37,6 +38,7 @@ import {
   hookAppender,
   nothingInstalled,
   type AppendHook,
+  type HookInstallOptions,
   type HookInstallPlan,
 } from './install-plan.js';
 import type { InstallResult } from './json-hooks.js';
@@ -126,11 +128,9 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
   ['PostCompact', [HIPPO_POST_COMPACT_MARKER]],
   ['PostToolUseFailure', [HIPPO_CAPTURE_ERROR_MARKER]],
   ['PostToolUse', [HIPPO_NOTE_WRITTEN_MARKER]],
-  ['Stop', [HIPPO_SLEEP_MARKER]],
+  ['Stop', [HIPPO_SLEEP_MARKER, HIPPO_END_CHECK_MARKER]],
 ];
 
-// Stop is only ever migrated away, so install never appends to it and a Stop that is not a list
-// does not block the install.
 const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter(
   (event) => event !== 'Stop',
 );
@@ -213,43 +213,48 @@ interface ClaudeHookPaths {
   readonly noteLog: string;
 }
 
+function appendClaudeHooks(
+  hooks: ClaudeHooks,
+  append: AppendHook,
+  { logFile, compactLog, noteLog }: ClaudeHookPaths,
+  endCheck: boolean,
+) {
+  return {
+    ...appendSessionHooks(hooks, append, logFile),
+    ...appendCompactionHooks(append, compactLog),
+    installedCaptureError: appendCaptureErrorHook(append),
+    installedNoteWritten: appendNoteWrittenHook(append, noteLog),
+    installedEndCheck: endCheck && appendEndCheckHook(append),
+  };
+}
+
+function withoutEndCheck(recorded: ReadonlySet<string>): ReadonlySet<string> {
+  return new Set([...recorded].filter((marker) => marker !== HIPPO_END_CHECK_MARKER));
+}
+
 export function planClaudeCodeHooks(
   settings: JsonObject,
-  { settingsPath, logFile, compactLog, noteLog }: ClaudeHookPaths,
+  paths: ClaudeHookPaths,
   recorded: ReadonlySet<string> = new Set(),
+  { endCheck = false }: HookInstallOptions = {},
 ): HookInstallPlan {
-  const merge = ensureHooksObject(settings, CLAUDE_APPENDED_EVENTS);
-  if (merge === null) return invalidClaudeSettings(settingsPath);
+  const merge = ensureHooksObject(
+    settings,
+    endCheck ? [...CLAUDE_APPENDED_EVENTS, 'Stop'] : CLAUDE_APPENDED_EVENTS,
+  );
+  if (merge === null) return invalidClaudeSettings(paths.settingsPath);
   // SAFETY: ensureHooksObject left every event hippo appends to absent or an array.
   const hooks = merge as ClaudeHooks;
   const migration = migrateLegacyClaudeHooks(hooks);
-  const { append, present, leftOut } = hookAppender(merge, recorded);
-
-  const {
-    installedSessionEnd,
-    installedSessionStart,
-    installedSessionRules,
-    migratedPinnedInjectRecent,
-    installedUserPromptSubmit,
-  } = appendSessionHooks(hooks, append, logFile);
-  const { installedPreCompact, installedCompactResume, installedPostCompact } =
-    appendCompactionHooks(append, compactLog);
-  const installedCaptureError = appendCaptureErrorHook(append);
-  const installedNoteWritten = appendNoteWrittenHook(append, noteLog);
+  const { append, present, leftOut } = hookAppender(
+    merge,
+    endCheck ? withoutEndCheck(recorded) : recorded,
+  );
 
   const result: InstallResult = {
     target: 'claude-code',
-    settingsPath,
-    installedSessionEnd,
-    installedSessionStart,
-    installedSessionRules,
-    installedUserPromptSubmit,
-    installedPreCompact,
-    installedCompactResume,
-    installedPostCompact,
-    installedCaptureError,
-    installedNoteWritten,
-    migratedPinnedInjectRecent,
+    settingsPath: paths.settingsPath,
+    ...appendClaudeHooks(hooks, append, paths, endCheck),
     ...migration,
     leftOut,
     invalidJson: false,
@@ -277,6 +282,14 @@ function appendCaptureErrorHook(append: AppendHook): boolean {
     'PostToolUseFailure',
     HIPPO_CAPTURE_ERROR_MARKER,
     claudeCommandGroup('hippo capture-error', HOOK_MEDIUM_TIMEOUT_SECONDS, '.*'),
+  );
+}
+
+function appendEndCheckHook(append: AppendHook): boolean {
+  return append(
+    'Stop',
+    HIPPO_END_CHECK_MARKER,
+    claudeCommandGroup('hippo end-check', HOOK_MEDIUM_TIMEOUT_SECONDS),
   );
 }
 
