@@ -6,7 +6,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from '../../base/errors/api-errors.js';
-import type { MemoryEntry } from '../../base/memory/entry.js';
+import { withoutCaptureTags, type MemoryEntry } from '../../base/memory/entry.js';
 import type { QuarantineRefusal } from '../../base/ports/store.js';
 import { StoreNotPortedError } from '../../base/util/store-blocked.js';
 import { vetSecrets } from '../../base/util/secret-detect.js';
@@ -14,6 +14,8 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import {
   detectInstruction,
   detectInstructionIn,
+  INSTRUCTION_LIKE_TAG,
+  instructionIn,
   UNTRUSTED_ORIGIN_TAG,
 } from '../../domain/trust/instruction-detect.js';
 import type { ContextWith } from '../types.js';
@@ -130,6 +132,32 @@ export interface QuarantineEditResult {
   warnings?: string[];
 }
 
+/** The tags an edit keeps, as a write screen reads them: no capture tag, and none of the marks this code adds itself. */
+function keptTagsOf(held: MemoryEntry): string[] {
+  return withoutCaptureTags(held.tags).filter(
+    (tag) => tag !== UNTRUSTED_ORIGIN_TAG && tag !== INSTRUCTION_LIKE_TAG,
+  );
+}
+
+/** The 400 for a held row whose kept lead-in or kept tags read as an instruction: an edit keeps both, so it cannot release it. */
+function refuseKeptFlags(id: string, held: MemoryEntry, keptTags: readonly string[]): void {
+  const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
+  if (lead?.flagged) {
+    throw new BadRequestError(
+      `the kept lead-in of memory ${id} reads as an instruction (${lead.reason ?? 'unknown'}); ` +
+        'an edit keeps the lead-in, so it cannot release this item; nothing was changed',
+    );
+  }
+  // No text: each tag, then the tags as a context line prints them.
+  const tags = instructionIn({ content: '' }, keptTags);
+  if (tags.flagged) {
+    throw new BadRequestError(
+      `the kept tags of memory ${id} read as an instruction (${tags.reason ?? 'unknown'}); ` +
+        'an edit keeps the tags, so it cannot release this item; nothing was changed',
+    );
+  }
+}
+
 /** The 400 or 404 a refused edit text answers before any write. A row the read missed is judged by
  * the text alone, so a flagged text never reaches the store. */
 function screenEditText(id: string, text: string, held: MemoryEntry | undefined): void {
@@ -139,14 +167,9 @@ function screenEditText(id: string, text: string, held: MemoryEntry | undefined)
     }
     return;
   }
-  const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
-  if (lead?.flagged) {
-    throw new BadRequestError(
-      `the kept lead-in of memory ${id} reads as an instruction (${lead.reason ?? 'unknown'}); ` +
-        'an edit keeps the lead-in, so it cannot release this item; nothing was changed',
-    );
-  }
-  const found = detectInstructionIn({ content: text, leadIn: held.leadIn });
+  const keptTags = keptTagsOf(held);
+  refuseKeptFlags(id, held, keptTags);
+  const found = instructionIn({ content: text, leadIn: held.leadIn }, keptTags);
   if (!found.flagged) return;
   const reason = found.reason ?? 'unknown';
   if (detectInstruction(text).flagged) {
@@ -154,8 +177,11 @@ function screenEditText(id: string, text: string, held: MemoryEntry | undefined)
       `edited text still reads as an instruction (${reason}); nothing was changed`,
     );
   }
+  const joined = detectInstructionIn({ content: text, leadIn: held.leadIn }).flagged
+    ? 'lead-in'
+    : 'tags';
   throw new BadRequestError(
-    `the edited text of memory ${id} reads as an instruction when joined to its kept lead-in (${reason}); ` +
+    `the edited text of memory ${id} reads as an instruction when joined to its kept ${joined} (${reason}); ` +
       'nothing was changed',
   );
 }
