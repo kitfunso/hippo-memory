@@ -2,7 +2,8 @@
 // else.
 import { estimateTokens } from '../../base/util/token-text.js';
 import { userRulesGet } from '../../api/index.js';
-import { userRuleLines } from '../../api/context/context-render.js';
+import { printedTokens, userRuleLine, userRuleLines } from '../../api/context/context-render.js';
+import { newestWithin, sessionRulesBudgetOf } from '../../domain/context/select-policy.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { cliApiContext, cliHookRequest, cliLedgerReach } from './api-context.js';
 import { resolveContextSession } from './context.js';
@@ -28,7 +29,17 @@ async function printSessionRules(
     currentProject: ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     currentSessionId,
   });
-  const text = userRuleLines(rules).join('\n').trim();
+  // A store with hundreds of rules would fill the first context, so the newest that fit are sent.
+  const kept = newestWithin(rules, sessionRulesBudgetOf(ctx.config.pinnedInject), (e) =>
+    printedTokens(userRuleLine(e)),
+  );
+  const left = rules.length - kept.length;
+  const counted = `${left}${kept.length > 0 ? ' more' : ''} ${left === 1 ? 'rule is' : 'rules are'}`;
+  const lines = [
+    ...userRuleLines(kept),
+    ...(left > 0 ? [`(${counted} not shown. hippo recall finds them.)`] : []),
+  ];
+  const text = lines.join('\n').trim();
   if (text === '') return;
 
   process.stdout.write(
@@ -42,7 +53,7 @@ async function printSessionRules(
       sessionId: ledgerSessionId,
       surface: 'session_start',
       event: 'inject',
-      items: rules.length,
+      items: kept.length,
       tokens: estimateTokens(text),
     },
     cliLedgerReach(hippoRoot),

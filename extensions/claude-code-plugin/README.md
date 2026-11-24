@@ -56,11 +56,11 @@ The per-prompt hook injects pinned rules and matching memories, so the plugin no
 
 ### Pinned rules on every prompt
 
-The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories stay in context through long sessions, with up to 5 memories that share words with the prompt. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the five newest writes instead.
+The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5 --format additional-context`, so pinned memories stay in context through long sessions, with up to 5 memories that share words with the prompt. Pins leave a quarter of the budget to those memories (`pinnedInject.promptRecallShare`, default 0.25), so they show even with many pins. Set `{"pinnedInject":{"promptRecall":false}}` in `.hippo/config.json` for the five newest writes instead.
 
 ### Your rules at session start
 
-The `SessionStart` hook runs `hippo session-rules`, which prints the rules you stated to this project as session context and nothing else. It prints nothing when there are none.
+The `SessionStart` hook runs `hippo session-rules`, which prints the rules you stated to this project as session context and nothing else. It sends the newest rules that fit 2,000 tokens (`pinnedInject.sessionRulesBudget`), oldest first, and a last line counts the rest. It prints nothing when there are none.
 
 ### Auto-capture errors
 

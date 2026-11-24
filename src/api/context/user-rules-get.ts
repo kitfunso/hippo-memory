@@ -1,4 +1,4 @@
-// Every rule the person taught this project, for the session-start hook, which sends them all.
+// Every rule the person taught this project, for the session-start hook, which cuts the list.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import type { Context } from '../types.js';
@@ -11,7 +11,7 @@ export type UserRulesOptions = Pick<ContextOptions, 'currentProject' | 'currentS
 
 /** The tenant's user rules for the current project from the project store and the global store,
  * oldest first, each id once; empty when pinned injection is off. Skips the budgeted selection, so
- * a long list is never cut. */
+ * this list is never cut; session-rules cuts it at pinnedInject.sessionRulesBudget. */
 export async function userRulesGet(ctx: Context, opts: UserRulesOptions): Promise<MemoryEntry[]> {
   if (!ctx.config.pinnedInject.enabled) return [];
   const pinned: ContextOptions = { ...opts, pinnedOnly: true, includeRecent: 0 };

@@ -8,14 +8,21 @@ import { compareScoredResults } from '../../base/rank/compare.js';
 import { scopeMatch } from '../../base/rank/active-scope.js';
 import { scopeBoostFor } from '../../domain/search/boosts.js';
 import type { HippoConfig } from '../../base/config/config.js';
-import { promptTokens, memoryTokens, gatePromptRecall } from '../../base/rank/prompt-recall.js';
+import {
+  promptTokens,
+  memoryTokens,
+  gatePromptRecall,
+  PROMPT_RECALL_MAX_CHARS,
+} from '../../base/rank/prompt-recall.js';
+import { rankBm25 } from '../../domain/search/bm25-search.js';
 import type { DeliveryObserver } from '../delivery/delivery-recorder.js';
 import type { ContextOptions, ContextResultEntry } from './context-types.js';
 import {
   admitWithinBudget,
   newestWorthSurfacing,
+  pinsWithinCap,
   promptRecallGateOf,
-  reservePinned,
+  promptRecallShareOf,
   strongestWithin,
   type Picked,
 } from '../../domain/context/select-policy.js';
@@ -88,13 +95,15 @@ export function selectPinned({
   const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // Pinned entries are explicit intent, the recent-N list an automatic backfill; both share ONE
-  // budget and the recent loop runs first, so pins are ranked here and reserve their share before
-  // it can spend.
+  // The cap reads only the budget and the share, never what recall used, so the pinned block stays
+  // byte-stable from prompt to prompt (skipUnchanged).
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
-  const recentBudget = Math.max(0, effBudget - reservePinned(rankedPinned, effBudget));
+  const share = plan.promptRecallPending ? promptRecallShareOf(pinnedCfg.pinnedInject) : 0;
+  const cap = effBudget - Math.floor(effBudget * share);
+  const pins = pinsWithinCap(rankedPinned, cap, rejectOverBudget(obs));
+  const recentBudget = Math.max(0, effBudget - pins.reduce((sum, r) => sum + r.tokens, 0));
 
   // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
@@ -105,7 +114,7 @@ export function selectPinned({
     backfillRecent(plan, { localPool, globalPool, picked, recentBudget, nowP });
   }
 
-  admitWithinBudget(rankedPinned, picked, effBudget, rejectOverBudget(obs));
+  admitWithinBudget(pins, picked, effBudget, rejectOverBudget(obs));
   return picked.items;
 }
 
@@ -182,9 +191,15 @@ function backfillFromPrompt(
   const p = promptTokens(opts.prompt ?? '');
   if (p.size === 0) return;
   const candidateItems = candidates(p);
-  const gated = gatePromptRecall(p, candidateItems, gate);
-  plan.obs?.gated(p, candidateItems, gate, gated);
-  const rows = gated.map((g) => ({
+  // The gate admits, the recall ranker orders, and maxItems cuts last, so a long row that holds most
+  // of the prompt is not cut by short rows that share fewer of its words.
+  const cleared = gatePromptRecall(p, candidateItems, {
+    ...gate,
+    maxItems: Number.POSITIVE_INFINITY,
+  });
+  const kept = orderLikeRecall(opts.prompt ?? '', cleared, plan).slice(0, gate.maxItems);
+  plan.obs?.gated(p, candidateItems, gate, kept);
+  const rows = kept.map((g) => ({
     entry: g.item.entry,
     score: g.score,
     tokens: plan.price(g.item.entry, g.item.isGlobal, true),
@@ -192,6 +207,38 @@ function backfillFromPrompt(
     promptRecall: true,
   }));
   admitWithinBudget(rows, picked, recentBudget, rejectOverBudget(plan.obs));
+}
+
+type GatedCandidates = ReturnType<typeof gatePromptRecall<PromptCandidate>>;
+
+// No cwd: the api reads no working folder, and on the served hook route the machine's is the daemon's.
+function orderLikeRecall(
+  prompt: string,
+  cleared: GatedCandidates,
+  plan: ContextPlan,
+): GatedCandidates {
+  const waiting = new Map(cleared.map((g) => [g.item.entry.id, g]));
+  const ranked = rankBm25(
+    prompt.slice(0, PROMPT_RECALL_MAX_CHARS),
+    cleared.map((g) => g.item.entry),
+    {
+      scope: plan.activeScope,
+      runtime: plan.config.runtime,
+      switches: plan.switches,
+      now: plan.now,
+      budget: Number.POSITIVE_INFINITY,
+    },
+  );
+  const ordered: GatedCandidates = [];
+  for (const { entry } of ranked) {
+    // The ranker's pool is the cleared rows, so a miss is an id it returned twice.
+    const g = waiting.get(entry.id);
+    if (g === undefined) continue;
+    ordered.push(g);
+    waiting.delete(entry.id);
+  }
+  // A cleared row the ranker scored 0 or dropped as a copy still follows, in gate order.
+  return [...ordered, ...cleared.filter((g) => waiting.has(g.item.entry.id))];
 }
 
 interface PromptRecallCandidatesOptions {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hippo-memory",
-  "version": "3.15.1",
+  "version": "3.16.0",
   "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
   "author": { "name": "Keith So", "url": "https://github.com/kitfunso/hippo-memory" },
   "keywords": ["memory", "remember", "recall", "lesson", "mistake", "hippo"],

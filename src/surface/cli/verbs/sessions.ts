@@ -335,8 +335,8 @@ export const SESSION_VERBS = {
     flags: {},
     usage: [
       `
-  session-rules            SessionStart hook: send every rule you stated to this project as Claude Code
-                           session context, from the project store and the global one`,
+  session-rules            SessionStart hook: send the newest rules you stated to this project, up to
+                           pinnedInject.sessionRulesBudget tokens, from the project store and the global one`,
     ],
   }),
   'session-end': verb(() => import('../hooks/session-end.js'), 'handleSessionEnd', {
