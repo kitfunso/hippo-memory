@@ -98,3 +98,23 @@ jobs:
       id-token: write
     secrets:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  release-dispatch:
+    needs: [publish]
+    if: needs.publish.outputs.dist-tag == 'latest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-dispatch
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - name: Send the release dispatch
+        env:
+          REPO: ${{ secrets.RELEASE_DISPATCH_REPO }}
+          TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "$REPO" ] || [ -z "$TOKEN" ]; then echo "release dispatch is not configured; skipped"; exit 0; fi
+          jq -nc --arg tag "$TAG" '{event_type:"core-release",client_payload:{tag:$tag}}' |
+            curl --fail-with-body -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/dispatches" --data-binary @-
