@@ -13,7 +13,7 @@ name: Publish to npm
 # No NPM_TOKEN secret is needed after that.
 # docs/release-policy.md covers tags and the `stable` channel.
 #
-# After a `latest` publish the release-dispatch job wakes a downstream CI (kitfunso/hippo-enterprise) with a repository_dispatch.
+# After a `latest` publish the release-dispatch job wakes a downstream CI with a repository_dispatch.
 # It reads RELEASE_DISPATCH_REPO and RELEASE_DISPATCH_TOKEN from the `release-dispatch` environment (limited to v*.*.* tags) and skips when either is unset.
 
 on:
