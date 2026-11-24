@@ -16,6 +16,7 @@ import {
   type InstallResult,
   type JsonHookPaths,
 } from './rules/json-hooks.js';
+import type { HookInstallOptions } from './rules/install-plan.js';
 import {
   defaultNoteWrittenLogPath,
   defaultPreCompactLogPath,
@@ -92,6 +93,13 @@ export function forgetInstalledHooks(target: 'claude-code' | 'codex'): void {
  * is not JSON stays untouched. A hook the user removed after an earlier install is not added back
  * until `forgetInstalledHooks`. */
 export function installJsonHooks(target: JsonHookTarget): InstallResult {
+  return installJsonHooksWith(target, {});
+}
+
+export function installJsonHooksWith(
+  target: JsonHookTarget,
+  options: HookInstallOptions,
+): InstallResult {
   const paths = resolveJsonHookPaths(target);
   const dir = path.dirname(paths.settings);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -109,7 +117,7 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     compactLog: defaultPreCompactLogPath(processHomes()),
     noteLog: defaultNoteWrittenLogPath(processHomes()),
   };
-  const plan = planJsonHooks(target, logs, readSettings(paths.settings), recorded);
+  const plan = planJsonHooks(target, logs, readSettings(paths.settings), recorded, options);
   if (plan.write !== null) writeSettingsFile(paths.settings, plan.write);
   const installed = new Set([...recorded, ...plan.present]);
   if (installed.size > recorded.size) {

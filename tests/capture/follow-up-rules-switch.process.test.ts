@@ -74,11 +74,11 @@ afterEach(() => {
 const contents = (): string[] => loadAllEntries(globalRoot, 'default').map((entry) => entry.content);
 
 describe('capture.followUpRules', () => {
-  it('a session end with the switch on and a key asks the model once and stores its pick', async () => {
+  it('a session end with the switch on and a key asks the model for the rule, then for its detector', async () => {
     writeConfig('model');
     initGitRepo(cwd);
     expect((await sessionEnd([])).status).toBe(0);
-    expect(modelCalls).toBe(1);
+    expect(modelCalls).toBe(2);
     expect(contents()).toEqual([RULE_SENTENCE]);
     // A harness prices the call from this line in the session-end log.
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
@@ -103,7 +103,7 @@ describe('capture.followUpRules', () => {
     );
     const endpoint = { HIPPO_LLM_BASE_URL: 'https://llm.internal/v1', HIPPO_LLM_MODEL: 'qwen-local' };
     expect((await sessionEnd([], null, endpoint)).status).toBe(0);
-    expect(urls).toEqual(['https://llm.internal/v1/chat/completions']);
+    expect(urls).toEqual(Array(2).fill('https://llm.internal/v1/chat/completions'));
     expect(contents()).toEqual([RULE_SENTENCE]);
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
       'follow-up rules: model=qwen-local input_tokens=812 output_tokens=37',
@@ -119,7 +119,7 @@ describe('capture.followUpRules', () => {
       env: envWith('test-key'),
     });
     expect(result.status).toBe(0);
-    expect(modelCalls).toBe(1);
+    expect(modelCalls).toBe(2);
     expect(loadAllEntries(projectRoot, 'default').map((entry) => entry.content)).toEqual([RULE_SENTENCE]);
   });
 

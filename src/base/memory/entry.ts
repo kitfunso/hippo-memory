@@ -14,6 +14,7 @@ import {
   type StrengthModel,
 } from './strength.js';
 import { isSuperseded } from './liveness.js';
+import { isDetectTag } from './detect-tags.js';
 
 export const DEFAULT_SCHEMA_FIT = 0.5;
 
@@ -145,7 +146,8 @@ export function isRecallOnly(entry: { readonly tags: readonly string[] }): boole
  * typed tag must not make a row print as the person's rule, and a corrected note is no longer a note. */
 export function withoutCaptureTags(tags: readonly string[]): string[] {
   return tags.filter(
-    (t) => t !== USER_RULE_TAG && t !== CAPTURED_NOTE_TAG && t !== USER_MESSAGE_TAG,
+    (t) =>
+      t !== USER_RULE_TAG && t !== CAPTURED_NOTE_TAG && t !== USER_MESSAGE_TAG && !isDetectTag(t),
   );
 }
 

@@ -1,6 +1,7 @@
 // Which model and text format built a vector index, and when a provider change means a rebuild:
 // pure rules that every store and the search side apply alike.
 
+import { isDetectTag } from '../memory/detect-tags.js';
 import { findableText } from '../memory/lead-in.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local.js';
 
@@ -27,7 +28,7 @@ export function embeddingInputText(entry: {
   tags: string[];
   leadIn?: string | null;
 }): string {
-  const tags = entry.tags.filter((t) => !t.startsWith('path:'));
+  const tags = entry.tags.filter((t) => !t.startsWith('path:') && !isDetectTag(t));
   return `${findableText(entry)} ${tags.join(' ')}`.trim();
 }
 

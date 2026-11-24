@@ -32,9 +32,9 @@ function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
     step !== undefined && (step.detail.startsWith('CORRELATED') || correlated(plan.find((p) => p.id === step.parent)));
   const innerLoop = (step: PlanStep): boolean =>
     plan.some((other) => other.parent === step.parent && other.id < step.id && /^(SCAN|SEARCH) /.test(other.detail));
-  return plan
-    .filter((step) => step.detail.includes('VIRTUAL TABLE') && (correlated(step) || innerLoop(step)))
-    .map((step) => step.detail);
+  const scansAnIndex = (step: PlanStep): boolean =>
+    step.detail.includes('VIRTUAL TABLE') && !/^SCAN json_(?:each|tree) /.test(step.detail);
+  return plan.filter((step) => scansAnIndex(step) && (correlated(step) || innerLoop(step))).map((step) => step.detail);
 }
 
 let root: string;

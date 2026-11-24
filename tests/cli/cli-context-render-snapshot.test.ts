@@ -22,6 +22,7 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { contextBlockLines } from '../../src/api/context/context-render.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
+import { detectorTags } from '../../src/base/memory/detect-tags.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import type { SleepResult } from '../../src/api/index.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
@@ -205,6 +206,20 @@ describe('printContextMarkdown snapshots', () => {
     ];
     const out = captureStdout(() => printContextMarkdown(oneItem, 20, 'observe'));
     expect(out).toMatchSnapshot();
+  });
+
+  it('prints the tags of a row without its detect: tags', () => {
+    const detector = detectorTags({ applies: ['**/*.py'], commands: [['pytest']] });
+    const row = (tags: string[]) => [
+      { entry: { ...memVerifiedSemantic, tags }, score: 0.9, tokens: 20, isGlobal: false },
+    ];
+    const plain = captureStdout(() => printContextMarkdown(row(['a', 'b']), 20, 'observe'));
+    const detected = captureStdout(() => printContextMarkdown(row(['a', ...detector, 'b']), 20, 'observe'));
+    expect(detected).toBe(plain);
+    expect(detected).toContain('[a, b]');
+    expect(detected).not.toContain('detect:');
+    const onlyDetector = captureStdout(() => printContextMarkdown(row(detector), 20, 'observe'));
+    expect(onlyDetector).toBe(captureStdout(() => printContextMarkdown(row([]), 20, 'observe')));
   });
 });
 

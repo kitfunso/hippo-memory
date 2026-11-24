@@ -1,0 +1,2 @@
+  end-check                Stop hook: list the person's command rules that this session shows no
+                           sign of, once each

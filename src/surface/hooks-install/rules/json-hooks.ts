@@ -18,7 +18,7 @@ import {
   uninstallClaudeCodeHooks,
 } from './claude-hooks.js';
 import { planCodexHooks, uninstallCodexHooks } from './codex-hooks.js';
-import { nothingInstalled, type HookInstallPlan } from './install-plan.js';
+import { nothingInstalled, type HookInstallOptions, type HookInstallPlan } from './install-plan.js';
 import { copilotHooksTable } from './copilot.js';
 
 /** A target's hook settings file, the log its SessionEnd hook writes, and the tool's display
@@ -47,6 +47,9 @@ export interface InstallResult {
   installedCaptureError: boolean;
   /** PostToolUse -> `hippo note-written` (a memory note Claude Code writes is imported at once). */
   installedNoteWritten: boolean;
+  /** Stop -> `hippo end-check` (the end-of-task rule check), added only when the install asks for
+   * it. */
+  installedEndCheck: boolean;
   migratedPinnedInjectRecent: boolean;
   migratedFromStop: boolean;
   migratedLegacySessionEnd: boolean;
@@ -123,6 +126,7 @@ export function planJsonHooks(
   paths: JsonHookLogs,
   settings: JsonValue | undefined,
   recorded: ReadonlySet<string>,
+  options: HookInstallOptions = {},
 ): HookInstallPlan {
   const invalid = {
     result: { ...nothingInstalled(target, paths.settings), invalidJson: true },
@@ -137,6 +141,7 @@ export function planJsonHooks(
     settings,
     { settingsPath: paths.settings, logFile: paths.logFile, compactLog, noteLog },
     recorded,
+    options,
   );
 }
 

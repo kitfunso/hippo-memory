@@ -1158,6 +1158,8 @@ For Claude Code, it also adds 9 hook entries to `~/.claude/settings.json`:
 - a `PostToolUseFailure` hook that runs `hippo capture-error`, which stores a failed tool call as an error memory. It skips interrupts, declined permissions and searches that found nothing, and stores a repeated failure once. It also logs every failure, stored or not, for `hippo failures`: the session, the tool and hashes of the error, never its text. A hash is not anonymous, since anyone who guesses an error's text can check it against the hash. The log keeps 90 days.
 - a `PostToolUse` hook that runs `hippo note-written` when Claude Code writes a memory note (a `.md` file in `projects/<name>/memory/`). A detached worker imports the notes within seconds and logs to `~/.hippo/logs/note-written.log`. An `if` filter keeps Claude Code from starting hippo for any other write.
 
+A tenth hook is opt-in: `hippo hook install claude-code --end-check` adds a `Stop` hook that runs `hippo end-check`, the end-of-task rule check. It lists nothing until `capture.followUpRules` is `"model"`, and `hippo doctor` warns when the hook is on and that key is off. A later `hippo hook install claude-code` keeps the hook, and `hippo hook uninstall claude-code` removes it.
+
 Only Claude Code saves memories at a compaction: hippo installs no `PreCompact` or `PostCompact` hook for Codex, Cursor, OpenCode, OpenClaw or Pi.
 
 To remove: `hippo hook uninstall claude-code`

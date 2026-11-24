@@ -1,6 +1,7 @@
 // The text a memory is found by has one rule, and each copy of it is held equal: the FTS row, its SQL repair, the BM25 document and the embed text.
 import { describe, expect, it } from 'vitest';
 import { embeddingInputText } from '../../src/base/embeddings/index-identity.js';
+import { detectorTags } from '../../src/base/memory/detect-tags.js';
 import { FINDABLE_TEXT_SQL, findableText } from '../../src/base/memory/lead-in.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { repairFtsDrift } from '../../src/db/migrate.js';
@@ -114,4 +115,62 @@ describe('the findable text, by copy', () => {
       expect(forFts.includes('zephyrline')).toBe(Boolean(leadIn));
     },
   );
+});
+
+describe('a detect: tag, by copy of the findable text', () => {
+  const DETECTOR_TAGS = detectorTags({ applies: ['**/*.py'], commands: [['pytest']] });
+  const TAGS = ['ops', ...DETECTOR_TAGS, 'cache'];
+  const NOT_INDEXED = ['detect', 'applies', 'cmd', 'pytest'];
+
+  function seedDetected() {
+    const root = makeRoot('detect-tag-parity');
+    const entry = createMemory(CONTENT, { tags: TAGS, tenantId: 'default' });
+    writeEntry(root, entry);
+    return { root, entry };
+  }
+
+  function expectNoDetectWords(db: DatabaseSyncLike, id: string): void {
+    expect(ftsRow(db, id).tags).toBe('ops cache');
+    expect(ftsHits(db, 'ops')).toEqual([id]);
+    for (const word of NOT_INDEXED) expect(ftsHits(db, word)).toEqual([]);
+  }
+
+  it('is stored with the row and left out of the BM25 document and the embed text', async () => {
+    const { root, entry } = seedDetected();
+    const [read] = await sqliteStore(root).entriesByIds([entry.id], 'default');
+    expect(read!.tags).toEqual(TAGS);
+    expect(entryText(read!)).toBe(`${findableText({ content: CONTENT })} ops cache`);
+    expect(embeddingInputText(read!)).toBe(`${findableText({ content: CONTENT })} ops cache`);
+  });
+
+  it('is left out of the FTS text of a single write', () => {
+    const { root, entry } = seedDetected();
+    withDb(root, (db) => expectNoDetectWords(db, entry.id));
+  });
+
+  it('is left out of the FTS text of a batch write', () => {
+    const root = makeRoot('detect-tag-parity-batch');
+    const entry = createMemory(CONTENT, { tags: TAGS, tenantId: 'default' });
+    batchWriteAndDeleteInFolder(root, [entry], []);
+    withDb(root, (db) => expectNoDetectWords(db, entry.id));
+  });
+
+  it('is left out of the FTS text after a drift repair', () => {
+    const { root, entry } = seedDetected();
+    withDb(root, (db) => {
+      db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
+      expect(repairFtsDrift(db)).toBe(true);
+      expectNoDetectWords(db, entry.id);
+    });
+  });
+
+  it('does not stop a repair from copying tags_json that is not a JSON array as it is', () => {
+    const { root, entry } = seedDetected();
+    withDb(root, (db) => {
+      db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?').run('plain-tag', entry.id);
+      db.prepare('DELETE FROM memories_fts WHERE id = ?').run(entry.id);
+      expect(repairFtsDrift(db)).toBe(true);
+      expect(ftsRow(db, entry.id).tags).toBe('plain-tag');
+    });
+  });
 });

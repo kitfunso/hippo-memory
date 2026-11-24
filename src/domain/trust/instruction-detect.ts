@@ -4,6 +4,7 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
+import { withoutDetectTags } from '../../base/memory/detect-tags.js';
 import { shownText, type LeadInText } from '../../base/memory/lead-in.js';
 
 /** What a member's flagged row in a shared scope carries: held for review on a store that reviews, else kept;
@@ -536,7 +537,8 @@ export function detectInstructionIn(text: LeadInText): InstructionDetection {
 /** The tag list as a context line prints it; the write screen checks the content joined to this text.
  * The line's `**` between them only widens the gap. */
 export function printedTags(tags: readonly string[]): string {
-  return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+  const shown = withoutDetectTags(tags);
+  return shown.length > 0 ? ` [${shown.join(', ')}]` : '';
 }
 
 /** The first flag in the text, in each tag, or in the text joined to the tags as a context line prints them;

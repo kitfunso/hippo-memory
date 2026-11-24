@@ -1,3 +1,4 @@
+import { withoutDetectTags } from '../../base/memory/detect-tags.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { findableText } from '../../base/memory/lead-in.js';
 import { indexTokenize } from '../../base/util/tokenize.js';
@@ -16,7 +17,7 @@ const BM25_B = 0.75;
 
 /** The text BM25 indexes for an entry: its findable text followed by its tags. */
 export function entryText(entry: MemoryEntry): string {
-  return `${findableText(entry)} ${entry.tags.join(' ')}`;
+  return `${findableText(entry)} ${withoutDetectTags(entry.tags).join(' ')}`;
 }
 
 export function buildCorpus(texts: string[]): BM25Corpus {

@@ -26,6 +26,7 @@ export const HIPPO_COMPACT_RESUME_MARKER = 'hippo compact-resume';
 export const HIPPO_CAPTURE_ERROR_MARKER = 'hippo capture-error';
 export const HIPPO_POST_COMPACT_MARKER = 'hippo post-compact';
 export const HIPPO_NOTE_WRITTEN_MARKER = 'hippo note-written';
+export const HIPPO_END_CHECK_MARKER = 'hippo end-check';
 
 /** Copilot's config folder: $COPILOT_HOME, else ~/.copilot under the profile folder, as the
  * Copilot apps resolve it (a HOME that differs from the profile must not move it). */

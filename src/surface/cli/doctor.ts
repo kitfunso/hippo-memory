@@ -14,6 +14,7 @@ import { type SpoolFs } from '../../infra/spool-files.js';
 import { isEmbeddingAvailable } from '../../base/embeddings/local.js';
 import { CODEX_TRUST_LINE } from '../hooks-install/json-hooks.js';
 import { isCodexPresent } from '../hooks-install/detect.js';
+import { HIPPO_END_CHECK_MARKER } from '../hooks-install/rules/shared.js';
 import { claudeConfigDir, codexHomeDir } from '../../base/util/agent-homes.js';
 import { processEnv } from '../../base/util/env.js';
 import { type JsonValue, isJsonObjectLiteral } from '../../base/util/json.js';
@@ -208,6 +209,21 @@ function claudeCodeCheck(home: string): DoctorCheck {
   return claudeHooksCheck(settings === null ? '' : JSON.stringify(settings));
 }
 
+function endCheckCheck(home: string, store: string | null): DoctorCheck | null {
+  if (store === null) return null;
+  const settings = readJson(path.join(claudeConfigDir(home, processEnv()), 'settings.json'));
+  if (!JSON.stringify(settings ?? '').includes(HIPPO_END_CHECK_MARKER)) return null;
+  if (loadConfig(store).capture.followUpRules === 'model') return null;
+  return {
+    id: 'end-check',
+    status: 'warn',
+    detail:
+      'the end-check hook is on but capture.followUpRules is off, so no detectors are written ' +
+      'and the check lists nothing',
+    fix: 'add {"capture": {"followUpRules": "model"}} to .hippo/config.json',
+  };
+}
+
 /** Grades the hooks from the settings file's text: the plugin, every hook, none, or some. */
 function claudeHooksCheck(text: string): DoctorCheck {
   const viaPlugin = /hippo-memory@/.test(text);
@@ -279,6 +295,8 @@ export async function runDoctor(opts: DoctorOptions): Promise<DoctorReport> {
   }
 
   checks.push(claudeCodeCheck(home));
+  const endCheck = endCheckCheck(home, store);
+  if (endCheck !== null) checks.push(endCheck);
 
   if (isCodexPresent(home)) checks.push(codexCheck(home));
 

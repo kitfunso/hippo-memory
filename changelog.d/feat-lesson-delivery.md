@@ -1,0 +1,3 @@
+### Added
+
+- **`hippo hook install claude-code --end-check` adds an opt-in Stop hook that runs `hippo end-check`, the end-of-task rule check.** With `capture.followUpRules` set to `"model"`, session capture also asks the model for a command detector for each rule it pins: the commands a later session must run to follow that rule. At the end of a task, the check lists the rules the session shows no sign of following. A plain `hippo hook install claude-code` does not add the hook and keeps it once added, and `hippo hook uninstall claude-code` removes it. `hippo doctor` warns when the hook is on and `capture.followUpRules` is off, because then no detectors are written and the check lists nothing.

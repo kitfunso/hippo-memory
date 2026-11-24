@@ -25,6 +25,7 @@ export function nothingInstalled(target: JsonHookTarget, settingsPath: string): 
     installedPostCompact: false,
     installedCaptureError: false,
     installedNoteWritten: false,
+    installedEndCheck: false,
     migratedPinnedInjectRecent: false,
     migratedFromStop: false,
     migratedLegacySessionEnd: false,
@@ -53,6 +54,10 @@ export interface HookInstallPlan {
   readonly result: InstallResult;
   readonly write: JsonValue | null;
   readonly present: readonly string[];
+}
+
+export interface HookInstallOptions {
+  readonly endCheck?: boolean;
 }
 
 export type AppendHook = (event: string, marker: string, group: JsonObject) => boolean;

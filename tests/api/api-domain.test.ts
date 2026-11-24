@@ -1,6 +1,8 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { BadRequestError, ConflictError } from '../../src/base/errors/api-errors.js';
+import { detectorTags } from '../../src/base/memory/detect-tags.js';
+import { USER_RULE_TAG } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -126,6 +128,21 @@ describe('api domain — recall/forget/promote/supersede', () => {
     const result = await promote(apiCtx(home, 'default', { subject: 'cli', role: 'admin' }), id);
 
     expect(readEntry(globalHome, result.globalId)?.leadIn).toBe(lead);
+  });
+
+  it('promote keeps the detect: tags on the copy of a user rule and drops them from any other row', async () => {
+    const detector = detectorTags({ applies: ['**/*.py'], commands: [['pytest']] });
+    const rule = createMemory('No: Run pytest before every commit.', { tags: ['rule', USER_RULE_TAG, ...detector] });
+    const other = createMemory('Run pytest before every commit on the billing repo.', { tags: ['rule', ...detector] });
+    writeEntry(home, rule);
+    writeEntry(home, other);
+    const ctx = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
+
+    const ruleCopy = await promote(ctx, rule.id);
+    const otherCopy = await promote(ctx, other.id);
+
+    expect(readEntry(globalHome, ruleCopy.globalId)?.tags).toEqual(['rule', USER_RULE_TAG, ...detector]);
+    expect(readEntry(globalHome, otherCopy.globalId)?.tags).toEqual(['rule']);
   });
 
   it.each([

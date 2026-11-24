@@ -60,6 +60,7 @@ compact-resume
 post-compact
 note-written
 __note-import-worker, no block
+end-check
 codex-run
 __codex-session-end-worker, no block
 hook
