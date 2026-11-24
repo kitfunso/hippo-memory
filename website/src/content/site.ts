@@ -19,12 +19,12 @@ export const site = {
   title: 'hippo: open-source memory for Claude Code, Codex and Cursor',
   // The default meta description and the JSON-LD description; package.json's line ships with npm releases.
   description:
-    'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.',
+    'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 26 in 100 to 12, at the same cost.',
   tagline: {
     lead: 'Your corrections, remembered by',
     accent: 'Claude Code, Codex and Cursor',
     summary:
-      'Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.',
+      'Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 26 in 100 to 12, at the same cost.',
   },
   installCmd: 'npm install -g hippo-memory',
   // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
@@ -86,9 +86,9 @@ export const terminal: ReadonlyArray<{ kind: 'note' | 'cmd' | 'out' | 'hippo'; t
 export const repeatMistakes = {
   unit: 'in 100',
   bars: [
-    { name: 'No memory', rate: 83, lead: false },
-    { name: "Claude Code's built-in memory", rate: 21, lead: false },
-    { name: 'Built-in memory plus hippo', rate: 11, lead: true },
+    { name: 'No memory', rate: 84, lead: false },
+    { name: "Claude Code's built-in memory", rate: 26, lead: false },
+    { name: 'Built-in memory plus hippo', rate: 12, lead: true },
   ],
 } as const;
 
@@ -143,7 +143,7 @@ export const how = {
 // Sources for each section are in the 12 Nov home deck v3.
 export const problem = {
   heading: 'You have explained this before',
-  intro: 'You already keep a CLAUDE.md, and the agent keeps notes of its own. A new session can still repeat a mistake you corrected last week, and in our test Claude Code with its built-in memory did so 21 times in 100.',
+  intro: 'You already keep a CLAUDE.md, and the agent keeps notes of its own. A new session can still repeat a mistake you corrected last week, and in our test Claude Code with its built-in memory did so 26 times in 100.',
   items: [
     {
       title: 'The same rule, every morning',
