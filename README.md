@@ -82,7 +82,7 @@ Real sessions on 29 repositories, with the plan registered before the run.
 | Claude Code with | Repeats per 100 chances |
 |---|--:|
 | No memory | 84 |
-| Built-in memory | 21 |
+| Built-in memory | 26 |
 | Built-in plus hippo | **12** |
 
 Cost with hippo: 1.006 times, the same.
@@ -226,9 +226,9 @@ Each run corrects Claude Code once and then, 2 or more tasks later, gives it a t
 
 | Claude Code with | Repeats in 100 |
 |---|--:|
-| No memory | 83 |
+| No memory | 84 |
 | Claude Code's built-in memory | 26 |
-| Built-in memory plus hippo | **11** |
+| Built-in memory plus hippo | **12** |
 
 The chart shows the registered measure, the first chance in each mistake family over 148 units. Hippo gives 14.9 points fewer repeats [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 
