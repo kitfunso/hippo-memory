@@ -10,7 +10,7 @@ const MEMBER_WRITE_ROUTES = {
   'POST /v1/memories/:id/archive': { screen: 'no new text', gate: 'row origin' },
   'POST /v1/memories/:id/promote': {
     screen: 'no new text',
-    gate: 'not gated: promote checks the caller project itself',
+    gate: 'not gated: a shared store admits by the body project, else a copy to the global store',
   },
   'DELETE /v1/memories/:id': { screen: 'no new text', gate: 'row origin' },
   'POST /v1/outcome': { screen: 'no new text', gate: 'row origin' },

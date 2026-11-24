@@ -67,8 +67,7 @@ describe('POST /v1/outcome', () => {
       body: JSON.stringify({ ids: [m1.id, m2.id], good: true }),
     });
     expect(res.status).toBe(200);
-    const body = await jsonAs<{ applied: number }>(res);
-    expect(body.applied).toBe(2);
+    expect(await jsonAs<{ applied: number }>(res)).toEqual({ applied: 2 });
   });
 
   it.skipIf(needsHippoDb('db'))(

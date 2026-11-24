@@ -138,10 +138,6 @@ function refusedPart(refused: number | undefined): { refused?: number } {
   return refused === undefined ? {} : { refused };
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the
-// ids this client's last recall or context call showed, and returns {applied, ids}, so callers can
-// tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row
-// (op='outcome').
 export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];

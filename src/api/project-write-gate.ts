@@ -17,11 +17,16 @@ type GateContext = Pick<
   Context,
   'tenantId' | 'actor' | 'projectWriteGate' | 'projectWriteGateTimeoutMs'
 >;
-type RowGateContext = GateContext & Pick<Context, 'store'>;
+type RowGateContext = GateContext & Pick<Context, 'store' | 'signal'>;
+
+export interface RowIdJudgement {
+  readonly admitted: ReadonlySet<string>;
+  readonly refused: ReadonlySet<string>;
+}
 
 /** Validates the caller's project, then asks the server's gate; no gate checks nothing. */
 export async function admitProjectWrite(
-  ctx: Pick<Context, 'tenantId' | 'actor' | 'projectWriteGate' | 'projectWriteGateTimeoutMs'>,
+  ctx: GateContext,
   project: { readonly name: string; readonly aliases?: readonly string[] } | null,
 ): Promise<void> {
   if (ctx.projectWriteGate === undefined) return;
@@ -80,12 +85,14 @@ export async function admitRowWrite(
   return row;
 }
 
-export async function refusedRowIds(
+export async function judgeRowIds(
   ctx: RowGateContext,
   ids: readonly string[],
-): Promise<ReadonlySet<string>> {
+): Promise<RowIdJudgement | undefined> {
+  if (ctx.projectWriteGate === undefined) return undefined;
+  const admitted = new Set<string>();
   const refused = new Set<string>();
-  if (ctx.projectWriteGate === undefined || ids.length === 0) return refused;
+  if (ids.length === 0) return { admitted, refused };
   const rows = new Map(
     (await ctx.store.entriesByIds(ids, ctx.tenantId)).map((row) => [row.id, row]),
   );
@@ -93,15 +100,20 @@ export async function refusedRowIds(
   const groups = new Map<string | null, string[]>();
   for (const id of new Set(ids)) {
     const row = rows.get(id);
-    if (row === undefined || isPersonalScope(row.scope) || !readerReaches(reader, row.scope)) {
+    if (row === undefined || !readerReaches(reader, row.scope)) continue;
+    if (isPersonalScope(row.scope)) {
+      admitted.add(id);
       continue;
     }
     const project = rowProject(row);
-    groups.set(project, [...(groups.get(project) ?? []), id]);
+    const members = groups.get(project);
+    if (members === undefined) groups.set(project, [id]);
+    else members.push(id);
   }
   for (const [project, members] of groups) {
-    if ((await askGate(ctx, project)) === null) continue;
-    for (const id of members) refused.add(id);
+    ctx.signal?.throwIfAborted();
+    const verdict = (await askGate(ctx, project)) === null ? admitted : refused;
+    for (const id of members) verdict.add(id);
   }
-  return refused;
+  return { admitted, refused };
 }

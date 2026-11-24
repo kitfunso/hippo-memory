@@ -1,7 +1,7 @@
 // Outcome feedback on recalled memories.
 
 import { scopeReaderOf } from '../../base/scope/recall-scope.js';
-import { refusedRowIds } from '../project-write-gate.js';
+import { judgeRowIds } from '../project-write-gate.js';
 import type { ContextWith, EntryContext } from '../types.js';
 
 /** An id outside ctx.tenantId, or in someone else's personal scope, is skipped, so a stale id never fails the call.
@@ -20,17 +20,19 @@ export async function outcome(
   ids: ReadonlyArray<string>,
   good: boolean,
 ): Promise<OutcomeResult> {
-  const refused = await refusedRowIds(ctx, ids);
-  const allowed = refused.size === 0 ? ids : ids.filter((id) => !refused.has(id));
-  const refusedPart = refused.size === 0 ? {} : { refused: refused.size };
-  if (refused.size > 0 && allowed.length === 0) {
+  const judgement = await judgeRowIds(ctx, ids);
+  const sent = judgement === undefined ? ids : ids.filter((id) => judgement.admitted.has(id));
+  const refusedCount = judgement?.refused.size ?? 0;
+  const refusedPart = refusedCount === 0 ? {} : { refused: refusedCount };
+  if (judgement !== undefined && sent.length === 0) {
     return { applied: 0, appliedIds: [], ...refusedPart };
   }
+  ctx.signal?.throwIfAborted();
   const write = {
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     ...scopeReaderOf(ctx.actor),
-    ids: allowed,
+    ids: sent,
     good,
   };
   const appliedIds = await ctx.store.entryWrites.applyOutcome(write);
