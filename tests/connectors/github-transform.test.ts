@@ -268,7 +268,10 @@ describe('the shape all four transforms share', () => {
 
   it('pins the exact opts, tag order included, for an event with no repository', () => {
     expect(
-      issueEventToRememberOpts({ action: 'opened', issue: { number: 1, title: ' T ', body: ' B ', user } }),
+      issueEventToRememberOpts({
+        action: 'opened',
+        issue: { number: 1, title: ' T ', body: ' B ', user, author_association: 'MEMBER' },
+      }),
     ).toEqual({
       ...common,
       content: 'T\n\nB',
@@ -279,7 +282,7 @@ describe('the shape all four transforms share', () => {
       issueCommentEventToRememberOpts({
         action: 'created',
         issue: { number: 1 },
-        comment: { id: 2, body: ' C ', user },
+        comment: { id: 2, body: ' C ', user, author_association: 'MEMBER' },
       }),
     ).toEqual({
       ...common,
@@ -288,7 +291,10 @@ describe('the shape all four transforms share', () => {
       tags: ['source:github', 'repo:unknown/unknown', 'event:issue_comment.created', 'user:github:octocat'],
     });
     expect(
-      pullRequestEventToRememberOpts({ action: 'opened', pull_request: { number: 3, title: '', body: ' B ', user } }),
+      pullRequestEventToRememberOpts({
+        action: 'opened',
+        pull_request: { number: 3, title: '', body: ' B ', user, author_association: 'MEMBER' },
+      }),
     ).toEqual({
       ...common,
       content: 'B',
@@ -299,7 +305,7 @@ describe('the shape all four transforms share', () => {
       prReviewCommentEventToRememberOpts({
         action: 'created',
         pull_request: { number: 3 },
-        comment: { id: 4, body: ' R ', user },
+        comment: { id: 4, body: ' R ', user, author_association: 'MEMBER' },
       }),
     ).toEqual({
       ...common,
@@ -318,12 +324,17 @@ describe('the shape all four transforms share', () => {
 describe('with a GHES host', () => {
   const GHES = 'ghes.example.com';
   const user = { login: 'octocat', id: 1 };
+  const author_association = 'MEMBER';
   const cases = [
     {
       name: 'issues',
       opts: () =>
         issueEventToRememberOpts(
-          { action: 'opened', repository: publicRepo, issue: { number: 42, title: 'T', body: 'B', user } },
+          {
+            action: 'opened',
+            repository: publicRepo,
+            issue: { number: 42, title: 'T', body: 'B', user, author_association },
+          },
           GHES,
         ),
       ref: 'github://ghes.example.com/acme/widgets/issue/42',
@@ -336,7 +347,7 @@ describe('with a GHES host', () => {
             action: 'created',
             repository: publicRepo,
             issue: { number: 42 },
-            comment: { id: 999, body: 'C', user },
+            comment: { id: 999, body: 'C', user, author_association },
           },
           GHES,
         ),
@@ -346,7 +357,11 @@ describe('with a GHES host', () => {
       name: 'pull_request',
       opts: () =>
         pullRequestEventToRememberOpts(
-          { action: 'opened', repository: publicRepo, pull_request: { number: 7, title: 'T', body: 'B', user } },
+          {
+            action: 'opened',
+            repository: publicRepo,
+            pull_request: { number: 7, title: 'T', body: 'B', user, author_association },
+          },
           GHES,
         ),
       ref: 'github://ghes.example.com/acme/widgets/pull/7',
@@ -359,7 +374,7 @@ describe('with a GHES host', () => {
             action: 'created',
             repository: publicRepo,
             pull_request: { number: 7 },
-            comment: { id: 12345, body: 'R', user },
+            comment: { id: 12345, body: 'R', user, author_association },
           },
           GHES,
         ),
@@ -372,5 +387,123 @@ describe('with a GHES host', () => {
     expect(o?.artifactRef).toBe(ref);
     expect(o?.tags?.[1]).toBe('repo:ghes.example.com/acme/widgets');
     expect(o?.scope).toBe('github:public:ghes.example.com/acme/widgets');
+    expect(o).not.toHaveProperty('hold');
+  });
+
+  it('holds an outside author on a GHES host and keeps the host in ref, repo tag and scope', () => {
+    const evt: GitHubIssueCommentEvent = {
+      action: 'created',
+      repository: publicRepo,
+      issue: { number: 42 },
+      comment: { id: 999, body: 'C', user, author_association: 'NONE' },
+    };
+    const held = issueCommentEventToRememberOpts(evt, GHES);
+    expect(held?.artifactRef).toBe('github://ghes.example.com/acme/widgets/issue/42/comment/999');
+    expect(held?.tags?.[1]).toBe('repo:ghes.example.com/acme/widgets');
+    expect(held?.scope).toBe('github:public:ghes.example.com/acme/widgets');
+    expect(held?.hold).toEqual({ reason: 'outside-author:NONE' });
+    expect('hold' in issueCommentEventToRememberOpts(evt, GHES, new Set([1]))!).toBe(false);
+  });
+});
+
+describe('trust follows the author', () => {
+  const commentBy = (association: string | undefined, user = { login: 'ana', id: 5 }): GitHubIssueCommentEvent => ({
+    action: 'created',
+    repository: publicRepo,
+    issue: { number: 1 },
+    comment: {
+      id: 2,
+      body: 'I can repro on arm64',
+      user,
+      author_association: association,
+    },
+  });
+  const heldFor = (association: string | undefined) => issueCommentEventToRememberOpts(commentBy(association))?.hold;
+
+  it.each(['OWNER', 'MEMBER', 'COLLABORATOR'])('does not hold an author GitHub vouches for as %s', (association) => {
+    expect('hold' in issueCommentEventToRememberOpts(commentBy(association))!).toBe(false);
+  });
+
+  it.each(['CONTRIBUTOR', 'FIRST_TIME_CONTRIBUTOR', 'FIRST_TIMER', 'NONE', 'MANNEQUIN', 'NEW_KIND'])(
+    'holds an outside author reported as %s',
+    (association) => {
+      expect(heldFor(association)).toEqual({ reason: `outside-author:${association}` });
+    },
+  );
+
+  it.each([undefined, 'owner', 'x y'])('holds an author whose association reads %s as unknown', (association) => {
+    expect(heldFor(association)).toEqual({ reason: 'outside-author:unknown' });
+  });
+
+  it('holds an author whose association is not a string as unknown', () => {
+    const evt = commentBy(undefined);
+    // SAFETY: the test plants a payload value the declared type forbids, to prove the rule holds anyway.
+    (evt.comment as { author_association?: unknown }).author_association = ['OWNER'];
+    expect(issueCommentEventToRememberOpts(evt)?.hold).toEqual({ reason: 'outside-author:unknown' });
+  });
+
+  const user = { login: 'ana', id: 5 };
+  const issue = (association: string): GitHubIssueEvent => ({
+    action: 'opened',
+    issue: { number: 1, title: 'T', body: 'B', user, author_association: association },
+  });
+  const pull = (association: string): GitHubPullRequestEvent => ({
+    action: 'opened',
+    pull_request: { number: 3, title: 'T', body: 'B', user, author_association: association },
+  });
+  const review = (association: string): GitHubPullRequestReviewCommentEvent => ({
+    action: 'created',
+    pull_request: { number: 3 },
+    comment: { id: 4, body: 'R', user, author_association: association },
+  });
+
+  it('applies the rule to all four event shapes', () => {
+    const outside = [
+      issueEventToRememberOpts(issue('NONE')),
+      pullRequestEventToRememberOpts(pull('NONE')),
+      prReviewCommentEventToRememberOpts(review('NONE')),
+    ];
+    const inside = [
+      issueEventToRememberOpts(issue('OWNER')),
+      pullRequestEventToRememberOpts(pull('OWNER')),
+      prReviewCommentEventToRememberOpts(review('OWNER')),
+    ];
+
+    for (const opts of outside) expect(opts?.hold).toEqual({ reason: 'outside-author:NONE' });
+    for (const opts of inside) expect('hold' in opts!).toBe(false);
+  });
+
+  it('skips the rule for a listed id on the issue, pull request and review shapes', () => {
+    const held = { reason: 'outside-author:NONE' };
+    const listed = new Set([5]);
+    const other = new Set([6]);
+
+    expect('hold' in issueEventToRememberOpts(issue('NONE'), undefined, listed)!).toBe(false);
+    expect('hold' in pullRequestEventToRememberOpts(pull('NONE'), undefined, listed)!).toBe(false);
+    expect('hold' in prReviewCommentEventToRememberOpts(review('NONE'), undefined, listed)!).toBe(false);
+    expect(issueEventToRememberOpts(issue('NONE'), undefined, other)?.hold).toEqual(held);
+    expect(pullRequestEventToRememberOpts(pull('NONE'), undefined, other)?.hold).toEqual(held);
+    expect(prReviewCommentEventToRememberOpts(review('NONE'), undefined, other)?.hold).toEqual(held);
+  });
+
+  it('skips the rule for a listed user id and holds the same comment when the id is not listed', () => {
+    const evt = commentBy('CONTRIBUTOR');
+
+    expect('hold' in issueCommentEventToRememberOpts(evt, undefined, new Set([5]))!).toBe(false);
+    expect(issueCommentEventToRememberOpts(evt, undefined, new Set([6]))?.hold).toEqual({
+      reason: 'outside-author:CONTRIBUTOR',
+    });
+    expect(issueCommentEventToRememberOpts(evt)?.hold).toEqual({ reason: 'outside-author:CONTRIBUTOR' });
+  });
+
+  it('trusts the id, not the login: a stranger who claimed a freed login stays held', () => {
+    const trusted = new Set([5]);
+    const teammate = commentBy('CONTRIBUTOR', { login: 'erin', id: 5 });
+    const stranger = commentBy('CONTRIBUTOR', { login: 'erin', id: 77 });
+
+    expect('hold' in issueCommentEventToRememberOpts(teammate, undefined, trusted)!).toBe(false);
+    expect(issueCommentEventToRememberOpts(stranger, undefined, trusted)?.hold).toEqual({
+      reason: 'outside-author:CONTRIBUTOR',
+    });
   });
 });

@@ -3,12 +3,13 @@
 // delivery id. The pre-check is only the fast path: the store logs the key in the memory's own
 // transaction, which is what holds when two workers race.
 
-import type { RememberOptions } from '../../../api/index.js';
+import type { ConnectorRememberOptions } from '../../../api/index.js';
 import type { ConnectorEvent } from '../../../base/ports/store.js';
 import { rememberWithEventLog, type ConnectorContext, type IngestResult } from '../ingest.js';
 import { githubArtifactRef, type GitHubItem } from './ref.js';
 import { computeIdempotencyKey } from './signature.js';
 import {
+  NO_TRUSTED_USER_IDS,
   issueEventToRememberOpts,
   issueCommentEventToRememberOpts,
   pullRequestEventToRememberOpts,
@@ -40,18 +41,24 @@ export interface IngestInput {
   host?: string;
   /** The site's ownsBareRefs: only then is a seen github.com-form key a duplicate of a GHES event. */
   ownsBareRefs?: boolean;
+  /** GitHub user ids GITHUB_TRUSTED_USER_IDS vouches for: their items skip the author rule, never the check. */
+  trustedUserIds?: ReadonlySet<number>;
 }
 
-function transformEvent(event: IngestEvent, host: string | undefined): RememberOptions | null {
+function transformEvent(
+  event: IngestEvent,
+  host: string | undefined,
+  trusted: ReadonlySet<number>,
+): ConnectorRememberOptions | null {
   switch (event.eventName) {
     case 'issues':
-      return issueEventToRememberOpts(event.payload, host);
+      return issueEventToRememberOpts(event.payload, host, trusted);
     case 'issue_comment':
-      return issueCommentEventToRememberOpts(event.payload, host);
+      return issueCommentEventToRememberOpts(event.payload, host, trusted);
     case 'pull_request':
-      return pullRequestEventToRememberOpts(event.payload, host);
+      return pullRequestEventToRememberOpts(event.payload, host, trusted);
     case 'pull_request_review_comment':
-      return prReviewCommentEventToRememberOpts(event.payload, host);
+      return prReviewCommentEventToRememberOpts(event.payload, host, trusted);
   }
 }
 
@@ -122,5 +129,9 @@ export async function ingestEvent(
 
   // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
   // transform.
-  return rememberWithEventLog(ctx, event, transformEvent(input.event, input.host));
+  return rememberWithEventLog(
+    ctx,
+    event,
+    transformEvent(input.event, input.host, input.trustedUserIds ?? NO_TRUSTED_USER_IDS),
+  );
 }

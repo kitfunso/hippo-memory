@@ -1,4 +1,4 @@
-// hippo.db's half of the ConnectorWrites store group: a connector's write or archive with its
+// hippo.db's half of the ConnectorWrites store group: a write, archive or held supersede with its
 // companion rows, in one transaction on one handle.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { logEvent, loggedMemory } from './events.js';
@@ -10,10 +10,16 @@ import type {
   ConnectorWrite,
   ConnectorWriteOutcome,
   ConnectorWrites,
+  HeldSupersede,
 } from '../../../base/ports/store.js';
 import { recordQuarantine } from './quarantine.js';
 import { stampOriginProject } from '../entries/entry-row.js';
-import { writeEntryMirrors, archiveRaw, writeInOwnTenant } from '../entries/entry-writes.js';
+import {
+  writeEntryMirrors,
+  archiveRaw,
+  commitSupersede,
+  writeInOwnTenant,
+} from '../entries/entry-writes.js';
 
 /** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
  * sees it. */
@@ -62,6 +68,16 @@ function archiveConnectorEntry(
   });
 }
 
+/** supersede with the successor's record and quarantine row in its scope; the mirror follows the commit. */
+function supersedeHeld(db: DatabaseSyncLike, files: StoreFiles, write: HeldSupersede): void {
+  const successor = stampOriginProject(files, write.successor);
+  const { tenantId, actor, quarantine } = write;
+  commitSupersede(db, { ...write, successor }, (handle, memoryId) => {
+    recordQuarantine(handle, { tenantId, memoryId, actor, ...quarantine });
+  });
+  writeEntryMirrors(files.hippoRoot, successor);
+}
+
 /** Each call on its own handle; the mirror follows the commit, so a duplicate or a rolled-back
  * write leaves none. */
 export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
@@ -78,8 +94,9 @@ export function sqliteConnectorWrites({ on, files }: Handles): ConnectorWrites {
       },
       openStore,
     ),
-    ...bound<Pick<ConnectorWrites, 'archiveConnectorEntry'>>(on, {
+    ...bound<Pick<ConnectorWrites, 'archiveConnectorEntry' | 'supersedeHeld'>>(on, {
       archiveConnectorEntry: (db, ...args) => archiveConnectorEntry(db, files, ...args),
+      supersedeHeld: (db, write) => supersedeHeld(db, files, write),
     }),
   };
 }

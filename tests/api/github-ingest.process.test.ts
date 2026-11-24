@@ -40,6 +40,7 @@ function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): Git
       title: 'Bug: thing broke',
       body: 'Steps to reproduce: 1, 2, 3.',
       user: { login: 'alice', id: 1 },
+      author_association: 'MEMBER',
       ...overrides,
     },
   };
@@ -59,6 +60,7 @@ function makeIssueCommentEvent(): GitHubIssueCommentEvent {
       id: 999,
       body: 'I can repro on macOS.',
       user: { login: 'bob', id: 2 },
+      author_association: 'MEMBER',
     },
   };
 }
@@ -77,6 +79,7 @@ function makePullRequestEvent(): GitHubPullRequestEvent {
       title: 'Fix bug 42',
       body: 'Patches the off-by-one.',
       user: { login: 'carol', id: 3 },
+      author_association: 'MEMBER',
     },
   };
 }
@@ -95,6 +98,7 @@ function makePrReviewCommentEvent(): GitHubPullRequestReviewCommentEvent {
       id: 12345,
       body: 'Nit: rename this var.',
       user: { login: 'dave', id: 4 },
+      author_association: 'MEMBER',
     },
   };
 }
@@ -219,6 +223,7 @@ describe('ingestEvent', () => {
         title: '',
         body: null,
         user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
       },
     };
     const rawBody = JSON.stringify(payload);

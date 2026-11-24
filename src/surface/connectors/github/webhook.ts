@@ -2,6 +2,7 @@ import {
   envGitHubAllowUnknownInstallationFallback,
   envGitHubEnterpriseBareRefsHost,
   envGitHubEnterpriseUrl,
+  envGitHubTrustedUserIds,
   envGitHubWebhookSecret,
   envGitHubWebhookSecretPrevious,
   envGitHubWebhookSecretPreviousUntil,
@@ -26,12 +27,14 @@ import {
 } from './ingest.js';
 import {
   headerHost,
+  fromSite,
   hostMismatch,
   parseGitHubEnterpriseUrl,
   payloadHost,
   payloadMismatch,
   type GitHubSite,
 } from './site.js';
+import { NO_TRUSTED_USER_IDS } from './transform.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
@@ -72,6 +75,27 @@ export function warnGitHubPreviousSecretOpen(): void {
     envGitHubWebhookSecretPrevious(),
     envGitHubWebhookSecretPreviousUntil(),
   );
+}
+
+const USER_ID = /^[1-9][0-9]*$/;
+
+/** GITHUB_TRUSTED_USER_IDS for the webhook, the DLQ replay and backfill alike. It throws on an entry that is
+ * not an id, such as a login: dropping it would hold the person the operator meant to trust. */
+export function githubTrustedUserIds(): ReadonlySet<number> {
+  const entries = (envGitHubTrustedUserIds() ?? '').split(',').map((entry) => entry.trim());
+  const bad = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.length > 0)
+    .filter(({ entry }) => !USER_ID.test(entry) || !Number.isSafeInteger(Number(entry)));
+  if (bad.length > 0) {
+    // No entry is quoted: any of them may be a secret pasted into the wrong variable.
+    const named = bad.map(({ index }) => `entry ${index + 1}`).join(', ');
+    throw new Error(
+      `GITHUB_TRUSTED_USER_IDS has entries that are not numeric GitHub user ids: ${named}; ` +
+        'get each id with: gh api users/<login> --jq .id',
+    );
+  }
+  return new Set(entries.filter((entry) => entry.length > 0).map(Number));
 }
 
 /** Reads the raw body and refuses it unless the signature matches the current or the previous
@@ -420,6 +444,10 @@ async function dispatchGitHubEvent({
       deliveryId,
       host: d.site.host,
       ownsBareRefs: d.site.ownsBareRefs,
+      // GitHub user ids are unique per server: the list holds only for items from the configured one.
+      trustedUserIds: fromSite(d.site, headerHost(d.enterpriseHost), payloadHost(body))
+        ? githubTrustedUserIds()
+        : NO_TRUSTED_USER_IDS,
     });
     sendJson(d.res, 200, { ok: true, status: r.status, memoryId: r.memoryId });
   }

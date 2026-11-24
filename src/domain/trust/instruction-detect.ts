@@ -4,10 +4,10 @@
  * (api/context/context-render.ts). Leaf module, no store/api imports.
  */
 
-import { shownText, type LeadInText } from '../base/memory/lead-in.js';
+import { shownText, type LeadInText } from '../../base/memory/lead-in.js';
 
-/** What a member's flagged row in a shared scope carries: it is kept, and prints framed as
- * untrusted. */
+/** What a member's flagged row in a shared scope carries: held for review on a store that reviews, else kept;
+ * either way it prints framed. */
 export const INSTRUCTION_LIKE_TAG = 'instruction-like';
 
 /** What every untrusted write (connector text) carries, so it prints framed whatever the
@@ -531,4 +531,25 @@ export function detectInstructionIn(text: LeadInText): InstructionDetection {
   const tail = withoutFormBlankStart(contentForm());
   const reason = matchedPattern(`${head}${MARK}${tail}`, true);
   return reason === null ? shown : { flagged: true, reason };
+}
+
+/** The tag list as a context line prints it; the write screen checks the content joined to this text.
+ * The line's `**` between them only widens the gap. */
+export function printedTags(tags: readonly string[]): string {
+  return tags.length > 0 ? ` [${tags.join(', ')}]` : '';
+}
+
+/** The first flag in the text, in each tag, or in the text joined to the tags as a context line prints them;
+ * each lead-in join is read as detectInstructionIn reads it. */
+export function instructionIn(text: LeadInText, tags: readonly string[]): InstructionDetection {
+  const found = detectInstructionIn(text);
+  if (found.flagged || tags.length === 0) return found;
+  for (const tag of tags) {
+    const inTag = detectInstruction(tag);
+    if (inTag.flagged) return inTag;
+  }
+  return detectInstructionIn({
+    leadIn: text.leadIn,
+    content: `${text.content}${printedTags(tags)}`,
+  });
 }

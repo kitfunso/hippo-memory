@@ -8,11 +8,16 @@ import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
 import { listDlq } from '../connectors/dlq.js';
 import { githubDlq, replayGithubDlqEntry, type IngestHook } from '../connectors/github/dlq.js';
 import { ingestEvent, githubEventRef, type IngestEvent } from '../connectors/github/ingest.js';
+import { NO_TRUSTED_USER_IDS } from '../connectors/github/transform.js';
 import { handleCommentDeleted } from '../connectors/github/deletion.js';
 import { computeDeletionKey } from '../connectors/github/signature.js';
-import { githubPreviousSecret, githubSiteFromEnv } from '../connectors/github/webhook.js';
+import {
+  githubPreviousSecret,
+  githubSiteFromEnv,
+  githubTrustedUserIds,
+} from '../connectors/github/webhook.js';
 import { isGitHubRepoFullName } from '../connectors/github/ref.js';
-import type { GitHubSite } from '../connectors/github/site.js';
+import { payloadFromSite, payloadHost, type GitHubSite } from '../connectors/github/site.js';
 import {
   isGitHubIssueEvent,
   isGitHubIssueCommentEvent,
@@ -98,6 +103,8 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   const site = githubSiteOrExit();
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
+  // Backfill fetches from site.apiBase, so every item is from the configured site.
+  const trustedUserIds = githubTrustedUserIds();
 
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
   try {
@@ -108,6 +115,7 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
       maxPerStream,
       sinceIso,
       site,
+      trustedUserIds,
     });
     console.log(JSON.stringify(result, null, 2));
   } catch (e) {
@@ -156,7 +164,7 @@ export function parseParkedPayload(rawPayload: string): JsonValue {
   }
 }
 
-function reingestParkedDelivery(site: GitHubSite): IngestHook {
+function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<number>): IngestHook {
   const { host, ownsBareRefs } = site;
   return async (innerCtx, args) => {
     const parsed = parseParkedPayload(args.rawPayload);
@@ -192,6 +200,10 @@ function reingestParkedDelivery(site: GitHubSite): IngestHook {
       deliveryId: args.deliveryId,
       host,
       ownsBareRefs,
+      // The parked row keeps no header, so the payload's repository host alone says the server.
+      trustedUserIds: payloadFromSite(host, payloadHost(parsed))
+        ? trustedUserIds
+        : NO_TRUSTED_USER_IDS,
     });
     return { memoryId: r.memoryId };
   };
@@ -204,6 +216,8 @@ export async function replayGitHubDlq(
   flags: CliFlags,
 ): Promise<void> {
   const site = githubSiteOrExit();
+  // A bad entry throws here, before any row is touched, as it refuses serve and backfill.
+  const trustedUserIds = githubTrustedUserIds();
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
   // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook
   // re-runs ingest.
@@ -212,7 +226,7 @@ export async function replayGitHubDlq(
       force,
       webhookSecret: envGitHubWebhookSecret(),
       previousSecret: githubPreviousSecret(),
-      ingestHook: reingestParkedDelivery(site),
+      ingestHook: reingestParkedDelivery(site, trustedUserIds),
       site,
     }),
   );

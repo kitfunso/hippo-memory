@@ -69,7 +69,8 @@ function writeTargets(n) {
     n.operatorToken.kind >= K.FirstAssignment &&
     n.operatorToken.kind <= K.LastAssignment
   ) {
-    return [n.left];
+    // Only an assignment target can destructure; `[...a, B].sort()` builds a new array and writes neither name.
+    return leaves(n.left);
   }
   if (
     (ts.isPrefixUnaryExpression(n) || ts.isPostfixUnaryExpression(n)) &&
@@ -163,7 +164,7 @@ export function analyze(root) {
       if (isReference(n) && free(n.text)) noteRead(facts, n, inType);
     } else {
       if (ts.isCallExpression(n) && n.expression.kind === K.ImportKeyword) facts.globals.add('import()');
-      for (const e of writeTargets(n).flatMap(leaves)) {
+      for (const e of writeTargets(n)) {
         const at = rootOf(e);
         if (at && free(at.name)) facts.writes.push(at);
       }

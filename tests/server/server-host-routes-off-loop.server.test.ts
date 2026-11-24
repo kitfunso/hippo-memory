@@ -141,6 +141,7 @@ const comment = (action: 'created' | 'deleted') => ({
     id: 9,
     body: 'I can reproduce this on main',
     user: { login: 'bob', id: 2 },
+    author_association: 'MEMBER',
     updated_at: '2026-02-28T09:00:00Z',
   },
 });

@@ -244,9 +244,30 @@ describe('backfill HWM stays put on capped streams', () => {
     // After v1.3.0: HWM advanced to issue 1's updated_at, skipping issues 2-3.
     // After v1.3.1: drained=false, HWM unchanged.
     const items = [
-      { number: 1, title: 'one', body: 'b1', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T10:00:00Z' },
-      { number: 2, title: 'two', body: 'b2', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T11:00:00Z' },
-      { number: 3, title: 'three', body: 'b3', user: { login: 'a', id: 1 }, updated_at: '2026-05-04T12:00:00Z' },
+      {
+        number: 1,
+        title: 'one',
+        body: 'b1',
+        user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
+        updated_at: '2026-05-04T10:00:00Z',
+      },
+      {
+        number: 2,
+        title: 'two',
+        body: 'b2',
+        user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
+        updated_at: '2026-05-04T11:00:00Z',
+      },
+      {
+        number: 3,
+        title: 'three',
+        body: 'b3',
+        user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
+        updated_at: '2026-05-04T12:00:00Z',
+      },
     ];
 
     let issuesPageServed = false;
@@ -304,6 +325,7 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
         title: 'pr1',
         body: 'p1',
         user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
         updated_at: '2026-05-04T10:00:00Z',
       },
       {
@@ -312,6 +334,7 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
         title: 'pr2',
         body: 'p2',
         user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
         updated_at: '2026-05-04T11:00:00Z',
       },
       {
@@ -320,6 +343,7 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
         title: 'pr3',
         body: 'p3',
         user: { login: 'a', id: 1 },
+        author_association: 'MEMBER',
         updated_at: '2026-05-04T12:00:00Z',
       },
     ];

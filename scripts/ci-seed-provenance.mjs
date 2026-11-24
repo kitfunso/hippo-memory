@@ -52,7 +52,13 @@ const ghEvent = {
   payload: {
     action: 'opened',
     repository: { full_name: 'acme/ci', private: false, owner: { login: 'acme' }, name: 'ci' },
-    issue: { number: 1, title: 'ci-seed', body: 'seed', user: { login: 'ciuser', id: 1 } },
+    issue: {
+      number: 1,
+      title: 'ci-seed',
+      body: 'seed',
+      user: { login: 'ciuser', id: 1 },
+      author_association: 'OWNER',
+    },
   },
 };
 await ingestEvent(ctx, {

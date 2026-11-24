@@ -111,3 +111,22 @@ export function payloadHostRefusal(host: string | undefined, site: GitHubSite): 
   if (site.host === undefined || host === site.host) return null;
   return `payload names ${host ?? 'no repository URL'}; ${SETTING} names ${site.host}`;
 }
+
+/** True when an item came from the configured site: `sent` is the header host and `payloadSays`
+ * the repository URL host. GitHub user ids are unique per server, so only such items may use the
+ * trusted-id list. A payload with no repository URL is not from the site. */
+export function fromSite(
+  site: GitHubSite,
+  sent: string | undefined,
+  payloadSays: string | undefined,
+): boolean {
+  return sent === site.host && payloadFromSite(site.host, payloadSays);
+}
+
+/** True when a payload's repository host is the site's own: github.com when `host` is undefined. */
+export function payloadFromSite(
+  host: string | undefined,
+  payloadSays: string | undefined,
+): boolean {
+  return payloadSays === (host ?? 'github.com');
+}

@@ -105,6 +105,7 @@ describe('connector webhooks', () => {
         title: 'CI cannot pull the registry',
         body: `I set GH_TOKEN to ${GHP} and the pull still fails`,
         user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
       },
       repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
       sender: { login: 'alice', id: 1 },
@@ -215,7 +216,13 @@ describe('connector webhooks', () => {
   it('a GitHub event parked for review lands in the dead-letter table redacted', async () => {
     const body = JSON.stringify({
       action: 'deleted',
-      issue: { number: 7, title: 'old', body: `the token ${GHP} was pasted here`, user: { login: 'alice', id: 1 } },
+      issue: {
+        number: 7,
+        title: 'old',
+        body: `the token ${GHP} was pasted here`,
+        user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
+      },
       repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
       sender: { login: 'alice', id: 1 },
       installation: { id: 99 },
