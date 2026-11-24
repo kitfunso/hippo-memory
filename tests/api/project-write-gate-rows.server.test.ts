@@ -506,7 +506,7 @@ describe('project write gate on outcome, when the request ends', () => {
     return entry.id;
   }
 
-  function endsDuringTheFirstAsk(root: string): { ctx: Parameters<typeof outcome>[0]; asked: Array<string | null> } {
+  function endsDuringTheFirstAsk(root: string) {
     const controller = new AbortController();
     const asked: Array<string | null> = [];
     const projectWriteGate = (c: ProjectWriteCall): null => {
