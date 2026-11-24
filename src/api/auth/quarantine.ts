@@ -131,9 +131,8 @@ export interface QuarantineEditResult {
   warnings?: string[];
 }
 
-/** The tags the successor stores, which the edit screens: every held tag in stored order, marks and
- * capture tags too, then the untrusted-origin mark if the row lacks it. A mark is screened with the
- * rest because the context line prints it, and `instruction-like` completes "ignore all previous". */
+/** The tags the successor stores and the edit screens, marks included, since the context line prints
+ * them and `instruction-like` completes "ignore all previous". */
 function successorTagsOf(held: MemoryEntry | undefined): string[] {
   return [...new Set([...(held?.tags ?? []), UNTRUSTED_ORIGIN_TAG])];
 }
@@ -158,9 +157,8 @@ function refuseKeptFlags(id: string, held: MemoryEntry, tags: readonly string[])
   }
 }
 
-/** The 400 or 404 a refused edit text answers before any write; else the tags the successor stores,
- * which it screened. A row the read missed is judged by the text alone, so a flagged text never
- * reaches the store. */
+/** Throws the 400 or 404 a refused edit answers before any write, else returns the screened tags. A row
+ * the read missed is judged by the text alone, so a flagged text never reaches the store. */
 function screenEditText(id: string, text: string, held: MemoryEntry | undefined): string[] {
   const tags = successorTagsOf(held);
   if (!held) {
