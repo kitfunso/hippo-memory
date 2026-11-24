@@ -134,6 +134,10 @@ export async function handleForgetMemory(
   return;
 }
 
+function refusedPart(refused: number | undefined): { refused?: number } {
+  return refused === undefined ? {} : { refused };
+}
+
 // POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the
 // ids this client's last recall or context call showed, and returns {applied, ids}, so callers can
 // tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row
@@ -162,12 +166,12 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
     },
   });
   if (ids !== undefined) {
-    const { applied } = await outcome(ctx, ids, good);
-    sendJson(res, 200, { applied });
+    const { applied, refused } = await outcome(ctx, ids, good);
+    sendJson(res, 200, { applied, ...refusedPart(refused) });
   } else {
     const shown = keptShownIds(ctx);
-    const { applied, appliedIds } = await outcome(ctx, shown, good);
-    sendJson(res, 200, { applied, ids: appliedIds });
+    const { applied, appliedIds, refused } = await outcome(ctx, shown, good);
+    sendJson(res, 200, { applied, ids: appliedIds, ...refusedPart(refused) });
   }
   return;
 }

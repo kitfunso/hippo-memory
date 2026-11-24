@@ -5,15 +5,21 @@ import { routeLabel, V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { WRITE_TOOLS } from '../../src/surface/mcp/tools.js';
 
 const MEMBER_WRITE_ROUTES = {
-  'POST /v1/memories': 'screened',
-  'POST /v1/memories/:id/supersede': 'screened',
-  'POST /v1/memories/:id/archive': 'no new text',
-  'POST /v1/memories/:id/promote': 'no new text',
-  'DELETE /v1/memories/:id': 'no new text',
-  'POST /v1/outcome': 'no new text',
-  'POST /v1/vectors/nearest': 'read',
-  'DELETE /v1/auth/keys/:keyId': 'no new text',
-} satisfies Record<string, string>;
+  'POST /v1/memories': { screen: 'screened', gate: 'caller project' },
+  'POST /v1/memories/:id/supersede': { screen: 'screened', gate: 'row origin' },
+  'POST /v1/memories/:id/archive': { screen: 'no new text', gate: 'row origin' },
+  'POST /v1/memories/:id/promote': {
+    screen: 'no new text',
+    gate: 'not gated: promote checks the caller project itself',
+  },
+  'DELETE /v1/memories/:id': { screen: 'no new text', gate: 'row origin' },
+  'POST /v1/outcome': { screen: 'no new text', gate: 'row origin' },
+  'POST /v1/vectors/nearest': { screen: 'read', gate: 'not gated: a read' },
+  'DELETE /v1/auth/keys/:keyId': {
+    screen: 'no new text',
+    gate: 'not gated: a key row, not a memory',
+  },
+} satisfies Record<string, { screen: string; gate: string }>;
 
 // Follow-up O1: each kind writes a mirror memory with a null scope that no screen runs on yet.
 const OBJECT_KINDS = [
@@ -27,13 +33,17 @@ const OBJECT_KINDS = [
   '/v1/customer-notes',
 ];
 
+const OBJECT_KIND_GATE = 'not gated: an object carries no caller project';
+
 const MCP_WRITE_TOOLS = {
-  hippo_remember: 'screened',
-  hippo_outcome: 'no new text',
-  hippo_learn: 'host admin only',
-  hippo_resolve: 'no new text',
-  hippo_share: 'no new text',
-} satisfies Record<string, string>;
+  hippo_remember: { screen: 'screened', gate: 'caller project' },
+  hippo_outcome: { screen: 'no new text', gate: 'row origin' },
+  hippo_learn: { screen: 'host admin only', gate: 'not gated: host admin only' },
+  hippo_resolve: { screen: 'no new text', gate: 'row origin; null for a reject' },
+  hippo_share: { screen: 'no new text', gate: 'not gated: a copy, off on a shared store' },
+} satisfies Record<string, { screen: string; gate: string }>;
+
+const GATE_DECISION = /^(caller project|row origin(; null for a reject)?|not gated: .+)$/;
 
 const memberWrites = V1_ROUTES.filter(
   (route) => (route.auth === 'viewer' || route.auth === 'editor') && route.method !== 'GET',
@@ -65,5 +75,12 @@ describe('the member write inventory', () => {
 
   it('classifies every MCP write tool', () => {
     expect([...WRITE_TOOLS].sort()).toEqual(Object.keys(MCP_WRITE_TOOLS).sort());
+  });
+
+  it('gives every write a gate decision of a known form', () => {
+    const decided = [...Object.values(MEMBER_WRITE_ROUTES), ...Object.values(MCP_WRITE_TOOLS)];
+    for (const gate of [...decided.map((write) => write.gate), OBJECT_KIND_GATE]) {
+      expect(gate).toMatch(GATE_DECISION);
+    }
   });
 });

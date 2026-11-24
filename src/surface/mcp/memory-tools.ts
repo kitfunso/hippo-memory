@@ -48,8 +48,9 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved
   // ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips
   // cross-tenant ids silently.
-  const { applied } = await apiOutcome(apiCtx, ids, good);
-  return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
+  const { applied, refused } = await apiOutcome(apiCtx, ids, good);
+  const refusedText = refused === undefined ? '' : `; the project write gate refused ${refused}`;
+  return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories${refusedText}`;
 }
 
 export async function runLearnTool({
