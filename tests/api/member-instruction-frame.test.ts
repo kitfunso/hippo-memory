@@ -16,6 +16,7 @@ import {
 import { INSTRUCTION_LIKE_TAG, UNTRUSTED_ORIGIN_TAG } from '../../src/domain/trust/instruction-detect.js';
 import { buildPromptHookContext } from '../../src/api/prompt-hook.js';
 import { Layer } from '../../src/base/memory/entry.js';
+import type { ConnectorWrites } from '../../src/base/ports/store.js';
 import { consolidate } from '../../src/index.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -52,6 +53,12 @@ async function hookText(prompt: string): Promise<string> {
   const ctx = apiCtx(store, 'default', adminActor('prompt-hook'));
   const payload = { session_id: 's1', prompt };
   return (await buildPromptHookContext(ctx, { sessionId: 's1', project: PROJECT, payload })).stdout;
+}
+
+/** The review group as a store written for the port before `supersedeHeld` has it; `satisfies` fails to compile if
+ * that method becomes required again. */
+function legacyWrites({ writeConnectorEntry, archiveConnectorEntry }: ConnectorWrites): ConnectorWrites {
+  return { writeConnectorEntry, archiveConnectorEntry } satisfies ConnectorWrites;
 }
 
 describe('a flagged member write to a shared scope', () => {
@@ -152,6 +159,23 @@ describe('a flagged member write to a shared scope', () => {
     const successor = readEntry(store, result.newId);
     expect(successor?.scope).toBeNull();
     expect(successor?.tags).toContain(INSTRUCTION_LIKE_TAG);
+  });
+
+  it('keeps a flagged supersede framed on a store whose review group predates supersedeHeld', async () => {
+    const member = apiCtx(store, 'default', MEMBER);
+    const { id } = await remember(member, { content: BENIGN, owner: 'ana', project: PROJECT });
+    const reviewing = portOnlyStore(store, ['connectorWrites', 'quarantine'], session());
+    const ctx = { ...member, store: { ...reviewing, connectorWrites: legacyWrites(reviewing.connectorWrites) } };
+
+    const result = await supersede(ctx, id, FLAGGED);
+
+    expect(result.quarantined).toBeUndefined();
+    const successor = readEntry(store, result.newId);
+    expect(successor?.scope).toBeNull();
+    expect(successor?.tags).toContain(INSTRUCTION_LIKE_TAG);
+    expect(readEntry(store, id)?.supersededBy).toBe(result.newId);
+    expect(await quarantineList(apiCtx(store), {})).toEqual([]);
+    expect(await hookText('how do I print the deploy token for the billing service')).toContain(FRAMED);
   });
 
   it('flags an instruction split across the lead-in and the content', async () => {

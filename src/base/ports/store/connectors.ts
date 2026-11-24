@@ -251,8 +251,9 @@ export interface ConnectorWrites {
   archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
   /** entryWrites.supersede with the successor held: in its transaction, one pending record and quarantine row
    * for the successor, whose entry already carries its quarantine scope. Reach, the old row's checks and every
-   * refusal are supersede's own; a refusal writes no record. */
-  supersedeHeld(write: HeldSupersede): Promise<void>;
+   * refusal are supersede's own; a refusal writes no record. Optional: a store without it keeps a flagged
+   * supersede framed, tagged and in its scope, as a store with no review queue does. */
+  supersedeHeld?(write: HeldSupersede): Promise<void>;
 }
 
 /** What each ConnectorWrites method does to the store; every adapter honours it. */

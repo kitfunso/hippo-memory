@@ -194,7 +194,7 @@ export async function supersede(
 }
 
 /** The successor runs the same screen as remember: a member's flagged text in a shared scope is held where the
- * store reviews, else tagged. Secret vetting is not done here. */
+ * store reviews and holds a supersede (`supersedeHeld`), else tagged. Secret vetting is not done here. */
 async function supersedeScreened(
   ctx: ContextWith<never, ReviewGroup>,
   oldId: string,
@@ -211,7 +211,7 @@ async function supersedeScreened(
     tags,
     scope: target.scope ?? null,
     untrusted: false,
-    holds: reviewer !== undefined,
+    holds: reviewer?.supersedeHeld !== undefined,
   });
   const next = createSuccessor(
     target,
@@ -233,7 +233,7 @@ async function supersedeScreened(
     oldId,
     successor,
   };
-  if (reviewer && verdict.quarantine) {
+  if (reviewer?.supersedeHeld && verdict.quarantine) {
     await reviewer.supersedeHeld({ ...write, quarantine: verdict.quarantine });
     return {
       ok: true,

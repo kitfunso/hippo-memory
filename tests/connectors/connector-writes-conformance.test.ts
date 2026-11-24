@@ -9,7 +9,12 @@ import { reject } from '../../src/api/index.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuditEvent } from '../../src/entry/store-kit.js';
-import type { ConnectorEvent, ConnectorWrite, ConnectorWriteOutcome } from '../../src/base/ports/store.js';
+import type {
+  ConnectorEvent,
+  ConnectorWrite,
+  ConnectorWriteOutcome,
+  ConnectorWrites,
+} from '../../src/base/ports/store.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import {
   outcomeOf,
@@ -361,11 +366,17 @@ describe('ConnectorWrites.archiveConnectorEntry', () => {
   });
 });
 
+/** The method under test: this suite runs against stores that implement it, though the port makes it optional. */
+function supersedeHeldOf(g: ConnectorWrites): NonNullable<ConnectorWrites['supersedeHeld']> {
+  if (!g.supersedeHeld) throw new Error('the store under test has no supersedeHeld');
+  return g.supersedeHeld.bind(g);
+}
+
 describe('ConnectorWrites.supersedeHeld', () => {
   const held =
     (noteId: string, successor: MemoryEntry): Call =>
     async (g) => {
-      await g.supersedeHeld({
+      await supersedeHeldOf(g)({
         tenantId: TENANT_A,
         actor: ACTOR,
         ownScope: null,
@@ -433,7 +444,7 @@ describe('ConnectorWrites.supersedeHeld', () => {
     const { note } = seeded;
     const successor = successorOf('a member held successor');
     const memberHeld: Call = async (g) => {
-      await g.supersedeHeld({
+      await supersedeHeldOf(g)({
         tenantId: TENANT_A,
         actor: ACTOR,
         ownScope: null,
