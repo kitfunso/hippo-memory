@@ -132,14 +132,16 @@ export interface QuarantineEditResult {
   warnings?: string[];
 }
 
-/** The tags an edit keeps, as a write screen reads them: no capture tag, and none of the marks this code adds itself. */
+/** The tags an edit keeps, as a write screen reads them: no capture tag, and none of the
+ * marks this code adds itself. */
 function keptTagsOf(held: MemoryEntry): string[] {
   return withoutCaptureTags(held.tags).filter(
     (tag) => tag !== UNTRUSTED_ORIGIN_TAG && tag !== INSTRUCTION_LIKE_TAG,
   );
 }
 
-/** The 400 for a held row whose kept lead-in or kept tags read as an instruction: an edit keeps both, so it cannot release it. */
+/** The 400 for a held row whose kept lead-in or kept tags read as an instruction: an edit keeps
+ * both, so it cannot release it. */
 function refuseKeptFlags(id: string, held: MemoryEntry, keptTags: readonly string[]): void {
   const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
   if (lead?.flagged) {
