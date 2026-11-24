@@ -416,13 +416,16 @@ describe('project write gate on an existing row', () => {
   it('14. outcome applies the admitted ids, skips the refused ones and counts them', async () => {
     const alpha = await seed(gated, keyO, { project: 'alpha' });
     const beta = await seed(gated, keyO, { project: 'beta' });
+    const sameProject = await seed(gated, keyO, { project: 'beta' });
     const mine = await seed(gated, keyO, { project: 'beta', personal: true });
     const theirs = await seed(gated, keyQ, { project: 'beta', personal: true });
     arm(gated);
-    const ids = [alpha, beta, mine, theirs, 'mem_absent', beta];
+    const ids = [alpha, beta, sameProject, mine, theirs, 'mem_absent', beta];
     const r = await http(gated, keyO, 'POST', '/v1/outcome', { good: true, ids });
-    expect([r.status, json(r)]).toEqual([200, { applied: 2, refused: 1 }]);
-    expect([alpha, mine, beta, theirs].map((id) => row(gated, id)?.outcome_positive)).toEqual([1, 1, 0, 0]);
+    expect([r.status, json(r)]).toEqual([200, { applied: 2, refused: 2 }]);
+    expect([alpha, mine, beta, sameProject, theirs].map((id) => row(gated, id)?.outcome_positive)).toEqual([
+      1, 1, 0, 0, 0,
+    ]);
     expect(asked(gated)).toEqual(['alpha', 'beta']);
   });
 
@@ -430,8 +433,13 @@ describe('project write gate on an existing row', () => {
     const first = await seed(gated, keyO, { project: 'beta' });
     const second = await seed(gated, keyO, { project: 'gamma' });
     arm(gated);
-    const r = await http(gated, keyO, 'POST', '/v1/outcome', { good: true, ids: [first, second, 'mem_absent'] });
-    expect([r.status, json(r)]).toEqual([200, { applied: 0, refused: 2 }]);
+    const all = await http(gated, keyO, 'POST', '/v1/outcome', { good: true, ids: [first, second] });
+    expect([all.status, json(all)]).toEqual([200, { applied: 0, refused: 2 }]);
+    const withMissing = await http(gated, keyO, 'POST', '/v1/outcome', {
+      good: true,
+      ids: [first, second, 'mem_absent'],
+    });
+    expect([withMissing.status, json(withMissing)]).toEqual([200, { applied: 0, refused: 2 }]);
     expect([first, second].map((id) => row(gated, id)?.outcome_positive)).toEqual([0, 0]);
   });
 
