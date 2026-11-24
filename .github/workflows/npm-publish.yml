@@ -12,6 +12,9 @@ name: Publish to npm
 # npm-publish.yml and "Allow npm publish" ticked; unticked, it may only stage.
 # No NPM_TOKEN secret is needed after that.
 # docs/release-policy.md covers tags and the `stable` channel.
+#
+# After a `latest` publish the release-dispatch job wakes a downstream CI (kitfunso/hippo-enterprise) with a repository_dispatch.
+# It reads RELEASE_DISPATCH_REPO and RELEASE_DISPATCH_TOKEN from the `release-dispatch` environment (limited to v*.*.* tags) and skips when either is unset.
 
 on:
   push:
@@ -98,3 +101,25 @@ jobs:
       id-token: write
     secrets:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  # Wakes a downstream CI after a `latest` release; skips unless both environment secrets are set.
+  release-dispatch:
+    needs: [publish]
+    if: needs.publish.outputs.dist-tag == 'latest'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: release-dispatch
+    # The publish has already run; a failed dispatch must not mark the release red.
+    continue-on-error: true
+    permissions: {}
+    steps:
+      - name: Send the release dispatch
+        env:
+          REPO: ${{ secrets.RELEASE_DISPATCH_REPO }}
+          TOKEN: ${{ secrets.RELEASE_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "$REPO" ] || [ -z "$TOKEN" ]; then echo "release dispatch is not configured; skipped"; exit 0; fi
+          jq -nc --arg tag "$TAG" '{event_type:"core-release",client_payload:{tag:$tag}}' |
+            curl --fail-with-body -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/dispatches" --data-binary @-
