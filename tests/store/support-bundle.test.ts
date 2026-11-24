@@ -1,4 +1,3 @@
-/** `hippo support-bundle`: read-only, secret-free, one redacted JSON file. Real stores, canaries built at runtime. */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync, existsSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
@@ -100,7 +99,6 @@ function seed(): Seeded {
   const fCanary = `f-${randomUUID()}`;
   const keyCanary = `k-${randomUUID()}`;
   const authCanary = `a-${randomUUID()}`;
-  // hippo's own key shape under a key name that does not look secret, so only the value's shape can catch it.
   const hippoKeyCanary = 'hk_' + 'c'.repeat(24) + '.' + 'd'.repeat(32);
   writeFileSync(
     join(hippoRoot, 'config.json'),
@@ -213,7 +211,6 @@ describe('buildSupportBundle', () => {
     expect(parsed.stores[0].schemaVersion).toBe(getCurrentSchemaVersion());
     expect(parsed.stores[0].path.startsWith('~')).toBe(true);
     expect(Array.isArray(parsed.doctor.checks)).toBe(true);
-    // codex joins only where CODEX_HOME names a folder on this machine; no global store, so no projects check.
     expect(parsed.doctor.checks.map((c: { id: string }) => c.id).filter((id: string) => id !== 'codex')).toEqual([
       'node',
       'store',
@@ -267,7 +264,6 @@ describe('buildSupportBundle', () => {
       bundleText(bundle).filter((t) => t.includes(aliasHome.toLowerCase())),
       aliasHome,
     ).toEqual([]);
-    // Exact, so a swap of only the user's own home (~\AppData\...\global) does not pass for this one.
     const globalStore = JSON.parse(JSON.stringify(bundle)).stores.find((st: { kind: string }) => st.kind === 'global');
     expect(globalStore.path).toBe(join('~', 'global'));
   });
@@ -278,7 +274,6 @@ describe('buildSupportBundle', () => {
     mkdirSync(join(s.home, 'tmp'));
     writeFileSync(join(s.home, '.hippo', 'logs', 'alias.log'), `wrote ${join(aliasHome, 'tmp', 'scratch.txt')}\n`);
     const saved = { TEMP: process.env.TEMP, TMP: process.env.TMP, TMPDIR: process.env.TMPDIR };
-    // os.tmpdir() reads these on every call, so the bundle sees a temp folder under the home's alias.
     for (const k of Object.keys(saved)) vi.stubEnv(k, join(aliasHome, 'tmp'));
     let bundle: JsonObject;
     bundle = await buildSupportBundle({
@@ -296,7 +291,6 @@ describe('buildSupportBundle', () => {
   });
 
   it('swaps the home in every spelling a log line uses: JSON-escaped, file URL, Claude Code folder name', async () => {
-    // A space and an accented letter, so the file URL spelling differs from the path.
     const home = join(tmp('hippo-bundle-home-'), 'José Q');
     const cwd = join(home, 'proj');
     mkdirSync(cwd, { recursive: true });
@@ -370,10 +364,8 @@ describe('buildSupportBundle', () => {
     'swaps a Windows home however a shell mounts its drive, short name included',
     async () => {
       const s = seed();
-      // tmpdir() is usually the 8.3 short form; HIPPO_HOME under it makes the bundle find that alias of the home.
       const shortHome = join(tmpdir(), basename(s.home));
       vi.stubEnv('HIPPO_HOME', join(shortHome, 'unused-global'));
-      // Git Bash writes C:\x as /c/x; Cygwin and WSL put the same path under /cygdrive and /mnt.
       const mount = (root: string, p: string): string =>
         `${root}/${p[0].toLowerCase()}${p.slice(2).replace(/\\/g, '/')}`;
       writeFileSync(
@@ -401,7 +393,6 @@ describe('buildSupportBundle', () => {
       });
       const tail: string[] = JSON.parse(JSON.stringify(bundle)).logs.tails['shell.log'];
       expect(tail.slice(0, 4)).toEqual(['cd ~/proj && npm test', 'ls ~/proj', 'ls ~/proj', 'ls ~/proj']);
-      // A mount or share no list names keeps its prefix, but the path that names the user still goes.
       for (const leaf of [basename(s.home), basename(homedir())].map((n) => n.toLowerCase())) {
         expect(
           tail.filter((t) => t.toLowerCase().includes(leaf) || t.toLowerCase().includes(claudeFolder(leaf))),
@@ -415,7 +406,6 @@ describe('buildSupportBundle', () => {
     'swaps a one-folder Windows home only after its drive, and a drive root never',
     async () => {
       const s = seed();
-      // A custom HOME of Q:\x or Q:\home names a folder any path may hold, however long; the home need not exist to be swapped.
       const lines = (n: string): string[] => [
         `Q:\\${n}\\proj`,
         `q:/${n}/proj`,
@@ -462,7 +452,6 @@ describe('buildSupportBundle', () => {
 
   it('a log tail that starts inside a private key drops the rest of the key', async () => {
     const s = seed();
-    // About 325 KB of key body, so the 256 KiB tail window starts after the BEGIN line.
     const bodyLine = `MIIE${'Q'.repeat(60)}`;
     writeFileSync(
       join(s.home, '.hippo', 'logs', 'big.log'),

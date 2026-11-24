@@ -1,5 +1,3 @@
-// Hashes and keys for imported items, shared by the sync and the single-file adapters so they never
-// drift apart.
 import { createHash } from 'node:crypto';
 import { FINGERPRINT_HEX_CHARS, ID_SUFFIX_CHARS } from '../../base/util/token-text.js';
 

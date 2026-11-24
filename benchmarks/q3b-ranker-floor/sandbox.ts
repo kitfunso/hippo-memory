@@ -1,5 +1,3 @@
-// One sandbox per store: the built CLI and the in-process calls both see it as HIPPO_HOME and as the home directory.
-
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { isAbsolute, join, posix, win32 } from 'node:path';
@@ -7,7 +5,6 @@ import { REPO_ROOT } from './queries.ts';
 
 const HIPPO_JS = join(REPO_ROOT, 'bin', 'hippo.js');
 const INIT_ARGS = ['init', '--no-learn', '--no-hooks', '--no-schedule'];
-// A CLI call that embeds loads the model first, so the cap is far above run.py's 30 seconds.
 const CLI_TIMEOUT_MS = 300_000;
 const HOME_KEYS = ['HIPPO_HOME', 'HOME', 'USERPROFILE'] as const;
 
@@ -49,7 +46,6 @@ export function resolveItemCwd(home: string, subdir: string | undefined, fixture
   if (subdir.split(/[\\/]/).includes('..')) throw new Error(`fixture ${fixture}: cwd_subdir ${subdir} must not contain '..'`);
   const target = join(home, subdir);
   mkdirSync(target, { recursive: true });
-  // Without its own store the walk-up would find the sandbox store and every subdirectory would share it.
   if (!existsSync(join(target, '.hippo', 'hippo.db'))) hippoOk(INIT_ARGS, home, target);
   return target;
 }

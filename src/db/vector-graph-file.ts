@@ -1,6 +1,3 @@
-// A store's vector graph saved beside hippo.db, so a process with no store worker searches a graph
-// instead of scanning. Node records have one size and sit in rowid order, so a search reads only
-// the records it reaches.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../host/atomic-write.js';
@@ -9,14 +6,10 @@ import { errorCode, errorFields, log } from '../base/util/log.js';
 import { getHippoDbPath } from './connect.js';
 import type { GraphRows } from './vector-graph-rows.js';
 
-// 'HVGF' read as a little-endian u32.
 const MAGIC = 0x46475648;
 const VERSION = 1;
 const HEADER_BYTES = 64;
-// rowid f64, id hash u32, level u8, flags u8, layer-0 link count u16, upper-links offset u32.
 const RECORD_HEAD = 20;
-/** Where each header field sits, in bytes from the file start; the fields from `magic` to
- * `jsonBytes` are uint32. */
 const HEADER_AT = {
   magic: 0,
   version: 4,
@@ -31,7 +24,6 @@ const HEADER_AT = {
   recordBytes: 44,
   upperBytes: 48,
 } as const;
-/** Where each field sits, in bytes from the record start. */
 const RECORD_AT = {
   rowid: 0,
   idHash: 8,
@@ -67,9 +59,7 @@ export interface GraphStamp {
   readonly nodes: number;
   readonly entry: number;
   readonly maxLevel: number;
-  /** The highest rowid a node holds. */
   readonly highRowid: number;
-  /** Nodes not replaced when the file was saved. */
   readonly live: number;
   readonly recordsAt: number;
   readonly recordBytes: number;
@@ -77,14 +67,11 @@ export interface GraphStamp {
   readonly upperBytes: number;
 }
 
-/** The nodes in file order, and the file index of each node. */
 interface FileOrder {
   readonly order: number[];
   readonly at: Int32Array;
 }
 
-/** Nodes in rowid order, so a row's node is found by a binary search; the newest node of a
- * reused rowid stays. */
 function fileOrder(rows: GraphRows): FileOrder {
   const order = rows.ids
     .map((_, node) => node)
@@ -96,7 +83,6 @@ function fileOrder(rows: GraphRows): FileOrder {
   return { order, at };
 }
 
-// A per-vector scale: the walk scores by cosine, which no scale changes.
 function putInt8(unit: Float32Array, out: Int8Array): void {
   let max = 0;
   for (let i = 0; i < unit.length; i++) max = Math.max(max, Math.abs(unit[i]));
@@ -112,7 +98,6 @@ interface WriteUpperLinksOptions {
   readonly m: number;
 }
 
-/** The links of levels 1 and up of one node, level by level from `base`. */
 function writeUpperLinks({ view, base, links, at, m }: WriteUpperLinksOptions) {
   for (let level = 1; level < links.length; level++) {
     const from = base + (level - 1) * upperLevelBytes(m);
@@ -232,7 +217,6 @@ export function badGraphFile(file: string, what: string, cause?: unknown): Graph
   );
 }
 
-/** The header's numbers as the file stores them, before any bounds check. */
 interface StoredHeader extends Omit<GraphStamp, 'model' | 'recordsAt' | 'upperAt'> {
   readonly jsonBytes: number;
 }

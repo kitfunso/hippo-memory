@@ -1,17 +1,3 @@
-/**
- * Mid-phase failure-path coverage for `api.sleep` (v1.12.2).
- *
- * Uses the test-only phase overrides of `runSleep` to inject a throwing stub
- * at each of the 5 phase boundaries. Asserts the `finally` block emits a
- * `consolidate` audit_log row with `partial: true` + `errorMessage` set to
- * the injected error's message — the path that was reachable via store-
- * corruption before but not previously locked by a test (independent-
- * review-critic MED #2 on v1.11.5; deferred in TODOS.md).
- *
- * Each test uses an isolated temp store + per-test HIPPO_HOME so the
- * autoShare phase's initGlobal() doesn't leak into the run-wide baseline.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { runSleep, type SleepPhases } from '../../src/api/sleep/sleep-run.js';
@@ -40,9 +26,6 @@ afterEach(() => {
 function newCtx() {
   const { base: tmpDir, root: hippoRoot } = makeStore('sleep-fault');
 
-  // Seed at least one entry so consolidate / dedup / audit phases have
-  // something to scan (otherwise some phases short-circuit before the
-  // injected throw would fire).
   const mem = createMemory('seed memory for sleep phase fault tests', {
     layer: Layer.Episodic,
     tags: ['test'],
@@ -53,7 +36,6 @@ function newCtx() {
   });
   writeEntry(hippoRoot, mem);
 
-  // Per-test HIPPO_HOME isolation (autoShare phase 4 calls initGlobal()).
   const globalTmp = makeRoot('sleep-fault-global', { init: false });
   vi.stubEnv('HIPPO_HOME', globalTmp);
 
@@ -96,7 +78,6 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 1 fault: consolidate threw');
-    // Pre-phase counters are 0 (consolidate failed before incrementing)
     expect(row!.metadata.consolidationCount).toBe(0);
     expect(row!.metadata.dedupCount).toBe(0);
   });
@@ -115,10 +96,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 2 fault: deduplicateStore threw');
-    // Phase 1 ran successfully → consolidationCount is set (could be 0 if
-    // nothing to consolidate, but the assignment-before-throw path was hit).
     expect(row!.metadata.consolidationCount).toBe(0);
-    // dedupCount still 0 (phase 2 threw before assignment)
     expect(row!.metadata.dedupCount).toBe(0);
   });
 
@@ -136,9 +114,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 3 fault: auditMemories threw');
-    // Phases 1+2 completed → dedupCount assigned (0 on empty store is fine)
     expect(row!.metadata.dedupCount).toBe(0);
-    // auditDeletedCount still 0 (phase 3 threw before assignment)
     expect(row!.metadata.auditDeletedCount).toBe(0);
   });
 
@@ -150,7 +126,6 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
       },
     };
 
-    // Phase 4 only runs if config.autoShareOnSleep is true, so the Context turns the flag on.
     const ctx = { ...testCtx.ctx, config: { ...testCtx.ctx.config, autoShareOnSleep: true } };
 
     await expect(runSleep(ctx, {}, stubPhases)).rejects.toThrow('phase 4 fault: autoShare threw');
@@ -159,9 +134,7 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 4 fault: autoShare threw');
-    // Phases 1-3 completed
     expect(row!.metadata.auditDeletedCount).toBe(0);
-    // ambientTotal still 0 (phase 5 didn't run)
     expect(row!.metadata.ambientTotal).toBe(0);
   });
 
@@ -179,14 +152,11 @@ describe('api.sleep mid-phase failure paths emit partial+errorMessage audit row'
     expect(row).not.toBeNull();
     expect(row!.metadata.partial).toBe(true);
     expect(row!.metadata.errorMessage).toBe('phase 5 fault: computeAmbientState threw');
-    // Phases 1-4 completed
     expect(row!.metadata.auditDeletedCount).toBe(0);
-    // ambientTotal still 0 (phase 5 threw before assignment)
     expect(row!.metadata.ambientTotal).toBe(0);
   });
 
   it('happy path (no faults) → partial:false + no errorMessage', async () => {
-    // No phase overrides: the public entry runs the real phases.
     await sleepWholeStore(testCtx.ctx);
 
     const row = getLastConsolidateAuditRow(testCtx.ctx.hippoRoot);

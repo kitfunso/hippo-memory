@@ -1,5 +1,3 @@
-// The part keys of a long note: a text-keyed item's key holds a hash of its whole text, so a part
-// key built from it would change with every edit.
 import { describe, expect, it } from 'vitest';
 import { itemHash, textItemKeys } from '../../src/domain/agent-memories/keys.js';
 import { planContainer, type LiveRow, type PlanItem } from '../../src/domain/agent-memories/plan.js';
@@ -7,7 +5,6 @@ import { fileOfKey } from '../../src/domain/agent-memories/source.js';
 import type { MemoryItem } from '../../src/domain/agent-memories/types.js';
 import { container, partsOf } from '../_helpers/agent-memories-parts.js';
 
-/** A text-keyed item as an adapter builds it: `<heading slug>/<12 hex of the whole text>`. */
 const textKeyedItem = (text: string): MemoryItem => ({
   key: textItemKeys([{ headingSlug: 'user-profile', text }])[0],
   text,

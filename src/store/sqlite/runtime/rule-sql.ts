@@ -1,9 +1,3 @@
-// The SQL twins of the model's rules in src/base: strength.ts, keep-rules.ts, recall scope
-// (recall-scope.ts), and the bare and identity text of src/store/rules/copies.ts. Each is held
-// equal to its JS half over seeded rows by a test: strength in tests/core/memory.test.ts and
-// tests/store/rule-sql-parity.test.ts, keep in tests/core/keep-rule.test.ts, scope in
-// tests/db/scope-admit-parity.test.ts and tests/api/personal-read-sites.process.test.ts, bare and
-// identity text in tests/store/rule-sql-parity.test.ts.
 import { DAY_MS } from '../../../base/util/time.js';
 import {
   EMOTIONAL_MULTIPLIERS,
@@ -88,8 +82,6 @@ export function strengthSqlAt(julianNow: string, model: StrengthModel): string {
 export const julianDayOfMs = (msParam: string): string =>
   `(${msParam} / ${DAY_MS}.0 + ${UNIX_EPOCH_JULIAN_DAY})`;
 
-// json_each matches the tag as a whole element; substr, not LIKE, keeps the prefix case-sensitive
-// like startsWith.
 const keepPairSql = (p: KeepPair): SqlFragment => ({
   sql:
     `(${notSupersededIn()} AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(tags_json) THEN ` +
@@ -98,8 +90,6 @@ const keepPairSql = (p: KeepPair): SqlFragment => ({
 });
 const KEEP_PAIR_SQL = KEEP_PAIRS.map(keepPairSql);
 
-// Pinned and kept rows stay (a superseded row is not kept: its successor carries the tag and
-// source); raw rows leave only through archiveRawMemory. The SQL twin guards the DELETE itself.
 export const AUTO_DELETABLE: SqlFragment = {
   sql: `pinned = 0 AND kind != 'raw'${KEEP_PAIR_SQL.map((k) => ` AND NOT ${k.sql}`).join('')}`,
   params: KEEP_PAIR_SQL.flatMap((k) => k.params),
@@ -111,7 +101,6 @@ export function scopeAdmitSql(col: '' | 'm.', ownScope?: string | null): SqlFrag
   const marks = placeholders(RECALL_DEFAULT_DENY_SCOPES.length);
   const admitted = `${col}scope IS NULL OR (${col}scope NOT IN (${marks}) AND ${col}scope NOT LIKE '%:private:%')`;
   if (ownScope == null) return { sql: `(${admitted})`, params: [...RECALL_DEFAULT_DENY_SCOPES] };
-  // The own arm sits inside the outer parentheses so a caller's `AND ${sql}` cannot split it off.
   return {
     sql: `(${admitted} OR ${col}scope = ?)`,
     params: [...RECALL_DEFAULT_DENY_SCOPES, ownScope],
@@ -124,7 +113,6 @@ export function originInSql(names: readonly string[], column = 'origin_project')
   return names.length === 0 ? '0' : `${column} IN (${placeholders(names.length)})`;
 }
 
-// A tags column that is not a JSON array reads as no tags, as parseJsonArray reads it.
 export const tagsOf = (column: string): string =>
   `CASE WHEN NOT json_valid(${column}) THEN '[]' WHEN json_type(${column}) = 'array' THEN ${column} ELSE '[]' END`;
 

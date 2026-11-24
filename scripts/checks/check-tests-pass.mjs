@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Pre-publish guard: the test suite must pass before `npm publish` (docs/release-policy.md).
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -31,7 +30,6 @@ function runGate() {
     };
   }
 
-  // A fixed report path could hold a stale report from a run that died before writing it.
   const reportDir = mkdtempSync(path.join(tmpdir(), 'hippo-testgate-'));
   try {
     const reportPath = path.join(reportDir, 'report.json');
@@ -70,7 +68,6 @@ function runGate() {
       ],
     };
   } finally {
-    // Swallowed on purpose: a cleanup EPERM says nothing, and throwing here would lose the verdict.
     try {
       rmSync(reportDir, { recursive: true, force: true });
     } catch {}

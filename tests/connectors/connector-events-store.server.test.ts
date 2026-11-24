@@ -1,5 +1,3 @@
-// With ctx.store, connector ingest and deletion run on the store's connectorEvents and connectorWrites groups from the entry point
-// down, and both webhooks serve from a folder that never holds a hippo.db.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -39,7 +37,6 @@ function copyOf(): string {
   return root;
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 function markedFolder(): string {
   const root = join(home, `marked-${String(++n)}`);
   mkdirSync(root);
@@ -47,7 +44,6 @@ function markedFolder(): string {
   return root;
 }
 
-/** A copy that routes Slack team T_ACME and GitHub installation 101 to acme, so any other sender is unroutable. */
 async function copyWithRoutes(): Promise<string> {
   const root = copyOf();
   await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
@@ -201,7 +197,6 @@ describe('the connector entry points on a store with connectorEvents', () => {
 });
 
 describe('both webhooks under a store that is not hippo.db', () => {
-  // Generated per run, so no signing secret is ever written down.
   const secrets = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
   const handles: ServerHandle[] = [];
   let side: ConnectorEventsSide;
@@ -309,7 +304,6 @@ describe('both webhooks under a store that is not hippo.db', () => {
     const stored = await postSlack(served.url, slackEvent('T_ACME', 'Ev_message', posted('1700.000001')));
     expect(stored).toMatchObject({ status: 200, body: { ok: true, status: 'ingested', memoryId: expect.any(String) } });
     const memoryId: string = stored.body.memoryId;
-    // Slack signs a retry afresh, so the retry passes the replay window and the event log is what dedupes it.
     const retryTs = String(Number(stored.sent.ts) - 1);
     const retry = await postSlack(
       served.url,

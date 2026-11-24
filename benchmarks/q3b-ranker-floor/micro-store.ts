@@ -1,11 +1,8 @@
-// Builds one micro fixture's store with the built CLI: run.py's commands, in run.py's order.
-
 import type { FixtureAction, MicroFixture, RememberItem } from './queries.ts';
 import { hippoOk, initSandbox, resolveItemCwd, runHippo } from './sandbox.ts';
 
 interface Remembered {
   readonly id: string;
-  /** The directory the memory was written from, so its local store is the one later actions reach. */
   readonly cwd: string;
   readonly text: string;
   promotedId?: string;
@@ -18,7 +15,6 @@ export function buildMicroStore(fixture: MicroFixture, home: string): void {
 }
 
 function remember(fixture: string, home: string, item: RememberItem): Remembered {
-  // A fixture writes a memory as a bare string or as an object with tags and a cwd.
   const { text, tags = [], cwd_subdir: subdir } = item instanceof Object ? item : { text: item, tags: undefined, cwd_subdir: undefined };
   const cwd = resolveItemCwd(home, subdir, fixture);
   const out = hippoOk(['remember', text, ...tags.flatMap((t) => ['--tag', t])], home, cwd);
@@ -62,7 +58,6 @@ function applyAction(fixture: string, home: string, action: FixtureAction, remem
   }
 }
 
-/** Strengthens one memory by recalling it; `--limit 1` keeps the bump to the top row, which must be the declared one. */
 function recallAction(fixture: string, home: string, action: FixtureAction, remembered: Remembered[]): void {
   if (!action.query) throw new Error(`fixture ${fixture}: a recall action needs a query`);
   const times = action.times || 1;
@@ -75,7 +70,6 @@ function recallAction(fixture: string, home: string, action: FixtureAction, reme
     topId = results[0]?.id ?? topId;
   }
   const declared = remembered[index];
-  // After a promote, the local copy wins at its own cwd and the promoted copy wins elsewhere; either is the target.
   const copies = declared ? [declared.id, declared.promotedId] : [];
   if (declared && topId && !copies.includes(topId)) {
     throw new Error(`fixture ${fixture}: the recall action returned ${topId}, not a copy of remember[${index}]; its query must rank the target first`);
@@ -90,7 +84,6 @@ function rejectAction(fixture: string, home: string, action: FixtureAction, row:
   if (!action.reason) throw new Error(`fixture ${fixture}: a reject action needs a reason`);
   hippoOk(['reject', row.id, '--reason', action.reason], home, row.cwd);
   if (!action.reattempt) return;
-  // The tombstone must refuse the same text, or a later must-not check tests a row that was never written again.
   const again = runHippo(['remember', row.text], home, row.cwd);
   if (again.status === 0 || !again.stderr.includes('rejected value')) {
     throw new Error(`fixture ${fixture}: remembering the rejected text again was not refused (exit ${again.status}): ${again.stderr.trim()}`);

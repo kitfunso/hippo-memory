@@ -1,4 +1,3 @@
-// Each binary floor must name the first release that ships its schema (v53 expiring keys, v54 task owners, v64 lead-in), or an older binary can open a store it misreads.
 import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +10,6 @@ const repos = new Map<string, string>();
 interface Floors {
   expiring: string;
   owner: string;
-  /** Defaults to the package version, the one untagged floor that always passes, so older cases stay about their own floor. */
   leadIn?: string;
 }
 
@@ -43,8 +41,6 @@ function writeTree(root: string, version: string, floors: Floors, schema: number
   writeFileSync(join(root, 'src', 'db', 'migrations', 'index.ts'), `export const MIGRATIONS = [${list}];\n`);
 }
 
-/** A git repo at `version` with schema v54 in its tree; `tag` first commits a release shipping `schema` under that name.
- *  The gate reads only the working tree and each tag's migration list, so tests tagging the same release share a repo. */
 function makeRepo(version: string, floors: Floors, tag?: { name: string; schema: number }): string {
   const key = tag ? `${tag.name}@${tag.schema}` : 'untagged';
   let root = repos.get(key);

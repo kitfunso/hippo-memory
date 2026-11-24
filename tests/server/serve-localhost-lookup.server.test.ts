@@ -1,4 +1,3 @@
-// 'localhost' counts as loopback for the auth and TLS checks of a bind only when the resolver says every address of it is.
 import { promises as dns } from 'node:dns';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
@@ -59,7 +58,6 @@ describe('serve() bound to localhost', () => {
     handle = undefined;
   });
 
-  /** Makes the resolver answer `addresses` for every name. */
   function resolveEverythingTo(...addresses: string[]): void {
     const answer = addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }));
     // vi.fn() is loosely typed, which spyOn needs here: it sees the overload that answers one address, not a list.

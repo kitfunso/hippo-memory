@@ -1,5 +1,3 @@
-"""Where the DolphinBench clone, its venv and every output live. DOLPHIN_BENCH_HOME names that folder; without it, the
-old rule holds: a hippo-bench folder beside this checkout's parent. The codex CLI sits under the same user home."""
 import os
 from pathlib import Path
 

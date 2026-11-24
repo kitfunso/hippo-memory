@@ -22,7 +22,6 @@ interface RunResult {
   status: number;
 }
 
-// In process, so coverage sees the verb; the shape matches the spawned run it replaced.
 async function runHippo(args: string[]): Promise<RunResult> {
   const r = await runCliAs(args, { env: { ...process.env, HIPPO_HOME: path.join(tmpDir, 'global') }, cwd: tmpDir });
   return { stdout: r.stdout, stderr: r.stderr, status: r.status ?? 1 };

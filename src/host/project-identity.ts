@@ -1,6 +1,3 @@
-// Resolves a folder's project by walking the disk for its markers, and finds hippo's stores; the
-// types and the matching rules live in src/base/scope/project-identity.ts. Each call walks: a root
-// that walks often holds a Host (host.ts).
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -24,8 +21,6 @@ export type RemoteRule = () => boolean;
 
 const globalRemoteRule: RemoteRule = () => namesProjectsByRemote(hippoHomeDir());
 
-/** The id a root names itself by plus every rung that resolves; only the root's own `.git` is
- * read, so a store nested in another checkout keeps its folder name. */
 function namesAt(
   root: string,
   legacyName: string,
@@ -40,7 +35,6 @@ function namesAt(
   return aliases.length > 0 ? { name, aliases } : { name };
 }
 
-/** Compare two resolved paths, case-insensitively on Windows. */
 function samePath(a: string, b: string): boolean {
   if (process.platform === 'win32') return a.toLowerCase() === b.toLowerCase();
   return a === b;
@@ -63,7 +57,6 @@ function isDirectoryAt(p: string): boolean {
   try {
     return fs.statSync(p).isDirectory();
   } catch (err) {
-    // Most folders on the walk up hold no marker, so a failed stat is the normal answer.
     log.debug(`project identity: no marker at ${p}: ${errorMessage(err)}`, errorFields(err));
     return false;
   }
@@ -109,24 +102,19 @@ export function walkIdentity(
   if (reachedHome || isUnder(real, home)) {
     return { identity: { root: home, name: '', legacyName: '', isHome: true }, rooted: false };
   }
-  // No markers anywhere: not a project. Empty name keeps these memories user-global rather than
-  // fabricating an origin from a basename.
   return { identity: { root: real, name: '', legacyName: '', isHome: false }, rooted: false };
 }
 
-/** The repo name a linked worktree shares with its main checkout (`repo.git` or `repo/.bare` for
- * a bare repo), so one repo is one project; null for any other checkout. */
 function linkedWorktreeRepoName(gitRoot: string, home: string): string | null {
   const marker = path.join(gitRoot, '.git');
   if (!fs.existsSync(marker) || isDirectoryAt(marker)) return null;
-  // An unreadable link is still a checkout, named after its own folder.
   const dirs = ignoringCodes(PATH_UNREADABLE, () =>
     readGitFilePointer(gitRoot, fs.readFileSync(marker, 'utf8')),
   );
-  if (dirs?.commonDir == null) return null; // no git dir, or a submodule's or a separate git dir's own checkout
+  if (dirs?.commonDir == null) return null;
   const common = realpathOrResolve(dirs.commonDir);
   const repo = ['.git', '.bare'].includes(path.basename(common)) ? path.dirname(common) : common;
-  if (samePath(repo, home)) return null; // a dotfiles repo at home must not make its worktrees user-global
+  if (samePath(repo, home)) return null;
   return (
     path
       .basename(repo)
@@ -141,8 +129,6 @@ interface MarkerWalk {
   reachedHome: boolean;
 }
 
-/** Climb from start toward the root; home (never a project) and every stop dir end the walk
- * unchecked. */
 function walkProjectMarkers(start: string, home: string, stopDirs: readonly string[]): MarkerWalk {
   let hippoRoot: string | null = null;
   let gitRoot: string | null = null;
@@ -162,7 +148,7 @@ function walkProjectMarkers(start: string, home: string, stopDirs: readonly stri
       gitRoot = dir;
     }
     const parent = path.dirname(dir);
-    if (samePath(parent, dir)) break; // filesystem root
+    if (samePath(parent, dir)) break;
     dir = parent;
   }
   return { hippoRoot, gitRoot, reachedHome };
@@ -192,8 +178,6 @@ export function getHippoRoot(
 }
 
 export function isInitialized(hippoRoot: string): boolean {
-  // autoInstallHooks / setupDailySchedule can create a bare .hippo with no hippo.db; counting that
-  // as initialized makes `hippo init` skip initStore, so only hippo.db counts.
   return fs.existsSync(path.join(hippoRoot, 'hippo.db'));
 }
 

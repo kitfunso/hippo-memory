@@ -1,9 +1,3 @@
-/** Retrieval-trace persistence: the single producer for `recall_traces`, `recall_trace_results`
- * and `recall_trace_outcomes`. One trace row per recall on api.recall, api.contextGet and
- * printRecall: the (query, shown, outcome) triple the learned components train on. All writes
- * are fail-soft: a failed trace write is logged to stderr and swallowed, never breaking the
- * surrounding call. */
-
 import { getMeta, withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { RerankStep } from '../../../base/rank/search-types.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
@@ -14,9 +8,6 @@ import { parseLastTraceId } from '../runtime/rows.js';
 import { META_KEY } from '../../../db/meta.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-/** Strip a RerankStep to {stage, multiplier, scoreBefore, scoreAfter}: `note` is free-form (the
- * CLI goal-boost step embeds goal tag text) and would leak user content into `rerank_json`; an
- * allowlist, so any future free-form field is dropped too. */
 function sanitizeRerankSteps(
   steps: RerankStep[],
 ): Array<Pick<RerankStep, 'stage' | 'multiplier' | 'scoreBefore' | 'scoreAfter'>> {
@@ -94,7 +85,6 @@ export interface RecordTraceOutcomeInput {
   traceId: number;
   tenantId: string;
   outcome: 'positive' | 'negative';
-  /** Ids actually credited by this outcome event (post tenant-filtering). */
   memoryIds: string[];
 }
 

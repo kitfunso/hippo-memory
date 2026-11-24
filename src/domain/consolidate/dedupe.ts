@@ -1,10 +1,3 @@
-/**
- * Store-level dedup: same text apart from spacing, keeping the stronger copy; split out so
- * `api.sleep` can dedupe without cli -> api imports. Survivor order is total and tenant-scoped:
- * strength bucket, retrievalCount, then compareEntryIdentity; raw and superseded rows are not
- * candidates.
- */
-
 import { textOverlap } from '../../base/util/tokenize.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import { canAutoDelete } from '../../base/memory/keep-rules.js';
@@ -33,10 +26,6 @@ export interface DedupResult {
   pairs: DedupPair[];
 }
 
-/**
- * Quantization step for strength-tie comparisons: the 0.01 epsilon applied by rounding instead of
- * an abs-diff threshold, so the tiebreak is transitive.
- */
 const STRENGTH_TIE_EPSILON = 0.01;
 
 /**
@@ -48,7 +37,6 @@ export function strengthTieKey(strength: number | null | undefined): number {
   return Number.isFinite(s) ? Math.round(s / STRENGTH_TIE_EPSILON) : 0;
 }
 
-/** What the survivor order and a pair read of a row: a scan holds these, never the row itself. */
 interface DedupRow {
   readonly id: string;
   readonly content: string;
@@ -57,7 +45,6 @@ interface DedupRow {
   readonly retrievalCount: number;
   readonly tags: readonly string[];
   readonly source: string;
-  /** canAutoDelete's answer; whether the row backs an object is asked once, for the losers only. */
   readonly deletable: boolean;
 }
 
@@ -75,8 +62,6 @@ function dedupRow(entry: MemoryEntry): DedupRow {
   };
 }
 
-/** The v1.26.3 survivor total order: strength bucket desc, then retrievalCount desc, then
- * compareEntryIdentity. */
 function survivorOrder(a: DedupRow, b: DedupRow): number {
   const bucketDiff = strengthTieKey(b.strength) - strengthTieKey(a.strength);
   if (bucketDiff !== 0) return bucketDiff;
@@ -99,12 +84,8 @@ function dedupPair(kept: DedupRow, dropped: DedupRow): DedupPair {
   };
 }
 
-/** One partition's same-text groups by duplicateKey: the best row so far and the rows it beat
- * that may go. */
 type PartitionGroups = Map<string, { survivor: DedupRow; losers: DedupRow[] }>;
 
-// The survivor order is total, so the best row so far ends as the row a sorted pass puts first, and
-// every other deletable row ends a loser whichever order the rows came in.
 function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
   const group = groups.get(key);
   if (!group) {
@@ -116,8 +97,6 @@ function addRow(groups: PartitionGroups, key: string, row: DedupRow): void {
   if (beaten.deletable) group.losers.push(beaten);
 }
 
-/** One partition's pairs in a sorted pass's order: groups by their survivor's rank, each group's
- * losers by rank; a loser backing an object stays. */
 function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): DedupPair[] {
   return [...groups.values()]
     .map((group) => ({ ...group, losers: group.losers.filter((loser) => !backing.has(loser.id)) }))
@@ -128,23 +107,18 @@ function partitionPairs(groups: PartitionGroups, backing: ReadonlySet<string>): 
     );
 }
 
-/** The rows duplicateCandidates selects, picked from pages of every row. */
 const isCurrentDistilled = (e: MemoryEntry): boolean =>
   (e.kind ?? 'distilled') === 'distilled' && !isSuperseded(e);
 
 type Partitions = Map<string, PartitionGroups>;
 
-/** Pages of rows, held now or read a page at a time from the store. */
 type RowPages = Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
 
-/** Groups rows fed a page at a time; between pages only each group's survivor and losers are
- * held. Map order is first appearance, so partitions keep the order the pages gave them. */
 async function partitionRows(pages: RowPages): Promise<Partitions> {
   const partitions: Partitions = new Map();
   for await (const page of pages) {
     for (const entry of page) {
       if (!isCurrentDistilled(entry)) continue;
-      // EI2: also split by restricted scope, else a private copy can delete the readable one.
       const partition = derivationPartitionKey(entry.tenantId, entry.scope, entry.originProject);
       let groups = partitions.get(partition);
       if (!groups) partitions.set(partition, (groups = new Map()));
@@ -154,7 +128,6 @@ async function partitionRows(pages: RowPages): Promise<Partitions> {
   return partitions;
 }
 
-/** The candidates' partitions in the order a read of every current row first meets them. */
 async function candidatePartitions(store: StoreWith<'consolidation'>): Promise<Partitions> {
   const { rows, firstSeen } = await store.consolidation.duplicateCandidates();
   const rank = new Map<string, number>();
@@ -184,8 +157,6 @@ export async function deduplicateStore(
   store: StoreWith<'consolidation' | 'auditMaintenance'>,
   options: { threshold?: number; dryRun?: boolean; actor?: string; pages?: RowPages } = {},
 ): Promise<DedupResult> {
-  // Only current distilled rows compete: raw rows are append-only (the delete trigger would abort
-  // sleep mid-loop) and superseded rows are history.
   const partitions = options.pages
     ? await partitionRows(options.pages)
     : await candidatePartitions(store);
@@ -194,7 +165,6 @@ export async function deduplicateStore(
   return { removed: done.length, pairs: done };
 }
 
-/** The pairs whose loser was deleted; one store call, one transaction per batch of deletes. */
 async function deletePairs(
   store: StoreWith<'consolidation' | 'auditMaintenance'>,
   pairs: readonly DedupPair[],
@@ -204,6 +174,5 @@ async function deletePairs(
   const gone = new Set(
     await store.auditMaintenance.deleteAutomatically(targets, actor ?? CLI_ACTOR),
   );
-  // A loser named twice went once, so only its first pair reports the delete.
   return pairs.filter((p) => gone.delete(p.removed));
 }

@@ -1,5 +1,3 @@
-/** `hippo projects` merge and repair: fold an old worktree name into its repo, set aside copies, re-tag sleep's user-global merges, reversibly. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -89,7 +87,6 @@ describe('hippo projects merge', () => {
     expect(rows.has(copy.id)).toBe(false);
     expect(listDormantSnapshots(db, T).find((s) => s.entry.id === copy.id)!.entry.originProject).toBe('repo');
     expect(rows.get(held.id)!.originProject).toBe('repo');
-    // The next sync renames its container prefix, so the import keeps its id, source and tag.
     expect(rows.get(kept.id)).toMatchObject({
       originProject: 'repo',
       source: kept.source,
@@ -276,7 +273,6 @@ describe('hippo projects repair', () => {
     });
     const dry = await projectNameRepair(ctx(), { dryRun: true });
     expect(dry.folds).toEqual([{ from: 'b', into: 'c' }]);
-    // Planned against the folded names, as apply sees them: both parents are under c.
     expect([dry.toProject, dry.setAside]).toEqual([[{ id: merged.id, origin: 'c' }], []]);
     expect((await projectNameRepair(ctx(), { dryRun: false })).toProject).toEqual(dry.toProject);
     expect(byId().get(lesson.id)!.originProject).toBe('a');
@@ -327,7 +323,6 @@ describe('hippo projects list', () => {
     setMeta(db, 'schema_version', String(older));
     db.exec(`PRAGMA user_version = ${older}`);
     closeHippoDb(db);
-    // The rows already have the last migration's shape, so only its run is counted.
     const up = vi.spyOn(MIGRATIONS[MIGRATIONS.length - 1]!, 'up').mockImplementation(() => undefined);
     try {
       expect((await projectNameList(ctx())).map((p) => p.origin)).toContain('repo-wt-a');

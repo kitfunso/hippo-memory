@@ -1,4 +1,3 @@
-// 3.0 entry shape: camelCase fields in memory, snake_case keys in every stored and exported format.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

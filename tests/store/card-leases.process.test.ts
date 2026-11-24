@@ -1,4 +1,3 @@
-// W2b leases, heartbeat and reclaim (trajectories/01M2EA6D1PVF2H25CGHE12JJ44/plan.md).
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
 import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -371,7 +370,6 @@ describe('invariant', () => {
   });
 });
 
-// Runs a real second thread (its own node:sqlite connection) so the write lock is genuinely
 // held while this process's reclaimExpiredCards blocks under PRAGMA busy_timeout, not simulated in-process.
 function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs: number) {
   const workerCode = `
@@ -389,7 +387,6 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
       parentPort.postMessage('released');
     }, workerData.holdMs));
   `;
-  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, sql, params, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
@@ -405,7 +402,6 @@ function holdLockThenRun(dbPath: string, sql: string, params: unknown[], holdMs:
       }
     });
   });
-  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
   return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
@@ -437,7 +433,6 @@ describe('reclaim under a real second connection', () => {
     const endedByReturn = holdHadEnded();
 
     expect(reclaimed).toEqual([expiredCard.id]);
-    // A sweep that did not wait returns while the lock is still held, before the hold ends.
     expect(endedByReturn).toBe(true);
     await released;
   });
@@ -507,7 +502,6 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
       return { out: toUtf8(err.stdout) + toUtf8(err.stderr), status: err.status ?? 1 };
     }
   }
-  // In process: these cases read exit codes and printed bytes; the first CLI case keeps the built CLI pinned in a real child.
   async function runCli(cwd: string, env: Record<string, string>, ...args: string[]) {
     const r = await runCliAs(args, { cwd, env: { ...process.env, ...env } });
     return { out: r.status === 0 ? r.stdout : r.stdout + r.stderr, status: r.status };
@@ -539,7 +533,6 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
     return runId;
   }
 
-  // HIPPO_HOME isolates only the global store; the local store this drives follows cwd (home/.hippo).
   function backdateLease(home: string, cardId: string) {
     const db = openHippoDb(join(home, '.hippo'));
     try {
@@ -785,7 +778,6 @@ describe('CLI cases: card heartbeat and reclaim through the built CLI', () => {
         'Usage: hippo card reclaim (sweeps every expired lease; use hippo card block <id> for one card)',
       );
 
-      // --run=5 is a real flag now, so it reaches the live-run check instead of the parser guard.
       const equalsForm = await runCli(home, env, 'card', 'heartbeat', id, '--run=5');
       expect(equalsForm.status).toBe(1);
       expect(equalsForm.out).toContain('Could not heartbeat card');

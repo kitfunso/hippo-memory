@@ -1,6 +1,3 @@
-// The vector math every ranking site shares (embeddings, the vector index, physics): one dot
-// product, one length and one rule for a vector too short to have a direction.
-
 /** A vector shorter than this has no direction: it normalises to nothing and scores 0 against
  * any other. */
 export const ZERO_NORM = 1e-10;
@@ -45,7 +42,6 @@ export function cosineOf(a: ArrayLike<number>, b: ArrayLike<number>): number {
   const lengthA = Math.sqrt(squaresA);
   const lengthB = Math.sqrt(squaresB);
   if (lengthA < ZERO_NORM || lengthB < ZERO_NORM) return 0;
-  // Clamp to [-1, 1] to handle floating point drift
   return Math.min(1, Math.max(-1, products / (lengthA * lengthB)));
 }
 

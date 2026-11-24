@@ -1,6 +1,3 @@
-/** Auto-learn from errors and git history.
- *  Agents learn from failures without explicit hippo remember calls. */
-
 import { MemoryEntry, ERROR_TAG, createMemory, Layer } from '../../base/memory/entry.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../base/memory/strength.js';
 import { assessAutomaticMemory } from '../../base/memory/memory-quality.js';
@@ -26,18 +23,15 @@ export function captureError(
   tenantId: string | undefined,
   now: Date,
 ): MemoryEntry {
-  // Truncate to first 500 chars to avoid storing megabytes of build logs
   const clean = redactSecretsStrict(stderr);
   const wasTruncated = clean.length > AUTOLEARN_TEXT_CHARS;
   const truncated = clean.slice(0, AUTOLEARN_TEXT_CHARS).trim();
   const suffix = wasTruncated ? ' [truncated]' : '';
-  // Strip leading env var assignments (KEY=val or key=val) before the actual command name
   const safeCmd =
     redactSecretsStrict(command.replace(/^([A-Za-z_][A-Za-z0-9_]*=\S+\s+)+/, '').trim()) ||
     '(redacted)';
   const content = `Command '${safeCmd}' failed (exit ${exitCode}): ${truncated}${suffix}`;
 
-  // Derive a sanitized tag from the command name (first word, strip path)
   const cmdBase = safeCmd.split(/\s+/)[0].replace(/[^a-zA-Z0-9-]/g, '');
   const tags = [ERROR_TAG, 'autolearn'];
   if (cmdBase) tags.push(cmdBase.toLowerCase().slice(0, AUTOLEARN_TAG_CHARS));
@@ -83,14 +77,11 @@ export function extractLessons(gitLog: string, customPatterns?: string[]): strin
       continue;
     }
 
-    // Strip leading git hash if present (real hashes are hex, but be lenient with alphanumeric
-    // prefixes)
     const subject = trimmed.replace(/^[a-z0-9]{6,40}\s+/i, '');
 
     for (const pat of patterns) {
       const m = subject.match(pat);
       if (m) {
-        // For conventional commits: use group 3 (message after prefix), group 2, or full match
         const lesson = (m[3] ?? m[2] ?? m[0]).trim();
         if (lesson.length > 5 && lesson.length < MAX_LESSON_CHARS) {
           lessons.push(lesson);

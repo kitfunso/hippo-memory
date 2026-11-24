@@ -1,5 +1,3 @@
-// A bearer key check derives on the thread pool, two at a time, one key id holds at most one of those and two waits,
-// and one address gets five tries at one key id.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHook } from 'node:async_hooks';
 import { rmSync } from 'node:fs';
@@ -28,7 +26,6 @@ const scryptJobs = createHook({
   },
 });
 
-/** Starts counting scrypt jobs; called after the keys are minted, since minting hashes with `scryptSync`. */
 function watchPool(): void {
   pool.running.clear();
   pool.peak = 0;
@@ -60,7 +57,6 @@ async function start(extra: Partial<ServeOptions> = {}): Promise<void> {
   stop = handle.stop;
 }
 
-/** The real store, with each key-row read held until `count` requests wait on one and then answered in one turn, so they all reach the bounds before any derivation can end; `onRelease` runs in that turn. */
 function arrivingTogether(count: number, onRelease: () => void = () => undefined): HippoStore {
   const inner = sqliteStore(root);
   const held: Array<() => void> = [];
@@ -107,7 +103,6 @@ async function recall(token: string, address?: string): Promise<Reply> {
 
 const OK: Reply = { status: 200, retryAfter: null, refusal: null };
 const UNAUTHORISED: Reply = { status: 401, retryAfter: null, refusal: { error: 'invalid api key' } };
-/** The `n`th well-formed wrong secret for `key`'s id. */
 const wrongSecret = (key: string, n: number): string =>
   `${key.slice(0, key.indexOf('.'))}.${'abcdefghijklmnopqrstuvwxyz'.charAt(n % 26).repeat(32)}`;
 
@@ -133,7 +128,6 @@ describe('key derivation bounds', () => {
     expect(scryptRuns() - before).toBe(5);
 
     expect(await recall(key, '203.0.113.77')).toEqual(OK);
-    // Retry-After is the wait for one more try, not for a fresh five.
     vi.setSystemTime(Date.now() + 12_000);
     expect([await guess(), (await guess()).status]).toEqual([UNAUTHORISED, 429]);
   });
@@ -143,7 +137,6 @@ describe('key derivation bounds', () => {
     vi.setSystemTime(new Date('2026-10-09T09:00:00Z'));
     const target = mint();
     const colleague = mint();
-    // Eight scrypt runs for the address: the flood's five tries take five, and its refusals must not take the other three.
     await start({ rateLimits: { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.05, burst: 8 } } });
     const office = '203.0.113.90';
     for (let sent = 0; sent < 30; sent++) await recall(wrongSecret(target, sent), office);
@@ -181,10 +174,8 @@ describe('key derivation bounds', () => {
     });
     await start({ store: arrivingTogether(10, () => flooded()) });
     const before = scryptRuns();
-    // One address per wrong secret, so no address bucket refuses any of them.
     const flood = Array.from({ length: 10 }, (_, n) => recall(wrongSecret(target, n), `203.0.113.${100 + n}`));
     await queued;
-    // Unbounded per key id, the flood would hold both slots and all eight waits here, and this first use would get 429.
     expect(await recall(colleague, '203.0.113.200')).toEqual(OK);
     const replies = await Promise.all(flood);
     expect(replies.filter((r) => r.status !== 429)).toEqual(Array(3).fill(UNAUTHORISED));
@@ -222,7 +213,6 @@ describe('key derivation bounds', () => {
     const before = scryptRuns();
     watchPool();
     expect(await recall(key)).toEqual(OK);
-    // A derivation on the event loop would count as a run yet hand no result back from the pool.
     expect({ derived: scryptRuns() - before, fromThePool: pool.delivered }).toEqual({ derived: 1, fromThePool: 1 });
   });
 });

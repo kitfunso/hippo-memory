@@ -1,4 +1,3 @@
-/** Failure log (ROADMAP CD13): every failed tool call is logged as hashes with its session; repeats across sessions count. */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,7 +52,6 @@ function logRows(root: string): LogRow[] {
   );
 }
 
-/** Tombstone a lesson text the way `hippo reject` does, so storing it again throws. */
 function rejectLesson(root: string, text: string): void {
   withDb(root, (db) =>
     insertRejectedValue(db, {
@@ -97,7 +95,6 @@ describe('repeat-error rate', () => {
     await log('s5', 'B');
 
     withDb(home, (db) => {
-      // s1's retry is the same session; s3's routine C is not rated, so s4's C is new; the null-session B is ignored.
       expect(summarizeFailures(db, 'default', ago(1))).toMatchObject({
         total: 8,
         rated: 6,
@@ -293,8 +290,6 @@ describe('hippo failures', () => {
   beforeEach(() => {
     dir = makeStore('failures-cli').base;
   });
-  // In process, throwing on a non-zero exit as execFileSync did, so coverage sees the hook and the report.
-  // In process, with execFileSync's throw on a non-zero exit, so coverage sees the hook and the report.
   async function run(args: string[], input = '', cwd = dir): Promise<string> {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(cwd, 'global'), HOME: cwd, USERPROFILE: cwd };
     delete env.HIPPO_SESSION_ID;
@@ -323,7 +318,6 @@ describe('hippo failures', () => {
       ['capture-error'],
       JSON.stringify({ session_id: 's2', tool_name: 'Grep', error: 'No matches found for pattern foo' }),
     );
-    // Storing this one throws; the hook still exits 0 (run would throw otherwise) and the log keeps it.
     await run(['capture-error'], JSON.stringify(refused));
 
     const summary = JSON.parse(await run(['failures', '--json']));

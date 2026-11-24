@@ -1,5 +1,3 @@
-// What a consolidation did, as data; the CLI and the /v1/sleep reply turn each event into its line.
-
 /** The rank a rescued row held in its tenant's memory-value order. */
 export interface RescueRank {
   readonly rank: number;

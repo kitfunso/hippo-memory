@@ -1,4 +1,3 @@
-// An upper bound on how long something took, or on a ratio or product of two timings, fails when the runner stalls, not when the code gets worse; no test may assert one.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,24 +5,17 @@ import { fileURLToPath } from 'node:url';
 
 const TESTS = fileURLToPath(new URL('..', import.meta.url));
 const UI_SRC = fileURLToPath(new URL('../../ui/src', import.meta.url));
-// This file holds the shapes as sample text.
 const SELF = 'scripts/elapsed-time-upper-bounds.test.ts';
 const CLOCK = String.raw`(?:Date\.now\(\)|performance\.now\(\)|hrtime(?:\.bigint)?\(\))`;
-// A clock read minus a start time held in a variable; minus a constant is a moment in the past, not a duration.
 const CLOCK_DIFF = new RegExp(String.raw`${CLOCK}\s*-\s*[a-z_$][\w$.]*(?!\s*[*(/\w$.])`);
 const ASSIGNED = new RegExp(String.raw`(?<![\w$.])([A-Za-z_$][\w$]*)\s*=[^=;\n]*?${CLOCK_DIFF.source}`, 'g');
-// Any `name = value` on one line, for the names a ratio or product of timings is kept in.
 const ASSIGNMENT = /(?<![\w$.])([A-Za-z_$][\w$]*)\s*=(?![=>])([^;\n]*)/g;
-// In a file that measures a duration, a name that says ratio or growth holds a ratio of timings.
 const RATIO_NAME = /(?<![\w$])[\w$]*(?:[Rr]atio|[Gg]rowth|[Ss]lowdown)\b/;
-// A helper or name that says it holds a ratio of timings, wherever the clock is read.
 const TIMING_RATIO_NAME =
   /(?<![\w$])[\w$]*(?:[Ff]astest|[Ss]lowest|[Tt]iming|[Tt]imed|[Ee]lapsed|[Dd]uration)[\w$]*(?:[Rr]atio|[Gg]rowth)\b/;
-// Names a helper or a spawned process gives a duration it measured itself: elapsed, ms, or any name ending in Ms or _ms; _MS constants are limits, not measurements.
 const REPORTED = /(?<![\w$])(?:elapsed|ms|[\w$]*(?:Ms|_ms))\b/;
 const MATCHER = /^\s*\.\s*(not\s*\.\s*)?(toBeLessThan|toBeLessThanOrEqual|toBeGreaterThan|toBeGreaterThanOrEqual)\(/;
 
-// By file and exact line, so an edited line is read again; the value says why a slow runner cannot fail it.
 const ALLOWED = new Map([
   [
     'eval/token-eval-z0-turns-resume-limits-and-planted-files.test.ts: expect(wallMs + 10_000).toBeLessThanOrEqual(stepMs);',
@@ -39,7 +31,6 @@ const ALLOWED = new Map([
   ],
 ]);
 
-/** The text between the bracket at `open` and the bracket that closes it. */
 function inside(text: string, open: number): string {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
@@ -49,7 +40,6 @@ function inside(text: string, open: number): string {
   return '';
 }
 
-/** Every assertion in `text` that bounds an elapsed time from above, as `file: line text`. */
 function elapsedUpperBounds(file: string, text: string): string[] {
   const durations = [...text.matchAll(ASSIGNED)].map((m) => m[1]);
   const measuresTime = CLOCK_DIFF.test(text);
@@ -61,7 +51,6 @@ function elapsedUpperBounds(file: string, text: string): string[] {
     durations.some((name) =>
       new RegExp(String.raw`(?<![\w$.])${name.replaceAll('$', String.raw`\$`)}(?![\w$])`).test(code),
     );
-  // A ratio or product of timings is a timing too, whatever it is called; repeat until no new name joins.
   const products = [...text.matchAll(ASSIGNMENT)].filter((m) => /[*/]/.test(m[2]) || TIMING_RATIO_NAME.test(m[2]));
   for (let grew = true; grew;) {
     grew = false;
@@ -89,7 +78,6 @@ function elapsedUpperBounds(file: string, text: string): string[] {
   return hits;
 }
 
-/** expect(elapsed).toBeLessThan(n), and its mirror expect(n).toBeGreaterThan(elapsed). */
 function boundedByMatcher(
   subject: string,
   after: string,
@@ -97,12 +85,10 @@ function boundedByMatcher(
   timed: (code: string) => boolean,
 ): boolean {
   const upper = matcher[2].startsWith('toBeLess') !== (matcher[1] !== undefined);
-  // The text before a comma is the value; after it comes the failure message.
   if (upper) return timed(subject.split(',')[0]);
   return timed(inside(after, matcher[0].length - 1)) && !timed(subject);
 }
 
-/** expect(elapsed < n).toBe(true): the smaller side of a comparison is the bounded one. */
 function boundedInline(subject: string, timed: (code: string) => boolean): boolean {
   return subject.split(/&&|\|\|/).some((clause) => {
     const compared = /^(.*?)\s(<=?|>=?)\s(.*)$/s.exec(clause);
@@ -113,7 +99,6 @@ function boundedInline(subject: string, timed: (code: string) => boolean): boole
 const files = readdirSync(TESTS, { recursive: true, encoding: 'utf8' })
   .map((file) => file.split('\\').join('/'))
   .filter((file) => /\.(?:ts|mjs|cjs)$/.test(file) && !file.startsWith('fixtures/') && file !== SELF);
-// The dashboard package has its own test run that the root suite never sees.
 const uiFiles = readdirSync(UI_SRC, { recursive: true, encoding: 'utf8' })
   .map((file) => file.split('\\').join('/'))
   .filter((file) => /\.test\.tsx?$/.test(file));
@@ -149,7 +134,6 @@ describe('elapsed-time upper bounds in tests', () => {
     'const ms = Number(process.hrtime.bigint() - begin) / 1e6;\nexpect(ms < 250).toBe(true);',
     'expect(ok && LIMIT_MS >= child.durationMs).toBe(true);',
     'expect(\n  Date.now() - started,\n).toBeLessThan(2000);',
-    // A ratio or product of two timings, kept under any name.
     'const fast = performance.now() - t0;\nconst slow = performance.now() - t1;\nconst growth = slow / fast;\nexpect(growth).toBeLessThan(20);',
     'const ratio = a.elapsedMs / b.elapsedMs;\nexpect(ratio).toBeLessThan(4);',
     'const total = perCallMs * calls;\nexpect(total).toBeLessThan(1000);',
@@ -161,18 +145,13 @@ describe('elapsed-time upper bounds in tests', () => {
   });
 
   it.each([
-    // A wait that must have happened.
     'const elapsed = Date.now() - started;\nexpect(elapsed).toBeGreaterThanOrEqual(3_500);',
-    // A stored time bracketed by the clock: a slow runner only moves the later read further out.
     'expect(row.updatedAt).toBeLessThanOrEqual(Date.now());',
     'const cutoff = Date.now() - 30 * DAY_MS;\nexpect(row.ts).toBeLessThan(cutoff);',
-    // A comparison of two timings that bounds neither from above.
     'const fast = performance.now() - t0;\nconst slow = performance.now() - t1;\nexpect(slow / fast > 0).toBe(true);',
-    // A ratio of counts, or of anything in a file that reads no clock.
     'expect(compressionRatio).toBeLessThan(0.5);',
     'const growth = after.rows / before.rows;\nexpect(growth).toBeLessThan(4);',
     'expect(after.rowsRead).toBeLessThanOrEqual(MAX_GROWTH * before.rowsRead);',
-    // A count, whatever it is called.
     'expect(retries).toBeLessThan(5);',
   ])('passes %j', (sample) => {
     expect(elapsedUpperBounds('x.test.ts', sample)).toEqual([]);

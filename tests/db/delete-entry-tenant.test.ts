@@ -1,5 +1,3 @@
-// The delete core takes the tenant it acts for, so a caller that skipped its own reach check still cannot remove
-// another tenant's row.
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { openHippoDb, type DatabaseSyncLike, closeHippoDb } from '../../src/db/index.js';
 import { deleteEntryCore } from '../../src/store/sqlite/entries/delete-and-batch.js';

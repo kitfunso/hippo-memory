@@ -1,8 +1,6 @@
 /** What a session last sent on a surface, for `lastSentState`. */
 export interface LastSent {
-  /** `blockHash` of the last injected block. */
   hash: string;
-  /** Consecutive `skip` rows since that injection. */
   skipsSince: number;
 }
 

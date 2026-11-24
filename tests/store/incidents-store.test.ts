@@ -1,21 +1,3 @@
-/**
- * E2 incident first-class object — store-layer tests.
- * Docs: docs/plans/2026-05-29-e2-incident-object.md
- *
- * Covers what only incidents have; the rules every kind shares run per kind in typed-object-store.test.ts.
- * 1. saveIncident creates both the memory mirror and the incidents row
- * 2. saveIncident without context: bare memory content, has_context false
- * 3. resolveIncident flips open -> resolved + emits incident_resolve audit
- * 4. resolve CAS: re-resolving an already-resolved row throws not-open
- * 5. resolveIncident requires non-empty resolution text
- * 6. close flips open -> closed + emits incident_close audit
- * 7. close also works from resolved (resolved -> closed)
- * 8. close guard: not-found vs already-closed
- * 9. ON DELETE SET NULL: forget the memory, incident survives
- * 10. list status filter; status 'open' excludes non-open
- * 11. linked_memory_ids round-trip + cross-tenant/nonexistent rejection (mandatory)
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -31,7 +13,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, objectsAt } = sessionPerTest();
 
-/** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -39,7 +20,6 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-/** Query all rows from the hippo SQLite handle. */
 function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -58,7 +38,6 @@ function countRows(home: string, table: string): number {
   }
 }
 
-/** Write a plain memory and return its id (used to seed linked receipts). */
 function seedMemory(home: string, content: string, tenantId: string): string {
   const mem = createMemory(content, {
     tags: ['note'],
@@ -87,7 +66,6 @@ describe('incidents store (first-class object)', () => {
       },
       by: { actor: 'cli', now: evalNow() },
     });
-    // The first row of a fresh AUTOINCREMENT table.
     expect(inc.id).toBe(1);
     expect(inc.memoryId).not.toBeNull();
     expect(inc.tenantId).toBe('default');
@@ -210,7 +188,6 @@ describe('incidents store (first-class object)', () => {
         by: { actor: 'cli', now: evalNow() },
       }),
     ).rejects.toThrow(/not open/);
-    // not found when the id does not exist
     await expect(
       resolveOpenIncident(objectsAt(home), {
         tenantId: 'default',
@@ -236,7 +213,6 @@ describe('incidents store (first-class object)', () => {
         by: { actor: 'cli', now: evalNow() },
       }),
     ).rejects.toThrow(/resolutionText must not be blank/);
-    // The failed resolve left the incident open.
     expect((await objectById(objectsAt(home), INCIDENT, 'default', inc.id))!.status).toBe('open');
   });
 
@@ -292,7 +268,6 @@ describe('incidents store (first-class object)', () => {
       now: evalNow(),
     });
     expect(closed.status).toBe('closed');
-    // resolution data is preserved through the close.
     expect(closed.resolutionText).toBe('fixed root cause');
     expect(closed.closedAt).not.toBeNull();
   });
@@ -390,11 +365,9 @@ describe('incidents store (first-class object)', () => {
       by: { actor: 'cli', now: evalNow() },
     });
     expect(inc.linkedMemoryIds).toEqual([receiptA, receiptB]);
-    // Round-trips through a fresh load (parsed back from JSON text).
     const reloaded = await objectById(objectsAt(home), INCIDENT, 'default', inc.id);
     expect(reloaded!.linkedMemoryIds).toEqual([receiptA, receiptB]);
 
-    // A nonexistent id is rejected, and the whole write rolls back.
     const incBefore = countRows(home, 'incidents');
     const memBefore = countRows(home, 'memories');
     await expect(async () => {
@@ -411,7 +384,6 @@ describe('incidents store (first-class object)', () => {
     expect(countRows(home, 'incidents')).toBe(incBefore);
     expect(countRows(home, 'memories')).toBe(memBefore);
 
-    // A receipt belonging to another tenant is rejected (cross-tenant leak guard).
     const crossTenantReceipt = seedMemory(home, 'tenant-b evidence', 'tenant-b');
     await expect(async () => {
       await openIncident(objectsAt(home), {

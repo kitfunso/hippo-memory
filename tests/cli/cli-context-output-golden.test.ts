@@ -1,7 +1,3 @@
-// Pins `hippo context` stdout, stderr and exit code across its three formats and the per-prompt hook path,
-// in process, so a split of renderContext that changes a byte fails here. Ids and timestamps are masked.
-// The seeded snapshot belongs to sess-golden: every text step for another or an unknown session prints it as a
-// pointer, the json steps and the sess-golden step print it whole.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';

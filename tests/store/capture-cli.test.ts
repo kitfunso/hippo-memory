@@ -1,5 +1,3 @@
-/** `hippo capture --file` through the CLI entry: bullets under a spec heading become spec memories, and the refusals. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,7 +22,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
 async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));

@@ -1,5 +1,3 @@
-// Every automatic delete (sleep's dedupe, audit and consolidation flush, and the automatic deleteEntry that `hippo audit --fix`
-// also calls) leaves a memory that backs a decision, incident or other object in place: deleting it would null the object's link.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { writeFileSync } from 'node:fs';

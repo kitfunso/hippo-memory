@@ -1,6 +1,3 @@
-"""Judge agreement check: re-judge public DolphinBench judge conversations (Claude Code + Mem0
-evidence, graded by Azure gpt-5.6-sol) through the codex-hosted judge and compare verdicts.
-Usage (WSL): DOLPHIN_CODEX_HOME=<clean profile> python dolphin_judge_calibration.py [per_verdict_per_persona]"""
 import gzip
 import json
 import sys
@@ -20,7 +17,6 @@ def verdicts(text: str) -> dict:
 
 
 def sample():
-    """First PER Sol-pass and PER Sol-fail conversations per persona, in test order, deduplicated."""
     for persona in ("morgan", "alex", "riley"):
         doc = json.load(gzip.open(BENCH / "evidence" / f"{persona}-claude-mem0-results.json.gz"))
         seen, picked = set(), {True: 0, False: 0}
@@ -42,7 +38,7 @@ def judge(item):
     tag, system, user, sol = item
     try:
         return tag, sol, verdicts(codex_verdict(system, user, WORK, tag))
-    except Exception as exc:  # a failed call is reported as a disagreement, never dropped
+    except Exception as exc:
         return tag, sol, {"error": repr(exc)[:200]}
 
 

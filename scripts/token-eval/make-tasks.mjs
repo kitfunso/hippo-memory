@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/**
- * Draft a TE5 tasks file from a repository's own history (ROADMAP Part IX).
- *
- * A candidate task is a non-merge commit that changes at least one test file
- * and at least one non-test file: its parent is the task's base, the commit
- * is the fix, and the test files it adds or changes are the hidden tests.
- * Consecutive candidates are grouped into sequences, so later tasks can use
- * what earlier ones taught.
- *
- * Every drafted task has `needsReview: true` and a prompt that is only the
- * commit subject and body. Commit messages usually describe the fix, which
- * leaks the answer; rewrite each prompt as the problem a user would report
- * (symptom, not solution), then delete `needsReview`. ab-run.mjs refuses
- * tasks that still carry it.
- *
- * --verify checks each candidate in a scratch worktree: the hidden tests must
- * fail at the base and pass at the fix, or the task cannot tell a fix from
- * no fix. Candidates that fail the check are dropped and listed.
- *
- * Run:
- *   node scripts/token-eval/make-tasks.mjs --repo ../some-repo --cluster some-repo \
- *     --test-cmd "npx vitest run {files}" --setup "npm ci && npm run build" \
- *     [--since 2026-01-01] [--max 40] [--per-sequence 5] [--verify] > tasks.json
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -30,16 +6,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 export const DEFAULT_TEST_PATTERN = '(^|/)(tests?|__tests__|spec)/|\\.(test|spec)\\.[cm]?[jt]sx?$|_test\\.(py|go)$|(^|/)test_[^/]*\\.py$|(^|/)conftest\\.py$';
-// Fixtures and snapshots are hidden test files the fix commit still writes, not files an agent must produce.
 export const DEFAULT_RUN_EXCLUDE = '(^|/)(fixtures?|__fixtures__|__snapshots__)/|(^|/)conftest\\.py$';
-// e2e specs need a running app; they are neither the task's tests nor its code.
 const E2E_PATTERN = /(^|\/)e2e\//;
 
 function git(args, cwd) {
   return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 }
 
-/** Added + deleted lines of files outside `isTest`; binary rows (`-`) count 0. */
 function codeLinesChanged(repo, parent, sha, isTest) {
   const out = git(['diff', '--numstat', '--no-renames', parent, sha], repo);
   let lines = 0;
@@ -103,7 +76,6 @@ export function findCandidates(repo, {
   return candidates.slice(-max);
 }
 
-/** Runs a check command, never throwing on a timeout or kill (status stays null). */
 function run(cmd, cwd, timeoutMs) {
   const r = spawnSync(cmd, { cwd, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28 });
   return { status: r.status, stderrTail: (r.stderr ?? '').slice(-2000) };
@@ -162,7 +134,6 @@ export function draftTasks(candidates, { repo, cluster, testCmd, setup = null, p
         const runFiles = c.runFiles ?? c.testFiles;
         const task = {
           id: c.sha.slice(0, 10),
-          // History tasks teach nothing on purpose: they are set N (prereg 46).
           kind: 'no-lesson',
           baseRef: c.parent,
           fixRef: c.sha,
@@ -185,7 +156,6 @@ function main() {
     const i = argv.indexOf(name);
     return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
   };
-  // A typo must not read as 0, which would silently switch the scope gate off.
   const count = (name, fallback) => {
     const n = Number(flag(name, fallback));
     if (!Number.isInteger(n) || n < 0) throw new Error(`${name} needs a whole number >= 0`);

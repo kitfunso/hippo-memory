@@ -1,13 +1,8 @@
-// The agent-memories import's one write per container: the sync plans a container's writes as data
-// from entry pages, and applyContainer runs them in one transaction once the rows they were planned
-// on still stand.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { SetAsideResult, SetAsideWhy } from './project-tags.js';
 import type { MethodEffects } from './effects.js';
 
 export interface AgentImport {
-  /** The steps in order in one write scope, or a trial scope that rolls back on `dryRun`;
-   * mirrors follow the commit. */
   applyContainer(plan: ContainerApply): Promise<ContainerApplied>;
 }
 
@@ -20,18 +15,14 @@ export const AGENT_IMPORT_EFFECTS = {
 export interface PlannedRow {
   readonly id: string;
   readonly source: string;
-  /** Carries the plan's tag. */
   readonly tagged: boolean;
 }
 
 export interface ContainerApply {
   readonly tenantId: string;
-  /** Rolls every step back, so the outcomes tell what a run would do. */
   readonly dryRun: boolean;
-  /** The tool's tag: a retag adds it and a set-aside takes it off. */
   readonly tag: string;
   readonly prefixes: readonly string[];
-  /** Every live row under `prefixes` the steps were planned on; any other set refuses the apply. */
   readonly rows: readonly PlannedRow[];
   readonly steps: readonly ImportStep[];
 }
@@ -45,7 +36,6 @@ export interface AdoptStep {
   readonly to: string;
 }
 
-/** A row under an earlier prefix moves to `to`, and to project `origin` when that is not null. */
 interface MoveStep {
   readonly kind: 'move';
   readonly id: string;
@@ -53,7 +43,6 @@ interface MoveStep {
   readonly origin: string | null;
 }
 
-/** Every dormant snapshot whose source starts with `from` moves under `to` the same way. */
 interface MoveDormantStep {
   readonly kind: 'moveDormant';
   readonly from: string;
@@ -66,14 +55,12 @@ interface RetagStep {
   readonly id: string;
 }
 
-/** Skipped when another writer superseded the row first. */
 interface SupersedeStep {
   readonly kind: 'supersede';
   readonly id: string;
   readonly by: string;
 }
 
-/** Stored through the write gate; once written it supersedes each row of `supersedes`. */
 interface WriteStep {
   readonly kind: 'write';
   readonly entry: MemoryEntry;
@@ -124,7 +111,6 @@ export type ContainerApplied =
   | {
       readonly kind: 'applied';
       readonly outcomes: readonly StepOutcome[];
-      /** Mirrors of set-aside rows the commit could not remove. */
       readonly unpurged: readonly MirrorFailure[];
     }
   /** The rows under the prefixes, or an adopted row, changed since the read: nothing was written. */

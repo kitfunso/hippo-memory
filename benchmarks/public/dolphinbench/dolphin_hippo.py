@@ -29,18 +29,15 @@ from pathlib import Path
 from typing import Any, NoReturn
 from unittest import mock
 
-from dolphin_home import BENCH, BENCH_ENV, CODEX_DIR, ROOT  # the clone, its venv and every output sit outside this checkout
+from dolphin_home import BENCH, BENCH_ENV, CODEX_DIR, ROOT
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 ADAPTER_FILES = ("dolphin_hippo.py", "dolphin_home.py", "dolphin_memory.py", "dolphin_smoke.py", "dolphin_fake_claude.py")
-# This checkout's files a run executes, compare's bootstrap included; a real-agent run needs every one committed.
 OURS = (*(HERE / name for name in ADAPTER_FILES), HERE.parent / "evidence_recall.py")
 CODEX_PACKAGE = CODEX_DIR / "package.json"
-JUDGE_RUNS = BENCH / "runs"  # the judge proxy's work files, judge-<label>/
+JUDGE_RUNS = BENCH / "runs"
 BASE = Path.home() / "dolphin"
-# The server file, the dist it loads and the lockfile come from this one commit, built in a clean clone of it.
-# Run records hold what was found; check and compare refuse any record that differs from the pin.
 HIPPO = BASE / "hippo-v3.5.1"
 HIPPO_VERSION = "3.5.1"
 HIPPO_COMMIT = "9d2a57529b8240bd17f129d6fb56dc56f4b20daa"
@@ -52,21 +49,19 @@ HIPPO_PIN = {
 SERVER = HIPPO / "benchmarks/public/hippo-mem0-server.mjs"
 CLAUDE = BASE / "claude-code" / "bin" / "claude"
 CLAUDE_VERSION = "2.1.259"
-# Fresh folders: the v1.52.3 stores, runs and logs stay as they are, since a newer build migrates a store on open.
 STORES, RUNS, LOGS = BASE / "stores-v3", BASE / "runs-v3", BASE / "logs-v3"
 WORK = Path("/tmp/dolphin-work")
 PERSONAS = ("morgan", "alex", "riley")
 ARMS = ("hippo", "bm25")
 PORTS = {"ingest": 18800, "hippo": 18801, "bm25": 18802}
 SERVER_ARM = {"ingest": "hippo", "hippo": "hippo", "bm25": "bm25"}
-JUDGE_PORT = 18765  # dolphin_smoke.PORT
+JUDGE_PORT = 18765
 JUDGE_URL = f"http://127.0.0.1:{JUDGE_PORT}/v1/chat/completions"
 JUDGE_MODEL = "gpt-5.6-sol"
 MODEL = "claude-sonnet-5"
-SYNTHETIC = "<synthetic>"  # Claude Code's model name on messages it writes itself, such as API error notices
+SYNTHETIC = "<synthetic>"
 TOKEN_ENV = "DOLPHIN_CLAUDE_OAUTH_TOKEN"
 DRY_RUN_TOKEN = "dry-run-dummy-not-a-credential"
-# Built-in tools of the official Claude Code + Mem0 run (evidence rows, available_tools).
 BUILTIN_TOOLS = ("Bash", "CronCreate", "CronDelete", "CronList", "DesignSync", "Edit", "EnterWorktree", "ExitWorktree",
                  "ListAgents", "ListMcpResourcesTool", "Monitor", "NotebookEdit", "PushNotification", "Read",
                  "ReadMcpResourceDirTool", "ReadMcpResourceTool", "RemoteTrigger", "ReportFindings", "ScheduleWakeup",
@@ -75,25 +70,20 @@ BUILTIN_TOOLS = ("Bash", "CronCreate", "CronDelete", "CronList", "DesignSync", "
 APP_TOOLS, MEMORY_TOOL = "mcp__dolphinbench_apps__*", "mcp__memory__search_memories"
 HOOK_LIMIT = 10
 TEST_TIMEOUT = 600
-# Failed and before-a-turn attempts count toward the cap across passes and resumes, so errors never buy extra tries.
 MAX_FAILED_ATTEMPTS, MAX_ATTEMPTS = 3, 9
 MAX_RATE_LIMITED, MAX_WAIT_S = 20, 6 * 3600
 FULL_TESTS = 200
-# One threshold per purpose: the pilot's alarm, and the full run's pause at 2% of an arm's 600 tests.
 MAX_CLOSED, MAX_CLOSED_ARM = 1, int(0.02 * FULL_TESTS * len(PERSONAS))
-# The driver maps only 429s, rejected rate_limit_events and "rate limit" text; the CLI also says "hit your ... limit".
 LIMIT_TEXT = re.compile(r"rate.?limit|usage limit|hit your .{0,40}limit|(session|weekly|spend|opus|sonnet|credit) limit",
                         re.I)
 USAGE_KEYS = ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
 MODEL_USAGE_KEYS = ("inputTokens", "outputTokens", "cacheReadInputTokens", "cacheCreationInputTokens")
 ZERO = dict.fromkeys(USAGE_KEYS, 0)
-# Benchmark data and run files; the venv and app servers the agent's own processes run from are left out, so ps passes.
 DATASET_PATH = re.compile(r"/dolphin/(runs|stores)(-v3)?/|hippo-bench/(?!\.venv|dolphinbench/mock_mcp/(repair_)?server\.py)"
                           r"|life_sim|facts\.yaml|\b(tests|grades|hooks|apps|deferred)/(morgan|alex|riley)/")
-WEB_TOOLS = ("WebSearch", "WebFetch")  # the bare name "dolphinbench" counts only in their arguments
-APP_SERVER_NAMES = ("dolphinbench_apps", "dolphinbench-apps")  # tool and server names, not file paths
-LOCAL_TOOLS = ("Bash", "Read", "Grep", "Glob")  # listed per pilot test for the hand read
-# claude_driver.py:47's list, plus HOME and the WSL interop socket that git.exe and the codex judge need.
+WEB_TOOLS = ("WebSearch", "WebFetch")
+APP_SERVER_NAMES = ("dolphinbench_apps", "dolphinbench-apps")
+LOCAL_TOOLS = ("Bash", "Read", "Grep", "Glob")
 CHILD_ENV = ("PATH", "HOME", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR", "WSL_INTEROP", BENCH_ENV)
 OVERRIDES = re.compile(r"(HIPPO|DOLPHINBENCH)_\w*|DOLPHIN_JUDGE_MODEL|(ANTHROPIC|CLAUDE_CODE|OPENAI|CODEX)_\w*MODEL\w*"
                        r"|MAX_THINKING_TOKENS|CLAUDE_CODE_EFFORT_LEVEL")
@@ -101,21 +91,16 @@ log = logging.getLogger("dolphin_hippo")
 
 
 class Deferred(Exception):
-    """A test marked for rerun, not graded: its attempts never reached an agent turn, or a usage limit outlasts the
-    wait. stop: the arm stops as well, since every later test would hit the same wall."""
-
     def __init__(self, reason: str, stop: bool) -> None:
         super().__init__(reason)
         self.stop = stop
 
 
 def child_env(*names: str, **fixed: str) -> dict[str, str]:
-    """A child process's environment: the allowlist, the named variables that are set, then fixed values."""
     return {**{name: os.environ[name] for name in (*CHILD_ENV, *names) if name in os.environ}, **fixed}
 
 
 def judge_label(kind: str) -> str:
-    """The judge model every judged grade records; the judge process always runs JUDGE_MODEL."""
     return f"codex:{JUDGE_MODEL}" if kind == "codex" else "stub"
 
 
@@ -141,7 +126,6 @@ def user_id(persona: str) -> str:
 
 
 def store_path(user: str) -> Path:
-    """Mirrors rootFor() in hippo-mem0-server.mjs."""
     slug = "".join(c if c.isalnum() or c in "_-" else "_" for c in user)[:40]
     return STORES / f"{slug}-{hashlib.sha256(user.encode()).hexdigest()[:10]}" / ".hippo" / "hippo.db"
 
@@ -187,7 +171,6 @@ def git(*args: str) -> bytes:
 
 
 def source_state(agent: str) -> dict:
-    """The last commit that changed OURS, and any of them left uncommitted, which a real-agent run refuses."""
     paths = [p.relative_to(REPO).as_posix() for p in OURS]
     status = git("status", "--porcelain", "--untracked-files=all", "--", *paths).decode()
     uncommitted = sorted(line[3:] for line in status.splitlines())
@@ -201,7 +184,6 @@ def file_sha(path: Path) -> str:
 
 
 def tree_sha(root: Path) -> str:
-    """One hash over every file under root, names and contents, so an edited or rebuilt tree shows."""
     digest = hashlib.sha256()
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         digest.update(f"{path.relative_to(root).as_posix()}\0{file_sha(path)}\n".encode())
@@ -209,10 +191,8 @@ def tree_sha(root: Path) -> str:
 
 
 def hippo_identity() -> dict:
-    """The pinned commit's clone as found: commit, a clean tree, and the hashes of the server file, the dist and the
-    lockfile. The hashes must equal HIPPO_PIN, so a run never starts on another build or server."""
     commit = run_text(["git", "-C", str(HIPPO), "rev-parse", "HEAD"])
-    dirty = run_text(["git", "-C", str(HIPPO), "status", "--porcelain"])  # dist and node_modules are git-ignored
+    dirty = run_text(["git", "-C", str(HIPPO), "status", "--porcelain"])
     if commit != HIPPO_COMMIT or dirty or not (HIPPO / "dist" / "entry" / "testing.js").is_file():
         raise SystemExit(f"{HIPPO} must be a clean, built clone at {HIPPO_COMMIT}, found {commit} {dirty[:200]}")
     found = {"server_sha256": file_sha(SERVER), "dist_sha256": tree_sha(HIPPO / "dist"),
@@ -224,15 +204,12 @@ def hippo_identity() -> dict:
 
 
 def pin_problems(hippo: Any) -> list[str]:
-    """What differs between a run record's hippo identity and the pin."""
     hippo = hippo if isinstance(hippo, dict) else {}
     wanted = {"version": HIPPO_VERSION, "commit": HIPPO_COMMIT, **HIPPO_PIN}
     return [f"{key} {str(hippo.get(key))[:12]} not {value[:12]}" for key, value in wanted.items() if hippo.get(key) != value]
 
 
 def code_hashes() -> dict[str, str]:
-    """runner.py:311-318 pins these for its own CLI, which arm_stage bypasses; ours add OURS and the hippo build the
-    server loads. They sit in run.json, so a resume refuses changed code (runner.py:97)."""
     stock = [*(p for part in ("harness", "graders", "mock_mcp", "examples") for p in sorted((ROOT / part).rglob("*.py"))),
              *sorted((ROOT / "examples/reference").glob("*")), ROOT / "harness/benchmark_soul.md",
              *sorted((ROOT / "mock_mcp/manifests").glob("*.yaml")),
@@ -255,7 +232,6 @@ def hippo_server(arm: str, label: str) -> Iterator[None]:
     port_free(port)
     LOGS.mkdir(parents=True, exist_ok=True)
     read_only = arm != "ingest"
-    # The pinned commit's own server file and dist (hippo_identity checked both); only ingestion may write to the stores.
     command = [node(), str(SERVER), "--dist", str(HIPPO / "dist"), "--arm", SERVER_ARM[arm], "--host", "127.0.0.1",
                "--port", str(port), "--data-dir", str(STORES), "--embeddings", "0", *(["--read-only"] if read_only else [])]
     with (LOGS / f"{label}-server-{arm}.log").open("a") as out:
@@ -307,8 +283,6 @@ def absorb(entry: dict, message: dict, seen: set[str]) -> None:
 
 
 def convert(events: list[dict], user: str, context: str | None) -> list[dict]:
-    """Claude stream-json to benchmark messages. Events of one API response share a message id and are merged,
-    so usage counts once; sub-agent turns go after the parent's tool results, keeping every call answered in order."""
     main: list[dict] = []
     side: dict[str, list[dict]] = {}
     merged: dict[str, tuple[dict, set[str]]] = {}
@@ -337,7 +311,6 @@ def convert(events: list[dict], user: str, context: str | None) -> list[dict]:
 
 
 def close(messages: list[dict], error: str | None) -> list[dict]:
-    """End a failed attempt's transcript validly: answer open calls, drop orphan results, add a final turn."""
     out: list[dict] = []
     pending: list[str] = []
     known: set[str] = set()
@@ -370,8 +343,6 @@ def redact(value: Any, secret: str) -> Any:
 
 
 def session_facts(config_dir: Path) -> dict:
-    """What Claude's own session files hold: the hook context it injected and the main thread's effort. Only
-    attachments count, since the search_memories tool returns the same text as the hook."""
     from harness.claude_driver import _trace_events
     contexts, effort = [], set()
     for path in sorted((config_dir / "projects").rglob("*.jsonl")):
@@ -385,8 +356,6 @@ def session_facts(config_dir: Path) -> dict:
 
 
 def ended_on_limit(result: Any, events: list[dict]) -> bool:
-    """The stream ended on a usage or rate limit: its result says so or, with no result, its last event does.
-    A 429 retried earlier in a stream that ended otherwise does not count."""
     final = next((e for e in reversed(events) if e.get("type") == "result"), None)
     if final is not None:
         return final.get("api_error_status") == 429 or bool(
@@ -401,9 +370,6 @@ def ended_on_limit(result: Any, events: list[dict]) -> bool:
 
 
 def summarize(result: Any, events: list[dict], hook_out: Path, session: dict) -> tuple[dict, str | None]:
-    """One attempt's record. Its outcome is usable, limited (its stream ended on a limit: waited out, never
-    counted), failed (the agent took a turn and the attempt still has no usable result) or no_turn (it ended before
-    the agent's first turn). injected says whether the hook's context is in Claude's own session file."""
     final = next((e for e in reversed(events) if e.get("type") == "result"), {})
     hook = json.loads(hook_out.read_text()) if hook_out.is_file() else {"error": "hook did not run"}
     complete = final.get("is_error") is False
@@ -432,8 +398,6 @@ def summarize(result: Any, events: list[dict], hook_out: Path, session: dict) ->
 
 
 class HippoAdapter:
-    """Ingestion writes each dated history message to the store (D1); tests run Claude with the memory hook and tool."""
-
     def __init__(self, arm: str, agent: str, run_dir: Path, token: str, judge: str) -> None:
         self.arm, self.agent, self.run_dir, self._token, self.judge = arm, agent, run_dir, token, judge
         self.port = PORTS[arm]
@@ -444,7 +408,7 @@ class HippoAdapter:
         base = {"adapter": "dolphin_hippo", "version": 1, "arm": self.arm, "hippo": hippo_identity()}
         if self.arm == "ingest":
             return {**base, "ingestion": "dated history message written to the store, no agent turn (D1)"}
-        source = source_state(self.agent)  # first, so uncommitted code stops a real run before anything starts
+        source = source_state(self.agent)
         claude = run_text([str(CLAUDE), "--version"]) if self.agent == "claude" else "fake"
         if self.agent == "claude" and not claude.startswith(CLAUDE_VERSION):
             raise SystemExit(f"{CLAUDE} reports {claude}, expected {CLAUDE_VERSION}")
@@ -491,7 +455,6 @@ class HippoAdapter:
         initial, started = state.read_bytes(), time.monotonic()
         hooks = self.run_dir / "hooks" / request.persona
         hooks.mkdir(parents=True, exist_ok=True)
-        # A deferred test keeps its attempts, so the cap spans passes and resumes and hook files are never reused.
         deferred = self.run_dir / "deferred" / request.persona / f"{request.interaction_id}.json"
         attempts: list[dict] = json.loads(deferred.read_text())["attempts"] if deferred.is_file() else []
         first = len(attempts)
@@ -500,7 +463,7 @@ class HippoAdapter:
                 health(self.port, SERVER_ARM[self.arm], read_only=True)
             except (OSError, ValueError, RuntimeError) as exc:
                 self._defer(request, attempts, f"memory server check failed: {exc!r}", stop=True)
-            state.write_bytes(initial)  # every attempt starts from the same app state
+            state.write_bytes(initial)
             calls_log.write_text("")
             hook_out = hooks / f"{request.interaction_id}-{len(attempts)}.json"
             began = time.monotonic()
@@ -527,7 +490,6 @@ class HippoAdapter:
         log.info("%s %s/%s: %d attempt(s), outcome=%s, %.0f s, tools=%s", self.arm, request.persona,
                  request.interaction_id, len(attempts), attempt["outcome"], time.monotonic() - started,
                  attempt["tool_calls"])
-        # Latency is the graded attempt's own run; waits and earlier attempts stay in `attempts`.
         latency = attempt["duration_ms"] if attempt["duration_ms"] is not None else attempt["wall_ms"]
         record = InteractionRecord(self.settings, messages, duration_ms=latency, attempts=attempts, app_calls=app_calls)
         return InteractionRecord(**redact(asdict(record), self._token))
@@ -551,7 +513,6 @@ class HippoAdapter:
         return close(messages, attempt["error"] or attempt["closed"]), []
 
     def _wait(self, request: Any, result: Any, attempts: list[dict], limited: int) -> float:
-        """Sleep out a rate or usage limit and return the seconds waited; a limit past MAX_WAIT_S stops the arm."""
         reset = result.rate_limit_reset_at
         seconds = max(reset - time.time() + 60 if reset else (result.retry_after_seconds or 300), 1)
         if limited > MAX_RATE_LIMITED or seconds > MAX_WAIT_S:
@@ -563,14 +524,12 @@ class HippoAdapter:
         return round(seconds, 1)
 
     def _defer(self, request: Any, attempts: list[dict], reason: str, stop: bool) -> NoReturn:
-        """Record why the test was left ungraded; evaluate() reruns it, and so does a resume."""
         from harness.durable_json import save_json
         save_json(self.run_dir / "deferred" / request.persona / f"{request.interaction_id}.json",
                   redact({"reason": reason, "stop": stop, "attempts": attempts}, self._token))
         raise Deferred(reason, stop)
 
     def _claude(self, request: Any, hook_out: Path) -> tuple[Any, dict]:
-        """One attempt, with the facts read from Claude's session file before its per-test home is removed."""
         from harness.claude_driver import run_claude
         box = WORK / self.run_dir.name / request.interaction_id
         shutil.rmtree(box, ignore_errors=True)
@@ -586,10 +545,9 @@ class HippoAdapter:
         settings = {"autoMemoryEnabled": False,
                     "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": hook, "timeout": 120}]}]}}
         command = [str(CLAUDE)] if self.agent == "claude" else [sys.executable, str(HERE / "dolphin_fake_claude.py")]
-        # run_claude copies this process's environment (claude_driver.py:46), so only the allowlist is left in it.
         allowed = child_env(*(["DOLPHIN_FAKE_FAIL"] if self.agent == "fake" else []))
         if self.agent == "claude":
-            allowed.pop(BENCH_ENV, None)  # the agent's env shows no benchmark path beyond PATH
+            allowed.pop(BENCH_ENV, None)
         try:
             with mock.patch.dict(os.environ, allowed, clear=True):
                 result = run_claude(
@@ -597,16 +555,15 @@ class HippoAdapter:
                     claude_command=command, claude_config_dir=home / ".claude", mcp_config_path=mcp_config,
                     allowed_mcp_tools=[APP_TOOLS, MEMORY_TOOL], cwd=home / "project", model=MODEL,
                     settings=settings, builtin_tools=list(BUILTIN_TOOLS), permission_mode="bypassPermissions",
-                    persist_session=True,  # the session file is the proof the hook's context reached Claude
+                    persist_session=True,
                     env={"CLAUDE_CODE_OAUTH_TOKEN": self._token, "HOME": str(home),
                          "CLAUDE_CODE_EFFORT_LEVEL": "medium", "DISABLE_AUTOUPDATER": "1"})
             return result, session_facts(home / ".claude")
         finally:
-            shutil.rmtree(box, ignore_errors=True)  # the per-test Claude home never outlives the test
+            shutil.rmtree(box, ignore_errors=True)
 
 
 def take_token(agent: str) -> str:
-    """Read the token once and drop it from this process's environment, so no child inherits the variable."""
     token = os.environ.pop(TOKEN_ENV, "").strip()
     if agent == "fake":
         return DRY_RUN_TOKEN
@@ -632,7 +589,6 @@ def ingest_stage(args: argparse.Namespace) -> None:
 
 
 def paused_reason(label: str) -> str | None:
-    """A paused run stays paused: no arm resumes it and compare gives it no reading."""
     for path in (RUNS / f"{label}-{arm}-{persona}" / "paused.json" for arm in ARMS for persona in PERSONAS):
         if path.is_file():
             return json.loads(path.read_text())["reason"]
@@ -640,8 +596,6 @@ def paused_reason(label: str) -> str | None:
 
 
 def evaluate(runner: Any, label: str, arm: str, persona: str) -> str | None:
-    """Runner.evaluate (runner.py:240) plus deferral, tagged judge files, the dataset and closure stamps and, in the
-    full run, the pause. Returns why the arm stopped early, or None once every test is graded and the cost is collected."""
     from graders import llm_judge
     from harness.durable_json import save_json
     from harness.submission import load_json
@@ -652,19 +606,17 @@ def evaluate(runner: Any, label: str, arm: str, persona: str) -> str | None:
     runner._saved_cost("ingestion")
     specs = runner.release[persona]["tests"]
     full = len(specs) == FULL_TESTS
-    # The pause counts this arm's closed tests over every persona, so earlier personas' closures count too.
     elsewhere = sum("closed" in json.loads(p.read_text()) for other in PERSONAS if other != persona
                     for p in (RUNS / f"{label}-{arm}-{other}" / "grades" / other).glob("*.json")) if full else 0
     closed: set[str] = set()
     todo = specs
-    for _ in range(2):  # the second pass reruns what the first deferred
+    for _ in range(2):
         deferred = []
         for spec in todo:
             item = str(spec["id"]).zfill(3)
             try:
                 evidence = runner._execute("tests", persona, spec)
             except Deferred as exc:
-                # Nothing was returned or saved, so the marker is not an uncertain interaction.
                 runner._path("tests", persona, item).with_suffix(".inflight").unlink(missing_ok=True)
                 if exc.stop:
                     return f"STOPPED at {persona}/{item}: {exc}"
@@ -674,7 +626,6 @@ def evaluate(runner: Any, label: str, arm: str, persona: str) -> str | None:
             if not grade_path.exists():
                 llm_judge.OPENAI_DEFAULT_ENDPOINT = f"{JUDGE_URL}?tag={arm}-{persona}-{item}"
                 grade = runner._grade(spec, evidence)
-                # passed() fails a test that touched the benchmark's files or that the adapter closed.
                 if hits := dataset_hits(evidence["row"]):
                     grade["dataset_touch"] = hits
                 if closure := evidence["attempts"][-1].get("closed"):
@@ -710,7 +661,6 @@ def arm_stage(args: argparse.Namespace) -> int:
     adapter = HippoAdapter(args.arm, args.agent, run_dir, token, args.judge)
     identity = {**adapter.identity(), "ingest_run": hashlib.sha256((ingest_dir / "run.json").read_bytes()).hexdigest()}
     if not run_dir.exists():
-        # The arm directory starts as a copy of the shared ingestion, under its own run identity.
         staging = run_dir.with_name(run_dir.name + ".staging")
         shutil.rmtree(staging, ignore_errors=True)
         shutil.copytree(ingest_dir, staging, ignore=shutil.ignore_patterns("run.json", ".lock"))
@@ -718,7 +668,7 @@ def arm_stage(args: argparse.Namespace) -> int:
         staging.rename(run_dir)
     with hippo_server(args.arm, args.label), run_lock(run_dir):
         runner = Runner(release, run_dir, adapter, identity=identity, release_root=ROOT)
-        runner.allow_paid = True  # D4: reach the local judge proxy without editing the runner
+        runner.allow_paid = True
         stopped = evaluate(runner, args.label, args.arm, args.persona)
     if stopped:
         log.error("%s %s: %s", args.arm, args.persona, stopped)
@@ -730,7 +680,7 @@ def judge_stage(args: argparse.Namespace) -> None:
     if args.judge == "codex" and not os.environ.get("DOLPHIN_CODEX_HOME"):
         raise SystemExit("the codex judge needs DOLPHIN_CODEX_HOME, a clean profile holding a copy of auth.json")
     import dolphin_smoke as smoke
-    smoke.JUDGE, smoke.MODEL = args.judge, JUDGE_MODEL  # pinned: no variable can swap the judge model
+    smoke.JUDGE, smoke.MODEL = args.judge, JUDGE_MODEL
     work = JUDGE_RUNS / f"judge-{args.label}"
     work.mkdir(parents=True, exist_ok=True)
     smoke.serve_judge(work)
@@ -758,7 +708,6 @@ def run_stage(args: argparse.Namespace) -> int:
     LOGS.mkdir(parents=True, exist_ok=True)
     me = [sys.executable, str(Path(__file__).resolve())]
     shared = ["--judge", args.judge, "--label", args.label]
-    # Each child gets the allowlist and only the secret it needs: the judge the codex profile, the arms the token.
     judge_env = child_env("DOLPHIN_CODEX_HOME")
     arm_env = child_env(TOKEN_ENV if args.agent == "claude" else "DOLPHIN_FAKE_FAIL")
     with (LOGS / f"{args.label}-judge.log").open("a") as out:
@@ -786,8 +735,6 @@ def run_stage(args: argparse.Namespace) -> int:
 
 
 def dataset_hits(row: dict) -> list[str]:
-    """Benchmark paths in any tool call or tool result, as "tool: path"; the app server's names are not paths, and
-    the benchmark's bare name counts only in a web search or fetch."""
     found = set()
     for message in row["messages"]:
         texts = [(call["name"], json.dumps(call["arguments"])) for call in message.get("tool_calls", [])]
@@ -804,7 +751,6 @@ def dataset_hits(row: dict) -> list[str]:
 
 
 def official(persona: str, ids: set[str]) -> dict:
-    """The public Claude Code + Sonnet 5 rows for the same tests (plan step 8 compares the pilot with them)."""
     report = {}
     for memory in ("builtin", "mem0", "honcho"):
         path = ROOT / "results/claude-code/claude-sonnet-5" / memory / persona / "tests.json"
@@ -815,26 +761,21 @@ def official(persona: str, ids: set[str]) -> dict:
 
 
 def passed(grade: dict) -> bool:
-    """A test passes when it has checks, every check passes, it touched no benchmark file and was not closed."""
     return (bool(grade["checks"]) and all(c["passed"] for c in grade["checks"])
             and not {"dataset_touch", "closed"} & grade.keys())
 
 
 def passes(label: str, arm: str, persona: str) -> dict[str, bool]:
-    """Test id to pass, from grades/."""
     grades = RUNS / f"{label}-{arm}-{persona}" / "grades" / persona
     return {p.stem: passed(json.loads(p.read_text())) for p in sorted(grades.glob("*.json"))}
 
 
 def model_flag(attempt: dict) -> bool:
-    """An attempt that reached the model with any main-thread model but the pinned one, or not at medium effort.
-    Sub-agent and helper models are recorded apart, in helper_models."""
     return attempt["outcome"] in ("usable", "failed") and (
         set(attempt["message_models"]) != {MODEL} or attempt["effort"] != ["medium"])
 
 
 def model_tokens(attempts: Iterable[dict]) -> Counter:
-    """Tokens per model from Claude's modelUsage, input side and output together."""
     total: Counter = Counter()
     for attempt in attempts:
         for model, use in attempt["model_usage"].items():
@@ -843,7 +784,6 @@ def model_tokens(attempts: Iterable[dict]) -> Counter:
 
 
 def arm_report(label: str, arm: str, persona: str, full: bool) -> dict:
-    """One arm's counts for check. Per-test tokens and searches are the graded attempt's; cost covers every attempt."""
     from harness.runner import JUDGE
     run_dir = RUNS / f"{label}-{arm}-{persona}"
     config = json.loads((run_dir / "run.json").read_text())["configuration"] if (run_dir / "run.json").is_file() else {}
@@ -886,7 +826,6 @@ def arm_report(label: str, arm: str, persona: str, full: bool) -> dict:
 
 
 def ingest_pin_problems(persona: str) -> list[str]:
-    """How the persona's stores were ingested: the ingest record must name the pinned build."""
     path = RUNS / f"ingest-{persona}" / "run.json"
     if not path.is_file():
         return ["no ingest record"]
@@ -894,9 +833,6 @@ def ingest_pin_problems(persona: str) -> list[str]:
 
 
 def check(label: str, persona: str, expected: int) -> dict:
-    """Per-arm counts and the machine gate. Integrity parts hold in every run; the pilot adds alarms on memory found,
-    benchmark files and closed tests, which in the full run fail the test in its arm and are listed. Every saved
-    file, the judge's included, is byte-scanned for the exported token and the dummy."""
     full = expected == FULL_TESTS
     token = os.environ.get(TOKEN_ENV, "").strip()
     secrets = {DRY_RUN_TOKEN.encode(), token.encode()} - {b""}
@@ -940,7 +876,6 @@ def check(label: str, persona: str, expected: int) -> dict:
 
 
 def reading(mean: float, lo: float, hi: float) -> str:
-    """Amendment 3's rule, in fractions; rounding keeps 18/600 equal to 0.03."""
     mean, lo, hi = (round(x, 9) for x in (mean, lo, hi))
     if lo > 0 and mean >= 0.03:
         return "beats"
@@ -952,8 +887,6 @@ def reading(mean: float, lo: float, hi: float) -> str:
 
 
 def pooled(reports: dict[str, dict]) -> dict:
-    """One arm over the compared personas: sums, means of the per-persona means (equal sizes), and the per-test
-    lists a reader needs."""
     def listed(key: str) -> dict:
         return {persona: r[key] for persona, r in reports.items() if r[key]}
 
@@ -974,9 +907,6 @@ def pooled(reports: dict[str, dict]) -> dict:
 
 
 def verify_records(label: str, personas: list[str]) -> None:
-    """compare's inputs: one configuration over arms and personas, the real agent and the codex judge, the pinned
-    hippo build in every arm and ingest record, and each of OURS recorded with the hash of the committed file, which
-    is also the file compare runs now."""
     records = {(arm, persona): json.loads((RUNS / f"{label}-{arm}-{persona}" / "run.json").read_text())["configuration"]
                for arm in ARMS for persona in personas}
     configs = list(records.values())
@@ -1006,9 +936,6 @@ def verify_records(label: str, personas: list[str]) -> None:
 
 
 def compare(label: str, personas: list[str]) -> dict:
-    """hippo minus bm25 pass rate, paired by test, with the public benchmarks' bootstrap (4,000 draws, seed 1).
-    Refuses a paused run, a failing gate and records that differ from the commit. Only "all" gets a reading; per
-    persona, without Morgan 1-20 (the pilot's tests) and without tests either arm closed are secondary."""
     if reason := paused_reason(label):
         raise SystemExit(f"compare refused: the run paused ({reason}); publish it as paused, with no reading")
     reports, refused = {}, []
@@ -1047,8 +974,6 @@ def compare(label: str, personas: list[str]) -> dict:
 
 
 def selftest() -> None:
-    """Converter and redaction checks on a synthetic trace (split events, parallel calls, a sub-agent), then
-    attempt outcomes, dataset hits, the gate and the compare refusal on files in a temporary directory."""
     from harness.submission import check_messages
     usage = {"input_tokens": 3, "output_tokens": 7, "cache_read_input_tokens": 5, "cache_creation_input_tokens": 0}
 
@@ -1085,7 +1010,6 @@ def selftest() -> None:
     for name in (TOKEN_ENV, "DOLPHIN_CODEX_HOME", "DOLPHIN_FAKE_FAIL", "CLAUDE_CONFIG_DIR", "PATH"):
         assert not OVERRIDES.fullmatch(name), name
     with tempfile.TemporaryDirectory() as tmp:
-        # The token variable is swapped for a dummy name, so the selftest never reads a real token.
         saved = {name: globals()[name] for name in ("RUNS", "LOGS", "WORK", "JUDGE_RUNS", "TOKEN_ENV", "git")}
         globals().update(RUNS=Path(tmp) / "runs", LOGS=Path(tmp) / "logs", WORK=Path(tmp) / "work",
                          JUDGE_RUNS=Path(tmp) / "judge", TOKEN_ENV="DOLPHIN_SELFTEST_TOKEN")
@@ -1099,8 +1023,6 @@ def selftest() -> None:
 
 
 def selftest_outcomes(tmp: Path) -> None:
-    """Outcomes follow how the stream ended; injection is read from Claude's session file, attachments only; the
-    detector passes the agent's own environment, config and processes and fires on real reads."""
     from types import SimpleNamespace
     context = "Memories from the user's past conversations:\n1. small latte\n2. pickup"
     hook_out = tmp / "hook.json"
@@ -1144,7 +1066,6 @@ def selftest_outcomes(tmp: Path) -> None:
             {"role": "assistant", "content": "", "tool_calls": [{"id": "x", "name": name, "arguments": arguments}]},
             {"role": "tool", "tool_call_id": "x", "content": output}]})
 
-    # The review's probes: env, ls ~/.claude and ps are benign; the other arm's hook file by a relative path is not.
     benign = [("Bash", {"command": "env"}, "PATH=/mnt/c/u/hippo-bench/.venv-dolphin-wsl/bin:/usr/bin\n"
                                            "DOLPHINBENCH_JUDGE_BACKEND=openai\nHOME=/tmp/dolphin-work/t-hippo-morgan/1/home"),
               ("Bash", {"command": "ls -la ~/.claude"}, "dolphinbench-native-memory-settings.json\nprojects"),
@@ -1165,9 +1086,6 @@ def selftest_outcomes(tmp: Path) -> None:
 
 
 def selftest_gate() -> None:
-    """A clean full run passes and compares. The full-run gate is integrity only and lists closed and touching tests,
-    which fail; the pilot adds its alarms; compare refuses a missing grade, a changed file, a dry-run record and a
-    paused run; a real-agent run refuses uncommitted files."""
     status = {"now": b""}
 
     def fake_git(*args: str) -> bytes:
@@ -1228,7 +1146,6 @@ def selftest_gate() -> None:
         put(grade, kept)
         configure(code={**config["code"], str(HERE / "dolphin_hippo.py"): "0" * 64})
         assert "dolphin_hippo.py differs" in refusal()
-        # A record whose server file, dist, lockfile or commit differs from the pin fails check's gate and compare.
         for key in ("server_sha256", "dist_sha256", "lock_sha256", "commit"):
             configure(hippo={**pinned, key: "0" * 40})
             assert not check("t", "morgan", FULL_TESTS)["parts"]["pin"], key
@@ -1286,8 +1203,6 @@ def selftest_gate() -> None:
 
 
 def selftest_pause() -> None:
-    """The full run pauses once an arm's closed tests exceed 2% over its personas and stays paused; a pilot never
-    pauses."""
     from types import SimpleNamespace
 
     from harness.durable_json import save_json

@@ -1,5 +1,3 @@
-// A prompt hook has a 5 s budget, so a store held by `hippo sleep` must degrade the hook after one short wait, never stall it.
-// Drives the built CLI while a child process holds the write lock.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

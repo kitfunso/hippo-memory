@@ -1,8 +1,3 @@
-/**
- * Ambient state vector: a compact O(N) summary of the corpus telling the agent "where it is" in
- * knowledge-space without retrieving specific memories.
- */
-
 import type { MemoryEntry } from './entry.js';
 import { Layer } from './entry.js';
 import { calculateStrength, type StrengthModel } from './strength.js';
@@ -12,7 +7,6 @@ import { isSuperseded } from './liveness.js';
 
 const STATE_DECIMALS = 3;
 
-// Cut points renderAmbientSummary uses to turn the state vector into words.
 const SUMMARY_THRESHOLD = {
   freshHigh: 0.5,
   freshLow: 0.1,

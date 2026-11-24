@@ -1,13 +1,3 @@
-/**
- * LC2-E3 — memory-value decay-pass wiring tests
- * (docs/plans/2026-08-10-lc2-e3-mv-wiring.md, task T4).
- *
- * Real scratch stores throughout (house rule). FILE-UNIQUE scratch root:
- * parallel vitest workers collide on a SHARED root (hard-learned — see
- * tests/benchmarks/memory-value-fit.process.test.ts's FIT_SCRATCH_ROOT comment), so this file
- * gets its own uniquely-named root, distinct from every other harness test
- * file's root name.
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -44,14 +34,10 @@ import { detailLines } from '../_helpers/sleep-lines.js';
 
 useMemoryValueScratch();
 
-/** The features the decay pass scores an entry by, at the default loss-aversion rules. */
 const featuresOf = (entry: MemoryEntry): MvFeatureVector => mvCandidate(entry, NOW, PRODUCTION_STRENGTH).features;
 // SAFETY: the frozen weights' keys; test (c) checks they are exactly the scorer's feature keys.
 const FEATURE_NAMES = Object.keys(MEMORY_VALUE_WEIGHTS) as ReadonlyArray<keyof MvFeatureVector>;
 
-// ---------------------------------------------------------------------------
-// (a) feature parity vs benchmarks/memory-value/extract.mjs
-// ---------------------------------------------------------------------------
 describe('(a) feature parity vs extract.mjs computeFeatures', () => {
   it('the decay scorer features match the benchmark for all 8 shared dims on real store-round-tripped entries', () => {
     initTestStore(dir);
@@ -100,9 +86,6 @@ describe('(a) feature parity vs extract.mjs computeFeatures', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// (b) normalization parity vs evaluate.mjs min-max
-// ---------------------------------------------------------------------------
 describe('(b) normalization parity vs evaluate.mjs min-max', () => {
   it('scoreEntries matches an independently-computed min-max normalization + weighted dot product', () => {
     initTestStore(dir);
@@ -136,7 +119,6 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
       }
       minMax[f] = { min, max };
     }
-    // evaluate.mjs's own formula (benchmarks/memory-value/evaluate.mjs:213-216).
     const norm = (f: string, v: number): number => {
       const { min, max } = minMax[f];
       return max === min ? 0 : (v - min) / (max - min);
@@ -157,9 +139,6 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
 
   it('a feature constant across the entry set normalizes to 0 (matches evaluate.mjs semantics)', () => {
     initTestStore(dir);
-    // Identical created/last_retrieved/half_life/outcome/retrieval fields ->
-    // every dim except content_length is constant across the set, so it is
-    // the ONLY nonzero contribution (weight -0.615, negative -> shorter wins).
     const built: MemoryEntry[] = [
       condemnedEntry('short'),
       condemnedEntry('a somewhat longer piece of content here'),
@@ -176,9 +155,6 @@ describe('(b) normalization parity vs evaluate.mjs min-max', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// (c) weights-sync: constant equals the committed JSON artifact
-// ---------------------------------------------------------------------------
 describe('(c) weights-sync vs the committed JSON artifact', () => {
   it('MEMORY_VALUE_WEIGHTS matches weights-learned.json values exactly; digest matches the meta sidecar', () => {
     const weightsJsonPath = path.join(repoRoot, 'benchmarks', 'memory-value', 'weights-learned.json');
@@ -208,16 +184,9 @@ describe('(c) weights-sync vs the committed JSON artifact', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// (d) flag-off byte-identical
-// ---------------------------------------------------------------------------
 describe('(d) flag-off byte-identical', () => {
   it('bigger mixed store (~40 entries, pinned/condemned/healthy, 3 tenants): survivor set, counts, and full details match a predicate-computed expectation', async () => {
     initTestStore(dir);
-    // Disable the other decay-adjacent passes so detailLines(result) is
-    // decay-pass-only and directly comparable to the predicate below
-    // (review-round F8 wants the FULL details array checked, not just
-    // counts). memoryValue stays unset -> DEFAULT_CONFIG's false.
     const configPath = path.join(dir, 'config.json');
     fs.writeFileSync(
       configPath,
@@ -249,16 +218,10 @@ describe('(d) flag-off byte-identical', () => {
         halfLifeDays: 1,
       });
     }
-    expect(built.length).toBeGreaterThanOrEqual(40); // 3 tenants * (10 + 3 + 1) = 42
+    expect(built.length).toBeGreaterThanOrEqual(40);
 
     writeEntriesTogether(dir, built);
 
-    // Predicate expectation, computed from the SAME order consolidate()
-    // will load (loadAllEntries's `ORDER BY created ASC, id ASC`) -- NOT
-    // `built`'s construction order, since entries sharing an identical
-    // `created` value (all healthy entries created within the same test
-    // tick; all condemned/pinned entries sharing the identical
-    // ancientDate(3650) string) tie-break on id, not insertion order.
     const loadedBeforeSleep = loadEveryTenantEntries(dir);
     const config = loadConfig(dir);
     const sessionCtx = loadSessionDecayContext(dir);
@@ -279,7 +242,7 @@ describe('(d) flag-off byte-identical', () => {
         expectedSurvivorIds.add(entry.id);
       }
     }
-    expect(expectedRemovedIds.size).toBe(9); // 3 tenants * 3 condemned each
+    expect(expectedRemovedIds.size).toBe(9);
     expect(expectedSurvivorIds.size).toBe(built.length - 9);
 
     const result = await consolidate(dir, { now: NOW });
@@ -287,9 +250,6 @@ describe('(d) flag-off byte-identical', () => {
     expect(result.removed).toBe(expectedRemovedIds.size);
     expect(result.decayed).toBe(expectedSurvivorIds.size);
     expect(detailLines(result).some((l) => l.includes('🛟'))).toBe(false);
-    // Full details array: with replay/physics/autoTraceCapture off and no
-    // Episodic/conflicting content, decay's removed lines are the entirety
-    // of detailLines(result), in loadAllEntries order.
     expect(detailLines(result)).toEqual(expectedRemovedDetails);
 
     const remainingIds = new Set(loadEveryTenantEntries(dir).map((e) => e.id));

@@ -1,5 +1,3 @@
-// What `forget --dry-run`, `resolve` (no --keep), `inspect`, `share` and `trace <id>` print with no server, and that
-// each leaves the store as it was. The first case of each verb spawns the built CLI; the rest run it in process.
 import { describe, expect, it } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,14 +17,12 @@ const UNREADABLE: Ran = { status: 1, stdout: '', stderr: 'Error: file is not a d
 const refused = (stderr: string): Ran => ({ status: 1, stdout: '', stderr: `${stderr}\n` });
 const printed = (stdout: string): Ran => ({ status: 0, stdout, stderr: '' });
 
-/** A store on the fixed clock, so ages and decayed strengths print the same on every run. */
 function clocked(opts: { global?: boolean; spawned?: boolean } = {}): Store {
   const s = new Store(opts);
   s.env['HIPPO_FAKE_NOW'] = FAKE_NOW;
   return s;
 }
 
-/** A row in the global store, which `Store.seedAged` does not reach. */
 function seedGlobal(
   s: Store,
   id: string,
@@ -46,7 +42,6 @@ function seedGlobal(
   });
 }
 
-/** Runs `args` while hippo.db holds bytes SQLite cannot open, then puts the store back. */
 async function runOnUnreadableStore(s: Store, ...args: string[]): Promise<Ran> {
   const file = join(s.root, 'hippo.db');
   const bytes = readFileSync(file);
@@ -58,12 +53,10 @@ async function runOnUnreadableStore(s: Store, ...args: string[]): Promise<Ran> {
   }
 }
 
-/** Both stores' rows and the global audit rows, read once the case has seeded them. */
 function held(s: Store): unknown[] {
   return [s.rows(), s.rows('global'), s.audit('global')];
 }
 
-/** A read verb leaves every row, audit row and counter as it found them. */
 function expectUntouched(s: Store, before: unknown[]): void {
   expect(held(s)).toEqual(before);
   expect(s.audit()).toEqual([]);
@@ -118,7 +111,6 @@ describe('hippo forget --dry-run (built CLI, no server)', () => {
 
 describe('hippo resolve with no --keep (built CLI, no server)', () => {
   const NOW = '2026-01-25T00:00:00.000Z';
-  // Fixed ids: the store orders a conflict's two sides by id, so random ids would swap [A] and [B] between runs.
   const A = 'mem_resolve_a';
   const B = 'mem_resolve_b';
 
@@ -165,7 +157,6 @@ describe('hippo resolve with no --keep (built CLI, no server)', () => {
 });
 
 describe('hippo inspect (built CLI, no server)', () => {
-  /** What inspect prints for a row seeded at CREATED, 12 days before the fixed clock. */
   const inspected = (id: string, fields: Record<string, string>, content: string): Ran =>
     printed(
       [
@@ -217,7 +208,6 @@ describe('hippo inspect (built CLI, no server)', () => {
         CLEAN,
       ),
     );
-    // Pinned rows do not decay, and an error tag doubles the half-life.
     expect(await s.run('inspect', 'mem_inspect_full')).toEqual(
       inspected(
         'mem_inspect_full',
@@ -284,7 +274,6 @@ describe('hippo share (built CLI, no server)', () => {
 });
 
 describe('hippo trace <id> (built CLI, no server)', () => {
-  /** The head and strength block trace prints for an unpinned row seeded at CREATED with no retrievals. */
   const traced = (id: string, where: string, content: string, tags: string): string =>
     [
       `Memory: ${id}  [${where}]`,

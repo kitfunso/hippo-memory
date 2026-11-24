@@ -1,6 +1,5 @@
 /** npm 11 refuses to publish below `latest` without --tag, so a backport
  *  needs the right maint-<major>.<minor> tag. */
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { distTagFor, fetchLatest } from '../../scripts/publish-dist-tag.mjs';
 

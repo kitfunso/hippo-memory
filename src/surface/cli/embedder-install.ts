@@ -1,6 +1,3 @@
-// The init step that installs the local embedder beside a global hippo, so a default install
-// recalls by meaning as well as by keyword while the package itself keeps no runtime dependencies.
-
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
@@ -81,7 +78,6 @@ export function embedderInstallAdvice(deps: EmbedderInstallDeps = MACHINE): stri
   return adviceFor(layoutOf(deps), deps);
 }
 
-/** The npm that owns hippo's global folder, else the one shipped beside this node. */
 function npmCliFor(prefix: string, deps: EmbedderInstallDeps): string | undefined {
   const lib = deps.platform === 'win32' ? '' : 'lib';
   const nodeHome = path.dirname(deps.nodePath);

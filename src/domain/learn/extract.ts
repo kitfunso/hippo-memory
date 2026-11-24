@@ -29,13 +29,7 @@ export interface ExtractedFact {
 export interface ExtractOptions {
   llm: Llm;
   model?: string;
-  /**
-   * Told why a call produced nothing, so callers can surface it instead of guessing; `failure` is
-   * set when the model call itself failed. Without it each failure logs a warn with its error
-   * fields.
-   */
   onError?: (msg: string, failure?: LlmFailure) => void;
-  /** The request's abort signal; the model call stops when it fires. */
   signal?: AbortSignal;
 }
 
@@ -55,14 +49,11 @@ Rules:
 Input text:
 `;
 
-// Output budget for one extraction reply.
 const EXTRACTION_MAX_TOKENS = 1200;
 
 /** What one extraction call produced. */
 export interface ExtractOutcome {
   facts: ExtractedFact[];
-  /** True only when the reply parsed as a JSON array with no element: the model found nothing to
-   * keep. An empty or unparseable reply, a non-array and an array of unusable items are false. */
   emptyArray: boolean;
 }
 
@@ -98,7 +89,6 @@ export async function extractFactsOutcome(
 
     return { facts: parseExtractedFacts(parsed), emptyArray: parsed.length === 0 };
   } catch (err) {
-    // V8's parse error quotes the reply, which can hold memory text; only a fixed text and the class leave.
     const msg = 'unparseable response: the reply is not a JSON array';
     if (opts.onError) opts.onError(msg);
     else log.warn(`fact extraction failed: ${msg}`, errorClassFields(err));
@@ -106,7 +96,6 @@ export async function extractFactsOutcome(
   }
 }
 
-// One element of the model's JSON array, before the per-field checks below.
 interface RawExtractedFact {
   content?: JsonValue;
   tags?: JsonValue;
@@ -167,8 +156,6 @@ export async function storeExtractedFacts(
     }
     const entry = buildExtractedEntry(fact, source, inheritedTags, { baseHalfLifeDays, now });
 
-    // A refusal is per-VALUE: one rejected fact must not drop the rest of the batch; writeEntry
-    // already audited it (reject_refusal), so skip and count.
     try {
       await store.entryWrites.writeEntry({ entry, actor: CLI_ACTOR });
     } catch (err) {
@@ -206,8 +193,6 @@ function buildExtractedEntry(
         source: source.source,
         extractedFrom: source.id,
         scope: source.scope,
-        // Without it createMemory stamps 'default', and extracted facts leave the tenant of the
-        // episodic memory they were extracted from.
         tenantId: source.tenantId,
         baseHalfLifeDays,
       },

@@ -1,4 +1,3 @@
-// Client IP keying and the per-IP rate limit for /v1 and /mcp.
 import { envClientIpHeader, envTrustedProxies } from '../../base/util/env.js';
 import type { IncomingMessage } from 'node:http';
 import { BlockList, isIP } from 'node:net';
@@ -35,8 +34,6 @@ export function clientIpForRateLimit(req: IncomingMessage): string {
 
 let trustedProxyCache: { raw: string; list: BlockList } | undefined;
 
-/** Parses HIPPO_TRUSTED_PROXIES once per distinct value; undefined when unset, so no peer's
- * header is read. */
 function proxyTrust(raw: string | undefined): BlockList | undefined {
   const value = raw?.trim();
   if (!value) return undefined;
@@ -114,7 +111,6 @@ function subscriberKey(ip: string): string {
   const [head = '', tail] = bare.toLowerCase().split('::');
   const left = head ? head.split(':') : [];
   const right = tail ? tail.split(':') : [];
-  // A trailing dotted quad holds two groups; isIP has already checked the shape.
   const rightGroups = right.length + (right.at(-1)?.includes('.') ? 1 : 0);
   const groups =
     tail === undefined
@@ -146,9 +142,6 @@ function isTrustedProxy(list: BlockList, ip: string): boolean {
 }
 
 export function enforceRateLimit(req: IncomingMessage, path: string, limiter?: RateLimiter): void {
-  // Per-IP rate limit on /v1/* and /mcp* to bound api-key-id enumeration; /health and other paths
-  // are never throttled, and a 429 lands in the createServer catch. Keyed per clientIpForRateLimit
-  // (set HIPPO_CLIENT_IP_HEADER behind a TLS-terminating proxy, or all clients share one bucket).
   if (limiter && (path.startsWith('/v1/') || path === '/mcp' || path === '/mcp/stream')) {
     if (!limiter.check(clientLimitKey(req))) {
       throw new HttpError(429, 'rate limit exceeded', limiter.retryAfterSec);

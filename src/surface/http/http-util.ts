@@ -4,8 +4,6 @@ import { tryParseUrl } from '../../base/util/net.js';
 import { BodyTimeoutError, BodyTooLargeError } from '../../base/errors/http-errors.js';
 import { MAX_BODY_BYTES } from '../../base/util/limits.js';
 
-// Leaf module shared by server.ts and the connector webhook receivers; it must not import either.
-
 // node:http header values are `string | string[] | undefined` (never a bare unknown), so this gets
 // its own predicate rather than reusing isJsonString.
 export function isHeaderString(value: string | string[] | undefined): value is string {
@@ -18,8 +16,6 @@ function sizeLabel(bytes: number): string {
     : `${Math.ceil(bytes / 1024)}KB`;
 }
 
-// How long a refused upload is still read and discarded after its reply, so a client that never
-// stops cannot hold the socket.
 const REFUSED_UPLOAD_LINGER_MS = 2000;
 
 export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
@@ -29,7 +25,6 @@ export const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 export function sendJson<T>(res: ServerResponse, status: number, body: T): void {
   const text = JSON.stringify(body);
   if (text === undefined) throw new Error('response body is not JSON');
-  // A reply can carry memory text or keys; a route that set its own Cache-Control keeps it.
   if (!res.hasHeader('cache-control')) res.setHeader('cache-control', 'no-store');
   res.writeHead(status, JSON_HEADERS);
   res.end(text);
@@ -46,9 +41,7 @@ export function bodyDeadlineMs(configured?: number): number {
 }
 
 export interface ReadBodyOptions {
-  /** Defaults to 1 MB. */
   maxBytes?: number;
-  /** Fails with BodyTimeoutError when the whole body has not arrived by then; defaults to 30 s. */
   deadlineMs?: number;
 }
 
@@ -60,10 +53,6 @@ export async function readBody(
   return (await readBodyBytes(req, options)).toString('utf8');
 }
 
-/**
- * The body as sent, refused mid-stream past maxBytes and past deadlineMs, so an oversized or slow
- * sender cannot tie up the server.
- */
 function readBodyBytes(
   req: IncomingMessage,
   { maxBytes = MAX_BODY_BYTES, deadlineMs = bodyDeadlineMs() }: ReadBodyOptions = {},
@@ -124,8 +113,6 @@ export function isCrossSite(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   if (origin === undefined) return false;
   const url = tryParseUrl(origin);
-  // The socket's own scheme, never a forwarded one: a page served over http must not drive an https
-  // listener.
   return (
     url?.protocol !== (req.socket instanceof TLSSocket ? 'https:' : 'http:') ||
     url.host !== req.headers.host
@@ -140,8 +127,6 @@ export interface WebhookRequest {
   opts: { hippoRoot: string; webhookBodyDeadlineMs?: number };
 }
 
-// A webhook route takes no key, so anyone holding a signature header could otherwise keep a socket
-// open with a body that never ends.
 const WEBHOOK_BODY_DEADLINE_MS = 10_000;
 
 /**

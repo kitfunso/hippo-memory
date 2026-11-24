@@ -1,13 +1,3 @@
-"""Free retrieval check on Mem0-runner LoCoMo output (no model calls).
-
-For each question, the share of its gold evidence turns found in the top k
-retrieved memories, from `--predict-only` output of
-mem0ai/memory-benchmarks. Works for any arm whose memories hold the raw turn
-text (hippo and bm25 here); Mem0's extracted memories do not, so this cannot
-score mem0-oss. Usage:
-
-    python evidence_recall.py --dataset locomo10.json --run-dir out/predicted_<name> [--k 10,50,200]
-"""
 from __future__ import annotations
 
 import argparse
@@ -18,17 +8,14 @@ from collections import defaultdict
 
 
 def bonferroni(k: int) -> float:
-    """The interval level when k primaries are read together (prereg Amendment 6 revision 1 item 10)."""
     return 1 - 0.05 / k
 
 
 def tails(level: float, draws: int) -> tuple[int, int]:
-    """Indices of an interval's ends in the sorted draws; rounded first, since 1 - (1 - 0.05 / 4) is not 0.0125."""
     return int(round((1 - level) / 2 * draws, 6)), int(round((1 + level) / 2 * draws, 6)) - 1
 
 
 def boot(diffs: list[float], draws: int = 4000, level: float = 0.95) -> tuple[float, float, float]:
-    """Paired bootstrap CI (95% unless level says otherwise) for a mean of per-question differences."""
     random.seed(1)
     n = len(diffs)
     means = sorted(sum(random.choice(diffs) for _ in range(n)) / n for _ in range(draws))
@@ -38,11 +25,6 @@ def boot(diffs: list[float], draws: int = 4000, level: float = 0.95) -> tuple[fl
 
 def cluster_boot(diffs_by_unit: dict[str, list[float]], draws: int = 4000,
                  level: float = 0.95) -> tuple[float, float, float]:
-    """Paired bootstrap CI that resamples whole units (a conversation, persona or haystack) with all their questions.
-
-    Questions that share a memory store are correlated, so the unit that owns the store is the independent draw
-    (prereg Amendment 6, revision 1, item 9). `level` above 0.95 gives the Bonferroni intervals of item 10.
-    """
     random.seed(1)
     units = [d for d in diffs_by_unit.values() if d]
     estimate = sum(map(sum, units)) / sum(map(len, units))
@@ -68,7 +50,6 @@ def turn_texts(conv: dict) -> dict[str, str]:
 
 
 def score_run(run_dir: str, texts: dict, ks: list[int]) -> tuple[dict, dict]:
-    """agg[cat][metric] -> list of values; per_q[k] -> {question_id: recall}."""
     agg: dict = defaultdict(lambda: defaultdict(list))
     per_q: dict = defaultdict(dict)
     for f in sorted(glob.glob(f"{run_dir}/*.json")):

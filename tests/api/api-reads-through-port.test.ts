@@ -1,4 +1,3 @@
-// reject and authKeyTenant read through ctx.store when the context names one, never the folder hippoRoot names.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';

@@ -27,7 +27,6 @@ interface JevRequestBody {
   questions: { durable: JevQuestion; kind: JevQuestion; valence: JevQuestion };
 }
 
-/** One candidate through judgeAll, the module's public entry. */
 async function judgeOne(content: string, opts: JudgeOptions): Promise<Judgment | null> {
   const [result] = await judgeAll([content], opts);
   return result ?? null;
@@ -212,7 +211,6 @@ describe('judgeAll', () => {
     const fetcher: typeof fetch = async (_input, init) => {
       const state = sentBody(init).state;
       if (state === 'bad') return new Response('', { status: 500 });
-      // The first item answers only after the last has, so the answers arrive out of input order.
       if (state === 'slow') await fastDone;
       else fastAnswered();
       return new Response(

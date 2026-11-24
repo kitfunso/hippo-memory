@@ -1,5 +1,3 @@
-// Installs and removes the Codex launcher wrapper on disk: reads its metadata, moves the launcher
-// aside and writes the wrapper. The paths and script text are rules/codex-wrapper.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -25,7 +23,6 @@ import { HIPPO_CODEX_WRAPPER_MARKER } from './rules/shared.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
-// The installer module exposes the paths it installs to.
 /** Where the wrapper, its metadata and its logs live under this process's home folder. */
 export function resolveCodexWrapperPaths(): CodexWrapperPaths {
   return codexWrapperPathsOn(processHomes());
@@ -44,8 +41,6 @@ const METADATA_TEXT_FIELDS = [
   'installedAt',
 ] as const;
 
-/** The check at the parse site; whether the paths are the installer's own is
- * isCodexWrapperMetadataValid's. */
 function isCodexWrapperMetadataRecord(value: JsonValue): value is JsonValue & CodexWrapperMetadata {
   if (!isJsonObject(value)) return false;
   if (!METADATA_TEXT_FIELDS.every((field) => isJsonString(value[field]))) return false;
@@ -62,7 +57,6 @@ function readCodexWrapperMetadata(): CodexWrapperMetadata | null {
     log.warn(`codex wrapper metadata ${metadataPath} has the wrong shape; it is ignored`);
     return null;
   } catch (err) {
-    // Unreadable metadata is treated like the missing-file case above, after the cause is logged.
     if (errorCode(err) !== 'ENOENT') {
       log.warn(
         `codex wrapper metadata ${metadataPath} unreadable: ${errorMessage(err)}`,
@@ -77,7 +71,6 @@ function readTextFile(filePath: string): string | null {
   try {
     return fs.readFileSync(filePath, 'utf8');
   } catch (err) {
-    // Callers treat an unreadable file as absent; only a missing one is silent.
     if (errorCode(err) !== 'ENOENT') {
       log.warn(`cannot read ${filePath}: ${errorMessage(err)}`, errorFields(err));
     }
@@ -142,8 +135,6 @@ interface LauncherSlot {
   plan: ReturnType<typeof resolveCodexInstallPlan>;
 }
 
-/** The launcher paths of each PATH folder, in PATH order, wrapper folder excluded, with their
- * install plans. */
 function pathLauncherFolders(): LauncherSlot[][] {
   const { wrapperDir } = resolveCodexWrapperPaths();
   const folders = envPathDirs()
@@ -158,8 +149,6 @@ function pathLauncherFolders(): LauncherSlot[][] {
   );
 }
 
-/** Whether the plan's command path is empty or hippo's wrapper, so writing a wrapper there loses no
- * launcher; a cmd shim for a vacated exe slot would otherwise overwrite a live codex.cmd. */
 function commandPathIsFree(plan: LauncherSlot['plan']): boolean {
   return !fs.existsSync(plan.commandPath) || isHippoCodexWrapperFile(plan.commandPath);
 }
@@ -241,7 +230,6 @@ export function installCodexWrapper(realCodexPath?: string): CodexWrapperInstall
 }
 
 function makeWrapperDirs(paths: CodexWrapperPaths): void {
-  // These live under ~/.hippo, which this may be the first write to make.
   for (const dir of [
     path.dirname(paths.metadataPath),
     path.dirname(paths.logFile),
@@ -252,10 +240,7 @@ function makeWrapperDirs(paths: CodexWrapperPaths): void {
 }
 
 function backUpRealLauncher(realCodexPath: string, backupPath: string): void {
-  // The launcher is gone and its backup is not: an earlier install already made this rename.
   if (!fs.existsSync(realCodexPath) && fs.existsSync(backupPath)) return;
-  // A launcher that is not our wrapper is the current codex, so it replaces any older backup a
-  // Codex update left.
   if (!isHippoCodexWrapperFile(realCodexPath)) {
     fs.renameSync(realCodexPath, backupPath);
   } else if (!fs.existsSync(backupPath)) {
@@ -265,8 +250,6 @@ function backUpRealLauncher(realCodexPath: string, backupPath: string): void {
   }
 }
 
-/** Moves files only along the install plan of the recorded launcher, and never puts the backup
- * over a launcher that is not our wrapper. */
 function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: string): boolean {
   if (!namesInstallerPaths(metadata)) {
     log.warn(
@@ -292,8 +275,6 @@ function restoreCodexLauncher(metadata: CodexWrapperMetadata, metadataPath: stri
   return true;
 }
 
-/** With no metadata, a backup beside an empty or hippo-wrapped slot is an install that stopped
- * part-way; a slot or command path holding a real launcher is never touched. */
 function restoreLeftoverBackups(): boolean {
   let changed = false;
   for (const { original, plan } of pathLauncherFolders().flat()) {
@@ -340,8 +321,6 @@ export function ensureCodexWrapperInstalled(): EnsureCodexWrapperResult {
 
   if (metadata) {
     const { metadataPath } = resolveCodexWrapperPaths();
-    // Metadata hippo never wrote could aim a repair at any file, so it changes nothing until the
-    // user reinstalls.
     if (!namesInstallerPaths(metadata)) {
       log.warn(
         `codex wrapper metadata ${metadataPath} names paths hippo never wrote, so the wrapper was not ` +

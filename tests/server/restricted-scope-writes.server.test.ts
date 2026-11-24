@@ -1,6 +1,3 @@
-// A member key reaches a restricted scope's rows by id only with a grant, as recall reads them: without one, DELETE and
-// archive answer 404 exactly as for a missing id and the row stays; with one and the row's owner, or as an admin, both
-// succeed.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -34,7 +31,6 @@ function mint(role: 'admin' | 'member', grant?: string, ownerSubject?: string): 
 
 interface Reply {
   status: number;
-  /** The body with the id it names replaced, so a refusal compares with a missing id's. */
   body: string;
 }
 
@@ -78,7 +74,6 @@ describe('DELETE /v1/memories/:id and POST /v1/memories/:id/archive on a restric
     expect(missing.status).toBe(404);
     expect([await forget(keys.member, note.id), await archive(keys.member, raw.id)]).toEqual([missing, missing]);
     expect(kept()).toEqual(expect.arrayContaining([note.id, raw.id]));
-    // The same member's recall of that scope is refused too, so writes and reads share one rule.
     const recall = await fetch(`${handle.url}/v1/memories?q=rota&scope=${encodeURIComponent(OPS)}`, {
       headers: { authorization: `Bearer ${keys.member}` },
     });

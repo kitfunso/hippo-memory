@@ -1,4 +1,3 @@
-// Sleep's queued ops group into units that commit whole, and a flush transaction closes at the first unit boundary past its deadline.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -115,7 +114,6 @@ describe('commitInChunks', () => {
       deletes: [],
       dormant: [],
     }));
-    // The flush reads the clock only at BEGIN and at each component boundary, so the test moves it per row op instead.
     let now = 0;
     const clock = () => now;
     const run = StatementSync.prototype.run;
@@ -128,13 +126,11 @@ describe('commitInChunks', () => {
       if (ROW_DELETE.test(sql)) {
         // SAFETY: the delete's one parameter is the JSON array of ids the store binds.
         const ids = JSON.parse(String(params[0])) as string[];
-        // One statement deletes the chunk, so the clock still moves once per row.
         now += 10 * ids.length;
       }
       return run.apply(this, params);
     });
 
-    // A pause is the gap after a commit, so the clock at each one says where that transaction closed.
     const pausedAt: number[] = [];
     const budget: WriteBudget = {
       holdMs: 25,
@@ -150,7 +146,6 @@ describe('commitInChunks', () => {
       busyWaitMs: SLEEP_DB_WAIT_MS,
     });
 
-    // The 11 row ops of the largest component, then three singles before the 25 ms hold runs out, then the last.
     expect(pausedAt).toEqual([110, 140]);
     expect(now).toBe(150);
     expect(removed.sort()).toEqual(retired.map((e) => e.id).sort());

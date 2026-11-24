@@ -1,5 +1,3 @@
-// hippo.db's own refusals: each is a StoreBlockedError, so the layers above map it to 501 by the
-// base class alone.
 import { StoreBlockedError } from '../base/util/store-blocked.js';
 
 /** A hippo.db open refused: a folder marked for another store, or a store whose SQLite work runs

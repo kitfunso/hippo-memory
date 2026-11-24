@@ -1,5 +1,3 @@
-// DagReads answers, with no audit row written, and the assemble and drill
-// routes built on it answer the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,7 +46,6 @@ const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}):
   ...extra,
 });
 
-/** One session in both tenants with every scope, origin and supersede edge, and summary trees three levels deep, one of them a loop. */
 function dagRows(): MemoryEntry[] {
   return [
     ...[0, 1, 2].map((i) => raw(TENANT_A, `raw_a_${i}`, i, { dagParentId: 'sum_a' })),
@@ -88,7 +85,6 @@ function dagRows(): MemoryEntry[] {
   ];
 }
 
-/** The first tenant's live raw rows of SESSION, oldest first. */
 const SESSION_IDS = [
   'raw_a_0',
   'raw_a_1',
@@ -106,7 +102,6 @@ const SESSION_IDS = [
   'raw_a_global',
   'raw_a_no_origin',
 ];
-/** sum_a's children the default scope deny admits: fact_a_private is left out, and leaf_a_under_private with it. */
 const SUM_A_CHILDREN = ['raw_a_0', 'raw_a_1', 'raw_a_2', 'fact_a_0', 'fact_a_1', 'fact_a_tie_x', 'fact_a_tie_y'];
 
 type Call<R> = GroupCall<'dagReads', R>;
@@ -114,7 +109,6 @@ type Call<R> = GroupCall<'dagReads', R>;
 let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
-/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
 async function conformsOn<G extends 'dagReads' | 'base', R>(group: G, calls: readonly GroupCall<G, R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, group, calls);
   expect(sqlite.audit).toEqual(fixtureAudit);
@@ -132,7 +126,6 @@ interface RawWindow {
   readonly origins?: readonly string[];
 }
 
-// The read assemble makes: a session's live raw rows, the newest `cap` of them oldest first when `cap` is positive.
 const window =
   (cap: number, over: Partial<RawWindow> = {}): GroupCall<'base', string[]> =>
   async (g) => {
@@ -351,14 +344,12 @@ const SERVED: readonly (readonly [string, number])[] = [
   ['/v1/recall/drill/loop_a?depth=2&limit=1', 200],
 ];
 
-/** Every SERVED path over serve() on a fresh copy of the fixture, as the first tenant's admin. */
 async function runServed(makeStore?: (root: string) => HippoStore): Promise<Reply[]> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-dag-served-'));
   try {
     const root = join(home, 'store');
     copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });

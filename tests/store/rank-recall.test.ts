@@ -1,5 +1,3 @@
-// rankRecall in process: what it ranks, what it hands back for the caller to write, and its re-rank stages.
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -90,7 +88,6 @@ describe('rankRecall', () => {
     );
   });
 
-  // Private and superseded rows are excluded in SQL, so they are pre-candidate: neither counted nor dropped.
   it('ranks the admitted pool and leaves out private and superseded rows', async () => {
     const rank = await rankRecall(ctx(), opts(), BUDGET_RANKED);
     expect(ids(rank.results).sort()).toEqual(['mem_rank_goal', 'mem_rank_plain', 'mem_rank_trace']);
@@ -158,7 +155,6 @@ describe('rankRecall re-rank stages', () => {
     });
 
     const plain = ids((await rank()).results);
-    // Without this order the check below would pass when the stage swaps the rows.
     expect(plain).toEqual(['mem_old', 'mem_new']);
     expect(ids((await rank({ evcAdaptive: true })).results)).toEqual(plain);
   });

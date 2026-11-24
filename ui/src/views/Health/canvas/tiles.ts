@@ -32,10 +32,8 @@ export interface Scene {
   cam: Camera;
   hover: number;
   sel: number;
-  /** Per-project search hits by key, or null when no search is active. */
   hits: ReadonlyMap<string, number> | null;
   bitmaps: BitmapCache;
-  /** Bumps on every relayout so cached bitmaps know their tile moved. */
   version: number;
   hatch: CanvasPattern | null;
 }

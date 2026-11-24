@@ -1,4 +1,3 @@
-// The local and global recall reads overlap, and the merged ranking does not depend on which finishes first.
 import { describe, it, expect } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -27,7 +26,6 @@ function gate(): Gate {
   return { opened, open };
 }
 
-/** The store with its recall read held at the start until `released`, so the test, not a timer, orders the reads. */
 function held(store: HippoStore, name: StoreName, released: Promise<void>, events: string[]): HippoStore {
   const search = store.searchRecallEntries.bind(store);
   // SAFETY: Object.create keeps every other store method; only the read under test is replaced.
@@ -61,7 +59,6 @@ function options(root: string): RankRecallOptions {
   };
 }
 
-/** One recall with both reads held until both have started, then let go one at a time in `order`. */
 async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: string[]; events: string[] }> {
   const { root: local } = makeStore('recall-concurrent-local');
   const { root: global } = makeStore('recall-concurrent-global');
@@ -79,7 +76,6 @@ async function run(order: readonly [StoreName, StoreName]): Promise<{ ids: strin
     embedderFor: resolveEmbeddingProvider,
   };
   const ranked = rankRecall(ctx, options(local), BUDGET_RANKED);
-  // Neither read may end yet, so a recall that ran them one after the other never starts the second.
   await waitFor(() => events.length === 2, { what: 'both store reads to start before either ends', timeoutMs: 4_000 });
   for (const name of order) {
     gates[name].open();

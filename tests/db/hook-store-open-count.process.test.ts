@@ -1,5 +1,3 @@
-// Hook commands run on every prompt and tool failure, so each store they read is opened once per process.
-// Drives the built CLI; a preload counts the DatabaseSync connections per database file.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -45,7 +43,6 @@ function seed(root: string, content: string, created: string, extra: Partial<Mem
   writeEntry(root, { ...createMemory(content, { baseHalfLifeDays: 30 }), created, lastRetrieved: created, ...extra });
 }
 
-// Stamped by hand: derived from the temp dir, the origin is whichever project marker sits above it on this machine.
 function seedGlobalPin(): void {
   initTestStore(globalRoot);
   seed(globalRoot, 'PINNED: never force-push the main branch', '2026-04-01T00:00:00.000Z', {
@@ -56,7 +53,6 @@ function seedGlobalPin(): void {
 
 interface HookRun {
   stdout: string;
-  /** Connections opened per database, keyed `local`, `global` or the file path. */
   opens: Record<string, number>;
 }
 
@@ -65,7 +61,6 @@ function runHook(args: string[], input: string): HookRun {
     process.execPath,
     ['--no-warnings', '--import', pathToFileURL(preloadPath).href, HIPPO_JS, ...args],
     {
-      // Home is the test dir, so the project walk from cwd stops there instead of finding a marker above the temp root.
       env: {
         ...process.env,
         HOME: tmp,

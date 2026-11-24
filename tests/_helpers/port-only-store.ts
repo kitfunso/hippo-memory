@@ -1,5 +1,3 @@
-// A store that answers only through the port, under a kind that is not hippo.db, while the port's own methods reach
-// hippo.db's rows.
 import { closeHippoDb, openHippoDb, type RequestStores } from '../../src/db/index.js';
 import type { AuditEvent } from '../../src/base/ports/store/types.js';
 import { auditRowsOn } from './audit-rows.js';
@@ -73,8 +71,6 @@ export function portOnlyStore<G extends OptionalGroup = never>(
   return { ...base, ...kept };
 }
 
-/** The store with the name of each recall and context read it answers pushed onto `calls`: the two base reads,
- * contextReads, vectors and the sessions read. */
 function logged<S extends HippoStore>(store: S, calls: string[]): S {
   const log =
     <A extends unknown[], R>(name: string, fn: (...args: A) => R) =>

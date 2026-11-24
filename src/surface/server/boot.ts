@@ -90,8 +90,6 @@ interface HandleRequestOptions {
   readonly limiter?: RateLimiter;
   readonly counts: ServerCounts;
   readonly workerCounts: ServerRuntime['workerCounts'];
-  /** /ready's one probe for the server's life, on the store as booted; unset when the store has
-   * no readiness group. */
   readonly ready: ReadyProbe | undefined;
 }
 
@@ -107,8 +105,6 @@ async function handleRequest(
   rejectEncodedSlash(req.url ?? '/');
 
   const { method, path, query } = parseRequest(req);
-  // An older core ignores X-Hippo-Project, so every /mcp reply, a 429 or 401 too, tells the client
-  // this one filters by it.
   if (path === '/mcp') res.setHeader(MCP_PROJECT_SCOPED_HEADER, '1');
 
   const routeRequest: RouteRequest = { req, res, opts, query };
@@ -119,7 +115,6 @@ async function handleRequest(
 
   if (await dispatchLimitedRoute(routeRequest, method, path)) return;
 
-  // Store-ready: the stream only authenticates, through the port.
   if (
     await dispatchHostRoute(routeRequest, request, HOST_ROUTES.mcpStream, () =>
       handleMcpStream(req, res, opts, streamSlots),
@@ -132,7 +127,6 @@ async function handleRequest(
   res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** GET /health then /ready; false when the request is neither. */
 async function dispatchProbeRoute(
   r: RouteRequest,
   request: { method: string; path: string },
@@ -145,8 +139,6 @@ async function dispatchProbeRoute(
   return dispatchHostRoute(r, request, ready, () => sendReady(r.res, options.ready));
 }
 
-/** The routes behind the rate limit: the /v1 table with the webhooks, public JSON, add-on routes
- * and POST /mcp. */
 async function dispatchLimitedRoute(
   r: RouteRequest,
   method: string,
@@ -155,8 +147,6 @@ async function dispatchLimitedRoute(
   if (await dispatchV1Route(r, method, path)) return true;
   if (dispatchPublicJson(r, method, path)) return true;
   if (await dispatchAddonRoute(r, method, path)) return true;
-  // Store-ready: under another store the MCP layer lists and runs only the tools ported to the
-  // port.
   return dispatchHostRoute(r, { method, path }, HOST_ROUTES.mcp, () =>
     handleMcpPost(r.req, r.res, r.opts),
   );
@@ -167,10 +157,6 @@ function sendHealth(
   res: ServerResponse,
   { startedAt, counts, workerCounts }: HandleRequestOptions,
 ): void {
-  // A caller on this machine (detectServer's probe reads version and pid) gets the full body;
-  // anyone else, even a proxied caller or a browser page on loopback, gets liveness only: the
-  // version would fingerprint the build and the pid is noise. Platform health checks only need the
-  // 200.
   if (isLocalCaller(req)) {
     sendJson(res, 200, {
       ok: true,
@@ -189,8 +175,6 @@ function sendHealth(
   }
 }
 
-/** Readiness: one cheap read on the served store under the server's lock wait. /health stays
- * liveness only, so a probe can tell a store that does not answer from a dead process. */
 async function sendReady(res: ServerResponse, ready: ReadyProbe | undefined): Promise<void> {
   if (ready === undefined) {
     sendJson(res, 200, { ok: true, store: 'unchecked' });
@@ -203,8 +187,6 @@ async function sendReady(res: ServerResponse, ready: ReadyProbe | undefined): Pr
   sendJson(res, 200, { ok: true });
 }
 
-/** A flag typo is refused at boot, since the safe side it would take may not be the side the
- * operator meant. */
 function assertFlagsValid(): void {
   const bad = validateFlags();
   if (bad.length > 0) {
@@ -263,9 +245,8 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   const limiters = bootLimiters(opts.rateLimits);
   assertClientIpHeaderPinned();
   assertFlagsValid();
-  // A bad GITHUB_ENTERPRISE_URL is refused here, not on the first delivery.
   githubSiteFromEnv();
-  githubTrustedUserIds(); // A bad entry refuses the start, as a flag typo does.
+  githubTrustedUserIds();
   const loopbackHosts = await loopbackBindHosts(host);
   assertTlsOrCleartextAllowed(
     host,
@@ -273,13 +254,9 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
     loopbackHosts,
     opts.allowCleartext ?? envAllowCleartext(),
   );
-  // An open-ended previous secret keeps working, so the operator hears once that nothing will close
-  // it.
   warnSlackPreviousSecretOpen();
   warnGitHubPreviousSecretOpen();
 
-  // Single source of truth for the start time: returned by GET /health and written into the
-  // pidfile, so detectServer can prove a pid-reusing impostor is not this server.
   const startedAt = new Date().toISOString();
   await claimPidfile(opts.hippoRoot, startedAt);
   try {
@@ -308,7 +285,6 @@ interface BootPlan {
   startedAt: string;
 }
 
-/** Everything after the pidfile claim; a throw here releases the claim in serve(). */
 async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHandle> {
   const { host, requestedPort, startedAt } = plan;
 
@@ -318,7 +294,6 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     ...evalStoreRules(envLossAversionRatio()),
     vectorGraphMaxVectors: loadConfig(opts.hippoRoot).vectorGraph.maxVectors,
   });
-  // Before the listen, so the first request already has the key it is checked against.
   const localKey = issueLocalKey(opts.hippoRoot);
   const served = servedOptsFor(opts, plan, runtime, localKey);
 
@@ -338,8 +313,6 @@ async function bindClaimed(opts: ServeOptions, plan: BootPlan): Promise<ServerHa
     if (stopping) return;
     stopping = true;
     await stopListening(opts, server, inflight, startedAt);
-    // An auto-sleep answers no request, so draining skips it; its child must leave the store before
-    // the store closes.
     await served.sleeps.settled();
     await runtime.close(DETACHED_SETTLE_MS);
   };
@@ -358,7 +331,6 @@ function requestOptionsFor(
 ): HandleRequestOptions {
   return {
     startedAt,
-    // Open /mcp/stream count per client key, so the cap is per server rather than per process.
     streamSlots: new Map<string, number>(),
     limiter: limiters.perAddress,
     counts: served.counts,
@@ -370,7 +342,6 @@ function requestOptionsFor(
 function frozenAddonRoutes(
   addonRoutes: ServeOptions['routes'],
 ): NonNullable<ServeOptions['routes']> {
-  // A frozen copy, so a route the caller adds or renames after boot never skips the check below.
   const routes = Object.freeze(
     (addonRoutes ?? []).map(({ path, handler, storeReady, level }) =>
       Object.freeze({
@@ -399,9 +370,7 @@ function servedOptsFor(
     counts.autoSleeps += 1;
     return sleeps.consolidate();
   };
-  // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
   const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
-  // The count reads the store's reports, so a store without them starts no sleep.
   const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
   const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
   const callers = createCallerState(autoSleep);
@@ -453,15 +422,11 @@ function acceptingServer(
   });
 }
 
-/** `served` as one request reads it: each store call to a worker waits on the request's
- * deadline, an in-process store opens on the request's session, and its Context carries the
- * abort signal. */
 function servedFor(
   served: ResolvedServeOptions,
   runtime: ServerRuntime,
   { limits, session }: { readonly limits: RequestLimits; readonly session: StoreSession },
 ): ResolvedServeOptions {
-  // One view per store, so the served, caller and ledger stores share the view of one.
   const views = new Map<HippoStore, HippoStore>();
   const storeFor = <S extends HippoStore>(own: S): S => {
     // SAFETY: each view was made by runtime.storeFor from the same `own`, so it has its type.
@@ -480,7 +445,6 @@ function servedFor(
   };
 }
 
-/** The server's callers for one request: the shared latch, and the count on the request's store. */
 function callersOnRequest(callers: CallerState, counted?: StoreWith<'reports'>): CallerState {
   const { autoSleep } = callers;
   if (autoSleep === undefined || counted === undefined) return callers;
@@ -511,8 +475,6 @@ async function stopListening(
   inflight: Set<ServerResponse>,
   startedAt: string,
 ): Promise<void> {
-  // Remove the pidfile only if it still names this server: a newer server may have rewritten it,
-  // and an unconditional unlink would orphan it.
   removePidfileIfOwned(opts.hippoRoot, { pid: process.pid, startedAt });
   await drainAndClose(server, inflight, opts.shutdownDrainMs ?? DEFAULT_SHUTDOWN_DRAIN_MS);
 }

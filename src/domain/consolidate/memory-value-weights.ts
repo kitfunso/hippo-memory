@@ -1,11 +1,3 @@
-/**
- * Frozen learned memory-value weight vector, GENERATED from
- * benchmarks/memory-value/weights-learned.json; never edit by hand (a sync test fails CI on drift).
- * The literal keeps the artifact's snake_case keys; the export maps them to camelCase.
- * CAVEAT: usage-feature signs come from an anti-oracle simulation, not real usage value; never read
- * this as production ranking advice.
- */
-
 import { fromArtifact } from './memory-value-artifact.js';
 
 const ARTIFACT_WEIGHTS = {

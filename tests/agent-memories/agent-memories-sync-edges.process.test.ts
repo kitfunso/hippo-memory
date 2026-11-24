@@ -1,4 +1,3 @@
-// Design 6's edge rows from the plan's Added list: supersede, restore, collapse, pin, refuse and the dormant lookups.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -38,7 +37,6 @@ import { saveDecision } from '../../src/entry/testing.js';
 const A = 'Run the schema check before this service deploys.';
 const B = 'Run the schema check and the smoke test before each deploy.';
 const TAG = 'claude-code-memory';
-// AWS's documented example access key: a public placeholder, not a credential.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 
 let w: World;
@@ -173,7 +171,6 @@ describe('agent memory sync: the Added list', () => {
     await sync();
     const row = only();
     const decision = await saveDecision(objectsAt(w.local), 30, 'default', { decisionText: 'We deploy on Fridays.' });
-    // No API links an object to a row it did not write, so the link is made the way a merge leaves it.
     withDb(w.local, (db) => db.prepare('UPDATE decisions SET memory_id = ? WHERE id = ?').run(row.id, decision.id));
     unlinkSync(file);
 

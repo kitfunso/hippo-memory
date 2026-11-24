@@ -1,9 +1,6 @@
-// Text rules shared by the adapters: frontmatter, item times and home-relative paths. The reads are
-// Machine.files.
 import path from 'node:path';
 
 export interface Frontmatter {
-  /** The YAML between the fences, or null when the file has none. */
   readonly yaml: string | null;
   readonly body: string;
 }

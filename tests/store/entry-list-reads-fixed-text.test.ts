@@ -1,5 +1,3 @@
-// A cached list read binds its list as one JSON param, so a short list and a long one share one prepared statement and
-// still keep the same rows. Real store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -36,7 +34,6 @@ beforeEach(() => {
 });
 afterEach(() => closeHippoDb(db));
 
-/** What `read` returns for a short list and then a long one, and the SQL the long one had to prepare. */
 interface ShortThenLong<T> {
   readonly short: T;
   readonly long: T;
@@ -77,7 +74,6 @@ describe('cached list reads', () => {
     expect(tagged.short.sort()).toEqual(['alpha row', 'global row']);
   });
 
-  // One origin binds `=` so the origin index can seek it; from two up the list is one JSON param.
   it('the entry filter reads one statement for a list of two origins and kinds and for three', () => {
     const current = (origins: readonly string[]) =>
       listEntriesWhere(db, { tenantId: TENANT, origins, live: true, kinds: ['distilled', 'superseded'] }, { limit: 10 })

@@ -1,15 +1,3 @@
-/**
- * v1.12.13 / C5 — WYSIATI cutoff transparency wire-format parity (HTTP path).
- *
- * Asserts:
- * 1. GET /v1/memories?q=... response body includes `suppressionSummary` with
- *    all 6 camelCase counters (matching the api.recall TS interface).
- * 2. Counters reflect actual filter activity (droppedByBudget non-zero when
- *    candidates > limit).
- * The field staying optional needs no test here: resultOf in src/api/recall/request.ts builds a RecallResult without
- * it, so `npm run typecheck:tests` fails the day it turns required.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -31,7 +19,6 @@ let handle: ServerHandle;
 
 beforeEach(async () => {
   home = makeRoot('http-c5');
-  // Seed 20 query-matching memories so droppedByBudget > 0 when limit < 20.
   writeEntriesTogether(
     home,
     Array.from({ length: 20 }, (_, i) =>
@@ -56,7 +43,6 @@ describe('HTTP /v1/memories suppressionSummary', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     expect(res.status).toBe(200);
     const body = await jsonAs<Partial<RecallResult>>(res);
-    // All 6 camelCase fields on the wire: 20 seeded matches, none filtered before rank, no session, summary or tail.
     expect(body.suppressionSummary).toEqual({
       totalCandidates: 20,
       droppedPreRank: 0,
@@ -71,7 +57,6 @@ describe('HTTP /v1/memories suppressionSummary', () => {
     const res = await fetch(`${handle.url}/v1/memories?q=omega&limit=5`);
     const body = await jsonAs<Partial<RecallResult>>(res);
     expect(body.results).toHaveLength(5);
-    // 20 candidates, limit 5 -> 15 dropped by budget.
     expect(body.suppressionSummary!.droppedByBudget).toBe(15);
   });
 });

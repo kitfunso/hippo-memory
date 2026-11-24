@@ -1,4 +1,3 @@
-// Takes, holds about 2 ms and releases one file lock in a loop, logging each enter, exit and unusable result.
 import { appendFileSync } from 'node:fs';
 import { takeFileLock } from '../../dist/host/file-lock.js';
 

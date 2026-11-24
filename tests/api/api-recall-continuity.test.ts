@@ -55,7 +55,6 @@ describe('api.recall continuity flag', () => {
     expect(result.continuity!.activeSnapshot?.task).toBe('Ship the recall continuity slice');
     expect(result.continuity!.sessionHandoff?.nextAction).toBe('Pick up at Task 3.');
     expect(result.continuity!.recentSessionEvents).toHaveLength(1);
-    // Snapshot 8 + 11 + 6, handoff 7 + 5 + artifact 4, event 9, each at Math.ceil(len/4).
     expect(result.continuityTokens).toBe(50);
   });
 
@@ -105,7 +104,6 @@ describe('api.recall continuity flag', () => {
     expect(result.continuity!.recentSessionEvents).toEqual([]);
   });
 
-  // codex P2: do not resurrect a stale handoff when the active snapshot is gone.
   it('does not surface a handoff from a session with no active snapshot', async () => {
     initTestStore(tmpDir);
     saveSessionHandoff(tmpDir, 'default', {
@@ -124,8 +122,6 @@ describe('api.recall continuity flag', () => {
     expect(result.continuity!.sessionHandoff).toBeNull();
   });
 
-  // v1.2: scope column ships on task_snapshots. Default-deny rule must reject
-  // private-scope continuity for no-scope callers; explicit-scope match works.
   it('default-deny scope rule excludes private-scope continuity for no-scope callers', async () => {
     initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -151,9 +147,6 @@ describe('api.recall continuity flag', () => {
     expect(scopedResult.continuity!.activeSnapshot?.task).toBe('private task');
   });
 
-  // codex v1.2 round 2 P1: readLatestHandoff SELECTs were missing the scope
-  // column even after the writer set it. Without scope on the loaded row,
-  // a private handoff would surface to no-scope callers.
   it('readLatestHandoff returns scope on the row, default-deny rejects private', async () => {
     initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -176,8 +169,6 @@ describe('api.recall continuity flag', () => {
       query: 'anything',
       window: { includeContinuity: true },
     });
-    // Snapshot is public-scope (null) so it surfaces. Handoff is private,
-    // must NOT surface.
     expect(noScopeResult.continuity!.activeSnapshot?.task).toBe('Public anchor');
     expect(noScopeResult.continuity!.sessionHandoff).toBeNull();
 
@@ -186,14 +177,9 @@ describe('api.recall continuity flag', () => {
       window: { includeContinuity: true },
       filter: { scope: 'slack:private:Csecret' },
     });
-    // Note: snapshot has scope=null and won't match 'slack:private:Csecret'
-    // exactly. Handoff has matching scope and DOES surface.
     expect(scopedResult.continuity!.sessionHandoff?.summary).toBe('PRIVATE handoff content');
   });
 
-  // codex v1.2 round 1 P0: explicit scope must EXACT-match, not allow-all.
-  // The v1.1.0 filter was `opts.scope || isPublic` which let any explicit
-  // scope see every continuity row regardless of that row's scope.
   it('explicit scope is exact-match, not allow-all (cross-scope leak guard)', async () => {
     initTestStore(tmpDir);
     saveActiveTaskSnapshot(tmpDir, 'default', {
@@ -205,7 +191,6 @@ describe('api.recall continuity flag', () => {
       scope: 'slack:private:C1',
     });
 
-    // Caller asks for C2 → must NOT see C1 snapshot.
     const c2Result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
       query: 'anything',
       window: { includeContinuity: true },
@@ -213,7 +198,6 @@ describe('api.recall continuity flag', () => {
     });
     expect(c2Result.continuity!.activeSnapshot).toBeNull();
 
-    // Caller asks for C1 exactly → DOES see C1 snapshot.
     const c1Result = await retrieve(apiCtx(tmpDir, 'default', { subject: 'test', role: 'admin' }), {
       query: 'anything',
       window: { includeContinuity: true },
@@ -236,7 +220,6 @@ describe('api.recall continuity flag', () => {
       query: 'anything',
       window: { includeContinuity: true },
     });
-    // 4 + 4 + 4 chars at Math.ceil(len/4) = 1+1+1 = 3
     expect(result.continuityTokens).toBe(3);
   });
 

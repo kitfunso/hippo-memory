@@ -1,4 +1,3 @@
-// The dashboard's live-row rules as SQL, which its reads and its sorted memory lists both filter by.
 import { liveIn } from '../../../db/sql-predicates.js';
 
 export const LIVE = liveIn('');
@@ -7,7 +6,6 @@ export const LIVE = liveIn('');
 // on a positional bind.
 export const IN_PROJECT = `tenant_id = :tenant AND origin_project IS :origin AND ${LIVE}`;
 
-// The open conflicts of the tenant bound as :tenant whose members are both live.
 export const OPEN_PAIRS =
   `open_pairs AS (SELECT mc.id AS id, mc.memory_a_id AS a, mc.memory_b_id AS b, ma.origin_project AS pa, ` +
   `mb.origin_project AS pb FROM memory_conflicts mc JOIN memories ma ON ma.id = mc.memory_a_id JOIN memories mb ` +

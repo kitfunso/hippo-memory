@@ -1,4 +1,3 @@
-// serve({ routes }): an add-on mounts POST /v1 routes behind core's auth and JSON parsing, and cannot shadow a core route.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,7 +39,6 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-/** An add-on route that records every call it gets and answers with `reply`. */
 function route(path: string, reply: () => Promise<JsonValue>): AddonRoute {
   return {
     path,
@@ -57,7 +55,6 @@ async function start(routes: readonly AddonRoute[]): Promise<void> {
   handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes });
 }
 
-/** The error serve() throws for these routes, or null when it started; a started server is stopped so a case never leaks one. */
 async function bootError(routes: readonly AddonRoute[]): Promise<Error | null> {
   return serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes }).then(
     async (h) => {
@@ -215,7 +212,6 @@ describe('an add-on route on a worker store', () => {
       .map((call) => String(call[0]))
       .filter((line) => line.includes('opened on the server thread by a route'));
 
-  /** One POST to the route on a server over `store`, stopped before it returns. */
   async function once(store?: HippoStore): Promise<{ status: number; reply: unknown }> {
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0, routes: [labels], ...(store && { store }) });
     try {
@@ -238,7 +234,6 @@ describe('an add-on route on a worker store', () => {
 
   it('answers 501 when a call the op table missed opens hippo.db on the server thread', async () => {
     const info = vi.spyOn(log, 'trail');
-    // keyWrites answered by the worker store's server-thread part, as a method missing from WORKER_OPS would be.
     const unrouted = sqliteStoreOn(handlesOf(root, { workerOnly: true }));
     const swapped = () => Object.assign(workerSqliteStore(root), { keyWrites: unrouted.keyWrites });
     expect((await once(swapped())).status).toBe(501);
@@ -286,7 +281,6 @@ describe('serve() refuses an add-on route that could shadow or dodge core', () =
       await start([route(near, async () => ({ near: true }))]);
       expect(await post(near, '{}')).toEqual({ status: 200, reply: { near: true } });
       expect(calls).toHaveLength(1);
-      // The real row is untouched: a numeric id still reaches core's handler, never the add-on's.
       expect((await post('/v1/predictions/7/close', '{"state":"closed"}')).reply).not.toEqual({ near: true });
       expect(calls).toHaveLength(1);
     },

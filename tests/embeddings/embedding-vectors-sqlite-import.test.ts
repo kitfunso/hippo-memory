@@ -1,4 +1,3 @@
-// A store from before schema v52 keeps its embeddings.json vectors: they move into memory_vectors once and the file stays as a backup.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -60,7 +59,6 @@ async function nearest(query: readonly number[], k: number): Promise<VectorMatch
   }
 }
 
-// Puts the store back to v51: no vectors table, the index still in embeddings.json.
 function downgradeToV51(): void {
   withDb((db) => {
     db.exec('DROP TRIGGER IF EXISTS trg_memory_vectors_delete; DROP TABLE IF EXISTS memory_vectors;');
@@ -187,12 +185,10 @@ describe('memory_vectors upkeep', () => {
   });
 
   it('the nearest-vector scan hands the event loop back part way, and a write on another handle lands meanwhile', async () => {
-    // Past one page, so the scan yields between its two reads.
     const rows = Array.from({ length: SCAN_PAGE_ROWS + 100 }, (_, i) =>
       createMemory(`note ${i}`, { tenantId: 'default', baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
     );
     batchWriteAndDeleteInFolder(root, rows, []);
-    // Row i sits at angle atan(i + 1) from the query, so the nearest three are rows 0, 1 and 2.
     saveEmbeddingIndex(root, Object.fromEntries(rows.map((r, i) => [r.id, [1, i + 1]])));
     const late = createMemory('written while the scan ran', {
       tenantId: 'default',

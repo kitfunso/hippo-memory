@@ -1,5 +1,3 @@
-// Project names for every front end: list them, fold one into another, and repair old tags; the
-// store owns each transaction.
 import {
   listProjects,
   mergeProjects,
@@ -26,11 +24,9 @@ export type { ProjectFold } from '../../base/ports/store/project-tags.js';
 export interface MergeProjectNamesOptions {
   from: string;
   into: string;
-  /** Plans in a transaction that rolls back: nothing is written, mirrors and backup included. */
   dryRun: boolean;
 }
 
-/** A repair reads the store's folder as well as its rows. */
 type RepairContext = ContextWith<'projectTags' | 'folderFiles'>;
 
 function scopeOf(ctx: ContextWith<'projectTags'>): ProjectTagScope {

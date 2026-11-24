@@ -1,4 +1,3 @@
-// Z0 G3 (prereg 164) with the fake Claude Code: a key phrase readable before its teach voids the (sequence, seed), and preflight refuses static leaks.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,13 +7,11 @@ import {
   cleanup, tmp, isolate, makeRepo, task, teach, apply, plain, lesson, family, spec, run, readRecords, readPlan, find, logLines,
 } from '../fixtures/z0-harness.js';
 
-// Every case builds a git repository in a child process, through the z0 harness fixture.
 vi.setConfig({ testTimeout: 30_000 });
 
 const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64');
 const sessions = (log: string) => logLines(log).filter((l) => l.startsWith('session '));
 const f1 = (keyPhrase?: string) => [family('f1', [lesson('f1-l1', 'Write the lesson file', keyPhrase ? { keyPhrase } : {})])];
-/** n0, then teach t1, two plain tasks and the applies a1 and a2; n0's prompt and setup and n1's prompt vary per test. */
 function leakSpec(r: ReturnType<typeof makeRepo>, n0: string, opts: { n0Setup?: string; n1?: string; t1Setup?: string; keyPhrase?: string } = {}) {
   return spec(r, f1(opts.keyPhrase), [
     task(r, 'n0', n0, opts.n0Setup ? { setup: opts.n0Setup } : {}), teach(r, 't1', 'f1-l1', 'look around only', opts.t1Setup ? { setup: opts.t1Setup } : {}),
@@ -104,7 +101,6 @@ describe('G3 leak search before the teach', () => {
 describe('preflight phrase checks', () => {
   afterEach(cleanup);
 
-  /** preflight in real mode; out sits in a fresh temp dir, which is also where the ancestor walk stops. */
   function preflightOf(s: ReturnType<typeof spec>) {
     const stopAt = tmp('z0-preflight-');
     const out = join(stopAt, 'out');

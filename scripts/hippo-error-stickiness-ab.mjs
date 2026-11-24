@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 8 of docs/EXPERIMENT-PROTOCOL.md. No external API: this tests HIPPO.
- *  Error-stickiness doubles half-life (memory.ts:394), lifting strength and
- *  the composite score, against a TOKEN budget (search.ts:410). Worth it? */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -49,8 +46,6 @@ console.error(
   `queries ${cases.length} usable: stratum E ${cases.filter((c) => c.stratum === 'E').length}, stratum N ${cases.filter((c) => c.stratum === 'N').length}\n`,
 );
 
-/** Tags are NOT touched, so one corpus serves every arm. Lane 6/7 rebuilt it
- *  per arm and shifted idf('error') and avgLen for every document (5.7 C10). */
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const halve = (ids) => entries.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days / 2 } : e));
 const double = (base, ids) => base.map((e) => (ids.has(e.id) ? { ...e, half_life_days: e.half_life_days * 2 } : e));
@@ -79,8 +74,6 @@ const METRICS = {
 const PRIMARY = 'recall@budget';
 let intervalCount = 0;
 
-/** One resample matrix per report so every metric shares draws and repeated
- *  calls stay comparable (5.7 C11: the old loop advanced the stream per metric). */
 function report(rows, label, seed, alpha = 0.05) {
   s = seed;
   const idx = [];
@@ -168,9 +161,6 @@ if (N.ci[PRIMARY].hi < 0) {
 
 let placebo = null;
 if (PLACEBO_REPLAYS > 0) {
-  /** Every query target is barred from BOTH boost pools. Without this the
-   *  boost-other arm promotes 140 of the 173 stratum-N targets it is scored
-   *  on, and beats the error arm by self-promotion alone. */
   const targetIds = new Set(cases.map((c) => c.id));
   const pool = otherRows.filter((e) => !targetIds.has(e.id)).sort((a, b) => tokens(a.content) - tokens(b.content));
   const used = new Set();
@@ -203,9 +193,6 @@ if (PLACEBO_REPLAYS > 0) {
     `\n--- placebo: ${pairs.length} length-matched pairs, median |gap| ${medGap} tokens vs ${medErrLen} median error length -> ${usable ? 'USABLE' : 'TOO WEAK, diagnostic only'}`,
   );
 
-  /** Both arms boost the SAME COUNT at MATCHED LENGTHS and differ only in
-   *  errorness, so length cannot explain a gap between them. Replays share
-   *  ~70% of their pairs, so these are far fewer than 20 effective draws. */
   const shuffle = (a) => {
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));

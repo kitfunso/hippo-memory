@@ -1,4 +1,3 @@
-// A text flag with no value (`--summary` and nothing after it) exits 1; before, parseArgs's `true` was stored as the text "true".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,4 +1,3 @@
-// rememberLocally and extractRememberedFacts on a real store: what each ending stores, counts and answers.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -48,7 +47,6 @@ function seed(ctx: FullContext, content: string, tags: string[]): void {
   writeEntry(ctx.hippoRoot, createMemory(content, { tags, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
 }
 
-/** A store whose last four rows are errors, so a fifth that overlaps them is a repeated error. */
 function storeOfRepeatedErrors(): FullContext {
   const ctx = store(SALIENCE_ON);
   for (let n = 1; n <= 4; n++) seed(ctx, `connection timeout on database shard ${n}`, ['error']);
@@ -196,7 +194,6 @@ describe('rememberLocally starts the embedding', () => {
     await embeddings.close();
   });
 
-  // A context with no keeper of its own makes the write wait for its embed.
   it('leaves a vector for the stored row before it returns, and none for a skipped write', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
     const ctx = store({
@@ -228,7 +225,6 @@ describe('extractRememberedFacts', () => {
     (text: string, status = 200): typeof fetch =>
     async () =>
       new Response(JSON.stringify({ content: [{ text }] }), { status });
-  /** `ctx` with a model whose network is `fetcher`, or with no model when there is none. */
   const withModel = (ctx: FullContext, fetcher?: typeof fetch): FullContext => ({
     ...ctx,
     infra: { ...testInfra(), llm: fetcher && anthropicLlm({ apiKey: 'no-key', fetcher }) },
@@ -264,7 +260,6 @@ describe('extractRememberedFacts', () => {
       requested: true,
     });
     expect(outcome).toEqual({ status: 'ran', facts: 2, failures: [] });
-    // Both facts share the run's instant, so the read order between them is the id's, not the model's.
     expect(
       extracted(ctx, entry)
         .map((row) => row.content)
@@ -286,7 +281,6 @@ describe('extractRememberedFacts', () => {
 
   describe('with a lead-in', () => {
     const LEAD_IN = 'user: How often do you and Mel run?';
-    /** The prompt the model got, from a stub that answers no facts. */
     async function promptFor(ctx: FullContext, entry: MemoryEntry): Promise<string> {
       let prompt = '';
       const fetcher: typeof fetch = async (_url, init) => {

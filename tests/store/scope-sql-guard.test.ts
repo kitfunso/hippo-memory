@@ -1,4 +1,3 @@
-// E10 lane A: the default-deny SQL lives in scopeAdmitSql alone, so a new read site cannot hand-roll a clause that drops the owner arm.
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
@@ -7,12 +6,9 @@ import { fileURLToPath } from 'node:url';
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
 const HAND_ROLLED =
   /:private:%|%:private:|(LIKE|GLOB)\s+['"`][^'"`]*(:private|personal:)|instr\([^)]*:private|['"`]unknown:legacy['"`]/i;
-// The deny list lives with the JS predicates; the SQL that reads it lives with the other SQL twins.
 const SCOPE_MODULES = [join('base', 'scope', 'recall-scope.ts'), join('store', 'sqlite', 'runtime', 'rule-sql.ts')];
 const ALLOWED = new Set(SCOPE_MODULES);
-// Migrations stamp the legacy marker once, as data, and never read through it.
 const EXEMPT_DIR = `db${sep}migrations${sep}`;
-// Doc lines that name the rule; exempt by file and exact text, so an edited or added line is read again.
 const DOC_LINES = new Set([
   'api/assemble.ts: * When undefined, default-deny applies to every `<source>:private:*` and `unknown:legacy` row. */',
   "store/sqlite/sessions/handoffs.ts: // api.recall and printRecall continuity exclude slack:private:* and 'unknown:legacy'.",
@@ -36,7 +32,6 @@ const sources = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((
 describe('scope SQL guard', () => {
   it('finds the patterns where they belong, so the scan is live', () => {
     expect(sources.length).toBeGreaterThan(50);
-    // Each module spells its half of the rule once: the deny list, and the SQL that reads it.
     for (const file of SCOPE_MODULES) expect(hits(file), file).toHaveLength(1);
   });
 

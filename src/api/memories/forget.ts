@@ -1,5 +1,3 @@
-// Forget a memory, and reject or unreject a value so it cannot be stored again.
-
 import {
   BadRequestError,
   memoryNotFoundText,
@@ -50,15 +48,9 @@ export async function removalTarget(
   return entry;
 }
 
-// Reject administration is Context-based and tenant-checked; it shares one transaction flow with
-// `hippo reject` via src/domain/trust/reject-flow.ts.
-
 export interface RejectOptions {
-  /** By-id form: reject the CURRENT content of an existing memory. */
   memoryId?: string;
-  /** Pre-emptive form: reject a value not currently stored (or already gone). */
   value?: string;
-  /** Required — the tombstone stores no content; reason is its only identity. */
   reason: string;
 }
 
@@ -77,8 +69,6 @@ export async function reject(
   opts: RejectOptions,
 ): Promise<RejectResult> {
   if (opts.memoryId !== undefined) {
-    // Tenant scope: same not-found-shaped denial as forget/promote; rejectValue tenant-checks too,
-    // but pre-checking keeps the error message consistent.
     const entry = await memoryGet(ctx, opts.memoryId);
     if (entry === null || !canReadScope(ctx.actor, entry.scope)) {
       throw new NotFoundError(memoryNotFoundText(opts.memoryId));

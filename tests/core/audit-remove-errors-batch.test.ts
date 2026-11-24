@@ -1,4 +1,3 @@
-// auditRemoveErrors deletes on one handle after one read of the id set, with the same rows and forget reasons a delete per id wrote.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';

@@ -1,16 +1,4 @@
 #!/usr/bin/env node
-/**
- * Pre-lock mechanism probe for the lifecycle stress eval (the (b) dry-run +
- * gates G2/G3/G4). NOT the harness - a minimal check that the HEADLINE
- * mechanism FIRES before building the full thing:
- *   1. consolidate() merges near-duplicate episodic clusters (G3 merge fires)
- *   2. the consolidated summary CARRIES the per-fact answer token (score-by-value works)
- *   3. the summary OUTRANKS the weakened (x0.3) originals so per-fact footprint drops
- *   4. physicsSearch is callable read-only, budget-packed (G2 path)
- * Hermetic: a throwaway temp store, local embeddings, no network (G4).
- *
- * Run: node scripts/lifecycle-stress/probe.mjs
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -24,11 +12,9 @@ import { resetAllPhysicsState, loadPhysicsState } from '../../dist/db/physics-st
 import { openHippoDb, closeHippoDb } from '../../dist/db/index.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../../dist/base/rank/physics-config.js';
 
-// mkdtemp gives a private folder under a name no other user of the temp folder can guess or pre-create.
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lse-probe-'));
 const root = path.join(base, '.hippo');
 initStore(root);
-// Hermetic + deterministic: disable the wall-clock-seeded replay pass (same as the harness).
 fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }));
 
 if (!isEmbeddingAvailable()) {
@@ -36,10 +22,6 @@ if (!isEmbeddingAvailable()) {
   process.exit(2);
 }
 
-// 4 queried facts, each as 3 near-duplicate episodic memories. The opaque
-// answer token is inside the first 120 chars of the first line of every member
-// (so it survives both the k=2 and k>=3 merge paths). Variants are near-
-// identical (high token overlap -> clears the 0.35 Jaccard merge threshold).
 const facts = [
   {
     key: 'falcon',
@@ -66,15 +48,13 @@ const facts = [
     filler: 'legal agreement signed following supplier diligence calls',
   },
 ];
-// within-fact: variants share topic+ans+filler (Jaccard high -> merge). cross-fact:
-// distinct topic+ans+filler (Jaccard low -> no cross-fact cluster). No shared boilerplate.
 const variants = (f) => [
   `${f.topic} is ${f.ans}. The ${f.filler}.`,
   `${f.topic} equals ${f.ans}. The ${f.filler}.`,
   `${f.topic}, namely ${f.ans}. The ${f.filler}.`,
 ];
 
-const createdOrder = []; // insertion order = recency proxy (facts first, distractors newest)
+const createdOrder = [];
 function add(content, tags) {
   const e = createMemory(content, { tags, source: 'lse-probe' });
   writeEntry(root, e);
@@ -87,8 +67,6 @@ for (let i = 0; i < 24; i++) {
 
 async function embedAll() {
   for (const e of loadAllEntries(root)) await embedMemory(root, e);
-  // Refresh physics particles from CURRENT strength so post-consolidate weakened
-  // mass is actually scored (codex P1: embedMemory only builds a particle if absent).
   const entries = loadAllEntries(root);
   const index = loadEmbeddingIndex(root);
   const db = openHippoDb(root);
@@ -105,7 +83,6 @@ const pc = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s) => Math.ceil(s.length / 4);
 const hasAns = (results, f) => results.some((r) => (r.entry.content || '').includes(f.ans));
 
-// naive-append (recency-fill): newest-first (reverse insertion order) to budget B. Fact-independent.
 function naiveAnswered(entries) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const newestFirst = [...createdOrder]
@@ -124,7 +101,6 @@ function naiveAnswered(entries) {
   for (const f of facts) if (hasAns(ctx, f)) n++;
   return n;
 }
-// hippo retrieval: per-fact physicsSearch at budget B, check answer token present.
 async function hippoAnswered(entries) {
   let n = 0;
   for (const f of facts) {
@@ -138,7 +114,6 @@ const before = loadAllEntries(root);
 const naiveAns = naiveAnswered(before);
 const hippoNoLifeAns = await hippoAnswered(before);
 
-// consolidate (merge the dupe clusters), then RE-EMBED (the new summary needs an embedding to be retrievable)
 const cons = await consolidate(root);
 await embedAll();
 const after = loadAllEntries(root);
@@ -148,7 +123,6 @@ const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidate
 let summaryCarriesAns = 0;
 for (const f of facts) if (summaries.some((s) => s.content.includes(f.ans))) summaryCarriesAns++;
 
-// footprint: for facts[0], at a very tight budget, is the top result the consolidated summary?
 const tight = await physicsSearch(facts[0].topic, after, {
   hippoRoot: root,
   physicsConfig: pc,
@@ -182,13 +156,8 @@ console.log(
   JSON.stringify(diag, null, 2),
 );
 
-// Strength-sorted (no-query ambient) assembly: sort by strength desc, pack to B.
-// This is the OTHER real getContext mode; consolidation's compact high-strength
-// summaries should float to the top here (unlike the relevance path above).
 function strengthSorted(entries, budget) {
   const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  // Round strength (read-time age-decay micro-varies it) so within-tier ties break
-  // deterministically by content. See run.mjs strengthSortedAssemble for the why.
   const sKey = (e) => Math.round((e.strength || 0) * 1000);
   const sorted = [...entries].sort((a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''));
   const ctx = [];
@@ -234,7 +203,4 @@ out.PROBE_PASS =
   out.PASS_hippo_beats_naive;
 console.log(JSON.stringify(out, null, 2));
 fs.rmSync(base, { recursive: true, force: true });
-// Report-only diagnostic: a `false` flag (e.g. the summary does not outrank the
-// weakened originals) is an expected FINDING, not a probe failure. Exit 0 unless
-// the probe itself crashed.
 process.exit(0);

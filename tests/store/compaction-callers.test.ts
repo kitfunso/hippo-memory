@@ -1,4 +1,3 @@
-// The seams a server uses to save another machine's compaction: pre-compact, compact-resume and the store calls under them.
 import { describe, expect, it, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -91,7 +90,6 @@ describe('saveItems for a caller', () => {
 });
 
 describe('saveItems on a record another process moved', () => {
-  // The in-scope status read refuses these; the guard under it is proved in status-transition-guard.test.ts.
   const save = (db: DatabaseSyncLike, recordId: string): number => {
     const ctx: ItemContext = {
       tenantId: TENANT,
@@ -160,7 +158,6 @@ describe('storeLesson for a caller', () => {
 
 describe('snapshot_saved under a tenant the environment does not name', () => {
   it('marks the record through both the handle and the root', async () => {
-    // The group's body runs to its end inside the call, so the row reads below see its write before the await.
     const marking = withDb((db) => {
       const a = startCompaction(db, TENANT, { ...META, originProject: 'acme/app' });
       const b = startCompaction(db, TENANT, { ...META, sessionId: 's3', originProject: 'acme/app' });
@@ -187,7 +184,6 @@ describe('preCompactForCaller', () => {
     withDb((db) =>
       expect(snapshotRow(db, mine?.id ?? 0)).toMatchObject({ owner_subject: 'alice', origin_project: 'acme/app' }),
     );
-    // The save superseded only Alice's rows: Bob's own row is still his active one.
     expect(loadActiveTaskSnapshot(root, TENANT, BOB)?.id).toBe(bobs.id);
   });
 
@@ -226,7 +222,6 @@ describe('preCompactForCaller', () => {
   });
 
   it('cuts each field back to its cap after the scrub, the summary keeping its newest turns', async () => {
-    // a@b.co masks to [email], one longer, so a field sent at its cap runs one over after the scrub.
     const atCap = (cap: number, tail: string): string =>
       `Mail a@b.co first. ${'Then run the build. '.repeat(120)}`.slice(0, cap - tail.length) + tail;
     await preCompact(owned('alice'), {

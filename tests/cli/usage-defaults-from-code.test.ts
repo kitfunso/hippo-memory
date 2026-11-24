@@ -1,5 +1,3 @@
-// Help text must print the defaults the code uses, so a changed constant cannot leave the help lying.
-
 import { describe, expect, it } from 'vitest';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../src/api/auth/auth.js';

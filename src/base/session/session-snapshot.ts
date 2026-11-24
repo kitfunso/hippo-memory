@@ -6,8 +6,6 @@ import { HOUR_MS } from '../util/time.js';
  */
 export const SNAPSHOT_AMBIENT_MAX_AGE_MS = 72 * HOUR_MS;
 
-/** A usable session id: non-null, non-empty string; named so the owner-match rule in
- * `freshActiveSnapshot` states its contract once. */
 function isNonEmptySessionId(value: string | null | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }

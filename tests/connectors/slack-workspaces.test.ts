@@ -1,10 +1,3 @@
-/**
- * Unit tests for slack workspace registration helpers (T2B 2026-05-24).
- *
- * Real-DB tests per project rule. Each test opens its own SQLite store
- * to avoid cross-test state.
- */
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { addWorkspace, listWorkspaces, removeWorkspace } from '../../src/surface/connectors/slack/workspaces.js';

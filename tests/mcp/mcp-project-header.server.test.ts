@@ -1,4 +1,3 @@
-// HTTP MCP on a shared store reads the caller's project from two percent-encoded headers and answers a bad one 400 before any JSON-RPC.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';

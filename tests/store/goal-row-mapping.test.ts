@@ -1,4 +1,3 @@
-// tests/store/goal-row-mapping.test.ts
 import { describe, it, expect } from 'vitest';
 import { rowToGoal, type GoalRow } from '../../src/store/sqlite/sessions/goals.js';
 

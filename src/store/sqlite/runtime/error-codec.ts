@@ -1,5 +1,3 @@
-// A thrown error crosses the worker boundary as plain data and arrives as an instance of its class:
-// the server's mappers test `instanceof`, `errcode` and fields.
 import {
   BadRequestError,
   ConflictError,
@@ -27,19 +25,13 @@ type FieldValue = string | number | boolean | null | readonly string[];
 
 /** One error as a thread message can carry it. */
 export interface WireError {
-  /** Constructor names from the thrown class up to Error: several classes set no `name`, so a
-   * name alone cannot pick the class. */
   readonly classes: readonly string[];
   readonly message: string;
   readonly stack: string | undefined;
-  /** Own enumerable fields with a primitive value or a list of strings: `status`, `errcode`,
-   * `storeKind`, a `name` its constructor set, a flush's `failedUnitIds`. */
   readonly fields: Readonly<Record<string, FieldValue>>;
   readonly cause: WireError | undefined;
 }
 
-// Every class the server maps by, at or below the store layer. Abstract ApiError is absent: only
-// its four subclasses are thrown.
 const CLASSES = [
   Error,
   TypeError,
@@ -69,7 +61,6 @@ const PROTOTYPES: ReadonlyMap<string, Error> = new Map(
   CLASSES.map((known): [string, Error] => [known.name, known.prototype]),
 );
 
-// A chain of causes deeper than this is cut, so a cycle cannot recurse for ever.
 const MAX_CAUSES = 4;
 
 function isFieldValue<V>(value: V): value is V & FieldValue {
@@ -133,15 +124,11 @@ export function decodeError(wire: WireError): Error {
       `a store worker threw ${thrown}, which the error codec does not list; it arrives as ${known}`,
     );
   }
-  // A listed ancestor still maps to its status, so its text stays as thrown; under plain Error the
-  // class survives only in the message.
   const message = unlisted && known === 'Error' ? `${thrown}: ${wire.message}` : wire.message;
   const rebuilt =
     wire.cause === undefined
       ? new Error(message)
       : new Error(message, { cause: decodeError(wire.cause) });
-  // The constructor is not run again: its arguments did not cross, and the fields below are what it
-  // set.
   Object.setPrototypeOf(rebuilt, PROTOTYPES.get(known) ?? Error.prototype);
   Object.assign(rebuilt, wire.fields);
   if (wire.stack !== undefined) rebuilt.stack = wire.stack;

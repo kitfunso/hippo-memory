@@ -1,4 +1,3 @@
-// The vector arm of hybrid recall applies tenant, scope and superseded rules before its top-k cut.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { recallScopeFilter } from '../../src/base/scope/recall-scope.js';
 import { createMemory } from '../../src/entry/memory.js';

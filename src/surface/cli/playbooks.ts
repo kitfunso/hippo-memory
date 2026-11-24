@@ -1,5 +1,3 @@
-// First-class object verbs for processes, policies and skills.
-
 import { policiesInForce, skillsExport } from '../../api/objects/object-kinds.js';
 import type { ContextWith } from '../../api/types.js';
 import type { Policy, Process, Skill } from '../../base/records/object-types.js';
@@ -8,7 +6,6 @@ import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 
-// A value-less --step errors; repeated and single values both come back as a list.
 function collectProcessSteps(flags: CliFlags): string[] {
   if (flagValueless(flags, 'step')) {
     fail('--step requires a value, e.g. hippo process new "<name>" --step "do X".');
@@ -45,7 +42,6 @@ const processKind: VersionedKind<'process', ProcessBody> = {
   bodyRequired: 'at least one --step "<text>"',
   body: (flags, verb) => {
     const steps = collectProcessSteps(flags);
-    // A new process may start with no steps; a new version must say what its steps are.
     if (verb === 'supersede' && steps.length === 0) return undefined;
     return { steps, description: nonEmptyStringFlag(flags, 'description') };
   },

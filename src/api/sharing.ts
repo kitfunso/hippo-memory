@@ -1,7 +1,3 @@
-// Copying memories between a folder's store and the operator's global store: share one or the best
-// by transfer score, list the projects that shared, and sync the global rows down. The caller's
-// tenant scopes each read of its own store.
-
 import type { MemoryEntry } from '../base/memory/entry.js';
 import { ALL_TENANTS } from '../base/util/tenant.js';
 import { syncGlobalToLocal } from '../domain/sharing/global-sync.js';
@@ -19,8 +15,6 @@ export interface SharePeer {
   readonly latest: string;
 }
 
-// A root's reach sets it for a store kept in a folder, so only a context built without a reach
-// lacks it.
 function requireGlobalTarget(
   ctx: Context,
   action: string,

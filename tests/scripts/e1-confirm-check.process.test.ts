@@ -1,5 +1,3 @@
-// confirm-check.mjs (docs/evals/2026-09-28-e1-release-confirmation-prereg.md): the R4 seed screen, the seed-spec
-// guard, the params check, and split's agreement with compare.mjs on one set of synthetic run files.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -17,7 +15,6 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-// No stale hits, so compare.mjs's cleanStaleR5 is the same quantity as split's updatedR5.
 function writeRun(
   arm: string,
   seed: number,
@@ -42,7 +39,6 @@ function writeRun(
 
 describe('confirm-check.mjs', () => {
   it("split's two lines match compare.mjs to the digit on the same files", () => {
-    // Eight seeds of 40 probes: on three seeds of ten, a different bootstrap stream gave the same 95% bounds.
     for (let s = 1; s <= 8; s++) {
       writeRun('x', s, (i) => (i * i + s * 7) % 5 < 3);
       writeRun('y', s, (i) => (i * 3 + s * s) % 7 < 4);

@@ -1,16 +1,3 @@
-/**
- * Task 16: 200-event GitHub connector smoke test.
- *
- * Streams 200 webhook deliveries (mix of all four event types, public + private
- * repos, varying users) plus 5 deletion events that archive a subset. Asserts
- * row counts, scope/owner/tag invariants, idempotent replay defense, scope-
- * filter denial on no-scope recall, the cross-source generic private filter,
- * and tenant routing fail-closed behaviour.
- *
- * Programmatic event generation — no static fixture file. Deterministic content
- * (`private-secret-marker-N` etc.) makes the no-scope denial check greppable.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -35,15 +22,10 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
-// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown,
 });
-
-// ---------------------------------------------------------------------------
-// Fixtures
-// ---------------------------------------------------------------------------
 
 const PUBLIC_REPO = {
   full_name: 'acme/public-repo',
@@ -70,12 +52,10 @@ interface GeneratedDelivery {
   readonly deliveryId: string;
   readonly isPrivate: boolean;
   readonly markerText: string;
-  /** Set on the 5 events we delete after the stream. */
   readonly artifactRef?: string;
 }
 
 function repoFor(index: number): typeof PUBLIC_REPO | typeof PRIVATE_REPO {
-  // Roughly half public, half private. Index parity keeps it deterministic.
   return index % 2 === 0 ? PUBLIC_REPO : PRIVATE_REPO;
 }
 
@@ -84,9 +64,6 @@ function userFor(index: number) {
   return { login, id: index + 1 };
 }
 
-/** Unique BM25 token per delivery — `markerXXXX` where XXXX is the index.
- *  Avoids cross-row token overlap so a recall on one marker returns exactly
- *  the rows whose body contains it. */
 function uniqueMarker(index: number): string {
   return `zzmarker${String(index).padStart(4, '0')}zz`;
 }
@@ -205,15 +182,6 @@ function makePrReviewCommentDelivery(index: number): GeneratedDelivery {
   };
 }
 
-/**
- * Build the 200-delivery stream with the spec'd distribution:
- *   50 issues.opened
- *   60 issue_comment.created
- *   40 pull_request.opened
- *   50 pull_request_review_comment.created
- *
- * Indices are unique across the whole stream so artifact_refs never collide.
- */
 function buildDeliveryStream(): GeneratedDelivery[] {
   const out: GeneratedDelivery[] = [];
   let i = 0;
@@ -239,10 +207,6 @@ function rawCount(root: string): number {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('GitHub connector — 200-event smoke test', () => {
   let root: string;
   beforeEach(() => {
@@ -253,13 +217,11 @@ describe('GitHub connector — 200-event smoke test', () => {
   });
   const { session } = sessionPerTest();
 
-  // Ingests 200 webhook events and replays them, each its own write to a real store.
   it('ingests the stream cleanly and enforces every security boundary', async () => {
     const ctx = onSession(ctxFor(root), session());
     const deliveries = buildDeliveryStream();
     expect(deliveries).toHaveLength(200);
 
-    // ---- Stream 1: ingest all 200 -----------------------------------------
     const results: IngestResult[] = [];
     for (const d of deliveries) {
       results.push(
@@ -275,11 +237,9 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(ingested).toBe(200);
     expect(rawCount(root)).toBe(200);
 
-    // ---- Pick 5 deletable events (have artifactRefs) and archive them -----
     const deletable = deliveries.filter((d): d is GeneratedDelivery & { artifactRef: string } =>
       Boolean(d.artifactRef),
     );
-    // The 60 issue comments and 50 review comments carry an artifactRef.
     expect(deletable).toHaveLength(110);
     const toDelete = deletable.slice(0, 5);
     const toDeleteIds = new Set(toDelete.map((d) => d.deliveryId));
@@ -298,11 +258,9 @@ describe('GitHub connector — 200-event smoke test', () => {
     }
     expect(archivedTotal).toBe(5);
 
-    // (1) Exactly 195 active raw rows after the stream.
     const activeCount = rawCount(root);
     expect(activeCount).toBe(195);
 
-    // ---- (2)(3)(4) Tag / scope / owner invariants on every active row ----
     const allEntries = loadAllEntries(root, 'default');
     const ghEntries = allEntries.filter((e) => e.tags.includes('source:github'));
     expect(ghEntries).toHaveLength(195);
@@ -313,8 +271,6 @@ describe('GitHub connector — 200-event smoke test', () => {
       expect(e.owner).toMatch(/^user:github:/);
       expect(e.scope === SCOPE_PUBLIC || e.scope === SCOPE_PRIVATE).toBe(true);
 
-      // Cross-check scope ↔ tag agreement: the repo:<owner/name> tag must
-      // identify the same repo as the scope's third segment.
       const repoTag = e.tags.find((t) => t.startsWith('repo:'));
       expect(repoTag).toMatch(/^repo:[^/]+\/[^/]+$/);
       const repoFull = repoTag!.slice('repo:'.length);
@@ -325,7 +281,6 @@ describe('GitHub connector — 200-event smoke test', () => {
       }
     }
 
-    // ---- (5) Re-running the same stream produces 0 new ingests -----------
     const beforeReplay = rawCount(root);
     let duplicateCount = 0;
     for (const d of deliveries) {
@@ -334,8 +289,6 @@ describe('GitHub connector — 200-event smoke test', () => {
         rawBody: d.rawBody,
         deliveryId: d.deliveryId,
       });
-      // Either fast-path 'duplicate' (live row) or 'skipped'/'duplicate' for
-      // the 5 archived rows (their event_log row still exists -> 'duplicate').
       expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
       if (r.status === 'duplicate' || r.status === 'skipped_duplicate') {
         duplicateCount++;
@@ -345,22 +298,11 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(rawCount(root)).toBe(beforeReplay);
     expect(duplicateCount).toBe(200);
 
-    // ---- (6) No-scope recall denial of a private repo memory -------------
-    // Pick the first delivery whose repo was private, then recall its marker.
     const privateDelivery = deliveries.find((d) => d.isPrivate && !toDeleteIds.has(d.deliveryId));
     expect(privateDelivery?.isPrivate).toBe(true);
     const privateMarker = privateDelivery!.markerText;
 
     const noScope = await retrieve(ctx, { query: privateMarker });
-    // Default-deny: no private-repo content surfaces to a no-scope caller.
-    // Since v1.25.0 the private exclusion runs in SQL BEFORE the candidate
-    // window (codex review P2: post-window filtering let private rows starve
-    // admitted candidates). Consequence: a query whose only lexical matches
-    // are denied now behaves exactly like a no-match query; listSearchRows'
-    // full-store fallback may return unrelated PUBLIC rows instead of a
-    // distinguishable empty set. That closes a side channel (an empty result
-    // no longer reveals "something private matches this query"), so the
-    // assertion tests the actual intent: nothing private leaks.
     const allPrivateMarkers = deliveries.filter((d) => d.isPrivate).map((d) => d.markerText);
     for (const r of noScope.results) {
       expect(r.content).not.toContain(privateMarker);
@@ -373,18 +315,15 @@ describe('GitHub connector — 200-event smoke test', () => {
       query: privateMarker,
       filter: { scope: SCOPE_PRIVATE },
     });
-    // The marker is unique to one delivery, so exactly its row matches.
     expect(withScope.results).toHaveLength(1);
     expect(withScope.results.some((r) => r.content.includes(privateMarker))).toBe(true);
 
-    // ---- (7) Replay defense with a fresh deliveryId per delivery ---------
     const beforeReplayDef = rawCount(root);
     let replayDuplicates = 0;
     for (const d of deliveries) {
       const r = await ingestEvent(ctx, {
         event: d.event,
         rawBody: d.rawBody,
-        // Fresh UUID — body+eventName must still dedupe.
         deliveryId: randomUUID(),
       });
       expect(['duplicate', 'skipped', 'skipped_duplicate']).toContain(r.status);
@@ -395,8 +334,6 @@ describe('GitHub connector — 200-event smoke test', () => {
     expect(rawCount(root)).toBe(beforeReplayDef);
     expect(replayDuplicates).toBe(200);
 
-    // ---- (8) Tenant routing failure for unknown installation -------------
-    // Seed a routing table so we land in the multi-tenant branch.
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
@@ -414,9 +351,6 @@ describe('GitHub connector — 200-event smoke test', () => {
       closeHippoDb(db);
     }
 
-    // ---- (9) Cross-scope leak negative test (generic private filter) -----
-    // Insert a synthetic memory under acme:private:demo (NOT a github source).
-    // The Task 0 generic-private filter should still hide it from no-scope recall.
     await remember(ctx, {
       content: 'cross-scope-canary-payload-1234',
       kind: 'raw',
@@ -428,16 +362,11 @@ describe('GitHub connector — 200-event smoke test', () => {
     const canaryNoScope = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
     });
-    // v1.25.0: same rationale as section (6) — the SQL pre-window exclusion
-    // makes a denied-only match behave like a no-match query (fallback rows
-    // possible); assert the intent (the canary payload never surfaces), not
-    // the distinguishable-empty shape.
     expect(canaryNoScope.results.some((r) => r.content.includes('cross-scope-canary-payload-1234'))).toBe(false);
     const canaryScoped = await retrieve(ctx, {
       query: 'cross-scope-canary-payload-1234',
       filter: { scope: 'acme:private:demo' },
     });
-    // The canary is the only row in its scope.
     expect(canaryScoped.results).toHaveLength(1);
     expect(canaryScoped.results[0].content).toBe('cross-scope-canary-payload-1234');
   });

@@ -1,6 +1,3 @@
-"""Zero-model DolphinBench plumbing check, run in WSL: a scripted agent answers one Morgan test
-through the real mock apps, and the stock grader calls a local OpenAI-compatible judge.
-Usage: python dolphin_smoke.py [stub|codex]   (codex needs DOLPHIN_CODEX_HOME, a clean profile)"""
 import asyncio
 import json
 import os
@@ -14,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from dolphin_home import BENCH, CODEX_DIR, ROOT  # the clone, its venv and every output live outside this checkout
+from dolphin_home import BENCH, CODEX_DIR, ROOT
 
 JUDGE = sys.argv[1] if len(sys.argv) > 1 else "stub"
 PORT = 18765
@@ -40,7 +37,6 @@ ORDER = {"restaurant": "Blue Bottle Coffee", "items": ["small latte"], "notes": 
 SETTINGS = {"model": "scripted-stub-agent"}
 USAGE = {"input_tokens": 0, "output_tokens": 0}
 JUDGE_LOG: list[dict] = []
-# One verdict at a time: parallel codex runs would share one auth refresh.
 JUDGE_LOCK = threading.Lock()
 
 
@@ -49,9 +45,8 @@ def win(path: Path) -> str:
 
 
 def codex_verdict(system: str, user: str, work: Path, tag: str) -> str:
-    """One judge call through the Windows codex CLI (ChatGPT plan) via WSL interop."""
     out, log = work / f"codex-{tag}.txt", work / f"codex-{tag}.log"
-    out.unlink(missing_ok=True)  # a codex exit 0 without output must fail, never reread an older verdict
+    out.unlink(missing_ok=True)
     cmd = ["node.exe", win(CODEX_JS), "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
            "-s", "read-only", "-c", "notify=[]", "-c", 'model_reasoning_effort="medium"', "-m", MODEL,
            "-o", win(out), "-"]
@@ -67,7 +62,6 @@ def serve_judge(work: Path) -> ThreadingHTTPServer:
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             system, user = (m["content"] for m in body["messages"])
-            # The arm names its arm, persona and test in ?tag=; the uuid keeps retries and later runs apart.
             label = parse_qs(urlsplit(self.path).query).get("tag", ["untagged"])[0]
             tag = f"{re.sub(r'[^A-Za-z0-9_-]', '_', label)[:80]}-{uuid.uuid4().hex[:8]}"
             with JUDGE_LOCK:
@@ -94,8 +88,6 @@ def serve_judge(work: Path) -> ThreadingHTTPServer:
 
 
 class ScriptedAgent:
-    """Stands in for Claude Code: acknowledges history, then places the order the test asks for."""
-
     def identity(self):
         return {"scripted_agent": "dolphin_smoke", "version": 1}
 
@@ -138,7 +130,7 @@ def main() -> None:
                           "tests": [t for t in morgan["tests"] if t["id"] == "001"]}}
     server = serve_judge(out.parent)
     runner = Runner(release, out, ScriptedAgent(), identity={"smoke": JUDGE}, release_root=ROOT)
-    runner.allow_paid = True  # skips the replay-only guard so the grader reaches the local judge
+    runner.allow_paid = True
     runner.ingest()
     runner.evaluate()
     server.shutdown()

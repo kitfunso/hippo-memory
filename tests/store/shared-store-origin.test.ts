@@ -1,4 +1,3 @@
-// A store flagged `"sharedStore": true` stamps NULL on a write that names no project, never the folder that holds it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -50,7 +49,6 @@ interface Layout {
   readonly folderStamp: string;
 }
 
-/** a: a server folder with no project marker (stamps ''); b: a store inside a git checkout (stamps 'team'). */
 function layouts(flagged: boolean): readonly Layout[] {
   const a = path.join(tmp, 'a', 'srv', 'hippo-team');
   const teamDir = path.join(tmp, 'b', 'team');
@@ -67,7 +65,6 @@ function layouts(flagged: boolean): readonly Layout[] {
   ];
 }
 
-/** A NULL-origin row with its own text per folder: a share of a text the global store holds writes nothing. */
 function rowToShare(store: string): MemoryEntry {
   return { ...createMemory(`the runbook index lives in the wiki of ${path.basename(store)}`), originProject: null };
 }
@@ -227,7 +224,6 @@ interface TaggedStore {
   readonly id: string;
 }
 
-/** `<tmp>/c/hippo-team/.hippo`, whose folder's id `server-id` is unlike its legacy name `hippo-team`, holding one row a member tagged `hippo-team`. */
 function storeWithFoldableTag(flagged: boolean): TaggedStore {
   const folder = path.join(tmp, 'c', 'hippo-team');
   const store = path.join(folder, '.hippo');

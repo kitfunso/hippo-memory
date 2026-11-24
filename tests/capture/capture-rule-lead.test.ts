@@ -1,4 +1,3 @@
-// A captured modal rule keeps the words before its keyword, so a negation or subject is never cut off.
 import { describe, expect, it } from 'vitest';
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 

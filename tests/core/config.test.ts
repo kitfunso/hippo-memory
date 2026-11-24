@@ -11,8 +11,6 @@ import { log } from '../../src/base/util/log.js';
 
 describe('config.pinnedInject', () => {
   it('defaults to enabled=true budget=1500', () => {
-    // v0.29.1: raised from 500 to 1500 so mature installs (10+ pinned
-    // memories) fit the full pinned set without silently truncating.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-'));
     try {
       const cfg = loadConfig(tmp);
@@ -28,7 +26,7 @@ describe('config.pinnedInject', () => {
     try {
       fs.writeFileSync(path.join(tmp, 'config.json'), JSON.stringify({ pinnedInject: { budget: 200 } }));
       const cfg = loadConfig(tmp);
-      expect(cfg.pinnedInject.enabled).toBe(true); // default retained
+      expect(cfg.pinnedInject.enabled).toBe(true);
       expect(cfg.pinnedInject.budget).toBe(200);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -206,12 +204,10 @@ describe('config.sharedStore', () => {
     expect(check(tmp)).toBe(true);
     writeConfig('{not json');
     expect(check(tmp)).toBe(true);
-    // The free function and a new check, as the next process holds, have not seen the folder.
     expect(() => isSharedStore(tmp)).toThrow(/config\.json could not be loaded/);
     expect(() => sharedStoreCheck()(tmp)).toThrow(/config\.json could not be loaded/);
   });
 
-  /** Flags `seen`, breaks its config, then asks the same check through `other`, a second spelling of the folder. */
   function stickyThrough(seen: string, other: string): boolean {
     const check = sharedStoreCheck();
     writeConfig(JSON.stringify({ sharedStore: true }));
@@ -235,7 +231,6 @@ describe('config.sharedStore', () => {
     try {
       fs.symlinkSync(tmp, link, process.platform === 'win32' ? 'junction' : 'dir');
     } catch (err) {
-      // Some boxes refuse links to a normal user; the spelling test still runs there.
       if (err instanceof Error && 'code' in err && err.code === 'EPERM') return;
       throw err;
     }
@@ -264,10 +259,8 @@ describe('config.json is parsed once per file version, per reader', () => {
     };
   });
 
-  /** Reads of this folder's config.json while `run` runs. */
   function configReads(run: () => void): number {
     const read = vi.spyOn(fsDefault, 'readFileSync');
-    // config.ts imports fs as a namespace, which sees the spy only after this sync.
     syncBuiltinESMExports();
     try {
       run();
@@ -278,7 +271,6 @@ describe('config.json is parsed once per file version, per reader', () => {
     }
   }
 
-  /** Writes `budget` at a fixed mtime, so two budgets of one length leave the same stamp. */
   function writeAtFixedStamp(budget: number): void {
     fs.writeFileSync(file, JSON.stringify({ pinnedInject: { budget } }));
     fs.utimesSync(file, new Date('2020-01-01T00:00:00Z'), new Date('2020-01-01T00:00:00Z'));
@@ -311,7 +303,6 @@ describe('config.json is parsed once per file version, per reader', () => {
     writeAtFixedStamp(300);
     const cli = configReader();
     expect(cli(tmp).pinnedInject.budget).toBe(300);
-    // The first root's parse is its own: the stamp it keyed on is unchanged, and the second root's read never reached it.
     expect(server(tmp).pinnedInject.budget).toBe(200);
     const other = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cfg-cache-other-'));
     try {

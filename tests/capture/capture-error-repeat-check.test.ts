@@ -1,5 +1,3 @@
-// capture-error's repeat check read every memory to compare a handful of
-// auto-captured tags. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

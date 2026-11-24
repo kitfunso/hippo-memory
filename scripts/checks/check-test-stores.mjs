@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Fails when a test file builds a store by hand, in any of three shapes: initStore, openStore or openHippoDb on a path built
-// from a mkdtempSync dir; a mkdtempSync dir handed to a hippo CLI call as its cwd or as HIPPO_HOME, so the CLI builds the store
-// there; or one of the three called on a function's own parameter, so the store's dir was made somewhere else.
-// makeRoot and makeStore in tests/_helpers/make-root.ts make the dir, init the store and remove it, so a store is built one
-// way in every test. A temp dir for a fake home, a vault or a plain file stays a mkdtempSync.
 
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +6,6 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 const STORE_OPENERS = new Set(['initStore', 'initTestStore', 'openStore', 'openHippoDb', 'sqliteStore']);
-// These open a store somebody else made, so a parameter holding its dir is fine; only a mkdtempSync dir is a hand-built store.
 const OPENS_GIVEN_ROOT = new Set(['openHippoDb', 'sqliteStore']);
 const PATH_FUNCTIONS = new Set(['join', 'resolve', 'dirname', 'normalize', 'realpathSync', 'native']);
 const SPAWNERS = new Set(['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync', 'fork']);
@@ -30,7 +24,6 @@ function visit(node, fn) {
   });
 }
 
-/** True when the expression only joins, resolves or concatenates path parts: the shapes a temp dir flows through on its way to a store. */
 function isPathExpression(e) {
   if (ts.isIdentifier(e) || ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return true;
   if (ts.isTemplateExpression(e)) return e.templateSpans.every((span) => isPathExpression(span.expression));
@@ -43,7 +36,6 @@ function isPathExpression(e) {
   return ts.isCallExpression(e) && PATH_FUNCTIONS.has(calleeName(e)) && e.arguments.every(isPathExpression);
 }
 
-/** Names an expression reads, leaving out property names (`x.root` reads `x`, not `root`). */
 function readNames(node) {
   const names = new Set();
   visit(node, (n) => {
@@ -61,7 +53,6 @@ const propertyNamed = (obj, name) =>
   );
 const valueOf = (p) => (ts.isShorthandPropertyAssignment(p) ? p.name : p.initializer);
 
-/** True when the call is inside a function that takes the name as a parameter. */
 function isParameter(call, name) {
   for (let p = call.parent; p; p = p.parent) {
     if (ts.isFunctionLike(p) && p.parameters.some((param) => ts.isIdentifier(param.name) && param.name.text === name)) {
@@ -105,7 +96,6 @@ export function handBuiltStores(text) {
     }
   }
   const isTemp = (e) => fromTemp(e) || [...readNames(e)].some((r) => tainted.has(r));
-  // The dir itself, not a path inside it: a CLI given the dir builds its store there.
   const isTempDir = (e) =>
     (ts.isIdentifier(e) && tainted.has(e.text)) ||
     (ts.isCallExpression(e) &&
@@ -165,7 +155,6 @@ export function findHandBuiltStores(dir) {
   );
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dir = process.argv[2] ?? 'tests';
   const hits = findHandBuiltStores(dir);

@@ -1,7 +1,5 @@
-// A supersede that runs api.supersede's read and write to its commit before it returns, for a race test's other writer.
 import type { Context } from '../../src/api/types.js';
 
-/** A caller's Context with the folder its store sits in, which supersedeNow reopens. */
 type RootedContext = Pick<Context, 'tenantId' | 'actor'> & { readonly hippoRoot: string };
 import { loadConfig } from '../../src/host/config-file.js';
 import { createSuccessor } from '../../src/base/memory/entry.js';

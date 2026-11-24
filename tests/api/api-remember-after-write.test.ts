@@ -5,7 +5,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
-/** Makes every insert into the Slack event log fail, as a real constraint would. */
 function breakEventLog(root: string): void {
   const db = openHippoDb(root);
   try {

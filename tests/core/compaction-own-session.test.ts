@@ -1,5 +1,3 @@
-// A session's own compaction items never inject back into it; another session and explicit recall still see them.
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -84,7 +82,6 @@ afterEach(() => {
 });
 
 describe('own-session compaction items in recent context', () => {
-  // 40 items outnumber the loader's first window (32), so admit has to reject them for the load to widen.
   function seedFortyItemsAndOlderRows() {
     const older = Array.from({ length: 8 }, (_, i) =>
       seed(local, `older release note ${i} about the checklist for the payments service`, { created: minute(0, i) }),

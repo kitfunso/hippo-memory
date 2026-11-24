@@ -1,5 +1,3 @@
-// A note over the content cap as parts of one row each: each heading section packed up to the cap,
-// so no part is ever cut short, and a run the secret check flags is never split across two parts.
 import path from 'node:path';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import {
@@ -13,10 +11,8 @@ import { closesFence, fenceOf, markdownHeading, slugHeading } from './markdown.j
 import { CONTENT_CAP, PART_MARK } from './source.js';
 import type { Container, MemoryItem } from './types.js';
 
-/** The longest title-and-heading line a part opens with, so a long heading leaves room for text. */
 const HEAD_CAP = 200;
 
-/** A run of the note: `start` and `end` index it, and `text` is what the part holds of it. */
 interface Piece {
   readonly start: number;
   readonly end: number;
@@ -24,26 +20,22 @@ interface Piece {
 }
 
 interface Section {
-  /** The heading path: a heading with no text of its own leads the next one, `A > B`. */
   readonly heading: string;
   readonly slug: string;
   readonly headingLines: readonly Piece[];
   readonly lines: Piece[];
 }
 
-/** A part as cut: its slug and text, and the run of the note it holds. */
 interface Part extends Piece {
   readonly slug: string;
 }
 
-/** What every cut of one note reads: the note, the room a piece has, and the runs never cut. */
 interface Cut {
   readonly note: string;
   readonly budget: number;
   readonly spans: readonly SecretSpan[];
 }
 
-/** The size as stored: emails are masked before the cap. */
 const size = (text: string): number => maskEmails(text).length;
 
 const overCap = (item: MemoryItem): boolean => size(item.text) > CONTENT_CAP;
@@ -53,8 +45,6 @@ export function splitContainer(container: Container): Container {
   if (!container.items.some(overCap)) return container;
   const fileTitle = (item: MemoryItem): string =>
     container.textKeyed ? path.basename(container.path) : path.posix.basename(item.key);
-  // A text-keyed item's key ends in a hash of its whole text, which any edit changes, so its parts
-  // hang on the heading before the hash; `seen` keeps the keys of two items under one heading apart.
   const noteOf = (item: MemoryItem): string =>
     container.textKeyed ? headingOfKey(item.key) : item.key;
   const seen = new Map<string, number>();
@@ -90,8 +80,6 @@ function noteParts(
   }));
 }
 
-/** The runs the strict check flags in the whole note; when they miss one it still finds, the
- * whole note is one run, as before the split. */
 function flaggedSpans(note: string): SecretSpan[] {
   if (redactSecretsStrict(note) === note) return [];
   const spans = secretSpans(note);
@@ -102,8 +90,6 @@ function flaggedSpans(note: string): SecretSpan[] {
   return redactSecretsStrict(rest) === rest ? spans : [{ start: 0, end: note.length }];
 }
 
-/** Each part opens with the title and heading path; a path over the head cap stays in the text
- * instead, so no heading is cut short. */
 function sectionParts(whole: Cut, section: Section, title: string): Part[] {
   const { heading } = section;
   const line = heading === '' || heading === title ? title : `${title} > ${heading}`;
@@ -116,7 +102,6 @@ function sectionParts(whole: Cut, section: Section, title: string): Part[] {
   );
 }
 
-/** The lines of `note` between two offsets, a CR before each line end left out. */
 function noteLines(note: string, from: number, to: number): Piece[] {
   const lines: Piece[] = [];
   for (let start = from; start <= to;) {
@@ -129,13 +114,11 @@ function noteLines(note: string, from: number, to: number): Piece[] {
   return lines;
 }
 
-// The line after `line` is inside a fence when this returns a run.
 function fenceAfter(open: string | null, line: string): string | null {
   if (open === null) return fenceOf(line);
   return closesFence(line, open) ? null : open;
 }
 
-/** Text before the first heading is the 'top' section; a heading inside a fence is code. */
 function sectionsOf(lines: readonly Piece[]): Section[] {
   const sections: Section[] = [{ heading: '', slug: slugHeading(''), headingLines: [], lines: [] }];
   let fence: string | null = null;
@@ -156,14 +139,11 @@ function sectionsOf(lines: readonly Piece[]): Section[] {
   return sections.filter((s) => s.lines.some((l) => l.text.trim() !== ''));
 }
 
-/** A heading with no Latin letter or digit slugs to 'top', so it takes a hash and pairs only with
- * itself. */
 function partSlug(heading: string): string {
   const slug = slugHeading(heading);
   return slug === 'top' ? `h-${sha256Hex(heading).slice(0, 8)}` : slug;
 }
 
-/** Paragraphs, lists and fences, a fence always a block of its own, blank lines inside it kept. */
 function blocksOf(note: string, lines: readonly Piece[]): Piece[] {
   const blocks: Piece[][] = [];
   let current: Piece[] = [];
@@ -189,7 +169,6 @@ function slice(note: string, start: number, end: number): Piece {
   return { start, end, text: note.slice(start, end) };
 }
 
-/** Neighbours a flagged run spans are one piece, so no cut falls inside the run. */
 function keepSpansWhole(cut: Cut, pieces: readonly Piece[]): Piece[] {
   const out: Piece[] = [];
   for (const piece of pieces) {
@@ -201,7 +180,6 @@ function keepSpansWhole(cut: Cut, pieces: readonly Piece[]): Piece[] {
   return out;
 }
 
-/** Whole pieces joined up to the budget; a piece over it goes to `finer` and stands alone. */
 function packPieces(cut: Cut, pieces: readonly Piece[], finer: (piece: Piece) => Piece[]): Piece[] {
   const out: Piece[] = [];
   let open: Piece | null = null;
@@ -223,8 +201,6 @@ function packPieces(cut: Cut, pieces: readonly Piece[], finer: (piece: Piece) =>
   return out;
 }
 
-/** A block over the budget: a fence at its lines, each part closing and reopening it; any other
- * block at its lines, then its words, then a code point. */
 function splitBlock(cut: Cut, block: Piece): Piece[] {
   const lines = noteLines(cut.note, block.start, block.end);
   const fence = fenceOf(lines[0].text);
@@ -246,7 +222,6 @@ function fenceParts(cut: Cut, lines: readonly Piece[], fence: string): Piece[] {
   const inner = lines.slice(1, closed ? -1 : undefined);
   if (inner.length === 0) return packLines(cut, lines);
   const room: Cut = { ...cut, budget: cut.budget - size(open) - size(close) - 2 };
-  // Under half a part left for code, and the cuts would be scraps inside a fence: plain lines.
   if (room.budget < cut.budget / 2) return packLines(cut, lines);
   return packLines(room, inner).map((p) => ({ ...p, text: `${open}\n${p.text}\n${close}` }));
 }
@@ -260,7 +235,6 @@ function wordsOf(note: string, line: Piece): Piece[] {
   return words;
 }
 
-/** The last resort: cuts at the budget on a code point, a flagged run kept whole even over it. */
 function hardCut(cut: Cut, piece: Piece): Piece[] {
   const out: Piece[] = [];
   for (let at = piece.start; at < piece.end;) {

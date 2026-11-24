@@ -1,4 +1,3 @@
-// Per-recall and per-chunk statements are prepared once per handle, not once per call.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

@@ -1,5 +1,3 @@
-/** CD5 quarantine tier: connector-flagged content is held under `quarantine:private:*` until an admin decides. Real SQLite, real HTTP + MCP, no mocks. */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -210,7 +208,6 @@ describe('a disguised instruction from a connector is held like the plain one', 
   ])('%s', async (_how, content, reason) => {
     const result = await api.rememberUntrusted(adminCtx(home), { content, scope: 'github:public:acme/demo' });
     expect(result.quarantined).toEqual({ reason });
-    // The row keeps the bytes that arrived: the screening form is for matching only.
     expect(readEntry(home, result.id, 'default')).toMatchObject({
       scope: 'quarantine:private:github:public:acme/demo',
       content,
@@ -586,7 +583,6 @@ describe('CLI drive via the built binary', () => {
   it('hippo quarantine --json lists the pending id, and approve succeeds', async () => {
     const cliHome = makeRoot('quarantine-cli', { init: false });
     const env = { ...process.env, HIPPO_HOME: join(cliHome, 'global-hippo'), HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
-    // In process, so coverage sees the quarantine verb; a non-zero exit fails as execFileSync's throw did.
     const hippo = async (...args: string[]): Promise<string> => {
       const r = await runCliAs(args, { cwd: cliHome, env });
       expect(r.status, r.stderr).toBe(0);

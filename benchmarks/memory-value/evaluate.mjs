@@ -1,64 +1,8 @@
 #!/usr/bin/env node
-/**
- * LC2-E1 — scorers, normalization, keep-selection, retention.
- *
- * Normalization: min-max PER STORE (robust to cross-store scale drift,
- * pre-reg). A feature constant within a store (min === max) normalizes to 0
- * for every row in that store, never 0/0.
- *
- * Scorers:
- *   - uniform: equal weights (1/K) over the oriented, normalized K-dim vector.
- *   - single-factor (both signs): score = +-norm(f) for each feature f,
- *     independent of the declared orientation map, so orientation choices
- *     can never hide a better-inverted factor.
- *   - recency: score = -norm(age_days) (the declared-orientation reading).
- *   - weighted (opt-in via --weights <file>, the E2 fitter hook): score =
- *     sum(weight[f] * norm(f)) using literal weights (the weights already
- *     encode sign/orientation; no additional orientation multiply).
- *
- * Keep set: top ceil(budget * N) under (score DESC, sessionIndex ASC,
- * turnIdx ASC, memory_id ASC as final fallback), a stable total order
- * applied identically to every scorer. sessionIndex/turnIdx come BEFORE
- * memory_id (codex review fix round, 2026-08-09 P1 fix): memory_id is
- * crypto.randomUUID(), fresh on every ingest, so a memory_id-primary
- * tie-break made the keep-budget cutoff (and therefore retention, for any
- * tie-heavy scorer — most single-factor scorers over a dead/near-constant
- * feature) non-reproducible ACROSS re-ingests of the identical dataset+seed,
- * even though it was internally consistent within one ingest.
- * (sessionIndex, turnIdx) is dataset-fixed and never changes across
- * re-ingests; memory_id remains only as the final fallback for the
- * vanishingly-rare case of two DIFFERENT logical turns tying on score AND
- * provenance (impossible for real per-turn provenance, kept for totality).
- * Cutoff-boundary score pairs (last-kept vs first-dropped, full float
- * precision) are recorded so a tie-heavy scorer is visible in the results
- * JSON rather than silently resolved by the tie-break (measure-ties
- * discipline).
- *
- * Retention(q) = |gold ∩ kept| / |gold|; questions with 0 gold are SKIPPED
- * from the mean but still counted (goldCount: 0 rows are not an error).
- *
- * Variance-aware reporting (code-review-critic fix rounds, 2026-08-09): a
- * feature that never varies WITHIN ANY SINGLE STORE is provably inert for
- * the uniform/weighted scorers (min-max normalizes it to 0 in every store)
- * and its single-factor score is a pure tie-break, not a real ranking
- * signal. `evaluateAll` computes this per-store liveness across every
- * processed question BEFORE scoring (see computeDatasetVariance — fix
- * round #2 corrected this from a pooled/cross-store definition, which wrongly
- * called a feature "varying" when it was constant in every store individually
- * but at a DIFFERENT constant per store), reports `varyingFeatures`/
- * `deadFeatures` explicitly, restricts `bestSingleFactor` to varying-feature
- * scorers only, and tags every single-factor summary cell for a dead feature
- * with `degenerate: true` so it is never silently mixed into a "best single
- * factor beats uniform" claim.
- */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG, orientationOf } from './config.mjs';
 import { readJson, readJsonl, featuresPathFor, RESULTS_DIR, writeJson } from './common.mjs';
-
-// ---------------------------------------------------------------------------
-// Scorers
-// ---------------------------------------------------------------------------
 
 /** @returns {Array<{name: string, score: (normedFeatures: Record<string, number>) => number}>} */
 export function buildScorers(featureNames, weights) {
@@ -98,19 +42,6 @@ export function buildScorers(featureNames, weights) {
 
   return scorers;
 }
-
-// ---------------------------------------------------------------------------
-// Dataset-wide variance, WITHIN-STORE liveness (codex review fix round #2,
-// 2026-08-09 P2 fix). A feature can pool as "varying" (its raw values differ
-// somewhere across the whole dataset) while being CONSTANT within every
-// single store — e.g. constant at 0.3 in store A, constant at 0.7 in store
-// B. Every scorer normalizes min-max PER STORE, so that feature normalizes
-// to 0 in EVERY store regardless of the cross-store spread: it is provably
-// inert for every scorer, exactly like a truly-constant feature, and must be
-// classified `dead`, not `varying`. Liveness is therefore "varies within AT
-// LEAST ONE store" — the pooled (cross-store) min/max/mean/variance are kept
-// in `detail` as diagnostics only, never as the classification signal.
-// ---------------------------------------------------------------------------
 
 /**
  * @param {Array<Array<{features: Record<string, number>}>>} storesRows  one
@@ -159,7 +90,7 @@ export function computeDatasetVariance(storesRows, featureNames) {
     const mean = has ? p.sum / p.count : 0;
     const variance = has ? Math.max(0, p.sumSq / p.count - mean * mean) : 0;
     const pooledVaries = has && p.max > p.min;
-    const varies = livesWithinStore[f]; // the classification signal — within-store, not pooled
+    const varies = livesWithinStore[f];
     detail[f] = { min: has ? p.min : null, max: has ? p.max : null, mean, variance, pooledVaries, varies };
     (varies ? varying : dead).push(f);
   }
@@ -184,10 +115,6 @@ export function evaluateVarianceGate(varying, dead, opts = {}) {
     deadFeatures: dead,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Per-store evaluation
-// ---------------------------------------------------------------------------
 
 /**
  * @param {Array<{memory_id: string, sessionIndex: number, turnIdx: number, gold: 0|1, features: Record<string, number>}>} rows
@@ -233,8 +160,6 @@ export function evaluateStore(rows, budgets, weights) {
       gold: r.gold === 1,
       score: scorer.score(normed[i]),
     }));
-    // (score DESC, sessionIndex ASC, turnIdx ASC, memory_id ASC) — see header
-    // comment for why memory_id is the LAST fallback, not the primary tie-break.
     scored.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       if (a.sessionIndex !== b.sessionIndex) return a.sessionIndex - b.sessionIndex;
@@ -266,10 +191,6 @@ export function evaluateStore(rows, budgets, weights) {
   return { N, goldCount, perScorer };
 }
 
-// ---------------------------------------------------------------------------
-// Multi-question orchestration
-// ---------------------------------------------------------------------------
-
 /**
  * @param {Array<{questionId: string, split: 'train'|'heldout'}>} questionSplits
  * @param {{ budgets?: number[], primaryBudget?: number, weights?: Record<string,number>, minVarying?: number }} [opts]
@@ -277,23 +198,14 @@ export function evaluateStore(rows, budgets, weights) {
 export function evaluateAll(questionSplits, opts = {}) {
   const primaryBudget = opts.primaryBudget ?? CONFIG.PRIMARY_BUDGET;
   const budgetsIn = opts.budgets ?? CONFIG.KEEP_BUDGETS;
-  // pairedRecords is keyed off primaryBudget; guarantee it's always evaluated
-  // even if a caller passes a custom --budget list that omits it.
   const budgets = budgetsIn.includes(primaryBudget) ? budgetsIn : [...budgetsIn, primaryBudget].sort((a, b) => a - b);
   const weights = opts.weights;
 
   const featureNames = CONFIG.FEATURES;
   let scorerNames = null;
   const perQuestion = [];
-  const aggregate = {}; // split -> scorer -> budget -> { sum, count, skipped }
-  // Per-question paired records: PRIMARY_BUDGET only, every scorer (bootstrap
-  // input; other budgets stay aggregate-only per the pre-reg's descriptive-
-  // only framing for 0.1/0.2/0.5). Built from the SAME evaluateStore() call
-  // as the aggregate below — one pass per question, not two.
+  const aggregate = {};
   const pairedRecords = [];
-  // RAW rows grouped PER STORE (question) — computeDatasetVariance measures
-  // liveness WITHIN each store's array, not across the pooled flat list
-  // (see its doc comment).
   const rawRowsByStore = [];
 
   for (const { questionId, split } of questionSplits) {
@@ -339,15 +251,10 @@ export function evaluateAll(questionSplits, opts = {}) {
     }
   }
 
-  // Within-store variance liveness (raw, pre-normalization) — determines
-  // which single-factor scorers are "degenerate: tie-break-only" (dead
-  // feature, min-max normalizes to 0 in every store) vs real ranking signal.
   const { varying: varyingFeatures, dead: deadFeatures, detail: featureVarianceDetail } =
     computeDatasetVariance(rawRowsByStore, featureNames);
   const varianceGate = evaluateVarianceGate(varyingFeatures, deadFeatures, { minVarying: opts.minVarying });
   const deadFeatureSet = new Set(deadFeatures);
-  // Single-factor scorer name -> its underlying feature, so degenerate
-  // marking and bestSingleFactor filtering share one source of truth.
   const singleFactorFeatureOf = {};
   for (const f of featureNames) {
     singleFactorFeatureOf[`${f}__pos`] = f;
@@ -376,10 +283,6 @@ export function evaluateAll(questionSplits, opts = {}) {
     }
   }
 
-  // bestSingleFactor: the best single-factor scorer per (split, budget),
-  // restricted to VARYING-feature scorers only — a dead-dim single-factor
-  // "win" (a min-max-normalized-to-0 tie broken purely by memory_id) must
-  // never be reported as if it were a real ranking signal.
   const bestSingleFactor = {};
   for (const split of Object.keys(summary)) {
     bestSingleFactor[split] = {};
@@ -387,15 +290,15 @@ export function evaluateAll(questionSplits, opts = {}) {
       let best = null;
       for (const scorerName of scorerNames) {
         const underlyingFeature = singleFactorFeatureOf[scorerName];
-        if (underlyingFeature === undefined) continue; // uniform/recency/weighted are not single-factor
-        if (deadFeatureSet.has(underlyingFeature)) continue; // never mix a degenerate scorer into "best"
+        if (underlyingFeature === undefined) continue;
+        if (deadFeatureSet.has(underlyingFeature)) continue;
         const cell = summary[split][scorerName][budget];
         if (cell.meanRetention === null) continue;
         if (best === null || cell.meanRetention > best.meanRetention) {
           best = { scorer: scorerName, meanRetention: cell.meanRetention, questionsIncluded: cell.questionsIncluded };
         }
       }
-      bestSingleFactor[split][budget] = best; // null if every varying-feature scorer had 0 eligible questions
+      bestSingleFactor[split][budget] = best;
     }
   }
 
@@ -414,9 +317,6 @@ export function evaluateAll(questionSplits, opts = {}) {
   };
 }
 
-// --------------------------------------------------------------------------
-// CLI
-// --------------------------------------------------------------------------
 function flag(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;

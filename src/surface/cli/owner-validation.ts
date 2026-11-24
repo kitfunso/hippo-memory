@@ -1,6 +1,3 @@
-/** --owner validation per MEMORY_ENVELOPE.md: `user:<id>` | `agent:<id>`, id in `[A-Za-z0-9_-]+`.
- * Warn-only by default for legacy scripted callers; `HIPPO_STRICT_OWNER=1` rejects and exits. */
-
 import { processEnv } from '../../base/util/env.js';
 
 const OWNER_RE = /^(user|agent):[A-Za-z0-9_-]+$/;
@@ -9,9 +6,7 @@ export const OWNER_CONTRACT_HINT =
 
 export interface OwnerValidation {
   ok: boolean;
-  /** The owner string as the caller should now use it. undefined when no owner was supplied. */
   value: string | undefined;
-  /** Human-readable message (warn or error). Empty when ok = true. */
   message: string;
 }
 

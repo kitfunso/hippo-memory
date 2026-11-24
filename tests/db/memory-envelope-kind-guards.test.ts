@@ -97,9 +97,6 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
   it('backfills kind=superseded for rows with superseded_by set, kind=distilled otherwise', () => {
     const home = makeRoot('a3');
     const db = openHippoDb(home);
-    // The v14→v15 NULL guard means we cannot null out kind in app code to simulate
-    // pre-A3 state (the trigger aborts). Instead, drop the triggers, simulate, re-run
-    // the migration, which is safe to run twice, then verify.
     db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_insert`);
     db.exec(`DROP TRIGGER IF EXISTS trg_memories_kind_check_update`);
     db.prepare(
@@ -174,7 +171,6 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
     removeDir(home);
   });
 
-  // v15 hardening: NULL-kind bypass closure + raw_archive uniqueness
   it('v15: rejects INSERT with kind=NULL (closes the v14 NULL bypass)', () => {
     const home = makeRoot('a3');
     const db = openHippoDb(home);
@@ -214,7 +210,6 @@ describe('memory envelope: kind column, delete and update guards, raw_archive, r
         )
         .run('m1', ts, 'duplicate at same instant', 'user:1', '{}'),
     ).toThrow(/UNIQUE constraint/i);
-    // Different timestamps for the same memory_id are allowed (history)
     db.prepare(
       `INSERT INTO raw_archive (memory_id, archived_at, reason, archived_by, payload_json) VALUES (?, ?, ?, ?, ?)`,
     ).run('m1', '2026-04-29T13:00:00.000Z', 'second event', 'user:1', '{}');

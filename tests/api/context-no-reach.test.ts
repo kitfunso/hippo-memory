@@ -1,4 +1,3 @@
-// A Context with no reach (an integrator's own store) reads one project and no global store, as the old "other" branch did.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

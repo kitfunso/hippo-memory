@@ -1,4 +1,3 @@
-// What a sync did, per tool, and the one line a command prints about it.
 import { AGENT_MEMORY_TOOLS, type Scope, type ToolId } from './agent-memory-tools.js';
 import { plural } from '../util/format.js';
 
@@ -70,8 +69,6 @@ export interface ToolReport {
   readonly homes: string[];
   readonly containers: ContainerSeen[];
   readonly tally: Tally;
-  /** Dry run only: kept rows in containers this run did not list, such as a moved project's old
-   * folder. */
   unlisted: number;
 }
 

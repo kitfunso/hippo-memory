@@ -31,7 +31,6 @@ beforeEach(async () => {
 });
 afterEach(() => removeScratch(s));
 
-// The hook runs through runCli in this process: every case reads rows, the log and the printed line, none the process.
 function postCompact(input: string, cwd: string = s.proj) {
   return runCliAs(['post-compact', '--log-file', logFile], { cwd, env: s.env, input });
 }
@@ -40,7 +39,6 @@ function log(): string {
   return fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
 }
 
-// Items in each fixture payload, in file order.
 const FIXTURE_ITEMS = [4, 1, 2, 2, 0];
 
 describe('hippo post-compact on real PostCompact payloads', () => {

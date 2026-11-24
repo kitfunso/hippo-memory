@@ -1,6 +1,3 @@
-/** Every rollback reached through catch or finally in src/ carries a guard, so a failed
- *  rollback can never replace the error that caused it. Savepoint rollbacks included. */
-
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -112,7 +109,6 @@ describe('guarded rollback', () => {
   });
 });
 
-/** Runs `run` on a store handle holding an empty scratch table, `scope_probe(v)`. */
 function withProbeDb(run: (db: DatabaseSyncLike) => void): void {
   const root = makeRoot('write-scope');
   const db = openHippoDb(root);
@@ -187,7 +183,6 @@ describe('withWriteScopeOr', () => {
       let thrown: unknown;
       try {
         withWriteScopeOr(db, 'probe', () => {
-          // Ends the transaction early, so the scope's ROLLBACK has none to undo and throws.
           db.exec('ROLLBACK');
           throw first;
         });
@@ -200,7 +195,6 @@ describe('withWriteScopeOr', () => {
   });
 });
 
-// A savepoint rollback throws for the same reason a plain one does, so both families count.
 const BARE_ROLLBACK = /^[\w.]+\.exec\((['"])ROLLBACK(?: TO SAVEPOINT \w+)?\1\);(\s*\/\/.*)?$/;
 const ERROR_PATH_OPENER = /^(\}\s*)?(catch\s*(\([^)]*\))?|finally)\s*\{$/;
 const GUARD_OPENER = /^(\}\s*)?try\s*\{$/;
@@ -219,7 +213,6 @@ function findErrorPathBareRollbacks(srcDir: string): string[] {
   return flagged;
 }
 
-// Climb the enclosing blocks by brace balance: catch or finally is an error path, try is the guard.
 // SHORTCUT: braces inside strings are counted too; swap in a parser if that ever misfires.
 function onErrorPath(lines: string[], start: number): boolean {
   let depth = 0;

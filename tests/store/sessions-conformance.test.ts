@@ -1,5 +1,3 @@
-// Sessions answers: snapshots and handoffs under continuity keys,
-// events, the session-end handoff, working memory and the session-owner binding.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { SessionHandoff } from '../../src/base/session/handoff.js';
@@ -33,7 +31,6 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-/** Each call one second after the one before, so the store stamps known times and orders rows by them. */
 async function conforms(calls: readonly GroupCall<'sessions', unknown>[]) {
   const timed = calls.map((call, i): GroupCall<'sessions', unknown> => (group, store) => {
     vi.setSystemTime(START + i * 1000);
@@ -94,7 +91,6 @@ describe('Sessions snapshots', () => {
 describe('Sessions snapshot close', () => {
   const T = 'default';
   const SEEDED_AT = '2026-02-01T00:00:00.000Z';
-  // The snapshot rows as one JSON text, so a read of them needs no row type.
   const rowsOf = (root: string, columns = 'id, task, status, updated_at'): string =>
     onHandle(root, (db) =>
       String(
@@ -105,7 +101,6 @@ describe('Sessions snapshot close', () => {
           .get()?.rows,
       ),
     );
-  // The port never leaves a snapshot without a successor in a status but its own, so the seed names the row.
   const seedRow = (root: string, status: string): void =>
     onHandle(root, (db) => {
       db.prepare(

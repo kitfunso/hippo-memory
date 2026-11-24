@@ -1,5 +1,3 @@
-// A memory page answers its filter tally and its rows from one evaluation of the kept rows, and a page past the end still
-// answers the tally.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

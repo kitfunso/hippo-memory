@@ -1,5 +1,3 @@
-// A checkout's `origin` remote, read from its git config file and normalized into a project id; no
-// git process, so the prompt hook can call it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isObjectLike, isStringValue } from '../base/session/capture-contract.js';
@@ -36,8 +34,6 @@ export function gitConfigPath(gitRoot: string): string | null {
     }
     return path.join(dirs.commonDir ?? dirs.linkDir, 'config');
   } catch (err) {
-    // The caller falls back to the folder name. A missing .git is the plain case; an unreadable one
-    // is told once.
     const message = `project remote: no git config for ${gitRoot}: ${errorMessage(err)}`;
     if (errorCode(err) === 'ENOENT') log.debug(message, errorFields(err));
     else log.warnThenDebug(`project-remote:${errorCode(err)}`, message, errorFields(err));
@@ -45,8 +41,6 @@ export function gitConfigPath(gitRoot: string): string | null {
   }
 }
 
-/** The text of a `.git` file, or null when `.git` is a folder; one descriptor answers both, so
- * the path cannot change in between. */
 function gitFilePointer(marker: string): string | null {
   const fd = fs.openSync(marker, 'r');
   try {
@@ -145,8 +139,6 @@ export function normalizeRemote(url: string): string | null {
     .replace(/\.git$/, '')
     .replace(/\/+$/, '');
   const id = azureDevOps(tidy);
-  // A colon would break the `shared:<project>:` source format; whitespace means this was no URL; an
-  // `@` left in a path may be a credential.
   return /^[^/]+\/./.test(id) && !/[:\s@]/.test(id) ? id : null;
 }
 
@@ -159,15 +151,12 @@ export function originRemoteId(gitRoot: string): string | null {
     const url = originUrlFromConfig(fs.readFileSync(file, 'utf8'));
     return url === null ? null : normalizeRemote(url);
   } catch (err) {
-    // A checkout whose .git holds no config has no origin; the project is then named by its folder.
     log.debug(`project remote: ${file} not read: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
 }
 
 export const PROJECT_FILE = '.hippo-project.json';
-/** A committed id longer than this is not a project name, so the remote or folder name stands
- * in. */
 const MAX_PROJECT_ID_CHARS = 200;
 
 /** The `id` a team committed in `.hippo-project.json` at root, lowercased like every project
@@ -179,8 +168,6 @@ export function projectFileId(root: string): string | null {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     const raw = isObjectLike(parsed) && 'id' in parsed ? parsed.id : undefined;
     const id = isStringValue(raw) ? raw.trim().toLowerCase() : '';
-    // No slash: a committed file in an untrusted clone must not claim a remote-shaped id like
-    // `github.com/acme/api`.
     if (id !== '' && id.length <= MAX_PROJECT_ID_CHARS && !/[:\s/\\]/.test(id)) return id;
     log.warn(
       `${file}: "id" must be a non-empty string with no colon, slash or spaces; ` +

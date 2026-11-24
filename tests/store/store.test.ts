@@ -191,7 +191,6 @@ describe('stats tracking', () => {
 
   it('persists stat counters through the SQLite backbone', async () => {
     initTestStore(tmpDir);
-    // Longer than any rewrite, so bytes left over from it would break the mirror's JSON.
     fs.writeFileSync(path.join(tmpDir, 'stats.json'), 'x'.repeat(4096));
 
     updateStats(tmpDir, { remembered: 2, recalled: 1, forgotten: 1 });

@@ -7,7 +7,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// HIPPO_BENCH_CLI is read at module load, so each case resets modules and re-imports the adapter.
 async function loadAdapter(cli: string) {
   vi.stubEnv('HIPPO_BENCH_CLI', cli);
   vi.resetModules();

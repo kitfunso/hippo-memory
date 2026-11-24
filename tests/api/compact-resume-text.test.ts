@@ -1,4 +1,3 @@
-// A caller's compaction must store the snapshot the local hook stores, and its resume must hand the model the bytes the local hook prints.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

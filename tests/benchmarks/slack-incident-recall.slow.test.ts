@@ -11,11 +11,9 @@ describe('slack incident recall (success criterion)', () => {
     root = makeRoot('slack-eval');
   });
 
-  // Ingests and recalls ten incident scenarios against a real store.
   it('beats transcript-tail baseline on every one of the 10 scenarios', async () => {
     const r = await runIncidentRecallEval({ hippoRoot: root, session: session() });
     expect(r.scenarios).toHaveLength(10);
-    // Named, so the one scenario that regresses shows in the diff.
     expect(r.scenarios.filter((s) => s.beat).map((s) => s.id)).toEqual([
       'S01-incident',
       'S02-incident',

@@ -1,7 +1,3 @@
-/** Z0 analyzer, part 3 of 6: units, fixed-repository t tests (family is the unit) with stratified bootstrap twins, H1-H4,
- * one Holm procedure per coding over H1 and H2, attribution, reported estimates. The repeat-mistake rate reads each lesson's
- * `first` verdict only (prereg 151); H3 and H4 read Claude Code records only. */
-
 import { addUsage, combineCodings, harmGate, holmAdjust, priceUsage, twoLevelBootstrap, verdict } from '../../dist/domain/eval/eval-stats.js';
 import { fixedRepositoryRatioT, fixedRepositoryT, repositoryT } from '../../dist/domain/eval/repository-t.js';
 import { pairTasks } from './z0-filters.mjs';
@@ -50,14 +46,12 @@ export function blocks(units) {
   return [...repos].sort(byKey).map(([, f]) => [...f].sort(byKey).map(([, us]) => us));
 }
 
-/** Units are finite by construction, so a dropped resample is a bug, never data. */
 function meanBootstrap(units, opts) {
   const e = twoLevelBootstrap(blocks(units), (us) => mean(us.map((u) => u.value)), { iterations: opts.iterations, seed: opts.seed, nullValue: 0, fixedRepositories: true });
   if (e.dropped > 0) throw new Error(`repeat-mistake bootstrap dropped ${e.dropped} resamples; every unit must be finite`);
   return e;
 }
 
-// The sizer passes no resample count, since only the t result decides; the analyzer always passes one.
 const twin = (opts, run) => (opts.iterations === undefined ? {} : { bootstrap: run() });
 
 /** Amendment 1's t test over repository means (each repository counts once), kept as a view: it decides nothing. */
@@ -120,7 +114,6 @@ function ratioBootstrap(units, field, opts) {
   return twoLevelBootstrap(blocks(units), ratioOf(field), { iterations: opts.iterations, seed: opts.seed, nullValue: 1, fixedRepositories: true });
 }
 
-/** One cell per (repo, family, seed), so each repository is a family-by-seed table; `make` reduces a cell's units. */
 function cellsOf(units, make) {
   const groups = new Map();
   for (const u of units) {
@@ -137,7 +130,6 @@ export function ratioT(units, field, opts) {
   return { ...fixedRepositoryRatioT(ratioCells(units, field)), ...twin(opts, () => ratioBootstrap(units, field, opts)) };
 }
 
-// A unit may sum `n` pairs (the sizer folds seeds into one unit); the difference stays per pair.
 const resolveDiff = (us) => (sum(us.map((u) => u.t.resolved)) - sum(us.map((u) => u.c.resolved))) / sum(us.map((u) => u.n ?? 1));
 
 /** H4 on set N units: the cost ratio and the resolve difference, each a fixed-repository test (family is the unit), and the gate.
@@ -172,15 +164,12 @@ function reportOrder(verdicts, h4) {
   return [...order, 'attribution'];
 }
 
-/** Prereg 148 words a winning H1 two ways, so a tie, loss or inconclusive H1 gets neither sentence (reading 2).
- * With A5 not planned (`est` null), A2 cannot have beaten it, so a win takes 148's "Otherwise" sentence. */
 function attributionOf(h1Verdict, est) {
   if (h1Verdict !== 'win') return { ...est, sentence: null, reason: `not applicable, H1 is ${h1Verdict}` };
   if (est === null) return { sentence: BEHAVIOUR_SENTENCE, reason: A5_NOT_RUN };
   return { ...est, sentence: CODINGS.every((c) => est[c].high < 0) ? LESSONS_SENTENCE : BEHAVIOUR_SENTENCE };
 }
 
-/** H4 is "not run" when set N was never planned, and fails when it was planned but filters left no pair: a harm gate needs data to pass. */
 function harmGateOf(units, setNPlanned, opts) {
   if (units === null || !setNPlanned) return null;
   const nUnits = units.filter((u) => u.set === 'N');
@@ -238,7 +227,6 @@ export function spearman(xs, ys) {
   return sxx === 0 || syy === 0 ? Number.NaN : sxy / Math.sqrt(sxx * syy);
 }
 
-/** Per family, the A2-minus-A1 difference (mean over seeds) against mean wordOverlap; families are the resampled blocks. */
 function overlapCorrelation(s, opts, coding) {
   const overlap = new Map();
   for (const r of s) {
@@ -295,7 +283,6 @@ function slotTable(records, s, prices) {
     .map((c) => ({ arm: c.arm, slot: c.slot, n: c.n, firstFailRate: avg(c.fails), meanCost: avg(c.costs) }));
 }
 
-/** Memory-failure chain per family and arm (178-184); `followed` is read only where `shown` is true. */
 function chainRates(s) {
   const cells = new Map();
   for (const r of s) {
@@ -334,8 +321,6 @@ export function armRate(s, arm, coding, keep, opts) {
   return units.length === 0 ? NA : { ...repeatT(units, opts), units: units.length };
 }
 
-/** Prereg 198 asks for the rate itself by tasks since teach; the A2-minus-A1 difference sits beside it in `bySinceTeach`.
- * Two-seed arms rate fewer seeds (124), so each rate carries the seeds it read. */
 function ratesBySinceTeach(s, arms, opts) {
   const rn = arms.filter((a) => a.startsWith('A'));
   return Object.fromEntries(SINCE_TEACH.map(([name, inBucket]) => {

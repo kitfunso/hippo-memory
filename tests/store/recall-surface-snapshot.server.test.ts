@@ -1,7 +1,3 @@
-// The whole reply of each recall surface (HTTP GET /v1/memories JSON, MCP hippo_recall text, CLI `hippo recall --json`)
-// and every row the recall writes, over one seeded store with vectors, pinned byte for byte: a ranking change on any
-// surface moves this snapshot, while recall-surface-differences.server.test.ts names which difference it touched.
-
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleRecall } from '../../src/surface/cli/recall.js';
@@ -32,7 +28,6 @@ import { mcpContext } from '../_helpers/mcp-context.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
-/** One query and the arguments each surface takes for it; a surface without the argument gets none. */
 interface SnapshotCase {
   readonly query: string;
   readonly http?: Readonly<Record<string, string>>;
@@ -47,7 +42,6 @@ const SESSION_CLI = { 'session-id': SESSION };
 const CASES: ReadonlyArray<readonly [string, SnapshotCase]> = [
   ['one word', { query: 'deploy', cli: { why: true } }],
   ['many words', { query: 'deploy rollout to the new staging cluster' }],
-  // The cli file moved in #1135: accented letters now stay inside the word, so `caf` no longer ranks café first.
   ['part word', { query: 'caf' }],
   ['no terms', { query: '!!' }],
   ['no match', { query: 'zebra' }],
@@ -95,12 +89,10 @@ let templates: Templates;
 let embeddings: HashedEmbeddings;
 let callers: CallerState;
 
-// The seeded prediction's claim is a semantic row with a fresh id each run.
 const stableIds = <T>(value: T): T =>
   // SAFETY: only string contents change, so the JSON parses back to the same shape.
   JSON.parse(JSON.stringify(value).replace(/\bsem_[0-9a-f]+\b/g, '<claim>')) as T;
 
-/** What one recall answered and every row it left in the local and the global store. */
 interface Recalled<T> {
   readonly reply: T;
   readonly local: ReturnType<typeof rowsOf>;
@@ -188,8 +180,6 @@ describe('recall surface snapshot', () => {
     vi.unstubAllEnvs();
   });
 
-  // A store per surface: a recall rewrites the rows it returns, and that write would move the next surface's ranks.
-  // One file per case and surface, so a moved ranking shows as a small diff in the one place it moved.
   it.each(CASE_SURFACES)('%s via %s', async (name, surface, c) => {
     const got = await onFreshStore<unknown>((s) => SURFACES[surface](s, c));
     await expect(got).toMatchFileSnapshot(`./__snapshots__/recall-surface/${fileStem(name)}.${surface}.txt`);

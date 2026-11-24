@@ -1,5 +1,3 @@
-// The real outside services, built in one place: each composition root puts them in the Context it
-// builds.
 import type { InfraPorts } from '../base/ports/infra.js';
 import type { Llm } from '../base/ports/llm.js';
 import type { RerankerLookup } from '../base/ports/reranker.js';
@@ -26,16 +24,11 @@ export function llmFromEnv(fetcher?: typeof fetch): Llm | undefined {
   return { send: async () => ({ ok: false, failure: { kind: 'config', message: route.reason } }) };
 }
 
-/** What a root builds once and keeps: its rerankers, so the cross-encoder loads once, and its
- * warned failures. */
 interface RootKept {
   readonly reranker: RerankerLookup;
   readonly failureNotices: FailureNotices;
 }
 
-/** The real ports over what the root keeps; the machine, the model, the eval switches and the
- * clock read the environment as each Context is built, and the machine walks projects through
- * the root's `host`. */
 function realInfra({ reranker, failureNotices }: RootKept, host: Host): InfraPorts {
   return {
     machine: currentMachine(host),

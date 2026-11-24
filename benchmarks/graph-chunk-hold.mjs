@@ -1,5 +1,3 @@
-// How long each of sleep's graph-write transactions holds the write lock, on 4,000 decisions and 1,000 policies under the OS temp folder.
-// Run by hand after `npm run build`, never in CI: node benchmarks/graph-chunk-hold.mjs [memories]. Exits 1 when a chunk holds over 150 ms.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -20,7 +18,6 @@ const POLICIES = 1_000;
 const DECISIONS = 4_000;
 const MEMORIES = Number(process.argv[2] ?? 20_000);
 
-/** Each decision names two policies, so the graph gets about two references per decision on top of its entities. */
 async function seedObjects(root) {
   const objects = sqliteStore(root).objects;
   for (let p = 0; p < POLICIES; p++) await savePolicy(objects, loadConfig(root).defaultHalfLifeDays, TENANT, { policyName: `RetryRule${p}`, policyText: `retry budget ${p}` });
@@ -29,7 +26,6 @@ async function seedObjects(root) {
   }
 }
 
-/** Filler memories so the store holds `MEMORIES` rows in all, mirrors included. */
 function seedFiller(root, n) {
   const db = openHippoDb(root);
   try {
@@ -50,7 +46,6 @@ function memoryCount(root) {
   }
 }
 
-/** Records BEGIN IMMEDIATE to COMMIT for every transaction the graph writer opens, and nothing else's. */
 function timeGraphChunks() {
   const holds = [];
   const begunAt = new WeakMap();

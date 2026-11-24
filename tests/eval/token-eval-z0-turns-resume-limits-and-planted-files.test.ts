@@ -1,4 +1,3 @@
-// Instruction files the agent leaves above work/, and usage limits around resumes.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -133,7 +132,6 @@ describe('usage limits around resumes', () => {
     await run(s, ['A0'], out, { limitWaitMs: 5000 });
     const t1 = find(readRecords(out), 'A0', 't1');
     expect(t1).toMatchObject({ invalid: null, limitRetries: 1, lessons: [{ first: 'fail', final: 'pass' }] });
-    // t1's step spans its start to n1's start and holds at least the 5 s nap and 5 s wait, which load only stretches; wallMs must leave both out.
     const started = Object.fromEntries(readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)]));
     const stepMs = started.n1 - started.t1;
     const wallMs = t1.wallMs ?? -1;

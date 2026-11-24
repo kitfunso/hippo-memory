@@ -1,4 +1,3 @@
-// The goal options the Goals group takes.
 import type { PolicyType, Goal } from './types.js';
 import type { MethodEffects } from './effects.js';
 

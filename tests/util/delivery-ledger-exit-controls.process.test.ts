@@ -1,4 +1,3 @@
-// Exit negative controls: constructions where a join must NOT confirm, so a reader that over-joins fails here.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as path from 'node:path';
 import {

@@ -1,5 +1,3 @@
-// GitHub Copilot Chat in VS Code: memory-tool files under VS Code's own data folders, one set per
-// product and workspace.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import { readFolderStore, type FolderRules } from './folder-store.js';
@@ -11,7 +9,6 @@ import { vscodeDataFolders } from '../../base/util/agent-homes.js';
 
 const MEMORY_TOOL = ['github.copilot-chat', 'memory-tool', 'memories'] as const;
 
-/** A `file:` URI as a local path; null for any other scheme or a URI with a host part. */
 function fileUriToPath(uri: string, platform: NodeJS.Platform): string | null {
   if (!uri.startsWith('file://')) return null;
   const rest = decodeURIComponent(uri.slice('file://'.length));
@@ -19,8 +16,6 @@ function fileUriToPath(uri: string, platform: NodeJS.Platform): string | null {
   return platform === 'win32' ? rest.replace(/^\/(?=[a-zA-Z]:)/, '').replace(/\//g, '\\') : rest;
 }
 
-/** The workspace's single folder as a path; null (with a warning when the file is unusable) for
- * anything else. */
 function workspaceFolder(
   files: AgentFiles,
   file: string,
@@ -33,7 +28,6 @@ function workspaceFolder(
     return null;
   }
   try {
-    // A scalar file or a non-string `folder` throws and becomes a warning.
     const json = parseJson(read.text);
     if (!isJsonObject(json)) throw new Error('not a JSON object');
     if ('workspace' in json || !json.folder) return null;
@@ -46,8 +40,6 @@ function workspaceFolder(
   }
 }
 
-/** Matches the project root exactly, or its git top level; git is asked once, and only when a
- * folder needs it. */
 function projectMatcher(ctx: AdapterContext, projectRoot: string): (folder: string) => boolean {
   const fold = (p: string): string => (ctx.platform === 'win32' ? p.toLowerCase() : p);
   const root = fold(path.resolve(projectRoot));

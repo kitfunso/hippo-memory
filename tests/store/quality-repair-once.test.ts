@@ -123,7 +123,6 @@ describe('repairQualityOnce', () => {
     expect(await repairQualityOnce(storeFilesOf(root), 'default')).toBeNull();
   });
 
-  // The failed repair waits out the 5 s lock wait on the held write lock, which is the default test limit.
   it('leaves the store unmarked when the repair fails, so the next run tries again', async () => {
     const bad = seed(root, CUT);
     const holder = new DatabaseSync(join(root, 'hippo.db'));
@@ -152,7 +151,6 @@ describe('repairQualityOnce', () => {
   });
 });
 
-// In process each case runs under 0.5 s, so the 30 s process-project timeout is a 60x margin.
 describe('the upgrade runs the repair once', () => {
   let dir: string;
   let local: string;
@@ -173,7 +171,6 @@ describe('the upgrade runs the repair once', () => {
       HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
     };
   });
-  // In process, so coverage sees sleep and the daily runner; the runner's own steps still start real children.
   const cli = (...args: string[]) => runCliAs(args, { cwd: dir, env });
 
   it('hippo sleep cleans the project store once, after a dry run that changed nothing', async () => {

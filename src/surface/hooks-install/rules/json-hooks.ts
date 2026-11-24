@@ -1,7 +1,3 @@
-/** Hook install and removal rules for AI coding tools, on parsed settings: Claude Code gets a
- * JSON `hooks` block in settings.json with older forms migrated, Codex an appended one, Copilot
- * a whole file; surface/hooks-install does the reads and writes. */
-
 import * as path from 'node:path';
 import { type JsonHookTarget, copilotHooksFile } from './shared.js';
 import {
@@ -108,8 +104,6 @@ export function planCopilotHooks(settingsPath: string, current: string | null): 
   };
 }
 
-/** A target's paths plus where the compaction hooks log (`compactLog`) and where the note hook does
- * (`noteLog`). */
 type JsonHookLogs = Pick<JsonHookPaths, 'settings' | 'logFile'> & {
   readonly compactLog: string;
   readonly noteLog: string;

@@ -1,4 +1,3 @@
-// The request abort ends a running outbound call, not only the next step.
 import { describe, expect, it } from 'vitest';
 import { startQueryEmbedDeadline } from '../../src/domain/search/vector.js';
 

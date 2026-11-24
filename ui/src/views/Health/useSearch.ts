@@ -15,11 +15,9 @@ export interface SearchState {
   input: string;
   setInput: (value: string) => void;
   clear: () => void;
-  /** The trimmed query the results belong to, or "" when no search is active. */
   query: string;
   status: SearchStatus;
   result: SearchResult | null;
-  /** Memories matched per project key; null when no search has results for the typed query. */
   hits: ReadonlyMap<string, number> | null;
   error: string | null;
 }

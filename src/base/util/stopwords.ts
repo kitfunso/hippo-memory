@@ -1,6 +1,3 @@
-// Four stopword sets, one per matcher. Each is tuned to its own matcher, so they differ on purpose
-// and are not merged.
-
 /** Articles, auxiliaries and pronouns. Unlike the conflict set it also drops "not" and "no"; it
  * has no wh-words. */
 export const MEMORY_QUALITY_STOPWORDS: ReadonlySet<string> = new Set([
@@ -277,8 +274,6 @@ export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'so',
   'than',
   'then',
-  // Verbs inside FORWARD_CLAIM_PATTERNS gate the regex but are no signal for class resolution;
-  // listing them keeps them out of the classQueryTokens overlap.
   'take',
   'taken',
   'takes',
@@ -293,8 +288,6 @@ export const FORWARD_CLAIM_STOPWORDS: ReadonlySet<string> = new Set([
   'next',
   'about',
   'around',
-  // Every forward-claim phrase contains a duration unit by design; letting it through would let a
-  // class tag containing 'days' win or tie on the unit.
   'day',
   'days',
   'week',

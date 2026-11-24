@@ -1,4 +1,3 @@
-// `hippo init --scan` installs the user-level agent hooks once and leaves every scanned repo's files as they were.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -16,7 +15,6 @@ beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-scan-'));
   alpha = path.join(home, 'code', 'alpha');
   beta = path.join(home, 'code', 'beta');
-  // Plain init in either repo would append its block to these files.
   for (const repo of [alpha, beta]) {
     fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
     fs.writeFileSync(path.join(repo, 'CLAUDE.md'), '# Claude rules\n');
@@ -30,7 +28,6 @@ afterEach(() => {
   fs.rmSync(home, { recursive: true, force: true });
 });
 
-// Without --no-schedule the run would register a real OS task, without --no-learn it would run git.
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   vi.stubEnv('HOME', home);
   vi.stubEnv('USERPROFILE', home);
@@ -38,7 +35,6 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   process.chdir(cwd);
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']));
-    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;
   } finally {
@@ -46,7 +42,6 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   }
 }
 
-/** Each top-level file of a repo with its text, so a patched or new instruction file shows up. */
 function files(repo: string): Record<string, string> {
   return Object.fromEntries(
     fs

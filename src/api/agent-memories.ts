@@ -1,5 +1,3 @@
-// The agent-memory import as each command runs it: which passes a store gets, which store each pass
-// writes to, and what it lists. src/domain/agent-memories runs one pass.
 import path from 'node:path';
 import type { Machine } from '../base/util/agent-homes.js';
 import {
@@ -30,8 +28,6 @@ export async function importForStore(root: string, opts: SyncOptions): Promise<I
   return report;
 }
 
-/** The home folder's notes, user-global as a session at home files them, with legacy adoption and
- * no handover: the global store is their own store. */
 async function importHomeMemories(globalRoot: string, opts: SyncOptions): Promise<ImportReport> {
   const ctx = context(opts.machine, { projectRoot: opts.machine.home });
   return runPass(
@@ -131,8 +127,6 @@ export async function importSessionFolder(
 ): Promise<ImportReport> {
   const project = transcriptNotesProject(transcriptPath, cwd, opts.machine);
   if (project === null) return emptyReport();
-  // A project store takes its own project's notes; another project's, or home's, go to the global
-  // store, which parts them by origin.
   const { machine } = opts;
   const own =
     machine.isGlobalRoot(root) || project.name === machine.projectIdentity(path.dirname(root)).name;

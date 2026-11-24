@@ -3,7 +3,6 @@
 const PUNCTUATION = /[\p{P}\p{S}]/u;
 const WORD = /[\p{L}\p{N}_]/u;
 
-/** Every maximal backtick run of `text` as [start, end), grouped by its length, in text order. */
 function runsByLength(text: string): Map<number, Array<[number, number]>> {
   const byLength = new Map<number, Array<[number, number]>>();
   for (const { 0: run, index } of text.matchAll(/`+/g)) {
@@ -17,7 +16,6 @@ function runsByLength(text: string): Map<number, Array<[number, number]>> {
 /** `text` with each code span replaced by `fill`, same length; an opener with no closer is text. */
 export function blankCodeSpans(text: string, fill = 'x'): string {
   const byLength = runsByLength(text);
-  // Openers only move forward, so each length keeps a cursor that never goes back.
   const cursor = new Map<number, number>();
   const closerEnd = (length: number, from: number): number => {
     const same = byLength.get(length) ?? [];
@@ -54,11 +52,8 @@ export function blankCodeSpans(text: string, fill = 'x'): string {
 /** One `**` delimiter run and the roles CommonMark gives it. */
 export interface StrongMarker {
   readonly index: number;
-  /** Left-flanking: it can open a span. */
   readonly open: boolean;
-  /** Right-flanking: it can close a span. */
   readonly close: boolean;
-  /** A word character on both sides, as in "2**10" and "foo**bar". */
   readonly inWord: boolean;
 }
 
@@ -79,7 +74,6 @@ const isPunctuation = (char: string): boolean => char !== '' && PUNCTUATION.test
 
 interface Candidate {
   readonly marker: StrongMarker;
-  /** A `/` follows: the `**` may start a path or a glob. */
   readonly slashed: boolean;
 }
 
@@ -100,7 +94,6 @@ export function strongMarkers(text: string): StrongMarker[] {
     };
     found.push({ marker, slashed: after === '/' });
   }
-  // "**/etc/hosts**" is bold when the next marker closes it with no space between; else it is "**/".
   const bold = ({ marker, slashed }: Candidate, i: number): boolean => {
     const next = found[i + 1];
     if (!slashed) return true;

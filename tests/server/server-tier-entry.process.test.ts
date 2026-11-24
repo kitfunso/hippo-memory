@@ -1,4 +1,3 @@
-// What hippo-enterprise imports from the server and store-kit entries gives the answers the core code does, called by package name from a child against the build.
 import { readdirSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { makeRoot, makeStore, openStoreAt } from '../_helpers/make-root.js';
@@ -7,7 +6,6 @@ import { runModuleScript } from '../_helpers/run-module-script.js';
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type KitAnswers = { [label: string]: Json };
 
-/** The named store-kit exports, each called with its JSON arguments, or read when it is a value. */
 function callKit(calls: { [label: string]: readonly [name: string, ...args: Json[]] }): KitAnswers {
   const script = `
     const kit = await import('hippo-memory/store-kit');
@@ -20,7 +18,6 @@ function callKit(calls: { [label: string]: readonly [name: string, ...args: Json
   return runModuleScript<KitAnswers>(script, JSON.stringify(calls));
 }
 
-/** One column of the row `id` on the store at `root`, which the SQL names `value`; read through the helper that check-test-stores allows. */
 function stored<T extends number | string>(root: string, sql: string, id: string): T {
   const db = openStoreAt(root);
   try {
@@ -60,7 +57,6 @@ describe('hippo-memory/store-kit initStore', () => {
 });
 
 describe('hippo-memory/server embedAll', () => {
-  // The index branch is hippo.db's own; the store branch is what a store with only vector groups, as the Postgres one, gets.
   it.each(['index', 'store'] as const)('embeds each memory once on the %s target', (branch) => {
     const { root } = makeStore(`server-tier-embed-${branch}`);
     const script = `
@@ -129,7 +125,6 @@ describe('store-kit row rules answer as core does', () => {
     for (const { id, stamp, iso } of rows) {
       expect(stored<string>(root, 'SELECT created AS value FROM memories WHERE id = ?', id)).toBe(iso ?? stamp);
     }
-    // An explicit offset makes this one the same instant in every time zone.
     expect(rows.map((r) => r.iso)).toEqual(['2026-03-05T08:00:00.000Z', null]);
   });
 
@@ -158,7 +153,6 @@ describe('store-kit row rules answer as core does', () => {
       root,
     );
     expect(stored).toBe(atNow);
-    // Without the given clock the strength would differ, so the match above is the clock at work.
     expect(atNow).not.toBe(atWallClock);
   });
 
@@ -181,7 +175,6 @@ describe('store-kit row rules answer as core does', () => {
     `;
     const rows = runModuleScript<Array<{ limit: number | null; expected: number; actual: number }>>(script, root);
     expect(rows.map((r) => r.actual)).toEqual(rows.map((r) => r.expected));
-    // The default, the floor of 1, a plain limit, then the cap of 10,000 plus the one row read ahead.
     expect(rows.map((r) => r.expected)).toEqual([100, 1, 5, 10_000, 10_001, 10_001]);
   });
 
@@ -239,7 +232,6 @@ describe('store-kit search helpers answer as the SQLite search does', () => {
       await store.close();
       console.log(JSON.stringify({ shared: ids[0], runs }));
     `;
-    // The first text holds both terms, so it lands in both lists and must come out once.
     const texts = ['cache 数据库 shared row', 'cache note one', 'cache note two', '数据库 note one', '数据库 note two'];
     const { shared, runs } = runModuleScript<{
       shared: string;
@@ -254,7 +246,6 @@ describe('store-kit search helpers answer as the SQLite search does', () => {
       expect(both[0]).toBe(words[0]);
     }
     expect(runs.map((r) => r.both.length)).toEqual([2, 4, 5]);
-    // At limit 6 every row of both lists is visited, so the shared row is reached twice and kept once.
     const all = runs[2]!;
     expect(all.words).toContain(shared);
     expect(all.cjk).toContain(shared);

@@ -1,4 +1,3 @@
-// G1 (prereg 113, 159-162): a session that read past its own cell, or was handed memory its arm must not hold, is void.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
@@ -22,9 +21,7 @@ const PS_R = /^-r(?:ecurse)?$/i;
 const RECURSIVE_FLAG = { grep: GREP_R, egrep: GREP_R, fgrep: GREP_R, ls: /^-[a-zA-Z]*R|^--recursive$/, 'get-childitem': PS_R, gci: PS_R, dir: /^(?:-r(?:ecurse)?|[-/]s)$/i };
 const WILDCARD_SEARCH = new Set(['select-string', 'sls']);
 const CD = new Set(['cd', 'pushd', 'set-location', 'sl', 'chdir']);
-// Under a Codex home a session may read its memories, config, hooks and instructions; any other file but its own rollouts is past work.
 const CODEX_OWN = /^(?:memories(?:\/|$)|config\.toml$|hooks\.json$|agents[^/]*\.md$)/i;
-// What a Codex memory thread may not reach: it reads this run's past sessions by design (E6 plan R21).
 const OUTSIDE = new Set(['other-arm', 'other-run', 'operator']);
 const CLAUDE_READ = { toolInputs, toolResultTexts, hookContexts };
 const READ_KEYS = { Read: 'file_path', NotebookRead: 'notebook_path', NotebookEdit: 'notebook_path', LS: 'path', Edit: 'file_path', MultiEdit: 'file_path', Write: 'file_path' };
@@ -47,19 +44,16 @@ export function resolveToken(token, { env, cwd, platform }) {
     .replace(/\$\{(\w+)\}/g, sub)
     .replace(/\$(\w+)/g, sub)
     .replace(/%(\w+)%/g, sub);
-  // The agent's shell is Git Bash (homes.mjs), where /c/x is C:/x.
   if (win) p = p.replace(/^\/([a-zA-Z])(?:\/|$)/, (_, d) => `${d.toUpperCase()}:/`);
   const resolved = (win ? path.win32 : path.posix).resolve(cwd, p);
   return win ? resolved.replaceAll('\\', '/') : resolved;
 }
 
-/** A search or glob root: the path up to the directory holding its first wildcard. */
 function cutWildcard(p) {
   const wild = p.search(/[*?[]/);
   return wild < 0 ? p : p.slice(0, p.lastIndexOf('/', wild) + 1) || p.slice(0, wild);
 }
 
-/** Each simple command's words, line by line, read with the agent shell's quotes and escape character, so `"$HOME"/x` is one word and `;&|()` end a command. */
 function shellCommands(text, esc) {
   const cmds = [];
   const joined = text.replace(esc === '\\' ? /\\\r?\n/g : /`\r?\n/g, '');
@@ -90,17 +84,14 @@ function shellCommands(text, esc) {
 
 const commandName = (word) => (word ?? '').replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
 
-// A body that only cat or tee takes is file content, as a Write tool's is; one fed to any other command, or piped on, may be a script.
 const HEREDOC = /(?<!<)<<(?!<)(-?)\s*(['"]?)([\w.-]+)\2/g;
 const FILE_SINK = new Set(['cat', 'tee']);
 
 function onlyToFile(line, at) {
-  // Quote-blind on purpose: in `git commit -m "$(cat <<'EOF'` the quote closes after the body.
   const cmd = commandName(line.slice(0, at).split(/&&|\|\||[;&|(]/).at(-1).trim().split(/[\s<>]+/)[0]);
   return FILE_SINK.has(cmd) && !line.slice(at).split(/&&|\|\||[;&]/)[0].includes('|');
 }
 
-/** The command with each file-content heredoc body blanked; every other line stays. */
 function blankFileBodies(command) {
   const lines = String(command ?? '').split('\n');
   for (let i = 0, next = 0; i < lines.length; i++) {
@@ -116,7 +107,6 @@ function blankFileBodies(command) {
   return lines.join('\n');
 }
 
-/** Path tokens of a shell command as `{token, search, cwd}`; a `cd` target counts as a read and moves cwd for the rest of the command. */
 function shellPaths(command, work, opts, esc) {
   const out = [];
   let cwd = work;
@@ -134,13 +124,11 @@ function shellPaths(command, work, opts, esc) {
     const pattern = PATTERN_FIRST.has(cmd) && !flags.some((a) => PATTERN_FLAG.test(a)) ? words.indexOf(args[0], 1) : -1;
     const kept = words.filter((a, i) => i !== pattern && !a.startsWith('-') && (/[\\/]/.test(a) || a.startsWith('~') || ENV_FORM.test(a) || (search && i > 0 && (a === '.' || a === '..'))));
     for (const token of kept) out.push({ token, search: search && token !== words[0], cwd });
-    // A search with no path searches cwd, which a cd may have moved.
     if (search && !kept.some((a) => a !== words[0])) out.push({ token: '.', search: true, cwd });
   }
   return out;
 }
 
-/** Every path a tool call names, as `{token, search, cwd}`. */
 function toolPaths(name, input, work, opts) {
   if (name === 'Bash' || name === 'PowerShell') return shellPaths(input.command, work, opts, name === 'Bash' ? '\\' : '`');
   if (name === 'Grep') return [{ token: input.path ?? '.', search: true, cwd: work }];
@@ -152,12 +140,10 @@ function toolPaths(name, input, work, opts) {
   return key && input[key] ? [{ token: String(input[key]), search: false, cwd: work }] : [];
 }
 
-// Errors an agent-written path can raise, so the walk takes the parent; any other, such as EMFILE or ENOMEM, is a runner fault.
 const UNRESOLVED = new Set([
   'ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'ELOOP', 'EINVAL', 'ENAMETOOLONG', 'EBUSY', 'EIO', 'ENXIO', 'ENODEV', 'UNKNOWN', 'ERR_INVALID_ARG_VALUE',
 ]);
 
-/** p with its deepest existing prefix resolved by the filesystem, so a short name or a link alias equals its target. */
 function realPath(p) {
   const tail = [];
   for (let cur = path.resolve(p); ; cur = path.dirname(cur)) {
@@ -179,7 +165,6 @@ export function foldPath(p) {
   return (WIN ? s.toLowerCase() : s).replace(/(?<=.)\/+$/, '');
 }
 
-/** The cell's bounds, folded for comparison; operator homes come from the runner's own env, since a Codex session's HOME is the run's. */
 function bounds(ctx, run, step, ownIds) {
   const win = WIN;
   const fold = foldPath;
@@ -192,7 +177,6 @@ function bounds(ctx, run, step, ownIds) {
     projects: fold(path.join(d.claudeConfig, 'projects')), own: [d.work, d.claudeConfig, d.codexHome, d.hippoHome, d.bin, d.home].map(fold),
     ownIds: new Set(ownIds.map((id) => (win ? id.toLowerCase() : id))),
     foreign: ctx.foreignDirs.filter((f) => f.order < step.order).map((f) => fold(f.path)),
-    // A recursive search from an ancestor of any of these reads past transcripts, other runs or operator memory (162).
     searchRoots: [fold(path.join(d.claudeConfig, 'projects')), fold(d.codexHome), fold(path.dirname(d.root)), ...operator],
   };
 }
@@ -200,7 +184,6 @@ function bounds(ctx, run, step, ownIds) {
 export const under = (p, root) => p === root || p.startsWith(root.endsWith('/') ? root : `${root}/`);
 const relTo = (root, p) => (p === root ? '' : p.slice(root.length + 1));
 
-/** Files under claude-config a session may read: its arm's memory and instructions, and its own transcripts. */
 function ownConfig(b, p) {
   const rel = relTo(b.config, p);
   if (/^projects\/[^/]+\/memory(?:\/|$)|^claude\.md$|^rules(?:\/|$)|^settings[^/]*\.json$/i.test(rel)) return true;
@@ -208,10 +191,8 @@ function ownConfig(b, p) {
   return Boolean(m && b.ownIds.has(m[1]));
 }
 
-/** A rollout of one of the session's own threads, named `rollout-<time>-<thread id>.jsonl`. */
 const ownRollout = (b, rel) => /^sessions\/.*\.jsonl$/.test(rel) && [...b.ownIds].some((id) => rel.endsWith(`-${id}.jsonl`));
 
-/** The first class a resolved path falls in (plan section 4, revisions 11 and 13), or null when the read is allowed. */
 function classify(b, p, search) {
   if (under(p, b.cache)) return 'other-arm';
   if (under(p, b.config) && !ownConfig(b, p)) return 'past-transcript';
@@ -247,18 +228,15 @@ export function deliveryHits(run, snap, preSession) {
   return hits;
 }
 
-/** Read hits from every tool call's paths, plus auto-memory hits for a floor arm whose tools touched a memory dir; tokens resolve in the session's env and cwd. */
 function pathHits(run, b, files, fileName, how) {
   const opts = { env: how.env, platform: process.platform };
   const hits = [];
   for (const { file, name, input, cwd: callCwd } of how.adapter.toolInputs(files)) {
     // A call runs in its cwd: where an earlier `cd` left Claude Code's shell, or a Codex call's workdir.
     const paths = toolPaths(name, input, callCwd ?? run.dirs.work, opts);
-    // That dir counts as a read the way a `cd` target does: a bare filename in a foreign dir names no path (prereg 113).
     if (SHELL_TOOLS.has(name) && callCwd && callCwd !== run.dirs.work) paths.unshift({ token: callCwd, search: false, cwd: run.dirs.work });
     for (const { token, search, cwd } of paths) {
       const p = b.fold(cutWildcard(resolveToken(token, { ...opts, cwd })));
-      // Prereg 162 voids a read of files: a word naming nothing on disk, such as an import path in a grep pattern, read nothing.
       if (!fs.existsSync(p)) continue;
       const cls = classify(b, p, search);
       if (cls && (!how.outsideOnly || OUTSIDE.has(cls))) hits.push(hit('read', cls, name, p, fileName(file)));
@@ -268,7 +246,6 @@ function pathHits(run, b, files, fileName, how) {
   return hits;
 }
 
-/** Each `{...}` at any depth as its own keys and values only, nested objects and arrays cut out; string-aware, a string ends at a newline, unclosed objects kept. */
 function ownObjects(text) {
   const done = [];
   const stack = [];
@@ -300,7 +277,6 @@ function ownObjects(text) {
 const AUTO_MEMORY_TEXT = "(user's auto-memory, persists across conversations)";
 const HOOK_TEXT = 'hook additional context';
 
-/** Hits from the proxy's request logs, which hold what the model received (smoke report point 1). */
 function requestHits(ctx, run, logs, fileName) {
   const hits = [];
   for (const log of logs) {
@@ -312,7 +288,6 @@ function requestHits(ctx, run, logs, fileName) {
   return hits;
 }
 
-/** Hits from what the session saw: other sessions' transcript lines in tool results, canaries anywhere, hook-injected context. */
 function contentHits(ctx, run, b, files, fileName, how) {
   const hits = [];
   for (const { file, text: raw } of how.outsideOnly ? [] : how.adapter.toolResultTexts(files)) {

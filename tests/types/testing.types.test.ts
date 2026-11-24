@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory/testing` (src/entry/testing.ts): the eval kit, with no reset seams. */
-
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import * as testing from '../../src/entry/testing.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';

@@ -1,12 +1,3 @@
-/**
- * Task 17: Provenance gate parity check.
- *
- * After ingesting a batch of GitHub events, every kind='raw' row must satisfy
- * the same envelope contract Slack rows do: owner + artifact_ref populated,
- * coverage 1.0. This guards against a future transform regression silently
- * dropping the `user:github:<login>` owner stamp and slipping past CI.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestEvent, type IngestEvent } from '../../src/surface/connectors/github/ingest.js';
@@ -69,7 +60,6 @@ describe('GitHub connector — provenance coverage parity', () => {
 
   it('every ingested GitHub raw row carries owner + artifact_ref (coverage = 1.0)', async () => {
     const ctx = onSession(ctxFor(root), session());
-    // 25 issues + 25 comments = 50 raw rows, all distinct artifact_refs.
     for (let i = 0; i < 25; i++) {
       const ev = makeIssue(i);
       await ingestEvent(ctx, {
@@ -95,8 +85,6 @@ describe('GitHub connector — provenance coverage parity', () => {
     expect(coverage.rawWithEnvelope).toBe(coverage.rawTotal);
     expect(coverage.coverage).toBe(1);
 
-    // GitHub-specific: at least 50 rows are tagged source:github, and every
-    // such row has a non-null owner shaped `user:github:<login>`.
     const githubEntries = entries.filter((e) => e.kind === 'raw' && e.tags.includes('source:github'));
     expect(githubEntries.length).toBeGreaterThanOrEqual(50);
     for (const e of githubEntries) {

@@ -1,5 +1,3 @@
-// The keeper of work a call starts and does not wait on: what it logs, what settle() waits for, and withDetached's
-// choice between the root's keeper and a keeper of the call's own.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DetachedSet } from '../../src/base/util/detached-set.js';
 import { withDetached } from '../../src/api/detached.js';
@@ -9,7 +7,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A promise and the function that resolves it, so a test decides when the work ends. */
 interface Held {
   readonly work: Promise<void>;
   readonly end: () => void;

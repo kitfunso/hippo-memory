@@ -2,14 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { extractFromTexts } from '../../src/surface/capture/extract.js';
 
-/**
- * DF2 — capture extractor: keyword-preserving, clause-bounded capture.
- * Plan: docs/plans/2026-08-23-df2-capture-anchoring.md
- *
- * `extractFromTexts` is a pure function (no store, no I/O), the exported
- * entry every capture path calls. These are direct unit tests against it; no store or
- * mocks are needed because nothing here touches persistence.
- */
 describe('capture coherence', () => {
   it('1. inversion pin: a prohibition keeps its keyword, not just the object', () => {
     const items = extractFromTexts(['Never use --no-verify on git commits in this project.']);
@@ -50,30 +42,16 @@ describe('capture coherence', () => {
   });
 
   it('6. DECISION and ERROR sets follow the same semantic-vs-label split as RULE', () => {
-    // SEMANTIC keyword ("decided to") carries the meaning -> preserved.
     const decision = extractFromTexts(['We decided to pin the version to avoid a repeat of the outage.']);
     expect(decision).toHaveLength(1);
     expect(decision[0].category).toBe('decision');
     expect(decision[0].content.toLowerCase()).toContain('decided');
 
-    // COLON labels ("decision:", "error:") are dropped - they name the
-    // category, which is already on the item. "the X is/was" is KEPT.
-    //
-    // This reverses an earlier revision of this test, and the reversal is the
-    // point: dropping "the X is/was" too left the residue starting with
-    // "to ", which isFragment rejects outright, so "The plan is to ship on
-    // Friday" and "The fix was to bump the pool timeout" stored NOTHING where
-    // every prior version stored them. Silent loss on two high-traffic
-    // patterns, found only at the ship gate. The AT1 rejected-value evidence
-    // that motivated label-dropping involved colon labels exclusively
-    // (tests/db/rejection-acceptance.test.ts still passes), so the narrow rule
-    // keeps that guarantee without the collateral loss.
     const error = extractFromTexts(['The issue was that the reserve loop did not dedupe entries.']);
     expect(error).toHaveLength(1);
     expect(error[0].category).toBe('error');
     expect(error[0].content.toLowerCase()).toContain('reserve loop');
 
-    // the regression this narrowing exists to prevent
     const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
     expect(plan[0].content.toLowerCase()).toContain('ship the df2 branch');
@@ -107,12 +85,6 @@ describe('capture coherence', () => {
       },
       {
         array: 'ERROR',
-        // LABEL keyword: 'Error:' names the category (already recorded in
-        // `category`) and carries no semantic sign, so T1 drops it rather
-        // than prefixing it onto the content. Contrast the RULE case above,
-        // where 'always' IS the meaning and must survive. Preserving label
-        // prefixes also broke AT1's rejected-value digest, which hashes the
-        // bare content — see tests/db/rejection-acceptance.test.ts.
         text: 'Error: the migration silently dropped the last batch of rows.',
         category: 'error',
         mustContain: 'migration silently dropped',
@@ -146,18 +118,7 @@ describe('capture coherence', () => {
     expect(extractFromTexts([`Always keep going ${'x'.repeat(500)} no matter what happens here today`])).toEqual([]);
   });
 
-  /**
-   * Ship-gate findings. Every case here is a regression this branch
-   * introduced against master, each verified by running BOTH versions - not
-   * inferred. All three survived twelve codex rounds and five reviewers,
-   * because they live at the interaction between the new scanner and gates
-   * nobody re-swept.
-   */
   it('17. ship gate: shorter-but-correct content must not fall under a downstream gate', () => {
-    // isFragment rejects content starting with "to " under 50 chars. Dropping
-    // the "the X is/was" label left exactly that residue, so these stored
-    // NOTHING while master stored them. Absence of a memory is invisible -
-    // no error, no log, nothing to notice in the field.
     const plan = extractFromTexts(['The plan is to ship the DF2 branch on Friday afternoon, pending QA signoff.']);
     expect(plan, 'a "the plan is to ..." memory must not vanish').toHaveLength(1);
 
@@ -169,17 +130,11 @@ describe('capture coherence', () => {
   });
 
   it('18. ship gate: closing a literal uses the same shape test as opening', () => {
-    // The open decision took twelve rounds of care; the close accepted any
-    // bare quote. So a possessive INSIDE a literal closed it early and the
-    // comma after read as a clause boundary - a mid-literal fragment that
-    // then passes the write gate, the exact defect this branch removes, on
-    // ordinary prose master handles correctly.
     const items = extractFromTexts(["Always pass 'user's a, b list' to the parser."]);
     expect(items).toHaveLength(1);
     expect(items[0].content, 'possessive inside a literal must not close it').toContain("'user's a, b list'");
   });
 
-  // Whole-sentence capture never decides where a quote opens or closes, so the shapes the clause scanner could not resolve come through intact.
   it('16. quote roles no longer matter: ambiguous quotes keep the whole sentence', () => {
     for (const text of [
       "Always run 'echo a, b ';then verify.",
@@ -191,10 +146,6 @@ describe('capture coherence', () => {
     expect(extractFromTexts(['Never use --no-verify on git commits in this project.'])[0]?.content).toContain('Never');
   });
 
-  // Codex P1 on this branch: the clause scanner cut inside code delimiters,
-  // reintroducing the exact fragment defect this change exists to remove -
-  // and the fragments PASSED the write gate because code punctuation reads as
-  // "specific". Depth-aware scanning is the fix; these pin it.
   it('11. clause scan ignores separators inside code delimiters', () => {
     const cases: Array<[string, string]> = [
       ['Always call build(x, y) before deploy.', 'build(x, y)'],
@@ -209,28 +160,16 @@ describe('capture coherence', () => {
   });
 
   it('12. "the X is" and "the X was" behave identically', () => {
-    // The original defect two reviewers found was an INCONSISTENCY: the
-    // discriminator knew "the X is" but not "the X was", so one kept its
-    // label and the other dropped it. Consistency was the requirement; which
-    // way to resolve it was the open choice.
-    //
-    // It was first resolved by dropping BOTH, which turned out to cause
-    // silent data loss (see test 6) because the residue starts with "to ".
-    // It is now resolved by KEEPING both. The invariant the reviewers
-    // actually asked for - identical handling - still holds, and is what
-    // this test pins.
     const wasItems = extractFromTexts(['The issue was the config file was missing from the deploy bundle.']);
     const isItems = extractFromTexts(['The issue is the config file goes missing from the deploy bundle.']);
     expect(wasItems).toHaveLength(1);
     expect(isItems).toHaveLength(1);
     expect(wasItems[0].content.toLowerCase()).toContain('the issue was');
     expect(isItems[0].content.toLowerCase()).toContain('the issue is');
-    // both keep their content, neither is truncated to the label
     expect(wasItems[0].content.toLowerCase()).toContain('config file');
     expect(isItems[0].content.toLowerCase()).toContain('config file');
   });
 
-  // Commas, brackets and apostrophes inside a sentence must not cut it.
   it('13. adversarial prose corpus: real-world text shapes come through as whole sentences', () => {
     const corpus = [
       "Always ensure it's enabled, then restart the service.",

@@ -1,21 +1,3 @@
-/**
- * Deterministic dedupe survivor selection
- * (docs/plans/2026-07-16-dedupe-survivor-determinism.md).
- *
- * Pins that `deduplicateStore` picks the SAME surviving content regardless
- * of ingest order: strength bucket desc -> retrieval_count desc ->
- * compareEntryIdentity (content asc -> layer -> tags -> source -> id asc;
- * cases 9-11 pin the metadata keys; 12-13 pin the candidate filter). Real-DB per project
- * convention (measure-ties-before-fixing / real-store-guard): each test
- * isolates a fresh hippoRoot via mkdtempSync + initStore, following the
- * tmpHome idiom in tests/api/api-sleep.test.ts.
- *
- * T2 (src/consolidate.ts mergeContents tie key) is exercised through the
- * public `consolidate()` merge pass (test 7), following the Merge-pass
- * idiom in tests/api/consolidate.test.ts -- `mergeContents` itself stays
- * file-private.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -69,14 +51,9 @@ function permutationsOf3(): number[][] {
   return out;
 }
 
-// Duplicate probe pair: the same sentence, B with a double space before "this".
-// Dedup removes only text that matches apart from spacing; a swapped word is a
-// changed value and both copies stay (tests/core/sleep-keeps-both-versions.process.test.ts).
 const CONTENT_A = 'The quarterly finance report shows revenue grew steadily across all four regions this year';
 const CONTENT_B = CONTENT_A.replace(' this year', '  this year');
 
-// Three mutual duplicates for the permutation test: one base sentence (B), with an
-// extra space at a different place in A and C, so A and C tie on length and B is shorter.
 const VARIANT_B =
   'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
 const VARIANT_A = VARIANT_B.replace(' this time', '  this time');
@@ -102,7 +79,7 @@ describe('dedupe survivor determinism', () => {
 
   it('2. permutation invariance: 3 pairwise near-duplicates with an epsilon-chain triple (1.0/0.994/0.988) survive identically across all 6 ingest orders', async () => {
     const contents = [VARIANT_A, VARIANT_B, VARIANT_C];
-    const strengths = [1.0, 0.994, 0.988]; // pins transitivity: old raw-epsilon check tied 1.0~0.994 and 0.994~0.988 but not 1.0~0.988
+    const strengths = [1.0, 0.994, 0.988];
     const survivorContents = new Set<string>();
 
     for (const perm of permutationsOf3()) {
@@ -144,7 +121,6 @@ describe('dedupe survivor determinism', () => {
   it('4. retrieval-count tiebreak preserved on an equal strength bucket, regardless of ingest order', async () => {
     const s1 = makeRoot('dedupe-det-4a');
     const s2 = makeRoot('dedupe-det-4b');
-    // Order 1: low-retrieval entry ingested first.
     const low1 = await remember(ctxFor(s1), { content: CONTENT_A });
     const high1 = await remember(ctxFor(s1), { content: CONTENT_B });
     setStrength(s1, low1.id, 1.0);
@@ -152,7 +128,6 @@ describe('dedupe survivor determinism', () => {
     setRetrievalCount(s1, low1.id, 0);
     setRetrievalCount(s1, high1.id, 5);
 
-    // Order 2: high-retrieval entry ingested first.
     const high2 = await remember(ctxFor(s2), { content: CONTENT_B });
     const low2 = await remember(ctxFor(s2), { content: CONTENT_A });
     setStrength(s2, high2.id, 1.0);
@@ -170,13 +145,6 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('4b. quantization intent: within-epsilon strength difference is a TIE, so retrieval_count decides (kills the raw-strength-compare mutant)', async () => {
-    // strengths 1.0 and 0.996 land in the SAME bucket (round(100.0) ==
-    // round(99.6) == 100), so under the shipped comparator retrieval_count
-    // decides -- the 0.996-strength / 5-retrieval entry must survive. A
-    // raw-strength compare ((b.strength ?? 0) - (a.strength ?? 0)) would
-    // keep the 1.0-strength entry instead and fail this test: this is the
-    // one case that pins the bucket quantization itself, not just the
-    // determinism properties (independent-review r1 MED).
     const home = makeRoot('dedupe-det-4b');
     const strongRaw = await remember(ctxFor(home), { content: CONTENT_A });
     const retrieved = await remember(ctxFor(home), { content: CONTENT_B });
@@ -226,8 +194,6 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('7. mergeContents same-created tie: merged base identical across opposite ingest orders (content asc tie key)', async () => {
-    // One word swapped: Jaccard 5/7 = 0.714 > MERGE_OVERLAP_THRESHOLD (0.35), so the merge pass fires.
-    // Both rows share one `created`, so the newest-first key is a REAL tie and only compareEntryIdentity decides the base.
     const contentAlpha = 'cache refresh failure data pipeline alpha';
     const contentOmega = 'cache refresh failure data pipeline omega';
 
@@ -254,12 +220,10 @@ describe('dedupe survivor determinism', () => {
           e.layer === Layer.Semantic && e.content.startsWith('[Consolidated from 2 related memories, newest first]'),
       );
       expect(semantics.length).toBe(1);
-      // Content shape: '[Consolidated from 2 related memories, newest first]\n\n- <base>\n- <other>'.
       bases.push(semantics[0].content.split('\n\n')[1].split('\n')[0]);
     }
 
     expect(bases[0]).toBe(bases[1]);
-    // content asc tie key: the lexicographically smaller content is the base.
     expect(bases[0]).toBe(`- ${contentAlpha}`);
   });
 
@@ -272,10 +236,6 @@ describe('dedupe survivor determinism', () => {
     expect(strengthTieKey(0)).toBe(0);
     expect(strengthTieKey(1)).toBe(100);
 
-    // Mirrors dedupe.ts's comparator chain (bucket desc -> retrieval desc ->
-    // compareEntryIdentity) using the same two exported building blocks, to
-    // pin that a NaN-strength entry still yields a strict, non-NaN order --
-    // no DB needed, pure-function test only.
     const a = { id: 'aaa-nan', content: 'alpha content', strength: NaN, retrievalCount: 0 };
     const b = { id: 'bbb-normal', content: 'beta content', strength: 0.5, retrievalCount: 0 };
 
@@ -293,9 +253,6 @@ describe('dedupe survivor determinism', () => {
     expect(Number.isFinite(cmp)).toBe(true);
   });
 
-  // Cases 9-11: byte-identical twins tie on strength, retrieval_count and
-  // content, so only the metadata keys can decide the survivor. Four twins
-  // (not two) so a pass under the old id-random comparator needs 1/4 luck.
   const TWIN_TEXT = 'byte identical twin content for the survivor metadata cases';
 
   async function survivorAfterDedupe(order: ReturnType<typeof createMemory>[]) {
@@ -341,8 +298,6 @@ describe('dedupe survivor determinism', () => {
     }
   });
 
-  // Cases 12-13 (codex round 1): the layer rank made these two lifecycle
-  // states deterministic LOSERS, so dedupe must not consider them at all.
   it('12. a raw (append-only) episodic twin is not a dedupe candidate, so sleep no longer aborts on the delete trigger', async () => {
     const raw = createMemory(TWIN_TEXT, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -389,7 +344,6 @@ describe('dedupe survivor determinism', () => {
   });
 
   it('14. mergeContents 3+ bullets: bullet order and merged tags identical across all 6 ingest orders (base order: created desc -> content asc)', async () => {
-    // Distinct texts, one word swapped each: the merge writes each distinct text once, so the spacing-only VARIANT_* would make one bullet.
     const textA =
       'our deployment pipeline automatically runs full suite of integration tests before every production release each week without exception this time';
     const textB =
@@ -409,7 +363,6 @@ describe('dedupe survivor determinism', () => {
     for (const perm of permutationsOf3()) {
       const home = makeRoot('dedupe-det-14');
       for (const idx of perm) {
-        // one shared `created`, so the ingest order cannot reach the primary key
         writeEntry(home, {
           ...createMemory(variants[idx].content, {
             baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

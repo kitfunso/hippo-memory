@@ -1,5 +1,3 @@
-// The /v1 route handlers and the CLI object verbs reach typed objects through src/api alone, so both surfaces make the
-// same calls; a type-only import of src/domain is fine.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

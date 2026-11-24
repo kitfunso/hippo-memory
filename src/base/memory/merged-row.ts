@@ -1,4 +1,3 @@
-// A sleep-merged row copies its sources' texts, so retiring a text (reject, or superseding its
 // source) must reach the row too. SHORTCUT: reject rewrites merged rows at once, live and dormant;
 // supersede and `resolve --reject-loser` wait for the next sleep's check, which sees a dormant row
 // only once restored.
@@ -23,8 +22,6 @@ export function mergedSuccessor(
   const header = row.content
     .slice(0, row.content.indexOf('\n\n'))
     .replace(/\d+ related memor(?:y|ies)/, count);
-  // A new id, as a fresh merge would get; age and half-life carry over so the rewrite buys the row
-  // no extra life.
   return {
     ...row,
     id: generateId('sem'),

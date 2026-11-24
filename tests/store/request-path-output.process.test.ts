@@ -1,4 +1,3 @@
-// What the whole-store MCP tools return on a small fixed store: which rows they show and the counts they print.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -24,7 +23,6 @@ afterEach(() => {
 });
 const { sqliteStore } = sessionPerTest();
 
-// Newest first, as git log prints them.
 const COMMIT_SUBJECTS = [
   'fix: the loader must handle a null cache key before it reads the index file',
   'fix(auth): refresh the token before the queue worker retries',
@@ -93,7 +91,6 @@ function localRow(i: number): MemoryEntry {
 function globalRow(j: number): MemoryEntry {
   const source =
     j % 3 === 0 ? `shared:proj${j % 4}:x` : j % 3 === 1 ? '/tmp/projB/.hippo' : j % 5 === 0 ? 'cli-global' : 'cli';
-  // Pairs share a timestamp so peer order and rank ties fall to the id.
   const created = base - Math.floor(j / 2) * 13 * HOUR;
   const entry = createMemory(
     `global note ${j} on ${WORDS[j % WORDS.length]} for the ${WORDS[(j * 5) % WORDS.length]} team`,
@@ -157,7 +154,7 @@ describe('request-path output on a fixed store', () => {
       for (let j = 0; j < 40; j++) writeEntryIn(global, globalRow(j));
     });
     cwd = process.cwd();
-    process.chdir(tmp); // outside git, so hippo_context's auto query is empty
+    process.chdir(tmp);
   });
 
   afterEach(() => {
@@ -182,7 +179,6 @@ describe('request-path output on a fixed store', () => {
   const call = (name: string, args: ToolArgs = {}): Promise<McpResponse | null> =>
     handleMcpRequest({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, mcpCtx());
 
-  /** The first content line of each row hippo_context prints, in print order. */
   const blocks = (text: string): string[] =>
     text
       .split(/\n\n(?=\[verified\])/)
@@ -191,7 +187,6 @@ describe('request-path output on a fixed store', () => {
   const firstLines = (entries: readonly MemoryEntry[]): string[] =>
     entries.map((e) => e.content.split('\n')[0]!).sort();
 
-  // Shown: the caller's tenant, this project or no project, live, and outside a private or unknown scope.
   const shownLocal = (e: MemoryEntry): boolean =>
     e.tenantId === 'default' &&
     e.supersededBy === null &&
@@ -218,7 +213,6 @@ describe('request-path output on a fixed store', () => {
   });
 
   it('mcp hippo_status counts the local rows of the caller tenant, and hippo_peers groups global rows by source', async () => {
-    // 80 rows and the merged one, less the 5 of tenant acme; pinned every 25th row, an error tag every 8th.
     expect(textOf(await call('hippo_status'))).toBe(
       'Memories: 76 (4 pinned, 10 errors)\nAvg strength: 0.62\nAt risk (<0.2): 19\nOpen conflicts: 0\n' +
         'Half-life default: 365d',
@@ -244,7 +238,6 @@ describe('request-path output on a fixed store', () => {
       .filter((e) => !before.has(e.id))
       .map((e) => e.content)
       .sort();
-    // Two of the four subjects are already held: one as a row, one inside the merged row's text.
     expect(out).toBe('Git learn: 2 new, 2 duplicates skipped (scanned 7 days)');
     expect(added).toEqual([
       'bump the redis client to the next minor',

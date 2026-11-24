@@ -1,5 +1,3 @@
-"""qa/ledger.py: the first valid reply among an item's first 3 asks, the frozen manifest, the per-item system hash,
-tool use as a rejected ask, and resumes that never ask an item past its 3rd ask."""
 from __future__ import annotations
 
 import threading
@@ -24,8 +22,6 @@ def ask_rec(item: Item, **kw) -> dict:
 
 
 class FakeLLM:
-    """Stands in for Claude or CodexJudge: hands out the queued replies and counts the asks."""
-
     def __init__(self, replies: list, cli: str = ANSWERER.cli) -> None:
         self.replies, self.cli, self.asked = list(replies), cli, []
 
@@ -78,7 +74,6 @@ def test_a_record_without_a_cli_stamp_is_rejected(tmp_path):
 
 
 def test_the_system_hash_is_checked_per_item(tmp_path):
-    """DMR puts each question's memories in its system prompt, so every item carries its own system text."""
     a = Item("answer hippo365 dmr-001", "memories of dmr-001", "q1", ANSWERER)
     b = Item("answer hippo365 dmr-002", "memories of dmr-002", "q2", ANSWERER)
     log = write_log(tmp_path / "calls.jsonl", [rec(a.tag, a.user, system=a.system, text="A"),

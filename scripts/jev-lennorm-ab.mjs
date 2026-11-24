@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 10 of docs/EXPERIMENT-PROTOCOL.md, $0 no-API: does p / sqrt(tokens)
- *  fix Jev's length bias? Same K as Lane 7 (raw-p arm), same paraphrase
- *  queries, same promotion mutation; only WHICH rows get promoted differs. */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -74,8 +71,6 @@ console.error(`usable cases: ${cases.length} (dropped ${queries.length - cases.l
 const docFreq = new Map();
 for (const e of entries) for (const t of toks(e.content)) docFreq.set(t, (docFreq.get(t) ?? 0) + 1);
 
-/** Same leakage check as Lane 6/7: a shared 3-word span only counts if it also
- *  carries a distinctive word, so it flags copied wording, not shared topic. */
 function sharedSpan(query, content) {
   const qw = words(query),
     tw = words(content).join(' ');
@@ -131,8 +126,6 @@ const medTok = (set) => med([...set].map((id) => tokensOf(id)));
 console.error(`top-K overlap: ${overlap}/${K} ids shared between raw-p and lennorm sets`);
 console.error(`median tokens promoted: raw-p ${medTok(rawSet)}, lennorm ${medTok(lenSet)}\n`);
 
-/** Only rows Jev's pick ADDS the tag to are mutated (matches jev-retrieval-ab
- *  -paraphrase.mjs:88-95); re-tagging an already-tagged row would give 4x. */
 function promote(idSet) {
   const adds = [...idSet].filter((id) => !byId.get(id)?.tags.includes('error'));
   const addSet = new Set(adds);
@@ -154,8 +147,6 @@ if (process.argv.includes('--dry')) {
   process.exit(0);
 }
 
-/** Rebuilt per arm, unlike Lane 8: here tag MEMBERSHIP changes between arms,
- *  which shifts idf('error') and avgLen for every document (Lane 6/7 finding). */
 const corpusBase = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const corpusRawP = buildCorpus(rawP.entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const corpusLen = buildCorpus(lenNorm.entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
@@ -199,8 +190,6 @@ const METRICS = {
 };
 const PRIMARY = 'recall@budget';
 
-/** One resample matrix per report, shared across all 4 metrics; both CIs
- *  below read off the SAME sorted deltas, so no extra draws for the 95%. */
 function report(rows, aKey, bKey, label, seed) {
   s = seed;
   const idx = [];

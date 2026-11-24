@@ -6,7 +6,6 @@ import ts from 'typescript';
 import { findFloatingApiCalls } from '../../scripts/checks/check-floating-api.mjs';
 import { findFloatingPromises } from '../../scripts/checks/check-floating-promises.mjs';
 
-// Parsing the real ES2022 lib took 6.5 s on a CI runner, past the unit budget; the check only needs these globals.
 const MINIMAL_LIB = [
   'interface Array<T> { length: number; [n: number]: T }',
   'interface Boolean {} interface Function {} interface NewableFunction {}',
@@ -25,7 +24,6 @@ const MINIMAL_LIB = [
   'declare var Promise: PromiseConstructor;',
 ].join('\n');
 
-// The checker's cold start is pure CPU, so a loaded runner stretched the first compile past the 5 s unit default even with the small lib.
 describe('check-floating-promises', { timeout: 30_000 }, () => {
   let dir: string;
   beforeEach(() => {
@@ -35,7 +33,6 @@ describe('check-floating-promises', { timeout: 30_000 }, () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** The hits for one source file, compiled on its own. */
   function hitsFor(body: string): { line: number; text: string }[] {
     const src = join(dir, 'src');
     mkdirSync(src, { recursive: true });
@@ -132,7 +129,6 @@ describe('check-floating-api', { timeout: 30_000 }, () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** The hits for one test file that imports a stand-in forget from src/api/memories/forget.ts. */
   function hitsFor(body: string): { file: string; line: number; why: string }[] {
     mkdirSync(join(dir, 'src', 'api', 'memories'), { recursive: true });
     mkdirSync(join(dir, 'tests'));

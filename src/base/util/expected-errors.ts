@@ -1,6 +1,3 @@
-// Leaf module: the named best-effort probes. Each absorbs the one failure its parser or system call
-// documents and throws every other error on, so no catch in src swallows a failure it did not name.
-
 import { errorCode } from './log.js';
 
 /** The errors that mean a path holds nothing to read: absent, not a directory entry, or closed

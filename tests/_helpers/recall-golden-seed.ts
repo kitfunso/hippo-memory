@@ -1,5 +1,3 @@
-// The recall golden seed: one local store, one wide store and one global store, copied fresh for each test,
-// so the surface goldens, the port-only parity test and the sqliteStore tests replay the same rows.
 import { vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -114,7 +112,6 @@ export function seeded(
   extra: Partial<MemoryEntry> = {},
   opts: Partial<Parameters<typeof createMemory>[1]> = {},
 ): MemoryEntry {
-  // createMemory decays strength over the real milliseconds it runs, so a fixed value keeps snapshots stable.
   return {
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts }),
     id,
@@ -126,7 +123,6 @@ export function seeded(
   };
 }
 
-/** Seeds the local store and returns the id of its active goal. */
 async function seedLocal(root: string): Promise<string> {
   initTestStore(root);
   const rows: MemoryEntry[] = [
@@ -267,7 +263,6 @@ export interface Templates {
 
 /** Seeds the three template stores once per file; `extendLocal` adds rows to the local store before the stamps are pinned. */
 export async function seedTemplates(extendLocal?: (root: string) => void | Promise<void>): Promise<Templates> {
-  // Rows made by createMemory (the prediction mirror) take evalNow, so a real-clock seed drifts against recall at FAKE_NOW.
   const prior = process.env.HIPPO_FAKE_NOW;
   process.env.HIPPO_FAKE_NOW = FAKE_NOW;
   try {

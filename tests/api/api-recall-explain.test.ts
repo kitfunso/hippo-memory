@@ -1,11 +1,3 @@
-/**
- * A7 recall-trace — api.recall explain flag.
- *
- * recall({explain:true}) attaches `rerankTrace` (the goal-boost step) +
- * `rerankPipeline:'api'` to result items; {explain:false} leaves BOTH absent
- * on EVERY band (byte-identical default). Real SQLite store, no mocks.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
@@ -40,11 +32,9 @@ describe('api.recall explain', () => {
       trace: { explain: true },
     });
 
-    // Every item carries the api pipeline marker.
     for (const item of result.results) {
       expect(item.rerankPipeline).toBe('api');
     }
-    // The boosted (goal-tagged) row carries a goal-boost trace step.
     const boosted = result.results.find((r) => r.id === goalMatch.id);
     expect(boosted!.rerankTrace!.length).toBe(1);
     expect(boosted!.rerankTrace![0].stage).toBe('goal-boost');
@@ -62,7 +52,6 @@ describe('api.recall explain', () => {
       expect(item.rerankPipeline).toBeUndefined();
       expect(item.rerankTrace).toBeUndefined();
     }
-    // The goal-boost still ran (ordering changed) — only the trace is absent.
     const ids = result.results.map((r) => r.id);
     expect(ids).toContain(goalMatch.id);
   });

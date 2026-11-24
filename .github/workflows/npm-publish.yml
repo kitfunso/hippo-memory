@@ -1,18 +1,9 @@
 name: Publish to npm
 
-# Publishes hippo-memory from CI with npm provenance: a signed record of the
-# commit and workflow that built the package, shown on npmjs.com and checked
-# by `npm audit signatures`. Trigger: push a v*.*.* tag, cut from master for a
-# release or from release/<x.y> for a backport (docs/release-policy.md).
-# The whole CI workflow and the slow token-eval tests run on the tagged commit first; nothing is published unless both pass.
-# Python has its own tag scheme (python-v*.*.*) in pypi-publish.yml.
-#
 # One-time setup (npmjs.com, package settings > Trusted publishing): add a
 # GitHub Actions publisher for kitfunso/hippo-memory with workflow file
 # npm-publish.yml and "Allow npm publish" ticked; unticked, it may only stage.
 # No NPM_TOKEN secret is needed after that.
-# docs/release-policy.md covers tags and the `stable` channel.
-
 on:
   push:
     tags:
@@ -21,20 +12,16 @@ on:
 permissions:
   contents: read
 
-# One publish at a time: the dist-tag is picked before the long release gate, so two tags
-# pushed together would both read the old `latest`. `max` queues extra runs instead of cancelling them.
 concurrency:
   group: npm-publish
   queue: max
 
 jobs:
-  # Called here, not looked up by commit: a backport commit has no CI run of its own, and a tag can be pushed before one finishes.
   ci:
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
-  # The harness tests the default run leaves out, so no test file sits outside the release.
   token-eval:
     uses: ./.github/workflows/token-eval.yml
     permissions:
@@ -74,13 +61,10 @@ jobs:
           version="$(node -p "require('./package.json').version")"
           tag="$(node scripts/publish-dist-tag.mjs "$version")"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      # prepublishOnly runs the full release gate: manifest versions, changelog,
-      # build:all, the openclaw smoke install and the test suite.
       - run: npm publish --provenance --access public --tag "$DIST_TAG"
         env:
           DIST_TAG: ${{ steps.disttag.outputs.tag }}
 
-  # After npm has the version: the registry checks that the package exists and carries mcpName.
   mcp-registry:
     needs: [publish]
     uses: ./.github/workflows/mcp-registry.yml
@@ -88,7 +72,6 @@ jobs:
       contents: read
       id-token: write
 
-  # Only a `latest` release updates the extension stores, so a backport never replaces a newer listing.
   vscode:
     needs: [publish]
     if: needs.publish.outputs.dist-tag == 'latest'

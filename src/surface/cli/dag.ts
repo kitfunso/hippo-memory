@@ -1,5 +1,3 @@
-// DAG summary verbs: `hippo dag`, `hippo assemble` and `hippo drill`.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import * as api from '../../api/index.js';
@@ -73,8 +71,6 @@ function groupByParent(entries: readonly MemoryEntry[]): Map<string, MemoryEntry
 }
 
 function printDagTree(entries: readonly MemoryEntry[]): void {
-  // Tree view: L3 entity profiles as roots with L2 children indented, then orphan L2 summaries at
-  // top level.
   const profiles = entries.filter((e) => e.dagLevel === DAG_LEVEL.entity);
   const l2List = entries.filter((e) => e.dagLevel === DAG_LEVEL.topic);
   const orphanL2 = l2List.filter((e) => !e.dagParentId);
@@ -90,12 +86,10 @@ function printDagTree(entries: readonly MemoryEntry[]): void {
     return;
   }
 
-  // L3 entity profiles as tree roots with their L2 children.
   for (const profile of profiles) {
     printProfileTree(profile, childL2ByProfile.get(profile.id) ?? [], childrenByParent);
   }
 
-  // Orphan L2 summaries (no L3 parent) at top level.
   for (const summary of orphanL2) {
     printOrphanSummary(summary, childrenByParent.get(summary.id) ?? []);
   }
@@ -143,7 +137,6 @@ async function assembleSession({
   flags,
 }: AssembleSessionOptions): Promise<void> {
   requireInit(hippoRoot);
-  // Absent stays undefined so the api default applies.
   const budget = parseBudgetFlag(flags, undefined);
   const freshTailCount = numberFlag(flags, 'fresh-tail');
   const summarizeOlder = !boolFlag(flags, 'no-summarize-older');
@@ -172,8 +165,6 @@ async function assembleSession({
   );
 }
 
-// --depth N walks N levels down (default 1, hard cap 10); out-of-range is rejected, never silently
-// clamped.
 function drillDepthFlag(flags: CliFlags): number | undefined {
   const depth = numberFlag(flags, 'depth');
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 1 || depth > 10)) {
@@ -210,7 +201,6 @@ async function drillIntoSummary({
 
 function drillDownOptions(flags: CliFlags): api.DrillDownOptions {
   const limit = numberFlag(flags, 'limit');
-  // Absent stays undefined so the api default applies.
   const budget = parseBudgetFlag(flags, undefined);
   const depth = drillDepthFlag(flags);
   const opts: api.DrillDownOptions = {};
@@ -222,8 +212,6 @@ function drillDownOptions(flags: CliFlags): api.DrillDownOptions {
 }
 
 function failDrill(r: api.DrillDownFailure, summaryId: string): never {
-  // Only `not_drillable` is caller-actionable. `not_found` collapses cross-tenant, scope-blocked
-  // and missing on purpose: telling scope_blocked apart would leak that the row exists.
   if (r.failure === 'not_drillable') {
     printError(`Id ${summaryId} is a leaf row, not a level-2+ summary; nothing to drill into.`);
   } else {

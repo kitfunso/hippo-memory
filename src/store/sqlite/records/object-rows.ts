@@ -1,7 +1,3 @@
-// hippo.db's rows for the typed objects: each kind's table, columns, row mapping and, for a kind
-// the shared save writes, its insert values and audit keys. A status column carries a CHECK
-// constraint, so a row declares it as the kind's status union.
-
 import { isJsonString } from '../../../base/util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../../../base/util/stored-json.js';
 import type { SourceObjectType } from '../../../base/ports/store/graph.js';
@@ -106,8 +102,6 @@ export interface RowByKind {
   customer_note: CustomerNoteRow;
 }
 
-// A reply lists an object's keys in the order its mapper sets them: head, the kind's own fields,
-// tail.
 const head = (row: HeadRow) => ({ id: row.id, memoryId: row.memory_id, tenantId: row.tenant_id });
 
 const versionedTail = <S>(row: VersionedRow<S>) => ({
@@ -134,7 +128,6 @@ function rowToDecision(row: DecisionRow): Decision {
 }
 
 function parseLinkedMemoryIds(raw: string, id: number): string[] {
-  // A malformed list column reads as empty instead of failing the incident read.
   const parsed = parseStoredJson({ table: 'incidents', id, column: 'linked_memory_ids' }, raw);
   return Array.isArray(parsed) ? parsed.filter(isJsonString) : [];
 }
@@ -153,7 +146,6 @@ function rowToIncident(row: IncidentRow): Incident {
   };
 }
 
-/** A malformed stored steps value warns and reads back as no steps. */
 function parseSteps(raw: string, id: number): string[] {
   const site = { table: 'processes', id, column: 'steps' };
   const parsed = parseStoredJson(site, raw);
@@ -205,15 +197,9 @@ const rowToCustomerNote = (row: CustomerNoteRow): CustomerNote => ({
 });
 
 interface RowSpec<K extends ObjectKind> {
-  /** The column list every read selects: exactly the columns the kind's row declares. */
   readonly cols: string;
   readonly rowTo: (row: RowByKind[K]) => ObjectByKind[K];
-  /** The one column a list may filter by equality. */
   readonly filterColumn?: string;
-  /**
-   * Set for the kinds the graph extracts, so a save marks the graph stale and a close drops the
-   * object's graph rows.
-   */
   readonly graphType?: SourceObjectType;
 }
 
@@ -221,7 +207,6 @@ interface RowSpec<K extends ObjectKind> {
 export type ColumnValue = string | number | null;
 
 interface InsertSpec<K extends SavableKind> {
-  /** The kind's own columns, in the order `values` fills them. */
   readonly columns: readonly string[];
   readonly values: (w: ObjectFields[K]) => readonly ColumnValue[];
 }
@@ -229,7 +214,6 @@ interface InsertSpec<K extends SavableKind> {
 type RowSpecs = { readonly [K in ObjectKind]: RowSpec<K> };
 type InsertSpecs = { readonly [K in SavableKind]: { readonly insert: InsertSpec<K> } };
 
-// An incident has no insert entry: it is opened and resolved by its own writes.
 const OBJECT_ROWS: RowSpecs & InsertSpecs = {
   decision: {
     cols: `
@@ -322,9 +306,6 @@ export function insertSpec<K extends SavableKind>(kind: K): InsertSpec<K> {
   return rows[kind].insert;
 }
 
-// Each typed-object kind's table and audit rows: the table its ids follow, whether it keeps
-// versions, and the op, target and keys of its open, create, supersede and close rows.
-
 export const KINDS = {
   decision: { table: 'decisions', idKey: 'decision_id' },
   incident: { table: 'incidents', idKey: 'incident_id' },
@@ -339,22 +320,15 @@ export const KINDS = {
 export const objectTable = (kind: ObjectKind): string => KINDS[kind].table;
 
 interface SaveRule<K extends SavableKind> {
-  /** A successor takes its predecessor's version plus one and the caller's change note; a
-   * decision has no version. */
   readonly versioned: boolean;
-  /** The create row's keys after the id, in stored order: ids, counts and flags, never the
-   * object's text. */
   readonly createKeys: (fields: ObjectFields[K], version: number) => JsonObject;
-  /** Keys the supersede row stores after its own. */
   readonly supersedeKeys?: (fields: ObjectFields[K]) => JsonObject;
-  /** The save also weakens the replaced row's mirror and the memory it names. */
   readonly weakensPredecessor?: true;
 }
 
 export const hasText = (text: string | null | undefined): boolean =>
   text !== undefined && text !== null && text !== '';
 
-// Tells an auto-refresh from a manual write in the audit log without a fourth audit op.
 const refreshKeys = (f: ObjectFields['project_brief']): JsonObject =>
   f.receiptCount === undefined
     ? { refreshed: false }

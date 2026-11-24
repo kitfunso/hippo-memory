@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166, 179): seeded stratified draws, path redaction, the leak scan, label files and the agreement statistics.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,9 +7,7 @@ import { ALL_ARMS } from './z0-records.mjs';
 
 const win = process.platform === 'win32';
 const Z95 = 1.959963984540054;
-// The memory tool, its homes and every instruction or memory file the reader diff hides: a command naming one is dropped.
 const HIDDEN_WORDS = ['hippo', 'memory/', 'claude-config', 'codex-home', ...READER_HIDDEN];
-// Strings that name a memory tool, a home or a hidden marker: any of them left in a blinded file could show the arm.
 export const FORBIDDEN = [...HIDDEN_WORDS, '.hippo', 'hippo-home', '[command hidden]', '[tool]'];
 export const isHiddenCommand = (command) => leakScan(command, HIDDEN_WORDS).length > 0;
 
@@ -68,7 +65,6 @@ export function shellSegments(command) {
   return out;
 }
 
-/** From the newline that opens heredoc bodies, the index of the newline (or end) after the last delimiter line; -1 when one is unterminated. */
 function heredocEnd(command, at, delimiters) {
   let j = at;
   for (const d of delimiters) {
@@ -82,7 +78,6 @@ function heredocEnd(command, at, delimiters) {
   }
   return j;
 }
-// An arm or seed named as its own word shows the arm as plainly as a path; arms keep their case, so code like x1 survives.
 const ARM_WORD = new RegExp(`\\b(?:${ALL_ARMS.join('|')})\\b`, 'g');
 const SEED_WORD = /\bseed\d+\b/gi;
 
@@ -154,7 +149,6 @@ export function fillStrata(groups, n, accept) {
   return { taken, rejected };
 }
 
-/** Windows 8.3 short name of an existing path, or null where the volume keeps none (R14). */
 function shortName(p) {
   if (!win || !fs.existsSync(p)) return null;
   const r = spawnSync('cmd.exe', ['/d', '/s', '/c', `"for %I in ("${p}") do @echo %~sI"`], { encoding: 'utf8', windowsVerbatimArguments: true });
@@ -220,7 +214,6 @@ export function wilson(k, n) {
   const d = 1 + (Z95 * Z95) / n;
   const c = (p + (Z95 * Z95) / (2 * n)) / d;
   const h = (Z95 * Math.sqrt((p * (1 - p)) / n + (Z95 * Z95) / (4 * n * n))) / d;
-  // Rounding can push an endpoint a hair outside [0, 1], where the analyzer's bounds check rejects it.
   return [Math.max(0, c - h), Math.min(1, c + h)];
 }
 

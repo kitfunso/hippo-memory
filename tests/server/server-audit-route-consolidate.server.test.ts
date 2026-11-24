@@ -1,19 +1,3 @@
-/**
- * Runtime test for v1.11.5: round-trip a consolidate audit_log row through
- * GET /v1/audit?op=consolidate.
- *
- * Locks the VALID_AUDIT_OPS Set wiring: adding 'consolidate' to the AuditOp
- * union at audit.ts WITHOUT adding it to the Set at server.ts:70 would let
- * api.sleep write rows that GET /v1/audit?op=consolidate rejects with HTTP
- * 400 "invalid op". This test fails if the Set drifts from the union.
- *
- * Also incidentally covers the pre-existing 'outcome' drift the round-3
- * critic surfaced (audit.ts had it, the Set didn't) — included for the
- * same reason.
- *
- * Real HTTP server (serve port:0), per-test isolated local + global stores.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -47,17 +31,12 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
   });
 
   it.skipIf(needsHippoDb('db'))('round-trips a consolidate row written by api.sleep', async () => {
-    // Seed: write one row by invoking api.sleep, then query via HTTP.
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'seed-for-consolidate' });
     await sleepWholeStore(ctx, { dryRun: true });
 
-    // D2 v1.12.10: consolidate rows now tagged tenant='__host__' (api.sleep
-    // is host-wide). The HTTP audit route accepts ?tenant=<t> to query the
-    // synthetic __host__ tenant explicitly.
     const res = await fetch(`${handle.url}/v1/audit?op=consolidate&tenant=__host__`);
     expect(res.status).toBe(200);
-    // auditList returns AuditEvent[] directly (not {events: [...]}).
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
     // from src/store/audit.ts, checked immediately by the assertions below.
     const body = (await res.json()) as Array<{ op: string; actor: string }>;
@@ -77,8 +56,6 @@ describe('GET /v1/audit?op=<op> — consolidate + outcome wiring', () => {
     await outcome(ctx, [m1.id], true);
 
     const res = await fetch(`${handle.url}/v1/audit?op=outcome`);
-    // Pre-v1.11.5 this returned 400 'invalid op' even though rows existed.
-    // Post-v1.11.5 it returns 200 with the rows.
     expect(res.status).toBe(200);
     // SAFETY: GET /v1/audit's response body is the serialized AuditEvent[]
     // from src/store/audit.ts, checked immediately by the assertion below.

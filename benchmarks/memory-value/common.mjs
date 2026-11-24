@@ -1,33 +1,14 @@
-/**
- * LC2-E1 memory-value eval — shared utilities.
- *
- * Not one of the plan's named deliverable files, but everything here is
- * shared by 3+ of them (split/ingest/simulate/extract/run); factoring it out
- * once avoids five copies of the same PRNG/date-parse/env-cache bugs.
- *
- * Determinism contract (mirrors scripts/e1-lifecycle/generate.mjs): every
- * random choice in this harness goes through `mulberry32` seeded via
- * `seedFromString`. No Math.random() anywhere in benchmarks/memory-value/.
- */
-
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Reuse the repo's existing seeded PRNG rather than hand-rolling a second
-// copy (coding-standards: prefer established code over a fresh
-// implementation when one already exists in-repo).
 import { mulberry32 } from '../../scripts/lib/prng.mjs';
 import { evalNow as _resetAblationCacheForTests } from '../../dist/entry/eval-scripts.js';
 
 export const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(HERE, '..', '..');
 export const RESULTS_DIR = path.join(HERE, 'results');
-
-// ---------------------------------------------------------------------------
-// Seeding
-// ---------------------------------------------------------------------------
 
 /** Deterministic 32-bit FNV-1a hash of a string, for seeding mulberry32 from
  *  arbitrary strings (question ids, question types, stage names). */
@@ -59,10 +40,6 @@ export function seededShuffle(rand, arr) {
   }
   return a;
 }
-
-// ---------------------------------------------------------------------------
-// LongMemEval date parsing: "YYYY/MM/DD (Day) HH:mm" -> canonical ISO
-// ---------------------------------------------------------------------------
 
 const LME_DATE_RE = /^(\d{4})\/(\d{2})\/(\d{2}) \((\w{3})\) (\d{2}):(\d{2})$/;
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -108,14 +85,6 @@ export function formatLmeDate(date) {
   return `${y}/${mo}/${d} (${dow}) ${h}:${mi}`;
 }
 
-// ---------------------------------------------------------------------------
-// HIPPO_FAKE_NOW — the one place that sets it, so the ablation-cache-reset
-// contract can never be forgotten at a call site. ablation.ts's readFlags()
-// caches on FIRST read (see src/core/ablation.ts JSDoc); every write here MUST be
-// paired with _resetAblationCacheForTests() or a stale cached value leaks
-// into every subsequent evalNow() call in this process.
-// ---------------------------------------------------------------------------
-
 /** Set the simulated clock. `iso` must be a canonical Date.toISOString() string. */
 export function setFakeNow(iso) {
   process.env.HIPPO_FAKE_NOW = iso;
@@ -127,23 +96,6 @@ export function clearFakeNow() {
   delete process.env.HIPPO_FAKE_NOW;
   _resetAblationCacheForTests();
 }
-
-// ---------------------------------------------------------------------------
-// Scratch-store paths. NEVER under the repo, NEVER touching ~/.hippo or any
-// .hippo ancestor (probation memory: feedback_hippo_probe_scratch_stores).
-// Built with path.join throughout so Windows/Git-Bash paths stay correct.
-//
-// Containment (codex review fix round, 2026-08-09 P1): `question_id` comes
-// from the LongMemEval dataset — untrusted-ish input. `sanitizeQuestionId`
-// is the single choke point every path-builder below routes through, so a
-// question_id containing path-traversal characters can never make
-// `questionDir` resolve outside the scratch root. `safeRemoveScratchDir` is
-// the single choke point for every recursive delete in this harness: it
-// re-verifies containment against the CURRENT `scratchRootDir()` (which
-// honors HIPPO_MV_SCRATCH_ROOT, read fresh on every call — see below) right
-// before deleting, so a caller can never be tricked into an out-of-root
-// `rmSync -r` even if a path was built some other way.
-// ---------------------------------------------------------------------------
 
 /** HIPPO_MV_SCRATCH_ROOT overrides the default os.tmpdir() root. Read FRESH
  *  on every call (not cached) so a test can point two separate ingests at
@@ -212,10 +164,6 @@ export function featuresPathFor(questionId) {
   return path.join(questionDir(questionId), 'features.jsonl');
 }
 
-// ---------------------------------------------------------------------------
-// JSON / JSONL IO
-// ---------------------------------------------------------------------------
-
 export function readJson(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
@@ -235,25 +183,12 @@ export function readJsonl(p) {
   return raw.split('\n').filter((l) => l.trim().length > 0).map((l) => JSON.parse(l));
 }
 
-// ---------------------------------------------------------------------------
-// Dataset loading (real file OR a caller-supplied array, e.g. the smoke fixture)
-// ---------------------------------------------------------------------------
-
 export function loadDataset(dataPath) {
   const raw = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
   const data = Array.isArray(raw) ? raw : (raw.data ?? raw.questions ?? raw.entries);
   if (!Array.isArray(data)) throw new Error(`loadDataset: expected an array at ${dataPath}`);
   return data;
 }
-
-// ---------------------------------------------------------------------------
-// Gold detection (plan: "Gold = evidence-TURN-level ... IF the cleaned
-// dataset retains those flags ... fallback = all turns of answer sessions").
-// Auto-detected PER QUESTION: if any turn in any answer session carries the
-// `has_answer` key, mode = 'evidence-turn' and gold = has_answer===true
-// turns; otherwise mode = 'answer-session-all' and gold = every turn of
-// every answer session.
-// ---------------------------------------------------------------------------
 
 /**
  * @returns {{ mode: 'evidence-turn'|'answer-session-all',
@@ -293,18 +228,6 @@ export function computeGold(question) {
   return { mode, turns };
 }
 
-// ---------------------------------------------------------------------------
-// Smoke fixture — a tiny, fully-synthetic dataset in the exact LongMemEval
-// shape, so `run.mjs --smoke` can exercise split -> ingest -> simulate ->
-// extract -> evaluate end to end with no dependency on the real (277MB,
-// main-checkout-only) dataset file. Deterministic (seeded), never touches
-// Math.random or the real clock.
-//
-// Exercises BOTH gold-detection modes on purpose: even-indexed questions
-// carry a `has_answer` flag on their answer session (evidence-turn mode),
-// odd-indexed questions omit the key entirely (answer-session-all fallback).
-// ---------------------------------------------------------------------------
-
 const SMOKE_TYPES = [
   'single-session-user',
   'single-session-assistant',
@@ -324,7 +247,7 @@ export function generateSmokeFixture(opts = {}) {
   const turnsPerSession = opts.turnsPerSession ?? 3;
   const rand = rngFor('smoke-fixture');
 
-  const baseDate = Date.UTC(2024, 0, 1, 9, 0, 0); // 2024-01-01T09:00:00Z (a Monday)
+  const baseDate = Date.UTC(2024, 0, 1, 9, 0, 0);
   const questions = [];
   let qIdx = 0;
   for (const type of SMOKE_TYPES) {
@@ -334,7 +257,7 @@ export function generateSmokeFixture(opts = {}) {
       const haystack_session_ids = [];
       const haystack_dates = [];
       const haystack_sessions = [];
-      const answerSessionIdx = sessionsPerQuestion - 1; // last session is always the answer session
+      const answerSessionIdx = sessionsPerQuestion - 1;
 
       for (let si = 0; si < sessionsPerQuestion; si++) {
         const sessionDate = new Date(baseDate + (qIdx * 10 + si) * 86400000 + Math.floor(rand() * 3600000));
@@ -376,13 +299,6 @@ export function generateSmokeFixture(opts = {}) {
   }
   return questions;
 }
-
-// ---------------------------------------------------------------------------
-// Stratified largest-remainder apportionment (used by split.mjs for the
-// exact 300/train-200/heldout target, and by run.mjs for --questions N).
-// Deterministic tie-break: fractional part descending, then bucket key
-// ascending (alphabetical) — no RNG involved, apportionment is arithmetic.
-// ---------------------------------------------------------------------------
 
 /**
  * @param {Record<string, number>} counts  bucket key -> total items

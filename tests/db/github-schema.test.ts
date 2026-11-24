@@ -154,13 +154,11 @@ describe('schema v24 — github connector tables', () => {
         'tenant-a',
         '2026-05-04T00:00:00Z',
       );
-      // Same repo for different tenant: NOT a collision (composite PK).
       db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`).run(
         'acme/repo',
         'tenant-b',
         '2026-05-04T00:00:01Z',
       );
-      // Same (repo, tenant): collides.
       expect(() =>
         db
           .prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?,?,?)`)

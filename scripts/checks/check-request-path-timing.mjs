@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Request-path work at 10,000 memories per store: contextGet, session assemble, the MCP tools that read whole stores, the HTTP recall and the dashboard.
-// Fails when a request runs more statements, reads more rows or opens more stores than its ceiling; the time is printed and fails nothing. Run after `npm run build`:
-//   node scripts/checks/check-request-path-timing.mjs [--memories 10000]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -16,14 +13,12 @@ const flag = (name, dflt) => {
 };
 const MEMORIES = flag('--memories', 10000);
 const RUNS = 3;
-// The work ceilings below were set at this size, about 1.3 times what each request does; twice the work fails every one.
 const CEILING_MEMORIES = 10000;
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-request-timing-'));
 const localRoot = path.join(tmp, 'proj', '.hippo');
 const globalRoot = path.join(tmp, 'global');
 process.env.HIPPO_HOME = globalRoot;
-// Outside git, so hippo_context's auto query is empty and the timing measures the store, not git.
 process.chdir(tmp);
 
 // Windows dynamic import() needs a file:// URL, not a raw drive path.
@@ -48,7 +43,6 @@ const { serveDashboard } = await load('surface/server/dashboard-listener.js');
 
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite');
 
-// Every connection open sets its lock wait first, so this counts store opens.
 const STORE_OPEN = /^PRAGMA busy_timeout = [1-9]/;
 
 function* countEach(rows, work) {
@@ -58,7 +52,6 @@ function* countEach(rows, work) {
   }
 }
 
-/** Statements `run` executes, rows they hand to JavaScript and stores it opens: the same on every runner, where the wall clock is not. */
 async function countWork(run) {
   const work = { statements: 0, rows: 0, opens: 0 };
   const exec = DatabaseSync.prototype.exec;
@@ -92,7 +85,6 @@ const WORDS =
   );
 const DAY_MS = 86400000;
 
-// One transaction on one handle: writeEntry's per-row commit and markdown mirror would make seeding the slow part.
 function seed(root, sourceOf) {
   initStore(root);
   const db = openHippoDb(root);
@@ -120,7 +112,6 @@ function seed(root, sourceOf) {
   }
 }
 
-// One long session of raw rows, a tenth of them private: assemble reads its keys, then only the rows the budget keeps.
 const SESSION_ROWS = 3000;
 function seedSession(root) {
   initStore(root);
@@ -152,7 +143,6 @@ function seedSession(root) {
 
 seed(localRoot, () => 'cli');
 seed(globalRoot, (i) => `shared:proj${i % 12}:seed`);
-// serve() refuses a second server on one root, and the copy is taken while no connection holds the store.
 const sessionRoot = path.join(tmp, 'session', '.hippo');
 seedSession(sessionRoot);
 const copyRoot = path.join(tmp, 'copy', '.hippo');
@@ -160,7 +150,6 @@ fs.cpSync(localRoot, copyRoot, { recursive: true });
 
 const localStore = sqliteStore(localRoot);
 const config = loadConfig(localRoot);
-// The script is its own composition root, so it hands the api the real ports as the CLI does.
 const infra = rootInfra()();
 const ctx = {
   hippoRoot: localRoot,
@@ -179,17 +168,14 @@ const mcpCtx = {
   store: localStore,
   config,
   infra,
-  // The host binds its tools once on the store it serves; each call runs on the request's view.
   tools: bindMcpTools(localStore),
 };
-// A root builds a request's store, and each global store its reach opens, on the request's session.
 const onSession = (session) => {
   const store = inSqliteSession(localStore, session);
   const openGlobal = (root) => sqliteStore(root, { session });
   return { store, reach: contextReach(sqliteReach({ hippoRoot: localRoot, store, openGlobal }), loadConfig) };
 };
 
-// A transport runs each tool call on its host's session (the server per request, stdio per frame).
 const tool =
   (name, args = {}) =>
   async () => {
@@ -206,7 +192,6 @@ const tool =
     if (res?.error || res?.result?.isError) throw new Error(`${name} failed: ${JSON.stringify(res)}`);
   };
 
-// As the CLI and the prompt hook run it: one session, so each store opens and is set up once.
 const inHook = (run) => () => runSqliteRequest((session) => run({ ...ctx, ...onSession(session) }), 'hook');
 
 const sessionStore = sqliteStore(sessionRoot);
@@ -217,7 +202,6 @@ const assembleSession = () =>
     'hook',
   );
 
-// With no global store a context query searches the local store alone, a separate load path; reach is probed afresh.
 const withoutGlobal = (run) => async () => {
   process.env.HIPPO_HOME = path.join(tmp, 'no-global');
   try {
@@ -227,7 +211,6 @@ const withoutGlobal = (run) => async () => {
   }
 };
 
-// Answers from a store worker thread, as serve() does by default; the counts below are this thread's, so its ceilings are zero.
 const served = workerSqliteStore(localRoot);
 
 function mintKey(root) {
@@ -239,21 +222,16 @@ function mintKey(root) {
   }
 }
 const keyId = mintKey(localRoot);
-// Every authenticated request starts with this read.
 const keyLookup = async () => {
   if ((await served.findApiKey(keyId)) === null) {
     throw new Error('the served store did not find the key the script minted');
   }
 };
 
-// The request benchmarks/a1/p99-recall.ts times, through a real server and socket. serve() answers it from store worker threads, where this thread
-// counts nothing, so its work is counted on a second server over a copy of the store, in process.
-// Every request sends the one local key, which the per-caller limiter would otherwise throttle.
 const unthrottled = { perCaller: 'off' };
 const server = await serve({ hippoRoot: localRoot, port: 0, rateLimits: unthrottled });
 const inProcess = sqliteStore(copyRoot);
 const inProcessServer = await serve({ hippoRoot: copyRoot, port: 0, store: inProcess, rateLimits: unthrottled });
-// Each server's own local key, as the CLI on this machine sends it.
 const keyOf = new Map([
   [server.url, readLocalKey(localRoot)],
   [inProcessServer.url, readLocalKey(copyRoot)],
@@ -285,7 +263,6 @@ const httpTool =
     }
   };
 
-// The dashboard builds its snapshot on a reader thread, so a statement on this thread during one of its reads fails here.
 const dashboardToken = randomBytes(16).toString('hex');
 const dashboard = await serveDashboard({ hippoRoot: localRoot, port: 0, token: dashboardToken, tenantId: 'default' });
 const minted = await fetch(`${dashboard.url}/api/overview?token=${dashboard.ticket()}`);
@@ -295,7 +272,6 @@ const dashboardRead = (pathAndQuery) => async () => {
   if (!res.ok) throw new Error(`GET ${pathAndQuery} failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 };
 
-// Each case: label, request, and its ceilings on statements run, rows read and stores opened.
 const cases = [
   ['contextGet, no query', inHook((c) => contextGet(c, { currentProject: 'proj' })), [59, 917, 3]],
   ['contextGet, query', inHook((c) => contextGet(c, { q: 'kafka redis', currentProject: 'proj' })), [69, 661, 3]],
@@ -326,19 +302,14 @@ const cases = [
   ['served predictions list', () => served.objects.listObjects('default', 'prediction', { limit: 20 }), [0, 0, 0]],
   ['served decisions list', () => served.objects.listObjects('default', 'decision', { limit: 20 }), [0, 0, 0]],
   ['served key lookup', keyLookup, [0, 0, 0]],
-  // A running server reuses the read handle an earlier request returned to its store runtime, so it opens none.
   ['http recall, limit 10', httpRecall(inProcessServer.url, 10), [37, 281, 0]],
-  // Fifty rows back, so one extra statement per returned row passes the ceiling, which ten rows would not.
   ['http recall, limit 50', httpRecall(inProcessServer.url, 50), [37, 333, 0]],
-  // As serve() answers by default: a statement or an open on the server thread during a recall fails here.
   ['served http recall, limit 10', httpRecall(server.url, 10), [0, 0, 0]],
   ['served http recall, limit 50', httpRecall(server.url, 50), [0, 0, 0]],
-  // Context reaches the global store too, which serve() also answers from worker threads.
   ['served http context', httpContext(server.url), [0, 0, 0]],
   ['served mcp hippo_context', httpTool(server.url, 'hippo_context'), [0, 0, 0]],
   ['served mcp hippo_recall', httpTool(server.url, 'hippo_recall', { query: 'kafka redis' }), [0, 0, 0]],
   ['dashboard overview, fresh', dashboardRead('/api/overview?fresh=1'), [0, 0, 0]],
-  // Page 1 takes a new snapshot, so its list is sorted again; page 5 of that snapshot reads the list page 1 kept.
   ['dashboard page 1, fresh', dashboardRead('/api/projects/p%3Aproj/memories?fresh=1'), [0, 0, 0]],
   ['dashboard page 5', dashboardRead('/api/projects/p%3Aproj/memories?offset=400'), [0, 0, 0]],
   ['dashboard search', dashboardRead(`/api/search?q=${encodeURIComponent('kafka redis')}`), [0, 0, 0]],

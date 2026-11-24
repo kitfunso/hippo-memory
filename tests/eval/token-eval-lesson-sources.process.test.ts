@@ -1,4 +1,3 @@
-// Z0 lesson sources (stage 2 plan D4): rules are source lines under one transform, reasons are fixed, templates come from the published list.
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';

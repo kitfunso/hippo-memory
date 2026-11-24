@@ -1,5 +1,3 @@
-// Preloaded into a spawned node: only the Transformers.js packages named in TRANSFORMERS_INSTALLED resolve, whatever is on disk.
-// The list is read on every resolve, so a script can "install" a package mid-run by changing the variable.
 const Module = require('node:module');
 
 const TRANSFORMERS = new Set(['@xenova/transformers', '@huggingface/transformers']);

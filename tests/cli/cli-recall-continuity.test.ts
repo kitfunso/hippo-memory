@@ -24,7 +24,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** `hippo recall <query> [--continuity] [--json]`, run in this process against the temp store. */
 async function runHippo(args: string[]): Promise<{ stdout: string; status: number }> {
   const [, query, ...rest] = args;
   const flags = Object.fromEntries(rest.map((f) => [f.replace(/^--/, ''), true]));
@@ -66,7 +65,6 @@ describe('hippo recall --continuity', () => {
     expect(parsed.continuity.activeSnapshot.task).toBe('Wire continuity into recall');
     expect(parsed.continuity.sessionHandoff.nextAction).toBe('Resume on Task 4 step 2.');
     expect(parsed.continuity.recentSessionEvents).toHaveLength(1);
-    // Snapshot 64 + handoff 47 + trail 45: the seeded texts plus fixed-width ISO stamps, each printed with a newline.
     expect(parsed.continuityTokens).toBe(156);
     expect(parsed.results).toHaveLength(1);
   });
@@ -81,12 +79,10 @@ describe('hippo recall --continuity', () => {
     expect(r.stdout).toContain('Active Task Snapshot');
     expect(r.stdout).toContain('Session Handoff');
     expect(r.stdout).toContain('Recent Session');
-    // recall prints its own sections whole whoever saved them; only hippo context points.
     expect(r.stdout).toContain('Plan reviewed twice. Implementation underway.');
     expect(r.stdout).toContain('Mid-task handoff.');
     expect(r.stdout).not.toContain('hippo session latest');
     expect(r.stdout).not.toContain('hippo handoff latest');
-    // Snapshot heading comes BEFORE the "Found N memories" line.
     expect(r.stdout.indexOf('Active Task Snapshot')).toBeLessThan(r.stdout.indexOf('Found'));
   });
 
@@ -102,7 +98,6 @@ describe('hippo recall --continuity', () => {
     expect(parsed.continuityTokens).toBeUndefined();
   });
 
-  // codex round 2 P1: zero-result regression must surface continuity.
   it('zero-result JSON: continuity still present when no memories match', async () => {
     initTestStore(hippoDir);
     writeEntry(hippoDir, createMemory('nothing relevant', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));

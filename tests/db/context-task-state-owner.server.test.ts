@@ -1,4 +1,3 @@
-// On a shared store contextGet's task state keys on owner and project, so each developer gets their own, across sessions.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -33,7 +32,6 @@ function snap(task: string, session: string) {
   return { task, summary: `${task} summary`, nextStep: `${task} next`, sessionId: session };
 }
 
-/** B's row first, then A's newer one: an unkeyed read would give A's row to both. */
 function seedTwoOwners() {
   const b = saveActiveTaskSnapshot(home, 'default', snap('bob task', 'sb'), KEY_B).id;
   const a = saveActiveTaskSnapshot(home, 'default', snap('alice task', 'sa'), KEY_A).id;

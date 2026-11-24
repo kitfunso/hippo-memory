@@ -1,4 +1,3 @@
-// Not in same-text because it reads the user-rule tag, and base/util may not import base/memory.
 import { USER_RULE_TAG, type MemoryEntry } from './entry.js';
 import { isSuperseded } from './liveness.js';
 

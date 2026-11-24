@@ -1,13 +1,3 @@
-/**
- * J3.2 — HTTP wire-format for planningFallacyHint on /v1/memories.
- *
- * Asserts the optional planningFallacyHint field rides on the GET
- * /v1/memories response body in camelCase shape, present only when the
- * query matches and a class resolves.
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 6, Task 9).
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -65,7 +55,6 @@ describe('HTTP /v1/memories planningFallacyHint', () => {
       if (hint === undefined) {
         throw new Error('planningFallacyHint missing from the response');
       }
-      // Wire-shape: camelCase fields per _Base.alias_generator=to_camel parity.
       expect(hint.classTag).toBe('migration-effort');
       expect(hint.source).toBe('j3.2-auto');
       expect(hint.nClosed).toBe(3);

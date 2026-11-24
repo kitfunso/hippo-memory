@@ -29,7 +29,6 @@ export function audit(db: DatabaseSyncLike, op: AuditOp, options: AuditOptions):
       },
     ]);
   } catch (error) {
-    // The mutation has already succeeded; a broken audit table must not undo it.
     reportAuditWriteFailure(op, error, targetId);
   }
 }

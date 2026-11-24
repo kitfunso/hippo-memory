@@ -1,5 +1,3 @@
-// The recall branches the surface differences test skips, over serve() on hippo.db: what each branch returns on HTTP and
-// MCP, the rows it writes, the stats mirror, and that the global store is never touched.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -48,7 +46,6 @@ async function recallOver(url: string, via: Surface, args: Args): Promise<Recall
   return reply.result!.content![0]!.text;
 }
 
-/** savePrediction draws its memory's id at random, so the rows name that one id by its role. */
 function predictionId(root: string): string {
   const db = openHippoDb(root);
   try {
@@ -99,7 +96,6 @@ async function runBranch(via: Surface, branch: Branch): Promise<Ran> {
 }
 
 const FILLS = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
-/** MCP's engine order over the local store plus the port-branch rows; the goal row sinks to the end with no session. */
 const ENGINE = [
   'mem_p_plain',
   'mem_p_pinned',
@@ -123,7 +119,6 @@ const HINT = 'localhost:cli recall_autodebias_hint deploy-duration';
 const SKIPPED = 'localhost:cli recall_anchor_skipped_no_session';
 const recallRow = (n: number): string => `localhost:cli recall ${n}`;
 
-/** Every row a recall shows is strengthened once; the goal row starts the seed at 3. */
 const bumpedFor = (shown: readonly string[]) => ({
   mem_p_goal: 3,
   ...Object.fromEntries(shown.map((id) => [id, id === 'mem_p_goal' ? 4 : 1])),
@@ -285,7 +280,6 @@ const WANT = new Map<string, Record<Surface, Want>>(
     },
     'LIKE path': {
       http: { ids: ['mem_x_cafe'], audit: [SKIPPED, recallRow(1)], trace: 'api 1 -', ledger: 'http_recall 1 -' },
-      // Moved in #1135: accented letters now stay inside the word, so `caf` no longer matches the word café.
       mcp: {
         ids: [],
         audit: [recallRow(0), SKIPPED],
@@ -306,7 +300,6 @@ const SCENARIOS = RECALL_BRANCHES.flatMap((b) =>
 );
 
 beforeAll(async () => {
-  // savePrediction stamps its memory from the eval clock, so a fixed clock keeps that row's score the same on every run.
   vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
   templates = await seedTemplates(seedPortBranches);
   vi.unstubAllEnvs();

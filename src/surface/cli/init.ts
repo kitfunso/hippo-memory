@@ -1,6 +1,3 @@
-// `hippo init`: create a store and wire the detected agents' instruction files, hooks and daily
-// runner.
-
 import { envSkipAutoIntegrations } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -51,7 +48,6 @@ import { installLocalEmbedder } from './embedder-install.js';
 import { loadConfig } from '../../host/config-file.js';
 import { plural } from '../../base/util/format.js';
 
-// An unreadable or vanished folder is expected while scanning; any other failure is worth a line.
 const QUIET_SCAN_ERRORS: ReadonlySet<string> = new Set(['EACCES', 'EPERM', 'ENOENT', 'ENOTDIR']);
 
 function scanForGitRepos(rootDir: string, maxDepth = 2): string[] {
@@ -93,7 +89,6 @@ interface InitScannedRepoOptions {
   readonly globalRoot: string;
 }
 
-/** Creates the repo's store when absent and registers it; returns whether it already existed. */
 async function initScannedRepo({
   repo,
   tenantId,
@@ -117,7 +112,6 @@ interface LearnScannedRepoOptions {
   agentImport: ReturnType<typeof emptyReport>;
 }
 
-/** Seeds one scanned repo from git history and its agents' notes, unless --no-learn. */
 async function learnScannedRepo(
   options: LearnScannedRepoOptions,
 ): Promise<Pick<Awaited<ReturnType<typeof learnFromRepo>>, 'added' | 'lowInfo'>> {
@@ -146,8 +140,6 @@ async function learnScannedRepo(
 }
 
 function installScanHooks(repos: readonly string[]): void {
-  // User-level hooks only: a hippo block in each repo's CLAUDE.md or AGENTS.md would leave a diff
-  // in every repo.
   const agents = detectAgentHooks(repos);
   if (agents.length === 0) {
     console.log(
@@ -184,14 +176,12 @@ interface RepoScan extends Omit<LearnScannedRepoOptions, 'repo'> {
   readonly globalRoot: string;
 }
 
-/** Inits, seeds and lists each repo in turn; the totals feed the cross-repo summary. */
 async function initEachScannedRepo(
   repos: readonly string[],
   scan: RepoScan,
 ): Promise<Omit<ScanSummary, 'repoCount'>> {
   const { tenantId, globalRoot, seedDays, learn, machine, agentImport } = scan;
   let totalLessons = 0;
-  // Rolled up so the cross-repo summary reports the gate too: a dropped subject is never invisible.
   let totalLowInfo = 0;
   for (const repo of repos) {
     const alreadyExists = await initScannedRepo({ repo, tenantId, globalRoot });
@@ -328,31 +318,25 @@ export async function handleInit({ hippoRoot, tenantId, flags }: CommandContext)
     autoInstallHooks();
   }
 
-  // Auto-setup daily schedule (unless --no-schedule)
   if (!boolFlag(flags, 'no-schedule') && !boolFlag(flags, 'global')) {
     setupDailySchedule(globalRoot);
   }
 
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
-  // Seed with git history on first init (unless --no-learn)
   if (!alreadyExists && learn && !boolFlag(flags, 'global')) {
     await seedFromGitHistory(hippoRoot, tenantId);
   }
 
-  // Every run, not only the first: an agent's notes change between inits.
   if (learn) {
     printAgentImport(await importForStore(hippoRoot, cliSyncOptions(tenantId, currentMachine())));
   }
 }
 
-/** First in every init path: a killed install leaves no store to skip the first-run seed, and
- * the memories init writes get vectors as they land. */
 function maybeInstallEmbedder(configRoot: string, flags: CliFlags): boolean {
   if (boolFlag(flags, 'no-embeddings')) return false;
   return installLocalEmbedder(loadConfig(configRoot).embeddings);
 }
 
-/** The embedder arrived after this store already held memories, and those have no vectors yet. */
 async function printEmbedHint(root: string, tenantId: string, command: string): Promise<void> {
   const count = await memoryCountAll(cliApiContext(root, tenantId));
   if (count > 0) {
@@ -361,10 +345,6 @@ async function printEmbedHint(root: string, tenantId: string, command: string): 
   }
 }
 
-/**
- * Every write init makes into agent config (instruction blocks, hooks, plugins) is an automatic
- * integration, so one switch skips them all.
- */
 function initInstallsIntegrations(flags: CliFlags): boolean {
   if (boolFlag(flags, 'no-hooks')) return false;
   if (!envSkipAutoIntegrations()) return true;
@@ -374,13 +354,10 @@ function initInstallsIntegrations(flags: CliFlags): boolean {
   return false;
 }
 
-/** Plain init: patch the detected agents' instruction files in cwd, then install their
- * user-level hooks. */
 function autoInstallHooks(): void {
   const cwd = process.cwd();
   const agents = detectAgentHooks([cwd]);
   const agentsMd = path.join(cwd, HOOKS.codex.file);
-  // Read before patching: a re-run of init finds its own block and skips the Codex hint.
   const codexHint = !(
     fs.existsSync(agentsMd) && fs.readFileSync(agentsMd, 'utf8').includes(HOOK_MARKERS.start)
   );
@@ -388,9 +365,7 @@ function autoInstallHooks(): void {
   installUserLevelHooks(agents, codexHint);
 }
 
-/** HOOKS keys of the agents with a marker file in any of dirs, in detector order. */
 function detectAgentHooks(dirs: readonly string[]): string[] {
-  // Map: filename to check -> hook key(s) to install
   const detectors: Array<{ files: string[]; hook: string }> = [
     { files: ['CLAUDE.md', '.claude/settings.json'], hook: 'claude-code' },
     { files: ['AGENTS.md', '.codex'], hook: 'codex' },
@@ -406,15 +381,12 @@ function detectAgentHooks(dirs: readonly string[]): string[] {
 }
 
 function patchInstructionFiles(dir: string, agents: readonly string[]): void {
-  // One block per file: several agents share AGENTS.md.
   const seen = new Set<string>();
   for (const hook of agents) {
     const hookDef = HOOKS[hook];
     if (!hookDef) continue;
 
     const targetPath = path.resolve(dir, hookDef.file);
-    // Never create the file: a marker such as .codex or .claude/settings.json does not ask for a
-    // new AGENTS.md or CLAUDE.md.
     if (!fs.existsSync(targetPath) || seen.has(targetPath)) continue;
     seen.add(targetPath);
     const existing = fs.readFileSync(targetPath, 'utf8');
@@ -433,8 +405,6 @@ interface ShippedBlockOptions {
   readonly hook: string;
 }
 
-/** Swap an unedited block from an earlier hippo for the current one; an edited block stays, with
- * a hint. */
 function refreshShippedBlock({ filePath, text, hook }: ShippedBlockOptions): void {
   const block = hippoBlock(text);
   if (!block || (block.owner && HOOKS[block.owner].content === block.inner)) return;
@@ -522,7 +492,6 @@ function installOpencodeUserPlugin(): void {
 /** The Copilot CLI keeps hippo's files in its own folder, so a machine check picks it, whatever the project holds. */
 function installCopilotForCli(): void {
   try {
-    // VS Code alone is setup's to wire; the strict check also skips the hooks/ folder setup leaves there.
     if (!isCopilotCliPresent()) return;
     printCopilotInstall(installCopilot(), '   ');
   } catch (err) {
@@ -535,21 +504,13 @@ function installCopilotForCli(): void {
   }
 }
 
-/**
- * Claude Code settings hooks, Codex's hooks.json, the OpenCode plugin and the Copilot CLI's files, under the home
- * directory; idempotent, so re-running init adds newer hooks.
- */
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
-    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
     if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
-    // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping
-    // `hippo init` in lockstep with `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

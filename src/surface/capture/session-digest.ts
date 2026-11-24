@@ -1,5 +1,3 @@
-// One memory per ended session, built without a model call from the agent's final message and the
-// files it changed.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -32,16 +30,13 @@ export const READ_CAP_BYTES = 64 * 1024 * 1024;
 
 export interface DigestEdit {
   filePath: string;
-  /** Working directory in effect at the call, for relative paths. */
   base: string | null;
 }
 
 export interface SessionScan {
   turns: SessionTurn[];
   finalText: string;
-  /** The first working directory the transcript names: where the session ran. */
   cwd: string | null;
-  /** Edits that landed, in call order. */
   edits: DigestEdit[];
 }
 
@@ -180,7 +175,6 @@ function nativePath(p: string): string {
   return path.resolve(s);
 }
 
-/** p resolved against base; null for a relative path with no base to resolve it against. */
 function resolveFrom(base: string | null, p: string): string | null {
   if (isNetworkPath(p)) return null;
   if (isAbsoluteAnywhere(p)) return nativePath(p);
@@ -307,8 +301,6 @@ export function scanSessionTranscript(
     turns,
     finalText: state.claudeFinal || state.codexFinal || state.codexUnphased,
     cwd: state.firstCwd,
-    // An unanswered call may never have run, so an edit counts only once its result says it
-    // applied.
     edits: state.pending
       .filter((e) => state.landed.has(e.callId))
       .map(({ filePath, base }) => ({ filePath, base })),
@@ -349,10 +341,6 @@ function isNetworkPath(p: string): boolean {
   return /^[\\/]{2}(?:(?![?.][\\/])|[?.][\\/]UNC[\\/])/i.test(p);
 }
 
-/**
- * The store root is realpath'd; transcript paths are not, and a deleted file has no realpath of its
- * own. Null for a network path.
- */
 function realFsPath(p: string): string | null {
   if (isNetworkPath(p)) return null;
   const abs = nativePath(p);
@@ -368,16 +356,11 @@ function realFsPath(p: string): string | null {
   return path.join(fs.realpathSync.native(head), ...rest);
 }
 
-/**
- * Repo-relative with forward slashes, '' for the root itself, null outside the repo or when the
- * path cannot be resolved.
- */
 function repoRelative(p: string, repoRoot: string): string | null {
   let real: string | null;
   try {
     real = realFsPath(p);
   } catch (err) {
-    // An unresolvable path counts as outside the repo: only that path is lost, never the digest.
     log.warnThenDebug(
       'digest:realpath',
       'digest: a changed path could not be resolved',
@@ -407,14 +390,11 @@ function changedFiles(edits: readonly DigestEdit[], repoRoot: string): string[] 
 }
 
 export interface SessionDigestOptions {
-  /** Session id, or the transcript's basename when the host gives none. */
   key: string;
   tenantId: string;
-  /** The repo store's config, as the caller's Context holds it. */
   config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
-/** The repo under the store, read from disk for the digest's path checks. */
 function diskRepo(hippoRoot: string, edits: readonly DigestEdit[]): DigestRepo {
   return {
     root: () => realFsPath(path.dirname(hippoRoot)),
@@ -455,8 +435,6 @@ export async function recordSessionDigest(
   scan: SessionScan | null,
   opts: DigestRunOptions,
 ): Promise<void> {
-  // The digest names this repo's files, so it goes only to the repo's own store, never the global
-  // one.
   if (!isInitialized(hippoRoot)) {
     opts.log('digest: skip: this folder has no store of its own');
     return;

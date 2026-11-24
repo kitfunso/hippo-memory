@@ -1,6 +1,3 @@
-// Pins each MCP read tool's text over one fixed store, through the stdio composition root, so moving the render into
-// src/api cannot change a byte of what a client reads.
-
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -23,12 +20,10 @@ import { removeDir } from '../_helpers/remove-dir.js';
 
 type ToolArgs = Record<string, string | number | boolean>;
 
-// One host per store, as one stdio loop serves one client: an outcome lands on what that host's recall showed.
 let host: McpHost<CliStore>;
 
 let templates: Templates;
 
-// A named project keeps hippo_context off the git-derived query, which would read this checkout's own diff.
 const NO_PROJECT = { name: '', legacyName: '' };
 
 async function tool(s: Store, name: string, args: ToolArgs): Promise<string> {
@@ -53,7 +48,6 @@ async function onFreshStore(run: (s: Store) => Promise<string[]>): Promise<strin
   }
 }
 
-// Seeds three real template stores, and a runner's disk sets how long that takes.
 beforeAll(async () => {
   templates = await seedTemplates(seedPortBranches);
 }, 30_000);

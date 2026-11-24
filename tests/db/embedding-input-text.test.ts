@@ -1,19 +1,3 @@
-/**
- * T1 regression tests (episode 01KX434KMAQSX4HRHYC67WDTJQ,
- * docs/plans/2026-07-09-recall-determinism.md).
- *
- * Covers two things:
- *  1. `embeddingInputText` excludes exactly `path:*` tags — the fix for the
- *     dominant root cause of cross-fresh-ingest recall-rank variance (auto
- *     path tags carry the store directory name, so identical content embeds
- *     to a different vector per store location).
- *  2. The reindex-identity choke point (`embeddingIndexIdentity`,
- *     `embeddingModelRequiresReindex`, `saveStoredEmbeddingModel`) versions
- *     consistently: a store just saved via the current format reports no
- *     reindex needed, while a legacy store with a bare (unversioned) stored
- *     model id reports a reindex is needed exactly once.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, setMeta } from '../../src/db/index.js';
 import { embeddingInputText, embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
@@ -94,8 +78,6 @@ describe('reindex identity consistency', () => {
   });
 
   it('a legacy store with a bare (unversioned) stored model id requires reindex exactly once', () => {
-    // Simulate a pre-T1 store: meta holds the bare provider id with no
-    // `#t<N>` suffix, as `saveStoredEmbeddingModel` used to write it.
     const db = openHippoDb(hippoRoot);
     try {
       setMeta(db, EMBEDDING_MODEL_META_KEY, 'modelX');
@@ -106,8 +88,6 @@ describe('reindex identity consistency', () => {
 
     expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelX', fakeIndex)).toBe(true);
 
-    // The migration reindex re-saves the identity in the current format —
-    // after that, the same model no longer requires reindex.
     saveStoredEmbeddingModel(handlesOf(hippoRoot).on, 'modelX');
     expect(embeddingModelRequiresReindex(handlesOf(hippoRoot).on, 'modelX', fakeIndex)).toBe(false);
   });

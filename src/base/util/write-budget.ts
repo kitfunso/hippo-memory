@@ -1,5 +1,3 @@
-// How long a long-running write may hold the store's write lock per transaction, and how long it
-// lets other writers in after.
 import { setTimeout as delay } from 'node:timers/promises';
 
 /** A chunk closes at the first unit boundary after this long: a server request gives up after a

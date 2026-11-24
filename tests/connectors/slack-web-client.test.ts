@@ -43,7 +43,6 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   const SECRET = 'xoxb-secret-token';
   const SLACK_CAP_BYTES = 64 * 1024 * 1024;
 
-  /** The rejection of one page fetch whose reply is `reply`; a page that came back fails the test. */
   async function failure(reply: Response): Promise<Error> {
     const fetcher = slackHistoryFetcher(SECRET, async () => reply);
     const outcome = await fetcher({ channelId: 'C0CHANNEL', cursor: 'CURSOR1' }).then(
@@ -59,7 +58,6 @@ describe('slackHistoryFetcher: a reply that is not the documented shape', () => 
   function expectNamesTheReply(err: Error, reason: RegExp): void {
     expect(err.message).toMatch(/^slack: HTTP 200 on \/api\/conversations\.history: /);
     expect(err.message).toMatch(reason);
-    // The query string holds the channel and the cursor; the header holds the token.
     expect(err.message).not.toMatch(/C0CHANNEL|CURSOR1|xoxb/);
   }
 

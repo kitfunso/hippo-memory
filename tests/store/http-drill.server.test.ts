@@ -1,10 +1,3 @@
-/**
- * HTTP `GET /v1/recall/drill/:id` — surface check for v1.5.0 drillDown.
- *
- * Verifies: 200 with summary + children for a real summary, 404 for an
- * unknown id, 404 for a leaf id, 400 on bad query params.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';

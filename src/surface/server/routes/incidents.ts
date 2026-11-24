@@ -1,5 +1,3 @@
-// /v1/incidents routes: open, list, show, resolve and close. The lifecycle is open, resolved,
-// closed with no supersede, so linkedMemoryIds takes supersedesDecisionId's place on create.
 import { incidentOpen, incidentResolve } from '../../../api/objects/object-kinds.js';
 import { sendJson } from '../../http/http-util.js';
 import { parseJsonBody, getString, getStringArray, requiredString } from '../validation.js';

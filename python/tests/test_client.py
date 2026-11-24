@@ -1,10 +1,3 @@
-"""Real-server integration tests for the Hippo async client.
-
-Each test spawns its own `node bin/hippo.js serve` subprocess via the
-`hippo_server` fixture (function-scoped per the plan-eng-critic finding).
-If the subprocess fails to come up, the test is SKIPPED not FAILED.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -19,7 +12,6 @@ async def test_health_reports_version(hippo_server: str, hippo_member_key: str):
     async with Hippo(base_url=hippo_server, api_key=hippo_member_key) as client:
         info = await client.health()
         assert info.ok is True
-        # Server version should be >=1.11.4 for the SDK's endpoint surface.
         assert tuple(int(p) for p in info.version.split(".")[:3]) >= (1, 11, 4)
         assert info.pid > 0
 
@@ -51,16 +43,9 @@ async def test_outcome_with_ids(hippo_server: str, hippo_member_key: str):
 async def test_outcome_last_recall_path(hippo_server: str, hippo_member_key: str):
     async with Hippo(base_url=hippo_server, api_key=hippo_member_key) as client:
         mem = await client.remember(content="last-recall outcome target")
-        # last_retrieval_ids is populated by api.getContext (HTTP /v1/context),
-        # NOT by api.recall (HTTP GET /v1/memories). cmdRecall populates it
-        # CLI-side at cli.ts:1282 but the api layer doesn't; this is a
-        # CLI/HTTP parity gap tracked in TODOS.md for a future minor. For
-        # the SDK user, get_context is the path that primes the last-recall
-        # outcome flow.
         await client.get_context(budget=1500)
-        result = await client.outcome(good=False)  # no ids -> last-recall path
+        result = await client.outcome(good=False)
         assert result.applied >= 1
-        # ids is the tenant-filtered applied subset (v1.11.4 contract).
         assert result.ids is not None
         assert mem.id in result.ids
 
@@ -75,8 +60,6 @@ async def test_get_context_budget_zero_short_circuits(hippo_server: str, hippo_m
 
 async def test_get_context_pinned_only_empty_store(hippo_server: str, hippo_member_key: str):
     async with Hippo(base_url=hippo_server, api_key=hippo_member_key) as client:
-        # Function-scoped fixture means a fresh empty store; pinned_only with
-        # no pinned entries returns empty.
         ctx = await client.get_context(pinned_only=True, budget=1500)
         assert ctx.entries == []
 
@@ -97,7 +80,6 @@ async def test_forget_removes_memory(hippo_server: str, hippo_admin_key: str):
 
 
 async def test_member_forget_of_unowned_row_is_403(hippo_server: str, hippo_member_key: str):
-    """The local key is a member key, and a row with no writer changes only with an admin key."""
     async with Hippo(base_url=hippo_server, api_key=hippo_member_key) as client:
         mem = await client.remember(content="member-forget canary")
         with pytest.raises(HippoError) as exc_info:
@@ -107,9 +89,7 @@ async def test_member_forget_of_unowned_row_is_403(hippo_server: str, hippo_memb
 
 
 async def test_hippo_error_on_400(hippo_server: str, hippo_member_key: str):
-    """POST /v1/outcome with non-boolean `good` field -> 400 -> HippoError."""
     async with Hippo(base_url=hippo_server, api_key=hippo_member_key) as client:
         with pytest.raises(HippoError) as exc_info:
-            # Bypass the typed method; hit the raw _request to force a 400.
             await client._request("POST", "/v1/outcome", json={"good": "not-a-bool"})
         assert exc_info.value.status_code == 400

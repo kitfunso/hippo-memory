@@ -1,6 +1,3 @@
-// The event log by ConnectorEvent, whichever connector's table holds the key, and the archive a
-// deletion event logs.
-
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { archiveRawMemories } from '../entries/raw-archive.js';
@@ -19,7 +16,6 @@ import {
 } from './github.js';
 import { markSlackEventSeen, slackEventMemory, slackEventRecord, slackEventSeen } from './slack.js';
 
-// The tenant filter keeps one tenant's deletion from reaching another's row under the same ref.
 const RAW_ROWS = `SELECT id FROM memories WHERE artifact_ref IN (?, ?) AND tenant_id = ? AND kind = 'raw'`;
 
 function eventSeen(db: DatabaseSyncLike, event: ConnectorEvent): boolean {
@@ -80,7 +76,6 @@ export function markEventSeen(
   ) as Array<{ id: string }>;
   const ids = rows.map((r) => r.id);
   if (ids.length === 0) {
-    // Still logged, so a retry of the same delete answers 'duplicate'.
     logEvent(db, event, null);
     return { duplicate: false, archived: 0 };
   }

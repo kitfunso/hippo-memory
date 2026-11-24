@@ -1,4 +1,3 @@
-// hippo.db's Consolidation group: sleep's reads and writes, each a body on one short-lived handle.
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import {
   type DatabaseSyncLike,
@@ -64,8 +63,6 @@ import { noteRebuildFailures } from './rebuild-holds.js';
 import { emptyExtractions, noteEmptyExtractions } from './empty-extractions.js';
 import { sleepClaim } from './sleep-lock.js';
 
-// A half-life move reads, writes, audits and records its base on one handle, so it commits whole or
-// not at all.
 function listHalfLifeRows(db: DatabaseSyncLike, from: number, typedPending: boolean): HalfLifeRows {
   return {
     from,
@@ -80,7 +77,6 @@ function* withoutObjects(entries: Iterable<MemoryEntry>): Generator<HalfLifeRow>
   for (const entry of entries) yield { entry, object: null };
 }
 
-/** Writes the move, then its audit rows one statement each. */
 function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): void {
   setHalfLives(
     db,
@@ -89,8 +85,6 @@ function writeMove(db: DatabaseSyncLike, move: HalfLifeMove, actor: string): voi
   for (const row of halfLifeAuditRows(move, actor)) appendAuditEvents(db, [row]);
 }
 
-/** Moves the store's half-lives to base `to` as planned from the rows read here, then records
- * the base. `outcome` is null when no move is due; a dry run plans and writes nothing. */
 function moveHalfLives(
   db: DatabaseSyncLike,
   to: number,
@@ -110,8 +104,6 @@ function moveHalfLives(
     setMeta(db, META_KEY.typedHalfLife, '1');
     return { from, outcome };
   };
-  // Plan, write, audit and record the base under one write lock, so a concurrent write or sleep
-  // cannot interleave.
   return opts.dryRun ? run() : withWriteScope(db, 'migrate_half_life', run);
 }
 
@@ -124,7 +116,6 @@ function begin(db: DatabaseSyncLike, to: number, opts: SleepBegin): SleepStart {
   return { from, outcome, fts, ...readSleepHistory(db), sessions };
 }
 
-// The wait is sleep's own, not a server request's 250 ms.
 const sleepOpener = waitingOpener(SLEEP_DB_WAIT_MS);
 const sleepStoreOpener = waitingOpener(SLEEP_DB_WAIT_MS, openStore);
 
@@ -143,9 +134,6 @@ async function commitSleep(
   return { removedIds, expired };
 }
 
-/** The chunked writes keep their handle until their Promise settles; a commit with nothing to
- * write opens none, and one that only expires opens a bare handle, so a dry run sets up no
- * mirror folder. */
 function chunkedCommit({ onAsync }: Handles): Consolidation['commit'] {
   return (commit) => {
     const flush = commit.flush && commit.flush.components.length > 0 ? commit.flush : null;

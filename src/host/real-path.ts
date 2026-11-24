@@ -1,4 +1,3 @@
-// Leaf module: path canonicalisation shared by project identity and the importers.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../base/util/log.js';

@@ -1,5 +1,3 @@
-// The published importers take a folder in their options, so this entry builds the hippo.db store
-// each one writes to.
 import {
   importEntriesInto,
   importRoot,

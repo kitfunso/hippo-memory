@@ -1,5 +1,3 @@
-// Pins stdout, stderr and the exit status of failing `hippo` invocations across the verb files on a real store, so a change
-// to how a verb stops its command cannot move a byte or a code. The cases in SPAWNED run the built CLI; the rest run it in process.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,11 +6,9 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeStore } from '../_helpers/make-root.js';
 
-// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const FETCH_UNAUTHORISED = resolve(__dirname, '..', '_helpers', 'fetch-unauthorised.cjs').split(sep).join('/');
 const FAILING_COMMAND = ['--', 'node', '-e', 'process.exit(3)'];
 const SPAWN_TIMEOUT_MS = 60_000;
-// Each exit code once through the real entry, the preload a child reads from NODE_OPTIONS, and serve, which arms process handlers.
 const SPAWNED = new Set([
   'version',
   'unknown verb',
@@ -25,7 +21,6 @@ const SPAWNED = new Set([
 interface Case {
   readonly name: string;
   readonly args: readonly string[];
-  /** `store` is a folder with an initialised store, `bare` one with none. */
   readonly cwd: 'store' | 'bare';
   readonly env?: Readonly<Record<string, string>>;
 }
@@ -127,9 +122,7 @@ function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessE
   return { ...env, ...extra };
 }
 
-/** Folder names differ per run and per platform, so each one prints as its label with forward slashes. */
 function masked(text: string): string {
-  // The version line moves with every release.
   let out = text
     .replace(/\r\n/g, '\n')
     .replaceAll('\\', '/')
@@ -155,7 +148,6 @@ async function run(c: Case) {
     ? hippoRun(c.args, { ...opts, timeout: SPAWN_TIMEOUT_MS })
     : await runCliAs(c.args, opts);
   codes.add(r.status);
-  // The usage text grows with every verb; `hippo help` prints it, so only its presence is pinned here.
   const stdout = usage.length > 0 ? r.stdout.replace(usage, '<the text of hippo help>\n') : r.stdout;
   return { stdout: masked(stdout), stderr: masked(r.stderr), status: r.status };
 }
@@ -168,7 +160,6 @@ describe('hippo exit codes and output of failing invocations (built CLI)', () =>
     ).toMatchSnapshot();
   });
 
-  // Reads what the cases above recorded, so it holds only on a whole-file run.
   it('covers every exit code a verb hands to the entry', () => {
     expect([...codes].sort()).toEqual([0, 1, 2, 3]);
   });

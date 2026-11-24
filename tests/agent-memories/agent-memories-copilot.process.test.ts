@@ -1,6 +1,3 @@
-/**
- * Copilot Chat adapter: VS Code data folders per platform, user files, and workspace matching by folder URI.
- */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -48,7 +45,6 @@ function fileUri(p: string): string {
   return `file://${encoded.replace(/^([a-zA-Z]):/, (_m, d: string) => `/${d.toLowerCase()}%3A`)}`;
 }
 
-/** A workspace whose repo folder holds one memory file; returns the container path. */
 function addWorkspace(data: string, id: string, workspaceJsonBody: string): string {
   write(path.join(repoMemories(data, id), 'note.md'), `note of ${id}`);
   write(workspaceJson(data, id), workspaceJsonBody);

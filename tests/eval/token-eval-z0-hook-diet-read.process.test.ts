@@ -1,4 +1,3 @@
-/** Z0 hook diet read end to end over a tiny scored tree and a stub hippo checkout: staging, the clock pin, the store counts and the named failures. */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -61,7 +60,6 @@ function write(file: string, text: string): void {
   fs.writeFileSync(file, text);
 }
 
-/** A scored folder shaped like round 3's: one final-read run whose plan has two A2 steps per seed, and a snapshot, log and usage file per seed spec. */
 function scoredTree(base: string, seeds: SeedSpec[]): string {
   const run = path.join(base, 'scored', 'r3run', 'q1-w1', 'run');
   const steps = seeds.flatMap(({ seed }) => [
@@ -82,7 +80,6 @@ function scoredTree(base: string, seeds: SeedSpec[]): string {
   return path.join(base, 'scored');
 }
 
-/** A hippo checkout whose bin/hippo.js is a stub: it logs what it saw to bin/seen.jsonl, then runs `tail`. */
 function stubCheckout(base: string, tail: string, withDist = true): string {
   const dir = path.join(base, 'checkout');
   write(path.join(dir, 'package.json'), '{"type":"commonjs"}');
@@ -136,7 +133,6 @@ describe('Z0 hook diet read', () => {
     const base = tempBase();
     const co = stubCheckout(base, PRINTS_BLOCK);
     const scored = scoredTree(base, onlyGoodSeed);
-    // chdir to the base, so the relative path holds on CI runners with the temp folder on another drive.
     const prevCwd = process.cwd();
     process.chdir(base);
     try {

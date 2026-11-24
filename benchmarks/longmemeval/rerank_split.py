@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""
-rerank_split.py — Split baseline retrieval JSONL into rerank batches.
-
-Reads results/f9_baseline/best.jsonl (500 queries, each with retrieved_memories).
-Writes /tmp/rerank_batches/batch_NNN.json (batches of 10 queries).
-Candidate content is truncated to 600 chars.
-"""
-
 import json
 import os
 import sys

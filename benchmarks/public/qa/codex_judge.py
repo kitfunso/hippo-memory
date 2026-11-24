@@ -1,13 +1,3 @@
-"""gpt-5.6-sol at medium effort through `codex exec` on the ChatGPT plan: the judge of prereg Amendment 6.
-
-Every call runs in one shared clean CODEX_HOME that starts with only a copy of the login, with no tools, so no
-AGENTS.md, skills, hooks or MCP servers reach the judge, from an empty folder outside any checkout in the read-only
-sandbox. Calls are logged in claude_llm's record shape, so qa/ledger.py reads the log; a reply that shows a tool is
-logged as `tool-use` and raises claude_llm.ToolUse; limits are waited out and a failed call raises, never a verdict.
-Login safety: refresh tokens are single use, so the pool home never refreshes. Its access token must outlive a
-call; near expiry the pool pauses, the main home refreshes as codex does for the user, and the pool copies it in.
-Usage: CodexJudge(log=Path("calls-judge.jsonl"), slots=8).ask(system, prompt, tag="judge q1")["text"]
-"""
 from __future__ import annotations
 
 import base64
@@ -27,14 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "mem0"))
 from claude_llm import KEEP_ENV, Claude  # noqa: E402
 
 MODEL = "gpt-5.6-sol"
-DEFAULT_SLOTS = 8  # 69.7 calls/min with no errors in the 11 Nov smoke; 4 slots gave 35.5, 1 gave 11.7
+DEFAULT_SLOTS = 8
 CODEX_JS = Path(os.environ.get("APPDATA", "")) / "npm/node_modules/@openai/codex/bin/codex.js"
 MAIN_HOME = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
 POOL_HOME = Path.home() / "hippo-bench" / ".codex-judge-home"  # outside %TEMP%: codex warns about helper binaries there
-# The no-tools preamble of dolphinbench/dolphin_smoke.py:39-40; it cannot be imported, that module boots a harness.
 PREAMBLE = ("You are a JSON-only grading function. Do NOT use any tool. Do NOT read, open, view or write any "
             "file. Everything you need is in this message. Reply with the JSON object only.\n\n")
-# Account-side features that would add tools, connectors or skills to a clean home; checked by `codex features list`.
 OFF = ("apps", "plugins", "remote_plugin", "hooks", "multi_agent", "image_generation", "browser_use",
        "browser_use_external", "computer_use", "in_app_browser", "goals", "tool_suggest", "skill_search",
        "skill_mcp_dependency_install", "shell_tool", "unified_exec", "view_image", "sleep_tool", "code_mode_host")
@@ -42,18 +30,15 @@ FLAGS = ("exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
          "-c", "notify=[]", "-c", "project_doc_max_bytes=0", "-c", "skills.include_instructions=false",
          "-c", 'web_search="disabled"', *(x for f in OFF for x in ("--disable", f)), "-m", MODEL, "--json")
 LIMIT_429 = re.compile(r"\b429\b|too many requests|usage limit|rate limit|hit your limit|try again (at|in)", re.I)
-# With the code-mode host off, codex says once per run that its exec tool fails closed: the wanted state.
 NOTICE = "Code Mode is unavailable because code-mode host is disabled"
-LEAK = re.compile(r"hook:|skill", re.I)  # what the main home's hooks and skills print; a clean home prints neither
-# codex --json shows no item for a code-mode tool call, only this stderr line and a second agent message (seen 11 Nov)
+LEAK = re.compile(r"hook:|skill", re.I)
 TOOL_LOG = re.compile(r"codex_core::tools")
-REPLY_ITEMS = ("agent_message", "reasoning", "error")  # every other item type is a tool
-LOCK_NAMES = ("auth.lock", "auth.json.lock")  # codex creates both, then writes auth.json (seen 11 Nov)
-GUARD = dt.timedelta(minutes=20)  # a call starts only if the pool's access token outlives the 900 s call cap
+REPLY_ITEMS = ("agent_message", "reasoning", "error")
+LOCK_NAMES = ("auth.lock", "auth.json.lock")
+GUARD = dt.timedelta(minutes=20)
 
 
 def _stamp(auth: Path) -> tuple[dt.datetime, dt.datetime, bytes] | None:
-    """A login file's last refresh, its access token's expiry and its bytes, or None if there is none."""
     try:
         raw = auth.read_bytes()
     except FileNotFoundError:
@@ -76,7 +61,6 @@ def _write(path: Path, raw: bytes) -> None:
 
 
 def read_run(rc: int, out: str, err: str) -> tuple[dict, str]:
-    """One `codex exec --json` run as claude_llm reads a result, with every sign of a tool, and its non-event lines."""
     texts, items, tools, errors, usage, loose = [], {}, [], [], None, []
     for line in out.splitlines():
         try:
@@ -102,7 +86,7 @@ def read_run(rc: int, out: str, err: str) -> tuple[dict, str]:
         elif kind in ("error", "turn.failed"):
             errors.append(str(ev.get("message") or (ev.get("error") or {}).get("message")))
     tools += [x.strip() for x in err.splitlines() if TOOL_LOG.search(x)]
-    if len(texts) > 1:  # a second message needs a tool's result between the two
+    if len(texts) > 1:
         tools.append(f"{len(texts)} agent messages")
     res = {"result": texts[-1] if texts else "", "usage": usage, "modelUsage": {MODEL: {}}, "items": items}
     if tools:
@@ -121,7 +105,6 @@ def outside_checkouts(folder: Path) -> bool:
 
 @contextlib.contextmanager
 def _file_lock(path: Path, wait_s: float):
-    """Holds a byte-range lock on path that overlaps codex's whole-file lock on the same file."""
     fd = os.open(path, os.O_RDWR | os.O_CREAT)
     end = time.monotonic() + wait_s
     try:
@@ -140,12 +123,10 @@ def _file_lock(path: Path, wait_s: float):
                 time.sleep(0.2)
         yield
     finally:
-        os.close(fd)  # closing the handle drops the lock
+        os.close(fd)
 
 
 class CodexJudge(Claude):
-    """Claude.ask's logged retry loop over one `codex exec` run per attempt instead of one `claude -p` run."""
-
     def __init__(self, log: Path, slots: int = DEFAULT_SLOTS, home: Path = POOL_HOME, work: Path | None = None,
                  main_home: Path = MAIN_HOME) -> None:
         node = shutil.which("node")
@@ -153,33 +134,29 @@ class CodexJudge(Claude):
             raise SystemExit(f"node or {CODEX_JS} not found: install @openai/codex with npm")
         self.cmd = [node, str(CODEX_JS), *FLAGS]
         work = (work or log.parent / "codex-judge").resolve()
-        self.cwd, self.sysdir = work / "cwd", work / "system-prompts"  # attributes Claude.ask and _log read
+        self.cwd, self.sysdir = work / "cwd", work / "system-prompts"
         profile = work / "profile"
         for d in (self.cwd, self.sysdir, profile, home):
             d.mkdir(parents=True, exist_ok=True)
-        if any(self.cwd.iterdir()) or not outside_checkouts(self.cwd):  # prereg Amendment 6 revision 1 item 7
+        if any(self.cwd.iterdir()) or not outside_checkouts(self.cwd):
             raise SystemExit(f"the judge's working folder {self.cwd} must be empty and outside any git checkout")
         self.log_path, self.lock, self.model, self.n = log, threading.Lock(), MODEL, slots
         self.slots, self.solo = threading.BoundedSemaphore(slots), threading.Lock()
         self.home, self.main_home = home, main_home
-        base = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}  # no OPENAI_* key: plan login only
+        base = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}
         self.main_env = {**base, "CODEX_HOME": str(main_home)}
-        # An empty profile: from any CODEX_HOME codex reads ~/.codex/auth.json and adopts it when newer (seen 11 Nov),
-        # so only sync() moves a login between the homes.
         self.env = {k: v for k, v in base.items() if k.upper() not in ("HOMEDRIVE", "HOMEPATH")}
         self.env.update(CODEX_HOME=str(home), USERPROFILE=str(profile), HOME=str(profile))
         if _stamp(main_home / "auth.json") is None:
             raise SystemExit(f"no codex login in {main_home}: run `codex login`")
         ver = subprocess.run([*self.cmd[:2], "--version"], capture_output=True, env=self.env, cwd=self.cwd, timeout=60)
-        self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
+        self.cli = ver.stdout.decode("utf-8", "replace").strip()
         self.sync()
 
     def ask(self, system: str, user: str, *, tag: str, effort: str = "medium", want_json: bool = False) -> dict:
         return super().ask(system, user, effort=effort, tag=tag, want_json=want_json)
 
     def sync(self) -> None:
-        """Copies the newer login over the older under both homes' codex locks. Pool to main happens only if a pool
-        run refreshed anyway, so main holds the new refresh token before it can reuse the spent one."""
         homes = (self.main_home, self.home)
         try:
             with contextlib.ExitStack() as st:
@@ -198,11 +175,10 @@ class CodexJudge(Claude):
                 _write((self.home if dst == "pool" else self.main_home) / "auth.json", raw)
                 self._log({"event": "login-sync", "from": src, "to": dst, "main_refresh": str(main[0]),
                            "pool_refresh": str(pool[0]) if pool else None})
-        except TimeoutError as e:  # the next call syncs again; nothing is lost by waiting
+        except TimeoutError as e:
             self._log({"event": "login-sync-skipped", "why": str(e)})
 
     def _refresh_main(self) -> None:
-        """One trivial run in the main home once its token has expired, so codex refreshes it there."""
         before = _stamp(self.main_home / "auth.json")[0]
         p = subprocess.run([*self.cmd, "-c", 'model_reasoning_effort="low"', "-"], input=b"Reply OK.",
                            capture_output=True, env=self.main_env, cwd=self.cwd, timeout=300)
@@ -212,8 +188,6 @@ class CodexJudge(Claude):
             raise RuntimeError(f"codex did not refresh the expired login in {self.main_home}: run `codex login`")
 
     def _ready(self, deadline: float) -> bool:
-        """True once the pool's access token outlives a call. Near expiry one thread drains the pool, waits for the
-        main token to expire or for the user's codex to refresh it, refreshes it if needed and copies it in."""
         self.sync()
         if _left(self.home) > GUARD:
             return True
@@ -234,7 +208,7 @@ class CodexJudge(Claude):
                     return False
                 else:
                     self._log({"event": "login-wait", "delay_s": round(wait)})
-                    time.sleep(min(wait, 600))  # looks again every 10 min: the user's codex may refresh first
+                    time.sleep(min(wait, 600))
             return False
         finally:
             for _ in range(taken):
@@ -242,12 +216,11 @@ class CodexJudge(Claude):
             self.solo.release()
 
     def _run(self, sys_file: Path, user: str, effort: str, deadline: float) -> tuple[dict, str] | None:
-        """One `codex exec` run in the pool home, or None if no slot or fresh login comes before the deadline."""
         while self._ready(deadline):
             if not self.slots.acquire(timeout=max(0.0, deadline - time.monotonic())):
                 return None
             try:
-                if _left(self.home) > GUARD:  # a drain may have run while this thread waited for its slot
+                if _left(self.home) > GUARD:
                     return self._exec(sys_file.read_bytes().decode("utf-8"), user, effort, deadline)
             finally:
                 try:
@@ -275,7 +248,6 @@ class CodexJudge(Claude):
 
 
 def main() -> None:
-    """Smoke: python -I codex_judge.py LOG [N_CALLS] [SLOTS] [PROMPT_FILE] - N judge-sized calls, calls per minute."""
     from concurrent.futures import ThreadPoolExecutor
     log, n, slots = Path(sys.argv[1]), int(sys.argv[2]) if len(sys.argv) > 2 else 1, \
         int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_SLOTS
@@ -292,7 +264,7 @@ def main() -> None:
             try:
                 f.result()
                 ok += 1
-            except Exception as e:  # counted and named; a failed call is never a verdict
+            except Exception as e:
                 bad.append(f"{type(e).__name__}: {e}"[:200])
     mins = (time.monotonic() - t0) / 60
     print(json.dumps({"slots": slots, "calls": n, "ok": ok, "errors": bad, "minutes": round(mins, 2),

@@ -11,7 +11,6 @@ const FIXTURE = path.resolve(__dirname, '..', 'fixtures', 'compaction', 'post-co
 
 export interface Scratch {
   dir: string;
-  /** A git-marked project under the scratch home, so its origin is 'proj'. */
   proj: string;
   env: NodeJS.ProcessEnv;
   hippoRoot: string;
@@ -30,7 +29,6 @@ export function scratch(): Scratch {
 }
 
 export function removeScratch(s: Scratch): void {
-  // A post-compact case leaves a detached import worker that holds the folder until it exits.
   removeDirOfWorker(s.dir);
 }
 

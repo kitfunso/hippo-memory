@@ -14,7 +14,6 @@ afterEach(() => {
 });
 
 const KEY_ENV = 'OPENAI_API_KEY';
-// Built from parts so the repo's secret scan does not flag the test file.
 const KEY = ['sk', 'proj', 'A1b2C3d4E5f6G7h8I9j0K1l2'].join('-');
 let root: string;
 let notices: FailureNotices;
@@ -37,7 +36,6 @@ afterEach(() => {
   errorSpy.mockRestore();
 });
 
-/** The root's index with this test's own warned failures, as each root keeps its own. */
 function index(): EmbedTarget {
   return { ...localIndex(root), failureNotices: notices };
 }

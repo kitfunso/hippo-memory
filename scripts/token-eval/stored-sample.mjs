@@ -1,4 +1,3 @@
-// Z0 prereg 179: the hand-labelled stored sample that checks the key-phrase judgement of `chain.stored`, with agreement and kappa.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { holds } from './leaks.mjs';
@@ -8,7 +7,6 @@ import { FORBIDDEN, blindLeaks, fenced, fillStrata, kappa, labelsTemplate, parse
 import { fileIds, forbiddenFor, outRedactor, taskText } from './reader-sample.mjs';
 
 const CUT = /\[cut at \d+ chars\]\n?$/;
-// Config parts would name the tool or its settings outright, so they never reach the reader.
 const DROPPED_PART = /(?:config|settings)\.json$|(?:^|[\\/])\.hippo[\\/]config/i;
 const YES_NO = ['yes', 'no'];
 const keyFile = (out) => path.join(out, 'g5', 'sealed', 'stored.key.json');
@@ -60,10 +58,8 @@ export function drawStored(out, { tasksFile, runsFile, seed, n = 30, aliases = [
     return `stored sample: already drawn, ${key.units.length} units in ${path.join(out, 'g5', 'stored')}\n`;
   }
   const { records } = parseZ0Records(fs.readFileSync(runsFile, 'utf8'), runsFile);
-  // Every record's run root too, since a unit's text can name a run with no saved grade.json.
   const cells = [...listGrades(out).map((e) => e.grade), ...records.map((r) => ({ runName: r.sequence, arm: r.arm, seed: r.seed }))];
   const { units, excluded } = storedUnits(out, records, taskText(tasksFile), outRedactor([out, ...aliases], cells));
-  // `[tool]` is this sample's own stand-in for the tool name, so only the reader sample scans for it.
   const forbidden = forbiddenFor(cells, FORBIDDEN.filter((f) => f !== '[tool]'));
   const accept = (u) => blindLeaks(unitText(u), forbidden).length === 0;
   const stratum = (j) => ({ quota: j === 'yes' ? Math.ceil(n / 2) : Math.floor(n / 2), items: seededOrder(seed, units.filter((u) => u.judged === j), (u) => u.key) });
@@ -88,7 +84,6 @@ export function scoreStored(out, labelsFile) {
   const key = readJson(keyFile(out));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.units.map((u) => u.file), YES_NO);
   if (fs.existsSync(scoreFile(out))) {
-    // A scored sample is final: new labels after seeing the score would be a reroll of the reported agreement.
     const old = readJson(scoreFile(out));
     if (key.units.some((u) => old.labels[u.file] !== labels.get(u.file))) throw new Error('the stored sample is already scored with other labels; a scored sample is final');
     return `stored sample: ${old.agree} of ${old.n} labels agree with the key-phrase judgement\n`;

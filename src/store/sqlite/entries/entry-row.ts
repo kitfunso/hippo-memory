@@ -23,8 +23,6 @@ import { duplicateHash, identityText } from '../../../base/util/same-text.js';
 import { LEAD_IN_MIN_BINARY } from '../../../base/util/version.js';
 import { findableText } from '../../../base/memory/lead-in.js';
 
-/** A 2.x JS caller's `tenant_id` would otherwise fall through to the default tenant without a
- * sound. */
 function rejectLegacyTenantKey(entry: MemoryEntry): void {
   if (Object.hasOwn(entry, 'tenant_id') && entry.tenantId === undefined) {
     throw new TypeError('tenant_id was renamed to tenantId in 3.0');
@@ -59,8 +57,6 @@ export function upsertMemoryRow(db: DatabaseSyncLike, entry: MemoryEntry): boole
   return holder === undefined;
 }
 
-// The duplicate read's key goes with every row write; no read selects it, so it stays out of
-// MEMORY_ROW_COLUMNS.
 const WRITTEN_COLUMNS = [...MEMORY_ROW_COLUMNS, 'duplicate_hash'] as const;
 const UPDATED_COLUMNS = WRITTEN_COLUMNS.slice(1);
 
@@ -84,21 +80,15 @@ export function updateMemoryRows(db: DatabaseSyncLike, entries: readonly MemoryE
   }
 }
 
-// An older sleep groups rows by content alone and would fold two lead-in rows, so the first one
-// shuts it out.
 function raiseFloorForLeadIn(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): void {
   if (entries.some((entry) => entry.leadIn)) raiseMinBinary(db, LEAD_IN_MIN_BINARY);
 }
 
-// Storage spells "no successor" one way: a blank link is stored as none. Whitespace stays a link.
 function storedLink(link: string | null | undefined): string | null {
   return link === '' ? null : (link ?? null);
 }
 
-/** Bind values for WRITTEN_COLUMNS, in its order. */
 function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
-  // Markdown rebuilds, imports and add-ons pass stamps as written; only toISOString text sorts by
-  // time in SQL.
   const created = isoInstant(entry.created) ?? entry.created;
   return [
     entry.id,
@@ -143,8 +133,6 @@ function memoryRowValues(entry: MemoryEntry): Array<string | number | null> {
   ];
 }
 
-// A failed index write makes the in-sync flag untrue, so reads skip the index until sleep recounts
-// it.
 function markFtsDrifted(db: DatabaseSyncLike): void {
   try {
     setFtsInSync(db, false);
@@ -172,8 +160,6 @@ export function syncFtsRow(
     );
   } catch (err) {
     markFtsDrifted(db);
-    // The memories table stays authoritative; a stale FTS row only costs recall quality, so the
-    // write goes on.
     log.warnThenSample(
       'fts-sync',
       `FTS index update failed for ${entry.id}; keyword recall may miss it: ${errorMessage(err)}`,
@@ -215,8 +201,6 @@ export function replaceFtsRows(
         JSON.stringify(staleIds),
       );
     } catch (err) {
-      // Their old rows are still indexed, so inserting them again would index an id twice; only new
-      // ids go in.
       kept = new Set(staleIds);
       markFtsDrifted(db);
       log.warnThenSample(

@@ -1,4 +1,3 @@
-// The Claude Code plugin's hooks and MCP server start these node scripts, which start the hippo CLI from PATH.
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,12 +12,9 @@ let dir: string;
 let bin: string;
 let empty: string;
 let project: string;
-// A folder name holding a %NAME% pair that run() sets, so a cmd.exe that expands the shim path cannot start it.
 let pctBin: string;
-// A space and a %NAME% pair, so a cmd.exe that splits or expands the argument fails the session-end test.
 let home: string;
 
-/** A `hippo` that prints its argv and stdin as JSON and exits with FAKE_HIPPO_EXIT. */
 function writeFakeHippo(folder: string, body: string): void {
   writeFileSync(join(folder, 'fake.mjs'), body);
   if (WIN) {

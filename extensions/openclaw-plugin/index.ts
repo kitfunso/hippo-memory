@@ -1,12 +1,3 @@
-/**
- * Hippo Memory - OpenClaw Plugin
- *
- * Auto-injects relevant memory context at session start,
- * captures errors during sessions, and runs consolidation.
- *
- * Config lives under plugins.entries.hippo-memory.config
- */
-
 import { execFileSync, spawn } from 'node:child_process';
 import type { ChildProcess, ExecFileSyncOptionsWithStringEncoding, SpawnOptions } from 'node:child_process';
 import { existsSync, readdirSync, rmSync } from 'node:fs';
@@ -67,10 +58,6 @@ const sessionErrorCounts = new Map<string, number>();
 const sessionErrorHashes = new Map<string, Set<string>>();
 const injectedSessions = new Set<string>();
 
-/**
- * Infrastructure errors that repeat constantly and never produce useful lessons.
- * These are transient operational failures, not domain-specific gotchas.
- */
 const NOISE_ERROR_PATTERNS: RegExp[] = [
   /Local media path is not under an allowed directory/i,
   /timed out\.?\s*Restart the OpenClaw gateway/i,
@@ -91,14 +78,11 @@ function isNoiseError(error: string): boolean {
   return NOISE_ERROR_PATTERNS.some((p) => p.test(error));
 }
 
-/** True for a non-empty string, without assuming the input's shape — used
- * on values read off the untyped OpenClaw plugin `api` surface. */
 function isNonEmptyString<T>(value: T): value is T & string {
   return typeof value === 'string' && value.length > 0;
 }
 
 function hashError(toolName: string, error: string): string {
-  // Normalize the error to a stable key: tool + first 80 chars of error
   const normalized = error.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase();
   return `${toolName}::${normalized}`;
 }
@@ -238,8 +222,6 @@ function runHippo(args: readonly string[], cwd?: string): string {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    // `encoding: 'utf8'` above selects the ExecFileSyncOptionsWithStringEncoding
-    // overload, so `result` is always a `string` here — no runtime check needed.
     return result.trim();
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
@@ -269,10 +251,8 @@ export default function register(api: any) {
 
   const logger = api.logger ?? console;
 
-  // Clean up stale backup plugins from previous updates
   cleanupBackupPlugins(logger);
 
-  // --- Tool: hippo_recall ---
   api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_recall',
     description:
@@ -300,7 +280,6 @@ export default function register(api: any) {
     },
   }));
 
-  // --- Tool: hippo_remember ---
   api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_remember',
     description:
@@ -348,7 +327,6 @@ export default function register(api: any) {
     },
   }));
 
-  // --- Tool: hippo_outcome ---
   api.registerTool((ctx: HippoRuntimeContext) => ({
     name: 'hippo_outcome',
     description:
@@ -372,7 +350,6 @@ export default function register(api: any) {
     },
   }));
 
-  // --- Tool: hippo_status ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_status',
@@ -392,7 +369,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_context ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_context',
@@ -422,7 +398,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_conflicts ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_conflicts',
@@ -448,7 +423,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_resolve ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_resolve',
@@ -487,7 +461,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_share ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_share',
@@ -527,7 +500,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_peers ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_peers',
@@ -547,7 +519,6 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Tool: hippo_wm_push ---
   api.registerTool(
     (ctx: HippoRuntimeContext) => ({
       name: 'hippo_wm_push',
@@ -589,14 +560,12 @@ export default function register(api: any) {
     { optional: true },
   );
 
-  // --- Hook: auto-inject context at session start ---
   api.on(
     'before_prompt_build',
     (_event: any, ctx: HippoRuntimeContext) => {
       const cfg = getConfig(api);
       if (cfg.autoContext === false) return {};
 
-      // Dedup guard: skip if this session already got context injected
       const sessionKey = getSessionIdentity(ctx);
       if (sessionKey && injectedSessions.has(sessionKey)) {
         logger.debug?.(`[hippo] skipping duplicate context injection for session ${sessionKey}`);
@@ -607,7 +576,6 @@ export default function register(api: any) {
       const framing = cfg.framing ?? 'observe';
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
 
-      // Record session_start event
       try {
         runHippo(
           ['session', 'log', '--id', sessionKey, '--type', 'session_start', '--content', 'Session started', '--source', 'openclaw'],
@@ -644,7 +612,6 @@ export default function register(api: any) {
       if (!event.error?.trim()) return;
       if (event.toolName.startsWith('hippo_')) return;
 
-      // --- Filter 1: Skip known infrastructure noise ---
       if (isNoiseError(event.error)) {
         logger.debug?.(`[hippo] autoLearn skipped noise error from '${event.toolName}'`);
         return;
@@ -652,14 +619,12 @@ export default function register(api: any) {
 
       const sessionKey = getSessionIdentity(ctx);
 
-      // --- Filter 2: Rate-limit errors per session ---
       const errorCount = sessionErrorCounts.get(sessionKey) ?? 0;
       if (errorCount >= MAX_ERRORS_PER_SESSION) {
         logger.debug?.(`[hippo] autoLearn rate-limited (${errorCount} errors this session)`);
         return;
       }
 
-      // --- Filter 3: Deduplicate within session ---
       const hash = hashError(event.toolName, event.error);
       const seen = sessionErrorHashes.get(sessionKey) ?? new Set<string>();
       if (seen.has(hash)) {
@@ -690,7 +655,6 @@ export default function register(api: any) {
   api.on(
     'session_end',
     (_event: { sessionId: string; messageCount: number }, ctx: HippoRuntimeContext) => {
-      // Clear dedup guards so a new session starts fresh
       const sessionKey = getSessionIdentity(ctx);
       injectedSessions.delete(sessionKey);
       sessionErrorCounts.delete(sessionKey);
@@ -699,7 +663,6 @@ export default function register(api: any) {
       const cfg = getConfig(api);
       const hippoCwd = resolveHippoCwdFromContext(api, ctx, cfg.root);
 
-      // Record session_end event
       try {
         runHippo(
           ['session', 'log', '--id', sessionKey, '--type', 'session_end', '--content', 'Session ended', '--source', 'openclaw'],

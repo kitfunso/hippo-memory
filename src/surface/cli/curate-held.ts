@@ -1,6 +1,3 @@
-// `hippo dormant` and `hippo quarantine`: list the dormant and quarantined memories, set aside from
-// recall, that wait on one decision, and apply it.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as path from 'node:path';
 import { RejectedValueError } from '../../base/errors/api-errors.js';

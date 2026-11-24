@@ -1,5 +1,3 @@
-// The SessionStart hook that sends the user's rules: install adds it once with no matcher, beside any hook already
-// there, and uninstall takes out only hippo's own handler. A fake HOME keeps the real settings.json out of it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

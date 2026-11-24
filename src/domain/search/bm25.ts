@@ -5,10 +5,10 @@ import { indexTokenize } from '../../base/util/tokenize.js';
 /** Tokenized BM25 corpus; build it once with `buildCorpus` and reuse it across queries on the
  * same entry set. */
 export interface BM25Corpus {
-  docs: string[][]; // tokenized documents
+  docs: string[][];
   avgLen: number;
-  df: Map<string, number>; // document frequency per term
-  N: number; // total documents
+  df: Map<string, number>;
+  N: number;
 }
 
 const BM25_K1 = 1.5;

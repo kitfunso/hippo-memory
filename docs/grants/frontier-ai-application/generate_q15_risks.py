@@ -1,5 +1,3 @@
-"""Generate Q15 appendix: risk register for Frontier AI Discovery feasibility study."""
-
 from pathlib import Path
 
 from fpdf import FPDF
@@ -28,7 +26,6 @@ def generate() -> None:
     pdf.cell(0, 5, "3-month feasibility study (Oct - Dec 2026) | Total cost: GBP 50,000", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
-    # Column widths
     col_id = 10
     col_cat = 22
     col_risk = 56
@@ -38,7 +35,6 @@ def generate() -> None:
     col_wp = 14
     col_status = 20
 
-    # Header
     pdf.set_font("Helvetica", "B", 7)
     pdf.set_fill_color(0, 51, 102)
     pdf.set_text_color(255, 255, 255)
@@ -170,7 +166,6 @@ def generate() -> None:
         pdf.cell(col_status, row_h, status, border=1, align="C", fill=True)
         pdf.ln(row_h)
 
-    # Risk matrix
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 7, "Risk Assessment Matrix", new_x="LMARGIN", new_y="NEXT")

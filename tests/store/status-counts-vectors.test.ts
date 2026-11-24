@@ -1,4 +1,3 @@
-// `hippo status` counts stored vectors from ids and one blob length; it must never decode a vector.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -39,9 +38,7 @@ function liveIds(n: number): string[] {
 const NOW = '2026-06-01T00:00:00.000Z';
 const daysAgo = (days: number): string => new Date(Date.parse(NOW) - days * DAY_MS).toISOString();
 
-/** `hippo status` run in this process from `home`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function status(): Promise<string[]> {
-  // No provider key, so the availability line never depends on the machine.
   const env = {
     HIPPO_HOME: path.join(home, 'global'),
     HOME: home,
@@ -120,7 +117,6 @@ describe('hippo status embedding lines', () => {
       ],
       'm',
     );
-    // Array.from over a decoded Float32Array walks this iterator once per vector, so a decode shows as a call.
     // SAFETY: %TypedArray%.prototype always carries Symbol.iterator, whose receiver is a typed array.
     const proto = Object.getPrototypeOf(Float32Array.prototype) as { [Symbol.iterator]: Walk };
     const original = proto[Symbol.iterator];
@@ -140,7 +136,6 @@ describe('hippo status embedding lines', () => {
   });
 });
 
-// A provider with no key prints one fixed line, where the local one depends on an optional install.
 function useKeylessProvider(): void {
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai' } }));
 }
@@ -209,7 +204,6 @@ async function seedEveryCase(): Promise<void> {
 
 const KEYLESS_LINE = 'Embeddings:        openai configured but OPENAI_API_KEY not set (BM25 only)';
 
-// Arguments follow print order: total and layers; pinned, at risk, conflicts, average; tiers and aged out.
 function countLines(layers: string[], health: string[], tiers: string[]): string[] {
   const [total, buffer, episodic, semantic, trace] = layers;
   const [pinned, atRisk, conflicts, average] = health;
@@ -273,7 +267,6 @@ describe('hippo status full text', () => {
 describe('reports.statusCounts', () => {
   it('equals a tally over every loaded entry, to the last bit of the average', async () => {
     await seedEveryCase();
-    // Written weakest first and created strongest first: a sum over rows in any other order than loadAllEntries' ends on other last bits.
     for (let i = 0; i < 40; i++) row(daysAgo(20), { created: daysAgo(900 - i), halfLifeDays: 0.5 * 1.18 ** i });
     const now = new Date(NOW);
     const entries = loadEveryTenantEntries(root);
@@ -304,7 +297,6 @@ describe('hippo status read bound', () => {
       }
     })();
     const rowReads = statements.filter((sql) => /^\s*SELECT\b[^;]*\bFROM memories\b/.test(sql));
-    // The read count is the code's to change; the one read that walks every row must be among them.
     expect(rowReads).toContain(
       'SELECT layer, confidence, pinned, created, last_retrieved, half_life_days, retrieval_count, ' +
         'emotional_valence, outcome_positive, outcome_negative FROM memories ORDER BY created ASC, id ASC',

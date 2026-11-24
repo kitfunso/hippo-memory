@@ -1,4 +1,3 @@
-// The bytes of every JSON-RPC reply kind the MCP transports write, pinned as strings so a change to how replies are built cannot move a key.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../../src/host/config-file.js';
 import { NotFoundError } from '../../src/base/errors/api-errors.js';
@@ -171,7 +170,6 @@ describe('replies the stdio loop writes', () => {
     startStdioLoop(cliStdioHost());
     const declared = 2 * 1024 * 1024;
     feed(`Content-Length: ${declared}\r\n\r\n`);
-    // The refused body is dropped as it arrives, so the loop reads the next frame as itself.
     feed(Buffer.alloc(declared, 0x78));
     expect(written).toEqual([
       '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error: frame exceeds 1MB"}}\n',
@@ -179,8 +177,6 @@ describe('replies the stdio loop writes', () => {
   });
 
   it('a call past its deadline, with -32001 and the request id, and the late reply is dropped', async () => {
-    // The call is held until the reply is out, so no timer race decides the order. The deadline stays real: a faked
-    // timer fires outside the request's async scope and drops the request id.
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '40');
     const real = cliStdioHost();
     let release = (): void => undefined;

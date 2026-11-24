@@ -1,4 +1,3 @@
-// Each person gets one bucket across their keys, an address's scrypt runs are capped, and every 429 says when to come back.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,7 +29,6 @@ const ENV_KEYS = [
 ] as const;
 
 const WIDE = { ratePerSec: 1000, burst: 1000 };
-// A slow refill, so a test that takes a while still sees the bucket it drained.
 const SLOW = { ratePerSec: 0.1, burst: 2 };
 const JSON_BODY = { 'content-type': 'application/json' };
 const TOOLS_LIST = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
@@ -79,7 +77,6 @@ async function send(path: string, init: RequestInit = {}): Promise<Reply> {
 }
 
 const bearer = (token: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${token}`, ...extra });
-/** The local key the running server wrote, as the CLI on this machine sends it. */
 const localKey = (): Record<string, string> => bearer(readLocalKey(root)!);
 const recall = (headers: Record<string, string> = localKey()): Promise<Reply> => send('/v1/memories?q=x', { headers });
 const addonRoute = (onRun: () => void): AddonRoute => ({
@@ -103,7 +100,6 @@ async function statuses(call: () => Promise<Reply>, n: number): Promise<number[]
 const OK = { status: 200, retryAfter: null };
 const UNAUTHORISED = { status: 401, retryAfter: null };
 
-/** Stops the clock so no bucket refills while a test counts tokens; timers still run. */
 function freezeClock(): void {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-06T09:00:00Z'));
@@ -121,7 +117,6 @@ describe('per-caller buckets', () => {
       recall(bearer(token, { 'x-forwarded-for': address }));
     expect(await replies(() => via(a, '203.0.113.7'), 3)).toEqual([OK, OK, { status: 429, retryAfter: '1' }]);
     expect(await via(b, '203.0.113.7')).toEqual(OK);
-    // A and B together spent the office address's four tokens; another address still has its own.
     expect(await via(b, '203.0.113.7')).toEqual({ status: 429, retryAfter: '10' });
     expect(await via(b, '203.0.113.8')).toEqual(OK);
   });
@@ -202,14 +197,11 @@ describe('per-caller buckets under a store that is not hippo.db', () => {
   it('charges a V1 route and an add-on route once each, though both answer 501', async () => {
     const key = mint({ ownerSubject: 'oid-stub' });
     const record = await sqliteStore(root).findApiKey(key.slice(0, key.indexOf('.')));
-    // As a store-kit adapter marks its folder, so any hippo.db open on it throws.
     writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
-    // Stands in for a store method that still opens hippo.db, so the V1 route's 501 is the blocked open, not an accident.
     const unported = async (): Promise<never> => {
       closeHippoDb(openHippoDb(root));
       throw new Error('the stub store does not serve recall');
     };
-    // hippo.db's groups, which serve() fences for this kind, less the local files an add-on route needs.
     const store: HippoStore = {
       ...withoutFolderGroups(sqliteStore(root)),
       kind: 'stub',
@@ -266,7 +258,6 @@ describe('the MCP stream heartbeat', () => {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let text = '';
-      // The first ping is the open; ten more are ten heartbeats.
       while (text.split(': ping').length - 1 < 11 && !text.includes('event: closed')) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -305,7 +296,6 @@ const wrongSecretOf = (key: string): string => `${key.slice(0, key.indexOf('.'))
 const scryptRunsSince = (before: number): number => scryptRuns() - before;
 const mintMany = (n: number): string[] => Array.from({ length: n }, () => mint());
 
-/** Wrong secrets for `keys` in turn, so the address bucket under test empties before any one key id's own five tries from that address. */
 function wrongSecretsAcross(
   keys: readonly string[],
   via: (token: string) => Promise<Reply> = (token) => recall(bearer(token)),
@@ -321,7 +311,6 @@ describe('the per-address scrypt bucket', () => {
     const uncached = mint({ ownerSubject: 'oid-f4-other' });
     const targets = mintMany(10);
     await start({ perAddress: WIDE, failedAuthPerAddress: { ratePerSec: 0.05, burst: 5 } });
-    // The good key's first check runs scrypt, so it spends one of the five tokens.
     expect(await recall(bearer(good))).toEqual(OK);
     const before = scryptRuns();
     const flood = await replies(wrongSecretsAcross(targets), 40);
@@ -360,7 +349,6 @@ describe('the per-address scrypt bucket', () => {
     } finally {
       closeHippoDb(db);
     }
-    // Burst 40 as the default, with a refill whose Retry-After no other limit answers.
     await start(
       { perAddress: 'off', failedAuthPerAddress: { ratePerSec: 0.005, burst: 40 } },
       { authResolver: () => null },
@@ -368,18 +356,14 @@ describe('the per-address scrypt bucket', () => {
     const office = (token: string): Promise<Reply> => recall(bearer(token, { 'x-forwarded-for': '203.0.113.50' }));
     expect(await office(dev)).toEqual(OK);
     const before = scryptRuns();
-    // A junk shape names no key id, so 60 of them past the burst charge nothing and run no scrypt.
     for (let i = 0; i < 60; i++) expect(await office('hk_junk')).toEqual(UNAUTHORISED);
-    // An unknown, a revoked and an expired key id each spend one token without a derivation.
     const unusable = [`hk_${'a'.repeat(24)}.${'b'.repeat(32)}`, revoked, expired];
     for (const token of unusable) expect(await office(token)).toEqual(UNAUTHORISED);
     expect(scryptRunsSince(before)).toBe(0);
-    // Real-shaped wrong secrets run scrypt, so they spend the 36 tokens left of the developer's first check, then meet 429.
     const flood = await replies(wrongSecretsAcross(targets, office), 37);
     expect(flood.slice(0, 36)).toEqual(Array(36).fill(UNAUTHORISED));
     expect(flood[36]).toEqual({ status: 429, retryAfter: '200' });
     expect(scryptRunsSince(before)).toBe(36);
-    // The bucket is empty, yet the developer's key passes, because its secret is already proved.
     expect(await office(dev)).toEqual(OK);
     expect(scryptRunsSince(before)).toBe(36);
   });

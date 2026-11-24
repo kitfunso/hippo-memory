@@ -1,5 +1,3 @@
-// A blank superseded link goes into dormant storage as written, and a restore stores no link, so the memory is live
-// again. Its own file since tests/store/dormant-memories.test.ts sits at the 800-line cap.
 import { describe, expect, it } from 'vitest';
 import * as api from '../../src/api/index.js';
 import { isSuperseded } from '../../src/base/memory/liveness.js';
@@ -25,7 +23,6 @@ describe('a blank superseded link through dormant storage', () => {
 
     expect(batchWriteAndDeleteInFolder(home, [], [], { dormant: [move] })).toEqual([entry.id]);
     expect(readEntry(home, entry.id)).toBeNull();
-    // Only the restore normalises: the snapshot keeps what the row held.
     const snapshot = sessionDb(home)
       .prepare(`SELECT json_extract(entry_json, '$.superseded_by') AS link FROM dormant_memories WHERE id = ?`)
       .get(entry.id);

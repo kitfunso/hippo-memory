@@ -1,5 +1,3 @@
-// The quarantine fixture: records in three tenants, one with no memory row and one moved out of its quarantine
-// scope, plus 105 records of one timestamp, written straight to hippo.db.
 import { vi } from 'vitest';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb } from '../../src/db/index.js';
@@ -30,7 +28,6 @@ interface Seeded {
   readonly memoryId: string;
   readonly originalScope: string | null;
   readonly second: number;
-  /** The scope of the memory row written in the record's tenant; unset writes no memory row. */
   readonly memoryScope?: string;
 }
 

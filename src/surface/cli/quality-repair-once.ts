@@ -1,6 +1,3 @@
-// Sleep and the daily runner clean a store's old automatic memories once, so an upgrade needs no
-// command.
-
 import * as path from 'node:path';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -19,7 +16,6 @@ export async function repairQualityOnce(root: string, tenantId: string): Promise
       );
       return;
     }
-    // A sleep run from a folder with no project store can resolve to the global store too.
     const scope = path.resolve(root) === path.resolve(hippoHomeDir()) ? ' --global' : '';
     const moved = result.appliedIds.length;
     if (moved > 0) {

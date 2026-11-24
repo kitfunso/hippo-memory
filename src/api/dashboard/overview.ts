@@ -1,5 +1,3 @@
-// The overview and one project's detail, built from the store's per-project tallies at the stamp's
-// instant.
 import { AT_RISK_BELOW } from '../../base/memory/strength-bands.js';
 import { SERIES_DAYS, seriesDay } from '../../base/memory/memory-facts.js';
 import { pct, plural, round1 } from '../../base/util/format.js';
@@ -21,10 +19,8 @@ import type {
   ScatterPoints,
 } from './types.js';
 
-/** The server words each delta for this range; the client re-slices the series for 7d and 90d. */
 const DELTA_DAYS = 30;
 
-/** One project's wire summary, keys in the wire's order. */
 function summaryOf(t: ProjectTally): ProjectSummary {
   const [pinned, strong, fading, atRisk] = t.bands;
   const [buffer, episodic, semantic, trace] = t.layers;
@@ -44,8 +40,6 @@ function summaryOf(t: ProjectTally): ProjectSummary {
 
 const noDays = (): number[] => Array.from({ length: SERIES_DAYS + 1 }, () => 0);
 
-/** 91 daily cumulative points, oldest first, from counts per seriesDay; the oldest day's count
- * is the base. */
 function cumulativeSeries(perDay: readonly number[]): number[] {
   let running = perDay[SERIES_DAYS];
   return noDays().map((_, i) => (running += i === 0 ? 0 : perDay[SERIES_DAYS - i]));
@@ -61,8 +55,6 @@ function createdPerDay(tallies: readonly ProjectTally[]): number[] {
   return days;
 }
 
-/** Named projects by the day each first appeared; one with no created time that parses counts as
- * today. */
 function firstSeenPerDay(named: readonly ProjectTally[], nowMs: number): number[] {
   const days = noDays();
   for (const t of named) days[seriesDay(t.firstCreatedMs ?? Number.POSITIVE_INFINITY, nowMs)]++;
@@ -74,7 +66,6 @@ interface Ordered {
   readonly summary: ProjectSummary;
 }
 
-/** Named projects by size, then Global, then Unassigned, as the treemap orders them. */
 function orderedProjects(tallies: readonly ProjectTally[]): Ordered[] {
   const rank = (p: Ordered): number =>
     p.summary.kind === 'project' ? 0 : p.summary.kind === 'global' ? 1 : 2;

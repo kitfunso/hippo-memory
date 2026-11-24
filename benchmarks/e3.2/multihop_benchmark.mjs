@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-/**
- * E3.2 multi-hop graph recall benchmark (roadmap success criterion — DESCRIPTIVE, not a
- * ship gate). Measures whether `recall --hops 1` surfaces a supersession-linked
- * predecessor decision that the flat baseline (same `--include-superseded`, same budget)
- * ranks below the result cut because the predecessor's wording is lexically distinct
- * from the successor query.
- *
- * HONEST framing baked into the design (per the plan's grill fix):
- *  - On today's supersedes-only graph the predecessor is a SUPERSEDED memory, so it is
- *    only a candidate at all under --include-superseded; --hops then surfaces it via the
- *    graph edge regardless of lexical score. Cross-object edges (future E3.1) link ACTIVE
- *    memories and remove that coupling.
- *  - Wording is realistic "we changed our mind and describe it differently now" prose,
- *    NOT artificially orthogonal tokens engineered to manufacture a win.
- *
- * Run: node benchmarks/e3.2/multihop_benchmark.mjs   (after `npm run build`)
- */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,8 +6,6 @@ import { join } from 'node:path';
 
 const CLI = join(process.cwd(), 'dist', 'cli.js');
 const home = mkdtempSync(join(tmpdir(), 'hippo-e3.2-bench-'));
-// Isolate from the user's real global store ($HIPPO_HOME / ~/.hippo): point HIPPO_HOME at
-// an empty temp dir so recall cannot pull in the operator's actual global memories (codex P2).
 const globalHome = mkdtempSync(join(tmpdir(), 'hippo-e3.2-bench-global-'));
 const env = { ...process.env, HIPPO_HOME: globalHome };
 function hippo(args) {
@@ -37,11 +18,9 @@ function memIdFrom(out) {
 }
 function rankOf(results, memId) {
   const i = results.findIndex((r) => r.id === memId);
-  return i < 0 ? null : i + 1; // 1-based, null = absent
+  return i < 0 ? null : i + 1;
 }
 
-// 5 decision lineages: predecessor superseded by successor, lexically distinct wording
-// for the same underlying decision.
 const chains = [
   { pred: 'Adopt Redis as the primary session cache for the web tier',
     succ: 'Move ephemeral login state into Postgres unlogged tables instead' },
@@ -56,7 +35,6 @@ const chains = [
 ];
 
 hippo(['init', '--no-hooks', '--no-schedule', '--no-learn']);
-// distractor noise so the budget cut is meaningful
 for (let i = 0; i < 30; i++) {
   hippo(['remember', `routine operations note ${i}: dashboards, oncall rotations, log retention windows`]);
 }
@@ -66,7 +44,7 @@ for (const c of chains) {
 }
 const extract = hippo(['graph', 'extract']);
 
-const BUDGET = process.argv[2] ?? '300'; // tokens; tight enough that the cut bites
+const BUDGET = process.argv[2] ?? '300';
 let baseHits = 0, hopHits = 0;
 const rows = [];
 for (const c of chains) {

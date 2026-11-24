@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Fails when src/ or tests/ drops the Promise of an api write function, or hands one to a synchronous expect(() => ...):
-// these answer through a Promise on every store, so a dropped one is a write nobody waits for and a sync expect passes on any refusal.
 
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -20,7 +18,6 @@ export const API_WRITES = {
 
 const CHAIN = new Set(['then', 'catch', 'finally']);
 
-/** The call a `.then`/`.catch`/`.finally` chain starts from. */
 function chainRoot(call) {
   let inner = call;
   while (
@@ -88,7 +85,6 @@ export function findFloatingApiCalls(program, rootDir) {
   return hits.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const hits = findFloatingApiCalls(programFromConfig('tsconfig.tests.json'), '.');
   if (hits.length > 0) {

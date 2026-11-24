@@ -1,5 +1,3 @@
-// The half-life move and the project stamp write any number of rows in one statement, with the values a row-by-row
-// write leaves, a repeated id taking its last value.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { setHalfLives, stampOriginProjects } from '../../src/store/sqlite/entries/entry-writes.js';

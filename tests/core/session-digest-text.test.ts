@@ -1,4 +1,3 @@
-// How a session digest picks its sentences and the files it lists, read back from the row a fresh store keeps.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -13,9 +12,7 @@ import { cliRequest } from '../../src/surface/cli/api-context.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
-// The digest keeps to 1200 chars; pinned here so a change to the cap shows up as a test edit.
 const MAX_DIGEST_CHARS = 1200;
-// A run that stores nothing for one of these reasons did so because of its text, never its setup.
 const TEXT_SKIPS = new Set([
   'digest: skip: nothing left after the filters',
   'digest: skip: no final message and no edits',
@@ -37,8 +34,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** The digest a session ending on `finalText` stores, '' for none. A fresh store each call, so no earlier digest echoes.
- *  One request, as the session-end hook runs it, so its store calls share one handle that closes before the next rm. */
 async function digest(finalText: string, opts: { echo?: string[]; edits?: DigestEdit[] } = {}): Promise<string> {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   return cliRequest(() => digestInOneRequest(finalText, opts));

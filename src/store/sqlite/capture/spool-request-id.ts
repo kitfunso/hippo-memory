@@ -1,4 +1,3 @@
-// The request id a spool file's compaction record carries, so a second import of the file finds it.
 import { createHash } from 'node:crypto';
 import { MAX_ID_LEN } from '../../../base/util/limits.js';
 

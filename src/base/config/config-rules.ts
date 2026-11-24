@@ -1,4 +1,3 @@
-// Leaf module: how one config.json value is checked and how a bad one is reported, in one wording.
 import {
   isJsonBoolean,
   isJsonNumber,

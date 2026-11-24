@@ -1,4 +1,3 @@
-// autoShare above the neutral score reads only rows that carry a score signal or a never-share mark, and picks the same rows.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -24,7 +23,6 @@ const { writeEntry } = sessionPerTest();
 
 type AutoShareStats = NonNullable<NonNullable<Parameters<typeof autoShare>[2]>['stats']>;
 
-/** loadAllEntries' statements: every full row of the store, or of one tenant. */
 const WHOLE_READ = new RegExp(
   `^SELECT ${MEMORY_SELECT_COLUMNS} FROM memories (WHERE tenant_id = \\? )?ORDER BY created ASC, id ASC$`,
 );
@@ -53,7 +51,6 @@ function put(label: string, extra: Partial<MemoryEntry> = {}, tags: string[] = [
   return entry.id;
 }
 
-/** One row per score signal and per skip rule, each labelled with the transfer score it should get. */
 function seedSignalRows(): Map<string, string> {
   const ids = new Map<string, string>();
   ids.set('plain 0.5', put('plain'));
@@ -74,7 +71,6 @@ function seedSignalRows(): Map<string, string> {
   ids.set('quarantined', put('quarantined', { scope: quarantineScopeFor(null) }, ['error']));
   ids.set('other error 0.6', put('other error', {}, ['error'], 'other'));
   ids.set('other digest', put('other digest', {}, ['session-digest'], 'other'));
-  // The JSON escape spells the same tag, so a plain substring of tags_json cannot find it.
   const db = openHippoDb(root);
   try {
     db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?').run('["\\u0065rror"]', ids.get('escaped error 0.6')!);

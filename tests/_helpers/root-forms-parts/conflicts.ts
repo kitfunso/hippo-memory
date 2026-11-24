@@ -1,5 +1,3 @@
-// Root-keyed conflicts forms tests call; production code goes through the port or the handle-first forms.
-
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { conflictLoserFate } from '../../../src/domain/consolidate/conflicts.js';
 import * as conflictsSql from '../../../src/store/sqlite/review/conflicts.js';

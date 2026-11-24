@@ -1,6 +1,3 @@
-// Which model a process calls, read from the environment: the endpoint wins, and a half-set or
-// unsafe setting is refused rather than sent to Anthropic.
-
 import {
   envAnthropicApiKey,
   envLlmAllowHttp,
@@ -33,7 +30,6 @@ export type LlmChoice =
 
 const refused = (reason: string): LlmChoice => ({ route: { kind: 'refused', reason } });
 
-/** The reason `key` cannot be sent as a header, or undefined when it can. */
 function keyProblem(name: string, key: string): string | undefined {
   try {
     checkHeaderSafe(name, key);

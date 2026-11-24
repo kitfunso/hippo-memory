@@ -1,4 +1,3 @@
-// hippo.db's Goals group: the goal stack's writes and the every-status listing.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type {
   ActiveGoals,
@@ -21,11 +20,6 @@ import { generateId } from '../../../base/memory/entry.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 import { moveOneStatus, moveStatus } from '../runtime/status-transitions.js';
 
-// The goal stack's rules: its ids, its depth cap, the parent check, a new goal and policy, and
-// the strength a completed goal passes to the memories recalled under it.
-
-// The CLI prints these ids and the sequential-learning adapter reads them back as 16 hex
-// characters.
 const GOAL_ID_CHARS = 16;
 const MAX_ACTIVE_GOAL_DEPTH = 3;
 const POSITIVE_OUTCOME_THRESHOLD = 0.7;
@@ -35,11 +29,9 @@ const STRENGTH_DECAY = 0.85;
 
 const newGoalId = (): string => generateId('g', GOAL_ID_CHARS);
 
-/** How many of a session's oldest active goals give way so one more fits under the depth cap. */
 const goalOverflow = (activeCount: number): number =>
   Math.max(0, activeCount - MAX_ACTIVE_GOAL_DEPTH + 1);
 
-/** Throws unless the push names no parent or one of its own tenant and session. */
 function assertParentInSession(
   opts: PushGoalOptions,
   parent: { readonly tenantId: string; readonly sessionId: string } | undefined,
@@ -51,7 +43,6 @@ function assertParentInSession(
   }
 }
 
-/** The policy row a push with `policy` stores, each weight 1 unless given. */
 function retrievalPolicyOf(
   goalId: string,
   policy: NonNullable<PushGoalOptions['policy']>,
@@ -67,7 +58,6 @@ function retrievalPolicyOf(
   };
 }
 
-/** The goal a push stores. */
 function pushedGoal(
   id: string,
   opts: PushGoalOptions,
@@ -88,8 +78,6 @@ function pushedGoal(
   };
 }
 
-/** The factor a completed goal's score applies to the strength of each memory recalled in its
- * active life. */
 function goalOutcomeMultiplier(score: number): number {
   if (score >= POSITIVE_OUTCOME_THRESHOLD) return STRENGTH_BOOST;
   return score < NEGATIVE_OUTCOME_THRESHOLD ? STRENGTH_DECAY : 1;
@@ -137,9 +125,6 @@ export function rowToGoal(row: GoalRow): Goal {
   };
 }
 
-/** Depth-cap enforcer for pushGoal and resumeGoal: suspends the oldest `overflow` goals;
- * **caller MUST be inside a `BEGIN IMMEDIATE` transaction**. @internal Internal goal-stack
- * invariant. Subject to change. */
 function enforceDepthCapWithinTx(db: DatabaseSyncLike, tenantId: string, sessionId: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const activeCount = (
@@ -182,11 +167,9 @@ function pushGoal(
   const policy = opts.policy ? retrievalPolicyOf(id, opts.policy) : undefined;
 
   withWriteScope(db, 'push_goal', () => {
-    // Depth cap: count active for (tenant, session); suspend oldest if at cap.
     enforceDepthCapWithinTx(db, opts.tenantId, opts.sessionId);
     assertParentInSession(opts, opts.parentGoalId ? parentOf(db, opts.parentGoalId) : undefined);
 
-    // Parent goal_stack row first (FK target).
     cachedStatement(db, INSERT_GOAL_SQL).run(
       id,
       opts.sessionId,
@@ -210,7 +193,6 @@ function parentOf(db: DatabaseSyncLike, parentGoalId: string) {
   return parent && { tenantId: parent.tenant_id, sessionId: parent.session_id };
 }
 
-/** Insert the policy row, then point goal_stack.retrieval_policy_id at it. */
 function insertRetrievalPolicy(db: DatabaseSyncLike, policy: RetrievalPolicy): void {
   cachedStatement(
     db,
@@ -243,7 +225,6 @@ export function activeGoalsWithPolicies(
   return { goals, policies: readGoalPolicies(db, goals) };
 }
 
-/** Every goal of a (tenant, session), whatever its status, oldest first. */
 function listSessionGoals(db: DatabaseSyncLike, tenantId: string, sessionId: string): Goal[] {
   const rows = cachedStatement(
     db,
@@ -270,8 +251,6 @@ function listActiveGoalsOn(db: DatabaseSyncLike, opts: GetActiveGoalsOptions): G
   return rows.map(rowToGoal);
 }
 
-// Per-goal retrieval_policy multipliers compose onto the base goal-tag boost and are hard-capped at
-// MAX_FINAL_MULTIPLIER (3.0x) before scoring.
 function readGoalPolicies(
   db: DatabaseSyncLike,
   active: readonly Goal[],
@@ -365,7 +344,6 @@ function completeGoal(
     ).get(goalId, tenantId) as { created_at: string } | undefined;
     if (!goalRow) return;
 
-    // A goal that is already completed moves no row, so a second call neither restamps nor rescales.
     const moved = moveStatus(db, 'goalComplete', {
       tenantId,
       ids: [goalId],
@@ -384,7 +362,6 @@ function completeGoal(
   });
 }
 
-/** A completed goal, its outcome multiplier and the start and end of its active life. */
 interface ScaleGoalRecallsOptions {
   readonly tenantId: string;
   readonly goalId: string;
@@ -393,8 +370,6 @@ interface ScaleGoalRecallsOptions {
   readonly until: string;
 }
 
-// Lifespan window: only recalls during this goal's active life; UNIQUE(memory_id, goal_id) gives
-// one adjustment per pair.
 function scaleGoalRecalls(
   db: DatabaseSyncLike,
   { tenantId, goalId, multiplier, since, until }: ScaleGoalRecallsOptions,

@@ -1,6 +1,3 @@
-// Transport-agnostic request handling: tool dispatch table, tool execution and the JSON-RPC method
-// switch.
-
 import { STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import {
   hasGroup,
@@ -56,11 +53,6 @@ import {
 } from './json-rpc.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
-// ── Token ledger ──
-
-/** Records the memory text hippo_context returned; best-effort (a ledger failure never fails the
- * call). hippo_recall's row is booked by the api with the rest of the recall, and other tools
- * are not recorded. */
 async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller): Promise<void> {
   if (toolName !== 'hippo_context' || !output) return;
   await recordTokens(mcpApiContext(ctx), 'mcp_context', {
@@ -69,26 +61,18 @@ async function recordMcpTokens(toolName: string, output: string, ctx: McpCaller)
   });
 }
 
-// ── Tool execution ──
-
-/** A store whose type holds every optional group, as the stdio host's cliStore does. */
 type AllGroupsStore = HippoStore & StoreGroups;
 
-/** One tool: its run on a store a host proved once, checked here, and its run on a store whose
- * type holds every group, checked nowhere. */
 interface ToolRow {
   readonly bind: (proved: HippoStore) => StoreTool<RequiredStore> | undefined;
   readonly onAll: StoreTool<AllGroupsStore>;
 }
 
-/** A tool that runs under any store. */
 function anyStore(run: ToolHandler): ToolRow {
   const tool: StoreTool<RequiredStore> = (ctx) => (args) => run({ ...toolCall(ctx), args });
   return { bind: () => tool, onAll: tool };
 }
 
-/** A tool that runs only on a store with every group `needs` names, handed that store and an api
- * Context on it. */
 function needing<G extends OptionalGroup>(needs: readonly G[], run: GroupToolHandler<G>): ToolRow {
   const on =
     (ctx: McpCaller, store: StoreWith<G>): ToolRun =>
@@ -101,7 +85,6 @@ function needing<G extends OptionalGroup>(needs: readonly G[], run: GroupToolHan
   };
 }
 
-/** A tool that runs only under a folder store with a global store in its reach. */
 function localTool(run: LocalToolHandler): ToolRow {
   const on = (ctx: McpCaller, store: StoreWith<'folderFiles'>): ToolRun | undefined => {
     const globalTarget = globalTargetOf(ctx);
@@ -148,24 +131,17 @@ export function allMcpTools(): McpTools<AllGroupsStore> {
   return new Map([...TOOL_ROWS].map(([name, row]) => [name, row.onAll]));
 }
 
-/** The transport's context is trusted: its hippoRoot, store and tenantId were bound by the host
- * (the HTTP server's Bearer, or the stdio host's folder walk and HIPPO_TENANT). */
 function toolCall(ctx: McpCaller): Omit<ToolCall, 'args'> {
   const { hippoRoot, tenantId, config, store } = ctx;
   return { ctx, hippoRoot, store, config, tenantId };
 }
 
-/** The tool bound to `ctx`'s host, or undefined when its store does not serve it. */
 function toolRun<S extends RequiredStore>(name: string, ctx: McpContext<S>): ToolRun | undefined {
-  // handleMcpRequest rejects names missing from TOOLS, so reaching here means TOOLS and this table
-  // drifted apart.
   if (!TOOL_ROWS.has(name)) {
     throw new Error(`hippo-mcp: tool ${name} is declared but has no handler`);
   }
   return ctx.tools.get(name)?.(ctx);
 }
-
-// ── Request handling ──
 
 // The MCP spec reports input validation as a tool result with isError, so the model can read it and
 // retry.
@@ -180,9 +156,6 @@ function invalidArgs(
   });
 }
 
-/** The tool and its ledger row run on the stores of the caller's context, which the host (server
- * or stdio) builds; the context's signal reaches store calls, embeddings, rerankers and LLM
- * fetches through the api Context. */
 async function runTool(
   toolName: string,
   run: ToolRun,
@@ -196,7 +169,6 @@ async function runTool(
   return text;
 }
 
-/** Why a write tool is refused before it runs: a viewer first, then a read-only store. */
 function writeRefusal<S extends RequiredStore>(
   name: string,
   ctx: McpContext<S>,
@@ -217,7 +189,6 @@ async function callTool<S extends RequiredStore>(
   if (!tool) {
     return errorReply(id, INVALID_PARAMS, `Unknown tool: ${toolName.slice(0, 128)}`);
   }
-  // The same refusal a ported tool gives when it reaches hippo.db, so a client handles one shape.
   const run = toolRun(toolName, ctx);
   if (run === undefined) return errorReply(id, INTERNAL_ERROR, STORE_NOT_PORTED_MESSAGE);
   const refusal = writeRefusal(toolName, ctx) ?? sharedStoreRefusal(toolName, ctx);

@@ -5,8 +5,6 @@ import { splitMarkdownFrontmatter, collectMarkdownFiles } from './markdown-parse
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 import { type JsonValue, isJsonString, isJsonObject } from '../../base/util/json.js';
 
-/** Coerce one imported record (string, `{content|text: ...}` object, or anything else) into the plain-text memory chunk
- *  it represents. */
 function extractMemoryText(candidate: JsonValue): string {
   if (isJsonString(candidate)) return candidate;
   if (isJsonObject(candidate)) {
@@ -15,8 +13,6 @@ function extractMemoryText(candidate: JsonValue): string {
   return '';
 }
 
-/** Parse a ChatGPT memory export: a JSON array of strings or `{content, created}` objects,
- * `{"memories": [...]}`, or plain text with one memory per line. */
 function parseChatGPTFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8').trim();
 
@@ -53,7 +49,6 @@ export function importChatGPTInto(filePath: string, options: TargetedImport): Im
 const HIPPO_START = '<!-- hippo:start -->';
 const HIPPO_END = '<!-- hippo:end -->';
 
-/** Strip the hippo hook block from markdown content. */
 function stripHippoBlock(content: string): string {
   const startIdx = content.indexOf(HIPPO_START);
   const endIdx = content.indexOf(HIPPO_END);
@@ -61,7 +56,6 @@ function stripHippoBlock(content: string): string {
   return content.slice(0, startIdx) + content.slice(endIdx + HIPPO_END.length);
 }
 
-/** Split markdown into meaningful chunks (headings + bullet points). */
 function splitMarkdown(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -73,10 +67,6 @@ function splitMarkdown(content: string): string[] {
   return chunks.filter(Boolean);
 }
 
-/**
- * Takes one line into the chunk being built, pushing that chunk when the line ends it; returns the
- * chunk still open.
- */
 function appendLine(chunks: string[], open: string, line: string): string {
   let current = open;
   const trimmed = line.trim();
@@ -120,7 +110,6 @@ function appendLine(chunks: string[], open: string, line: string): string {
   return current ? current + ' ' + trimmed : trimmed;
 }
 
-/** Parse CLAUDE.md or Claude memory.json. */
 function parseClaudeFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
 
@@ -147,8 +136,6 @@ export function importClaudeInto(filePath: string, options: TargetedImport): Imp
   return importEntriesInto(chunks, 'import:claude', ['imported', 'claude'], options);
 }
 
-/** Split cursor rules file into chunks.
- *  Priority: numbered items, then bullet points, then double newlines. */
 function parseCursorFile(content: string): string[] {
   const chunks: string[] = [];
   const lines = content.split('\n');
@@ -157,7 +144,6 @@ function parseCursorFile(content: string): string[] {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // A bare '#' is an empty comment line, so it ends the rule like a blank line.
     if (!trimmed || trimmed === '#') {
       if (current.trim()) {
         chunks.push(current.trim());
@@ -181,14 +167,12 @@ function parseCursorFile(content: string): string[] {
 
   if (current.trim()) chunks.push(current.trim());
 
-  // Also split on double newlines within chunks if they somehow ended up there
   return chunks.flatMap((c) => {
     const parts = c.split(/\n{2,}/);
     return parts.map((p) => p.trim()).filter(Boolean);
   });
 }
 
-/** The rule text a numbered item or bullet opens, or null when the line opens no rule. */
 function cursorRuleStart(trimmed: string): string | null {
   if (/^\d+\.\s+/.test(trimmed)) return trimmed.replace(/^\d+\.\s+/, '').trim();
   if (/^[-*]\s+/.test(trimmed)) return trimmed.replace(/^[-*]\s+/, '').trim();
@@ -211,10 +195,6 @@ export function importCursorInto(sourcePath: string, options: TargetedImport): I
   return importEntriesInto(chunks, 'import:cursor', ['imported', 'cursor'], options);
 }
 
-/**
- * Split a generic file into chunks: markdown on headings and bullets, plain text on double newlines
- * or one per line.
- */
 function parseGenericFile(filePath: string): string[] {
   const raw = fs.readFileSync(filePath, 'utf8');
   const isMarkdown = filePath.endsWith('.md') || filePath.endsWith('.mdx');

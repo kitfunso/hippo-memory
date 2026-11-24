@@ -1,5 +1,3 @@
-// Z1: recall against the prompt, gated (docs/plans/2026-09-26-z1-prompt-recall.md).
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -45,7 +43,6 @@ function ids(result: { entries: Array<{ entry: { id: string } }> }) {
   return result.entries.map((e) => e.entry.id);
 }
 
-// A root loads config once per command, so a test that writes config.json reloads ctx.config as the next command would.
 function writeConfig(root: string, json: string): void {
   fs.writeFileSync(path.join(root, 'config.json'), json);
   ctx = { ...ctx, config: loadConfig(root) };
@@ -115,7 +112,6 @@ describe('contextGet prompt recall (api-level)', () => {
   });
 
   describe('two replies with one text under different lead-ins', () => {
-    // "Yes." alone fails the quality floor that context applies to a row's content.
     const REPLY = 'Yes, do that first.';
     const PROMPT = 'how should the postgres migration rollback plan work';
     const LEAD_A = 'user: the postgres migration script needs a rollback plan before deploy';
@@ -158,7 +154,6 @@ describe('contextGet prompt recall (api-level)', () => {
   it('recalls a Chinese memory older than the 2,000 newest rows, through the trigram index', async () => {
     enablePromptRecall(local);
     const relevant = seed(local, '数据库连接池的大小必须设置为二十', { created: '2026-01-01T00:00:00.000Z' });
-    // A newer row sharing one character pair keeps the LIKE window non-empty, so no fallback reads old rows.
     seed(local, '连接测试', { created: '2026-06-02T00:00:00.000Z' });
     const db = openHippoDb(local);
     try {
@@ -184,11 +179,9 @@ describe('contextGet prompt recall (api-level)', () => {
     expect(ids(result)).toContain(relevant.id);
   }, 30_000);
 
-  // The overlap gate is opened wide in the next two: the store's search for the prompt is under test.
   it('recalls a Chinese memory from a prompt that also holds 8+ indexed English words', async () => {
     enablePromptRecall(local, { promptRecallThreshold: 0.01, promptRecallMaxItems: 20 });
     const english = 'kubernetes ingress certificate renewal pipeline staging cluster rollout canary';
-    // Two rows each, so every English word counts 2 and the Chinese phrase, in one row, counts 1.
     for (const n of [1, 2]) seed(local, `${english} runbook ${n}`);
     const chinese = seed(local, '数据库连接池的大小必须设置为二十');
 
@@ -372,12 +365,7 @@ describe('contextGet prompt recall (api-level)', () => {
   });
 
   it('finds a relevant memory via rarest-term pre-select even when its terms are not first in the prompt', async () => {
-    // maxItems raised past the decoy count: they share more prompt tokens than the
-    // target (that's the point -- FTS pre-select is under test, not the overlap gate).
     enablePromptRecall(local, { promptRecallMinShared: 1, promptRecallThreshold: 0.05, promptRecallMaxItems: 20 });
-    // 8 decoys share every common word (FTS doc count 8 each); a naive
-    // first-8-terms query would never include needle/fingerprint, which
-    // appear in exactly one row (doc count 1) and come last in the prompt.
     const commonWords = 'alpha bravo charlie delta echo foxtrot golf hotel';
     for (let i = 0; i < 8; i++) {
       seed(local, `${commonWords} decoy row number ${i} about something else entirely`, {
@@ -401,7 +389,6 @@ describe('contextGet prompt recall (api-level)', () => {
 
   it('skips an over-budget candidate without blocking a smaller one behind it (skip-not-break)', async () => {
     enablePromptRecall(local, { promptRecallMaxItems: 2 });
-    // `big` also holds the two prompt words `small` lacks, so the recall ranker puts it first.
     const shared = 'deploy rollback plan for service payments-api2026';
     const extra = 'checklist owner';
     const big = seed(local, `${(shared + ' ').repeat(50)}${extra}`, {
@@ -438,7 +425,6 @@ describe('contextGet prompt recall (api-level)', () => {
       'payroll',
     ];
     const prompt = `${words.join(' ')} audit budget`;
-    // Ninety distinct filler words keep the long row's overlap share (10 of 102) under each short row's (2 of 14).
     const filler = Array.from(
       { length: 90 },
       (_, i) => `lorem${String.fromCharCode(97 + (i % 26))}${String.fromCharCode(97 + Math.floor(i / 26))}`,
@@ -473,7 +459,6 @@ describe('contextGet prompt recall (api-level)', () => {
       prompt: 'deploy checklist warm cache canary flag',
     });
 
-    // rankBm25 drops the source for its extract; the gate cleared it, so it still follows in gate order.
     const matched = result.entries.filter((e) => e.promptRecall).map((e) => e.entry.id);
     expect(new Set(matched)).toEqual(new Set([source.id, extract.id, other.id]));
     expect(matched.at(-1)).toBe(source.id);
@@ -486,7 +471,6 @@ describe('pins and prompt recall share one budget (api-level)', () => {
   const ROW_A = 'the postgres migration script needs a rollback plan before deploy';
   const ROW_B = 'kubernetes ingress certificate renewal needs a canary rollout before friday';
 
-  /** `n` pins of 10 tokens each; a higher index is newer, and sorts later by content. */
   function seedPins(n: number): MemoryEntry[] {
     return Array.from({ length: n }, (_, i) =>
       seed(local, `pinned rule ${String(i).padStart(2, '0')}`.padEnd(40, '-'), {
@@ -530,7 +514,6 @@ describe('pins and prompt recall share one budget (api-level)', () => {
     const pins = seedPins(9);
     seed(local, ROW_A);
     seed(local, ROW_B);
-    // Budget 100, share 0.25: the cap is 75 tokens, so seven of the nine 10-token pins stay.
     const oldest = pins.slice(0, 2).map((p) => p.id);
     const newest = pins.slice(2).map((p) => p.id);
 
@@ -621,8 +604,6 @@ describe('hippo context --pinned-only --format additional-context prompt recall 
     enablePromptRecall(hippoDir);
   });
 
-  // No origin_project override: the CLI derives it from cwd's own basename,
-  // so a hardcoded 'proj-a' (unlike the api-level tests, which pin currentProject to match) would read as cross-project and get excluded.
   function seedCli(content: string, extra: Partial<MemoryEntry> = {}) {
     const entry = { ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), ...extra };
     writeEntry(hippoDir, entry);

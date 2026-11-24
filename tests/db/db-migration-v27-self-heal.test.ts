@@ -1,17 +1,3 @@
-/**
- * v1.12.7 (B6) regression test for migration v27 self-heal.
- *
- * Surfaced 2026-05-24 on Keith's ~/.hippo/hippo.db: schema_version recorded
- * as 25 but api_keys and audit_log tables were missing. Root cause unknown
- * (BEGIN/COMMIT wrapping has been in place since the first SQLite commit),
- * but the symptom is real and reproducible. Migration v27 re-asserts the
- * v16 schema with CREATE IF NOT EXISTS — fixes affected DBs on next open,
- * zero-cost for DBs that already have the tables.
- *
- * Also covers v26 defensive guard: when api_keys is missing, v26's ALTER
- * must no-op rather than crash and block all later migrations.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
@@ -44,14 +30,10 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
   });
 
   function simulatePartialV16State(): void {
-    // Get the DB to a state matching Keith's ~/.hippo/hippo.db on 2026-05-24:
-    // - schema_version = 25 (later migrations applied)
-    // - api_keys + audit_log tables missing (v16 partial-apply)
     const db = openHippoDb(root);
     try {
       db.exec('DROP TABLE IF EXISTS api_keys');
       db.exec('DROP TABLE IF EXISTS audit_log');
-      // Roll schema_version back to 25 so the next open re-runs v26 and v27.
       setMeta(db, 'schema_version', '25');
     } finally {
       closeHippoDb(db);
@@ -61,8 +43,6 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
   it("re-opening a DB in Keith's partial-v16 state heals it to v27", () => {
     simulatePartialV16State();
 
-    // Re-open triggers runMigrations which should run v26 (no-op on missing
-    // api_keys per the defensive guard) then v27 (creates both tables).
     const db = openHippoDb(root);
     try {
       const tables = tableNames(db);
@@ -80,7 +60,6 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; PRAGMA table_info always
-      // yields rows with a `name` column, which is all this test reads.
       const cols = (db.prepare(`PRAGMA table_info(api_keys)`).all() as Array<{ name: string }>).map((r) => r.name);
       expect(cols).toContain('role');
       expect(cols).toContain('key_id');
@@ -97,7 +76,6 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
     const db = openHippoDb(root);
     try {
       // SAFETY: DatabaseSyncLike#all() returns `unknown[]`; PRAGMA table_info always
-      // yields rows with a `name` column, which is all this test reads.
       const cols = (db.prepare(`PRAGMA table_info(audit_log)`).all() as Array<{ name: string }>).map((r) => r.name);
       expect(cols).toEqual(
         expect.arrayContaining(['id', 'ts', 'tenant_id', 'actor', 'op', 'target_id', 'metadata_json']),
@@ -108,11 +86,8 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
   });
 
   it('v27 is a no-op on a healthy DB (CREATE IF NOT EXISTS)', () => {
-    // Open + close once to apply all migrations to current head.
     closeHippoDb(openHippoDb(root));
 
-    // Roll schema_version back to 26 to force v27 to re-run on a DB that
-    // already has the tables. v27 must not error.
     const db1 = openHippoDb(root);
     try {
       setMeta(db1, 'schema_version', '26');
@@ -120,7 +95,6 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
       closeHippoDb(db1);
     }
 
-    // Re-open re-runs v27; should be a no-op + bump schema_version to 27.
     const db2 = openHippoDb(root);
     try {
       const tables = tableNames(db2);
@@ -133,9 +107,6 @@ describe('migration v27 self-heal — partial-applied v16 state', () => {
   });
 
   it('v26 ALTER no-ops when api_keys table is missing (defensive guard)', () => {
-    // This test specifically locks the v26 fix: tableExists guard added
-    // alongside the existing tableHasColumn guard. Without it, v26 would
-    // crash on the partial-apply state before v27 could heal.
     simulatePartialV16State();
 
     const db = openHippoDb(root);

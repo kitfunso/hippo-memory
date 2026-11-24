@@ -1,4 +1,3 @@
-// The built-in SQLite adapter behind the store port.
 import { countAmbient } from './recall/ambient.js';
 import type { SqliteStoreOptions } from './runtime/grant.js';
 import { ambientRefusal } from '../../base/scope/read-admission.js';
@@ -77,8 +76,6 @@ import { embedLockKey } from './vectors/embed-lock.js';
 import type { ContinuityKey } from '../../base/ports/store/types.js';
 import type { ProjectTagReads } from '../../base/ports/store/project-tags.js';
 
-/** The groups that read and write hippo.db's own files beside its rows, and the rest of sleep's
- * and capture's. */
 function sqliteLocalGroups(handles: Handles): SleepGroups & CaptureGroups & MaintenanceGroups {
   const { on } = handles;
   return {
@@ -133,8 +130,6 @@ export function sqliteStoreOn(handles: Handles): HippoStore & StoreGroups {
   };
 }
 
-/** The groups only a store kept as files in a folder serves: its ledger, own index, promote
- * copies and sharing. */
 function sqliteFolderGroups(handles: Handles): FolderGroups {
   return {
     ledger: sqliteLedger(handles.on, handles.files.opens.grant.session),
@@ -185,7 +180,6 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
     ...bound(on, storeFilesBodies(files), openStore),
     ...writes,
     appendAuditEvents: skipEmpty(writes.appendAuditEvents, () => undefined),
-    // It strengthens, so it scores by the store's strength model.
     ...bound<Pick<BaseMethods, 'finishRecall'>>(on, {
       finishRecall: (db, recall) => {
         finishRecall(db, files, recall);
@@ -194,11 +188,9 @@ function sqliteBaseMethods({ on, files }: Handles): BaseMethods {
   };
 }
 
-// The key is the embedding index's own lock key, so the vector groups and embeddingIndex share a queue.
 function sqliteVectorWrites(on: OnHandle, hippoRoot: string): VectorWrites {
   return {
     ...bound<Omit<VectorWrites, 'indexKey'>>(on, { entriesWithoutVector, writeVectors }),
-    // Resolved at use, as the handle is: building a store reads no path.
     indexKey: async () => embedLockKey(hippoRoot),
   };
 }
@@ -211,8 +203,6 @@ function sqliteReadiness(hippoRoot: string, on: OnHandle): Readiness {
   return {
     ping: () =>
       answered(() => {
-        // A probe must not create the store; the first write does, so a root with none yet is
-        // ready.
         if (!existsSync(getHippoDbPath(hippoRoot))) return;
         on((db) => {
           db.prepare('SELECT 1').get();
@@ -277,10 +267,8 @@ export function sqliteDiagnosticsStore(
   };
 }
 
-// Non-enumerable, so a caller's spread copy of the store is not reopened as sqliteStore's own.
 const REOPEN = Symbol('sqliteStore reopen');
 
-/** A store sqliteStore built, with how to build it again on one session's handles. */
 interface Reopenable {
   readonly [REOPEN]: (session: RequestStores) => HippoStore & StoreGroups;
 }
@@ -330,7 +318,6 @@ function sqliteContextReads({ on, files }: Handles): ContextReads {
   };
 }
 
-/** sqliteStore's continuity read, for the synchronous recall that cannot await the port. */
 function continuity(
   db: DatabaseSyncLike,
   files: StoreFiles,

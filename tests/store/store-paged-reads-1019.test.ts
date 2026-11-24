@@ -1,5 +1,3 @@
-// A mirror sync that spans several pages, and a recall trace written in one or many multi-row inserts.
-
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,7 +23,6 @@ describe('syncMirrorFiles', () => {
     const root = freshRoot();
     const seed = openHippoDb(root);
     try {
-      // Rows with no mirror files, so the sync below writes every one.
       seed.exec('BEGIN');
       for (let i = 0; i < 530; i++) {
         writeEntryDbOnly(seed, { ...createMemory(`paged mirror row number ${i}`), id: `mem_page_${i}` });

@@ -1,4 +1,3 @@
-// Ambient context injection: contextGet, the selection it drives and the retrieval it records.
 import type { TaskSnapshot } from '../../base/ports/store/sessions.js';
 import { markRetrieved } from '../../base/memory/entry.js';
 import { dropHeldCopies } from '../../base/util/same-text.js';
@@ -74,14 +73,10 @@ export async function assembleContext(ctx: Context, opts: ContextOptions): Promi
 
   const { items, tokens } = finalizeSelection(picked, plan);
   if (items.length === 0 && noSections) {
-    // A query that found nothing is the coverage-gap signal, so it still gets a trace; pinned-only
-    // stays read-only.
     if (!plan.pinnedOnly && !readOnlyOf(ctx)) await traceEmptyContext(ctx, opts, plan);
     return { entries: [], tokens: 0 };
   }
 
-  // pinnedOnly is the UserPromptSubmit hot path: read-only so pinned memories don't inflate
-  // retrieval_count or extend half_life every turn.
   const recorded = plan.pinnedOnly
     ? { items, ambientState: undefined }
     : await recordRetrieval(ctx, {
@@ -125,7 +120,6 @@ interface FinalSelection {
   tokens: number;
 }
 
-/** The `limit` cut, then the held-copy drop, then each entry's origin annotation. */
 function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): FinalSelection {
   const { obs } = plan;
   offerRanked(picked, plan);
@@ -140,7 +134,6 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
     );
     selected = cut;
   }
-  // After the last cut, so a merged row that was cut hides nothing.
   const heldDropped = dropHeldCopies(selected, (r) => r.entry);
   obs?.dropMissing(
     selected.map((r) => r.entry),
@@ -151,8 +144,6 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   selected = heldDropped;
   const tokens = selected.reduce((sum, r) => sum + r.tokens, 0);
 
-  // Every returned entry carries its origin and how it relates to the active project, so renderers
-  // can mark cross-project rows.
   selected = selected.map((r) => ({
     ...r,
     origin: r.entry.originProject ?? null,
@@ -162,8 +153,6 @@ function finalizeSelection(picked: ContextResultEntry[], plan: ContextPlan): Fin
   return { items: selected, tokens };
 }
 
-// Ranking reports nothing itself, so its results are offered here and the cuts after can name
-// what they drop.
 function offerRanked(picked: ContextResultEntry[], plan: ContextPlan): void {
   const { obs } = plan;
   if (plan.pinnedOnly || !obs) return;
@@ -180,13 +169,11 @@ function offerRanked(picked: ContextResultEntry[], plan: ContextPlan): void {
   );
 }
 
-// Never touches the index, so it cannot desync last_retrieval_ids from last_trace_id.
 async function traceEmptyContext(
   ctx: Context,
   opts: ContextOptions,
   plan: ContextPlan,
 ): Promise<void> {
-  // No snapshot in this branch, so the caller's own id is the only session to stamp.
   const trace: RecallTraceInput = {
     tenantId: ctx.tenantId,
     sessionId: opts.currentSessionId || null,
@@ -195,7 +182,6 @@ async function traceEmptyContext(
     explainMode: false,
     results: [],
   };
-  // The empty reply is already decided, so a lost trace is logged and the call still answers.
   try {
     await ctx.store.finishRecall({ goalLog: [], audit: [], trace });
   } catch (error) {
@@ -216,7 +202,6 @@ interface RecordRetrievalOptions {
   readonly activeSnapshot: TaskSnapshot | null;
 }
 
-/** Strengthens and marks the returned rows, then writes the trace and index together. */
 async function recordRetrieval(
   ctx: ContextWith<never, 'lastRecall'>,
   { opts, plan, selected, activeSnapshot }: RecordRetrievalOptions,
@@ -236,10 +221,7 @@ async function recordRetrieval(
     })),
   };
   const writes = { goalLog: [], audit: [], trace, strengthen: strengthenOf(ctx, retrievedIds) };
-  // A read-only store keeps its rows; the reply still shows them as this retrieval left them.
   if (!readOnlyOf(ctx)) {
-    // The last recall feeds only outcomeForLastRecall, so a store that keeps none still finishes the
-    // recall without one.
     const store = ctx.store;
     const traceId = store.lastRecall
       ? await store.lastRecall.finishRecall(writes, plan.hasGlobal ? plan.globalRoot : undefined)
@@ -248,14 +230,11 @@ async function recordRetrieval(
     await store.bumpRecallStats(selected.length);
   }
 
-  // Replace selectedItems entries with markRetrieved-updated copies so the returned ContextResult
-  // reflects post-recall state.
   const items = selected.map((s) => ({
     ...s,
     entry: updatedEntries.find((u) => u.id === s.entry.id) ?? s.entry,
   }));
 
-  // Read after strengthenRetrieved commits, so the rows just retrieved count at their new strength.
   return {
     items,
     ambientState: plan.config.ambient.enabled ? await readAmbientState(ctx, plan) : undefined,

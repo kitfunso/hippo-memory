@@ -1,6 +1,3 @@
-// Pins `hippo sleep` stdout, stderr, exit code and log file over its flags on a seeded store, so moving the
-// sleep verb out of cli.ts, or any later refactor of it, that changes a byte fails here.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -125,7 +122,6 @@ async function run(c: Case): Promise<RunOutput> {
   if (!c.uninitialised) copyTree(template, join(home, '.hippo'));
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const k of DROP_ENV) delete env[k];
-  // The agent-memory import reads the home dir, so every home a run could see is the temp dir.
   Object.assign(env, {
     HIPPO_HOME: join(home, 'global-hippo'),
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
@@ -151,7 +147,7 @@ describe('cli sleep golden output', () => {
   beforeAll(() => {
     template = makeStore('sleep-golden-template').root;
     seedLocal(template);
-  }, 30_000); // Seeds a real store, and a runner's disk sets how long that takes.
+  }, 30_000);
 
   it.each(CASES)('$name', async (c) => {
     expect(await run(c)).toMatchSnapshot();

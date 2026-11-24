@@ -1,4 +1,3 @@
-// diskAgentFiles.readText hands back a text file's content, or the reason it set aside whatever sits at the path.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

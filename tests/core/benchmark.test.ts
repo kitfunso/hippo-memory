@@ -1,15 +1,3 @@
-/**
- * Retrieval Quality Benchmark for Hippo.
- * Measures quality, not speed: the CI step "Perf regression gate" is the performance gate.
- *
- * Seeds 50+ real memories from MEMORY.md (lessons learned in production)
- * and validates that natural-language queries surface the right memories.
- *
- * Metrics per query:
- *   Precision@3 - of top-3 results, fraction that were expected
- *   Recall@3    - of expected IDs, fraction that appeared in top-3
- *   MRR         - 1/rank of first correct result (0 if none in top-10)
- */
 import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
@@ -21,13 +9,9 @@ sessionPerTest();
 
 useBenchmarkCorpus();
 
-// ---------------------------------------------------------------------------
-// Metric helpers
-// ---------------------------------------------------------------------------
-
 interface QueryCase {
   query: string;
-  expectedLabels: string[]; // seed labels that should appear in top-3
+  expectedLabels: string[];
 }
 
 function runQuery(query: string, n = 10): string[] {
@@ -53,10 +37,6 @@ function mrr(topIds: string[], expectedIds: string[]): number {
   }
   return 0;
 }
-
-// ---------------------------------------------------------------------------
-// Retrieval quality test cases
-// ---------------------------------------------------------------------------
 
 const TEST_CASES: QueryCase[] = [
   {
@@ -144,26 +124,22 @@ const TEST_CASES: QueryCase[] = [
 describe('Retrieval quality benchmark', () => {
   it('has all seed memories written to the store', () => {
     const entries = loadAllEntries(tmpDir, 'default');
-    // We seed >30 memories explicitly above
     expect(entries.length).toBeGreaterThanOrEqual(30);
   });
 
-  // Run each query and assert MRR > 0 (at least one correct result in top-10)
   for (const tc of TEST_CASES) {
     it(`query: "${tc.query}"`, () => {
       const expectedIds = tc.expectedLabels.map((l) => seedIds[l]).filter(Boolean);
-      expect(expectedIds).toHaveLength(tc.expectedLabels.length); // sanity check all labels exist
+      expect(expectedIds).toHaveLength(tc.expectedLabels.length);
 
       const topIds = runQuery(tc.query);
       const m = mrr(topIds, expectedIds);
       const p3 = precision3(topIds, expectedIds);
 
-      // Something relevant in the top-10: a hit at rank 10 scores 1/10, and the rank is the scorer's to choose.
       expect(m, `MRR=0 for query "${tc.query}". Top results: ${topIds.slice(0, 3).join(', ')}`).toBeGreaterThanOrEqual(
         0.1,
       );
 
-      // Log for visibility (doesn't fail)
       console.log(
         `  P@3=${p3.toFixed(2)} Recall@3=${recall3(topIds, expectedIds).toFixed(2)} MRR=${m.toFixed(2)} | ${tc.query}`,
       );
@@ -195,7 +171,6 @@ describe('Retrieval quality benchmark', () => {
     console.log(`  Avg MRR:         ${avgMRR.toFixed(3)}`);
     console.log('  ───────────────────────────────────────────────────');
 
-    // Hard floor: MRR should be > 0.3 (correct result usually in top-3)
     expect(avgMRR, `Avg MRR too low: ${avgMRR.toFixed(3)}`).toBeGreaterThan(0.3);
   });
 });

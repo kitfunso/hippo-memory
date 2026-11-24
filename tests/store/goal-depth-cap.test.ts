@@ -14,7 +14,6 @@ describe('goal stack depth cap', () => {
   });
 
   it('auto-suspends the oldest active goal when pushing the 4th, even when all share one created_at', async () => {
-    // A frozen clock gives every push the same created_at, the tie fast pushes hit by chance.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
     let g1: Awaited<ReturnType<typeof pushGoal>>;
@@ -54,9 +53,6 @@ describe('goal stack depth cap', () => {
   });
 
   it('serialized pushes never leave more than 3 active (post-Task-3 BEGIN IMMEDIATE)', async () => {
-    // Sequential is enough to verify the invariant — node:sqlite is in-process,
-    // and BEGIN IMMEDIATE serializes through SQLite's write lock. This guards
-    // against regressions where someone strips the transaction wrapper.
     for (let i = 0; i < 10; i++) {
       await pushGoal(root, { ...ctx, goalName: `g${i}` });
     }

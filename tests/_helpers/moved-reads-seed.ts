@@ -1,4 +1,3 @@
-// One seeded store for the tests of the reads that answer from worker threads: the recall golden rows plus vectors, a graph, held memories and callers.
 import { vi } from 'vitest';
 import { dirname, join } from 'node:path';
 import { adminActor, rememberUntrusted } from '../../src/api/index.js';
@@ -28,20 +27,17 @@ export interface Callers {
   readonly main: string;
   readonly member: string;
   readonly other: string;
-  /** Well formed, and in no store. */
   readonly unknown: string;
 }
 
 export interface MovedReadsSeed {
   readonly templates: Templates;
-  /** The default tenant's three pending quarantine records, by memory id. */
   readonly held: readonly string[];
   readonly otherHeld: string;
   readonly keys: Callers;
   readonly keyIds: readonly string[];
 }
 
-/** Vectors and particles for five rows, one of them 8 numbers long, and a vector whose memory row is gone. */
 function seedVectors(root: string): void {
   const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
   const index = Object.fromEntries(
@@ -73,7 +69,6 @@ async function seedGraph(root: string): Promise<void> {
   await extractGraph(sqliteStore(root), OTHER_TENANT);
 }
 
-/** A connector's flagged text, which lands under a quarantine scope with a pending record; returns the memory id. */
 async function hold(root: string, tenantId: string, ending: string): Promise<string> {
   const saved = await rememberUntrusted(apiCtx(root, tenantId, adminActor('seed')), {
     content: `${STANDING_ORDER} ${ending}.`,
@@ -90,7 +85,6 @@ export async function seedMovedReads(): Promise<MovedReadsSeed> {
   let keys = { main: '', member: '', other: '', unknown: '' };
   let keyIds: string[] = [];
   const templates = await seedTemplates(async (root) => {
-    // A remember may share to the user's global store, which must not be the real one.
     vi.stubEnv('HIPPO_HOME', join(dirname(root), 'seed-home'));
     seedPortBranches(root);
     seedVectors(root);

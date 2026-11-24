@@ -1,17 +1,3 @@
-/**
- * v1.3.2 hotfix regression tests. Codex round 3 + claude review caught
- * residual issues in v1.3.1's own fix:
- *
- *   - P0: server.ts deletion branches still called computeIdempotencyKey
- *     with the v1.3.0 (eventName, rawBody) signature instead of the v1.3.1
- *     (artifactRef, updatedAt). TS didn't catch — both signatures are
- *     (string, string).
- *   - P1: DLQ replay routed `*.deleted` comment events through ingestEvent
- *     (writing a fresh raw memory) instead of handleCommentDeleted.
- *   - P1: compareSemver silently coerced pre-release tags to 0, defeating
- *     the rollback guard if min_compatible_binary ever got a pre-release.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { compareSemver } from '../../src/base/util/version.js';
@@ -34,14 +20,6 @@ describe('deletion key namespace separates ingest from deletion', () => {
   afterEach(() => safeRmSync(home));
 
   it('deletion key DIFFERS from ingest key for the same artifact + updated_at', () => {
-    // First fix attempt: make deletion+ingest share keys (codex round 3 P0).
-    // That broke the deletion path: hasSeenKey returned true on the first
-    // delete because the prior ingest's row was already in github_event_log,
-    // and deletion short-circuited to 'duplicate' without archiving.
-    //
-    // v1.3.2 final fix: deletion key gets a 'deleted:' prefix so it's a
-    // separate namespace. Same artifact + same updated_at, different
-    // operation = different key.
     const artifactRef = 'github://acme/demo/issue/42/comment/123';
     const updatedAt = '2026-05-04T10:00:00Z';
 

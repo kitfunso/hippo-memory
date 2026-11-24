@@ -1,4 +1,3 @@
-// Twin fires, decision invariance and fail-soft for the two boundary rows of the delivery ledger.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -89,7 +88,6 @@ describe('a hook registered twice does not number a compaction twice', () => {
   });
 });
 
-/** The snapshot block prints its save time, which differs between any two runs. */
 const maskTimes = (text: string): string => text.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '<time>');
 
 interface Observed {
@@ -100,7 +98,6 @@ interface Observed {
   tokens: Array<{ [column: string]: string | number | null }>;
 }
 
-/** Pre-compact over a real transcript, then compact-resume over the snapshot it saved. */
 function scenario(proj: Project): Observed {
   const pre = hippo(proj, ['pre-compact'], {
     input: preCompactPayload('inv', { transcript_path: writeTranscript(proj), cwd: proj.cwd }),
@@ -181,8 +178,6 @@ describe('boundary row contents and a boundary callback that throws', () => {
     const cells = tableRows(p, 'SELECT * FROM delivery_events')
       .flatMap((r) => Object.values(r))
       .filter((v): v is string => typeof v === 'string');
-    // The two boundary rows, 11 non-null text cells each: ts, tenant, runtime, event, surface, two store
-    // fields, session and its state, block state and emitted hash.
     expect(cells).toHaveLength(22);
     const raw = [SNAPSHOT_TASK, PRE_COMPACT_INSTRUCTION.slice(0, 40), 'delivery ledger'];
     expect(cells.filter((c) => raw.some((t) => c.includes(t)))).toEqual([]);
@@ -202,7 +197,6 @@ describe('boundary row contents and a boundary callback that throws', () => {
           throw new Error('boom');
         },
       });
-      // The hook exits once stdout and stderr drain, so the stub must be in place until then.
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0));
       const log = fs.readFileSync(logFile, 'utf8');
       expect(log).toContain('boundary callback failed: boom');

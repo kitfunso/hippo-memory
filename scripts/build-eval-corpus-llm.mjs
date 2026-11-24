@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-/**
- * Build an eval corpus by asking Claude for realistic paraphrased queries
- * for each memory. Produces harder cases than the keyword-match bootstrap
- * because the queries don't reuse the memory's wording — this is where
- * embeddings and MMR actually earn their keep.
- *
- * Requires ANTHROPIC_API_KEY in env. Uses fetch directly (no SDK dep).
- *
- * Usage:
- *   node scripts/build-eval-corpus-llm.mjs [--max N] [--out PATH]
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -118,7 +107,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Pick the first MAX_CASES after random ordering (loadEntries used ORDER BY RANDOM)
   const chosen = pool.slice(0, MAX_CASES);
   console.error(`Generating queries for ${chosen.length} memories via ${MODEL}...`);
 
@@ -139,7 +127,6 @@ async function main() {
     } catch (err) {
       console.error(`  [${i + 1}/${chosen.length}] ${m.id}: FAILED - ${err.message}`);
     }
-    // Rate-limit: 1 req/sec so we don't tickle any limits
     await new Promise((r) => setTimeout(r, 1000));
   }
 

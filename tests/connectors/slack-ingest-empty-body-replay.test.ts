@@ -1,17 +1,3 @@
-/**
- * Regression: ingestMessage status string consistency on empty-body replay
- * (B3 v1.12.6).
- *
- * Pre-v1.12.6: empty-body event first call returned 'skipped' (memory_id=null,
- * markEventSeen called), but the replay returned 'duplicate' — same effect,
- * different status string. A switch/case in a downstream caller would treat
- * them as two distinct branches.
- *
- * Fix: replay of an empty-body event (cached memory_id IS NULL) now returns
- * 'skipped' too. memory_id non-NULL still returns 'duplicate' (an actual
- * memory was written previously).
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
@@ -46,7 +32,6 @@ describe('ingestMessage empty-body replay status consistency', () => {
     expect(first.memoryId).toBeNull();
 
     const replay = await ingestMessage(ctx(hippoRoot), opts);
-    // Pre-fix: 'duplicate' (the asymmetry). Post-fix: 'skipped' (consistent).
     expect(replay.status).toBe('skipped');
     expect(replay.memoryId).toBeNull();
   });
@@ -70,7 +55,6 @@ describe('ingestMessage empty-body replay status consistency', () => {
     expect(first.memoryId).not.toBeNull();
 
     const replay = await ingestMessage(ctx(hippoRoot), opts);
-    // Non-null cached memory_id → 'duplicate' (correct, not affected by B3 fix).
     expect(replay.status).toBe('duplicate');
     expect(replay.memoryId).toBe(first.memoryId);
   });

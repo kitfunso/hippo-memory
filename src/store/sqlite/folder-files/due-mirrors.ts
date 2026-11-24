@@ -1,6 +1,3 @@
-// Mirrors rewritten after the job that changed their rows. Each row's meta mark commits with the
-// row, so a crash before the rewrite leaves the mark, and the store's next open rewrites that
-// mirror.
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import {
@@ -17,13 +14,9 @@ import { deferMirrorWrite, mirrorBestEffort, writeMarkdownMirrors } from './mirr
 import { cachedStatement } from '../../../db/statement-cache.js';
 
 const DUE = 'mirror_due:';
-// The first key past every DUE key, as ';' follows ':'.
 const DUE_END = 'mirror_due;';
-// Below the batch size at which writeMarkdownMirrors lists a layer folder, so a rewrite never reads
-// a whole folder.
 const DUE_PAGE = 64;
 
-/** One row's mark: its meta key and the token of the write that set it. */
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 // meta's key and value are both TEXT NOT NULL.
 interface DueMark {
@@ -58,9 +51,7 @@ export function recoverDueMirrors(at: StoreAt, db: DatabaseSyncLike, due?: boole
   });
 }
 
-// No session, so the rewrite neither shares the job's handle nor counts as the job's commit.
 function rewriteDueMirrorsIn({ hippoRoot, runtime }: StoreAt): void {
-  // A store removed before its deferred rewrite has nothing left to mirror.
   if (!fs.existsSync(getHippoDbPath(hippoRoot))) return;
   const db = grantFor({ runtime }).open(hippoRoot);
   try {
@@ -70,12 +61,8 @@ function rewriteDueMirrorsIn({ hippoRoot, runtime }: StoreAt): void {
   }
 }
 
-/** Rewrites each due mirror from its row as it stands now, a page at a time; a mark is cleared
- * once its file is written or its row is gone, and only if no later write has marked the row
- * again. */
 function rewriteDueMirrors(db: DatabaseSyncLike, hippoRoot: string): void {
   for (let marks = dueMarks(db, DUE); marks.length > 0; marks = dueMarks(db, marks.at(-1)!.key)) {
-    // A mark names a row by id alone, and one rewrite serves the marks every tenant's jobs left.
     const rows = readEntriesByIds(
       db,
       marks.map((mark) => mark.key.slice(DUE.length)),

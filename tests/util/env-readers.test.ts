@@ -1,4 +1,3 @@
-/** src/base/util/env.ts readers: timeouts refuse negatives, HIPPO_REQUIRE_SERVER reads like the other switches, ids and keys come back trimmed. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   envClaudeCodeSessionId,
@@ -37,7 +36,6 @@ describe('timeouts', () => {
     expect(read()).toBe(250);
   });
 
-  // One rule for every whole-number variable: a unit or a fraction is a typo, never the number in front of it.
   it.each([...readers, ['HIPPO_REQUEST_DEADLINE_MS', envRequestDeadlineMs] as const])(
     '%s reads only a whole number',
     (name, read) => {

@@ -1,5 +1,3 @@
-// Every member-callable write route and MCP write tool, with its CD5 screen decision. WRITE_TOOLS stays complete
-// because tests/cli/read-only-mode.process.test.ts:195-202 refuses any tool that writes outside it.
 import { describe, expect, it } from 'vitest';
 import { routeLabel, V1_ROUTES } from '../../src/surface/server/route-table.js';
 import { WRITE_TOOLS } from '../../src/surface/mcp/tools.js';
@@ -15,7 +13,6 @@ const MEMBER_WRITE_ROUTES = {
   'DELETE /v1/auth/keys/:keyId': 'no new text',
 } satisfies Record<string, string>;
 
-// Follow-up O1: each kind writes a mirror memory with a null scope that no screen runs on yet.
 const OBJECT_KINDS = [
   '/v1/predictions',
   '/v1/decisions',

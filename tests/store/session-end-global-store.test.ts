@@ -1,5 +1,3 @@
-// SessionEnd in a folder with no store of its own saves into the global store, or nothing when there is none.
-// Real built CLI and real stores, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -82,7 +80,6 @@ describe('__session-end-worker with no store in the folder', () => {
 
     expect((await runSessionEnd('sess-global-origin')).status).toBe(0);
 
-    // Capture splits the turn into sentences, and only the 'Never' sentence holds the rule.
     const saved = loadAllEntries(globalRoot, 'default').filter((e) => e.content.includes(RULE));
     expect(saved).toHaveLength(1);
     expect(saved.every((e) => e.originProject === 'work')).toBe(true);

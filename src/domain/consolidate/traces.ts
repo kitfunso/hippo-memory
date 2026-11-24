@@ -17,15 +17,9 @@ export function traceWindow(
 ): SleepBegin['traces'] {
   if (run.dryRun || run.config.autoTraceCapture === false) return undefined;
   const windowDays = run.config.autoTraceWindowDays ?? 7;
-  // Auto-trace runs for the caller's tenant alone; consolidating every tenant needs a per-tenant
-  // loop on top of this.
   return { tenantId: run.tenantId, sinceMs: run.now.getTime() - windowDays * DAY_MS };
 }
 
-// 1.4. Auto-promote complete sessions to traces: each session `traceWindow` names (idempotent via
-// source_session_id) is rendered as markdown and persisted as a Layer.Trace memory, which inherits
-// decay, search, replay and physics. The store read the sessions with their events at sleep begin,
-// and one tombstone read covers every trace.
 export async function promoteSessionTraces(
   run: SleepRun,
   sessions: readonly UntracedSession[],
@@ -61,13 +55,11 @@ export async function promoteSessionTraces(
 
 type TraceOutcome = 'success' | 'failure' | 'partial';
 
-/** The trace a completed session renders to, or null when it cannot be promoted. */
 function sessionTrace(
   run: SleepRun,
   consolidationTenant: string,
   { sessionId, events }: UntracedSession,
 ): { trace: MemoryEntry; outcome: TraceOutcome; sessionId: string } | null {
-  // A mixed-scope session would otherwise leak into one trace.
   const sessionScope = commonDerivationScope(events.map((e) => e.scope));
   if (!sessionScope.ok) {
     run.result.tracesSkippedMixedScope++;
@@ -92,8 +84,6 @@ function sessionTrace(
       tags: ['auto-promoted'],
       source: 'auto-promote',
       scope: sessionScope.scope,
-      // Same tenant as the window's no-trace check, or a non-default tenant's trace regenerates
-      // every sleep.
       tenantId: consolidationTenant,
       baseHalfLifeDays: run.config.defaultHalfLifeDays,
     },
@@ -102,17 +92,14 @@ function sessionTrace(
   return { trace, outcome, sessionId };
 }
 
-/** The outcome and title a session's terminal event carries, or null when it has none or the
- * event is malformed. */
 function sessionEnding(
   events: readonly SessionEvent[],
 ): { outcome: TraceOutcome; summary: string } | null {
   const completeEvent = events.find((e) => e.eventType === 'session_complete');
-  if (!completeEvent) return null; // defence-in-depth; the store's untraced-session read filters already.
+  if (!completeEvent) return null;
 
   const outcomeRaw = completeEvent.content;
   if (outcomeRaw !== 'success' && outcomeRaw !== 'failure' && outcomeRaw !== 'partial') {
-    // Malformed terminal event — skip rather than crash the whole sleep.
     return null;
   }
 
@@ -123,8 +110,6 @@ function sessionEnding(
   return { outcome: outcomeRaw, summary };
 }
 
-// A tombstoned trace is left out; its refusal row names the session, and the digest it was refused
-// under.
 async function auditRejectedTrace(
   run: SleepRun,
   trace: MemoryEntry,
@@ -144,15 +129,9 @@ async function auditRejectedTrace(
   });
 }
 
-// 1.5. Replay pass: rehearse high-value survivors by sampling N memories weighted by outcome,
-// valence, under-rehearsal and idle time, then applying the `markRetrieved` strengthening, so
-// important memories don't fade.
 export async function replayPass(run: SleepRun): Promise<void> {
   const { survivors, now } = run;
   const replayCount = run.config.replay?.count ?? REPLAY_COUNT_DEFAULT;
-  // EVAL-ONLY ablation (see ablation.ts): replay rehearsal is recall strengthening, so the
-  // strengthen-off arm silences the whole pass; persisting unmutated entries anyway would still
-  // refresh updated_at and mirrors.
   if (!(replayCount > 0 && survivors.size > 0 && run.strength.recallStrengthens)) return;
   const seed = Math.floor(now.getTime() / 1000) & 0xffffffff;
   const picked = await survivors.get(
@@ -166,7 +145,6 @@ export async function replayPass(run: SleepRun): Promise<void> {
   );
   if (picked.length === 0) return;
   const rehearsed = markRetrieved(picked, now, run.strength);
-  // Update survivors in place so downstream passes see rehearsed state.
   await survivors.set(rehearsed);
   run.result.replayed = rehearsed.length;
   run.result.events.push({ kind: 'replayed', ids: rehearsed.map((e) => e.id) });

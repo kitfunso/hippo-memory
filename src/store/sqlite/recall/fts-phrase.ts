@@ -1,5 +1,3 @@
-// The one place a search term becomes an FTS5 phrase.
-
 /** `term` as one FTS5 phrase: wrapped in double quotes, each inner quote doubled. */
 export function ftsPhrase(term: string): string {
   return `"${term.replaceAll('"', '""')}"`;

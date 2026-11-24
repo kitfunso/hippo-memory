@@ -11,7 +11,6 @@ export interface Rect {
 /** One project's tile in layout (camera 1) coordinates. */
 export interface Tile extends Rect {
   key: string;
-  /** Index into the projects array the layout was built from. */
   index: number;
 }
 

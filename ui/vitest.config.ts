@@ -1,12 +1,3 @@
-/**
- * Vitest config for the hippo-brain-observatory SPA.
- *
- * Component tests use jsdom; engine tests that need WebGL stay in the
- * Node backend test suite (root vitest.config.ts).
- *
- * Bootstrapped in E0 per docs/plans/2026-05-24-ui-hybrid-v4-revamp.md.
- */
-
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 

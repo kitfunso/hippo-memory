@@ -1,4 +1,3 @@
-// tests/api/goal-outcome-propagation.test.ts
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
@@ -48,7 +47,6 @@ describe('completeGoal lifespan-windowed propagation', () => {
 
   it('outcome >= 0.7 boosts memories recalled within the goal lifespan', async () => {
     const m = await remember(ctx(root), { content: 'lesson', tags: ['rfx'] });
-    // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
     const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
@@ -77,13 +75,12 @@ describe('completeGoal lifespan-windowed propagation', () => {
 
   it('memories recalled BEFORE the goal lifespan are NOT propagated', async () => {
     const m = await remember(ctx(root), { content: 'pre-goal', tags: ['rfx'] });
-    // Seed a log row dated yesterday — before any goal exists.
     const yesterday = new Date(Date.now() - 86400_000).toISOString();
     const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
-    seedRecallLog(root, g.id, m.id, yesterday); // outside lifespan
+    seedRecallLog(root, g.id, m.id, yesterday);
     const before = readStrength(root, m.id);
     await completeGoal(root, g.id, { outcomeScore: 0.9 });
-    expect(readStrength(root, m.id)).toBe(before); // no change
+    expect(readStrength(root, m.id)).toBe(before);
   });
 
   it('UNIQUE(memory_id, goal_id) prevents double-propagation if the log is poked twice', async () => {
@@ -98,12 +95,10 @@ describe('completeGoal lifespan-windowed propagation', () => {
 
   it('strength clamps at upper bound 1.0', async () => {
     const m = await remember(ctx(root), { content: 'near-ceiling', tags: ['rfx'] });
-    // The remember API doesn't expose strength; override directly.
     setStrength(root, m.id, 0.95);
     const g = await pushGoal(root, { sessionId: 's1', tenantId: 'default', goalName: 'rfx' });
     seedRecallLog(root, g.id, m.id, new Date().toISOString());
     await completeGoal(root, g.id, { outcomeScore: 0.9 });
-    // 0.95 * 1.10 = 1.045, but SQLite's MIN(1.0, MAX(0.0, ...)) clamps at 1.0.
     expect(readStrength(root, m.id)).toBe(1.0);
   });
 });

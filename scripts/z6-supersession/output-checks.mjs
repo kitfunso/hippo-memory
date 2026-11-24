@@ -1,19 +1,15 @@
-// Pure checks and parsers for what the hippo CLI printed or wrote during a Z6 run; none of them spawns or touches disk.
 import path from 'node:path';
 import { esc } from './fixture.mjs';
 
-// Pure predicate so the guard is selftest-able without creating any directory (R11, R18).
 function rootBaseOk(rel) {
   return rel !== '' && !path.isAbsolute(rel) && !rel.startsWith('..');
 }
 
-// Exit 0 alone proves nothing: a failed child is caught and counted, and a workspace without .hippo is skipped silently.
 function dailyRunnerOk(lastLine) {
   const m = /^Daily maintenance complete: (\d+) workspaces? processed, (\d+) command failures?\.$/.exec(lastLine ?? '');
   return Boolean(m) && Number(m[1]) === 1 && Number(m[2]) === 0;
 }
 
-// Pure so R18's log-shape cases run in --selftest with no spawn; the poll regex only proves the run ended, not that it ended well.
 function parseWorkerLog(txt) {
   if (/skip capture: no transcript|No transcript found|had no user\/assistant messages|skip: no session_id/.test(txt)) return { ok: false, reason: 'misfed' };
   if (!txt.includes('[hippo] sleep complete') || !txt.includes('[hippo] capture complete')) return { ok: false, reason: 'incomplete' };
@@ -25,7 +21,6 @@ function parseWorkerLog(txt) {
   return { ok: true, outcome: { type: 'captured', n: Number(m[1]), m: Number(m[2]), r: m[3] === undefined ? 0 : Number(m[3]) } };
 }
 
-// The exact seven commands hook install claude-code writes (src/hooks.ts:765-879); any other command voids the run.
 function checkHooks(settings) {
   const got = Object.entries(settings.hooks ?? {}).flatMap(([ev, list]) =>
     (Array.isArray(list) ? list : []).flatMap((m) => (m.hooks ?? []).map((h) => ({ ev, matcher: m.matcher ?? '', command: h.command }))));
@@ -45,14 +40,10 @@ function checkHooks(settings) {
   return { logPath };
 }
 
-// --- recall output parsing ---
-
 // matchAll (not match) so every "--- id [" line counts; match() alone silently keeps only the first (R19).
 function parseRankedIds(stdout) {
   return [...stdout.matchAll(/^--- (\S+) \[/gm)].map((m) => m[1]);
 }
-
-// --- explain parsing ---
 
 function parseExplainBlocks(text) {
   const blocks = [];

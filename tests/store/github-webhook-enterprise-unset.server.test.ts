@@ -4,7 +4,6 @@ import { serve, type ServerHandle } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { log } from '../../src/base/util/log.js';
 
-// Own file: the warning fires once per process, so it needs a module no other test has touched.
 const SECRET = 'github-webhook-secret';
 
 afterEach(() => {

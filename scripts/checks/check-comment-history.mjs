@@ -1,15 +1,10 @@
 #!/usr/bin/env node
-// CI comment gate. Ticket codes, version tags, reviewer notes, dates and plan paths in src/ comments belong in docs
-// or git log; each file's count of such comment lines may fall but never rise above .comment-history-baseline.json.
-// Usage: check-comment-history.mjs [--list [file...]] [--update]. --update rewrites the baseline; run it only after clearing hits.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASELINE = '.comment-history-baseline.json';
 
-// Each pattern skips domain words it would otherwise hit: schema versions (v39, not a release tag), DAG layers L0-L3,
-// BM25, FTS5, SHA1, UTF8, P95 percentiles, a prereg "amendment A1", invalid example dates, and the Codex product.
 const PATTERNS = [
   ['version', /\bv\d+\.\d+(?:\.\d+)?\b/],
   [
@@ -25,12 +20,10 @@ const PATTERNS = [
   ['pr', /\(#\d{2,4}\)|\bPR ?#?\d+|\bissue #\d+/],
 ];
 
-// Section labels that name a plan, wave or feature number instead of what the code is; no baseline, any hit fails.
 const LABEL_PATTERN = /\bFeature \d+:|\bW\d+[a-z]?:|\b[Pp]lan designs? \d+|\bCHANGELOG \d/;
 
 const PRECEDES_REGEX = '(,=:[!&|?{};+-*%<>~^';
 
-/** Index just past the string literal that opens at `start`, and how many escaped newlines it spans. */
 function skipQuoted(src, start, quote) {
   let i = start + 1;
   let newlines = 0;
@@ -41,7 +34,6 @@ function skipQuoted(src, start, quote) {
   return { next: i + 1, newlines };
 }
 
-/** Index just past the regex literal that opens at `start`. */
 function skipRegexLiteral(src, start) {
   let inClass = false;
   let i = start + 1;
@@ -59,13 +51,12 @@ function opensRegex(src, i, prev) {
   return /(?:^|[^\w$])(?:return|typeof|case)\s*$/.test(src.slice(Math.max(0, i - 8), i));
 }
 
-/** Returns [lineNumber, text] for every comment line: `//` tails and each line of a block comment. */
 function commentLines(src) {
   const out = [];
-  const templateDepth = []; // brace depth inside each open `${ }`
+  const templateDepth = [];
   let line = 1;
   let i = 0;
-  let prev = ''; // last code char; decides whether `/` opens a regex or divides
+  let prev = '';
   let inTemplate = false;
   while (i < src.length) {
     const c = src[i];
@@ -147,7 +138,6 @@ function tsFiles(dir, out = []) {
   return out.sort();
 }
 
-/** Every history-carrying comment line under src/: { file, line, kind, text }. */
 function findHits() {
   const hits = [];
   for (const file of existsSync('src') ? tsFiles('src') : []) {

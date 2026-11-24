@@ -1,5 +1,3 @@
-// Cards and Goals answer: the card board's moves, leases, runs and
-// promotions, and the goal stack's depth cap and the strength a completed goal passes on.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { CARD_LEASE_MS, type CardStatus } from '../../src/base/records/card.js';
@@ -38,7 +36,6 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// Card, goal and policy ids are random, so each side's are named by the order its calls made them.
 const made = new WeakMap<HippoStore, string[]>();
 const idOf = (store: HippoStore, i: number): string => made.get(store)?.[i] ?? `unmade-${i}`;
 const keep = (store: HippoStore, ...ids: (string | undefined)[]): void => {
@@ -63,7 +60,6 @@ async function namedCall<G extends 'cards' | 'goals'>(call: GroupCall<G, unknown
   }
 }
 
-/** Each call one second after the one before, its answer or error with every id named by place. */
 async function conforms<G extends 'cards' | 'goals'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
@@ -82,7 +78,6 @@ describe('Cards', () => {
       return card;
     };
   const at = (ms: number) => vi.setSystemTime(START + ms);
-  // Deps read in the other id's byte order, and these ids are random, so the named ids are compared sorted.
   const sortedDeps = (detail: { deps: { parents: string[]; children: string[] } } | null) =>
     detail && {
       ...detail,
@@ -276,7 +271,6 @@ describe('Goals', () => {
     ]);
     expect(outcomes.slice(4, 6).every((o) => 'error' in o)).toBe(true);
     expect(statuses(outcomes[7])).toEqual(['suspended', 'active', 'active', 'active']);
-    // Tenant B's complete of the suspended 'test' goal changed nothing.
     expect(statuses(outcomes[23])).toEqual(['completed', 'completed', 'suspended', 'completed']);
     expect(outcomes[22]).toEqual({
       value: [

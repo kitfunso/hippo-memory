@@ -1,17 +1,3 @@
-/**
- * E2 decision first-class object — store-layer tests.
- * Docs: docs/plans/2026-05-28-e2-decision-object.md
- *
- * Covers what only decisions have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. saveDecision creates both the memory mirror and the decisions row
- * 2. a supersede that loses its race after the preflight is a ConflictError (409)
- * 3. saveDecision without context: bare memory content, has_context false
- * 4. loadDecisions status filter; status 'active' excludes non-active
- * 5. resolveActiveDecisionIdByMemory (row id first-class, null legacy/superseded)
- * 6. a superseding saveDecision weakens the replaced memory in the same write and halves its half-life once,
- *    however often it is weakened; a named memory that is missing or another tenant's refuses the whole save
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -36,12 +22,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, readEntry, objectsAt } = sessionPerTest();
 
-/**
- * Typed wrappers around DatabaseSyncLike's untyped get/all and JSON.parse.
- * Every call site below supplies T for a SELECT column list (or JSON
- * payload written by saveDecision/audit logging under test) directly at
- * the call, so the shape is established there, not assumed blind.
- */
 function getRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T {
   // SAFETY: see doc comment above.
   return db.prepare(sql).get(...params) as T;
@@ -79,7 +59,7 @@ describe('decisions store (first-class object)', () => {
       decisionText: 'use Postgres',
       context: 'scale and JSONB',
     });
-    expect(d.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
+    expect(d.id).toBe(1);
     expect(d.memoryId).not.toBeNull();
     expect(d.tenantId).toBe('default');
     expect(d.decisionText).toBe('use Postgres');
@@ -120,7 +100,6 @@ describe('decisions store (first-class object)', () => {
     });
     const db = openHippoDb(home);
     try {
-      // The trigger stands in for a concurrent writer: the preflight sees an active row, the UPDATE changes nothing.
       db.exec(
         `CREATE TRIGGER lose_supersede_race BEFORE UPDATE OF status ON decisions BEGIN SELECT RAISE(IGNORE); END`,
       );
@@ -201,7 +180,6 @@ describe('decisions store (first-class object)', () => {
     });
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', d.memoryId!)).toBe(d.id);
 
-    // A legacy decision-tagged memory with NO decisions row
     const legacy = createMemory('legacy decision memory', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['decision'],
@@ -213,7 +191,6 @@ describe('decisions store (first-class object)', () => {
     writeEntry(home, legacy);
     expect(await resolveActiveDecisionIdByMemory(objectsAt(home), 'default', legacy.id)).toBeNull();
 
-    // A superseded decision's memory no longer resolves (status != active)
     const sup = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'old',
     });

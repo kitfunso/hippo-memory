@@ -1,9 +1,3 @@
-/**
- * CLI integration tests for `hippo invalidate` safety (2026-06-09 fix):
- * pattern-XOR-id argument contract, value-less --id rejection, --dry-run
- * preview output, and exact-tag matching through the real CLI surface.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';

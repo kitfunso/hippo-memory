@@ -1,4 +1,3 @@
-// End to end through bin/hippo.js: the session-end workers write the digest, and context prints the handoff or the digest, never both.
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -44,7 +43,6 @@ beforeEach(async () => {
   ]);
   env = {};
   for (const [key, value] of Object.entries(process.env)) if (!drop.has(key.toUpperCase())) env[key] = value;
-  // A model CLI on PATH could answer a capture step; the digest must stand without one.
   env.PATH = (process.env.PATH ?? '')
     .split(path.delimiter)
     .filter((dir) => !/[\\/]npm[\\/]?$/i.test(dir))
@@ -58,7 +56,6 @@ beforeEach(async () => {
   expect((await hippo(['init', '--no-hooks', '--no-schedule', '--no-learn'])).status).toBe(0);
 });
 
-// In process unless `spawned`: the first worker case and the concurrent pair run real children, the rest read rows and bytes.
 async function hippo(
   args: string[],
   input?: string,
@@ -119,8 +116,6 @@ async function claudeWorker(sessionId: string, transcript: string, spawned = fal
 
 const digests = () => loadAllEntries(path.join(repo, '.hippo'), 'default').filter(isSessionDigestRow);
 
-// The slowest case runs about 2 s solo, so the 30 s process-project timeout leaves a 15x margin for a busy suite.
-
 describe('the Claude Code session-end worker', () => {
   it('writes one digest per session, a re-run keeps one, and the log never holds its text', async () => {
     const transcript = claudeTranscript('s1');
@@ -166,7 +161,6 @@ describe('the Claude Code session-end worker', () => {
   });
 });
 
-/** Writes a Codex rollout that ran in `cwd` and returns the worker's arguments. */
 function codexRollout(cwd: string): string[] {
   const codexHome = path.join(tmp, 'codex');
   const dir = path.join(codexHome, 'sessions', '2026', '09', '29');
@@ -243,7 +237,6 @@ describe('a folder with only the global store', () => {
 });
 
 describe('context prints the handoff or the digest, never both', () => {
-  // No session id means an unknown caller: the hook text leaves every handoff out, markdown points to it, JSON stays whole.
   const context = async (format: 'additional-context' | 'markdown' | 'json', sessionId?: string): Promise<string> => {
     const input = sessionId === undefined ? '' : JSON.stringify({ session_id: sessionId });
     const result = await hippo(['context', '--pinned-only', '--include-recent', '5', '--format', format], input);
@@ -255,7 +248,6 @@ describe('context prints the handoff or the digest, never both', () => {
 
   it('hides the digest behind its own session handoff, even when it is the only memory', async () => {
     await claudeWorker('S1', claudeTranscript('s1'));
-    // The message saved whole is recall-only, so context never shows it.
     const rows = loadAllEntries(path.join(repo, '.hippo'), 'default').filter((e) => !e.tags.includes('user-message'));
     expect(rows.map((e) => e.id)).toEqual([sessionDigestId('default', 'S1')]);
     const text = await context('additional-context');
@@ -298,7 +290,6 @@ describe('context prints the handoff or the digest, never both', () => {
         '',
       );
       expect(result.status).toBe(0);
-      // Nothing fits the smallest budgets, and then context prints nothing at all.
       const json = result.stdout.trim() ? JSON.parse(result.stdout) : { memories: [] };
       const digest = json.memories.some((m: { id: string }) => m.id === sessionDigestId('default', 'S1'));
       seen.push({ budget, handoff: json.sessionHandoff?.sessionId === 'S1', digest });

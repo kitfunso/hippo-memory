@@ -1,4 +1,3 @@
-// A store root before each W2a card test; uninitialised only for a test of a fresh store's first open.
 import { beforeEach } from 'vitest';
 import { makeRoot } from './make-root.js';
 

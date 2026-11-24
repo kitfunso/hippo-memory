@@ -10,14 +10,6 @@ import type {
   GitHubRepository,
 } from './types.js';
 
-/**
- * Convert GitHub webhook events into RememberOptions; each returns null when the event has no
- * usable body so the caller marks it seen and skips the insert. artifact_ref formats
- * (github://<owner/repo>/issue|pull/<n>[/comment|review_comment/<id>], with the GHES host before the
- * owner) are stable because deletion and dedupe look rows up by them (ref.ts).
- */
-
-/** GitHub vouches for these authors: the repository's owner, a member of its organization, an invited collaborator. */
 const INSIDE_AUTHORS: ReadonlySet<string> = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
 const ASSOCIATION_NAME = /^[A-Z_]{1,40}$/;
 
@@ -31,7 +23,6 @@ function outsideAuthorHold(
   authorId: number,
   trusted: ReadonlySet<number>,
 ): ConnectorRememberOptions['hold'] {
-  // A payload can carry a non-string here, so every check runs on a proven string.
   if (isStringValue(association) && INSIDE_AUTHORS.has(association)) return undefined;
   if (trusted.has(authorId)) return undefined;
   const named =

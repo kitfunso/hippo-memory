@@ -1,4 +1,3 @@
-// A mint that names no role is a member key and one that names no expiry lasts 90 days; admin and no expiry are asked for by name.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { adminActor, authCreate } from '../../src/api/index.js';
@@ -23,7 +22,6 @@ interface Minted {
   expiresAt: string | null;
 }
 
-/** What a test posts to the mint route, the wrong types a caller might send included. */
 interface MintBody {
   label?: string;
   role?: string;
@@ -51,7 +49,6 @@ async function jsonOf<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** The host CLI's own path: it opens the store as host admin, so it needs no key to mint the first one. */
 function hostMint(role: 'admin' | 'member'): Promise<Minted> {
   return authCreate(apiCtx(home, 'default', adminActor('cli')), { role, noExpiry: true });
 }
@@ -83,7 +80,6 @@ function floor(): string | undefined {
   }
 }
 
-/** Whole days from now to `iso`, so a test reads the lifetime a mint chose without racing the clock. */
 function daysUntil(iso: string | null): number {
   return iso === null ? Number.NaN : Math.round((Date.parse(iso) - Date.now()) / DAY_MS);
 }
@@ -259,7 +255,6 @@ describe('hippo auth create defaults', () => {
     expect(JSON.parse(forever.stdout) as Minted).toMatchObject({ role: 'admin', expiresAt: null });
     expect(forever.stderr).not.toContain('unknown flag');
     const soon = hippoRun(['auth', 'create', '--global', '--ttl-days', 'soon'], { env, cwd: home });
-    // The exit now waits for stderr to drain, so Node's one-time SQLite warning can follow the message.
     expect([soon.status, soon.stdout, soon.stderr.trim().split('\n')[0]]).toEqual([
       1,
       '',

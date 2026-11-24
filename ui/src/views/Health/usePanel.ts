@@ -3,11 +3,8 @@ import { isAbort } from "../../api/client";
 
 /** Shared snapshot state: a read response with a newer id makes every panel refetch. */
 export interface SnapshotClock {
-  /** Bumps whenever a read reports a snapshot newer than one already seen. */
   epoch: number;
-  /** Highest snapshot id seen; read it in effects, never during render. */
   seen: { current: number };
-  /** Records a response's id; false means the response is older than one already seen and must be dropped. */
   report: (id: number) => boolean;
 }
 
@@ -37,11 +34,8 @@ export interface Panel<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
-  /** Refetch now, whatever the snapshot says (Retry, visibility refetch). */
   reload: () => void;
-  /** Take a response fetched elsewhere (Refresh, an action's answer); false when it is older than data already seen. */
   accept: (data: T) => boolean;
-  /** Wall-clock ms when `data` last arrived, or 0. */
   fetchedAt: number;
 }
 
@@ -74,7 +68,6 @@ export function usePanelCore<T extends { snapshotId: number }>(
     if (!enabled) return;
     const h = held.current;
     if (!forced.current && h && h.key === depsKey && h.id >= seen.current) return;
-    // The state drops the old key's data below, so `held` must stop naming it or a return to that key would skip its load.
     if (h && h.key !== depsKey) held.current = null;
     forced.current = false;
     const ctrl = new AbortController();
@@ -113,7 +106,6 @@ export function usePanelCore<T extends { snapshotId: number }>(
   );
 
   const current = state.key === depsKey;
-  // A new key starts clean: the old key's error and loading flag must not show for it before its effect runs.
   return {
     data: current ? state.data : null,
     error: current ? state.error : null,

@@ -1,18 +1,12 @@
-// The language-model port: domain writes the prompt and reads the reply; src/infra/anthropic-llm.ts
-// and src/infra/openai-chat-llm.ts make the call.
 import { errorCode, errorFields, type LogFields } from '../util/log.js';
 
 export interface LlmRequest {
-  /** The model the caller's config names; the adapter's own default when absent. */
   readonly model?: string;
   readonly maxTokens: number;
   readonly prompt: string;
-  /** The request's abort signal; the call stops when it fires. */
   readonly signal?: AbortSignal | undefined;
 }
 
-// `cause` is the thrown value behind a message, kept so the site that logs the failure can write
-// its class and chain.
 export type LlmFailure =
   | { kind: 'request'; message: string; cause?: unknown }
   | { kind: 'http'; status: number; detail: string }
@@ -35,8 +29,6 @@ export interface Llm {
   send(request: LlmRequest): Promise<LlmReply>;
 }
 
-// A bad or missing key, no credit, no permission, an unknown model: every later call gets the same
-// answer. So does a redirect from the fixed configured URL, which hippo never follows.
 const PERMANENT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 404]);
 
 /** True for a failure the next call would repeat, so a caller looping over items should stop

@@ -30,7 +30,6 @@ export interface Kpi {
 }
 
 export interface Overview {
-  /** Bumped on each rebuild and seeded from the wall clock, so ids keep rising across server restarts. */
   snapshotId: number;
   generatedAt: string;
   total: number;
@@ -157,7 +156,6 @@ export interface ForgetResult {
   id: string;
 }
 
-// W2c board view: mirrors src/base/records/card.ts field for field, same nullability.
 export type CardStatus = "backlog" | "ready" | "running" | "blocked" | "review" | "done" | "shelved";
 
 export interface Card {
@@ -216,6 +214,5 @@ export interface CardDetail {
 
 export interface CardList {
   cards: Card[];
-  /** Present only when another page of cards follows; pass it back as `?cursor=`. */
   next_cursor?: string;
 }

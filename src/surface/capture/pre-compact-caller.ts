@@ -1,5 +1,3 @@
-// PreCompact for a caller on another machine: the record and the owner's snapshot go under its
-// tenant and project; only a refused bind or the holdout arm withholds the instruction.
 import type { ContextWith, EntryContext } from '../../api/types.js';
 import { PRE_COMPACT_INSTRUCTION } from './compaction-record.js';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
@@ -27,8 +25,6 @@ export interface CallerHookOutput {
   readonly stdout: string;
 }
 
-/** A failed step is logged and the instruction still goes out, as the local hook prints it
- * before any store work. */
 async function logged<T>(what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn();
@@ -63,7 +59,6 @@ export async function preCompactForCaller(
     (await saveOwnerSnapshot(ctx, req.sessionId, key, state)) &&
     recordId !== null
   ) {
-    // Marked under ctx.tenantId, which the environment's tenant may not be.
     await logged('compaction record not marked with its snapshot', () =>
       compactions.markSnapshotSaved(ctx.tenantId, recordId),
     );
@@ -71,7 +66,6 @@ export async function preCompactForCaller(
   return { stdout: PRE_COMPACT_INSTRUCTION };
 }
 
-/** True when the owner's snapshot was saved. */
 async function saveOwnerSnapshot(
   ctx: ContextWith<'sessions'>,
   sessionId: string,

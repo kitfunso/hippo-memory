@@ -1,5 +1,3 @@
-// The dashboard drawer's detail of one memory, read fresh through the api and stamped with the id
-// the client holds.
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { leadInField } from '../../base/memory/lead-in.js';
@@ -64,7 +62,6 @@ interface BuildMemoryDetailOptions {
   readonly options: MemoryDetailOptions;
 }
 
-/** Full detail read fresh from the store, so the drawer is current inside the coalescing window. */
 async function buildMemoryDetail(
   store: Pick<RequiredStore, 'entriesByIds'>,
   { reads, tenantId, entry, options }: BuildMemoryDetailOptions,

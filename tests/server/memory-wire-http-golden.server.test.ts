@@ -1,5 +1,3 @@
-// Pins the GET /v1/memories body bytes for one entry with every field set, so a rename of MemoryEntry's fields cannot
-// move a key an HTTP client reads.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';

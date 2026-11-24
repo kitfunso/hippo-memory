@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// One changelog.d/ fragment per PR keeps open PRs from conflicting on CHANGELOG.md.
-// `fold [YYYY-MM-DD]` writes them under the package.json version and deletes them;
-// `check` (prepublishOnly) fails while any are left.
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -26,7 +23,6 @@ function hasSection(changelog, version) {
 function check() {
   if (fragments.length > 0) {
     const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
-    // fold refuses a version that has a section, so a fragment merged in after the fold is moved by hand.
     const fix = hasSection(readFileSync('CHANGELOG.md', 'utf8'), version)
       ? `Fix: CHANGELOG.md already has a ## ${version} section, so these came in after the fold. ` +
         'Move their entries under its ### headings, delete the files and commit.'

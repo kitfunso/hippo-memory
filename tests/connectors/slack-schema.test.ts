@@ -25,7 +25,6 @@ describe('schema v17 — slack ingestion tables', () => {
       const cols = db.prepare(`PRAGMA table_info(slack_event_log)`).all() as TableInfoRow[];
       const eventIdCol = cols.find((c) => c.name === 'event_id');
       expect(eventIdCol?.pk).toBe(1);
-      // Re-insert same event_id must throw (PK uniqueness).
       db.prepare(`INSERT INTO slack_event_log (event_id, ingested_at, memory_id) VALUES (?, ?, ?)`).run(
         'E1',
         '2026-04-29T00:00:00Z',
@@ -50,7 +49,6 @@ describe('schema v17 — slack ingestion tables', () => {
         '1700000000.000000',
         '2026-04-29T00:00:00Z',
       );
-      // Same composite key collides; INSERT OR REPLACE supported.
       expect(() =>
         db
           .prepare(`INSERT INTO slack_cursors (tenant_id, channel_id, latest_ts, updated_at) VALUES (?, ?, ?, ?)`)

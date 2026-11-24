@@ -1,4 +1,3 @@
-// The one problems line `hippo last-sleep` shows the user at session start, and where it goes.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -77,7 +76,6 @@ describe('handleLastSleep output', () => {
     errors: string[];
   }
 
-  /** Captures stdout and every stderr route the command uses, so nothing reaches the test runner. */
   function capture(): Streams {
     const streams: Streams = { stdout: [], errors: [] };
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {

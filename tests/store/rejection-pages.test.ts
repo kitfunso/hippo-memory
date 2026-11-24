@@ -1,5 +1,3 @@
-// A rejection over a tenant larger than one page: the same removals as one whole scan, and a write that lands while
-// the rows are walked cannot bring the value back.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { RejectedValueError } from '../../src/base/errors/api-errors.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -28,10 +26,8 @@ beforeEach(() => {
   root = makeRoot('rejection-pages');
 });
 
-// The walk's page read: a write that lands as it is first prepared lands while the rows are walked with no lock held.
 const WALK_PAGE = 'SELECT id, content, lead_in, source, scope, created FROM memories ';
 
-/** hippo.db's rejections on handles that call `onWalk` once, as the walk prepares its first page read. */
 function rejectionsWalking(onWalk: () => void) {
   const handles = handlesOf(root);
   const { on } = handles;
@@ -62,7 +58,6 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Live rows that differ from a plain filler row, by their place in store order. */
 const SPECIAL: ReadonlyMap<number, Partial<MemoryEntry>> = new Map<number, Partial<MemoryEntry>>([
   [2, { content: VALUE }],
   [600, { content: '  the DEPLOY window is friday   afternoon ' }],

@@ -1,7 +1,3 @@
-/**
- * The feature eval runner, regression detection and report. Zero API calls (no LLM judge, no
- * embeddings), deterministic and fast; the corpus it scores is built in eval-suite-corpus.ts. */
-
 import { rankBm25 } from '../search/bm25-search.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import { rankMultihop } from '../search/multihop.js';
@@ -64,7 +60,6 @@ interface ScoredFeatureCase {
   ndcg5: number;
 }
 
-/** Each category's mean scores, in the order the corpus first names the category. */
 function featureAverages(
   cases: readonly FeatureTestCase[],
   caseResults: readonly ScoredFeatureCase[],
@@ -134,8 +129,6 @@ export async function runFeatureEval(
 }
 
 const REGRESSION_THRESHOLD = 0.05;
-// Large enough that the token budget never cuts a synthetic case's results, so the metrics see the
-// whole ranking.
 const EVAL_TOKEN_BUDGET = 50000;
 
 export function detectRegressions(

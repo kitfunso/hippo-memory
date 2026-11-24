@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Post-deploy only: submits URLs to IndexNow, read from dist/sitemap-0.xml or given as arguments.
-// The key is public by design, served at /<key>.txt. `--dry-run` prints the payload instead of sending it.
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

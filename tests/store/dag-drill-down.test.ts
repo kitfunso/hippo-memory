@@ -1,12 +1,3 @@
-/**
- * v1.5.0 DAG-aware recall — Task 3 drillDown.
- *
- * Companion to api.recall's substitution path. When recall surfaces a level-2
- * summary in place of overflowed children, drillDown walks one step down the
- * DAG to recover the originals. Tenant scope and the *:private:* default-deny
- * are enforced on both the summary and its children.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -81,9 +72,6 @@ describe('drillDown', () => {
   });
 
   it('filters out children whose scope fails the default-deny check', async () => {
-    // Public summary, but one child accidentally tagged private. Should NOT
-    // appear in the children list (defense in depth — even if the DAG is
-    // misbuilt, drill cannot leak).
     const s = makeSummary('public topic', { scope: 'slack:public:CGEN' });
     writeEntry(root, s);
     writeEntry(root, makeChild('public child', s.id, { scope: 'slack:public:CGEN' }));
@@ -133,7 +121,6 @@ describe('drillDown', () => {
     const plain = makeChild('Mel signed up for the spring run', s.id);
     plain.created = '2026-01-02T00:00:00.000Z';
     writeEntriesTogether(root, [led, plain]);
-    // Priced by content alone both would fit; priced by the shown text the second no longer does.
     const budget = estimateTokens(led.content) + estimateTokens(plain.content);
     const r = await drillDown(ctxFor(root), s.id, { budget });
     expect('failure' in r).toBe(false);

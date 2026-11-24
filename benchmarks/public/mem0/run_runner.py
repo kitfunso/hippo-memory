@@ -1,8 +1,3 @@
-"""Mem0's runner at 4b61c5d with one transport change: its HTTP timeout to the memory server, 300 s to 12 h.
-
-A usage-limit wait behind the Mem0 server can outlast 300 s, and the runner resends a timed-out add, which would
-store that turn twice. Usage: python run_runner.py <memory-benchmarks dir> <the runner's own arguments>
-"""
 import os
 import runpy
 import sys

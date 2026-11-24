@@ -1,4 +1,3 @@
-// The daily-runner install reaches schtasks and crontab as argv with no shell between; a stand-in runner records the calls, so no real scheduler runs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { setupDailySchedule } from '../../src/surface/cli/install-steps.js';
 import { DAILY_TASK_NAME } from '../../src/surface/cli/scheduler.js';
@@ -7,7 +6,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The runner's options type is private to the module, so it is read off the parameter.
 type SchedulerOptions = Parameters<NonNullable<Parameters<typeof setupDailySchedule>[1]>>[2];
 
 interface Call {
@@ -97,7 +95,6 @@ describe('setupDailySchedule', () => {
   });
 });
 
-/** What node's execFileSync throws for a program that exits non-zero with `stderr` on its error stream. */
 function exitedWith(status: number, stderr: string): Error {
   return Object.assign(new Error(`Command failed: crontab -l\n${stderr}`), { status, stderr });
 }
@@ -105,7 +102,6 @@ function exitedWith(status: number, stderr: string): Error {
 const MARKER = `# hippo:${DAILY_TASK_NAME}`;
 const CMD = 'cd "/srv/hippo-home" && hippo daily-runner';
 
-/** Runs the install on a Linux host whose `crontab -l` answers `listing`; a `crontab -` write throws `writeError`. */
 function install(listing: Error | string, writeError?: Error): Call[] {
   const calls: Call[] = [];
   setupDailySchedule(
@@ -194,7 +190,6 @@ describe('setupDailySchedule on a crontab that may already hold the daily runner
     vi.restoreAllMocks();
   });
 
-  /** The crontab text the install wrote, or undefined when it wrote nothing. */
   const written = (calls: Call[]): string | undefined =>
     calls.find(({ args }) => args[0] === '-')?.opts.input?.toString();
 
@@ -270,7 +265,6 @@ describe('setupDailySchedule on a crontab that may already hold the daily runner
     expect(said).toContain(`   15 6 * * * ${CMD} ${MARKER}`);
   });
 
-  // Another job that only holds the marker as quoted data is not our entry, whatever its schedule.
   const BACKUP_JOB = `0 0 * * * crontab -l | grep -v ' ${MARKER} ' > /tmp/cron.bak`;
   const ECHO_JOB = `0 1 * * * echo "kept ${MARKER} here"`;
 

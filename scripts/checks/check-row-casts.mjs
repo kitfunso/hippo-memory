@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Fails when src/ or tests/ casts a SQLite read to a row shape nothing proves. The SAFETY note sits once on the
-// row type, so this check proves each cast instead: the SQL must name every key of the row it is cast to.
 
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -9,7 +7,6 @@ import { programFromConfig } from './check-floating-promises.mjs';
 const READS = new Set(['get', 'all', 'iterate']);
 const STATEMENT_TYPES = new Set(['StatementSyncLike', 'StatementSync']);
 const WRAPPERS = new Set(['Array', 'ReadonlyArray', 'Iterable', 'IterableIterator']);
-// The nodes the anti-slop lint rule looks above for a SAFETY note, so a cast passes here exactly where it passes there.
 const OWNER_KINDS = new Set([
   ts.SyntaxKind.ExpressionStatement,
   ts.SyntaxKind.PropertyDeclaration,
@@ -17,19 +14,16 @@ const OWNER_KINDS = new Set([
   ts.SyntaxKind.ThrowStatement,
   ts.SyntaxKind.VariableStatement,
 ]);
-// A part of the SQL known only at run time reads as this, which matches no column name.
 const UNKNOWN = '\0';
 // Read from node:sqlite; a value pragma such as `PRAGMA user_version` answers one column named after itself, but
 // `PRAGMA busy_timeout` answers `timeout`.
 const PRAGMA_COLUMNS = { table_info: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'] };
 const VALUE_PRAGMA_COLUMN = { busy_timeout: 'timeout' };
-// Deep enough for a builder that calls a builder, shallow enough that a recursive one stops.
 const MAX_DEPTH = 12;
 
 const hasSafety = (text, from, to) =>
   [...text.slice(from, to).matchAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g)].some((c) => /\bSAFETY\s*:/.test(c[0]));
 
-/** A SAFETY comment just before the cast or one of its ancestors up to the owning statement, as the lint rule looks. */
 function noteAtCast(cast, sf) {
   for (let node = cast; node; node = node.parent) {
     const comments = ts.getLeadingCommentRanges(sf.text, node.getFullStart()) ?? [];
@@ -40,7 +34,6 @@ function noteAtCast(cast, sf) {
   return false;
 }
 
-/** The row type under `| undefined`, `| null`, `[]` and the iterable wrappers. */
 function rowType(type) {
   if (ts.isParenthesizedTypeNode(type)) return rowType(type.type);
   if (ts.isArrayTypeNode(type)) return rowType(type.elementType);
@@ -63,7 +56,6 @@ const unwrap = (node) =>
     ? unwrap(node.expression)
     : node;
 
-/** The top-level comma-separated items after the first top-level `keyword`, up to `stop` or the end. */
 function topLevelItems(sql, keyword, stop) {
   let depth = 0;
   let start = -1;
@@ -97,13 +89,11 @@ export function selectNames(sql) {
     const alias = /\bAS\s+["`]?(\w+)["`]?$/i.exec(item);
     if (alias) return [alias[1]];
     if (/(^|\.)\*$/.test(item)) return ['*'];
-    // An item built from text known only at run time names nothing this check can see.
     const bare = item.includes(UNKNOWN) ? null : /(?:^|[\s.])["`]?(\w+)["`]?$/.exec(item);
     return bare ? [bare[1]] : [];
   });
 }
 
-/** Reads the SQL text of TypeScript expressions as far as constants, builders and string methods allow. */
 class SqlReader {
   constructor(checker) {
     this.checker = checker;
@@ -114,7 +104,6 @@ class SqlReader {
     return symbol && symbol.flags & ts.SymbolFlags.Alias ? this.checker.getAliasedSymbol(symbol) : symbol;
   }
 
-  /** The initializer of a `const`, or of a `let` that is only ever appended to, which reads as a prefix. */
   boundValue(id) {
     const decl = this.symbolOf(id)?.valueDeclaration;
     if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return undefined;
@@ -140,7 +129,6 @@ class SqlReader {
     return reassigned ? undefined : { init: unwrap(decl.initializer), prefix: true };
   }
 
-  /** The called function and the one expression it returns, when it has exactly one `return`. */
   called(call) {
     if (!ts.isIdentifier(call.expression)) return undefined;
     const decl = this.symbolOf(call.expression)?.valueDeclaration;
@@ -158,7 +146,6 @@ class SqlReader {
     return returns.length === 1 && returns[0].expression ? { fn, body: unwrap(returns[0].expression) } : undefined;
   }
 
-  /** The node an expression stands for: a constant's initializer or a builder's returned expression. */
   source(expr, depth) {
     const node = unwrap(expr);
     if (depth > MAX_DEPTH) return undefined;
@@ -173,7 +160,6 @@ class SqlReader {
     return node;
   }
 
-  /** The strings of a constant array, through spreads and `.map` over a one-parameter arrow, or undefined. */
   strings(expr, env, depth) {
     const node = this.source(expr, depth);
     if (!node) return undefined;
@@ -201,7 +187,6 @@ class SqlReader {
     return base?.map((value) => this.text(fn.body, new Map([...env, [param, value]]), depth + 1));
   }
 
-  /** The SQL text an expression spells, with UNKNOWN for each part known only at run time. */
   text(expr, env = new Map(), depth = 0) {
     const node = unwrap(expr);
     if (depth > MAX_DEPTH) return UNKNOWN;
@@ -232,7 +217,6 @@ class SqlReader {
     return ts.isCallExpression(node) ? this.callText(node, env, depth) : UNKNOWN;
   }
 
-  /** The text of a `.join` over constant strings, or of a builder called with arguments in view. */
   callText(node, env, depth) {
     if (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'join') {
       const parts = this.strings(node.expression.expression, env, depth + 1);
@@ -241,7 +225,6 @@ class SqlReader {
     }
     const target = this.called(node);
     if (!target) return UNKNOWN;
-    // Each parameter reads as its argument's text, so a builder called with literals spells its whole result.
     const args = target.fn.parameters.map((p, i) => [
       p.name.getText(),
       node.arguments[i] ? this.text(node.arguments[i], env, depth + 1) : UNKNOWN,
@@ -249,7 +232,6 @@ class SqlReader {
     return this.text(target.body, new Map(args), depth + 1);
   }
 
-  /** The column names the SQL answers; a choice between two statements answers only the names both share. */
   names(expr, depth = 0) {
     const node = this.source(expr, depth);
     if (!node) return undefined;
@@ -263,7 +245,6 @@ class SqlReader {
     return selectNames(this.text(node, new Map(), depth));
   }
 
-  /** The SQL a read runs: `db.prepare(sql)`, `cachedStatement(db, sql)`, or a `const` holding either. */
   statementSql(receiver) {
     const node = unwrap(receiver);
     if (ts.isIdentifier(node)) {
@@ -278,10 +259,8 @@ class SqlReader {
   }
 }
 
-// Library generics whose first argument is the row the keys come from.
 const KEY_KEEPERS = new Set(['Omit', 'Pick', 'Partial', 'Readonly', 'Required']);
 
-/** Each named type the row's keys come from, so its declaration can be held to the one SAFETY note. */
 function namedParts(sql, row) {
   const parts = [];
   const walk = (node) => {
@@ -301,7 +280,6 @@ function namedParts(sql, row) {
   return parts;
 }
 
-/** Why a cast with no note of its own does not hold, or undefined when it does. */
 function rowCastProblem(checker, sql, cast, read) {
   const row = rowType(cast.type);
   for (const { name, decl } of namedParts(sql, row)) {
@@ -309,7 +287,6 @@ function rowCastProblem(checker, sql, cast, read) {
     const sf = decl.getSourceFile();
     if (!hasSafety(sf.text, decl.getFullStart(), decl.getStart(sf))) return `${name} carries no SAFETY note`;
   }
-  // A row whose keys are all optional still claims each one, since a read with none of them would fit any SQL.
   const props = checker.getTypeFromTypeNode(row).getProperties();
   const required = props.filter((p) => !(p.flags & ts.SymbolFlags.Optional));
   const keys = (required.length > 0 ? required : props).map((p) => p.getName());
@@ -356,9 +333,7 @@ export function findRowCasts(program, srcDir) {
   return casts.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  // The tests program holds src too, so one program covers both trees.
   const program = programFromConfig('tsconfig.tests.json');
   const casts = ['src', 'tests'].flatMap((dir) =>
     findRowCasts(program, `${process.cwd()}/${dir}`).map((c) => ({ ...c, file: `${dir}/${c.file}` })),

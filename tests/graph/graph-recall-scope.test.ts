@@ -1,14 +1,3 @@
-/**
- * Graph-hop scope parity (v1.26.1) — docs/plans/2026-07-11-graph-hop-scope-parity.md.
- *
- * `graphExpandRecall` loads graph-REACHED memories directly by id (bypassing the
- * lexical candidate set), so it must re-apply the v39 recall scope rule itself —
- * base recall's SQL/JS scope filters never see these rows. Covers the fail-closed
- * default (bare/SDK callers), the CLI additive unlock, the api exact-narrowing
- * mode, the quarantine bucket, the global-root traversal path, and unlock
- * composition against a second, non-requested private scope. Real SQLite stores,
- * no mocks (repo law).
- */
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,8 +24,6 @@ function safeRmSync(p: string): void {
     /* best-effort */
   }
 }
-/** Write a distilled memory (createMemory's default kind — the only kind graph writers
- *  accept per the E3.3 consolidated-source guard) and return the full entry. */
 function mem(home: string, tenant: string, text: string, opts: { scope?: string | null } = {}): MemoryEntry {
   const content = text.length < 3 ? text.repeat(3) : text;
   const m = createMemory(content, {
@@ -57,7 +44,6 @@ function sr(entry: MemoryEntry, score: number): SearchResult {
 function ent(home: string, tenant: string, m: MemoryEntry, name: string): number {
   return insertEntityAt(home, tenant, { entityType: 'decision', name, memoryId: m.id }).id;
 }
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -84,8 +70,6 @@ describe('graph-recall scope parity', () => {
     });
     const eSeed = ent(home, T, seed, 'SEED');
     const ePriv = ent(home, T, priv, 'PRIV');
-    // priv is the `from` endpoint (reached direction 'from'), so it is not treated as a
-    // superseded endpoint and would surface by default absent the scope fix.
     insertRelationAt(home, T, { fromEntityId: ePriv, toEntityId: eSeed, relType: 'supersedes', memoryId: priv.id });
 
     const out = await graphExpandRecall([sr(seed, 1.0)], {
@@ -169,7 +153,6 @@ describe('graph-recall scope parity', () => {
   it('global-root: a private-scoped memory reachable only via the GLOBAL store graph is dropped by default', async () => {
     const glob = makeRoot('graphrecall-scope');
     try {
-      // Seed + graph live entirely in the GLOBAL store; `home` (local) has no entities.
       const seed = mem(glob, T, 'globally-stored seed decision about cache invalidation');
       const priv = mem(glob, T, 'globally-stored private linked wording xyzzy plugh', { scope: 'slack:private:dm1' });
       const eSeed = ent(glob, T, seed, 'SEED');
@@ -234,7 +217,6 @@ describe('graph-recall scope parity: CLI e2e', () => {
   });
   afterEach(() => {
     vi.unstubAllEnvs();
-    // Removed once the test is done, after its session has closed its handles.
     const dir = cliHome;
     onTestFinished(() => removeDir(dir));
   });

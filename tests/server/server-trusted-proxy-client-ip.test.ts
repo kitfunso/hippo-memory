@@ -1,6 +1,3 @@
-// The rate-limit key trusts a forwarded header only from a listed proxy peer and then takes
-// the rightmost hop no trusted proxy added, so a client cannot mint a fresh bucket per request.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';

@@ -6,7 +6,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
-// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown,
@@ -66,7 +65,6 @@ describe('resolveTenant', () => {
     const db = openHippoDb(root);
     try {
       insertInstallation(db, '12345', 'tenant-alpha');
-      // Unknown installation id, table non-empty -> fail closed.
       expect(
         await resolveTenant(
           sqliteStore(root),
@@ -143,7 +141,6 @@ describe('resolveTenant', () => {
           fallback(),
         ),
       ).toBeNull();
-      // Even with no repoFullName supplied — PAT-mode envelope from a foreign source.
       expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -175,12 +172,10 @@ describe('resolveTenant', () => {
     const db = openHippoDb(root);
     try {
       vi.stubEnv('HIPPO_TENANT', 'rollback-tenant');
-      // Case 2: installation_id present but unknown.
       insertInstallation(db, '12345', 'tenant-alpha');
       expect(
         await resolveTenant(sqliteStore(root), { connector: 'github', installationId: '99999' }, fallback(true)),
       ).toBe('rollback-tenant');
-      // Case 5: no installation_id, no repo match.
       expect(
         await resolveTenant(
           sqliteStore(root),
@@ -200,12 +195,8 @@ describe('resolveTenant', () => {
   it('regression: PAT-mode webhook (no installation_id) with non-empty github_installations and no repo match -> null', async () => {
     const db = openHippoDb(root);
     try {
-      // Multi-tenant App install populated via installations table.
       insertInstallation(db, '11111', 'tenant-alpha');
       insertInstallation(db, '22222', 'tenant-beta');
-      // Foreign PAT-mode webhook arrives — no installation field, repo not registered.
-      // The pre-fix bug was: env fallback fires here, silently routing into HIPPO_TENANT.
-      // Post-fix: must fail closed.
       vi.stubEnv('HIPPO_TENANT', 'env-tenant');
       expect(
         await resolveTenant(
@@ -218,7 +209,6 @@ describe('resolveTenant', () => {
           fallback(),
         ),
       ).toBeNull();
-      // Even with no repoFullName at all (malformed PAT-mode envelope).
       expect(
         await resolveTenant(sqliteStore(root), { connector: 'github', installationId: undefined }, fallback()),
       ).toBeNull();
@@ -247,13 +237,10 @@ describe('resolveTenant', () => {
   it('HIPPO_TENANT env var set -> uses it; cleared -> falls back to "default"', async () => {
     const db = openHippoDb(root);
     try {
-      // Both tables empty -> single-tenant deployment, env fallback path.
       vi.stubEnv('HIPPO_TENANT', 'custom-env');
       expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('custom-env');
-      // Whitespace-only HIPPO_TENANT must fall back to 'default'.
       vi.stubEnv('HIPPO_TENANT', '   ');
       expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('default');
-      // Cleared.
       vi.stubEnv('HIPPO_TENANT', undefined);
       expect(await resolveTenant(sqliteStore(root), { connector: 'github' }, fallback())).toBe('default');
     } finally {

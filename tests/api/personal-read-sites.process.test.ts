@@ -1,4 +1,3 @@
-// E10 lane A: every SQL read site admits the caller's own personal row only when handed its owner, and deny-only sites admit none.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -54,7 +53,6 @@ function mem(content: string, opts: Partial<CreateMemoryOptions>): MemoryEntry {
   return createMemory(content, { tenantId: T, baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, ...opts });
 }
 
-// Five rows that every site could match on "zebrafish", one per scope, plus raw rows for the session count.
 function seed(): void {
   const rows = Object.entries(SCOPES).map(([k, scope]) =>
     mem(`zebrafish note ${k} keeps the build cache warm`, { scope, tags: [`who:${k}`, 'path:hippo'] }),

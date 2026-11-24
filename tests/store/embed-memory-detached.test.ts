@@ -1,4 +1,3 @@
-// A write that fires its embedding and moves on must log a rejection from the embed path, never leave it unhandled.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -28,7 +27,6 @@ describe('embedMemoryDetached', () => {
       unhandled.push(reason);
     };
     process.on('unhandledRejection', onUnhandled);
-    // `groups` is read after the provider answers, so a target whose store cannot be reached rejects embedMemory itself.
     const target: EmbedTarget = {
       embeddings: loadConfig(root).embeddings,
       embedderFor: resolveEmbeddingProvider,

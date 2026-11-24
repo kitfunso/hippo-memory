@@ -1,17 +1,3 @@
-/**
- * J3.2 — api.recall integration with planningFallacyHint auto-injection.
- *
- * Asserts the orchestrator (decidePlanningFallacy) wires correctly
- * through api.recall: hint populated only when ALL conditions met (env
- * != off, forward-claim match, class resolves uniquely, nClosed > 0).
- * Audit attribution flows from ctx.actor.subject -> inner
- * computePredictionBaserate so MCP-/HTTP-originated calls don't default
- * to 'cli'.
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 4, Task 9).
- * Project rule: always use real DB for tests.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -30,7 +16,6 @@ function ctxFor(root: string, subject: string = 'cli'): FullContext {
   return apiCtx(root, 'default', { subject, role: 'admin' });
 }
 
-// Seed 3 closed predictions in class "migration-effort" with mean_ratio = 2.0
 async function seedMigrationEffortBaserate(root: string): Promise<void> {
   const pairs: Array<[number, number]> = [
     [2, 4],
@@ -121,7 +106,6 @@ describe('api.recall planningFallacyHint', () => {
     const off = { ...ctx, config: { ...ctx.config, runtime: { autodebias: false } } };
     const result = await retrieve(off, { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
-    // No audit fires either — off short-circuits before the regex gate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(0);
     expect(countAuditOps(root, 'recall_autodebias_hint_no_class_match')).toBe(0);
   });
@@ -133,7 +117,6 @@ describe('api.recall planningFallacyHint', () => {
   });
 
   it('silent on tie: 2 classes with equal overlap returns no hint + emits tiebreak audit', async () => {
-    // Seed two classes that BOTH overlap with "migration" token.
     const pairs: Array<[number, number]> = [[2, 4]];
     for (const [est, act] of pairs) {
       const a = await savePrediction(root, 'default', {
@@ -149,7 +132,6 @@ describe('api.recall planningFallacyHint', () => {
       });
       await closePrediction(root, 'default', b.id, { closureState: 'closed', actualValue: act });
     }
-    // Query "migration will take 3 days" overlaps only on "migration" — tie.
     const result = await retrieve(ctxFor(root), { query: 'migration will take 3 days' });
     expect(result.planningFallacyHint).toBeUndefined();
     expect(countAuditOps(root, 'recall_autodebias_hint_tiebreak')).toBe(1);
@@ -172,31 +154,17 @@ describe('api.recall planningFallacyHint', () => {
 
   it('predict_baserate audit channel NOT polluted on auto-hint success (emitAudit=false path)', async () => {
     await seedMigrationEffortBaserate(root);
-    // Baseline: 0 predict_baserate rows after seeding.
     const baselineBaserate = countAuditOps(root, 'predict_baserate');
     const result = await retrieve(ctxFor(root), { query: 'migration effort will take 3 days' });
     expect(result.planningFallacyHint?.classTag).toBe('migration-effort');
-    // J3.2 emits recall_autodebias_hint, NOT predict_baserate.
     expect(countAuditOps(root, 'recall_autodebias_hint')).toBe(1);
     expect(countAuditOps(root, 'predict_baserate')).toBe(baselineBaserate);
   });
 
   it('class_tag selection is tenant-global, NOT scope-filtered (documented v1 behavior)', async () => {
-    // Independent-review-critic round 1 MED locked here: PlanningFallacyHint.classTag
-    // surfaces across recall scopes. Base-rate reasoning needs the full historical
-    // sample; the hint payload itself carries no memory content (only summary string
-    // + numeric stats). Lock so a future "fix" that scope-filters the resolver trips
-    // CI and forces an explicit revisit of the trade-off.
-    // 1. Seed a prediction in a private-channel scope. predictions table has no
-    //    scope column; the relationship is via memory_id → memories.scope.
     await seedMigrationEffortBaserate(root);
-    // 2. A no-scope recall (the agent didn't specify --scope) should STILL surface
-    //    the migration-effort class hint, even though the predictions were created
-    //    via tenant-global savePrediction calls without scope segregation.
     const result = await retrieve(ctxFor(root), { query: 'the migration effort will take 3 days' });
     expect(result.planningFallacyHint!.classTag).toBe('migration-effort');
-    // Sanity: the same data with an explicit scope filter on recall still surfaces
-    // the hint (the resolver doesn't consult opts.scope by design).
     const scopedResult = await retrieve(ctxFor(root), {
       query: 'the migration effort will take 3 days',
       filter: { scope: 'channel:work' },
@@ -205,7 +173,6 @@ describe('api.recall planningFallacyHint', () => {
   });
 
   it('cross-tenant scoping: tenant-b query gets no hint from tenant-a predictions', async () => {
-    // Seed tenant-a only.
     const ctxA: FullContext = apiCtx(root, 'tenant-a', { subject: 'cli', role: 'admin' });
     const pairs: Array<[number, number]> = [
       [2, 4],
@@ -219,10 +186,8 @@ describe('api.recall planningFallacyHint', () => {
       });
       await closePrediction(root, 'tenant-a', p.id, { closureState: 'closed', actualValue: act });
     }
-    // Tenant-a query gets the hint.
     const resultA = await retrieve(ctxA, { query: 'migration effort will take 3 days' });
     expect(resultA.planningFallacyHint?.classTag).toBe('migration-effort');
-    // Tenant-b query gets nothing.
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
     const resultB = await retrieve(ctxB, { query: 'migration effort will take 3 days' });
     expect(resultB.planningFallacyHint).toBeUndefined();

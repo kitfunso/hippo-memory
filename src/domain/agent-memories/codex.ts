@@ -1,5 +1,3 @@
-// Codex CLI's memory_summary.md, the one memory file Codex puts in its prompt, read as a single
-// text-keyed file.
 import path from 'node:path';
 import { codexHomeDir } from '../../base/util/agent-homes.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';
@@ -7,7 +5,6 @@ import { textItemKeys } from './keys.js';
 import { splitMarkdownItems } from './markdown.js';
 import type { Adapter, Container, MemoryItem } from './types.js';
 
-// "What's in Memory" only indexes MEMORY.md, so it is left out.
 const KEPT_HEADINGS: ReadonlySet<string> = new Set([
   'user profile',
   'user preferences',

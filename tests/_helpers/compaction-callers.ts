@@ -1,4 +1,3 @@
-// Store, caller contexts and row readers the compaction caller tests share; useCallerStore gives each case a fresh server store.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, vi } from 'vitest';
@@ -27,7 +26,6 @@ import type { ContinuityKey } from '../../src/base/ports/store/types.js';
 import { initTestStore } from './store-template.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
-// A server ctx carries a reach from its composition root; the ledger books nowhere without one.
 export const SHARED_REACH: ContextReach = { hasLocal: true, isGlobal: false, shared: true };
 
 export const TENANT = 'acme-tenant';
@@ -57,7 +55,6 @@ export function useCallerStore(): void {
     root = path.join(dir, 'server', '.hippo');
     fs.mkdirSync(root, PRIVATE_DIR);
     initTestStore(root);
-    // A server's store: its own folder names no project, so nothing here may fall back to it.
     fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
   });
 

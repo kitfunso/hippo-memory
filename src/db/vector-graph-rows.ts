@@ -1,5 +1,3 @@
-// One store's memory_vectors as an HNSW graph: which row each node came from, the reads that bring
-// the graph up to date, and the search whose candidates SQL admits and the stored vectors score.
 import type { DatabaseSyncLike } from './sqlite.js';
 import { getMeta } from './meta.js';
 import {
@@ -20,8 +18,6 @@ import {
 import { cachedStatement } from './statement-cache.js';
 import { placeholders } from './sql.js';
 
-// The graph beat the paged scan at both p50 and p95 from 1,000 vectors on; docs/ARCHITECTURE.md has
-// the bench.
 /** Stored vectors a store holds before its nearest-row reads search a graph. */
 export const VECTOR_GRAPH_THRESHOLD = 1_000;
 /** Share of a graph's nodes that may be stale, or its file's rows new, before it is rebuilt. */
@@ -29,32 +25,21 @@ export const STALE_SHARE = 0.1;
 
 const GRAPH_SEED = 1;
 
-// The first walk asks for this many candidates per wanted row, at least EF_FLOOR, and doubles up to
-// EF_CAP. A lower floor lost recall where the nearest rows barely stand out, for little time saved.
 const EF_PER_ROW = 4;
 const EF_FLOOR = 128;
 const EF_CAP = 2048;
 
-// Rows below the newest one read that may be checked for the newest row still holding what the
-// graph read.
 const INTACT_WALK = 32;
 
 const BLOCK_ROWS = 1024;
 
 export interface GraphRows {
   readonly graph: VectorGraph;
-  /** The index identity the vectors were read under; another one means every node is from an
-   * older model. */
   readonly model: string;
-  /** The memory id and rowid of each node. */
   readonly ids: string[];
   readonly rowids: number[];
-  /** The node that holds each memory's current vector; a node no id points at holds a replaced
-   * one. */
   readonly nodeOf: Map<string, number>;
-  /** The highest rowid read. */
   lastRowid: number;
-  /** Stored vectors at the last count, plus the memories added since. */
   live: number;
 }
 
@@ -114,7 +99,6 @@ export class StagedRows {
     return this.ids.length;
   }
 
-  // A blob of another length is skipped, as the scan skips it.
   add(row: StoredRow): void {
     if (row.vector.byteLength !== this.#dim * 4) return;
     const at = this.ids.length;
@@ -136,9 +120,6 @@ export class StagedRows {
   }
 }
 
-/** The highest rowid at or below the last one read whose row still holds the memory read there,
- * or undefined when none of the newest rows does. SQLite hands a deleted top rowid out again, so
- * rows above it may be new. */
 function intactRowid(db: DatabaseSyncLike, g: GraphRows): number | undefined {
   const rows = db
     .prepare(

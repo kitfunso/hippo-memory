@@ -1,27 +1,4 @@
 #!/usr/bin/env node
-/**
- * LC2-E1 — blind per-memory feature extraction -> features.jsonl.
- *
- * Reads raw MemoryEntry fields straight from the store and DERIVES strength
- * via calculateStrength at extraction time (HIPPO_FAKE_NOW = question_date).
- * Binding constraint from the plan: stored `strength` writes are inert
- * (calculateStrength recomputes from last_retrieved/half_life_days/reward
- * and never reads the persisted `strength` column — src/base/memory/memory.ts:309-385),
- * so this file never trusts entry.strength and always recomputes it here.
- *
- * Blind: nothing here reads query text, the eval answer, or gold labels
- * while computing a feature value. The `gold` column on each output row
- * comes from the gold.json sidecar (ingest.mjs), joined AFTER all 30
- * feature values are computed — gold never feeds a feature.
- *
- * Provenance (codex review fix round, 2026-08-09 P1 fix): every row also
- * carries `sessionIndex`/`turnIdx` (dataset-fixed, from gold.json's
- * memories list — which already carries the same {id, sessionIndex,
- * turnIdx} triples ingest.mjs writes to meta.json's `turns` for
- * simulate.mjs). `memory_id` is crypto-random per ingest and must never be
- * the ONLY join key between two runs of the same dataset; evaluate.mjs's
- * tie-break and any cross-ingest comparison join on this provenance key.
- */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { calculateStrengthWire as calculateStrength } from '../../dist/entry/testing.js';
@@ -74,8 +51,6 @@ export function computeFeatures(entry, now) {
     ...oneHot('kind', KIND_LEVELS, entry.kind),
     ...oneHot('confidence', CONFIDENCE_LEVELS, entry.confidence),
   };
-  // Defensive: every declared feature must be present (catches a future
-  // FEATURES list edit that forgets to update this function).
   for (const f of CONFIG.FEATURES) {
     if (!(f in raw)) throw new Error(`computeFeatures: missing declared feature "${f}"`);
   }
@@ -133,9 +108,6 @@ export function extractQuestion(questionId, questionDateIso) {
   return { rows: rows.length, path: outPath };
 }
 
-// --------------------------------------------------------------------------
-// CLI
-// --------------------------------------------------------------------------
 function flag(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
   return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;
@@ -150,7 +122,6 @@ if (isMain) {
   }
   const meta = readJson(metaPathFor(questionId));
   const t0 = Date.now();
-  // Causal clock clamp: tEval (not questionDate) — see ingest.mjs header.
   const r = extractQuestion(questionId, meta.tEval);
   console.log(`[extract] ${questionId}: ${r.rows} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${r.path}`);
 }

@@ -1,4 +1,3 @@
-// How a ref is judged changed: the refs a memory names, their tracked paths and the git evidence.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import {
   gitLsFilesAtHead,
@@ -10,8 +9,6 @@ import {
   type ChurnRepo,
 } from './churn-git.js';
 import type { ChurnCandidate } from './churn-stale.js';
-
-// Opt-in, ROADMAP Part XIII.
 
 const CHURN_PATH_EXTENSIONS = [
   'ts',
@@ -34,7 +31,6 @@ const CHURN_PATH_EXTENSIONS = [
   'html',
 ];
 const CHURN_PATH_RE = new RegExp(
-  // The lookahead stops `ts` winning over `tsx` and `js` over `json`.
   `[A-Za-z0-9_./\\\\:-]+\\.(?:${CHURN_PATH_EXTENSIONS.join('|')})(?![A-Za-z0-9_])(?::\\d+(?:-\\d+)?)?`,
   'g',
 );
@@ -60,7 +56,6 @@ export function extractChurnRefs(content: string): ChurnRefs {
   const symbols = new Set<string>();
   for (const m of content.matchAll(CHURN_SYMBOL_RE)) {
     const name = m[1];
-    // Plain words never count: require a camelCase/PascalCase transition or an inner underscore.
     if (name.length >= 6 && (/[a-z][A-Z]/.test(name) || /[A-Za-z0-9]_[A-Za-z0-9]/.test(name))) {
       symbols.add(name);
     }
@@ -85,7 +80,6 @@ function buildTrackedIndex(paths: Set<string>): TrackedIndex {
   return { exact: paths, lower };
 }
 
-// Returns git's spelling so later exact matches against the log agree on case-insensitive Windows.
 function trackedSpelling(index: TrackedIndex, candidate: string): string | null {
   if (index.exact.has(candidate)) return candidate;
   return IS_WIN32 ? (index.lower.get(candidate.toLowerCase()) ?? null) : null;
@@ -95,8 +89,6 @@ function isTrackedPath(index: TrackedIndex, candidate: string): boolean {
   return trackedSpelling(index, candidate) !== null;
 }
 
-// Absolute-path relativization and the <repoName>/ strip both need the repo, so they happen here
-// rather than in the pure extractor.
 function resolveTrackedPath(
   token: string,
   git: Pick<ChurnGitView, 'repoRoot' | 'projectName' | 'trackedIndex'>,
@@ -144,8 +136,6 @@ export interface ChurnNeeds {
   scripts: boolean;
 }
 
-/** The per-commit lookups of a ChurnGitView; each asks git once per commit and remembers the
- * answer. */
 function churnCommitLookups(
   repo: ChurnRepo,
 ): Pick<ChurnGitView, 'resolveAnchorCommit' | 'symbolsPresentAt' | 'scriptsAt'> {
@@ -239,7 +229,6 @@ function pathEvidence(
       );
       if (changed) return `file-changed: ${resolved}`;
     } else {
-      // --no-renames means a rename shows as a D + A pair, so this also fires for renames.
       const deleted = git.windowLog.some(
         (c) =>
           new Date(c.date).getTime() > anchorTime &&

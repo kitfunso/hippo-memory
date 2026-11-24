@@ -1,4 +1,3 @@
-// `hippo capture`: extracts memories from piped text, a file or a session transcript.
 import { hippoHomeDir } from '../../../host/agent-homes.js';
 import { envCaptureScripted } from '../../../base/util/env.js';
 import { runCapture, type CaptureOptions } from '../../capture/command.js';
@@ -16,8 +15,6 @@ import { fail } from '../exit.js';
 export async function handleCapture({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
   const { captureSource, captureFile, transcriptPath } = captureSourceFlags(flags);
 
-  // Bounded, and only when last-session has no explicit path: the --stdin source keeps its own
-  // blocking read in src/surface/capture/ by design.
   const bounded =
     captureSource === 'last-session' && !transcriptPath
       ? await readHookStdin()

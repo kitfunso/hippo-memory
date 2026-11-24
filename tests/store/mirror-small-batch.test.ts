@@ -1,5 +1,3 @@
-// A mirror batch lists a layer folder only when it writes into it and enough of its entries would probe it; every other
-// folder is probed per file. Either way the batch leaves the same files.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +18,6 @@ afterEach(() => {
   syncBuiltinESMExports();
 });
 
-/** `count` episodic entries, the first of which already has a mirror in the semantic folder from an earlier write. */
 function batch(count: number): MemoryEntry[] {
   const entries = Array.from({ length: count }, (_, i) =>
     createMemory(`mirror batch row ${i}`, { layer: Layer.Episodic }),
@@ -29,7 +26,6 @@ function batch(count: number): MemoryEntry[] {
   return entries;
 }
 
-/** The layer folders `fn` lists, in call order. */
 function listedDuring(fn: () => void): Layer[] {
   const readdir = vi.spyOn(fs, 'readdirSync');
   syncBuiltinESMExports();

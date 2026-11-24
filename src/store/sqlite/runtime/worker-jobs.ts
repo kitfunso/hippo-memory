@@ -1,5 +1,3 @@
-// A store worker's side of the executor: one job at a time, on one connection the thread holds for
-// its life.
 import type { MessagePort } from 'node:worker_threads';
 import { auditWriteFailureCount } from '../../../base/records/audit-report.js';
 import { type DatabaseSyncLike, RequestStores } from '../../../db/index.js';
@@ -29,9 +27,6 @@ import {
   WORKER_OPS,
 } from './worker-ops.js';
 
-/** Every method the op table can name, on the thread's store, each run to its end on the
- * thread's one connection; stored vectors answer as a pack, which worker-store.ts turns back
- * into the port's Map. */
 function workerOps(
   { hippoRoot, rules }: WorkerInit,
   graphs: VectorGraphs | undefined,
@@ -47,8 +42,6 @@ function workerOps(
 
 type Ops = ReturnType<typeof workerOps>;
 
-/** The session every job of a thread opens through, so each open inside a job gets the thread's
- * one connection. */
 class WorkerStores extends RequestStores {
   walPages: number | undefined;
   jobId = 0;
@@ -58,7 +51,6 @@ class WorkerStores extends RequestStores {
   readonly #walPagesOn = new WeakMap<DatabaseSyncLike, number>();
 
   constructor(init: WorkerInit, runtime: StoreRuntime) {
-    // The executor sends a reader its first job only after the writer has run the setup.
     super({
       runtime,
       busyWaitMs: init.busyWaitMs,
@@ -68,19 +60,15 @@ class WorkerStores extends RequestStores {
     this.#commitFlag = init.commitFlag && new Int32Array(init.commitFlag);
   }
 
-  // The one path every open of the scope takes.
   override [SESSION_OPEN](hippoRoot: string, opts?: { busyWaitMs?: number }): OpenedDb {
     const opened = super[SESSION_OPEN](hippoRoot, opts);
     const { db } = opened;
     if (!this.#prepared.has(db)) {
       this.#prepared.add(db);
-      // A reader that could write would let a method wrongly tagged 'read' take the write lock off
-      // the writer thread.
       if (this.#init.mode === 'read') shutWriteGate(db);
       const flag = this.#commitFlag;
       if (flag) watchCommits(db, () => Atomics.store(flag, 0, this.jobId));
     }
-    // The connection set its own value from this thread's state, where no checkpointer ever runs.
     if (
       hippoRoot === this.#init.hippoRoot &&
       this.walPages !== undefined &&
@@ -102,10 +90,8 @@ function runsOnWorker(group: WorkerGroup, method: string): boolean {
   return Object.hasOwn(places, method);
 }
 
-// NonNullable: a group may carry an optional method, which reads as `fn | undefined`.
 type MethodsOf<T> = T extends T ? NonNullable<T[keyof T]> : never;
 
-/** What a method the op table names can return. */
 type Ran = ReturnType<
   MethodsOf<Ops[Exclude<WorkerGroup, 'base'>] | Pick<Ops, keyof typeof WORKER_OPS.base>>
 >;
@@ -118,7 +104,6 @@ function methodsOf(ops: Ops, group: WorkerGroup) {
   >;
 }
 
-/** Runs `op`; only a method the op table places on a worker can run. */
 function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   const [group = '', method = ''] = op.split('.');
   const run =
@@ -127,7 +112,6 @@ function runOp(ops: Ops, op: string, args: readonly unknown[]) {
   return run(...args);
 }
 
-/** The thread's store runtime and its one session, which every job opens through. */
 interface Thread {
   readonly runtime: StoreRuntime;
   readonly stores: WorkerStores;
@@ -175,9 +159,6 @@ function post(port: MessagePort, reply: Reply, end: () => void): void {
   });
 }
 
-// Each step still closes what is left when the one before it throws, so a failed flush leaves no
-// handle on the files. Held writes run first, then the thread's session closes, and closeNow finds
-// no session left to close twice.
 function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
   try {
     runtime.held.flush();
@@ -194,8 +175,6 @@ function closeThread({ runtime, stores }: Thread, port: MessagePort): void {
 /** Answers the thread's jobs until 'stop', which closes the connection so the thread ends with
  * no handle on the store's files. */
 export function serveJobs(port: MessagePort, init: WorkerInit): void {
-  // A thread is its own composition root: its runtime holds its mirror writes and closes its
-  // connection at stop.
   const runtime = new StoreRuntime();
   const thread: Thread = { runtime, stores: new WorkerStores(init, runtime) };
   const graphs = init.pinned
@@ -205,8 +184,6 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
       })
     : undefined;
   const ops = workerOps(init, graphs, thread.stores);
-  // A thread is sent one job at a time, so only 'stop' can arrive while a vector scan yields, and
-  // it waits for that job's reply.
   let last: Promise<void> = Promise.resolve();
   const stopThread = (): void => {
     graphs?.close();
@@ -219,8 +196,6 @@ export function serveJobs(port: MessagePort, init: WorkerInit): void {
       stopThread();
       return;
     }
-    // Ends in a catch, so `last` never rejects and skips the stop; a reply that cannot be posted
-    // ends the thread, so the server rejects every call left.
     last = answer(ops, thread, init.hippoRoot, message)
       .then((reply) => post(port, reply, stopThread))
       .catch((err) =>

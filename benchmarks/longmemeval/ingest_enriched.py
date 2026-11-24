@@ -1,18 +1,3 @@
-"""Ingest LongMemEval sessions with subagent-extracted entry-level signals.
-
-Variant of `ingest_direct.py` that consumes `signals.jsonl` (one record per
-session_id with `confidence`, `kind`, `schema_fit`, `strength`,
-`outcome_positive`, `outcome_negative`) produced by Plan F10 Task 5. Writes
-the actual values into the `memories` table instead of the neutral defaults
-used by the F6 ingest path.
-
-Sessions whose `session_id` is absent from `signals.jsonl` fall back to the
-neutral defaults (and the fallback rate is recorded in the result-doc
-Provenance section).
-
-Per `docs/plans/2026-05-11-r5-track3-richer-ingest.md` Task 6.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -84,7 +69,6 @@ def load_signals(signals_path: Path) -> dict[str, dict[str, Any]]:
             sid = rec.get("session_id")
             if not sid:
                 continue
-            # Clip / coerce to safe ranges.
             out[sid] = {
                 "confidence": rec.get("confidence", DEFAULT_SIGNALS["confidence"]),
                 "kind": rec.get("kind", DEFAULT_SIGNALS["kind"]),
@@ -185,15 +169,6 @@ def ingest_enriched(
             sig = DEFAULT_SIGNALS
             fallback_count += 1
 
-        # `kind` namespace mismatch: the F10 prompt extracted content-type
-        # values (episodic|semantic|procedural) but the DB schema (src/db/index.ts
-        # triggers) and features.ts KIND_WEIGHT use lifecycle values
-        # (raw|distilled|superseded|archived). The prompt's `kind` is therefore
-        # discarded for this F10 run; all sessions get kind='raw' (the
-        # default for freshly-ingested content). Documented as a known
-        # limitation in the F10 result doc — the other 4 signals
-        # (confidence, schema_fit, strength, outcome_positive/negative)
-        # carry the experiment.
         try:
             db.execute(
                 """INSERT INTO memories(

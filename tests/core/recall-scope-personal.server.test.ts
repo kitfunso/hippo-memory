@@ -1,4 +1,3 @@
-// Personal scopes answer to their owner alone, and an HttpError can carry Retry-After.
 import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from 'vitest';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { HttpError } from '../../src/base/errors/http-errors.js';

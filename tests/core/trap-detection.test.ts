@@ -1,18 +1,3 @@
-/**
- * Trap Detection Test: Repeated Mistake Harness
- *
- * Simulates what happens when an agent works on code WITH and WITHOUT Hippo memory.
- * For each trap in trap-definitions.json, we check:
- *   - Does `hippo recall <query>` return the memory that would prevent it?
- *
- * Score:
- *   WITH memory:    traps_caught / total_traps (should be high)
- *   WITHOUT memory: 0 / total_traps (baseline — no memory = guaranteed mistakes)
- *
- * This does NOT run an LLM. It tests the retrieval system's ability to surface
- * the correct preventive memory when given a task-related query.
- */
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,10 +7,6 @@ import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-// ---------------------------------------------------------------------------
-// Load trap definitions
-// ---------------------------------------------------------------------------
 
 const TRAP_DEFS_PATH = path.join(__dirname, '..', 'traps', 'trap-definitions.json');
 
@@ -44,14 +25,9 @@ interface TrapDefinition {
 // authored to match the TrapDefinition shape declared above.
 const trapDefs: TrapDefinition[] = JSON.parse(fs.readFileSync(TRAP_DEFS_PATH, 'utf8')).traps as TrapDefinition[];
 
-// ---------------------------------------------------------------------------
-// Setup: seed the store with the exact memories that prevent each trap
-// ---------------------------------------------------------------------------
-
 let tmpDir: string;
 const entriesByLabel: Record<string, MemoryEntry> = {};
 
-/** Seed memories that map to the trap prevention IDs */
 function seedTrapMemories(hippoRoot: string): void {
   const memories: Array<{ label: string; id: string; content: string; opts: Parameters<typeof createMemory>[1] }> = [
     {
@@ -163,10 +139,6 @@ beforeAll(() => {
   seedTrapMemories(tmpDir);
 });
 
-// ---------------------------------------------------------------------------
-// Helper: query the store and check if the expected memory appears
-// ---------------------------------------------------------------------------
-
 function recallTop(query: string, n = 5): string[] {
   const entries = loadAllEntries(tmpDir, 'default');
   const results = rankBm25(query, entries, { now: evalNow(), budget: 8000 });
@@ -178,11 +150,6 @@ function trapCaught(trap: TrapDefinition): boolean {
   return topIds.includes(trap.memory_id);
 }
 
-// ---------------------------------------------------------------------------
-// Trap file content assertions (static code review — no LLM needed)
-// ---------------------------------------------------------------------------
-
-// The trap repo is a fixture whose planted flaws are its text, so the text is the contract.
 describe('Trap repo files contain expected issues', () => {
   const repoDir = path.join(__dirname, '..', 'traps', 'trap-repo', 'src');
 
@@ -193,7 +160,7 @@ describe('Trap repo files contain expected issues', () => {
 
   it('data_refresh.py has bare except: pass', () => {
     const code = fs.readFileSync(path.join(repoDir, 'data_refresh.py'), 'utf8');
-    expect(code).toMatch(/except\s*:/); // bare except
+    expect(code).toMatch(/except\s*:/);
     expect(code).toContain('pass');
   });
 
@@ -209,11 +176,8 @@ describe('Trap repo files contain expected issues', () => {
 
   it('model.py reports walk-forward Sharpe as OOS without calling the right method', () => {
     const code = fs.readFileSync(path.join(repoDir, 'model.py'), 'utf8');
-    // The file prints OOS Sharpe...
     expect(code).toContain('OOS Sharpe:');
-    // ...but the function that produces it is walk_forward_sharpe, not a CPCV function
     expect(code).toContain('walk_forward_sharpe');
-    // There is no function call to any cpcv routine in the production path
     expect(code).not.toContain('cpcv_sharpe(');
     expect(code).not.toContain('combinatorial_purged(');
   });
@@ -221,7 +185,7 @@ describe('Trap repo files contain expected issues', () => {
   it('config.ts has RISK_PER_TRADE mismatch (0.02 vs 0.015)', () => {
     const code = fs.readFileSync(path.join(repoDir, 'config.ts'), 'utf8');
     expect(code).toContain('RISK_PER_TRADE = 0.02');
-    expect(code).toContain('0.015'); // commented reference to the correct value
+    expect(code).toContain('0.015');
   });
 
   it('agent_output.py contains slop words', () => {
@@ -240,7 +204,6 @@ describe('Trap repo files contain expected issues', () => {
   it('feature_eng.py tests features on full dataset', () => {
     const code = fs.readFileSync(path.join(repoDir, 'feature_eng.py'), 'utf8');
     expect(code).toContain('OOS results');
-    // The function selects on X (full), not X_train
     expect(code).toContain('def select_features_data_mining');
   });
 
@@ -250,10 +213,6 @@ describe('Trap repo files contain expected issues', () => {
     expect(code).toContain('unverified claim');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Memory recall tests: does hippo surface the right memory for each trap?
-// ---------------------------------------------------------------------------
 
 describe('Memory recall catches traps (with memory)', () => {
   const results: Array<{ trap: string; caught: boolean; query: string; topIds: string[] }> = [];
@@ -265,7 +224,6 @@ describe('Memory recall catches traps (with memory)', () => {
 
       results.push({ trap: trap.id, caught, query: trap.recall_query, topIds });
 
-      // Soft assertion: log result even on failure for diagnostics
       if (!caught) {
         console.warn(
           `  MISSED trap: ${trap.id}\n` +
@@ -275,7 +233,6 @@ describe('Memory recall catches traps (with memory)', () => {
         );
       }
 
-      // Each trap should be caught (correct memory in top-5)
       expect(
         caught,
         `Trap ${trap.id} not caught. Memory "${trap.memory_id}" not in top-5 for query "${trap.recall_query}"`,
@@ -286,7 +243,6 @@ describe('Memory recall catches traps (with memory)', () => {
 
 describe('Baseline without memory', () => {
   it('without memory search returns 0 results (empty store)', () => {
-    // Create a fresh empty store to simulate no memory
     const emptyDir = makeRoot('empty');
 
     const entries = loadAllEntries(emptyDir, 'default');
@@ -294,7 +250,6 @@ describe('Baseline without memory', () => {
       now: evalNow(),
       budget: 8000,
     });
-    // No memories -> no results -> agent has no guidance
     expect(results.length).toBe(0);
   });
 

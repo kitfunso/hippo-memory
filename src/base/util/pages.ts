@@ -1,6 +1,3 @@
-// Keyset paging for a caller that walks a whole read: each page is one bounded statement, and only
-// that page is held.
-
 /** Rows per statement when a caller walks every row a read names. */
 export const READ_PAGE_ROWS = 500;
 
@@ -17,7 +14,6 @@ export function* rowsInPages<T, C>(
   } while (after !== undefined);
 }
 
-/** A keyset-paged read that answers through a Promise, one page per call. */
 type PageRead<T, C> = (
   after: C | undefined,
 ) => Promise<{ readonly entries: readonly T[]; readonly next: C | null }>;

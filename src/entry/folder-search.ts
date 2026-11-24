@@ -1,7 +1,3 @@
-// The published hybridSearch and physicsSearch: each fills the hippo.db folder, working-folder and
-// eval-switch defaults, then calls the domain ranker of that name. The eval kit's embedMemory and
-// loadRecallSearchEntries take a folder the same way.
-
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
 import type { OriginFilter } from '../base/ports/store/types.js';
@@ -60,7 +56,6 @@ export async function hybridSearch(
   entries: MemoryEntry[],
   options: HybridSearchOptions = {},
 ): Promise<SearchResult[]> {
-  // GraphStreamOptions names the global store by folder, so it opens here.
   const globalRoot = options.graphStream?.globalRoot;
   return rankHybrid(query, entries, {
     ...withEvalSwitches(options),

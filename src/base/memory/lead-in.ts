@@ -1,6 +1,3 @@
-// The texts a memory with a lead-in shows, finds and compares by. A row with no lead-in gives its
-// content alone from each.
-
 export interface LeadInText {
   readonly content: string;
   readonly leadIn?: string | null;

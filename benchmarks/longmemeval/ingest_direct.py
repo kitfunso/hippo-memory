@@ -1,9 +1,3 @@
-"""Ingest LongMemEval sessions directly into hippo's SQLite store.
-
-Bypasses the CLI to avoid shell escaping and argument length limits on Windows.
-Writes directly to the .hippo/hippo.db SQLite database.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -85,7 +79,6 @@ def ingest_direct(
 
     logger.info("Store directory: %s", store_dir)
 
-    # Initialize hippo store via CLI (creates schema)
     hippo_dir = store_dir / ".hippo"
     import os
     abs_store = str(store_dir.resolve())
@@ -99,7 +92,6 @@ def ingest_direct(
             env=init_env,
         )
         if result.returncode != 0:
-            # Older versions (pre-v0.30) may not have all flags; fall back.
             result = subprocess.run(
                 [hippo_bin, "init", "--no-schedule"],
                 cwd=abs_store,
@@ -111,9 +103,6 @@ def ingest_direct(
 
     db_path = hippo_dir / "hippo.db"
     if not db_path.exists():
-        # v0.34 hippo init creates schema lazily on first write. Seed with one
-        # dummy `hippo remember` to force schema creation, then we can write
-        # directly for the rest of the corpus.
         seed_result = subprocess.run(
             [hippo_bin, "remember", "schema-seed-dummy", "--tag", "_schema_seed"],
             cwd=abs_store,
@@ -165,7 +154,6 @@ def ingest_direct(
 
     db.commit()
 
-    # Backfill FTS index if available
     try:
         db.execute("""
             INSERT INTO memories_fts(id, content, tags)
@@ -182,7 +170,6 @@ def ingest_direct(
 
     logger.info("Inserted %d/%d sessions (failed: %d)", inserted, len(sessions), failed)
 
-    # Save metadata
     meta = {
         "data_path": str(data_path),
         "store_dir": str(store_dir),

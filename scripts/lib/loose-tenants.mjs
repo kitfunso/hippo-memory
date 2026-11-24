@@ -1,11 +1,8 @@
-// The tenant scan for check-store-port.mjs: a src/store function or port method whose tenant can be left out reads
-// every tenant by accident, so each one names a tenant or ALL_TENANTS.
 import ts from 'typescript';
 import { declarationsOf, lineOf, parse } from './port-type-facts.mjs';
 
 const TENANT_NAMES = new Set(['tenant', 'tenantId']);
 
-/** True when a type node lets the value be undefined or null. */
 function admitsNothing(node) {
   if (!node) return false;
   if (ts.isParenthesizedTypeNode(node)) return admitsNothing(node.type);
@@ -16,8 +13,6 @@ function admitsNothing(node) {
 
 const namesTenant = (name) => name !== undefined && ts.isIdentifier(name) && TENANT_NAMES.has(name.text);
 
-/** The tenant members a type node holds that may be left out, as `Owner.member`, read through src aliases, interfaces,
- * intersections, unions and type arguments. */
 function looseMembers(file, node, seen) {
   if (!node) return [];
   if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) return looseMembers(file, node.type, seen);
@@ -53,7 +48,6 @@ function looseIn(members, owner) {
     .map((m) => `${owner}.${m.name.text}`);
 }
 
-/** Why a parameter's tenant may be left out, or [] when it may not. */
 function looseParam(file, p, seen) {
   if (namesTenant(p.name) && (p.questionToken || p.initializer || admitsNothing(p.type))) return [p.name.text];
   const defaulted = ts.isObjectBindingPattern(p.name)

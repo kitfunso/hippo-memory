@@ -1,5 +1,3 @@
-// What each recall path of retrieve() returns and writes over one fixed store: the ids in order, the audit rows, the
-// strengthened ids, the trace and last_retrieval_ids, pinned so folding the paths into one ranker cannot move any of it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { adminActor, type RecallResult } from '../../src/api/index.js';
@@ -29,11 +27,8 @@ const ROWS = [
   seeded('lunch menu on thursdays', 'mem_o_f', '2026-01-29T00:00:00.000Z'),
 ];
 
-// A forward claim with no prediction class, so every path writes its planning row too.
 const CLAIM = 'the deploy will take 3 days';
 
-// A hint row of the caller's own, so the test sees where each path puts it among the recall's rows.
-// A presenter that detected an availability bias; the api writes its row.
 const CALLER_HINTS: ShownHints = {
   anchoring: null,
   availability: {
@@ -56,7 +51,6 @@ interface Written {
 }
 
 let root: string;
-// Seeding writes 'remember' rows; only the rows after it are the recall's.
 let seededAuditId: number;
 
 function ctx(): FullContext {
@@ -84,7 +78,6 @@ function cliCore(): Pick<CliCoreRecall, 'rank'> {
   };
 }
 
-// Opened here: the store-worker helper also starts servers, so importing it would class this file as a process test.
 function onDb<T>(root: string, use: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {

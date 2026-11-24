@@ -1,4 +1,3 @@
-// Preloaded into a spawned CLI: writes the lock waits the process asked for to LOCK_WAIT_TRACE_DIR/<pid>.json, a figure a slow runner cannot inflate.
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync, StatementSync } = require('node:sqlite');
@@ -44,7 +43,6 @@ for (const method of ['run', 'get', 'all', 'iterate']) {
   };
 }
 
-// The busy-retry loops wait here between tries, on a handle whose own timeout may be 0.
 const wait = Atomics.wait;
 Atomics.wait = function tracedWait(array, index, value, ms) {
   trace.sleeps.push(ms);
@@ -53,6 +51,5 @@ Atomics.wait = function tracedWait(array, index, value, ms) {
 
 process.on('exit', () => {
   const dir = process.env.LOCK_WAIT_TRACE_DIR;
-  // A worker that outlives its test finds the scratch folder gone.
   if (dir && fs.existsSync(dir)) fs.writeFileSync(path.join(dir, `${process.pid}.json`), JSON.stringify(trace));
 });

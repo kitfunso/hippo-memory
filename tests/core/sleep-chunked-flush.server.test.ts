@@ -1,5 +1,3 @@
-// Sleep's flush commits whole units of work in short transactions and lets other writers in between,
-// a run stopped between two of them leaves a consistent store, and an uninterrupted run ends where one transaction would.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
@@ -38,7 +36,6 @@ import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-/** The hold a test picks; the store's pause, read at each flush, yields once instead of waiting out the real gap. */
 const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): Pick<WriteBudget, 'holdMs'> => {
   vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(pause);
   return { holdMs };
@@ -53,7 +50,6 @@ const NOW = new Date('2026-06-01T12:00:00.000Z');
 const MERGED_SQL = `SELECT COUNT(*) AS c FROM memories WHERE content LIKE '[Consolidated pattern%'`;
 const roots: string[] = [];
 
-// A thread, not a timer: the sleep's busy wait blocks this thread until the holder commits.
 const HOLD_LOCK_WORKER = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
@@ -81,7 +77,6 @@ function newRoot(): string {
   return root;
 }
 
-/** Three-row merge clusters first (sleep loads by created), then faded rows, one merged row holding a superseded text, and pinned rows sleep leaves alone. */
 function seed(counts: { clusters: number; dormant: number; filler: number }): Fixture {
   let n = 0;
   const row = (
@@ -123,7 +118,6 @@ function seed(counts: { clusters: number; dormant: number; filler: number }): Fi
   };
 }
 
-/** One transaction on one handle, so seeding writes no mirrors and stays fast. */
 function insertRows(root: string, rows: MemoryEntry[]): void {
   const db = openHippoDb(root);
   try {
@@ -154,7 +148,6 @@ function ids(db: DatabaseSyncLike, sql: string): string[] {
   return (db.prepare(sql).all() as Array<{ id: string }>).map((r) => r.id).sort();
 }
 
-/** One write from a connection that never waits: it lands only while no transaction holds the lock. */
 function probe(db: DatabaseSyncLike, seen: Array<{ merged: number; runs: number }>): void {
   try {
     db.exec('BEGIN IMMEDIATE');
@@ -177,7 +170,6 @@ function callStack(): string {
   }
 }
 
-/** Counts the batch writer's BEGIN IMMEDIATEs, leaving out the prober's and every other writer's. */
 function countFlushBegins(prober: DatabaseSyncLike) {
   let begins = 0;
   const exec = DatabaseSync.prototype.exec;
@@ -191,7 +183,6 @@ function countFlushBegins(prober: DatabaseSyncLike) {
   return { count: () => begins, restore: () => spy.mockRestore() };
 }
 
-/** Ids from a counter, so two runs mint the same ones; generateId keeps randomUUID's first 12 hex digits. */
 async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
   let n = 0;
   const spy = vi
@@ -206,7 +197,6 @@ async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Everything a flush writes, minus wall-clock stamps (updated_at, audit ts) and autoincrement ids. */
 function storeState(root: string) {
   return onStore(root, (db) => {
     const all = (sql: string): unknown[] => db.prepare(sql).all();
@@ -232,7 +222,6 @@ function storeState(root: string) {
   });
 }
 
-/** The crash contract's checks, read in one pass. */
 function storeFacts(fx: Fixture) {
   return onStore(fx.root, (db) => {
     const memoryIds = ids(db, 'SELECT id FROM memories');
@@ -328,7 +317,6 @@ describe('chunked consolidation flush', () => {
     await expect(runSleep(ctx, { noShare: true }, { consolidate: atNow })).rejects.toThrow('stopped between chunks');
 
     const stopped = storeFacts(fx);
-    // A zero hold commits one unit per chunk, so two clusters land before the second pause throws.
     expect(stopped.merged).toBe(2);
     expect(stopped.merged).toBeLessThan(12);
     expect(stopped.parentsDemoted).toBe(true);
@@ -368,7 +356,6 @@ describe('chunked consolidation flush', () => {
     expect(result.semanticCreated).toBe(4);
   });
 
-  // On a worker the error reaches the sleep as a copy the store's error codec rebuilt, so the ids must ride on it.
   it.each([
     ['in process', (root: string) => sqliteStore(root)],
     ['on a store worker', (root: string) => workerSqliteStore(root)],

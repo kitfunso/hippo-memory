@@ -1,5 +1,3 @@
-// Runs a CLI verb function in this process and returns what a spawned `hippo` would print plus its exit code,
-// so a verb test skips the node start-up and module load a child process pays.
 import { format } from 'node:util';
 import { vi } from 'vitest';
 import { CliExit } from '../../src/surface/cli/exit.js';
@@ -23,11 +21,9 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   const out: string[] = [];
   const err: string[] = [];
   let exited: ExitCalled | undefined;
-  // A caller that catches the throw (runCli does) runs on, so output after the first exit is dropped as the real process would.
   const keep = (sink: string[], text: string): void => {
     if (!exited) sink.push(text);
   };
-  // Console output goes through the stream write, as in a real process, so a verb that tees the stream sees it.
   const toStdout = (...parts: unknown[]): void => {
     process.stdout.write(`${format(...parts)}\n`);
   };
@@ -62,7 +58,6 @@ export async function runInProcess(fn: () => void | Promise<void>): Promise<InPr
   try {
     await fn();
   } catch (error) {
-    // A verb called without runCli stops by throwing; the entry would exit with that code.
     if (error instanceof CliExit) exited ??= new ExitCalled(error.code);
     if (!exited) throw error;
   } finally {

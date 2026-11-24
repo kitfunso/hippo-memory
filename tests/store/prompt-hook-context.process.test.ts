@@ -1,4 +1,3 @@
-// promptHookContext answers a store-less laptop's per-prompt hook with the bytes the local hook would print.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -25,10 +24,8 @@ afterEach(() => {
 });
 
 const REPO = path.resolve(__dirname, '..', '..');
-// The command Claude Code runs on every prompt, so a change to its flags fails the parity case below.
 const HOOK_ARGS = HIPPO_PINNED_INJECT_COMMAND.split(' ').slice(1);
 
-// The env inputs a direct call cannot see are dropped from the CLI side.
 const CLI_ENV: NodeJS.ProcessEnv = { ...process.env };
 for (const name of [
   'HIPPO_SESSION_ID',
@@ -55,11 +52,9 @@ let tmp: string;
 
 beforeEach(() => {
   tmp = makeRoot('prompt-hook', { init: false });
-  // An empty global store on both sides, so neither the CLI nor the call mixes in a real one.
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
 });
 
-/** A project folder with its own `.hippo` store; a rate writes the store's pilot config. */
 function makeProject(dir: string, rateBp: number | null = null): string {
   const store = path.join(dir, '.hippo');
   fs.mkdirSync(store, { recursive: true });
@@ -100,7 +95,6 @@ function localHook(projectDir: string, payload: HookPayload): string {
   return r.stdout;
 }
 
-/** A session id whose hash arm is `arm` at `rate`, so a rate-driven case never depends on luck. */
 function sessionFor(arm: 'hippo' | 'holdout', rate: number): string {
   for (let i = 0; ; i++) if (hashArm(`s-${i}`, rate) === arm) return `s-${i}`;
 }
@@ -112,8 +106,6 @@ const NOTHING = { stdout: '', staticHash: null };
 describe('promptHookContext', () => {
   it('prints the bytes the local hook prints for the same store, project and session', async () => {
     const cliProj = path.join(tmp, 'cli', 'proj');
-    // A project file id plus an origin remote, so rows filed under the remote id reach the call only as an alias.
-    // Written before the store, whose set-up caches this folder's identity in-process.
     fs.mkdirSync(path.join(cliProj, '.git'), { recursive: true });
     fs.writeFileSync(path.join(cliProj, '.git', 'config'), '[remote "origin"]\n\turl = git@github.com:acme/proj.git\n');
     fs.writeFileSync(path.join(cliProj, '.hippo-project.json'), JSON.stringify({ id: 'acme-proj' }));
@@ -141,11 +133,9 @@ describe('promptHookContext', () => {
       nextStep: 'run tests',
       sessionId: 'parity',
     });
-    // Copied before either side runs: the first prompt of a session must not see the other side's ledger rows.
     const srvStore = path.join(tmp, 'srv', 'proj', '.hippo');
     copyTree(cliStore, srvStore);
 
-    // A prompt swaps the recent-5 backfill for prompt recall, so one session takes each path.
     const withPrompt: HookPayload = {
       session_id: 'parity',
       prompt: 'how do we pause the kafka consumers for the billing migration',
@@ -156,7 +146,6 @@ describe('promptHookContext', () => {
     expect(expected[0]).toContain('Active Task Snapshot');
     expect(expected[0]).toContain('Prompt-Relevant Memory');
     expect(expected[1]).toContain('Release train');
-    // 'parity' saved the snapshot, so it reads the whole text; 'parity-recent' is another session and reads a pointer.
     expect(expected[0]).toContain('half done');
     expect(expected[0]).not.toContain('hippo session latest');
     expect(expected[1]).toContain('run `hippo session latest --id=parity`');
@@ -171,7 +160,6 @@ describe('promptHookContext', () => {
     expect(project).toMatchObject({ name: 'acme-proj', legacyName: 'proj', aliases: ['github.com/acme/proj', 'proj'] });
     const ctx = ctxFor(srvStore);
     const staticHash = expect.stringMatching(BLOCK_HASH_RE);
-    // The local hook points to another session's snapshot and drops its handoff, so the remote route needs both opt-ins to match it byte for byte.
     const pointers: PromptHookOptions = { continuity: 'pointer', ownHandoffOnly: true };
     expect(await buildPromptHookContext(ctx, { sessionId: 'parity', project, payload: withPrompt }, pointers)).toEqual({
       arm: null,
@@ -212,7 +200,6 @@ describe('promptHookContext', () => {
     });
     const payload: HookPayload = { session_id: 'state-only', hook_event_name: 'UserPromptSubmit' };
     const out = await buildPromptHookContext(ctxFor(store), { sessionId: 'state-only', project: PROJECT_P, payload });
-    // The saving session reads it whole; the local hook, for another session, reads a pointer.
     expect(out.stdout).toContain('Active Task Snapshot');
     expect(out.stdout).toContain('half done');
     const local = localHook(dir, { ...payload, session_id: 'state-only-cli' });
@@ -305,7 +292,6 @@ describe('promptHookContext', () => {
     pin(store, 'PINNED: always check the rollback plan', 'p');
     const ctx = ctxFor(store);
     const first = await buildPromptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
-    // A reply lost on the way, or a compaction the server never saw: the caller has no hash to send.
     const second = await buildPromptHookContext(ctx, { sessionId: 'lost', project: PROJECT_P });
     expect(second).toEqual(first);
     expect(ledger(store, `event = 'inject' AND surface = 'hook'`).map((r) => r.block_hash)).toEqual([
@@ -514,7 +500,6 @@ describe('subpath exports resolve', () => {
     ['hippo-memory/session-text', 'summariseTranscript', 'undefined'],
   ])('%s: typeof %s is %s in the build', (specifier, name, type) => {
     const script = `const m = await import('${specifier}'); console.log(typeof m.${name});`;
-    // cwd is the checkout because self-reference resolves from the nearest package.json.
     const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       cwd: REPO,
       encoding: 'utf-8',

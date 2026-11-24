@@ -1,6 +1,3 @@
-/** Z0 analyzer, part 5 of 6: blind codes, the key file, the blind report, unblind checks and input hashes (prereg 168, 240).
- * The key is plaintext beside the records, so blindness is procedural: it stops a reader, not a determined operator. */
-
 import { createHash, randomInt } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';

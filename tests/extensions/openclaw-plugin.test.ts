@@ -11,10 +11,6 @@ const spawnMock = vi.fn(() => ({
 }));
 const existsSyncMock = vi.fn((target: string) => target.includes('.hippo'));
 
-// Fakes injected via __setHippoPluginDeps (a DI seam on the plugin module)
-// instead of `vi.mock` on the process-spawning and fs modules, so the module under
-// test always calls through real function references and only the
-// execFileSync/spawn/existsSync implementations are swapped.
 async function loadPlugin() {
   const mod = await import('../../extensions/openclaw-plugin/index.js');
   mod.__setHippoPluginDeps({
@@ -65,8 +61,6 @@ type HippoPluginConfig = {
   };
 };
 
-/** Distinguishes a registered ToolDef factory from an already-built ToolDef: only the
- *  factory form is callable, and only the built form carries `execute` directly. */
 function isToolFactory(registration: ToolDef | ((ctx: ToolCtx) => ToolDef)): registration is (ctx: ToolCtx) => ToolDef {
   return !('execute' in registration);
 }
@@ -183,7 +177,6 @@ describe('openclaw hippo plugin', () => {
     const hook = harness.getHook('before_prompt_build');
     const result = hook({ prompt: 'help', messages: [] }, { workspaceDir: 'C:\\repo\\project-b' });
 
-    // 2 calls: session_start event + context injection
     expect(execFileSyncMock).toHaveBeenCalledTimes(2);
     expect(execFileSyncMock.mock.calls[0]?.[1]).toContain('session');
     expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/repo/project-b' });
@@ -240,7 +233,6 @@ describe('openclaw hippo plugin', () => {
     const args = execFileSyncMock.mock.calls[0]?.[1];
     expect(args).toContain('remember');
     expect(args).toContain('--error');
-    // tool name sanitized to tag: browser_open -> browser-open
     expect(args).toContain('browser-open');
     expect(execFileSyncMock.mock.calls[0]?.[2]).toMatchObject({ cwd: 'C:/Users/alice/project-b' });
   });

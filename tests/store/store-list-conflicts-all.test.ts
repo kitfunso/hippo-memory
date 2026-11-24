@@ -1,11 +1,3 @@
-/**
- * v0.28 — listMemoryConflicts '*' sentinel test (E2 real-edges).
- *
- * Verifies the new 'all statuses' sentinel and that existing 'open' callers
- * (cli.ts, surface/mcp/server.ts, dashboard.ts, consolidate-extraction.test.ts) see
- * NO behaviour change.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -29,13 +21,11 @@ describe("listMemoryConflicts '*' sentinel", () => {
     writeEntry(tmpDir, b);
     writeEntry(tmpDir, c);
 
-    // Insert two open conflicts.
     replaceDetectedConflicts(tmpDir, [
       { memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 },
       { memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 },
     ]);
 
-    // Resolve one by re-running with only the other.
     replaceDetectedConflicts(tmpDir, [{ memoryAId: b.id, memoryBId: c.id, reason: 'r2', score: 0.7 }]);
 
     const openOnly = await listMemoryConflicts(tmpDir, 'open');
@@ -73,9 +63,8 @@ describe("listMemoryConflicts '*' sentinel", () => {
     replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'r1', score: 0.7 }]);
     replaceDetectedConflicts(tmpDir, []);
 
-    // listMemoryConflicts(tmpDir) === listMemoryConflicts(tmpDir, 'open')
     const def = await listMemoryConflicts(tmpDir);
-    expect(def).toHaveLength(0); // only resolved exists; default 'open' filter hides it
+    expect(def).toHaveLength(0);
   });
 
   it("returns empty when filtering by 'resolved' and no resolved exist", async () => {

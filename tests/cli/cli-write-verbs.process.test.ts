@@ -1,5 +1,3 @@
-// What `hippo remember`, `hippo supersede`, `hippo trace record` and `hippo share` store, count, audit and print with no server.
-// One case per verb spawns the built CLI; the rest run it in process.
 import { describe, expect, it } from 'vitest';
 import { reject, remember, adminActor } from '../../src/api/index.js';
 import { PATH_TAGS, remembered, Store } from '../_helpers/cli-verb-store.js';
@@ -12,7 +10,6 @@ const REFUSED =
   'Error: Memory value refused: matches a rejected value (digest 2084ea4db93e..., reason: wrong). ' +
   'Run "hippo unreject" to allow it again.\n';
 
-/** The columns of a stored row that the verbs here set. */
 interface WrittenRow {
   content: string;
   layer: string;
@@ -32,7 +29,6 @@ interface WrittenRow {
   source_session_id: string | null;
 }
 
-/** A plain `hippo remember TEXT` row, which each flag case changes in the columns it names. */
 const PLAIN_ROW: Omit<WrittenRow, 'source_session_id'> = {
   content: TEXT,
   layer: 'episodic',
@@ -54,7 +50,6 @@ const PLAIN_ROW: Omit<WrittenRow, 'source_session_id'> = {
 const REMEMBER_FLAGS: ReadonlyArray<[string, string[], Partial<WrittenRow>]> = [
   ['plain', [], {}],
   ['--tag twice', ['--tag', 'billing', '--tag', 'retry'], { tags: ['billing', 'retry', ...PATH_TAGS] }],
-  // An error doubles the half-life and marks the row negative.
   ['--error', ['--error'], { tags: ['error', ...PATH_TAGS], half_life_days: 730, emotional_valence: 'negative' }],
   ['--pin', ['--pin'], { pinned: 1 }],
   ['--observed', ['--observed'], { confidence: 'observed' }],
@@ -151,7 +146,6 @@ describe('hippo remember (built CLI, no server)', () => {
   });
 });
 
-// The new row keeps the old row's tags, pin and scope unless a flag names its own; confidence starts verified again.
 const SUPERSEDE_FLAGS: ReadonlyArray<[string, string[], string[], Partial<WrittenRow>]> = [
   ['plain', [], [], { layer: 'episodic', tags: PATH_TAGS, pinned: 0 }],
   ['--layer', [], ['--layer', 'semantic'], { layer: 'semantic', tags: PATH_TAGS }],
@@ -259,7 +253,6 @@ describe('hippo trace record (built CLI, no server)', () => {
     '  2. ran the tests\n     → all passed';
   const RECORD = ['trace', 'record', '--task', 'migrate the billing tables', '--steps', steps];
 
-  /** Runs one `trace record` and checks the row it printed, stored and audited. */
   async function recordsTrace(s: Store, outcome: string, flags: string[], row: Partial<WrittenRow>): Promise<void> {
     const ran = await s.run(...RECORD, '--outcome', outcome, ...flags);
     const id = s.lastId();

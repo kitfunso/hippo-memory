@@ -9,9 +9,6 @@ import type { AuditPrune } from '../../../base/ports/store/audit.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-// node:sqlite returns INTEGER as bigint above MAX_SAFE_INTEGER, which JSON.stringify cannot
-// serialize without a replacer. `JsonValueWithBigInt` keeps `any` out of this boundary and stays
-// assignable as a JSON.stringify replacer.
 type JsonValueWithBigInt = JsonValue | bigint;
 
 function isBigIntValue(value: JsonValueWithBigInt): value is bigint {
@@ -25,8 +22,6 @@ function bigintSafeReplacer(_key: string, value: JsonValueWithBigInt): JsonValue
 const AUDIT_ROW_COLUMNS = 'ts, tenant_id, actor, op, target_id, metadata_json';
 const INSERT_AUDIT_ROW_SQL = `INSERT INTO audit_log (${AUDIT_ROW_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?)`;
 
-// Every column is text, so one JSON array binds any number of rows and the statement's text never
-// changes.
 const INSERT_AUDIT_ROWS_SQL =
   `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) ` +
   `SELECT ?, json_extract(value, '$[0]'), json_extract(value, '$[1]'), json_extract(value, '$[2]'), ` +
@@ -39,7 +34,6 @@ export function appendAuditEvents(
 ): void {
   const [only] = events;
   if (only === undefined) return;
-  // The plain INSERT for the common single row skips json_each.
   if (events.length === 1) {
     cachedStatement(db, INSERT_AUDIT_ROW_SQL).run(handleStamp(db), ...auditRowValues(only));
     return;
@@ -81,7 +75,6 @@ export function listAuditEvents(db: DatabaseSyncLike, opts: QueryAuditOptions): 
   return rows.map(rowToAuditEvent);
 }
 
-/** How many of a tenant's audit rows are older than `cutoff`. */
 function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const row = cachedStatement(
@@ -91,7 +84,6 @@ function countAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string
   return Number(row.c);
 }
 
-/** Deletes a tenant's audit rows older than `cutoff`; returns how many went. */
 function deleteAuditBefore(db: DatabaseSyncLike, tenantId: string, cutoff: string): number {
   const result = cachedStatement(db, `DELETE FROM audit_log WHERE tenant_id = ? AND ts < ?`).run(
     tenantId,
@@ -146,7 +138,6 @@ function rowToAuditEvent(r: AuditRow): AuditEvent {
 }
 
 function safeJsonParse(raw: string, id: number): JsonObject {
-  // Damaged metadata reads as empty so the audit row itself stays listable.
   return parseStoredObject({ table: 'audit_log', id, column: 'metadata_json' }, raw) ?? {};
 }
 
@@ -180,7 +171,6 @@ export function pruneAuditRows(db: DatabaseSyncLike, prune: AuditPrune): number 
   if (prune.dryRun) return countAuditBefore(db, tenantId, cutoff);
   return withWriteScope(db, 'audit_prune', () => {
     const count = deleteAuditBefore(db, tenantId, cutoff);
-    // Written after the delete with ts = now, so the cutoff just applied cannot take it.
     appendAuditEvents(db, [
       {
         tenantId,

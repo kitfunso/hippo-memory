@@ -1,5 +1,3 @@
-// The effect of every store method, by group, assembled from the port files; WORKER_OPS derives
-// from it.
 import { AGENT_IMPORT_EFFECTS } from './agent-import.js';
 import { AUDIT_LOG_EFFECTS, AUDIT_MAINTENANCE_EFFECTS } from './audit.js';
 import { CAPTURES_EFFECTS, COMPACTIONS_EFFECTS, COMPACTION_HOOKS_EFFECTS } from './capture.js';

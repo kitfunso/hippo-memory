@@ -1,11 +1,3 @@
-/**
- * E3.1 deterministic entity extraction - tests.
- * Docs: docs/plans/2026-06-01-e3-deterministic-extraction.md
- *
- * extractGraph rebuilds the graph from the consolidated E2 objects (decision/policy/
- * customer_note/project_brief -> entities + supersedes relations). Real DB, no mocks.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
@@ -40,7 +32,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
 
 const yieldOnce = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-// A thread, not a timer: the rebuild's busy wait blocks this thread until the holder commits.
 const HOLD_LOCK_WORKER = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
@@ -53,7 +44,6 @@ db.exec('COMMIT');
 db.close();
 `;
 
-/** The real clock with the hold a test picks, and a pause that yields once instead of waiting out the real gap. */
 const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteBudget => ({
   ...WRITE_BUDGET,
   holdMs,
@@ -62,7 +52,6 @@ const budget = (holdMs: number, pause: WriteBudget['pause'] = yieldOnce): WriteB
 
 const GRAPH_WRITE_SQL = /\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(entities|relations)\b/i;
 
-/** The graph-table writes `run` prepares, on any connection. */
 function graphWritesDuring(run: () => void): string[] {
   const writes: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
@@ -91,7 +80,6 @@ function callStack(): string {
   }
 }
 
-/** Counts the graph writer's BEGIN IMMEDIATEs, leaving out every other writer's. */
 function countRebuildBegins() {
   let begins = 0;
   const exec = DatabaseSync.prototype.exec;
@@ -105,7 +93,6 @@ function countRebuildBegins() {
   return { count: () => begins, restore: () => spy.mockRestore() };
 }
 
-/** A tenant's graph by natural key, leaving out ids and timestamps. */
 function graphByKey(home: string, tenant = 'default') {
   const ents = loadEntities(home, tenant, { limit: 10_000 });
   const keyOf = (e: Entity) => `${e.entityType}|${e.sourceObjectType}:${e.sourceObjectId}`;
@@ -146,7 +133,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('extracts entities (4 types) + a supersedes relation; excludes closed; idempotent', async () => {
-    // decision v1 -> superseded by v2 (active)
     const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Adopt Postgres',
     });
@@ -154,12 +140,10 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       decisionText: 'Adopt Postgres (managed)',
       supersedesDecisionId: d1.id,
     });
-    // a closed decision (must be excluded)
     const dc = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Retired idea',
     });
     await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: dc.id, actor: CLI_ACTOR, now: evalNow() });
-    // one of each other type
     await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       policyName: 'Data retention',
       policyText: 'Delete logs after 90 days',
@@ -174,7 +158,7 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     });
 
     const r = await extractGraph(sqliteStore(home), 'default');
-    expect(r.byType).toEqual({ decision: 2, policy: 1, customer: 1, project: 1 }); // dc excluded
+    expect(r.byType).toEqual({ decision: 2, policy: 1, customer: 1, project: 1 });
     expect(r.entities).toBe(5);
     expect(r.relations).toBe(1);
     expect(r.truncated).toEqual([]);
@@ -185,18 +169,14 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     expect(ents.some((e) => e.entityType === 'policy' && e.name === 'Data retention')).toBe(true);
     expect(ents.some((e) => e.entityType === 'customer' && e.name === 'Acme Corp')).toBe(true);
     expect(ents.some((e) => e.entityType === 'project' && e.name === 'hippo')).toBe(true);
-    expect(ents.some((e) => e.name === 'Retired idea')).toBe(false); // closed excluded
-
-    // the supersedes relation: v2 supersedes v1
+    expect(ents.some((e) => e.name === 'Retired idea')).toBe(false);
     const e1 = ents.find((e) => e.name === 'Adopt Postgres')!;
     const e2 = ents.find((e) => e.name === 'Adopt Postgres (managed)')!;
     const rels = loadRelations(home, 'default', { limit: 100 });
     expect(rels.length).toBe(1);
     expect(rels[0].relType).toBe('supersedes');
-    expect(rels[0].fromEntityId).toBe(e2.id); // successor
-    expect(rels[0].toEntityId).toBe(e1.id); // superseded
-
-    // idempotent: re-running rebuilds to the same graph (no duplication)
+    expect(rels[0].fromEntityId).toBe(e2.id);
+    expect(rels[0].toEntityId).toBe(e1.id);
     const r2 = await extractGraph(sqliteStore(home), 'default');
     expect(r2.entities).toBe(5);
     expect(r2.relations).toBe(1);
@@ -205,18 +185,15 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('KEEPS an active E2 object whose source memory was forgotten (v38 E2-provenance): memory_id NULL, source_object set', async () => {
-    // v38: extraction anchors provenance to the authoritative E2 object, so an in-force
-    // decision STAYS in the graph after its mirror is forgotten (memory_id -> NULL), now
-    // anchored via source_object_type/id.
     const dn = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Will lose its memory',
     });
-    deleteEntry(home, dn.memoryId!); // distilled delete is allowed; decisions.memory_id -> NULL
+    deleteEntry(home, dn.memoryId!);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Keeps its memory',
     });
     const r = await extractGraph(sqliteStore(home), 'default');
-    expect(r.byType.decision).toBe(2); // BOTH extracted (the forgotten-mirror one survives)
+    expect(r.byType.decision).toBe(2);
     const ents = loadEntities(home, 'default', { limit: 100 });
     const names = ents.map((e) => e.name);
     expect(names).toContain('Keeps its memory');
@@ -228,7 +205,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('skips a supersedes relation when the successor is not extracted (closed)', async () => {
-    // d1 superseded by d2, then d2 closed -> d1 superseded (extracted), d2 closed (not)
     const d1 = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'orig',
     });
@@ -238,7 +214,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     });
     await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: d2.id, actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
-    // d1 (superseded) extracted; d2 (closed) excluded -> no relation (successor missing)
     expect(r.byType.decision).toBe(1);
     expect(r.relations).toBe(0);
   });
@@ -252,21 +227,18 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'second' });
     await closeObject(objectsAt(home), DECISION, { tenantId: 'default', id: d.id, actor: CLI_ACTOR, now: evalNow() });
     const r = await extractGraph(sqliteStore(home), 'default');
-    expect(r.byType.decision).toBe(1); // 'second' present, 'first' (now closed) gone
+    expect(r.byType.decision).toBe(1);
     expect(loadEntities(home, 'default', { limit: 100 }).map((e) => e.name)).toEqual(['second']);
   });
 
   it('truncates an over-cap E2 name instead of throwing + bricking the rebuild', async () => {
-    // decisionText is uncapped at source; a >512-char one must NOT throw in insertEntity
-    // (which would leave the cleared graph empty + unrebuildable). It is truncated.
     const longText = 'D' + 'x'.repeat(700);
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: longText });
     await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', { decisionText: 'short one' });
-    const r = await extractGraph(sqliteStore(home), 'default'); // must not throw
+    const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType.decision).toBe(2);
     const ents = loadEntities(home, 'default', { limit: 100 });
     expect(ents.find((e) => e.name.startsWith('Dxxx'))?.name).toBe(longText.slice(0, 512));
-    // re-run still works (not bricked)
     await extractGraph(sqliteStore(home), 'default');
     expect(loadEntities(home, 'default', { limit: 100 }).length).toBe(2);
   });
@@ -275,19 +247,17 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     const d = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'placeholder',
     });
-    // Inject a name whose first 512 chars are whitespace (slice-without-trim would
-    // yield a whitespace-only label -> insertEntity trims to '' -> throws -> brick).
     const db = openHippoDb(home);
     try {
       db.prepare(`UPDATE decisions SET decision_text = ? WHERE id = ?`).run(' '.repeat(600) + 'real decision', d.id);
     } finally {
       closeHippoDb(db);
     }
-    const r = await extractGraph(sqliteStore(home), 'default'); // must not throw
+    const r = await extractGraph(sqliteStore(home), 'default');
     expect(r.byType.decision).toBe(1);
     const ent = loadEntities(home, 'default', { limit: 100 })[0];
-    expect(ent.name).toBe('real decision'); // trimmed, non-empty
-    await extractGraph(sqliteStore(home), 'default'); // not bricked
+    expect(ent.name).toBe('real decision');
+    await extractGraph(sqliteStore(home), 'default');
   });
 
   it('empty store extracts to an empty graph (no crash)', async () => {
@@ -330,7 +300,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
       summary: 'agent-memory lib for Acme Corp',
     });
     const first = await extractGraph(sqliteStore(home), 'default');
-    // Both active decisions and the note name RetryPolicy, and the brief names Acme Corp; superseded rows make none.
     expect(first.references).toBe(4);
 
     expect(graphWritesDuring(async () => await extractGraph(sqliteStore(home), 'default'))).toEqual([]);
@@ -396,7 +365,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
   });
 
   it('a mirrorless object closed between the load and its chunk gets no entity row', async () => {
-    // Loaders return newest first, so the older decision's insert lands in a later chunk than the newer one's.
     const older = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       decisionText: 'Older call, mirror forgotten',
     });
@@ -419,7 +387,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
 
     const r = await extractGraphChunked(sqliteStore(home), 'default', budget(0, closeOlderOnce));
 
-    // A zero hold commits one op per chunk, and the two entity inserts need one pause between them.
     expect(pauses).toBe(1);
     expect(loadEntities(home, 'default', { limit: 10 }).map((e) => e.name)).toEqual(['Newer call']);
     expect(r.skipped).toBe(1);

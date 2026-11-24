@@ -7,7 +7,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 let home: string;
 
-/** `hippo <args>` run in this process from `home`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(home);
@@ -24,7 +23,6 @@ describe('hippo recall --why exposes envelope', () => {
   beforeEach(() => {
     home = makeRoot('why', { init: false });
     vi.stubEnv('HIPPO_HOME', home);
-    // The local store `init` makes, and the global one `init --global` makes at HIPPO_HOME.
     initTestStore(join(home, '.hippo'));
     initTestStore(home);
   });
@@ -83,7 +81,6 @@ describe('hippo recall --why exposes envelope', () => {
       '--global',
     );
     const parsed = JSON.parse(await hippo('recall', 'envelope-json-marker rollback-uniq43', '--why', '--json'));
-    // Both stores together hold only the one memory this test remembered.
     expect(parsed.results).toHaveLength(1);
     const first = parsed.results[0];
     expect(first.envelope.kind).toBe('distilled');

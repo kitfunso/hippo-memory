@@ -133,7 +133,6 @@ describe('recoverable automatic memory quality repair', () => {
         expect.objectContaining({ id: backing.id, protection: 'backs an object' }),
       ]),
     );
-    // An agent's note is never judged, even when it carries a hippo writer's tag.
     for (const row of [imported, kept]) expect(result.issues.map((issue) => issue.id)).not.toContain(row.id);
     expect(loadEveryTenantEntries(root)).toHaveLength(6);
     expect(withDb((db) => db.prepare('SELECT memory_id FROM predictions WHERE id = ?').get(prediction.id))).toEqual({
@@ -385,7 +384,6 @@ describe('hippo audit repair', () => {
   });
   const cli = (...args: string[]) =>
     spawnSync(process.execPath, [HIPPO_JS, 'audit', 'repair', ...args], { cwd: dir, env, encoding: 'utf8' });
-  // The preview case reads bytes only, so it runs in process; the busy-store case keeps the child, a lock held by another process.
   const cliIn = (...args: string[]) => runCliAs(['audit', 'repair', ...args], { cwd: dir, env });
 
   it('previews as JSON, lets --dry-run win over --apply, and names --global in the recovery line', async () => {

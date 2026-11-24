@@ -1,5 +1,3 @@
-// hippo.db's graphDelta plans the ops store/rules/graph-delta.ts diffGraph plans over every stored row of the tenant,
-// and hands back only the rows that change.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { deriveGraph, extractGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
@@ -33,7 +31,6 @@ const OTHER = 'acme';
 const NOW = '2026-10-01T00:00:00.000Z';
 const ENTITY_TYPES: readonly EntityType[] = ['person', 'project', 'customer', 'system', 'policy', 'decision'];
 const REL_TYPES: readonly RelationType[] = ['owns', 'supersedes', 'depends-on', 'blocked-by', 'references'];
-// A pair cut in half is stored as U+FFFD and a padded name trimmed, so neither matches its desired twin.
 const NAMES = ['Alpha', 'Beta', 'Gamma Ray', 'cut \uD83D', 'cut �', ' Padded '];
 const DELTA_READ = 'json_each';
 
@@ -67,7 +64,6 @@ function shuffled<V>(r: () => number, items: readonly V[]): V[] {
   return out;
 }
 
-/** Decisions, policies and customer notes of one tenant, every fourth superseded. */
 function seedObjects(db: DatabaseSyncLike, tenant: string, n: number): SourceObjectRef[] {
   const insert = {
     decision: `INSERT INTO decisions (tenant_id, decision_text, status, created_at) VALUES (?, 'd', ?, ?)`,
@@ -82,7 +78,6 @@ function seedObjects(db: DatabaseSyncLike, tenant: string, n: number): SourceObj
   });
 }
 
-/** Entities on random keys, some loose and some sharing a key, and edges among them. */
 function seedGraph(
   db: DatabaseSyncLike,
   tenant: string,
@@ -106,7 +101,6 @@ function seedGraph(
     memoryId: r() < 0.5 ? null : pick(r, memories),
     sourceObject: pick(r, objects),
   }));
-  // Exact copies, so a key can hold two edges that both match the wanted one in full.
   for (const edge of [...edges, ...edges.filter(() => r() < 0.3)]) insertRelationRow(db, tenant, edge);
 }
 
@@ -116,7 +110,6 @@ function memoryIdsOf(desired: DesiredGraph): string[] {
   return [...ids];
 }
 
-/** Every stored row of the tenant and the kind of each memory `desired` names: the read before graphDelta. */
 function storedGraph(db: DatabaseSyncLike, tenant: string, desired: DesiredGraph): StoredGraph {
   // SAFETY: the SELECT names id and kind.
   const kinds = db
@@ -150,7 +143,6 @@ const keyOf = (row: StoredEntity): NaturalKey | null =>
         sourceObject: { type: column<SourceObjectType>(row.source_object_type), id: row.source_object_id },
       };
 
-/** A rebuild's desired graph: most stored keys again, some renamed or moved, new keys, twins and restated edges. */
 function desiredGraph(
   r: () => number,
   stored: StoredGraph,
@@ -269,7 +261,6 @@ describe('graphDelta on hippo.db', () => {
   }, 300_000);
 });
 
-/** `n` policies and a decision naming each of the first tenth, so the graph holds entities and references edges. */
 function seedPolicies(root: string, n: number): void {
   withDb(root, (db) => {
     db.prepare(

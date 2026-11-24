@@ -1,5 +1,3 @@
-// Write-side tool handlers: hippo_remember, hippo_outcome and hippo_learn.
-
 import {
   remember as apiRemember,
   outcome as apiOutcome,
@@ -19,9 +17,6 @@ export async function runRememberTool({ args, ctx }: ToolCall): Promise<string> 
   if (boolArg(args, 'error')) tags.push(ERROR_TAG);
   const tag = stringArg(args, 'tag', MAX_ID_LEN);
   if (tag) tags.push(tag);
-  // Route through api/index.ts so audit_log captures the caller identity like CLI/REST: the
-  // auth-resolved ctx.actor under HTTP-MCP, 'mcp' for stdio. It also starts the root's auto-sleep
-  // when one is due.
   const result = await apiRemember(mcpApiContext(ctx), {
     content: text,
     leadIn: optionalStringArg(args, 'lead_in', MAX_CONTENT_LEN),
@@ -45,9 +40,6 @@ export async function runOutcomeTool({ args, ctx }: ToolCall): Promise<string> {
   const ids = keptShownIds(apiCtx);
   if (ids.length === 0) return 'No recent recalls to apply outcome to.';
 
-  // Route through src/api/index.ts so audit_log captures the caller identity (auth-resolved
-  // ctx.actor under HTTP-MCP, 'mcp' for stdio) and tenant scoping is uniform; outcome() also skips
-  // cross-tenant ids silently.
   const { applied } = await apiOutcome(apiCtx, ids, good);
   return `Applied ${good ? 'positive' : 'negative'} outcome to ${applied} memories`;
 }
@@ -56,10 +48,7 @@ export async function runLearnTool({
   args,
   api,
 }: GroupToolCall<'lessonWrites' | 'vectors' | 'vectorWrites'>): Promise<string> {
-  // 0 reads as unset, as it always has.
   const days = numberArg(args, 'days') || DEFAULT_LEARN_DAYS;
-  // With no repoPath api learn reads the server's own folder, not a remote caller's, so it refuses
-  // all but stdio and a host admin (mcpActor fails closed).
   const result = await apiLearn(api, { days, profile: MCP_LEARN });
   if (result.status === 'not-a-repo') return 'No git history found.';
   if (result.status === 'no-commits') {

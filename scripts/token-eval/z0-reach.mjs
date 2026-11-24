@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/** Z0 round 3 lesson reach: where a taught lesson sits between its teach and its first apply, from the records and the request logs.
- * Read-only. Every rate is the runner's first check on first applies, never the blind G5 grade. Exit 0 on a clean read, 1 on bad input or any errors entry. */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,9 +20,7 @@ const TEACH_FORMS = ['correction', 'confirmation'];
 const RULES_BLOCK = /## Rules from the user\n((?:- [^\n]*\n?)+)/g;
 const NO_LEAD = /^- No[:,] /;
 const BLOCK_HEADER = /## (Project Memory|Pinned rules|Prompt-Relevant Memory)[^\n]*\((\d+) entr[a-z]*, (\d+) tokens\)[^\n]*/g;
-// A `## ` line is not a bound: an entry body may hold a markdown heading.
 const BLOCK_END = /Today's date|<\/system-reminder>/;
-// A block with no bound would run to the end of its text part, so it stops at the size hippo's budget allows.
 const BLOCK_CAP = 12_000;
 const ENTRY_TAGS = /\*\* \[([^\]]+)\]/g;
 const JSON_STRING = /^"(?:[^"\\]|\\.)*"$/s;
@@ -37,7 +33,6 @@ const NO_BLOCK_KEY = { error: 'hookErrorOrTimeout', output: 'emptyResult', none:
 
 const fold = (s) => s.toLowerCase().replace(/\s+/g, ' ');
 const scoredOf = (r) => r.lessons.filter((l) => l.first !== 'na');
-// A record whose lessons are all 'na' has no outcome; it is neither a pass nor a fail.
 const outcomeOf = (r) => (scoredOf(r).length === 0 ? 'unscored' : r.lessons.some((l) => l.first === 'fail') ? 'fail' : 'pass');
 const shownOf = (r) => r.chain?.shown ?? null;
 const isFirstApply = (r) => r.kind === 'apply' && r.invalid === null && r.leak !== true && r.applyIndex === 1;
@@ -138,14 +133,12 @@ export function messageTexts(messages) {
   return texts;
 }
 
-/** A text part that is itself a JSON string, decoded; any other part comes back as it was. */
 function decodedText(text) {
   const quoted = text.trim();
   if (!JSON_STRING.test(quoted)) return text;
   try {
     return JSON.parse(quoted);
   } catch {
-    // The text only looked like a JSON string (a quoted Windows path, a literal newline), so it is plain text.
     return text;
   }
 }
@@ -252,7 +245,6 @@ function loadBlind(scored, errors) {
   return { source: file, h1Estimate: estimate, g5: { n: g5.n, disagreements: g5.disagreements } };
 }
 
-/** Reads every A2 and A5 first apply's request logs once; a missing log is named and the read continues. */
 function readSessions(scored, firsts, errors, warn) {
   const sessions = new Map();
   for (const r of firsts.filter((x) => x.arm === 'A2' || x.arm === 'A5')) {
@@ -285,7 +277,6 @@ function funnelOf(firsts) {
   return out;
 }
 
-/** A first-apply record must be the only one of its arm at its (run, sequence, seed, position); a repeat is named, never merged. */
 function checkUnique(firsts, errors) {
   const seen = new Set();
   for (const r of firsts) {
@@ -301,7 +292,6 @@ function armIndex(firsts, arm) {
   return index;
 }
 
-/** A2 against A5 at one position. Pairs where either side has no scored lesson are listed apart, never counted as a pass. */
 function pairedOf(firsts) {
   const a2 = armIndex(firsts, 'A2');
   const a5 = armIndex(firsts, 'A5');
@@ -331,7 +321,6 @@ function pairedOf(firsts) {
   };
 }
 
-/** Every first-apply lesson that was scored, with its own arm's teach form; a lesson with no teach form is an error and never a bucket. */
 function lessonTable(firsts, teachForms, errors) {
   const rows = [];
   for (const r of firsts.filter((x) => TEACH_ARMS.includes(x.arm))) {
@@ -344,7 +333,6 @@ function lessonTable(firsts, teachForms, errors) {
   return rows;
 }
 
-/** A2's scored lessons with how the SessionStart rules and the hook block held each key phrase. */
 function a2Rows(table, sessions, keyPhrases, errors) {
   const rows = [];
   for (const t of table.filter((x) => x.arm === 'A2')) {
@@ -422,7 +410,6 @@ function reachOf(rows, index) {
   };
 }
 
-/** Entry counts and characters by tag class over blocks, with the entries the headers declare and every block where the two differ. */
 function entryClasses(blocksByRecord) {
   const classes = new Map();
   const mismatches = [];

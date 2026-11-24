@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Per-file count of hand-spelled caught-error text in src/ may fall, never rise: use errorMessage() from src/base/util/log.ts.
-// Usage: check-error-text.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

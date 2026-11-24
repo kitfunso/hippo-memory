@@ -1,5 +1,3 @@
-// A rule the person stated prints first and plain, as an order; only capture's tag makes a row one, so a typed tag, a
-// pin or a supersede cannot forge it, and a block with no such rule is the block it always was.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -38,7 +36,6 @@ const RULE =
 const NOTE = 'Deploys go through the staging queue before the production queue';
 const HEADING = '## Rules from the user';
 
-/** The row capture writes for a rule the person stated. */
 function ruleRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
   const row = createMemory(RULE, {
     source: 'capture',
@@ -49,7 +46,6 @@ function ruleRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
   return { ...row, originProject: 'p', ...over };
 }
 
-/** A pinned row an agent or a person saved by hand. */
 function noteRow(over: Partial<MemoryEntry> = {}): MemoryEntry {
   return { ...createMemory(NOTE, { pinned: true }), originProject: 'p', ...over };
 }
@@ -129,7 +125,6 @@ describe("a rule the person stated, in the hook's block", () => {
   it('prices no heading when the view holds no user rule', () => {
     const cost = contextCost('additional-context', 'observe', new Date());
     const can = { cross: true, promptRecall: true, ambient: false };
-    // The fixed price master computes: the memory headings alone.
     const legacy =
       printedTokens(contextHeading('Project Memory', 1500, 1500)) +
       printedTokens(crossProjectHeading(1500)) +
@@ -143,7 +138,6 @@ describe("the budget pays for a user rule's heading", () => {
   const CAN = { cross: false, promptRecall: false, ambient: false };
   const cost = () => contextCost('additional-context', 'observe', new Date());
 
-  /** The smallest budget at which the hook read returns `id`. */
   async function smallestBudgetShowing(id: string): Promise<number> {
     for (let budget = 1; budget <= 400; budget++) {
       const result = await contextGet(ctx(), {
@@ -157,7 +151,6 @@ describe("the budget pays for a user rule's heading", () => {
     throw new Error('the row never fit in 400 tokens');
   }
 
-  /** The first budget whose room after `fixedAt` holds `entryTokens`. */
   function smallestBudgetFor(entryTokens: number, extra: (budget: number) => number): number {
     for (let budget = 1; ; budget++) {
       if (budget - cost().fixed(budget, { ...CAN, userRule: false }) - extra(budget) >= entryTokens) return budget;
@@ -287,7 +280,6 @@ describe('a typed tag cannot make a user rule', () => {
 });
 
 describe('`hippo context` run in a project', () => {
-  // The command reads its project from the process folder, so the rows are filed under that one.
   const HERE = cwdProject().name;
   let flagsRoot: string;
 

@@ -1,8 +1,3 @@
-/**
- * TE5 A/B analyzer on synthetic run records with a known effect: the hippo
- * arm resolves the same tasks for less, and the random-text control does not.
- * The records are generated here, not measured; they test the arithmetic.
- */
 import { describe, it, expect } from 'vitest';
 import { parseRuns, analyze, recordCost } from '../../scripts/token-eval/ab-analyze.mjs';
 
@@ -48,7 +43,6 @@ describe('A/B analyzer', () => {
     const result = analyze(parseRuns(records()), { prices });
     const random = result.comparisons.find((c: { arm: string }) => c.arm === 'random-text');
     if (!random) throw new Error('no random-text comparison');
-    // Both arms resolve the same tasks, so the estimate is the per-run price ratio less one: $0.45525 over $0.4425.
     expect(random.costPerResolved.relative.estimate).toBeCloseTo(0.45525 / 0.4425 - 1, 10);
     expect(random.resolveRate.delta.estimate).toBe(0);
   });

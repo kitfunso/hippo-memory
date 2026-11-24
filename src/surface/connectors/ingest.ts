@@ -1,5 +1,3 @@
-// The write half every connector's ingest shares, after its own pre-check of the event log.
-
 import { rememberUntrusted, type ConnectorRememberOptions } from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
 import type { ConnectorEvent, OptionalGroup, StoreWith } from '../../base/ports/store.js';
@@ -39,16 +37,12 @@ export async function rememberWithEventLog(
 ): Promise<IngestResult> {
   if (!opts) return markSkipped(ctx, event);
   try {
-    // No actor fallback: every caller builds ctx with its connector subject.
     const result = await rememberUntrusted(ctx, { ...opts, event });
-    // Another worker logged this key between the pre-check and the write: its memory stands and
-    // ours was not stored.
     if (result.duplicate) {
       return { status: 'skipped_duplicate', memoryId: result.duplicate.memoryId };
     }
     return { status: 'ingested', memoryId: result.id };
   } catch (e) {
-    // A tombstone refusal is permanent, so a DLQ retry would hit it forever.
     if (e instanceof RejectedValueError) return markSkipped(ctx, event);
     throw e;
   }

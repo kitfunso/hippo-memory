@@ -1,15 +1,9 @@
-/** Git reads for churn-staleness (src/domain/learn/churn-evidence.ts), through the caller's git
- * runner. */
-
 import type { GitResult, GitRunner } from '../../base/ports/git.js';
 import { DAY_MS, MINUTE_MS } from '../../base/util/time.js';
 import { errorMessage } from '../../base/util/log.js';
 import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json.js';
 
-// A `git log --name-status` dump can run to tens of MB; default 1MB pipe would truncate it.
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
-// Longer than the 10 s of one-line git reads because a full log dump on a large repo is slow, yet
-// bounded so a wedged git cannot stall sleep.
 const GIT_TIMEOUT_MS = MINUTE_MS;
 
 /** A real git failure (not git grep's expected exit-1-no-match). Callers abort the whole run on
@@ -39,7 +33,6 @@ function runGit(args: string[], repo: ChurnRepo): string {
   throw readFailed(args, run);
 }
 
-// git grep exits 1 for "no match" -- a normal empty result, not a failure.
 function runGitGrepOrEmpty(args: string[], repo: ChurnRepo, input: string): string {
   const run = gitCall(repo, args, input);
   if (run.ok) return run.stdout;
@@ -47,7 +40,6 @@ function runGitGrepOrEmpty(args: string[], repo: ChurnRepo, input: string): stri
   throw readFailed(args, run);
 }
 
-// ls-tree, not ls-files: the index can hold staged adds/deletes that HEAD does not.
 export function gitLsFilesAtHead(repo: ChurnRepo): Set<string> {
   const raw = runGit(['ls-tree', '-r', '--name-only', 'HEAD'], repo);
   return new Set(
@@ -65,16 +57,13 @@ export interface ChurnCommitFile {
 
 export interface ChurnCommit {
   hash: string;
-  date: string; // committer date, ISO 8601
+  date: string;
   files: ChurnCommitFile[];
 }
 
-// 1-day buffer guards against git's --since boundary excluding a commit dated exactly at the
-// anchor.
 export function fetchChurnWindowLog(repo: ChurnRepo, sinceIso: string): ChurnCommit[] {
   const buffered = new Date(new Date(sinceIso).getTime() - DAY_MS).toISOString();
   const raw = runGit(
-    // --first-parent -m: a merge's changes land as one diff against its mainline parent.
     [
       'log',
       '--no-renames',

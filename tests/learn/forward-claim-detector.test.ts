@@ -1,13 +1,3 @@
-/**
- * J3.2 forward-claim detector — unit tests.
- *
- * Calibration: HIGH PRECISION, LOW RECALL. Patterns are intentionally
- * narrow; expect negative cases to outnumber positives. Documented in
- * src/domain/learn/forward-claim-detector.ts header.
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 1, Task 9).
- */
-
 import { describe, it, expect } from 'vitest';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
 
@@ -49,8 +39,6 @@ describe('detectForwardClaim — positive matches', () => {
     expect(m?.phrase.toLowerCase()).toContain('~2 weeks');
   });
 
-  // Codex review round 1 caught: \b before ~ requires a word char
-  // immediately preceding. These three cases previously failed silently.
   it('matches "~3 days for migration" (tilde at start of string)', () => {
     const m = detectForwardClaim('~3 days for migration');
     expect(m?.phrase.toLowerCase()).toContain('~3 days');
@@ -111,10 +99,6 @@ describe('detectForwardClaim — negative cases (no false positives)', () => {
     expect(detectForwardClaim('BETAtesting documentation')).toBeNull();
   });
 
-  // Codex round 2 P2: verb-only matches without a quantifier produced
-  // cry-wolf hints on non-estimate queries. These cases used to match
-  // and produce planning-fallacy hints when the query shared a token
-  // with an existing prediction class.
   it('returns null for "who will take ownership of auth?" (no time quantifier)', () => {
     expect(detectForwardClaim('who will take ownership of auth?')).toBeNull();
   });
@@ -140,7 +124,6 @@ describe('detectForwardClaim — token extraction', () => {
   it('strips stop words and short tokens', () => {
     const m = detectForwardClaim('this auth migration will take 3 days');
     expect(m).not.toBeNull();
-    // Should contain "auth" and "migration" (domain tokens), not "this" / "will" / "take"
     expect(m!.classQueryTokens).toContain('auth');
     expect(m!.classQueryTokens).toContain('migration');
     expect(m!.classQueryTokens).not.toContain('this');
@@ -163,7 +146,6 @@ describe('detectForwardClaim — token extraction', () => {
   it('keeps tokens >= 3 chars only', () => {
     const m = detectForwardClaim('os will take 3 days');
     expect(m).not.toBeNull();
-    // "os" is 2 chars — dropped
     expect(m!.classQueryTokens).not.toContain('os');
   });
 
@@ -174,10 +156,6 @@ describe('detectForwardClaim — token extraction', () => {
     expect(m!.classQueryTokens).toContain('effort');
   });
 
-  // Codex round 2 P3: duration units leaking into class tokens caused
-  // wrong-class wins / ties when a tenant had a class containing 'days'
-  // or 'weeks'. These tokens MUST drop from class resolution because
-  // every forward-claim regex requires them as the quantifier suffix.
   it('strips duration units (days, weeks, etc.) from class tokens', () => {
     const m = detectForwardClaim('migration effort will take 3 days');
     expect(m).not.toBeNull();

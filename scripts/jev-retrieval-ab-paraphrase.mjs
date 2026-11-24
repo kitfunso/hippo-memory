@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 6 of docs/EXPERIMENT-PROTOCOL.md: paired retrieval A/B on PARAPHRASED
- *  queries sharing no wording with the target. Supersedes Lane 5, whose
- *  token-sampled queries let BM25 pin the target. Jev scores on disk, $0. */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -67,9 +64,6 @@ const words = (t) =>
     .split(/\s+/)
     .filter(Boolean);
 
-/** A shared 3-word span leaks only if it also carries a distinctive word:
- *  "the api key" is subject matter, "debug symbols warning" is copied wording.
- *  Calibrated on batch 1 with no outcome data seen. */
 function sharedSpan(query, content) {
   const qw = words(query),
     tw = words(content).join(' ');
@@ -119,9 +113,6 @@ const tagSet = new Set(
 );
 console.error(`tagging top ${K} of ${labelled.length} by Jev p (store base rate ${f(baseRate)})`);
 
-/** Stored half_life_days already carries the 2x from deriveHalfLife
- *  (memory.ts:523), so re-tagging a row that is already tagged would give 4x.
- *  Only rows Jev adds the tag to are mutated; the rest keep their real state. */
 const adds = [...tagSet].filter((id) => !byId.get(id)?.tags.includes('error'));
 const addSet = new Set(adds);
 const jevEntries = entries.map((e) =>
@@ -140,9 +131,6 @@ if (process.argv.includes('--dry')) {
 const corpusBase = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const corpusJev = buildCorpus(jevEntries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 
-/** --opcut is Lane 7: hippo's real default 4000-token budget decides the cut
- *  (search.ts:410, a median of 28 memories), so a miss means the agent never
- *  saw it. Without the flag the budget is lifted and only rank matters. */
 const OPCUT = process.argv.includes('--opcut');
 
 async function rankOf(query, ents, corpus, targetId) {

@@ -1,4 +1,3 @@
-// The Codex side of a task cell (E6 plan D13, R4, R21, R24): the apply session, its price, read check and record fields, the X4 block, the token sweeps.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_ARMS } from './arms.mjs';
@@ -16,7 +15,6 @@ const ZERO_USAGE = { inputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0, ou
 const PROJECT_DOC_CAP = 32 * 1024;
 const OPEN = '<!-- z0 taught -->';
 const CLOSE = '<!-- /z0 taught -->';
-// The first and the closing line of hippo's Codex session-end worker log; each line is `[hippo] <time> <text>`.
 const WRAPPER_START = /^\[hippo\] \S+ (?:consolidating memory\.\.\.|skip sleep: |skip: no hippo store )/;
 const WRAPPER_END = /^\[hippo\] \S+ (digest: wrote .*|digest: skip: .*|digest failed: .*|skip capture: no Codex transcript for this session|skip: no hippo store for this folder or globally)$/;
 const WRAPPER_POLL_MS = 250;
@@ -52,7 +50,6 @@ export function codexVoid(ctx, run, step, stage, session) {
 /** What the worker's log says (plan R17): done once a start line heads it and an end line follows; captured only when the digest names this thread's rollout. */
 export function wrapperVerdict(logText, threadId) {
   const lines = logText.split('\n').map((l) => l.replace(/\r$/, ''));
-  // A log with no start line holds an earlier worker's late line, never this session's end.
   const end = WRAPPER_START.test(lines[0]) ? lines.map((l) => WRAPPER_END.exec(l)?.[1]).filter(Boolean).at(-1) : undefined;
   if (end === undefined) return { done: false, captured: false, end: null };
   const rollout = /^digest: wrote .* for (\S+)$/.exec(end)?.[1];
@@ -81,10 +78,8 @@ export function codexFields(ctx, run, session) {
   const parsed = parseRollouts(session.rollouts.agent);
   const store = path.join(run.dirs.work, '.hippo');
   return {
-    // Hook rows are booked per thread id, so every agent thread counts and Codex's own memory threads are counted apart (plan R26).
     codexHooksFired: hippoSentFor(store, session.rollouts.threadIds),
     codexInternalHooksFired: hippoSentFor(store, session.rollouts.internalIds),
-    // Null is a wait that timed out; false is an end line that names no digest for this thread, or an arm with no wrapper.
     codexWrapperCaptured: session.wrapper ? session.wrapper.captured : false, codexWrapperWait: session.wrapper?.wait ?? null,
     codexVersion: ctx.codexVersion, codexMemories: ctx.codexMemories, codexHookTrust: ctx.codexHookTrust.kind, codexAuth: 'copied-file', codexMemoryWait: session.wait,
     codexCalls: parsed.calls, codexUnparsedCalls: parsed.unparsed, codexUsageOdd: session.usage?.odd ?? null, codexUsageRaw: session.usage?.raw ?? null,
@@ -117,7 +112,6 @@ export function writeX4Block(work, taught) {
     return 'replaced';
   }
   fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${block}`);
-  // A lone marker means an agent edited the block; the new one is added, never merged into it.
   return from >= 0 || text.includes(CLOSE) ? 'appended' : 'written';
 }
 
@@ -142,7 +136,6 @@ export function finishCodex(ctx) {
     } catch (err) {
       notes.push(`runs (unreadable: ${errNote(err)})`);
     }
-    // authOut folds each copy's tokens into the vault before deleting it, so the sweep below still knows them.
     for (const home of homes) {
       try {
         authOut(ctx.codexVault, home);
@@ -156,7 +149,6 @@ export function finishCodex(ctx) {
   }
 }
 
-/** Every `runs/<name>/<arm>/<seed>/codex-home` dir. */
 function codexHomes(runs) {
   const dirs = (p) => fs.readdirSync(p, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => path.join(p, e.name));
   return dirs(runs).flatMap(dirs).flatMap(dirs).map((d) => path.join(d, 'codex-home')).filter((d) => fs.existsSync(d));

@@ -1,4 +1,3 @@
-/** Z0 cost by kind pure parts: the kind filters, the pairs, the hash checks, the self-check compare, the cell rows and the text print. */
 import { describe, it, expect, afterAll } from 'vitest';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -35,7 +34,6 @@ const EST = { estimate: 1.0057, low: 0.9639, high: 1.0493, se: 0.0215, df: 248.2
 
 describe('Z0 cost by kind: kinds and pairs', () => {
   const rec = (set: string, kind: string, applyIndex: number | null): Rec => ({ arm: 'A2', sequence: 'seq', seed: 1, position: 0, set, kind, applyIndex, cost: 1 });
-  // The last four sit outside sets R and N, or outside teach and apply, with an apply slot that tempts a filter missing its kind or set check.
   const RECORDS = [
     rec('R', 'teach', null), rec('R', 'apply', 1), rec('R', 'apply', 2), rec('R', 'apply', 3), rec('N', 'apply', null), rec('X', 'apply', 1),
     rec('X', 'teach', null), rec('X', 'apply', 2), rec('R', 'review', 1), rec('R', 'review', 2),

@@ -1,4 +1,3 @@
-// One seeded generator for every script: a seed must draw the same sequence wherever it is used.
 /** @param {number} seed @returns {() => number} uniform [0,1) */
 export function mulberry32(seed) {
   let s = seed >>> 0;

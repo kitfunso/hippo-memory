@@ -1,4 +1,3 @@
-// The previous Slack signing secret works until the date the operator names, then it is refused with one warning.
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';

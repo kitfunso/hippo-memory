@@ -1,5 +1,3 @@
-// First-class object, server, goal and auth verbs, in `hippo help` order.
-
 import { DEFAULT_KEY_TTL_DAYS, MAX_TTL_DAYS } from '../../../api/auth/auth.js';
 import {
   DEFAULT_DASHBOARD_PORT,

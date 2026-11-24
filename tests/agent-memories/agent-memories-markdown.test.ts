@@ -1,6 +1,3 @@
-/**
- * Markdown item splitter for agents that keep memory in one file: bullets and paragraphs are items, headings are context.
- */
 import { describe, it, expect } from 'vitest';
 import { splitMarkdownItems, slugHeading } from '../../src/domain/agent-memories/markdown.js';
 

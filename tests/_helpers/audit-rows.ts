@@ -1,4 +1,3 @@
-// Every audit row hippo.db holds, in id order and read as the store reads one, so a test can compare whole audit logs.
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 import type { AuditOp } from '../../src/base/records/audit-ops.js';
 import { parseStoredObject } from '../../src/base/util/stored-json.js';

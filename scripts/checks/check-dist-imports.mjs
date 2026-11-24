@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Fails when a script, benchmark, eval or test imports a dist/ file the build no longer makes, or a value that file no
-// longer exports: module moves broke such imports twice, and only the one shard that ran them noticed. Run after build.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
@@ -21,7 +19,6 @@ const DIST_SPEC = /(?:^|\/)dist\//;
  * `fromRepo` specs resolve against the repo root, the rest against the importing file's folder.
  */
 
-/** True when tsc drops the statement: `import type`, `export type`, or every named specifier marked `type`. */
 function erased(node) {
   const clause = ts.isImportDeclaration(node) ? node.importClause : node;
   if (!clause) return false;
@@ -31,7 +28,6 @@ function erased(node) {
   return !clause.name && elements.length > 0 && elements.every((e) => e.isTypeOnly);
 }
 
-/** The names a static import or re-export takes as values: type-only ones are erased, `* as` checks no name. */
 function valueNames(node) {
   if (ts.isExportDeclaration(node)) {
     if (node.isTypeOnly || !node.exportClause || !ts.isNamedExports(node.exportClause)) return [];
@@ -44,7 +40,6 @@ function valueNames(node) {
   return clause.name ? ['default', ...names] : names;
 }
 
-/** `pathToFileURL(x)`, `pathToFileURL(x).href` and `new URL(x, import.meta.url)` load what `x` names. */
 function unwrapUrl(node) {
   if (ts.isPropertyAccessExpression(node) && node.name.text === 'href') return unwrapUrl(node.expression);
   const call = ts.isCallExpression(node) || ts.isNewExpression(node) ? node : null;
@@ -53,7 +48,6 @@ function unwrapUrl(node) {
   return node;
 }
 
-/** A literal path, or `path.join(root, 'dist', ...)` and `join(DIST, ...)` with literal parts after the root. */
 function targetOf(arg) {
   const node = unwrapUrl(arg);
   if (ts.isStringLiteralLike(node)) return DIST_SPEC.test(node.text) ? { spec: node.text, fromRepo: false } : null;
@@ -66,7 +60,6 @@ function targetOf(arg) {
   return at < 0 ? null : { spec: parts.slice(at).join('/'), fromRepo: true };
 }
 
-/** The value names `const { a, b: c } = await import(...)` takes; any other use checks only that the file loads. */
 function boundNames(call) {
   let node = call.parent;
   if (node && ts.isAwaitExpression(node)) node = node.parent;
@@ -78,7 +71,6 @@ function boundNames(call) {
     .map((n) => n.text);
 }
 
-/** `import(...)` and `distImport('x')` calls that name a dist/ file. */
 function dynamicImport(node) {
   if (!ts.isCallExpression(node) || node.arguments.length === 0) return null;
   if (node.expression.kind === ts.SyntaxKind.ImportKeyword) return targetOf(node.arguments[0]);
@@ -122,9 +114,7 @@ function listSources(dir) {
   });
 }
 
-/** Exports of each declaration file that carry no value, so a TypeScript import of one without `type` is no miss. */
 function typeOnlyExports(dtsFiles) {
-  // Symbol flags need no lib types, and parsing the default libs cost seconds per call.
   const program = ts.createProgram(dtsFiles, { noEmit: true, noLib: true, skipLibCheck: true, types: [] });
   const checker = program.getTypeChecker();
   return new Map(
@@ -141,7 +131,6 @@ function typeOnlyExports(dtsFiles) {
   );
 }
 
-/** Loads each dist/ target once; a missing file or a load error is the target's whole result. */
 async function loadTargets(targets) {
   const loaded = new Map();
   for (const target of targets) {
@@ -158,7 +147,6 @@ async function loadTargets(targets) {
   return loaded;
 }
 
-/** Each import's target inside the repo's dist/, or none for a fixture's own dist folder. */
 function withTargets(repo, files) {
   const dist = resolve(repo, 'dist') + sep;
   return files.flatMap((file) => {
@@ -200,7 +188,6 @@ export async function checkDistImports(repo, { roots = SCANNED, allowed = ALLOWE
   return { checked: imports.length, problems };
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const repo = resolve(process.argv[2] ?? '.');
   if (!existsSync(join(repo, 'dist', 'index.js'))) {

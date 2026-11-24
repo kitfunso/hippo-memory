@@ -1,4 +1,3 @@
-// Z0 stage 2 pins: the dist tree hash, the hippo build a record names, and the --pins refusal.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -37,13 +37,9 @@ from benchmarks.longmemeval import run as lme  # noqa: E402
 from claude_llm import Claude  # noqa: E402
 from qa.ledger import ANSWERER, JUDGE, Choice, Item, Ledger, require, trail  # noqa: E402
 
-# codex_judge's preamble asks for "the JSON object only", which would turn LongMemEval's yes/no judge into JSON.
-# Same no-tools wording, format left to the prompt; one value for every arm and benchmark.
 codex_judge.PREAMBLE = ("You are a grading function. Do NOT use any tool. Do NOT read, open, view or write any file. "
                         "Everything you need is in this message. Reply in exactly the format the instructions ask for.\n\n")
 LME_CUTOFFS, BEAM_CUTOFFS = [200, 10], [100]
-# Dated notes 9: at 200 (LongMemEval) and 100 (BEAM) hippo-best shows the memories hippo-emb shows, so it is answered
-# at LongMemEval's 10 alone and never on BEAM.
 NOT_ON_BEAM = {"hippo-best"}
 
 
@@ -51,17 +47,16 @@ def lme_cutoffs(arm: str) -> list[int]:
     return [10] if arm == "hippo-best" else LME_CUTOFFS
 BEAM_SIZES = {"beam-100k": "100K", "beam-500k": "500K", "beam-1m": "1M", "beam-10m": "10M"}
 BENCHES = ("longmemeval-s", "longmemeval-m", *BEAM_SIZES)
-CTX: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar("ctx")  # (arm, question id) of the running task
+CTX: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar("ctx")
 sha = h2h.sha
 
 
 class MissingReply(RuntimeError):
-    """Replay needs a logged reply that is not there."""
+    ...
 
 
 class Exhausted(RuntimeError):
-    """An answer with no valid reply in its 3 asks: its question scores wrong on every metric (prereg Amendment 6
-    revision 1 item 5)."""
+    ...
 
 
 def kind_of(bench: str) -> str:
@@ -69,7 +64,6 @@ def kind_of(bench: str) -> str:
 
 
 def parse_json_reply(text: str):
-    """A judge reply as the runner reads structured output (llm_client.py:285-293), after a whole-reply code fence is removed."""
     t = text.strip()
     fenced = h2h.FENCE.fullmatch(t)
     try:
@@ -93,7 +87,6 @@ def number(v: object, key: str, kind: type) -> bool:
 
 
 def valid_structured(system: str, v: object) -> bool:
-    """A reply the runner could use. Where it would score 0 or -1 for a reply with no score or index, this asks again."""
     if v is None:
         return False
     if system == BEAM_JUDGE_SYSTEM_PROMPT:
@@ -106,16 +99,12 @@ def valid_structured(system: str, v: object) -> bool:
 
 
 def yes_no_of(text: str) -> tuple[bool, str] | None:
-    """LongMemEval's verdict as the runner parses it, or None for a reply with neither word, which is asked again."""
     if text.strip() and re.search(r"\b(yes|no)\b", text.lower()):
         return LLMClient._parse_yes_no_judgment(None, text), text.strip()  # type: ignore[arg-type]
     return None
 
 
 class Backend:
-    """Claude and the codex judge behind the call logs: each prompt gets the first valid reply among its first 3 asks,
-    counted across every run (qa/ledger.py). A replay (live=False) never asks."""
-
     def __init__(self, out: Path, slots_answer: int, slots_judge: int, live: bool) -> None:
         self.live, self.lock = live, threading.Lock()
         self.logs = {"answer": out / "calls-answer.jsonl", "judge": out / "calls-judge.jsonl"}
@@ -144,8 +133,6 @@ class Backend:
         return c.value.strip()
 
     def structured(self, system: str, user: str):
-        """The first usable reply in 3 asks. With none, the runner's own value after unreadable replies, {}
-        (llm_client.py:308), which its code scores as a failed step; no verdict is made up."""
         arm, qid = CTX.get()
 
         def usable(text: str):
@@ -156,16 +143,12 @@ class Backend:
         return c.value if c.status == "valid" else {}
 
     def yes_no(self, user: str) -> tuple[bool, str]:
-        """LongMemEval's yes/no judge, asked again on a reply with neither word. With none in 3 asks the item is no,
-        as the runner counts such a reply."""
         arm, qid = CTX.get()
         c = self._settle("judge", Item(f"judge {arm} {qid} {sha('')[:8]}", "", user, JUDGE, yes_no_of))
         return c.value if c.status == "valid" else (False, "")
 
 
 class Answerer:
-    """The runner's LLMClient.generate over Claude."""
-
     def __init__(self, be: Backend, pool: ThreadPoolExecutor) -> None:
         self.be, self.pool = be, pool
 
@@ -175,8 +158,6 @@ class Answerer:
 
 
 class Judge:
-    """The runner's LLMClient.generate_structured and judge_yes_no over the codex judge."""
-
     def __init__(self, be: Backend, pool: ThreadPoolExecutor) -> None:
         self.be, self.pool = be, pool
 
@@ -191,8 +172,6 @@ class Judge:
 
 
 class SavedSearch:
-    """Stands in for Mem0Client in process_question: the search returns the saved retrieval."""
-
     def __init__(self, results: list[dict]) -> None:
         self.results = results
 
@@ -222,8 +201,6 @@ def beam_question(saved: dict) -> dict:
 
 
 async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecutor) -> dict:
-    """The runner's result for one saved question, its cutoff_results filled by the runner's own code. A question
-    with an exhausted prompt names it under "exhausted"; one with an exhausted answer has no cutoff_results."""
     ans, jdg = Answerer(be, pool), Judge(be, pool)
     try:
         if kind_of(bench) == "lme":
@@ -241,7 +218,7 @@ async def evaluate(bench: str, saved: dict, be: Backend, pool: ThreadPoolExecuto
         return {"question_type": saved["question_type"], "exhausted": [str(e)]}
     res.pop("retrieval", None)
     if spent := [t["tag"] for t in be.trace.get(CTX.get(), []) if t["status"] == "exhausted"]:
-        res["exhausted"] = spent  # absent when none, so results saved before this rule still verify
+        res["exhausted"] = spent
     return res
 
 
@@ -254,7 +231,6 @@ def same_result(a: dict, b: dict) -> bool:
 
 
 def pick(bench: str, arms: dict[str, Path], limit: int) -> list[str]:
-    """Question ids common to every arm. For a smoke run, a seeded handful, with one event-ordering question for BEAM."""
     ids = sorted(set.intersection(*(set(pred_files(d)) for d in arms.values())))
     if not limit:
         return ids
@@ -269,8 +245,6 @@ def pick(bench: str, arms: dict[str, Path], limit: int) -> list[str]:
 
 
 def check_retrieval(arm: str, pred: Path, ids: list[str]) -> str:
-    """The arm's retrieval check, if its retrieval ran here, must have passed and still match the files: no answer is
-    made on retrieval that lost an add or a search (the integrity gate, as prereg Amendment 5)."""
     cp = pred.parent / "retrieval-check.json"
     if not cp.exists():
         return "no retrieval-check.json (retrieval from another run, e.g. Lane R)"
@@ -283,7 +257,6 @@ def check_retrieval(arm: str, pred: Path, ids: list[str]) -> str:
 
 
 def check_inputs(out: Path, arms: dict[str, Path], ids: list[str]) -> None:
-    """The retrieval files this run answers, pinned on first use: a changed file stops the run."""
     pin = out / "inputs.json"
     now = {arm: {i: sha(pred_files(d)[i].read_text(encoding="utf-8")) for i in ids} for arm, d in arms.items()}
     if not pin.exists():
@@ -302,7 +275,6 @@ def results_on_file(out: Path) -> dict:
 
 
 def verify(bench: str, arms: dict[str, Path], out: Path, ids: list[str]) -> dict:
-    """Every saved result, made again from the call logs alone: same prompts, same replies, same result, or stop."""
     recs = results_on_file(out)
     be = Backend(out, 1, 1, live=False)
     pool = ThreadPoolExecutor(4)
@@ -337,13 +309,13 @@ def run(bench: str, arms: dict[str, Path], out: Path, a: argparse.Namespace) -> 
         sys.exit(f"{sorted(NOT_ON_BEAM & set(arms))} is not answered on BEAM: at cutoff 100 it shows hippo-emb's memories")
     ids = pick(bench, arms, a.smoke)
     out.mkdir(parents=True, exist_ok=True)
-    if not a.smoke:  # a smoke run answers a subset, which the manifest does not cover
+    if not a.smoke:
         for arm, d in arms.items():
             check_retrieval(arm, d, ids)
     check_inputs(out, arms, ids)
     done =verify(bench, arms, out, ids) if (out / "results.jsonl").exists() else {}
     jobs = [(arm, qid) for qid in ids for arm in arms if (arm, qid) not in done]
-    random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits every arm alike
+    random.Random(4).shuffle(jobs)
     be = Backend(out, a.answer_slots, a.judge_slots, live=True)
     pool = ThreadPoolExecutor(a.tasks + 8)
     failed: list[str] = []
@@ -355,7 +327,7 @@ def run(bench: str, arms: dict[str, Path], out: Path, a: argparse.Namespace) -> 
             p = pred_files(arms[arm])[qid]
             try:
                 res = await evaluate(bench, load_pred(p), be, pool)
-            except Exception as e:  # named below and retried by a rerun; the other questions still land
+            except Exception as e:
                 failed.append(f"{arm} {qid}: {type(e).__name__}: {e}")
                 return
             rec = {"arm": arm, "qid": qid, "pred_sha256": sha(p.read_text(encoding="utf-8")), "result": res,

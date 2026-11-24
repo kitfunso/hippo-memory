@@ -1,4 +1,3 @@
-// The per-prompt hook end to end through the built CLI: what the delivery ledger records, and that it never changes the hook.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,7 +20,6 @@ import { copyTree } from '../_helpers/copy-tree.js';
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const HOOK_ARGS = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
 const PROMPT = 'how should the postgres migration rollback plan work';
-// After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';
 
 const BASE_ENV: NodeJS.ProcessEnv = { ...process.env };
@@ -70,7 +68,6 @@ function configure(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInj
   );
 }
 
-/** A copy of the project with the ledger switched; same folder name, since the project name gates which memories load. */
 function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject']> = {}): string {
   const dir = path.join(tmp, `clone-${ledger ? 'on' : 'off'}-${fs.readdirSync(tmp).length}`, 'proj');
   copyTree(proj, dir);
@@ -78,7 +75,6 @@ function clone(ledger: boolean, pinnedInject: Partial<HippoConfig['pinnedInject'
   return dir;
 }
 
-// In process unless `spawned`: F1 pins the hook in a real child, and F5 and the preload cases spawn their own.
 async function run(
   dir: string,
   payload: Payload | null,
@@ -104,7 +100,6 @@ function events(dir: string, sessionId: string | null): DeliveryEventRow[] {
   }
 }
 
-/** A session's events, asserting the count first so a second write in one call cannot hide behind destructuring. */
 function eventsN(dir: string, sessionId: string | null, n: number): DeliveryEventRow[] {
   const rows = events(dir, sessionId);
   expect(rows).toHaveLength(n);
@@ -543,7 +538,6 @@ DatabaseSync.prototype.prepare = function (sql, ...rest) {
     } finally {
       closeHippoDb(db);
     }
-    // The scan covers each run's session and turn, the 2 pins, and the one note that shares the prompt's words.
     expect(cells).toEqual(
       expect.arrayContaining(['f10', 'f10-codex', 'turn-9', ...seeded.slice(0, 3).map((m) => m.id)]),
     );

@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-/**
- * Judge helper for the model-profile benchmark. Uses the Claude Code CLI
- * (`claude -p --model ...`) so no API key is needed — the user's subscription
- * handles billing.
- */
 import { execFileSync } from 'node:child_process';
 import * as os from 'node:os';
 
@@ -77,8 +72,6 @@ export function judge(caseDef, response) {
   return { verdict, raw: data.result ?? '' };
 }
 
-// Allow direct invocation for quick tests:
-//   echo '{"case": {...}, "response": "..."}' | node scripts/model-profile-judge.mjs
 if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
   let input = '';
   process.stdin.setEncoding('utf8');

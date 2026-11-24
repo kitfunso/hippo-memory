@@ -1,19 +1,14 @@
-// Callers outside src/ for the test-only export gate: a file under scripts/ or benchmarks/ that imports a src module,
-// by its dist/ build path or its src/ path, is a production caller of the names it uses from that module.
-
 import { posix } from 'node:path';
 import ts from 'typescript';
 
 const JS_PATH = /^[\w./-]+\.js$/;
 
-/** The src module behind an import specifier written in `from`, or null when it does not land in the repo's dist/ or src/. */
 function toSrc(has, from, spec) {
   if (!spec.startsWith('.')) return null;
   const m = /^(?:dist|src)\/(.+)\.(?:js|mjs|ts)$/.exec(posix.normalize(posix.join(posix.dirname(from), spec)));
   return m && has(`src/${m[1]}.ts`) ? `src/${m[1]}.ts` : null;
 }
 
-/** The src module a path literal names when the file builds its import path at run time (`load('store/open.js')`). */
 function fromLiteral(has, text) {
   if (!JS_PATH.test(text)) return null;
   const file = `src/${text
@@ -43,7 +38,6 @@ function readCall(found, call, resolve) {
     else if (!literal) found.computed = true;
     return;
   }
-  // `join(REPO, 'dist', 'store', 'open.js')` names one path, so its pieces are never read as paths of their own.
   let run = [];
   const flush = () => {
     if (run.length > 1) {

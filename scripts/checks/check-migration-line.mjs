@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// The migrations form one unbroken line v01..vN: a store opened by a build with a gap would never run the skipped ones.
-// First step of prepublishOnly, not CI: CI stays green while a gap is open, a publish must not.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,7 +34,6 @@ export function describeGap({ after, next }) {
   return `v${after} is followed by v${next}, so ${missing} ${next - after === 2 ? 'is' : 'are'} missing.`;
 }
 
-// Guarded so importing this module (the test) neither runs the check nor exits.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const gaps = findMigrationGaps(readMigrationVersions(process.argv[2]));
   if (gaps.length > 0) {

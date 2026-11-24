@@ -1,4 +1,3 @@
-// tests/store/goal-push.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) =>

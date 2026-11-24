@@ -1,5 +1,3 @@
-// A sleep flush reads the live rows and tombstones of a window of writes at once, one tombstone read per tenant, so its
-// reads stay flat as a batch grows; it still refuses each write that would bring a rejected text back, and audits it.
 import { describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { normalizeValueForRejection, rejectionDigest } from '../../src/base/records/rejection-digest.js';
@@ -31,14 +29,10 @@ const note = (tenantId: string, text: string): MemoryEntry => ({
 interface Batch {
   readonly home: string;
   readonly ops: MemoryEntry[];
-  /** Per tenant: a live row whose own text was rejected after it was written, re-persisted unchanged. */
   readonly kept: MemoryEntry[];
-  /** The live rows changed onto a rejected text, one a tenant, then the new rows of one. */
   readonly refused: MemoryEntry[];
 }
 
-// Each tenant: `perTenant` live rows re-persisted with one more retrieval, one of them changed onto a rejected text,
-// one keeping its own rejected text, and a new row of a rejected text.
 function tombstone(home: string, rows: readonly MemoryEntry[]): void {
   const db = openHippoDb(home);
   try {
@@ -112,7 +106,6 @@ const oneRow = (refresh: { id: string; strength: number } | MemoryEntry): FlushC
 });
 
 describe("sleep's flush over one-row components", () => {
-  // Windows of 16, 32, 64, 128 then 256 ops: 42 components take two, 402 take five.
   it.each([
     [40, 2],
     [400, 5],

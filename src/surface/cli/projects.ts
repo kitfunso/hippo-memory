@@ -1,6 +1,3 @@
-// The `hippo projects` verb: list a store's project names, fold an old worktree name into its repo,
-// repair old tags in one pass.
-
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import * as api from '../../api/index.js';
@@ -12,8 +9,6 @@ import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.j
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 
-/** Old per-worktree project names of the repo at cwd, mapped to the repo's main checkout name;
- * empty outside git. */
 function worktreeNames(): Map<string, string> {
   try {
     const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {

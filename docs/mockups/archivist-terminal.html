@@ -120,7 +120,6 @@
   <div class="boot" id="boot"><span id="bootOut"></span><span class="cursor">_</span></div>
 
   <div class="shell" id="shell" style="visibility:hidden">
-    <!-- TOP CHROME -->
     <div class="chrome">
       <pre class="banner" id="banner"></pre>
       <div style="display:flex;align-items:center;gap:18px">
@@ -129,19 +128,15 @@
       </div>
     </div>
 
-    <!-- MAIN -->
     <div class="main">
-      <!-- LEFT: drawer cabinet -->
       <nav class="cabinet" id="cabinet"></nav>
 
-      <!-- CENTER: reading desk -->
       <section class="desk" id="desk">
         <div class="desk-head" id="deskHead"></div>
         <div class="card-wrap"><pre class="card" id="card"></pre></div>
       </section>
     </div>
 
-    <!-- PROMPT -->
     <div class="prompt">
       <span class="ps">CALL&gt;</span>
       <input id="prompt" autocomplete="off" spellcheck="false" placeholder="call HIP.EP.012 | drw 02 | grep gpu | ls buffer | stat | help"/>
@@ -149,7 +144,6 @@
     </div>
   </div>
 
-  <!-- HELP OVERLAY -->
   <div class="overlay" id="overlay">
     <pre id="help"></pre>
   </div>

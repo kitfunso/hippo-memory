@@ -1,7 +1,3 @@
-// Where hippo and the agent tools keep their config and data, from a machine's home folder and
-// environment: the rules only. src/host/agent-homes.ts reads this process's home, and
-// src/infra/machine.ts builds the real Machine.
-
 import * as path from 'node:path';
 import type { AgentFiles } from './agent-files.js';
 import type { GitRunner } from '../ports/git.js';
@@ -21,13 +17,9 @@ export interface Machine {
   readonly platform: NodeJS.Platform;
   readonly files: AgentFiles;
   readonly git: GitRunner;
-  /** The folder the process runs in, whose path segments boost a recall; absent, no path boost. */
   readonly cwd?: string;
-  /** The project a folder belongs to, as src/host walks its markers. */
   readonly projectIdentity: (dir: string) => ProjectIdentity;
-  /** hippo's global store folder, read when asked so a changed HIPPO_HOME shows. */
   readonly globalRoot: () => string;
-  /** Whether a folder is the global store's, links and case resolved as the disk has them. */
   readonly isGlobalRoot: (hippoRoot: string) => boolean;
 }
 

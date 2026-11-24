@@ -1,6 +1,3 @@
-// The key a `hippo serve` hands to the CLI and hooks on its own machine. Each start writes a fresh
-// secret next to the pidfile, in a file only the user can read; reading that file, never a socket
-// address, is what proves a caller local.
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +8,6 @@ import { ensureKeyGitignored } from '../../host/key-gitignore.js';
 import { restrictToCurrentUser } from '../../host/windows-acl.js';
 
 const KEY_FILE = 'server.key';
-// Its own prefix, so the token never reaches an auth resolver or the API-key table.
 const KEY_PREFIX = 'hl_';
 const KEY_BYTES = 32;
 /** The audit actor of a request the local key signs, as the CLI on this machine has always been
@@ -50,7 +46,6 @@ export function callerKey(hippoRoot: string): string | undefined {
 
 /** The local key one server issued; only a digest is held. */
 export interface LocalKey {
-  /** True when `token` is this key; compared in constant time. */
   matches(token: string): boolean;
 }
 

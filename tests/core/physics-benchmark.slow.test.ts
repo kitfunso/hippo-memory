@@ -1,13 +1,3 @@
-/**
- * A/B Benchmark: Physics Search vs Classic Search
- *
- * Uses synthetic embeddings (deterministic, fast) to test physics scoring
- * against classic BM25+cosine. Memories in the same cluster get similar
- * embedding vectors; unrelated memories get orthogonal vectors.
- *
- * This isolates the physics scoring logic from embedding model quality.
- */
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -19,22 +9,15 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { saveEmbeddingIndex, writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 
-// ---------------------------------------------------------------------------
-// Synthetic embedding generator
-// ---------------------------------------------------------------------------
-
 const EMBED_DIM = 384;
 
-/** Generate a deterministic unit vector from a seed. Seeded hash -> direction. */
 function syntheticEmbedding(seed: number): number[] {
   const vec = Array.from({ length: EMBED_DIM }, () => 0);
-  // Simple deterministic pseudo-random using seed
   let s = seed;
   for (let i = 0; i < EMBED_DIM; i++) {
     s = ((s * 1103515245 + 12345) & 0x7fffffff) >>> 0;
     vec[i] = (s / 0x7fffffff) * 2 - 1;
   }
-  // Normalize to unit vector
   let norm = 0;
   for (let i = 0; i < EMBED_DIM; i++) norm += vec[i] * vec[i];
   norm = Math.sqrt(norm);
@@ -42,7 +25,6 @@ function syntheticEmbedding(seed: number): number[] {
   return vec;
 }
 
-/** Create a cluster of similar embeddings: base vector + small noise. */
 function clusterEmbedding(base: number[], noiseSeed: number, noiseScale = 0.15): number[] {
   const vec = [...base];
   let s = noiseSeed;
@@ -50,7 +32,6 @@ function clusterEmbedding(base: number[], noiseSeed: number, noiseScale = 0.15):
     s = ((s * 1103515245 + 12345) & 0x7fffffff) >>> 0;
     vec[i] += ((s / 0x7fffffff) * 2 - 1) * noiseScale;
   }
-  // Re-normalize
   let norm = 0;
   for (let i = 0; i < EMBED_DIM; i++) norm += vec[i] * vec[i];
   norm = Math.sqrt(norm);
@@ -58,15 +39,10 @@ function clusterEmbedding(base: number[], noiseSeed: number, noiseScale = 0.15):
   return vec;
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 let tmpDir: string;
 const seedIds: Record<string, string> = {};
 const embeddingIndex: Record<string, number[]> = {};
 
-// Cluster centroids (orthogonal-ish directions in 384-dim space)
 const FRED_CENTROID = syntheticEmbedding(100);
 const SUBAGENT_CENTROID = syntheticEmbedding(200);
 const QUANT_CENTROID = syntheticEmbedding(300);
@@ -93,7 +69,6 @@ function seed(
 function seedCorpus(): void {
   tmpDir = makeRoot('physics-bench');
 
-  // ── FRED cluster (3 tightly clustered memories) ──────────────────────
   seed(
     'fred_cache_drop',
     `FRED cache can silently drop series. tips_10y vanished from fred_weekly.parquet during daily refresh, breaking the gold model.`,
@@ -115,7 +90,6 @@ function seedCorpus(): void {
     { tags: ['data-pipeline', 'fred', 'columns'] },
   );
 
-  // ── Sub-agent cluster ─────────────────────────────────────────────────
   seed(
     'subagent_american_english',
     `Sub-agents consistently use American English spelling. Review output: favorable, maximize, optimize.`,
@@ -137,7 +111,6 @@ function seedCorpus(): void {
     { tags: ['sub-agent', 'verification', 'error'], emotionalValence: 'critical' },
   );
 
-  // ── Quant/backtest cluster ────────────────────────────────────────────
   seed(
     'walk_forward_overestimates',
     `Walk-forward OOS Sharpe overestimates by ~50%. CPCV shows deflation of +0.59 on average.`,
@@ -159,7 +132,6 @@ function seedCorpus(): void {
     { tags: ['quant', 'cpcv', 'sharpe'] },
   );
 
-  // ── Data pipeline errors cluster ──────────────────────────────────────
   seed(
     'eia_path_change',
     `EIA API path changed silently. /petroleum/sum/wkly became /petroleum/sum/sndw. Broke 9 of 10 series.`,
@@ -188,7 +160,6 @@ function seedCorpus(): void {
     { tags: ['data-pipeline', 'cache', 'columns'] },
   );
 
-  // ── Platform cluster ──────────────────────────────────────────────────
   seed(
     'no_emoji_python',
     `No emoji in Python print statements on Windows. cp1252 encoding crashes on emoji characters.`,
@@ -203,7 +174,6 @@ function seedCorpus(): void {
     { tags: ['platform', 'powershell', 'windows'] },
   );
 
-  // ── Production rules ──────────────────────────────────────────────────
   seed(
     'never_overwrite',
     `NEVER overwrite existing production files. Create versioned copies. Violating destroys PnL history.`,
@@ -218,7 +188,6 @@ function seedCorpus(): void {
     { tags: ['production', 'rule', 'versioning'] },
   );
 
-  // ── Frontend cluster ──────────────────────────────────────────────────
   seed(
     'build_before_deploy',
     `Always run build before deploying frontend. Missing the build step deploys stale code.`,
@@ -233,7 +202,6 @@ function seedCorpus(): void {
     { tags: ['frontend', 'backend', 'constants'] },
   );
 
-  // ── Ops cluster ───────────────────────────────────────────────────────
   seed(
     'cron_timeout_sizing',
     `Cron timeout sizing for heavy jobs. Default to >=900s. Run manual timed pass first.`,
@@ -248,7 +216,6 @@ function seedCorpus(): void {
     { tags: ['ops', 'cron', 'scheduling'] },
   );
 
-  // ── Isolated memories (no cluster) ────────────────────────────────────
   seed(
     'equal_weight_beats_optimization',
     `Equal weight beats portfolio optimization. 1/N allocation Sharpe 3.12 beats all optimization schemes.`,
@@ -284,7 +251,6 @@ function seedCorpus(): void {
     { tags: ['sub-agent', 'data-sources', 'creativity'] },
   );
 
-  // ── Save synthetic embeddings and initialize physics ──────────────────
   saveEmbeddingIndex(tmpDir, embeddingIndex);
 
   const db = openHippoDb(tmpDir);
@@ -292,7 +258,6 @@ function seedCorpus(): void {
     const entries = loadAllEntries(tmpDir, 'default');
     const resetCount = resetAllPhysicsState(db, entries, embeddingIndex);
 
-    // Run 10 sleep cycles to let clusters form
     for (let cycle = 0; cycle < 10; cycle++) {
       const physicsMap = loadAllPhysicsState(db);
       const particles = Array.from(physicsMap.values());
@@ -324,13 +289,9 @@ function seedCorpus(): void {
 
 beforeAll(() => seedCorpus());
 
-// ---------------------------------------------------------------------------
-// Metric helpers
-// ---------------------------------------------------------------------------
-
 interface QueryCase {
   query: string;
-  queryEmbedding: number[]; // synthetic query vector
+  queryEmbedding: number[];
   expectedLabels: string[];
 }
 
@@ -368,10 +329,6 @@ function mrr(topIds: string[], expectedIds: string[]): number {
   }
   return 0;
 }
-
-// ---------------------------------------------------------------------------
-// Standard queries (keyword-heavy — BM25 should do well)
-// ---------------------------------------------------------------------------
 
 const STANDARD_QUERIES: QueryCase[] = [
   {
@@ -422,11 +379,6 @@ const STANDARD_QUERIES: QueryCase[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Cluster queries (physics should outperform — broad queries where
-// the answer is a cluster of 3+ related memories)
-// ---------------------------------------------------------------------------
-
 const CLUSTER_QUERIES: QueryCase[] = [
   {
     query: 'FRED data pipeline issues',
@@ -454,10 +406,6 @@ const CLUSTER_QUERIES: QueryCase[] = [
     expectedLabels: ['staleness_hides_ok', 'eia_path_change', 'fred_cache_drop'],
   },
 ];
-
-// ---------------------------------------------------------------------------
-// A/B comparison
-// ---------------------------------------------------------------------------
 
 interface Metrics {
   readonly p3: number;
@@ -518,7 +466,6 @@ function logSummary(title: string, scores: readonly QueryScore[], by: keyof Metr
 }
 
 describe('Physics vs Classic A/B Benchmark', () => {
-  // Scored once, in a fixed order, before the stability test resets physics state, so no test order can move a total.
   let standard: QueryScore[] = [];
   let cluster: QueryScore[] = [];
   beforeAll(() =>
@@ -534,7 +481,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = standard[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'mrr');
-        // The rank follows the default embedding model, which only some runners have, so only a top-10 hit is fixed.
         expect(s.classic.mrr, `Classic MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });
@@ -543,7 +489,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
       expect(standard).toHaveLength(STANDARD_QUERIES.length);
       logSummary('Standard Queries', standard, 'mrr');
       expect(mean(standard, 'classic', 'mrr')).toBeGreaterThanOrEqual(0.8);
-      // Rank-based like the per-query checks, so only a floor holds.
       expect(mean(standard, 'physics', 'mrr')).toBeGreaterThan(0);
     });
   });
@@ -554,7 +499,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
         const s = cluster[i]!;
         expect(s.expectedCount).toBe(tc.expectedLabels.length);
         logRow(s, 'r3');
-        // Physics scores decay from the real clock and fall back to the default model, so only a top-10 hit is fixed.
         expect(s.physics.mrr, `Physics MRR=0 for "${tc.query}"`).toBeGreaterThan(0);
       });
     });
@@ -567,7 +511,6 @@ describe('Physics vs Classic A/B Benchmark', () => {
   });
 
   describe('Simulation stability', () => {
-    // 50 simulate-and-save cycles of a pairwise force loop, which coverage instrumentation slows far more than other code.
     it('energy does not increase over 50 sleep cycles', () => {
       const db = openHippoDb(tmpDir);
       try {

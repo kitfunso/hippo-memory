@@ -49,9 +49,6 @@ describe('archiveRawMemory', () => {
     expect(archived.memory_id).toBe('r1');
     expect(archived.reason).toBe('GDPR right-to-be-forgotten');
     expect(archived.archived_by).toBe('user:42');
-    // v0.39 Path A: payload_json is metadata-only — original content is NOT
-    // stored. The audit_log row carries the compliance trail; raw_archive
-    // tracks only that an archive happened, for what tenant/kind, and why.
     // SAFETY: payload_json is written by archiveRawMemory (src/store/raw-archive.ts)
     // with exactly this metadata-only shape.
     const payload = JSON.parse(archived.payload_json) as ArchivedRawPayload;
@@ -88,7 +85,6 @@ describe('archiveRawMemory', () => {
   it('purges memories_fts row so archived content is not searchable (GDPR)', () => {
     const home = makeRoot('arch');
     const db = openHippoDb(home);
-    // Skip if FTS5 not available in this build
     // SAFETY: literal SELECT of a single known meta key; the value column is
     // NOT NULL in the schema when the row exists.
     const ftsRow = db.prepare(`SELECT value FROM meta WHERE key='fts5_available'`).get() as
@@ -107,11 +103,9 @@ describe('archiveRawMemory', () => {
       'classifiedsecret unique-canary-zylph',
       '[]',
     );
-    // Pre-condition: FTS finds it
     const before = db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`).all('zylph');
     expect(before.length).toBe(1);
     archiveRawMemory(db, 'rfts', { reason: 'GDPR delete', who: 'user:99' });
-    // Post-condition: FTS no longer finds it
     const after = db.prepare(`SELECT id FROM memories_fts WHERE memories_fts MATCH ?`).all('zylph');
     expect(after.length).toBe(0);
     closeHippoDb(db);
@@ -125,7 +119,6 @@ describe('archiveRawMemory', () => {
       db.prepare(
         `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind) VALUES ('rfail','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','purge must not half-happen','raw')`,
       ).run();
-      // fts5_available stays '1', so the archive still tries the purge and it fails.
       db.prepare(
         `INSERT INTO meta(key, value) VALUES ('fts5_available', '1') ON CONFLICT(key) DO UPDATE SET value = '1'`,
       ).run();
@@ -195,7 +188,6 @@ function stampOf(db: Db, id: string): string | null {
   return row.mirror_cleaned_at;
 }
 
-/** The stamp in the store at `home`, read without the open-time reaper that would set it. */
 function storedStamp(home: string, id: string): string | null {
   const db = openHippoDbReadOnly(home);
   try {
@@ -205,7 +197,6 @@ function storedStamp(home: string, id: string): string | null {
   }
 }
 
-/** A store with the `ids` archived and unstamped, and a second connection to take its write lock. */
 function withArchivedRows(ids: readonly string[], run: (db: Db, holder: Db) => void): void {
   const home = makeRoot('arch');
   const db = openHippoDb(home, { busyWaitMs: 50 });
@@ -269,7 +260,6 @@ interface RawLoserConflict {
   readonly loser: MemoryEntry;
 }
 
-/** A kept memory and a raw one, each with its markdown mirror, and the open conflict between them. */
 async function conflictOverRawLoser(home: string): Promise<RawLoserConflict> {
   const keeper = createMemory('keeper content for the mirror stamp tests', { tags: ['x'] });
   const loser = createMemory('raw loser content for the mirror stamp tests', { tags: ['x'], kind: 'raw' });
@@ -305,8 +295,6 @@ const mirrorsOf = (home: string, id: string): string[] =>
     .map(String)
     .filter((file) => file.endsWith(`${id}.md`));
 
-/** Wraps the real unlink so `holder` takes the write lock once the first mirror of `ids` is gone, which is after the
- * remove committed, and lets it go before the second one goes. Returns the ids as they are unlinked. */
 function lockAfterFirstMirrorUnlink(holder: Db, ids: readonly string[]): string[] {
   const realUnlink = fs.unlinkSync;
   const unlinked: string[] = [];

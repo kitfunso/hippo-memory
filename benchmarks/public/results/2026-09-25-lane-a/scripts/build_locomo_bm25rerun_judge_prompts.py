@@ -1,4 +1,3 @@
-"""Blind judge prompts for deviation 3: hippo@365 answers shuffled with the regenerated bm25 answers."""
 import glob, io, json, os, random, sys
 
 HOME = os.path.expanduser('~')

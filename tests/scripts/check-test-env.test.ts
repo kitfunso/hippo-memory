@@ -64,7 +64,6 @@ describe('earlyUnstubs', () => {
   });
 });
 
-// Built from pieces so this file's own text starts nothing and it stays a unit test.
 const CHILD = `import { spawn } from 'node:${['child', 'process'].join('_')}';\n`;
 const SERVER = `await ${['ser', 've'].join('')}({ port: 0 });\n`;
 

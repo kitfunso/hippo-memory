@@ -1,6 +1,3 @@
-// The write half of `hippo refine`: the model call stays with the caller, the rewritten row is
-// stored here.
-
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { Context } from '../types.js';
 

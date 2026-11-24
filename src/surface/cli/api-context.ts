@@ -58,8 +58,6 @@ import { DetachedSet } from '../../base/util/detached-set.js';
  * parses an unchanged config.json once. */
 export const cliConfig: ConfigReader = configReader(envRuntimeSettings);
 
-/** The CLI process's Host: one command, or one stdio MCP loop, walks each folder and reads each
- * shared flag once. */
 const cliHost = createHost();
 
 /** The CLI process's outside services: one reranker registry for every command and stdio MCP
@@ -72,12 +70,8 @@ export function cliReranker(name: string | null | undefined): RerankerFn | null 
   return rerankerWithClef({ infra: cliInfra() }, name, envClefSettings());
 }
 
-// A CLI process runs one command, so the session that command opened is this root's state, as
-// cliHost is, not a scope.
 let commandSession: StoreSession | undefined;
 
-// A session's stores hold the runtime its handles return to, so a stdio loop's frames and stores
-// share one.
 function cliStoreOptions(session: StoreSession | undefined): StoreOptions {
   return {
     ...evalStoreRules(envLossAversionRatio()),
@@ -189,8 +183,6 @@ export function cliDetached(): DetachedWork {
  * unchecked; the folder rides beside the api's Context for the verbs that reopen it. */
 export type CliContext = ContextWith<OptionalGroup> & { readonly hippoRoot: string };
 
-/** The stores a CLI call on `hippoRoot` reaches, each global one with its config and on the
- * call's session. */
 function cliReach(
   hippoRoot: string,
   store: HippoStore & StoreGroups,
@@ -211,16 +203,12 @@ function cliReach(
   );
 }
 
-// The one place the CLI names its audit actor and builds its store; root is a parameter because
-// some verbs target the global store. A command's callers start empty unless its caller holds a
-// set; a CLI write starts no sleep.
 export function cliApiContext(
   hippoRoot: string,
   tenantId: string,
   callers: CallerState = createCallerState(),
 ): CliContext {
   const store = cliStore(hippoRoot);
-  // Read here, once per command, so a long-lived caller of this function never pins a stale config.
   const config = cliConfig(hippoRoot);
   const infra = cliInfra();
   const reach = cliReach(hippoRoot, store, infra.embedderFor);
@@ -251,8 +239,6 @@ export function cliLedgerReach(hippoRoot: string): LedgerReach {
   });
 }
 
-/** `root`'s auto-sleep on a session of its own: the sleep outlives the frame whose write started
- * it. */
 function rootAutoSleep(root: string, hostTenantId: string): AutoSleepRunner {
   return () =>
     runStoreRequest(
@@ -275,10 +261,7 @@ export function cliStdioHost(): McpHost<CliStore> {
   const hostTenantId = envTenant();
   const shared = createCallerState();
   const tools = allMcpTools();
-  // The command's runtime under `hippo mcp`; a host built outside a command keeps its own.
   const detached = cliRuntime() ?? new DetachedSet();
-  // The rings span the loop; each folder keeps an auto-sleep and its latch, as a write's context
-  // names no folder, and each frame counts on its own store.
   const byRoot = new Map<string, Pick<AutoSleepHost, 'run' | 'latch'>>();
   const callersOn = (root: string, store: StoreWith<'reports'>): CallerState => {
     let sleeps = byRoot.get(root);
@@ -311,8 +294,6 @@ export function cliStdioHost(): McpHost<CliStore> {
         detached,
       };
     };
-  // Frames interleave, so each takes a session of its own and hands it to every store its context
-  // builds.
   return {
     runFrame: (signal, run) =>
       runStoreRequest((session) => run(contextIn(session, signal)), 'cli', cliRuntime()),

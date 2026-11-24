@@ -1,10 +1,7 @@
-// The SessionEnd worker is detached, so on Windows it has no console: a child
-// started without windowsHide gets its own visible terminal window.
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Built from pieces so this file does not match the pattern that lists the tests which start a process.
 const CHILD_IMPORT = new RegExp(String.raw`from ['"](node:)?child_` + 'process[\'"]');
 const CALL = /\b(execFileSync|execSync|spawnSync|spawn|execFile)\(/g;
 
@@ -16,7 +13,6 @@ function tsFiles(dir: string): string[] {
   });
 }
 
-/** Text of the call from its opening paren to the matching close paren. */
 function callText(src: string, open: number): string {
   let depth = 0;
   for (let i = open; i < src.length; i++) {

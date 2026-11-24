@@ -1,4 +1,3 @@
-// One session-end worker per session: a busy session queues the request for the running worker, and turn capture resumes from its cursor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -23,7 +22,6 @@ import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js
 const ID = 'vscode-sess-1';
 let fake: FakeHomeHandle;
 let sessions: string;
-/** The sessions folder's files, leaving out the lock file a finished worker keeps for the next take. */
 const left = (): string[] => fs.readdirSync(sessions).filter((n) => !n.endsWith('.lock.db'));
 const file = (suffix: string): string => path.join(sessions, `${ID}${suffix}`);
 
@@ -39,7 +37,6 @@ afterEach(() => {
 
 const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
 
-/** A child process that holds the lock file until it is killed. */
 async function holdInChild(lock: string): Promise<ChildProcess> {
   const child = spawn(process.execPath, [HOLDER, lock], { stdio: ['ignore', 'pipe', 'ignore'] });
   await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
@@ -67,7 +64,6 @@ function recorder(): Recorder {
   };
 }
 
-/** A give-up writer that keeps what it is given. */
 function giveUps() {
   const lines: string[] = [];
   const gaveUp: LineLog = (line) => {
@@ -76,7 +72,6 @@ function giveUps() {
   return { lines, gaveUp };
 }
 
-/** A folder where takeQueued renames the request to makes every take fail. */
 function blockTake(): void {
   const blocked = file(`.queued.${process.pid}`);
   fs.mkdirSync(blocked);
@@ -125,7 +120,6 @@ describe('runSessionWorker', () => {
   });
 
   it('keeps serving after five rounds that ran work: only rounds that took nothing count', async () => {
-    // The first work call leaves a request that cannot be taken (a folder in the rename target's place).
     const blocked = file(`.queued.${process.pid}`);
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const gave = giveUps();
@@ -143,7 +137,6 @@ describe('runSessionWorker', () => {
       const lines = write.mock.calls
         .map((c) => String(c[0]))
         .filter((m) => m.includes('cannot take the queued request'));
-      // One failed take in the round that ran work, then five idle rounds.
       expect(lines).toHaveLength(6);
       expect(gave.lines).toHaveLength(1);
     } finally {
@@ -152,7 +145,6 @@ describe('runSessionWorker', () => {
   });
 
   it('looks at the queue again after a release even when it ran nothing, stops after five rounds and says so once', async () => {
-    // Every take fails: ran stays false and the request stays queued.
     blockTake();
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const gave = giveUps();
@@ -230,7 +222,6 @@ describe('runSessionWorker', () => {
   it('runs a request that another reply queued while the work ran, before it lets go', async () => {
     const runs: WorkerMode[] = [];
     await runSessionWorker(ID, 'turn', async (mode) => {
-      // What a second Stop hook's worker does when it finds the lock held: queue, then leave.
       if (runs.length === 0) fs.writeFileSync(file('.queued'), 'turn', { flag: 'wx' });
       runs.push(mode);
     });
@@ -254,7 +245,6 @@ describe('runSessionWorker', () => {
   });
 
   it('runs unlocked and warns once, naming the lock path, when the lock cannot be made', async () => {
-    // A folder in the lock's place cannot be opened as a lock database.
     fs.mkdirSync(file('.lock.db'));
     const write = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
@@ -385,7 +375,6 @@ describe('the progress cursor', () => {
 
   it('logs a cursor it cannot save and goes on, so the digest and handoff still run', () => {
     const transcript = path.join(fake.home, 'transcripts', `${ID}.jsonl`);
-    // A folder in the cursor's place makes the rename fail, as Windows does with EPERM while another process has the file open.
     fs.mkdirSync(path.join(file('.cursor.json'), 'held'), { recursive: true });
     const log: string[] = [];
     expect(() => saveTurnPosition(ID, transcript, turns, (m) => log.push(m))).not.toThrow();
@@ -441,7 +430,6 @@ describe('pruning the sessions folder', () => {
     try {
       expect(pruneSessionFiles(Date.now())).toBe(0);
       expect(fs.existsSync(at('idle.lock.db'))).toBe(true);
-      // ctime cannot be set, so the clock moves past the age instead.
       expect(pruneSessionFiles(Date.now() + 31 * DAY)).toBe(1);
       expect(fs.readdirSync(sessions).sort()).toEqual(['held.lock.db', 'queued.lock.db', 'queued.queued']);
     } finally {

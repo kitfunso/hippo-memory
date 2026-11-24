@@ -1,18 +1,3 @@
-/**
- * v1.12.3: tests for the auth CLI role surfacing.
- *
- * Covers:
- *   - api.authCreate accepts opts.role and returns it on the result
- *   - listApiKeys returns role on each row (admin + member)
- *   - listApiKeys legacy DB row (pre-v26-migration with NULL role) → fail-safe-to-member
- *   - Bearer minted with role='member' is 403-blocked at admin-gated /v1/sleep
- *
- * The CLI flag (`hippo auth create-key --role`) and table-header column are
- * pure surfacing of the api.authCreate / listApiKeys results — covered
- * transitively. Direct subprocess invocation of createApiKey is awkward in
- * vitest (would mock process.exit / stdout), so the contract is locked at
- * the api/db layer.
- */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -70,17 +55,12 @@ describe('auth CLI role surfacing', () => {
   });
 
   it('listApiKeys fail-safe-to-member on unrecognised role value', async () => {
-    // Construct an api_keys row with a non-canonical role via direct SQL
-    // (simulates a legacy or corrupted row). listApiKeys must cast it to
-    // 'member' — never silently grant admin.
     const t = newCtx();
     try {
-      // First mint a real key so the schema migration runs and the table exists.
       await authCreate(t.ctx, { label: 'real-key' });
 
       const db = openHippoDb(t.ctx.hippoRoot);
       try {
-        // Now insert a row with an unrecognised role value
         db.prepare(`
           INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at, role)
           VALUES (?, ?, ?, ?, ?, ?)
@@ -88,7 +68,7 @@ describe('auth CLI role surfacing', () => {
 
         const items = listApiKeys(t.ctx.hippoRoot, { tenantId: ALL_TENANTS, active: true });
         const legacy = items.find((i) => i.keyId === 'hk_legacy0000000000000000');
-        expect(legacy!.role).toBe('member'); // fail-safe-to-member
+        expect(legacy!.role).toBe('member');
       } finally {
         closeHippoDb(db);
       }

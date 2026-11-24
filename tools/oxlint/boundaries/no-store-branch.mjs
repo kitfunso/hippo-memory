@@ -1,4 +1,3 @@
-// Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
 import { defineRule } from '@oxlint/plugins';
 
 import { isDotted, isNamed, textOf } from './nodes.mjs';

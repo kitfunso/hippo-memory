@@ -1,5 +1,3 @@
-// Runs the adapters for one pass and routes each container to its store; src/api/agent-memories.ts
-// picks the passes.
 import path from 'node:path';
 import { plural } from '../../base/util/format.js';
 import type { Machine } from '../../base/util/agent-homes.js';
@@ -51,35 +49,24 @@ export const ADAPTERS: readonly Adapter[] = [
 export const TOOLS_ENV = 'HIPPO_AGENT_MEMORY_TOOLS';
 
 export interface SyncOptions {
-  /** The tenant every imported row is written as; the caller's root resolved it. */
   readonly tenantId: string;
   readonly machine: Machine;
-  /** Reads one store's config; the caller's, so this module never touches config.json. */
   readonly configAt: (hippoRoot: string) => HippoConfig;
-  /** Writes nothing: each container's transaction rolls back, and a missing store is stood in
-   * for by an empty one. */
   readonly dryRun?: boolean;
-  /** How long a busy store is waited on before its containers are skipped. */
   readonly busyWaitMs?: number;
-  /** Opens each target store; the caller's, so this module never builds a store adapter. */
   readonly stores: ImportStores;
-  /** The root's eval switches and clock, which score and stamp each revived or new row. */
   readonly run: EmbedRun;
 }
 
 /** One pass: the listing it takes from each adapter and the store its rows land in. */
 export interface Pass {
   readonly scope: Scope;
-  /** The store rows land in. */
   readonly target: string;
-  /** The store the command runs in; without the variable, its config must allow a tool as well. */
   readonly invoking: string;
   readonly list: (adapter: Adapter) => Listing | null;
   readonly legacy: boolean;
   readonly originProject: string | undefined;
-  /** The project's names before its id, whose global-store imports this pass moves under the id. */
   readonly legacyOrigins: readonly string[];
-  /** Set aside the global store's copies of each container this pass syncs into a local store. */
   readonly handover: boolean;
 }
 
@@ -103,7 +90,6 @@ export function allowedTools(
             .split(',')
             .map((t) => t.trim())
             .filter((t) => t !== '');
-    // The value is never echoed: a secret set in this variable by mistake would reach the log.
     let unknown = 0;
     const known = knownTools(listed, () => unknown++);
     if (unknown > 0) {
@@ -152,7 +138,6 @@ function knownTools(ids: readonly string[], onUnknown: (id: string) => void): Se
 export async function runPass(pass: Pass, opts: SyncOptions): Promise<ImportReport> {
   const report = emptyReport();
   const allowed = allowedTools(opts, pass.invoking, pass.target, report.warnings);
-  // Long notes split before the legacy match, so an old row is matched to a part.
   const listings = ADAPTERS.filter((a) => allowed.has(a.tool))
     .flatMap((a) => listSafely(a, pass, report))
     .map((l) => ({ ...l, containers: l.containers.map(splitContainer) }));
@@ -202,14 +187,10 @@ function listSafely(adapter: Adapter, pass: Pass, report: ImportReport): Listing
 
 interface OpenStore {
   readonly store: ImportStore;
-  /** The folder whose config scores the rows; a stand-in plans by the absent target's, its
-   * defaults. */
   readonly root: string;
   readonly global: boolean;
 }
 
-/** A store that does not exist yet is created only when there is something to put in it; a dry
- * run plans against an empty stand-in. */
 async function openTarget(
   target: string,
   hasItems: boolean,
@@ -244,15 +225,11 @@ function storeSession(
   };
 }
 
-/** One pass's store as each of its containers syncs into it. */
 interface PassStore {
   readonly pass: Pass;
   readonly session: StoreSession;
   readonly legacy: LegacyWork | null;
-  /** The project's earlier names; each container's rows under them move to its prefix. */
   readonly earlier: readonly string[];
-  /** A project's rows in the global store are parted by origin: a worktree and its main checkout
-   * share a folder. */
   readonly partition: string | null;
   readonly machine: ContainerMachine;
   readonly isBusy: ImportStores['isBusy'];
@@ -339,8 +316,6 @@ async function syncListing(
   return synced;
 }
 
-/** The legacy names plus every name a merge or repair folded into the project; the audit read
- * runs once per pass. */
 async function earlierNames(
   store: ImportStore,
   tenantId: string,
@@ -378,8 +353,6 @@ function containerWork(
   };
 }
 
-/** Null when the container was skipped: a busy store, or one that changed under both plans,
- * waits for the next sync; any other failure is a warning and the sync goes on. */
 async function syncOne(
   session: StoreSession,
   work: ContainerWork,
@@ -429,8 +402,6 @@ async function bumpRemembered(
   }
 }
 
-/** Dry run only: kept rows of this scope in containers this run did not list (a moved project's
- * old folder); `partition` limits it to one project's names. */
 interface UnlistedRowsOptions {
   readonly tool: AgentMemoryTool;
   readonly scope: Scope;

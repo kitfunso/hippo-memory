@@ -1,5 +1,3 @@
-// Root-keyed vectors and graph forms tests call; production code goes through the port or the handle-first forms.
-
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import { READ_PAGE_ROWS } from '../../../src/base/util/pages.js';
 import type { EntryCursor } from '../../../src/base/ports/store/types.js';

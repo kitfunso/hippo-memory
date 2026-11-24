@@ -1,4 +1,3 @@
-// contextGet's selection stages: the pinned-only branch and the strongest-first branch.
 import { calculateStrength, type StrengthModel } from '../../base/memory/strength.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
@@ -32,9 +31,6 @@ import { findableText } from '../../base/memory/lead-in.js';
 
 const GLOBAL_DISCOUNT = 1 / DEFAULT_LOCAL_BUMP;
 
-// Share and promote copy a memory to the global store under a new id, so equal content is the only
-// link. A pinned copy wins, then the stronger one after the ranking's own global discount; a tie
-// keeps the local copy.
 export function oneCopyPerMemory(
   local: readonly MemoryEntry[],
   global: readonly MemoryEntry[],
@@ -89,14 +85,11 @@ export function selectPinned({
   if (!pinnedCfg.pinnedInject.enabled) {
     return null;
   }
-  // Effective budget: explicit opts.budget wins over config, less what the sections took.
   const effBudget = left;
   const nowP = plan.now;
   const [localPool, globalPool] = loadedOneCopy(plan, pools);
   const picked: Picked<ContextResultEntry> = { items: [], ids: new Set<string>(), used: 0 };
 
-  // The cap reads only the budget and the share, never what recall used, so the pinned block stays
-  // byte-stable from prompt to prompt (skipUnchanged).
   const pinnedLocal = localPool.filter((e) => e.pinned);
   const pinnedGlobal = globalPool.filter((e) => e.pinned);
   const rankedPinned = rankPinned(plan, pinnedLocal, pinnedGlobal, nowP);
@@ -105,7 +98,6 @@ export function selectPinned({
   const pins = pinsWithinCap(rankedPinned, cap, rejectOverBudget(obs));
   const recentBudget = Math.max(0, effBudget - pins.reduce((sum, r) => sum + r.tokens, 0));
 
-  // Prompt recall gates the backfill on the prompt instead of recency.
   if (plan.promptRecallPending) {
     const candidates = (prompt: ReadonlySet<string>): PromptCandidate[] =>
       promptRecallCandidates({ plan, pools, admit: admission.admit, rankedPinned, nowP, prompt });
@@ -118,7 +110,6 @@ export function selectPinned({
   return picked.items;
 }
 
-/** The loaded rows offered to the observer, then one copy of each memory across both stores. */
 function loadedOneCopy(plan: ContextPlan, pools: ContextPools): [MemoryEntry[], MemoryEntry[]] {
   const { obs } = plan;
   const localEntries = pools.local.entries;
@@ -191,8 +182,6 @@ function backfillFromPrompt(
   const p = promptTokens(opts.prompt ?? '');
   if (p.size === 0) return;
   const candidateItems = candidates(p);
-  // The gate admits, the recall ranker orders, and maxItems cuts last, so a long row that holds most
-  // of the prompt is not cut by short rows that share fewer of its words.
   const cleared = gatePromptRecall(p, candidateItems, {
     ...gate,
     maxItems: Number.POSITIVE_INFINITY,
@@ -211,7 +200,6 @@ function backfillFromPrompt(
 
 type GatedCandidates = ReturnType<typeof gatePromptRecall<PromptCandidate>>;
 
-// No cwd: the api reads no working folder, and on the served hook route the machine's is the daemon's.
 function orderLikeRecall(
   prompt: string,
   cleared: GatedCandidates,
@@ -231,13 +219,11 @@ function orderLikeRecall(
   );
   const ordered: GatedCandidates = [];
   for (const { entry } of ranked) {
-    // The ranker's pool is the cleared rows, so a miss is an id it returned twice.
     const g = waiting.get(entry.id);
     if (g === undefined) continue;
     ordered.push(g);
     waiting.delete(entry.id);
   }
-  // A cleared row the ranker scored 0 or dropped as a copy still follows, in gate order.
   return [...ordered, ...cleared.filter((g) => waiting.has(g.item.entry.id))];
 }
 
@@ -250,7 +236,6 @@ interface PromptRecallCandidatesOptions {
   readonly prompt: ReadonlySet<string>;
 }
 
-// Candidates came off the ambient load's own connection (the recall request), not a fresh open.
 function promptRecallCandidates({
   plan,
   pools,
@@ -260,7 +245,6 @@ function promptRecallCandidates({
   prompt,
 }: PromptRecallCandidatesOptions): PromptCandidate[] {
   const { obs, primaryIsGlobal } = plan;
-  // A candidate carrying a pin's text would inject that memory a second time.
   const pinnedText = new Set(rankedPinned.map((r) => identityText(r.entry)));
   const ineligibleReason = (e: MemoryEntry): 'scope' | 'pinned' | 'quality' | 'duplicate' | null =>
     !admit(e)
@@ -305,7 +289,6 @@ function promptCandidateItems(
 ): PromptCandidate[] {
   const seenCandidateIds = new Set<string>();
   const candidateItems: PromptCandidate[] = [];
-  // Local wins the id collision (a global row synced into the local store).
   for (const [entries, isGlobal] of [
     [localCandidates, primaryIsGlobal],
     [globalCandidates, true],

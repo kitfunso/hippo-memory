@@ -1,4 +1,3 @@
-// A row's owner is the caller's own; only an admin may write one for someone else.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

@@ -1,7 +1,3 @@
-/**
- * Tests for schema_fit computation — how well new memories fit existing patterns.
- */
-
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { computeSchemaFit, deriveHalfLife, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -32,14 +28,12 @@ describe('computeSchemaFit', () => {
 
   it('returns high fit for content+tags matching existing patterns', () => {
     const pool = makePool();
-    // New memory about data pipeline errors — fits the dominant pattern
     const fit = computeSchemaFit('World Bank data download failed with SSL error', ['data-pipeline', 'error'], pool);
     expect(fit).toBeGreaterThan(0.5);
   });
 
   it('returns low fit for completely novel content+tags', () => {
     const pool = makePool();
-    // New memory about something entirely different
     const fit = computeSchemaFit(
       'Kubernetes pod scaling requires HPA configuration',
       ['kubernetes', 'devops', 'infrastructure'],
@@ -60,7 +54,6 @@ describe('computeSchemaFit', () => {
   it('content overlap contributes to schema fit', () => {
     const pool = makePool();
 
-    // Same tags but different content relevance
     const fitRelevantContent = computeSchemaFit(
       'FRED cache silently dropped another series during refresh',
       [], // no tags
@@ -100,7 +93,6 @@ describe('contextReads.schemaFit', () => {
       ...makePool(),
       createMemory('One row carrying a tag twice', { tags: ['rule', 'rule'] }),
       createMemory('A row with no tags at all'),
-      // Eight matching texts pass the five that cap the content score, so the store's text walk stops early.
       ...Array.from({ length: 8 }, (_, i) =>
         createMemory(`zephyrine refresh dropped series ${i}`, { tags: ['data-pipeline'] }),
       ),
@@ -113,7 +105,6 @@ describe('contextReads.schemaFit', () => {
     const loaded = loadAllEntries(root, 'default');
     expect(loaded).toHaveLength(pool.length);
 
-    // Each probe scores below the caps, so a wrong row count, tag count or text set moves it.
     const probes: ReadonlyArray<readonly [string, string[]]> = [
       ['', ['data-pipeline']],
       ['Never overwrite production files', ['rule', 'rule', 'unseen']],
@@ -126,7 +117,6 @@ describe('contextReads.schemaFit', () => {
     );
     expect(fits).toEqual(probes.map(([content, tags]) => computeSchemaFit(content, tags, loaded)));
     expect(fits.filter((fit) => fit > 0 && fit < 1)).toHaveLength(3);
-    // No tags and a capped content score: 0.6 * 0 + 0.4 * 1.
     expect(await sqliteStore(root).contextReads.schemaFit('default', 'zephyrine refresh', [])).toBe(0.4);
     expect(await sqliteStore(root).contextReads.schemaFit('nobody', 'zephyrine refresh', ['data-pipeline'])).toBe(0.5);
   });
@@ -134,7 +124,6 @@ describe('contextReads.schemaFit', () => {
   it('scores against only the newest window of rows, not the whole tenant', async () => {
     const root = makeRoot('schema-fit-window');
     roots.push(root);
-    // Mirrors SCHEMA_FIT_WINDOW_ROWS in src/store/candidates.ts; a drift fails the fit comparison below.
     const windowRows = 2000;
     const oldest = Array.from({ length: 50 }, (_, i) => ({
       ...createMemory(`ancient ledger entry ${i}`, { tags: ['oldonly'] }),
@@ -144,7 +133,6 @@ describe('contextReads.schemaFit', () => {
       ...createMemory(`recent pipeline note ${i}`, { tags: ['recent', i % 2 ? 'even' : 'odd'] }),
       created: new Date(Date.UTC(2025, 0, 1, 0, 0, i)).toISOString(),
     }));
-    // Rows only, in one transaction: 2050 mirror files cost seconds on a Windows runner and no assertion reads them.
     const db = openHippoDb(root);
     try {
       db.exec('BEGIN');

@@ -13,13 +13,12 @@ PRED = {
 }
 
 gold_meta = json.load(io.open(os.path.join(LME, 'gold_meta.json'), encoding='utf-8'))
-# gold_meta lacks question text -- pull it from the Lane R predicted files (hippo365 side; same qid set both arms)
 question_text = {}
 for qid in gold_meta:
     q = json.load(io.open(os.path.join(PRED['hippo365'], qid + '.json'), encoding='utf-8'))
     question_text[qid] = q['question']
 
-items = []  # {'arm','qid','answer','prompt'}
+items = []
 for arm in ('hippo365', 'bm25'):
     files = sorted(glob.glob(os.path.join(LME, 'answers', f'{arm}-batch-*.jsonl')))
     for f in files:

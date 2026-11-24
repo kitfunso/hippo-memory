@@ -1,4 +1,3 @@
-// `hippo watch --shell` is gone: a line that passes it fails before anything runs, and no src file asks a shell to parse text.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -9,7 +8,6 @@ import { makeStore } from '../_helpers/make-root.js';
 
 const srcRoot = join(dirname(dirname(dirname(fileURLToPath(import.meta.url)))), 'src');
 const savedCwd = process.cwd();
-// Built from pieces so this file, which only reads src text, stays out of the process-test list.
 const IMPORTS_CHILD_PROCESS = new RegExp(String.raw`from '(?:node:)?child_` + "process'");
 const IMPORTS_EXEC = new RegExp(
   String.raw`import\s*\{[^}]*\b(?:exec|execSync)\b[^}]*\}\s*from\s*'(?:node:)?child_` + "process'",

@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Open-core guard: fails when a change adds commercial-only files or identifiers to the MIT repo.
-// The commercial list is in README "Open source and commercial"; the override is a line `open-core: reviewed`.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -13,7 +11,6 @@ const TERM_RE =
   /saml|scim|siem|oidc[-_ ]?login|(?:^|[^a-z])sso(?:[^a-z]|$)|licen[cs]e[-_ ]?keys?|admin[-_ ]?view|(?:^|[^a-z])pilot[-_ ]?report|v1\/hooks/;
 const MARKER_RE = /\/\/\s*commercial\b/i;
 
-// Splits acronym runs and camelCase so `APIPilotReport`, `ssoLogin` and `adminView` match while `processor` does not.
 const normalise = (s) =>
   s
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')

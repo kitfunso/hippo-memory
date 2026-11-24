@@ -10,14 +10,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Regression: MCP-over-HTTP must thread the auth-resolved tenant into the
-// MCP dispatcher. Before the fix, executeTool resolved tenantId from
-// HIPPO_TENANT (env), so a Bearer for tenant 'alpha' silently dropped to
-// whatever the env said — defaulting to 'default' when HIPPO_TENANT was
-// unset. Hippo root suffered the same bug via findHippoRoot() walking
-// from cwd. This test pins both: the per-test root is used (no env hacks)
-// AND the resulting memory carries tenant_id='alpha'.
-
 describe('MCP-over-HTTP tenant context', () => {
   let home: string;
   let handle: ServerHandle;
@@ -38,8 +30,6 @@ describe('MCP-over-HTTP tenant context', () => {
   });
 
   it.skipIf(needsHippoDb('db'))('Bearer token for tenant alpha lands the memory under tenant_id=alpha', async () => {
-    // Mint an API key bound to tenant 'alpha' directly via the auth helper —
-    // the same path the /v1/auth/keys POST exercises end-to-end.
     const db = openHippoDb(home);
     let plaintext: string;
     try {
@@ -76,8 +66,6 @@ describe('MCP-over-HTTP tenant context', () => {
     const replyText = body.result?.content?.[0]?.text ?? '';
     expect(replyText).toMatch(/Remembered/i);
 
-    // Inspect the row directly: tenant_id MUST be 'alpha'. The bug we are
-    // guarding against would have written 'default' here.
     const verify = openHippoDb(home);
     try {
       // SAFETY: the SELECT list above names exactly these two columns, so

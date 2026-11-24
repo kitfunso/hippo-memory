@@ -16,7 +16,6 @@ export interface QuarantineListQuery {
  * such memory row. */
 export interface QuarantinedMemory extends QuarantineRow {
   readonly content: string | null;
-  /** The held memory's lead-in; absent when it has none, so a review sees text the flag may sit in. */
   readonly leadIn?: string;
 }
 
@@ -60,37 +59,19 @@ export type QuarantineEditOutcome =
  * on a tombstoned text and writes a reject_refusal row.
  */
 export interface Quarantine {
-  /** At most `limit` of the tenant's records, newest first (quarantinedAt as text in byte order,
-   * then memoryId, both descending); `after` keeps only records below its pair. 'pending' leaves
-   * out a record whose memory row is gone; every other status keeps it, with null content. No
-   * audit row. */
   listQuarantined(tenantId: string, query: QuarantineListQuery): Promise<QuarantinedMemory[]>;
-  /** In one transaction, all or none: restores the memory's originalScope if it is in the tenant
-   * and still under `quarantine:private:...`; marks the record approved (decidedAt from the
-   * store's clock, decidedBy `actor`); appends one quarantine_approve row ({originalScope}). */
   decideQuarantined(
     tenantId: string,
     id: string,
     decision: 'approve',
     actor: string,
   ): Promise<QuarantineApproval>;
-  /** In one transaction, both or neither: marks the record rejected (decidedAt/decidedBy as
-   * approve) and appends one quarantine_reject row. The memory row is not touched, so it stays
-   * under its quarantine scope and a record with no memory row can still be rejected. */
   decideQuarantined(
     tenantId: string,
     id: string,
     decision: 'reject',
     actor: string,
   ): Promise<QuarantineRejection>;
-  /** Optional: a store without it answers 501 for an edit. In one transaction, all or none, on a
-   * pending record whose memory is in the tenant, under its quarantine scope and not superseded:
-   * writes a successor under originalScope (parents [id], the held row's artifactRef) carrying
-   * `edit.content`, and the `edit.leadIn` and `edit.tags` passed, not the held row's; supersedes the
-   * held row by it; marks the record approved; appends the supersede, remember and one
-   * quarantine_edit row ({originalScope, newId}), in that order. Refuses with 'deleted',
-   * 'superseded' (carrying supersededBy) or 'scope_moved' in that case. A tombstoned text rejects
-   * with RejectedValueError, rolls back and leaves one reject_refusal row. */
   editQuarantined?(
     tenantId: string,
     id: string,

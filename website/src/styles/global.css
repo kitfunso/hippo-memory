@@ -1,7 +1,3 @@
-/* hippo-memory design system, "Card catalogue": warm paper, typed ink, one bottle-green accent.
-   Newsreader sets h1 and h2; Geist sets everything else; Geist Mono sets code and figures.
-   Rationale and the do-not list live in DESIGN.md. */
-
 @import 'tailwindcss';
 
 @theme {
@@ -9,7 +5,6 @@
   --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
 
-  /* one warm ramp: page, card, raised; three text roles (ink-3 holds 4.5:1 on paper-3) */
   --color-paper: #f7f4ee;
   --color-paper-2: #fdfbf7;
   --color-paper-3: #efe9df;
@@ -19,7 +14,6 @@
   --color-rule: rgb(31 27 22 / 0.1);
   --color-rule-strong: rgb(31 27 22 / 0.2);
 
-  /* accent: links, the primary figure, focus; warn: published losses and "marked wrong" */
   --color-accent: #1d5b43;
   --color-accent-deep: #14402f;
   --color-warn: #a3402a;
@@ -28,7 +22,6 @@
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* The one page column every section, the nav and the footer share. */
 @utility wrap {
   margin-inline: auto;
   max-width: var(--container-6xl);
@@ -38,7 +31,6 @@
   }
 }
 
-/* The two button looks; the nav's small Install button keeps its own size. */
 @utility btn {
   display: inline-flex;
   min-height: 2.75rem;
@@ -75,7 +67,6 @@
 @layer base {
   :root {
     color-scheme: light;
-    /* em, not ch: Geist averages ~0.45em a character, so 34em holds about 75 per line */
     --measure: 34em;
     --section-y: 4rem;
     --duration-fast: 150ms;
@@ -90,7 +81,6 @@
   html {
     background-color: var(--color-paper);
     scroll-behavior: smooth;
-    /* keeps focused and anchored targets clear of the 64px sticky header (WCAG 2.4.11) */
     scroll-padding-top: 5rem;
   }
 
@@ -112,7 +102,6 @@
     font-weight: 400;
     letter-spacing: -0.015em;
   }
-  /* one h2 size sitewide, so sections never pick their own */
   h2 {
     font-size: 2rem;
     line-height: 1.1;
@@ -138,7 +127,6 @@
   }
 }
 
-/* one prose-link treatment sitewide, applied per link so buttons and nav keep their own */
 .link {
   color: var(--color-accent);
   text-decoration-line: underline;
@@ -151,7 +139,6 @@
 .link:focus-visible {
   text-decoration-color: var(--color-accent);
 }
-/* a text link that stands alone gets a 24px tap area; the text does not move */
 .tap { position: relative; display: inline-block; }
 .tap::after {
   content: '';
@@ -162,7 +149,6 @@
   transform: translateY(-50%);
 }
 
-/* inline code in long-form prose only, so a command row keeps its own look; long strings wrap on phones */
 .copy :is(p, li, dd, td, th) code {
   font-family: var(--font-mono);
   font-size: 0.875em;
@@ -179,12 +165,10 @@
   padding: 0;
 }
 
-/* positioned so the box, not the page, holds and clips the sr-only labels inside it */
 [data-scroll-x] {
   position: relative;
 }
 
-/* wide tables on phones: fade the right edge while more columns sit off-screen (flag set in Base.astro) */
 [data-scroll-x][data-more] {
   mask-image: linear-gradient(to right, #000 calc(100% - 3.5rem), transparent);
 }
@@ -196,7 +180,6 @@ nav[aria-label='Pages'] a[aria-current='page'] {
   border-color: var(--color-ink);
 }
 
-/* the single entrance: the hero fades and rises once on load */
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }

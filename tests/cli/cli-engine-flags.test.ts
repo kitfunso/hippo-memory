@@ -1,4 +1,3 @@
-// engineFlags and the boolean readers answer the same for `--flag`, `--flag=false` and `--no-flag`.
 import { describe, expect, it } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';

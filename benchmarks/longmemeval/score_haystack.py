@@ -1,7 +1,3 @@
-"""Strict cross-check for evaluate_retrieval.py: exact session-id match, any/all, 500 vs 470 (no _abs).
-
-usage: python score_haystack.py <data.json> <ret.jsonl> [<ret.jsonl> ...]
-"""
 import json
 import sys
 from pathlib import Path

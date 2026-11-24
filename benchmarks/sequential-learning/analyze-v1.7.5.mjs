@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-/**
- * v1.7.5 -- Analyze the 4-condition × 20-seed eval per the pre-registration:
- * docs/evals/2026-05-07-v1.7.5-goal-stack-eval-prereg.md.
- *
- * Reads the 4 result JSONs from results/v1.7.5-eval-C{0,1,2,3}-... directories.
- * Computes the paired permutation CI on Δ = mean_late(C2) − mean_late(C3).
- * Applies the mechanical decision rule.
- * Prints a markdown-ready summary.
- *
- * Run: node benchmarks/sequential-learning/analyze-v1.7.5.mjs
- */
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,9 +21,6 @@ const c2 = loadLatestJson('v1.7.5-eval-C2-hippo-base');
 const c3 = loadLatestJson('v1.7.5-eval-C3-hippo-goalstack');
 
 function extractSeedRates(condRoot) {
-  // Output schema written by run.mjs::runAdapter when n-seeds>1.
-  // Expected shape: { conditions: { <name>: { seeds: [{seed, phases:{early,mid,late}, overall}], phase_aggregate: ... } } }
-  // Single-condition runs (output dir per condition) collapse to that one condition.
   const cond = condRoot.conditions ?? {};
   const condName = Object.keys(cond)[0];
   const seeds = cond[condName]?.seeds ?? [];
@@ -74,17 +60,13 @@ const rows = [
   row('C3 hippo+goalstack', e3),
 ];
 
-// Sanity gate: C2 late within [0.04, 0.24]
 const sanityPass = e2.late.length === 20 && rows[2].lateMean >= 0.04 && rows[2].lateMean <= 0.24;
 
-// Hook-failure gate
 const hookFailuresOk =
   (e3.hookFailures?.push ?? 0) === 0 && (e3.hookFailures?.complete ?? 0) === 0;
 
-// Paired permutation CI on Δ = late_C2 − late_C3 (positive Δ = goal-stack helped)
 const perm = pairedPermutationCI(e2.late, e3.late, 0.05, 10_000);
 
-// Decision rule
 const delta = perm.deltaMean;
 const ciLow = perm.ciLow;
 const ciHigh = perm.ciHigh;
@@ -98,7 +80,6 @@ else if (SUPPORTED) decision = 'HYPOTHESIS SUPPORTED';
 else if (HARMS) decision = 'HYPOTHESIS NOT SUPPORTED + goal-stack measurably HARMS performance (Δ<0, upper-CI<0) — flag for v1.8';
 else decision = 'HYPOTHESIS NOT SUPPORTED';
 
-// Output
 const pct = (x) => (Number.isFinite(x) ? (x * 100).toFixed(1) + '%' : 'NaN');
 const pp = (x) => (Number.isFinite(x) ? (x * 100).toFixed(1) + 'pp' : 'NaN');
 
@@ -134,7 +115,6 @@ console.log('- `results/v1.7.5-eval-C1-static/benchmark-*.json`');
 console.log('- `results/v1.7.5-eval-C2-hippo-base/benchmark-*.json`');
 console.log('- `results/v1.7.5-eval-C3-hippo-goalstack/benchmark-*.json`');
 
-// Also write structured JSON for programmatic use
 const summary = {
   decision,
   sanityPass,

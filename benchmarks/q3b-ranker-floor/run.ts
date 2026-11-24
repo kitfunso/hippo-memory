@@ -1,6 +1,3 @@
-// The ranker floor check. `--plan` lists what each arm would be asked and runs nothing; without it, the whole run.
-// A retrieval-floor check that picks a ranking core. It is not a measure of how well hippo serves an agent.
-
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -62,7 +59,6 @@ function printPlan(queries: readonly EvalQuery[]): void {
   console.log('plan only: no store was built and no arm was called');
 }
 
-/** A BM25-only run is not a result, so the run stops here unless run.py's own probe passes. */
 function preflight(python: string): void {
   if (!isEmbeddingAvailable()) throw new Error(`the Transformers.js backend is not installed in this checkout: ${BACKEND_INSTALL}`);
   const r = spawnSync(python, ['-c', 'import run; run.preflight_embeddings()'], { cwd: MICRO_DIR, encoding: 'utf8' });
@@ -75,7 +71,6 @@ function siteIn(work: string, name: string): Site {
   return { home: join(dir, 'home'), snapshot: join(dir, 'snapshot') };
 }
 
-/** One query, once per arm, each in a fresh copy of the store and from the query's own cwd. */
 async function scoreQuery(site: Site, q: EvalQuery): Promise<Cell[]> {
   const cells: Cell[] = [];
   for (const arm of ARMS) {
@@ -105,7 +100,6 @@ async function scoreMicro(work: string, fixtures: readonly LoadedFixture[]): Pro
   return cells;
 }
 
-/** Builds the window store, checks placement, and embeds every row with the call `hippo embed` makes. */
 async function buildWindowSite(work: string): Promise<Site> {
   const site = siteIn(work, 'window');
   const store = await buildWindowFixture(site.home);
@@ -119,17 +113,14 @@ async function buildWindowSite(work: string): Promise<Site> {
   return site;
 }
 
-/** An unlifted target in a top 5 means placement or a lift leaked: the fixture is broken, so no result is reported. */
 function assertControlsOut(cells: readonly Cell[]): void {
   const leaks = cells.flatMap((c) => CONTROL_MARKERS.filter((m) => c.top.some((t) => t.includes(m))).map((m) => `${m} in arm ${c.arm}'s top 5 for ${c.query}`));
   if (leaks.length > 0) throw new Error(`window fixture broken, fix it before any run: ${leaks.join('; ')}`);
 }
 
-/** 3 warm-ups then 30 timed calls per query and arm, on a fresh copy each; 150 samples per arm. */
 async function timeWindow(site: Site, queries: readonly EvalQuery[]): Promise<Record<Arm, number[]>> {
   const timings = { A: new Array<number>(), B: new Array<number>(), C: new Array<number>() };
   for (const [i, q] of queries.entries()) {
-    // Rotated so no arm always takes the first, coldest slot of a query.
     for (const arm of ARMS.map((_, k) => ARMS[(i + k) % ARMS.length]!)) {
       restore(site);
       await inSandbox(site.home, site.home, async () => {

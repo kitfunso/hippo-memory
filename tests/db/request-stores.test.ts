@@ -1,5 +1,3 @@
-// A request session owns one handle per store; code that outlives the session, or runs beside it, never gets or closes
-// that handle.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   openHippoDb,
@@ -22,13 +20,11 @@ beforeEach(() => {
 const busyTimeout = (db: DatabaseSyncLike): number =>
   Number((db.prepare('PRAGMA busy_timeout').get() as { timeout: number }).timeout);
 
-/** An open on `session`, as a store built with it makes. */
 const openIn = (session: RequestStores): DatabaseSyncLike => grantFor({ session }).open(root);
 
 describe('withSharedStoreHandles', () => {
   it('work that outlives its session gets a connection of its own, which closeHippoDb closes', async () => {
     let late: Promise<DatabaseSyncLike> | undefined;
-    // Released only once the session has closed, so the late open runs after it.
     let release = (): void => undefined;
     const sessionClosed = new Promise<void>((resolve) => {
       release = resolve;
@@ -44,7 +40,6 @@ describe('withSharedStoreHandles', () => {
     release();
     const db = await late!;
     try {
-      // Identity as a boolean: the matcher would format the closed handle, which throws.
       expect(db === scoped).toBe(false);
       expect(db.isOpen).toBe(true);
       expect(busyTimeout(db)).toBe(250);
@@ -67,7 +62,6 @@ describe('withSharedStoreHandles', () => {
 
   it("interleaved sessions never share or close each other's handles", async () => {
     let first: DatabaseSyncLike | undefined;
-    // Session a stays open until b has opened its own handle beside it.
     let release = (): void => undefined;
     const bOpened = new Promise<void>((resolve) => {
       release = resolve;

@@ -1,14 +1,3 @@
-/**
- * v1.7.4 -- MCP hippo_recall accepts session_id and applies the dlPFC
- * goal-stack boost to its physics/hybrid result list before formatMemories.
- *
- * Codex v2 finding: MCP's user-visible primary ordering does NOT come from
- * api.recall (it goes through physicsSearch/hybridSearch separately), so
- * lifting the boost into api.recall alone leaves the MCP main band
- * unboosted. This test pins that the schema field is accepted AND that the
- * boost actually moves the goal-tagged memory ahead in the rendered output.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -47,7 +36,6 @@ function extractText(res: McpResponse | null): string {
   return (res as { result?: { content: Array<{ text: string }> } } | null)?.result?.content?.[0]?.text ?? '';
 }
 
-/** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -86,8 +74,6 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
     const res = await callTool('hippo_recall', { query: 'auth', budget: 2000, session_id: sessionId }, ctx);
     const text = extractText(res);
     expect(text).toContain('auth bug fix details');
-    // Side effect proves the boost ran on the MCP physics/hybrid path: the
-    // tagged memory landed in goal_recall_log.
     const db = openHippoDb(home);
     try {
       const count = queryOne<{ c: number }>(
@@ -95,7 +81,6 @@ describe('MCP hippo_recall session_id goal-stack boost', () => {
         `SELECT COUNT(*) AS c FROM goal_recall_log WHERE session_id = ?`,
         sessionId,
       )!.c;
-      // One tagged memory and one goal; the log keeps one row per (memory, goal) however many bands boost it.
       expect(count).toBe(1);
     } finally {
       closeHippoDb(db);

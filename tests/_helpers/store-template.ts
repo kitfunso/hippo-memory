@@ -6,7 +6,6 @@ import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
 declare module 'vitest' {
   export interface ProvidedContext {
-    /** hippo.db of the store tests/_store-template.ts migrated for this run. */
     storeTemplate: string;
   }
 }

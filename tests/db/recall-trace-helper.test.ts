@@ -1,25 +1,9 @@
-/**
- * LC1 recall-trace helper unit tests
- * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- *
- * Covers writeRecallTrace / recordTraceOutcome in
- * isolation, against a scratch HIPPO_HOME (never a repo checkout).
- *
- * readLastTraceId / writeLastTraceId were DELETED (F1(e) structural fix,
- * final review round): last_trace_id now only ever advances atomically with
- * last_retrieval_ids via store.ts's saveIndex, so the standalone meta
- * accessors had no remaining production caller. See tests/recall-trace-
- * wiring.test.ts for last_trace_id coverage via loadLastRecall/saveIndex.
- */
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { writeRecallTrace, recordTraceOutcome } from '../../src/store/sqlite/recall/recall-trace.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-// Row shapes mirror the recall_traces / recall_trace_results /
-// recall_trace_outcomes tables created in src/db/index.ts (openHippoDb migration).
 interface RecallTraceRow {
   id: number;
   ts: string;
@@ -99,7 +83,6 @@ describe('writeRecallTrace', () => {
         expect(trace.explain_mode).toBe(0);
         expect(String(trace.query_hash)).toMatch(/^[0-9a-f]{16}$/);
         expect(trace.query_length).toBe('super secret raw query text'.length);
-        // Raw query text must never land in any persisted column.
         expect(JSON.stringify(trace)).not.toContain('super secret raw query text');
 
         const results = queryAll<RecallTraceResultRow>(
@@ -228,9 +211,6 @@ describe('writeRecallTrace', () => {
     try {
       const db = openHippoDb(home);
       try {
-        // Two distinct memory ids at the same array position never happens
-        // in practice, but the writer relies on array index for rank, so
-        // ranks are always unique per trace by construction.
         const traceId = writeRecallTrace(db, {
           tenantId: 'default',
           pipeline: 'api',
@@ -358,7 +338,6 @@ describe('recordTraceOutcome', () => {
             { memoryId: 'mem-b', score: 0.5 },
           ],
         });
-        // mem-c was never in this trace's results (stale caller state).
         recordTraceOutcome(db, {
           traceId: traceId!,
           tenantId: 'default',

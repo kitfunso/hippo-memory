@@ -1,5 +1,3 @@
-// The typed objects as one seam: each call names its kind, so the HTTP routes and the CLI verbs
-// make the same calls, and the caller's tenant, actor and half-life come from the Context alone.
 import type { ObjectByKind, ObjectKind, SavableKind } from '../../base/records/object-types.js';
 import {
   CUSTOMER_NOTE,
@@ -47,7 +45,6 @@ export interface WriteOrigin {
   readonly folder: string;
 }
 
-/** Each savable kind's descriptor, typed per kind so a generic call gets its kind's write back. */
 type SavableDescriptors = { readonly [K in SavableKind]: SavableDescriptor<K, ObjectWrites[K]> };
 type ObjectDescriptors = { readonly [K in ObjectKind]: ObjectDescriptor<K> };
 

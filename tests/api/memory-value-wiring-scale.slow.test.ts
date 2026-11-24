@@ -1,4 +1,3 @@
-// LC2-E3 memory-value decay-pass wiring: scale characterization and dry-run parity.
 import { describe, it, expect } from 'vitest';
 import { consolidate } from '../../src/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -25,8 +24,6 @@ import { detailLines } from '../_helpers/sleep-lines.js';
 
 useMemoryValueScratch();
 
-/** The rows on hippo.db alone, in one transaction: no test here reads a markdown mirror, and a mirror file per seeded
- *  row was most of this file's disk writes. */
 function seedRows(root: string, rows: readonly MemoryEntry[]): void {
   const db = openHippoDb(root);
   try {
@@ -36,11 +33,7 @@ function seedRows(root: string, rows: readonly MemoryEntry[]): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// (h) scale characterization (~2,000 entries, 3 tenants)
-// ---------------------------------------------------------------------------
 describe('(h) scale characterization', () => {
-  // Seeds about 2,000 rows over three tenants and runs a full sleep on them twice.
   it('deterministic, deletes-subset, per-tenant isolation at ~2,000 entries / 3 tenants; reports rescue rate', async () => {
     const rand = mulberry32(20260810);
     const wordBank = [
@@ -98,18 +91,6 @@ describe('(h) scale characterization', () => {
           const words: string[] = [];
           for (let w = 0; w < wordCount; w++) words.push(wordBank[Math.floor(rand() * wordBank.length)]);
           const content = `${tenantId} entry ${i}: ${words.join(' ')}`;
-          // 95% non-Episodic so the merge pass's O(N^2) episodic-candidate
-          // scan and detectConflicts's O(N^2) non-Semantic scan both stay
-          // small regardless of total N (plan's Risks section / T4(h) note).
-          // Tenant A (TENANTS[0]) is EXCLUDED from Episodic entirely
-          // (review-round F11): the merge pass demotes a merged episodic's
-          // half_life_days WITHIN the same cycle, which would perturb
-          // tenant A's own per-tenant min-max normalization context between
-          // cycle 1 and cycle 2 -- a real, orthogonal same-tenant effect
-          // that would confound the cross-tenant isolation property F11
-          // checks (tenant B's mutation must not move tenant A's rescue
-          // outcomes; a tenant-A-internal merge moving them is a different
-          // question this test isn't asking).
           const layerRoll = rand();
           const layer =
             tenantId === TENANTS[0]
@@ -166,19 +147,14 @@ describe('(h) scale characterization', () => {
     const condemnedIds = new Set(
       loaded.filter((e) => !e.pinned && calculateStrength(e, NOW, decayOpts) < 0.05).map((e) => e.id),
     );
-    // The seed's draws condemn 106, 117 and 104 rows: 200+ days old at a one-day half-life, while every other row is under 5 days old.
     expect(condemnedIds.size).toBe(327);
 
-    // --- Determinism ---
     const rescued1 = rescueSet(loaded, condemnedIds, NOW);
     const rescued2 = rescueSet(loaded, condemnedIds, NOW);
     expect([...rescued2].sort()).toEqual([...rescued1].sort());
 
-    // --- Deletes-subset property ---
     for (const id of rescued1) expect(condemnedIds.has(id)).toBe(true);
 
-    // --- Per-tenant isolation: mutate tenant B's composition, tenant A's
-    // rescue outcomes for its condemned entries must be unchanged. ---
     const tenantAId = TENANTS[0];
     const tenantBId = TENANTS[1];
     const tenantBIds = new Set(loaded.filter((e) => e.tenantId === tenantBId).map((e) => e.id));
@@ -203,7 +179,6 @@ describe('(h) scale characterization', () => {
       expect(rescuedAfterMutation.has(id)).toBe(rescued1.has(id));
     }
 
-    // --- Rescue rate (characterized, not gated) ---
     const rescueRate = rescued1.size / condemnedIds.size;
     const perTenant: Record<string, { condemned: number; rescued: number }> = {};
     for (const tenantId of TENANTS) {
@@ -218,8 +193,6 @@ describe('(h) scale characterization', () => {
       perTenant,
     });
 
-    // --- End-to-end cross-check: the real consolidate() pipeline's actual
-    // decisions must match the pure-function prediction above. ---
     const result = await consolidate(dir, { now: NOW });
     expect(result.removed).toBe(condemnedIds.size - rescued1.size);
     const finalIds = new Set(loadEveryTenantEntries(dir).map((e) => e.id));
@@ -227,20 +200,6 @@ describe('(h) scale characterization', () => {
       expect(finalIds.has(id)).toBe(rescued1.has(id));
     }
 
-    // --- Review-round F11: G4 isolation proven through the FULL wiring,
-    // not just the pure rescueSet function. A SECOND, SEPARATE store,
-    // seeded with the IDENTICAL initial composition but with tenant B's
-    // rows mutated in the REAL STORE before its own (single) consolidate()
-    // run, must produce IDENTICAL tenant-A mv_rescue audit rows to the
-    // first store's cycle above (same ids, same rank/totalNonPinned/keepN/
-    // score). Two SEPARATE one-cycle stores, not two sequential cycles on
-    // the same store: a second cycle on the SAME store starts from a
-    // tenant-A composition already shrunk by the first cycle's own
-    // deletions (a real, expected, but orthogonal effect — not an
-    // isolation break) that would confound a same-store before/after
-    // comparison. Holding tenant A's starting composition fixed across two
-    // stores isolates exactly the property under test: tenant B's
-    // composition, and nothing else, is what may differ.
     type MvAuditMeta = { rank?: number; totalNonPinned?: number; keepN?: number; score?: number };
     const cycle1Events = auditRescueRows(dir, tenantAId);
     // SAFETY: consolidate.ts's mv_rescue audit always writes metadata as
@@ -249,7 +208,6 @@ describe('(h) scale characterization', () => {
     const cycle1ByIdMeta = new Map(
       cycle1Events.filter(hasStringTargetId).map((e) => [e.targetId, e.metadata as MvAuditMeta]),
     );
-    // One audit row per tenant-A rescue the pure rescueSet predicted; the count comes from its scores, not the seed alone.
     expect(cycle1ByIdMeta.size).toBe(perTenant[tenantAId].rescued);
     expect(cycle1ByIdMeta.size).toBeGreaterThan(0);
 
@@ -289,11 +247,6 @@ describe('(h) scale characterization', () => {
   });
 });
 
-/** Parses entry ids out of decay-pass detail lines (review-round F7: parity
- *  by IDS, not just counts). Line shapes (src/consolidate.ts):
- *    "  🛟 <id> (strength ...) - rescued (...)"
- *    "  🗑  removed <id> (strength ...)"
- */
 function parseRescuedIds(details: string[]): Set<string> {
   const ids = new Set<string>();
   for (const line of details) {
@@ -311,9 +264,6 @@ function parseRemovedIds(details: string[]): Set<string> {
   return ids;
 }
 
-// ---------------------------------------------------------------------------
-// (i) dry-run parity
-// ---------------------------------------------------------------------------
 describe('(i) dry-run parity', () => {
   it('dry-run preview decisions match a real run on a cloned store', async () => {
     const dirDry = makeRoot('case');
@@ -323,7 +273,6 @@ describe('(i) dry-run parity', () => {
 
     const lens = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const built = lens.map((len) => condemnedEntry('w'.repeat(len), { tenantId: 'ti' }));
-    // Identical ids in both stores: a true clone.
     writeEntriesTogether(dirDry, built);
     writeEntriesTogether(dirReal, built);
 
@@ -339,8 +288,6 @@ describe('(i) dry-run parity', () => {
     expect(dryResult.decayed).toBe(realResult.decayed);
     expect(dryResult.removed).toBe(expectedDeleted.size);
 
-    // F7: parity by IDS, not just counts — parse the rescued/removed
-    // entry ids out of both runs' details and assert set equality.
     const dryRescuedIds = parseRescuedIds(detailLines(dryResult));
     const realRescuedIds = parseRescuedIds(detailLines(realResult));
     expect(dryRescuedIds).toEqual(realRescuedIds);
@@ -351,11 +298,9 @@ describe('(i) dry-run parity', () => {
     expect(dryRemovedIds).toEqual(realRemovedIds);
     expect(dryRemovedIds).toEqual(expectedDeleted);
 
-    // Dry-run: store untouched, zero audit rows.
     expect(loadEveryTenantEntries(dirDry).length).toBe(built.length);
     expect(auditRescueRows(dirDry, 'ti').length).toBe(0);
 
-    // Real run: expected deletes gone, expected rescues present, audit rows match.
     const realIds = new Set(loadEveryTenantEntries(dirReal).map((e) => e.id));
     for (const id of expectedRescued) expect(realIds.has(id)).toBe(true);
     for (const id of expectedDeleted) expect(realIds.has(id)).toBe(false);

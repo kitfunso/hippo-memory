@@ -244,7 +244,6 @@ describe('GITHUB_TRUSTED_USER_IDS applies only to items from the configured serv
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   };
 
-  // Author id 5, association NONE: only the trusted-id list can keep this issue live.
   const outsideIssue = (htmlUrl: string): string =>
     issueBody()
       .replace('"user":{"login":"alice","id":1}', '"user":{"login":"erin","id":5}')

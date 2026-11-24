@@ -1,4 +1,3 @@
-/** Schema v46 (ROADMAP CD13): a v45 store gains the failure log on its next open. */
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getMeta, setMeta } from '../../src/db/index.js';
 import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
@@ -21,7 +20,6 @@ describe('schema v46', () => {
       const columns = (db.prepare(`PRAGMA table_info(failure_log)`).all() as Array<{ name: string }>).map(
         (c) => c.name,
       );
-      // The open runs on to the latest schema, so v54's owner, project and retry columns follow v46's.
       expect(columns).toEqual([
         'id',
         'ts',

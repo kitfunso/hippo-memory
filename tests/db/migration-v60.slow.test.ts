@@ -1,5 +1,3 @@
-// Schema v60 indexes the memories that hold conflict refs, so the conflict refresh reads those rows, not every memory,
-// and recall traces by ts for their prune (tests/db/recall-trace-prune.test.ts).
 import { describe, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -58,14 +56,12 @@ const entry = (id: string, extra: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...extra,
 });
 
-// Three open pairs over five rows: a holds b and c, b and c hold a, d and e hold each other.
 const PAIRS = [
   ['m_a', 'm_b'],
   ['m_a', 'm_c'],
   ['m_d', 'm_e'],
 ].map(([a, b]) => ({ memoryAId: a, memoryBId: b, reason: 'test', score: 0.9 }));
 
-/** Copies `templateId`'s row under `n` fresh ids in one statement, so 10,000 rows seed in well under a second. */
 function fill(db: DatabaseSyncLike, templateId: string, n: number): void {
   // SAFETY: pragma_table_info answers one TEXT `name` per column.
   const cols = (db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>).map(
@@ -78,7 +74,6 @@ function fill(db: DatabaseSyncLike, templateId: string, n: number): void {
   ).run(n, templateId);
 }
 
-/** Five rows in three open conflicts among `size` memories, after one refresh has settled their refs. */
 function seededStore(size: number): string {
   const root = makeRoot('v60-flat');
   writeEntriesTogether(root, [...['m_a', 'm_b', 'm_c', 'm_d', 'm_e'].map((id) => entry(id)), entry('m_plain')]);

@@ -1,4 +1,3 @@
-// A hook whose delivery recorder cannot start skips the ledger with one leveled warn line and still returns null.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,8 +21,6 @@ describe('startDeliveryRecorder when the recorder cannot start', () => {
 
   it('returns null and writes one warn line with a space after the colon', async () => {
     const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    // A number where a root path belongs, for the context and its store: path.join throws on it, which is the start-up
-    // failure under test.
     const badRoot: string = JSON.parse('42');
     const store = sqliteStore(badRoot);
     const config = { ...DEFAULT_CONFIG, deliveryLedger: { enabled: true } };

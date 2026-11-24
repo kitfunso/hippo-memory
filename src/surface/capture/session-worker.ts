@@ -1,6 +1,3 @@
-// One session-end worker per session at a time, plus how far turn capture has read that session's
-// transcript. Two fast replies would otherwise start two workers that both read the dedupe keys
-// before either writes.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { homeDir } from '../../host/agent-homes.js';
@@ -35,17 +32,14 @@ interface SessionStateFiles {
 
 const sessionsDir = (): string => path.join(homeDir(), HIPPO_DIR, 'sessions');
 
-/** Null for a missing id or one that could climb out of the sessions folder. */
 function sessionStateFiles(sessionId: string | null): SessionStateFiles | null {
   if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return null;
   const base = path.join(sessionsDir(), sessionId);
   return { lock: `${base}.lock.db`, queued: `${base}.queued`, cursor: `${base}.cursor.json` };
 }
 
-// The lock is best-effort, so the work still runs; the line says why it ran without one.
 function warnUnusableLockOnce<E>(lock: string, cause: E): void {
   const code = errorCode(cause) || 'no errno';
-  // Keyed by error class, not lock path: a key per session would crowd the capped once-only key set.
   logger.warnThenDebug(
     `session-worker-lock:${code}`,
     `session worker: lock ${lock} cannot be taken (${code}: ${errorMessage(cause)}), so the work runs without it`,
@@ -53,8 +47,6 @@ function warnUnusableLockOnce<E>(lock: string, cause: E): void {
   );
 }
 
-/** False when the request could not be queued; the caller then refuses the run, since an
- * unlocked worker could race a live one. */
 function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
   try {
     fs.mkdirSync(path.dirname(files.queued), PRIVATE_DIR);
@@ -67,8 +59,6 @@ function queueRun(files: SessionStateFiles, mode: WorkerMode): boolean {
     return false;
   }
   try {
-    // A full close outranks a turn close: it overwrites a queued turn, and a turn never replaces a
-    // queued full close.
     if (mode === 'full') fs.writeFileSync(files.queued, 'full');
     else fs.writeFileSync(files.queued, 'turn', { flag: 'wx' });
     return true;
@@ -88,15 +78,11 @@ type Take =
   | { readonly kind: 'empty' }
   | TakeFailed;
 
-/** Takes the queued request by renaming it, so one queued while this reads it lands in a fresh
- * file. */
 function takeQueued(queued: string): Take {
   const taken = `${queued}.${process.pid}`;
   try {
     fs.renameSync(queued, taken);
   } catch (err) {
-    // ENOENT means nothing is queued; any other refusal leaves the request queued for the next
-    // round, but is told.
     if (errorCode(err) === 'ENOENT') return { kind: 'empty' };
     logger.warn(
       `session worker: cannot take the queued request ${queued}: ${errorMessage(err)}`,
@@ -111,7 +97,6 @@ function takeQueued(queued: string): Take {
   }
 }
 
-// Rounds in which takeQueued took nothing: such a request stays queued for the next worker instead of spinning here.
 const MAX_ROUNDS = 5;
 
 function queuedKind(queued: string): string {
@@ -166,7 +151,6 @@ export async function runSessionWorker(
       take.lock.release();
     }
     if (next.kind === 'failed') lastFailed = next;
-    // A taker that found the lock held left its request queued, so look again after every release.
     if (!fs.existsSync(files.queued)) return;
     if (!ran && ++idleRounds >= MAX_ROUNDS) {
       reportGaveUp(files.queued, lastFailed, gaveUp);
@@ -195,8 +179,6 @@ export function turnsAfter(
   const count = Number(countText);
   if (!Number.isInteger(count) || count <= 0) return turns;
   if (count <= turns.length && turnKey(turns[count - 1]) === key) return turns.slice(count);
-  // A transcript too big to read whole is read from its tail, so the count shifts; the last turn's
-  // text still marks the place.
   for (let i = turns.length - 1; i >= 0; i--) {
     if (turnKey(turns[i]) === key) return turns.slice(i + 1);
   }
@@ -215,7 +197,6 @@ export function loadTurnPosition(sessionId: string, transcriptPath: string): str
     }
     return 'position' in cursor && isStringValue(cursor.position) ? cursor.position : null;
   } catch (err) {
-    // A torn cursor means the next capture reads every turn, which the dedupe keys absorb.
     if (err instanceof SyntaxError) return null;
     logger.warn(
       `session worker: cannot read the cursor ${file}: ${errorMessage(err)}`,
@@ -256,17 +237,13 @@ const CURSOR_TMP = /\.cursor\.json\.\d+\.tmp$/;
 const CURSOR_MAX_AGE_MS = 30 * DAY_MS;
 const LOCK_DB = '.lock.db';
 
-/** A text lock from before 3.0 names no process any more, so a day old is long dead. */
 const LEGACY_LOCK_MAX_AGE_MS = DAY_MS;
 
-/** Age limit in ms for a file in the sessions folder that a prune may remove; null for any other. */
 function pruneLimit(name: string): number | null {
   if (name.endsWith('.cursor.json') || CURSOR_TMP.test(name)) return CURSOR_MAX_AGE_MS;
   return name.endsWith('.lock') ? LEGACY_LOCK_MAX_AGE_MS : null;
 }
 
-/** A session's lock file goes when the session is idle past the cursor age and the file is as old; a
- * session with no cursor counts as idle once its lock file is that old. */
 function lockDbIdle(dir: string, id: string, file: string, nowMs: number): boolean {
   if (fs.existsSync(path.join(dir, `${id}.queued`))) return false;
   const cursor = fs.statSync(path.join(dir, `${id}.cursor.json`), { throwIfNoEntry: false });

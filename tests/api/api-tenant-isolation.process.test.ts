@@ -16,16 +16,10 @@ import { loadConfig } from '../../src/host/config-file.js';
 import { readEntry } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 
-/**
- * Typed wrapper around a single-row SQL lookup. Every call site below
- * passes a SELECT whose column list matches T exactly, so the cast is sound.
- */
 function queryRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: each call site's SELECT explicitly lists the columns matching T.
   return db.prepare(sql).get(...params) as T | undefined;
 }
-
-// A caller's tenant bounds promote, supersede and key minting, so one tenant can never touch another's rows.
 
 describe('api tenant isolation', () => {
   let home: string;
@@ -44,7 +38,6 @@ describe('api tenant isolation', () => {
     rmSync(globalHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
-  // ---- Test 1: promote cross-tenant denied ----------------------------------
   it('promote refuses to promote a row that belongs to another tenant', async () => {
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'alpha-row promote-cross-tenant canary',
@@ -63,7 +56,6 @@ describe('api tenant isolation', () => {
       ),
     ).rejects.toThrow(/memory not found/i);
 
-    // The original row must still exist on the local root, untouched.
     const db = openHippoDb(home);
     try {
       const row = queryRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);
@@ -72,8 +64,6 @@ describe('api tenant isolation', () => {
       closeHippoDb(db);
     }
 
-    // The global root must NOT have a copy. copyToGlobal must never have
-    // run because the tenant pre-check throws before it does.
     const gdb = openHippoDb(globalHome);
     try {
       const grows = queryRow<{ c: number }>(gdb, `SELECT COUNT(*) AS c FROM memories`)!;
@@ -83,7 +73,6 @@ describe('api tenant isolation', () => {
     }
   });
 
-  // The loser read the row before the winner committed, so its early check passed: only the guarded UPDATE can refuse it.
   it('supersede refuses the writer that read the row before another writer superseded it', async () => {
     const alpha = (): FullContext => apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' });
     const created = await remember(alpha(), { content: 'alpha-row supersede CAS race canary' });
@@ -115,7 +104,6 @@ describe('api tenant isolation', () => {
     const refused = supersede(loser, created.id, 'the loser');
     await expect(refused).rejects.toBeInstanceOf(ConflictError);
     await expect(refused).rejects.toThrow(`Memory ${created.id} already superseded by another writer`);
-    // A read after the winner's commit would see its successor and refuse at the early check instead.
     expect(readAs).toEqual([null]);
 
     const db = openHippoDb(home);
@@ -126,7 +114,6 @@ describe('api tenant isolation', () => {
         created.id,
       );
       expect(old?.superseded_by).toBe(successorId);
-      // The loser's transaction rolled back whole: no successor row and no supersede row of its own.
       const rows = queryRow<{ c: number }>(db, `SELECT COUNT(*) AS c FROM memories WHERE tenant_id = 'alpha'`);
       expect(Number(rows?.c)).toBe(2);
       expect(listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' }).map((e) => e.targetId)).toEqual([created.id]);
@@ -138,7 +125,6 @@ describe('api tenant isolation', () => {
     );
   });
 
-  // ---- Test 6: supersede CAS — clean path -----------------------------------
   it('supersede CAS clean path: both rows present, audit row written, chain pointer set', async () => {
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'alpha-row supersede clean-path canary',
@@ -154,18 +140,15 @@ describe('api tenant isolation', () => {
     expect(result.oldId).toBe(created.id);
     expect(result.newId).toMatch(/^mem_/);
 
-    // Old row carries the chain pointer.
     const oldEntry = readEntry(home, created.id, 'alpha');
     expect(oldEntry).not.toBeNull();
     expect(oldEntry!.supersededBy).toBe(result.newId);
 
-    // New row landed.
     const newEntry = readEntry(home, result.newId, 'alpha');
     expect(newEntry).not.toBeNull();
     expect(newEntry!.content).toBe('fresh replacement content');
     expect(newEntry!.tenantId).toBe('alpha');
 
-    // Audit log: 'supersede' op with newId metadata + 'remember' for the new row.
     const db = openHippoDb(home);
     try {
       const supersedeEvents = listAuditEvents(db, { tenantId: 'alpha', op: 'supersede' });
@@ -182,7 +165,6 @@ describe('api tenant isolation', () => {
     }
   });
 
-  // ---- Test 7: supersede CAS — tenant-scoped --------------------------------
   it('supersede across tenants throws "Memory not found" via readEntry tenant scope', async () => {
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'alpha-row supersede tenant-scope canary',
@@ -196,7 +178,6 @@ describe('api tenant isolation', () => {
       ),
     ).rejects.toThrow(/memory not found/i);
 
-    // The original row is untouched: no superseded_by, no new memory created.
     const db = openHippoDb(home);
     try {
       const row = queryRow<{ tenant_id: string; superseded_by: string | null }>(
@@ -214,15 +195,6 @@ describe('api tenant isolation', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// Test 4: authCreate body tenantId ignored (HTTP layer regression)
-// ---------------------------------------------------------------------------
-//
-// HTTP POST /v1/auth/keys with a Bearer for tenant alpha and a body
-// containing tenantId='bravo' must mint the key for ALPHA, not bravo.
-// The body field is ignored at the HTTP layer; opts.tenantId no longer
-// exists on AuthCreateOptions.
 
 describe('authCreate HTTP body.tenantId ignored', () => {
   let home: string;
@@ -244,7 +216,6 @@ describe('authCreate HTTP body.tenantId ignored', () => {
   });
 
   it('POST /v1/auth/keys ignores body.tenantId, binds key to bearer tenant', async () => {
-    // Mint an alpha key directly so we have a Bearer for tenant alpha.
     const db = openHippoDb(home);
     let alphaPlaintext: string;
     try {
@@ -254,9 +225,6 @@ describe('authCreate HTTP body.tenantId ignored', () => {
       closeHippoDb(db);
     }
 
-    // Call POST /v1/auth/keys as alpha but try to smuggle tenantId='bravo'
-    // in the body. The route handler must drop body.tenantId and bind the
-    // new key to ctx.tenantId='alpha'.
     const res = await fetch(`${handle.url}/v1/auth/keys`, {
       method: 'POST',
       headers: {
@@ -273,7 +241,6 @@ describe('authCreate HTTP body.tenantId ignored', () => {
     expect(body.tenantId).toBe('alpha');
     expect(body.keyId).toMatch(/^hk_/);
 
-    // Confirm in the DB: the api_keys row carries tenant_id='alpha'.
     const db2 = openHippoDb(home);
     try {
       const row = queryRow<{ tenant_id: string }>(db2, `SELECT tenant_id FROM api_keys WHERE key_id = ?`, body.keyId);

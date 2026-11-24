@@ -1,18 +1,3 @@
-/**
- * v1.7.7 -- Analyze the 4-condition × 20-seed eval per the pre-registration:
- * docs/evals/2026-05-09-v1.7.7-goal-stack-eval-prereg.md.
- *
- * Reads the 4 result JSONs from results/v1.7.7-eval-C{0,1,2,3}-... directories.
- * Computes the paired permutation CI on Δ = mean_late(C2) − mean_late(C3).
- * Applies the mechanical decision rule via the pure `computeVerdict` helper
- * (post-review P1-2: tie-degeneracy guard; post-review P1-3: exact enumeration
- * sensitivity check when the Monte Carlo result is within 2pp of a decision
- * boundary).
- * Prints a markdown-ready summary.
- *
- * Run: node benchmarks/sequential-learning/analyze-v1.7.7.mjs
- */
-
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { mean, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
@@ -35,7 +20,7 @@ import { mean, ciHalfWidth95, pairedPermutationCI } from './aggregate.mjs';
 export function computeVerdict({ delta, ciLow, hookFailures, sanityPass, tiePass }) {
   if (!sanityPass) return 'SANITY_FAIL';
   if ((hookFailures?.push ?? 0) > 0 || (hookFailures?.complete ?? 0) > 0) return 'HOOK_FAIL';
-  if (tiePass === false) return 'NOT_SUPPORTED'; // degenerate, surface in result doc
+  if (tiePass === false) return 'NOT_SUPPORTED';
   if (delta >= 0.10 && ciLow > 0) return 'SUPPORTED';
   return 'NOT_SUPPORTED';
 }
@@ -58,7 +43,7 @@ export function exactPairedPermutationCI(c2, c3, alpha = 0.05) {
   const diffs = c2.map((v, i) => v - c3[i]);
   const observed = diffs.reduce((a, b) => a + b, 0) / n;
   const allMeans = [];
-  const total = 1 << n; // 2^n
+  const total = 1 << n;
   for (let mask = 0; mask < total; mask++) {
     let sum = 0;
     for (let i = 0; i < n; i++) {
@@ -89,11 +74,9 @@ function loadLatestJson(dirName) {
   return JSON.parse(readFileSync(join(dir, latest), 'utf-8'));
 }
 
-// 5-bucket histogram for late-phase rates on the N=4 lattice (0, 0.25, 0.5, 0.75, 1.0).
 function latticeHistogram(rates) {
   const buckets = { '0.0': 0, '0.25': 0, '0.5': 0, '0.75': 0, '1.0': 0 };
   for (const r of rates) {
-    // Round to nearest lattice value to absorb floating-point noise.
     const rounded = Math.round(r * 4) / 4;
     let key;
     if (rounded === 0) key = '0.0';
@@ -101,18 +84,16 @@ function latticeHistogram(rates) {
     else if (rounded === 0.5) key = '0.5';
     else if (rounded === 0.75) key = '0.75';
     else if (rounded === 1) key = '1.0';
-    else key = '0.0'; // off-lattice fallback (should not happen at N=4)
+    else key = '0.0';
     buckets[key]++;
   }
   return buckets;
 }
 
-// Only run main() when this file is executed directly (not when imported by tests).
 const isMain = (() => {
   try {
     const argv1 = process.argv[1] ?? '';
     const thisFile = new URL(import.meta.url).pathname;
-    // Normalise Windows path quirk: leading '/C:/...' from URL pathname.
     const norm = (p) => p.replace(/^\/([A-Za-z]:)/, '$1').replace(/\\/g, '/');
     return norm(argv1) === norm(thisFile);
   } catch {
@@ -131,9 +112,6 @@ function main() {
   const c3 = loadLatestJson('v1.7.7-eval-C3-hippo-goalstack');
 
   function extractSeedRates(condRoot) {
-    // Output schema written by run.mjs::runAdapter when n-seeds>1.
-    // Expected shape: { conditions: { <name>: { seeds: [{seed, phases:{early,mid,late}, overall}], phase_aggregate: ... } } }
-    // Single-condition runs (output dir per condition) collapse to that one condition.
     const cond = condRoot.conditions ?? {};
     const condName = Object.keys(cond)[0];
     const seeds = cond[condName]?.seeds ?? [];
@@ -173,13 +151,6 @@ function main() {
     row('C3 hippo+goalstack', e3),
   ];
 
-  // Sanity gate (POST-AUDIT P0-1, v1.7.8): N=4 lattice rule per
-  // docs/evals/2026-05-09-v1.7.7-goal-stack-eval-prereg.md "Stop conditions".
-  // Replaces the inherited [0.04, 0.24] band which was calibrated for the
-  // chronological-third late slice (last 7 of 25), not the N=4 lattice
-  // (lateMean = k/80 ∈ {0, 1.25%, ..., 100%}).
-  //
-  // Pre-registered rule: mean ∈ [0.05, 0.50] AND ≥3 distinct seeds non-zero.
   const c2SeedsNonZero = e2.late.filter((r) => r > 0).length;
   const sanityPass =
     e2.late.length === 20 &&
@@ -187,19 +158,15 @@ function main() {
     rows[2].lateMean <= 0.50 &&
     c2SeedsNonZero >= 3;
 
-  // Hook-failure gate (handled inside computeVerdict; kept here for the human-readable line)
   const hookFailuresOk =
     (e3.hookFailures?.push ?? 0) === 0 && (e3.hookFailures?.complete ?? 0) === 0;
 
-  // Paired permutation CI on Δ = late_C2 − late_C3 (positive Δ = goal-stack helped)
   const perm = pairedPermutationCI(e2.late, e3.late, 0.05, 10_000);
 
-  // Per-seed paired diffs (C2 - C3) for tie-degeneracy gate + histogram.
   const pairedDiffs = e2.late.map((v, i) => v - e3.late[i]);
   const zeroDiffCount = pairedDiffs.filter((d) => d === 0).length;
   const tiePass = pairedDiffs.length > 0 && zeroDiffCount / pairedDiffs.length <= 0.70;
 
-  // Lattice histograms for C2 and C3 late-phase rates.
   const c2Histogram = latticeHistogram(e2.late);
   const c3Histogram = latticeHistogram(e3.late);
 
@@ -207,7 +174,6 @@ function main() {
   const ciLow = perm.ciLow;
   const ciHigh = perm.ciHigh;
 
-  // Post-review P1-3: exact enumeration when within 2pp of decision boundary.
   const nearBoundary = Math.abs(delta - 0.10) < 0.02 || Math.abs(ciLow) < 0.02;
   let exact = null;
   if (nearBoundary) {
@@ -225,7 +191,6 @@ function main() {
     tiePass,
   });
 
-  // Human-readable decision string for the markdown report.
   const HARMS = ciHigh < 0;
   let decision;
   if (verdict === 'SANITY_FAIL') decision = 'STOP — sanity gate failed (C2 late outside [5%, 50%] OR <3 seeds non-zero on N=4 lattice)';
@@ -235,7 +200,6 @@ function main() {
   else if (HARMS) decision = 'HYPOTHESIS NOT SUPPORTED + goal-stack measurably HARMS performance (Δ<0, upper-CI<0) — flag for v1.8';
   else decision = 'HYPOTHESIS NOT SUPPORTED';
 
-  // Output
   const pct = (x) => (Number.isFinite(x) ? (x * 100).toFixed(1) + '%' : 'NaN');
   const pp = (x) => (Number.isFinite(x) ? (x * 100).toFixed(1) + 'pp' : 'NaN');
 
@@ -302,7 +266,6 @@ function main() {
   console.log('- `results/v1.7.7-eval-C2-hippo-base/benchmark-*.json`');
   console.log('- `results/v1.7.7-eval-C3-hippo-goalstack/benchmark-*.json`');
 
-  // Also write structured JSON for programmatic use
   const summary = {
     verdict,
     decision,

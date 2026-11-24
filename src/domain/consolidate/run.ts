@@ -40,14 +40,9 @@ export interface ConsolidationResult {
   extracted: number;
   dagCandidateClusters: number;
   dagSummariesCreated: number;
-  // Failed and zero-child counts are first-class so callers (CLI eval, HTTP /v1/sleep) see
-  // structured data, not a parsed line.
   summariesRebuilt: number;
   summariesRebuildFailed: number;
   summariesZeroChildSkipped: number;
-  // Hardening pass: tombstone-refused rebuilds are split out of `rebuilt` so the stat does not
-  // absorb refusals (metadata is still applied and dirty cleared; counters only, see
-  // applyRebuildResult's return contract).
   summariesRebuildRefused: number;
   summariesRebuildCapped: boolean;
   /** Dirty summaries left out because their rebuild failed three times in a row and the hold has
@@ -82,29 +77,22 @@ export type ConsolidationStore = StoreWith<
  * `units` whole in one transaction.
  */
 export interface SleepRun {
-  /** The caller's tenant, whose completed sessions become traces. */
   tenantId: string;
   store: ConsolidationStore;
   now: Date;
   dryRun: boolean;
   config: HippoConfig;
   decayOpts: DecayBasis;
-  /** The model every strength this run reads is scored by. */
   strength: StrengthModel;
   result: ConsolidationResult;
   rows: SleepRows;
   retirable: (entry: MemoryEntry) => boolean;
-  /**
-   * Auto-promote (1.4) and merge (3) write deterministic content through the guard's bypass, so
-   * both check tombstones here first.
-   */
   tombstones: TombstoneChecks;
   survivors: Survivors;
   pendingRefreshes: StrengthRefresh[];
   pendingWrites: MemoryEntry[];
   pendingDeletes: string[];
   pendingDormant: DormantMove[];
-  /** The DAG parent of each loaded row that has one, for the flush's family units. */
   parentOf: Map<string, string>;
   units: string[][];
 }

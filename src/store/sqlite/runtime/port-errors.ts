@@ -1,5 +1,3 @@
-// hippo.db's busy and locked codes leave the adapter as the port's StoreBusyError, so no layer
-// above it reads a driver code. The driver's error stays as the cause and its text as the message.
 import { isSqliteBusy } from '../../../db/index.js';
 import { errorMessage } from '../../../base/util/log.js';
 import { StoreBusyError } from '../../../base/ports/store.js';

@@ -1,4 +1,3 @@
-// The five caller calls key every row on ctx.tenantId and the body's project, never HIPPO_TENANT or the folder the server runs in.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -50,7 +49,6 @@ beforeEach(() => {
   fs.mkdirSync(root, { recursive: true });
   initTestStore(root);
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ sharedStore: true }));
-  // A folder outside any repo, so a call that fell back to the process folder would stamp its name.
   const elsewhere = path.join(dir, 'elsewhere');
   fs.mkdirSync(elsewhere);
   startCwd = process.cwd();
@@ -92,7 +90,6 @@ describe('caller calls under a foreign environment', () => {
   it("each of the five calls writes only to ctx.tenantId and the body's project", async () => {
     const store = sqliteStore(root);
     const config = loadConfig(root);
-    // As a server root sets it: the store keeps a ledger, so session-end re-reads book there.
     const ledger = { ledger: store.ledger, folderFiles: store.folderFiles, config };
     const ctx: CallerContext = {
       store,

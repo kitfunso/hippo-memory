@@ -1,12 +1,3 @@
-/**
- * Runtime test for v1.12.0 A5 v2 sub-1: migration v26 adds the `role` column
- * to `api_keys` with DEFAULT 'admin'. Existing keys backfill to 'admin'
- * (single-tenant operator = admin by definition). New keys created via
- * createApiKey get explicit 'admin' on the 6-column INSERT.
- *
- * Real-DB per project convention.
- */
-
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, getCurrentSchemaVersion, getSchemaVersion } from '../../src/db/index.js';
 import { createApiKey, validateApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -78,8 +69,6 @@ describe('migration v26: api_keys.role', () => {
     const home = makeRoot('v26-legacy');
     const db = openHippoDb(home);
     try {
-      // Simulate a legacy 5-column INSERT (what v1.11.x binaries would do).
-      // The migration already ran so the column exists; DEFAULT 'admin' fills it.
       db.prepare(`INSERT INTO api_keys (key_id, key_hash, tenant_id, label, created_at) VALUES (?, ?, ?, ?, ?)`).run(
         'hk_legacy_test',
         'fake_hash_for_test',

@@ -1,5 +1,3 @@
-// Runs one store group's calls on sqliteStore over its own copy of a two-tenant fixture, and returns the answers and
-// the audit rows so a test can assert them.
 import { mkdtempSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { tmpdir } from 'node:os';
@@ -24,10 +22,8 @@ export const FIXTURE_REVOKED_AT = '2026-01-02T00:00:00.000Z';
 type FixtureKey = 'adminA' | 'memberA' | 'revokedA' | 'memberB';
 
 export interface TwoTenantFixture {
-  /** The template folder; each run uses its own copy. */
   readonly dir: string;
   readonly keys: Readonly<Record<FixtureKey, string>>;
-  /** Each key's bearer token, minted at seed time. */
   readonly tokens: Readonly<Record<FixtureKey, string>>;
 }
 

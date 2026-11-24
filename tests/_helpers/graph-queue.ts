@@ -1,4 +1,3 @@
-// Reads graph_extraction_queue rows off a real store; production only drains the queue, so no src reader exists.
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import {
   QUEUE_COLS,

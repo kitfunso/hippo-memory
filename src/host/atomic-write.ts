@@ -1,5 +1,3 @@
-// One way to replace a file a user or another program depends on: write a temp file beside it, then
-// rename over it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorCode, errorMessage, log, errorFields } from '../base/util/log.js';
@@ -33,10 +31,6 @@ function renameOnto(tmp: string, target: string): void {
   }
 }
 
-/**
- * Where a write to `file` lands: through any symlink, a dangling one included, so a dotfile
- * manager's link survives.
- */
 function writeTarget(file: string): string {
   let target = file;
   for (
@@ -56,8 +50,6 @@ function keepAccess(tmp: string, old: fs.Stats): void {
   if (process.getuid?.() === 0) fs.chownSync(tmp, old.uid, old.gid);
 }
 
-/** Cleanup must not hide the failure that made it necessary, so a cleanup error is logged and
- * the first error stays the one thrown. */
 function removeTemp(tmp: string): void {
   try {
     fs.rmSync(tmp, { force: true });
@@ -122,8 +114,6 @@ function replaceViaTemp(
   if (opts.durable) flushFolder(path.dirname(target));
 }
 
-/** The pre-rename write: it truncates first, so it is only the fallback, but it needs just a
- * writable file and keeps hard links together. */
 function writeInPlace(target: string, data: string | Uint8Array): void {
   try {
     fs.writeFileSync(target, data, 'utf8');
@@ -135,7 +125,6 @@ function writeInPlace(target: string, data: string | Uint8Array): void {
         : `could not be replaced (${errorCode(err) || err.message})`;
     const wrapped: NodeJS.ErrnoException = new Error(`${target} ${reason}`, { cause: err });
     const { code, errno, syscall }: NodeJS.ErrnoException = err;
-    // Callers sort file errors by `code`; a field the cause lacks stays off, as errorCode reads any `code` key.
     if (code !== undefined) wrapped.code = code;
     if (errno !== undefined) wrapped.errno = errno;
     if (syscall !== undefined) wrapped.syscall = syscall;
@@ -144,13 +133,8 @@ function writeInPlace(target: string, data: string | Uint8Array): void {
 }
 
 export interface AtomicWriteOptions {
-  /** False skips the fsyncs, for derived files that can be rebuilt; a reader still never sees a
-   * torn file. */
   readonly durable?: boolean;
-  /** The mode a new file is created with, before the umask; a replaced file keeps its own. */
   readonly mode?: number;
-  /** False never writes in place: a refused rename throws, for a file other processes read while
-   * it is replaced. */
   readonly inPlace?: boolean;
 }
 

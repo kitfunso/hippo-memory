@@ -1,11 +1,9 @@
-// Status moves whose from-set sits in the UPDATE, so a row another writer already moved is left alone.
 import type { DatabaseSyncLike, SqlResult } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { SNAPSHOT_CLOSE_STATUSES } from '../../../base/ports/store/sessions.js';
 import type { ALL_TENANTS, TenantId } from '../../../base/util/tenant.js';
 
-// Table, key and column names reach the SQL only through this map, never from a caller.
 const TRANSITIONS = {
   compactionDone: {
     table: 'compactions',

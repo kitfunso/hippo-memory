@@ -1,5 +1,3 @@
-// Text the MCP recall and context tools print, and what each printed piece costs the token budget.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
@@ -14,8 +12,6 @@ import { detectAvailabilityBias } from '../../api/availability.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 
 const MCP_PREVIEW_CHARS = 200;
-
-// ── Format helpers ──
 
 function handoffLines(h: SessionHandoff): string[] {
   const lines = [`- Summary: ${h.summary}`];
@@ -91,8 +87,6 @@ export interface RenderedRecall {
   list: SearchResult[];
 }
 
-// api.retrieveRanking hands the ranking to a callback, so the render it produces comes back through
-// this slot.
 export interface RenderSlot {
   rendered?: RenderedRecall;
 }
@@ -103,8 +97,6 @@ export const memoryCostAt =
   (r: Pick<SearchResult, 'entry'>): number =>
     printedTokens(formatMemory(r, now));
 
-// The widest heading or the empty-list line, whichever costs more, so either prints inside the
-// budget.
 export function memoriesReserve(budget: number): number {
   return Math.max(printedTokens(memoriesHeading(budget)), estimateTokens(NO_MEMORIES));
 }
@@ -134,25 +126,19 @@ export function trailPiece(events: readonly SessionEvent[]): string {
   return ['## Recent Session Trail', ...trailLines(events), '', ''].join('\n');
 }
 
-// Sections print ahead of the memories in hippo_context, so contextGet pays for each as printed
-// before any memory.
 export const contextCostAt = (now: Date): ContextCost => ({
   entry: memoryCostAt(now),
   fixed: (budget) => memoriesReserve(budget),
-  // hippo_context passes no continuity opt-in, so the mode is always 'full' and the full piece is the price.
   snapshot: (s, _mode) => estimateTokens(snapshotPiece(s)),
   handoff: (h, _mode) => estimateTokens(handoffPiece(h)),
   trail: (events) => estimateTokens(trailPiece(events)),
 });
 
-// Rows the ranked list already shows drop out of this section, so pricing every row bounds what it
-// prints.
 export function tailSection(rows: RecallResultItem[]): string {
   if (rows.length === 0) return '';
   const lines: string[] = ['', '## Fresh tail / substituted summaries'];
   for (const r of rows) {
     const tag = r.isSummary ? '[summary]' : '[tail]';
-    // A preview shows the memory itself: a lead-in first would fill the cut.
     const head = truncateWithEllipsis(r.content, MCP_PREVIEW_CHARS, '…');
     if (r.isSummary && r.substitutedFor && r.substitutedFor.length > 0) {
       lines.push(`- ${tag} ${r.id} (covers ${r.substitutedFor.length} rows): ${head}`);
@@ -163,8 +149,6 @@ export function tailSection(rows: RecallResultItem[]): string {
   return '\n' + lines.join('\n');
 }
 
-// The hint depends on the query alone, so the ranker's copy is the one shown; JSON.stringify fences
-// the phrase.
 export function planningSection(r: RecallResult): string {
   if (r.planningFallacyHint) {
     const h = r.planningFallacyHint;

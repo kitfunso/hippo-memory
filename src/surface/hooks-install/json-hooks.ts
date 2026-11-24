@@ -1,4 +1,3 @@
-// Reads and writes each tool's hook settings file; what changes in it is rules/json-hooks.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -24,7 +23,6 @@ import {
   type JsonHookTarget,
 } from './rules/shared.js';
 
-// What a caller of the installer names beside it: the reminder Codex needs before it runs a new hook.
 export { CODEX_TRUST_LINE } from './rules/shared.js';
 
 /** The paths for `target` under this process's home folder; reads and writes nothing. */
@@ -43,15 +41,12 @@ export function writeSettingsFile(file: string, settings: JsonValue): void {
   writeFileAtomic(file, settingsText(settings));
 }
 
-/** Parsed settings, `{}` for a missing file, or undefined for one that is not JSON. */
 function readSettings(file: string): JsonValue | undefined {
   return fs.existsSync(file) ? tryReadJsonFile(file) : {};
 }
 
-/** Each settings file path with the markers of the hippo hooks installed there. */
 type InstalledHooks = Map<string, string[]>;
 
-/** The record of installed hooks; a missing or malformed file reads as empty. */
 function readInstalledHooks(): InstalledHooks {
   const file = installedHooksPathOn(processHomes());
   if (!fs.existsSync(file)) return new Map();
@@ -67,7 +62,6 @@ function readInstalledHooks(): InstalledHooks {
   );
 }
 
-/** A record that cannot be saved costs only a hook the user removed coming back, so it warns. */
 function saveInstalledHooks(record: InstalledHooks): void {
   const file = installedHooksPathOn(processHomes());
   try {
@@ -102,7 +96,6 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
     return plan.result;
   }
   const record = readInstalledHooks();
-  // A deleted settings file took every hook with it, which is a fresh start rather than removals.
   const recorded = new Set(fs.existsSync(paths.settings) ? record.get(paths.settings) : []);
   const logs = {
     ...paths,
@@ -119,8 +112,6 @@ export function installJsonHooks(target: JsonHookTarget): InstallResult {
   return plan.result;
 }
 
-/** Never rewrites a settings file that does not parse; a read failure (a permission, a folder)
- * throws to the caller. */
 function readForRemoval(settingsPath: string): JsonValue | undefined {
   try {
     return readJsonFile(settingsPath);
@@ -140,8 +131,6 @@ function readForRemoval(settingsPath: string): JsonValue | undefined {
  * handler; true when the file changed. */
 export function uninstallJsonHooks(target: JsonHookTarget): boolean {
   const { settings: settingsPath } = resolveJsonHookPaths(target);
-  // After uninstall the next install starts fresh, so it must not leave out a hook the user once
-  // removed.
   if (target !== 'copilot') forgetInstalledHooks(target);
   if (!fs.existsSync(settingsPath)) return false;
   if (target === 'copilot') {

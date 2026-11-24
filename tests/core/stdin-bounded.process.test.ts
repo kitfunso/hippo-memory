@@ -10,8 +10,6 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
-// Plan: hippo/trajectories/01M2ZSMFG8JXSM7PH10EVZNZBW/plan.md. Real spawn,
-// real store, no mocks, same idiom as tests/core/pre-compact-e2e.process.test.ts.
 const HIPPO_JS = path.resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 
 function withScratchEnv() {
@@ -29,7 +27,6 @@ function transcriptJsonl(entries: unknown[]): string {
   return entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
 }
 
-// Setup only, so in process; every case under test spawns, since each one is about a real stdin pipe.
 async function initHippo(cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
   const result = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd, env });
   expect(result.status).toBe(0);
@@ -45,8 +42,6 @@ function safeRmSync(p: string): void {
   }
 }
 
-// case 1's payload-less run takes the "no session_id" branch, which
-// session-end-snapshot-close.process.test.ts's own CLOSE_STEP regex never matches.
 const SESSION_END_DONE =
   /closed \d+ active snapshot\(s\) for session |snapshot close failed: |skip: no session_id in SessionEnd payload/;
 function sessionEndDoneLogged(logFile: string): boolean {
@@ -67,12 +62,8 @@ type StdinPlan =
   | { mode: 'dribble'; text: string; everyMs: number }
   | { mode: 'write'; text: string; end: boolean; delayMs?: number };
 
-// Long enough the fix's <=1000ms default wait never reaches it, short
-// enough to fail fast instead of waiting out vitest's 30s global timeout.
 const KILL_GUARD_MS = 15_000;
 
-/** spawnSync can't express "stdin open, never written": its child stdin
- * closes the instant the call returns. Case 1 needs a real spawn. */
 function spawnBounded(
   args: string[],
   cwd: string,
@@ -96,8 +87,6 @@ function spawnBounded(
       stderr += c.toString('utf8');
     });
 
-    // This guard (not vitest's) is what ends a red-phase hang: it names
-    // the stuck command instead of a generic "test timed out".
     const guard = setTimeout(() => {
       child.kill('SIGKILL');
       reject(new Error(`hippo ${args.join(' ')} did not exit within ${KILL_GUARD_MS}ms (killed by test guard)`));
@@ -116,7 +105,6 @@ function spawnBounded(
     });
 
     if (stdin.mode === 'dribble') {
-      // EPIPE once the child exits is expected, not a test failure.
       child.stdin!.on('error', () => {});
       dribble = setInterval(() => {
         child.stdin?.write(stdin.text, () => {});
@@ -136,7 +124,6 @@ function spawnBounded(
   });
 }
 
-/** Writes a synthetic transcript and matching PreCompact payload for `sessionId`. */
 function seedPreCompactPayload(dir: string, sessionId: string) {
   const transcriptPath = path.join(dir, `${sessionId}-transcript.jsonl`);
   fs.writeFileSync(
@@ -205,7 +192,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       const result = await spawnBounded(['session-end', '--log-file', logFile], dir, fastEnv(), { mode: 'idle' });
       expect(result.status).toBe(0);
       expect(result.signal).toBeNull();
-      // Let the detached worker finish before afterEach removes dir.
       await waitFor(() => sessionEndDoneLogged(logFile), {
         what: 'the session-end worker finishing',
         timeoutMs: 25_000,
@@ -259,8 +245,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
   });
 
   it('cases 6+7: a timed-out pre-compact never overwrites session A with an auto-discovered decoy, and logs the skip', async () => {
-    // Literal, not read back from the store: a blank field here would
-    // silently inherit the decoy's value via capture.ts's CX6 fallback.
     const SESSION_A_TASK = 'Investigate the flaky upload retry test.';
     const SESSION_A_NEXT_STEP = 'Added a regression test for the retry backoff.';
     const SESSION_A_SUMMARY =
@@ -284,14 +268,12 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     const seed = (): Promise<BoundedRunResult> =>
       spawnBounded(['pre-compact'], dir, env, { mode: 'write', text: seedPayload, end: true });
 
-    // a. Seed session A via the explicit-path branch.
     let result = await seed();
     expect(result.status).toBe(0);
     let snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.sessionId).toBe('session-A');
 
-    // b. Decoy sits where auto-discovery actually looks (capture.ts:742-765).
     const decoyDir = path.join(dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(decoyDir, { recursive: true });
     fs.writeFileSync(
@@ -314,20 +296,15 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
       ]),
     );
 
-    // c. Positive control: a true manual invocation (stdin closed, not
-    // idle) must pick up the decoy, proving the overwrite path is live here.
     result = await spawnBounded(['pre-compact'], dir, env, { mode: 'ignore' });
     expect(result.status).toBe(0);
     snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.summary).toContain('DECOY SESSION');
 
-    // Re-seed session A before the guarded run.
     result = await seed();
     expect(result.status).toBe(0);
 
-    // d. The guard: stdin OPEN and never written must fail closed, not
-    // fall through to auto-discovery the way step c did.
     const logFile = path.join(dir, 'pre-compact-guard.log');
     result = await spawnBounded(
       ['pre-compact', '--log-file', logFile],
@@ -346,7 +323,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(snapshot!.nextStep).toBe(SESSION_A_NEXT_STEP);
     expect(snapshot!.summary).not.toContain('DECOY SESSION');
 
-    // 7. The skip must be visible in the log, not silent.
     expect(fs.readFileSync(logFile, 'utf8')).toContain(
       'skip: no PreCompact payload arrived before the stdin wait window closed',
     );
@@ -368,7 +344,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(compactionRows(getHippoRoot(dir))).toEqual([]);
   });
 
-  /** Plants a transcript where resolveLastSessionTranscript's step-3 scan looks. */
   function seedDecoyProject(dir: string): void {
     const decoyDir = path.join(dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(decoyDir, { recursive: true });
@@ -395,8 +370,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
   it('case 8: a timed-out capture --last-session refuses the cross-project scan', async () => {
     seedDecoyProject(dir);
 
-    // Positive control: stdin closed, not idle, must still find the decoy,
-    // proving the scan is reachable here and step d is a real discriminator.
     let result = await spawnBounded(['capture', '--last-session', '--dry-run'], dir, env, { mode: 'ignore' });
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain(NO_TRANSCRIPT);
@@ -418,7 +391,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     expect(result.status).toBe(0);
     expectRowFor(dir, 'sess-case9');
 
-    // Positive control: the snapshot is live and printable on a manual run.
     result = await spawnBounded(['compact-resume'], dir, env, { mode: 'ignore' });
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('## Restored after compaction');
@@ -438,7 +410,6 @@ describe('hippo stdin: bounded read for the optional hook payload (plan: stdin-i
     );
     expect(result.status).toBe(0);
     expect(result.signal).toBeNull();
-    // 200ms idle refreshed every 50ms would never fire; only the 10x cap ends it.
     expect(result.elapsedMs).toBeGreaterThanOrEqual(1500);
   });
 });

@@ -1,6 +1,3 @@
-/** The code UPGRADING-3.0 tells an integrator to write, compiled against the built declarations
- * they import; the last case fails when a row's code is not the code compiled here. */
-
 import { readFileSync } from 'node:fs';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { typeOnly } from './_type-only.js';
@@ -51,7 +48,6 @@ describe('UPGRADING-3.0 advice', () => {
       }
       // @ts-expect-error a Context whose store names no sessions is refused
       await bindSessionOwner(ctx, sessionId);
-      // The spread row 18 warns against compiles; it drops the store's marks at run time.
       expectTypeOf({ ...store, sessions: requireGroup(store, 'sessions') }).toHaveProperty('sessions');
     });
   });
@@ -154,8 +150,6 @@ function compiledText(): string {
   return squash(kept.join('\n'));
 }
 
-/** Each statement or object span in the guide's advice column that this file does not compile and
- * UNCOMPILED_SPANS does not name, as `row: span`; a UNCOMPILED_SPANS entry the guide no longer holds is listed too. */
 function uncovered(): string[] {
   const compiled = compiledText();
   const guide = readFileSync(new URL('../../docs/UPGRADING-3.0.md', import.meta.url), 'utf8');
@@ -177,7 +171,6 @@ function uncovered(): string[] {
   return [...misses, ...stale.map((k) => `stale ${k}`)];
 }
 
-/** Shape spans the guide shows and this file does not compile, by row, each with its reason. */
 const UNCOMPILED_SPANS: readonly {
   readonly row: string;
   readonly spans: readonly string[];

@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166): the arm-blind reader sample of (diff, verdict) pairs, drawn in rounds, labelled by hand, then scored.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { git } from './exec.mjs';
@@ -41,7 +40,6 @@ export function taskText(tasksFile) {
 /** What a blinded file must never hold: memory names and markers, every run-name, arm and seed path segment in the out dir. */
 export function forbiddenFor(grades, extra = FORBIDDEN) {
   const names = new Set(extra);
-  // Every arm shares the run name, so only its path form is forbidden; a bare one would reject pairs that name the repo.
   for (const g of grades) for (const s of [`/${g.runName}/`, `/${g.arm}/seed`, `seed${g.seed}/work`]) names.add(s);
   return [...names];
 }
@@ -59,7 +57,6 @@ export function readerPairs(out, round, flipErrors = false) {
   const pass = round === 1 ? 'repro' : 'postfix';
   const rows = readRows(rowsFile(out, pass)).rows;
   if (rows.size === 0) throw new Error(`reader round ${round} needs ${pass} rows; run regrade${pass === 'postfix' ? ' --post-fix' : ''} first`);
-  // The lessons grading drops, by the same function, so the sample never judges a lesson G5 leaves out.
   const flipped = flipsOf(out, listGrades(out), flipErrors).flipped;
   const eligible = [];
   let ineligible = 0;
@@ -92,7 +89,6 @@ export function pairDiff(out, e, which) {
 
 const FINAL_LABEL = 'The agent got one follow-up message after its first try, and the diff is its work after it. Judge the commands after the follow-up when any of them bear on the rule; otherwise judge them all. Does the work obey the rule? Write pass, fail or na (the rule does not apply) in labels.tsv.';
 
-/** A pair's file body: prompt, rule, the commands with memory-tool ones dropped silently (R4), split at the follow-up for a final pair, and the redacted diff. */
 function renderPair(ctx, p) {
   const g = p.entry.grade;
   const final = p.which === 'final';
@@ -101,7 +97,6 @@ function renderPair(ctx, p) {
   const parts = [['## Commands the agent ran', g.commandsFirst ?? []], ...(final ? [['## Commands after the follow-up message', after]] : [])];
   let dropped = 0;
   const commandText = parts.flatMap(([head, commands]) => {
-    // Cut after redaction, so a memory word in the out dir's own path does not hide a plain command; chained plain parts stay.
     const kept = commands.map((c) => visibleCommand(ctx.redact(c))).filter((c) => c !== null);
     dropped += commands.length - kept.length;
     return [head, kept.length ? fenced(ctx.redact(kept.join('\n\n')), 'sh') : '(none)', ''];
@@ -115,7 +110,6 @@ function renderPair(ctx, p) {
   return { text, dropped };
 }
 
-/** Equal shares per arm, then proportional to the arm's verdict counts (R18), each stratum in seeded order. */
 function readerGroups(seed, n, pool, arms) {
   const shares = equalShares(seed, n, arms);
   return seededOrder(seed, arms, (a) => a, 'arm:').map((arm) => {
@@ -127,16 +121,13 @@ function readerGroups(seed, n, pool, arms) {
   });
 }
 
-/** The `lessonId:sha` of every checker a round's verdicts came from: the run's in round 1, the post-fix rows' after. */
 function verdictShas(out, round) {
   const pairs = round === 1 ? listGrades(out).flatMap((e) => Object.entries(e.grade.checkers)) : postfixCheckers(readRows(rowsFile(out, 'postfix')).rows);
   return [...new Set(pairs.map(([id, sha]) => `${id}:${sha}`))].sort();
 }
 
-// G5's 10% test from z0-gates.mjs without its size test, so a short round with few disagreements also counts as passed.
 const passed = ({ n, disagreements }) => !(disagreements * 10 > n);
 
-/** Prereg 166: round K only once round K-1 was scored with more than 10% disagreeing and a checker changed since its draw. */
 function assertNewRound(out, round) {
   const prev = round - 1;
   if (!fs.existsSync(keyFile(out, prev))) throw new Error(`reader round ${prev} is not drawn; draw rounds in order`);
@@ -205,7 +196,6 @@ export function scoreReader(out, round, labelsFile) {
   const key = readJson(keyFile(out, round));
   const labels = parseLabels(fs.readFileSync(labelsFile, 'utf8'), key.pairs.map((p) => p.file), VERDICTS);
   if (fs.existsSync(scoreFile(out, round))) {
-    // A scored round is final: new labels after seeing the score would be a reroll of G5.
     const old = readJson(scoreFile(out, round));
     if (key.pairs.some((p) => old.labels[p.file] !== labels.get(p.file))) throw new Error(`reader round ${round} is already scored with other labels; a scored round is final`);
     return `reader round ${round}: ${old.disagreements} of ${old.n} labels disagree\n`;
@@ -224,7 +214,6 @@ export function scoreReader(out, round, labelsFile) {
   return `reader round ${round}: ${disagreements} of ${key.pairs.length} labels disagree\n`;
 }
 
-/** Round 1's labels against the post-fix verdicts, once a post-fix pass exists (reading 13). */
 function rescoreRound1(out) {
   const rows = readRows(rowsFile(out, 'postfix')).rows;
   if (rows.size === 0 || !fs.existsSync(scoreFile(out, 1))) return null;
@@ -250,7 +239,6 @@ export function readerSummary(out) {
   if (!fs.existsSync(scoreFile(out, k))) throw new Error(`reader round ${k} is drawn but not scored; run reader --round ${k} --labels FILE first`);
   const key = readJson(keyFile(out, k));
   const score = readJson(scoreFile(out, k));
-  // The score stands only for the verdicts its round judged, so post-fix rows from another checker cannot borrow it.
   assertCheckersJudged(out, postfixCheckers(readRows(rowsFile(out, 'postfix')).rows), "the post-fix rows'");
   return {
     readerSample: { n: score.n, disagreements: score.disagreements },

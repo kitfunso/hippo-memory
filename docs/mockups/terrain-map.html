@@ -329,7 +329,6 @@
 
 <div class="page-grid">
 
-  <!-- ── Cartouche ── -->
   <div class="cartouche">
     <span class="corner-bl">&#x2514;</span>
     <span class="corner-br">&#x2518;</span>
@@ -341,34 +340,25 @@
     </div>
   </div>
 
-  <!-- ── Terrain canvas ── -->
   <div class="terrain-wrap">
     <canvas id="terrainCanvas"></canvas>
     <div class="zone-label buffer">Buffer Basin</div>
     <div class="zone-label episodic">Episodic Plateau</div>
     <div class="zone-label semantic">Semantic Bedrock</div>
 
-    <!-- Compass rose -->
     <svg class="compass" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="46" stroke="#8b7d6b" stroke-width="1" fill="none"/>
       <circle cx="50" cy="50" r="42" stroke="#8b7d6b" stroke-width="0.5" fill="none"/>
-      <!-- N arrow -->
       <polygon points="50,8 46,28 50,22 54,28" fill="#5a3e28"/>
-      <!-- S arrow -->
       <polygon points="50,92 46,72 50,78 54,72" fill="#c4b9a8"/>
-      <!-- E arrow -->
       <polygon points="92,50 72,46 78,50 72,54" fill="#c4b9a8"/>
-      <!-- W arrow -->
       <polygon points="8,50 28,46 22,50 28,54" fill="#c4b9a8"/>
-      <!-- Center dot -->
       <circle cx="50" cy="50" r="3" fill="#5a3e28"/>
       <circle cx="50" cy="50" r="1.5" fill="#f4efe6"/>
-      <!-- Cardinal letters -->
       <text x="50" y="6" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#5a3e28" font-weight="600">N</text>
       <text x="50" y="99" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">S</text>
       <text x="98" y="53" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">E</text>
       <text x="3" y="53" text-anchor="middle" font-family="Georgia,Palatino,serif" font-size="9" fill="#9b8e7e">W</text>
-      <!-- Tick marks -->
       <line x1="50" y1="10" x2="50" y2="16" stroke="#8b7d6b" stroke-width="0.5"/>
       <line x1="50" y1="84" x2="50" y2="90" stroke="#8b7d6b" stroke-width="0.5"/>
       <line x1="10" y1="50" x2="16" y2="50" stroke="#8b7d6b" stroke-width="0.5"/>
@@ -376,7 +366,6 @@
     </svg>
   </div>
 
-  <!-- ── Field Notes sidebar ── -->
   <div class="field-notes">
     <h2>Field Notes</h2>
 
@@ -421,7 +410,6 @@
     </div>
   </div>
 
-  <!-- ── Legend ── -->
   <div class="legend">
     <h2>Legend</h2>
     <div class="legend-row">

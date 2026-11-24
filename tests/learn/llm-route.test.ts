@@ -1,4 +1,3 @@
-// Which model a process calls: the endpoint wins, a half-set or unsafe setting is refused and never falls back to Anthropic.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isPermanentFailure, type LlmReply } from '../../src/base/ports/llm.js';
 import { llmFromEnv } from '../../src/infra/ports.js';

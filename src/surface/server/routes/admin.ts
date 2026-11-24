@@ -1,4 +1,3 @@
-// Admin routes: API keys, quarantine and the audit log.
 import {
   DEFAULT_LIST_LIMIT,
   MAX_AUDIT_LIMIT,
@@ -38,21 +37,12 @@ import type { AuditOp } from '../../../base/records/audit-ops.js';
 
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
-// A key mint or grant is a few short fields, so even an authenticated caller gets a small cap and a short
-// wait. ServeOptions.mintBodyDeadlineMs overrides the wait for tests only, so a 408 test need not
-// sit through it.
 const KEY_BODY_MAX_BYTES = 4 * 1024;
 const KEY_BODY_DEADLINE_MS = 10_000;
 
-// GET /v1/auth/keys had no limit, so its default page is the cap: a deployment below 1000 keys sees
-// no change.
 const MAX_AUTH_KEYS_PAGE = 1000;
 
-// POST /v1/auth/keys: mints a key; plaintext is in the response body (the CLI client, not this
-// layer, carries the "store this somewhere safe" warning).
 export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest): Promise<void> {
-  // The dispatch gate authenticated before the body, so an unknown caller costs no read; this
-  // recheck runs the resolver right before the mint.
   const raw = await readBody(req, {
     maxBytes: KEY_BODY_MAX_BYTES,
     deadlineMs: opts.mintBodyDeadlineMs ?? KEY_BODY_DEADLINE_MS,
@@ -60,8 +50,6 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   const ctx = await recheckContextWithAuth(req, opts);
   const body = parseJsonObjectText(raw);
   const labelRaw = getString(body, 'label', MAX_ID_LEN);
-  // Optional body.role mirrors the --role CLI flag and is validated strictly: anything but 'admin'|'member' is a 400;
-  // authCreate refuses a member caller with a 403.
   const roleRaw = body['role'];
   let role: 'admin' | 'member' | undefined;
   if (roleRaw !== undefined) {
@@ -70,8 +58,6 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
     }
     role = roleRaw;
   }
-  // A null is a 400 too: a client that serialises an unset field as null must not get a key that
-  // never expires.
   const ttlDays = body['ttlDays'];
   if (ttlDays !== undefined && !isJsonNumber(ttlDays)) {
     throw new HttpError(400, 'ttlDays must be a number');
@@ -80,22 +66,17 @@ export async function handleCreateAuthKey({ req, res, opts }: AuthedRouteRequest
   if (noExpiry !== undefined && !isJsonBoolean(noExpiry)) {
     throw new HttpError(400, 'noExpiry must be true or false');
   }
-  // Security: any body `tenantId` is IGNORED; the key is bound to the caller's authenticated
-  // tenant, or tenant A could mint a key for tenant B (see authCreate).
   const result = await authCreate(ctx, {
     label: labelRaw,
     role,
     ttlDays,
     noExpiry,
   });
-  // The reply carries the key plaintext, so no cache or proxy may keep it.
   res.setHeader('Cache-Control', 'no-store');
   sendJson(res, 200, result);
   return;
 }
 
-// GET /v1/auth/keys?active=true&limit=&cursor=: lists keys visible to ctx.tenantId; `active`
-// defaults to true, ?active=false includes revoked and expired rows.
 export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const activeRaw = query.get('active');
   let active = true;
@@ -119,9 +100,6 @@ export async function handleListAuthKeys({ res, ctx, query }: AuthedRouteRequest
   return;
 }
 
-// DELETE /v1/auth/keys/:keyId revokes: missing or cross-tenant keys are 404 (no leak); a member is
-// 403 on any key but its own or, via the resolver, those it minted. Returns 200 with the body
-// rather than 204 so the caller sees revokedAt.
 export async function handleRevokeAuthKey(
   { res, ctx }: AuthedRouteRequest,
   { keyId }: RouteParams,
@@ -132,8 +110,6 @@ export async function handleRevokeAuthKey(
   return;
 }
 
-// POST /v1/auth/keys/:keyId/grants {"scope"}: the scope rides in the body, since it holds ':' and
-// so cannot sit in the path. authGrant answers the tenant, role and scope-shape errors.
 export async function handleGrantAuthKeyScope(
   { req, res, opts }: AuthedRouteRequest,
   { keyId }: RouteParams,
@@ -150,7 +126,6 @@ export async function handleGrantAuthKeyScope(
   return;
 }
 
-// DELETE /v1/auth/keys/:keyId/grants?scope=: removes one grant; the same errors as the grant.
 export async function handleUngrantAuthKeyScope(
   { res, ctx, query }: AuthedRouteRequest,
   { keyId }: RouteParams,
@@ -162,8 +137,6 @@ export async function handleUngrantAuthKeyScope(
   return;
 }
 
-// GET /v1/quarantine?status=&limit=&cursor=: quarantine review queue. quarantineList carries no
-// role gate itself, so its row's admin gate is the check.
 export async function handleListQuarantine({
   res,
   ctx,
@@ -196,7 +169,6 @@ export async function handleListQuarantine({
   return;
 }
 
-// POST /v1/quarantine/:id/approve: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleApproveQuarantine(
   { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
@@ -207,7 +179,6 @@ export async function handleApproveQuarantine(
   return;
 }
 
-// POST /v1/quarantine/:id/reject: admin only; ForbiddenError falls through to mapApiError's 403.
 export async function handleRejectQuarantine(
   { res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
@@ -218,7 +189,6 @@ export async function handleRejectQuarantine(
   return;
 }
 
-// POST /v1/quarantine/:id/edit {content}: admin only; the text runs the write screen again.
 export async function handleEditQuarantine(
   { req, res, ctx }: GroupRequest<'quarantine'>,
   { id }: RouteParams,
@@ -232,14 +202,11 @@ export async function handleEditQuarantine(
   return;
 }
 
-// GET /v1/audit?op=&since=&limit=&cursor=: all three filters are validated at the route boundary so
-// an invalid value is a 400 before the DB is hit.
 export async function handleListAudit({ res, ctx, query }: AuthedRouteRequest): Promise<void> {
   const op = auditOpParam(query.get('op'));
   const since = auditSinceParam(query.get('since'));
   const limit = auditLimitParam(query.get('limit'));
   const after = parseCursor(query.get('cursor'), 'string', 'integer');
-  // ?tenant=<t> reads another tenant (e.g. '__host__' for consolidate rows); admin only.
   const tenantOverride = query.get('tenant');
   if (tenantOverride !== null && tenantOverride !== '') validateIdSegment(tenantOverride, 'tenant');
   const crossTenant =

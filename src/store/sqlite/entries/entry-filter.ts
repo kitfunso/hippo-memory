@@ -1,6 +1,3 @@
-// hippo.db's half of the entry filter (port/reports.ts): each field one WHERE term with bound
-// parameters, over the memories columns or the same fields of a dormant snapshot's JSON.
-// memory/entry-filter.ts is the predicate half.
 import { keysetPage } from '../../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../../base/util/tenant.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
@@ -32,8 +29,6 @@ export type FilterColumn =
   | 'source_session_id';
 
 type ColumnOf = (column: FilterColumn) => string;
-// An alias, not `keyof` inline: a mapped type over it lets TERMS[key] read as Term<K> for a generic
-// key.
 type Field = keyof EntryNarrowing;
 type Term<K extends Field> = (
   value: NonNullable<EntryNarrowing[K]>,
@@ -48,20 +43,15 @@ export function prefixUpperBound(prefix: string): string | null {
   const last = points.pop();
   if (last === undefined) return null;
   const next = last.codePointAt(0)! + 1;
-  // The surrogate block holds no code point, so the next one up is U+E000.
   return points.join('') + String.fromCodePoint(next === 0xd800 ? 0xe000 : next);
 }
 
-// One value binds `=`, which the tenant and origin index can seek; a list binds one JSON param, so
-// the statement text stays the same however long it is.
 function inList(column: string, values: readonly string[]): SqlFragment {
   return values.length === 1
     ? { sql: `${column} = ?`, params: [values[0]!] }
     : { sql: `${column} IN (SELECT value FROM json_each(?))`, params: [JSON.stringify(values)] };
 }
 
-// A BINARY range is startsWith in byte order, and it is what idx_memories_source_tenant_created
-// seeks.
 function startsWith(column: string, prefix: string): SqlFragment {
   const upper = prefixUpperBound(prefix);
   return upper === null
@@ -118,8 +108,6 @@ export function listEntriesWhere(
   const { tenantId, ...narrowing } = filter;
   const where = narrowingAnd(narrowing);
   if (narrowing.ids !== undefined) return idsPage(db, filter, where, page);
-  // Without the hint the planner takes the tenant index for its created order and filters every row of the tenant;
-  // the all-tenant read already pins its own index inside its subquery.
   const seeksSource = narrowing.sourcePrefix !== undefined && narrowing.origins === undefined;
   const index =
     seeksSource && tenantId !== ALL_TENANTS ? ' INDEXED BY idx_memories_source_tenant_created' : '';
@@ -134,8 +122,6 @@ export function listEntriesWhere(
   );
 }
 
-// An id list reads off the primary key: the plus keeps SQLite off the tenant index, and no tenant
-// is walked.
 function idsPage(
   db: DatabaseSyncLike,
   filter: EntryFilter,

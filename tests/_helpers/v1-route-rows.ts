@@ -23,7 +23,6 @@ export function viewerWriteRows(rows: readonly { key: string; route: { method: s
     .map(({ key }) => key);
 }
 
-// The rows above the editor level; a new admin row fails the levels check until it is listed.
 export const ADMIN_LEVEL = new Map([
   ['POST /v1/sleep', 'host-admin-local'],
   ['POST /v1/auth/keys', 'admin'],

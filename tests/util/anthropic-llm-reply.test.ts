@@ -1,11 +1,9 @@
-// The Anthropic Llm reads its reply under a byte cap and through shape checks, and reports a bad reply as a typed failure.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 import { isPermanentFailure, llmFailureFields, type LlmFailure, type LlmReply } from '../../src/base/ports/llm.js';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 
-/** One prompt through an Anthropic Llm whose network is `fetcher`. */
 function sendVia(fetcher: typeof fetch): Promise<LlmReply> {
   return anthropicLlm({ apiKey: 'k-test', fetcher }).send({ maxTokens: 10, prompt: 'hi' });
 }

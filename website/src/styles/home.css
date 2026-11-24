@@ -1,4 +1,3 @@
-/* Home page (Lagoon), ported from the v5 mockup. Other pages use global.css. */
 :root{
   --bg:#0b1014; --bg2:#0f161b; --card:#131b21; --card2:#1b252d; --line:#26323b; --line2:#36444f;
   --fg:#eef6f9; --soft:#cbd8de; --mute:#9aaab3;
@@ -22,7 +21,6 @@ code,pre,kbd{font-family:var(--mono)}
 :focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:6px}
 h2.big{font:400 clamp(34px,4.4vw,58px)/1.02 var(--display);letter-spacing:-.015em;text-wrap:balance}
 .lede{margin-top:16px;color:var(--soft);font-size:18px}
-/* page head of a dark sub-page (/teams/): clears the floating nav, colour bar under the title */
 .ptop{padding:clamp(150px,15vw,200px) 0 clamp(64px,8vw,104px)}
 .ptop h1{font:400 clamp(44px,5.6vw,76px)/1.02 var(--display);letter-spacing:-.015em;max-width:20ch;text-wrap:balance}
 .ptop h1::after{content:"";display:block;width:54px;height:3px;margin-top:28px;background:var(--bar)}
@@ -36,20 +34,17 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .btn-a{background:var(--amber);color:#101316}
 .btn-a:hover{background:#77fbe5}
 
-/* numbered section heads, startup's 01 to 07 in this page's type and colour bar */
 .shead{display:grid;grid-template-columns:190px minmax(0,1fr);column-gap:28px;align-items:start}
 .num{position:relative;display:block;font:500 108px/.84 var(--mono);letter-spacing:-.07em;color:#50677a;user-select:none;font-variant-numeric:tabular-nums;padding-bottom:20px}
 .num::after{content:"";position:absolute;left:6px;bottom:0;width:54px;height:3px;background:var(--bar)}
 .shead .ctas{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
 
-/* top bar: 10's dotted strip, in the colour bar's three colours */
 .announce{position:relative;min-height:44px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid var(--line);overflow:hidden;background:#080a0b}
 .announce::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,#5eead4 .9px,transparent 1.3px) 0 0/5px 5px,radial-gradient(circle,#22a6c9 .9px,transparent 1.3px) 2.5px 2.5px/5px 5px,radial-gradient(circle,#4371e2 .8px,transparent 1.2px) 1px 3px/7px 7px;-webkit-mask-image:linear-gradient(90deg,#000,transparent 24%,transparent 76%,#000);mask-image:linear-gradient(90deg,#000,transparent 24%,transparent 76%,#000);opacity:.8}
 .announce a{position:relative;display:flex;align-items:center;gap:12px;min-height:44px;padding:0 20px;font-size:14.5px;font-weight:600;text-decoration:none}
 .announce a b{font-weight:500;color:var(--mute)}
 .announce a:hover b{color:var(--fg)}
 
-/* nav: 8's floating bar, dark */
 .nav{position:sticky;top:10px;z-index:50;margin:10px auto -78px;max-width:1232px;padding:0 16px}
 .nav-in{display:flex;align-items:center;gap:6px;height:68px;padding:0 10px 0 16px;background:rgba(17,20,23,.78);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;font:400 21px/1 var(--display);letter-spacing:-.015em;padding-right:14px;margin-right:6px;border-right:1px solid var(--line);min-height:44px}
@@ -61,10 +56,8 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .menu{display:none;width:44px;height:44px;border-radius:10px;border:1px solid var(--line2);background:transparent;color:var(--fg);cursor:pointer;align-items:center;justify-content:center}
 .menu svg{width:20px;height:20px}
 
-/* first screen: 6's glass card deck */
 .hero{position:relative;min-height:max(calc(100svh - 44px),760px);display:grid;place-items:center;text-align:center;overflow:hidden;isolation:isolate}
 .hero canvas{position:absolute;inset:0;width:100%;height:100%;z-index:-1;display:block;opacity:0;transition:opacity .6s;-webkit-mask-image:radial-gradient(60% 66% at 50% 46%,#000 50%,transparent 100%);mask-image:radial-gradient(60% 66% at 50% 46%,#000 50%,transparent 100%)}
-/* The CSS deck holds the first screen until the WebGL deck draws its first frame. */
 .hero-fallback{position:absolute;inset:0;z-index:-1;transition:opacity .6s}
 .hero-live .hero canvas{opacity:1}
 .hero-live .hero-fallback{opacity:0}
@@ -77,10 +70,8 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .stackart i{position:absolute;left:50%;top:50%;width:46vmin;height:28vmin;border-radius:3vmin;background:linear-gradient(115deg,transparent 0%,var(--c) 35%,rgba(199,255,243,.3) 62%,transparent);border:1px solid var(--c);filter:blur(1.5px);mix-blend-mode:screen;transform:translate(-50%,-50%) rotate(-38deg) translate(calc(var(--k)*5.4vmin - 19vmin),calc(var(--k)*-1.2vmin));opacity:calc(.35 + var(--k)*.07)}
 .stackart::after{content:"";position:absolute;inset:0;background:radial-gradient(40% 40% at 50% 50%,rgba(94,234,212,.22),transparent 70%)}
 
-/* agent marks: one tile size and one mark size everywhere */
 .works{margin:50px auto 0;max-width:820px;text-align:center}
 .works .wl{display:block;font:500 13px var(--mono);color:var(--mute);margin-bottom:12px}
-/* The track is wider than a phone; without containment its width sizes the hero and pushes the headline off screen. */
 .marq{contain:inline-size;overflow:hidden;padding:6px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)}
 .mtrack{display:flex;gap:8px;width:max-content;animation:marq 30s linear infinite}
 .marq:hover .mtrack{animation-play-state:paused}
@@ -95,7 +86,6 @@ p code,li code,dd code,figcaption code{font-size:.88em;color:#fff;background:var
 .ag svg{width:26px;height:26px}
 .ag span{font:600 13px/1.2 var(--body);color:var(--soft);text-align:center}
 
-/* try it: 8's hero component, with Convex's colour rail */
 .try{position:relative;padding:72px 0 130px;overflow:hidden}
 .rail{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
 .try .wrap{position:relative;z-index:1}
@@ -166,7 +156,6 @@ pre.out .tx{color:var(--fg)}
 .quiet code{font-size:13.5px;padding:4px 9px;border-radius:7px}
 .quiet .iconbtn{width:44px;height:44px}
 
-/* command rows and copy buttons: 8's floating rows */
 .cmdline{display:flex;align-items:center;gap:10px;background:#0a0c0e;border:1px solid var(--line);border-radius:9px;padding:4px 4px 4px 12px}
 .cmdline code{flex:1;min-width:0;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cmdline code::before{content:"$ ";color:var(--amber)}
@@ -186,7 +175,6 @@ pre.out .tx{color:var(--fg)}
 .float.in{opacity:1;transform:none}
 .rows .float:nth-child(2){transition-delay:.12s}.rows .float:nth-child(3){transition-delay:.24s}
 
-/* the film: 11's pinned scroll window */
 .story{position:relative;background:var(--bg2)}
 .story-pad{height:40px}
 .pin{position:relative;padding:0 16px}
@@ -226,7 +214,6 @@ html.gl .cap.on{border-color:rgba(94,234,212,.5);box-shadow:0 30px 80px -40px #0
 html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 @keyframes breathe{50%{text-shadow:0 0 1px rgba(235,238,240,.9),0 0 20px rgba(94,234,212,.85),0 0 48px rgba(34,166,201,.6),0 0 96px rgba(47,75,179,.65)}}
 
-/* what hippo does: startup's six panels */
 .sec{padding:clamp(80px,10vw,140px) 0}
 .alt{background:var(--bg2)}
 .panels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:48px}
@@ -239,7 +226,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .pc h3 b{font:500 18px var(--body);color:var(--fg);margin-right:3px}
 .pc .cmd{display:block;margin-top:auto;padding-top:12px;border-top:1px dashed var(--line2);font-size:12.5px;color:var(--mute);overflow-wrap:anywhere}
 
-/* results: 2's 100-square grids, laid out as in the dark journey */
 .wfig{margin:48px auto 0;max-width:1000px;background:var(--card);border:1px solid var(--line2);border-radius:20px;padding:34px 40px 24px}
 .grids{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(14px,4.6vw,60px)}
 .g-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:16px;font-size:15px;color:var(--mute)}
@@ -267,7 +253,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .view button:hover{color:var(--fg);background:var(--card2)}
 .view button[aria-pressed="true"]{background:var(--amber);color:#101316}
 .view button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-/* Positioned so the board, not the page, holds and clips the sr-only labels in its cells. */
 .board{position:relative;--hpl:color-mix(in srgb,var(--amber) 70%,transparent);margin-top:24px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
 .view+.board{margin-top:12px}
 .board[data-view="simple"] .dt,.board[data-view="detail"] .sm{display:none}
@@ -299,7 +284,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;color:var(--amber);font-weight:600;text-decoration:none}
 .more:hover{text-decoration:underline}
 
-/* model calls, form A: one bar per product on a shared 0 to 3 scale */
 .cbars{margin-top:44px;background:var(--card);border:1px solid var(--line2);border-radius:18px;padding:16px 22px 12px}
 .cb-h,.cb{display:grid;grid-template-columns:150px minmax(0,1fr) 40px 290px;column-gap:18px;align-items:center}
 .cb-h{font:500 11.5px var(--mono);color:var(--mute);padding:0 14px 6px}
@@ -324,7 +308,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .cnote{margin-top:16px;display:grid;gap:6px;color:var(--mute);font-size:14px;max-width:80ch}
 .cnote b{color:var(--fg);font-weight:600}
 
-/* model calls, form B: one tile per product */
 .ctiles{margin-top:44px;display:grid;grid-template-columns:minmax(0,1.3fr) repeat(4,minmax(0,1fr));gap:10px}
 .ct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:4px;min-height:178px;min-width:0}
 .ct .nm{font:500 16.5px/1.2 var(--body)}
@@ -345,7 +328,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .ct.lc{border-color:rgba(34,166,201,.4);background:linear-gradient(160deg,rgba(34,166,201,.12),transparent 60%),var(--card)}
 .ct.lc .big{color:var(--hot);font-size:44px;text-shadow:0 0 26px rgba(34,166,201,.4)}
 
-/* three readers: 10's readers as three panes, then the agents */
 .readers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:44px}
 .reader{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
 .reader pre{margin:0;background:#0a0c0e;border-bottom:1px solid var(--line);padding:16px 18px;font-size:12.5px;line-height:1.6;color:var(--soft);white-space:pre-wrap;min-height:176px}
@@ -363,7 +345,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .agents b{font:500 15.5px/1.2 var(--body)}
 .agents code{font-size:12px;line-height:1.4;color:var(--mute);background:none;border:0;padding:0}
 
-/* infrastructure you own: the dark journey's today and planned cards, 11's diff */
 .own{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:56px;align-items:center;margin-top:40px}
 .plans{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .plan{border:1px solid var(--line2);border-radius:14px;padding:18px 20px 20px;background:var(--card)}
@@ -380,7 +361,6 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .editor pre{padding:18px 18px 24px;font-size:13px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--soft)}
 .editor .add{color:#9fd8b4}.editor .del{color:var(--hot)}.editor .hd{color:var(--amber)}
 
-/* the dashboard: platform's browser frame on a glow in the bar's colours */
 .dashf{margin-top:44px}
 .glowbg{border-radius:24px;padding:clamp(10px,3.4vw,48px);border:1px solid var(--line);background:radial-gradient(55% 75% at 8% 6%,rgba(94,234,212,.42),transparent 62%),radial-gradient(50% 70% at 94% 10%,rgba(34,166,201,.4),transparent 66%),radial-gradient(70% 90% at 70% 108%,rgba(47,75,179,.6),transparent 62%),#14181c}
 .browser{border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 40px 90px -36px #000}
@@ -390,13 +370,11 @@ html.gl .cap.on :is(h2,h3){animation:breathe 3.4s ease-in-out infinite}
 .browser img{display:block;width:100%;height:auto}
 .dashf figcaption{margin-top:12px;font-size:14px;color:var(--mute)}
 
-/* questions */
 .faq{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:40px}
 .faq div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
 .faq dt{font:500 18px/1.3 var(--body)}
 .faq dd{margin-top:8px;color:var(--soft);font-size:15.5px}
 
-/* install: Convex's closing setup box */
 .install{position:relative;background-color:var(--bg2);background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:36px 36px;padding:110px 0 170px;overflow:hidden}
 .install .wrap{position:relative;z-index:1;text-align:center}
 .setup{max-width:780px;margin:40px auto 0;background:#0a0c0e;border:1.5px solid #314351;border-radius:14px;padding:8px;box-shadow:0 30px 70px -30px #000;text-align:left}

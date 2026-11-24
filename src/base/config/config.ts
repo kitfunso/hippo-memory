@@ -1,5 +1,3 @@
-/** Hippo's config: its shape and its defaults. config-keys.ts reads each key of .hippo/config.json. */
-
 import { type PhysicsConfig, DEFAULT_PHYSICS_CONFIG } from '../rank/physics-config.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../memory/strength.js';
 import { SALIENCE_DEFAULTS } from '../memory/salience.js';
@@ -13,7 +11,6 @@ import type { JsonValue } from '../util/json.js';
 
 export type DecayBasis = 'clock' | 'session' | 'adaptive';
 
-// The two pinnedInject keys that are optional in the type, so a config built in code can omit them.
 export const DEFAULT_PROMPT_RECALL_SHARE = 0.25;
 export const DEFAULT_SESSION_RULES_BUDGET = 2000;
 
@@ -186,41 +183,25 @@ export interface HippoConfig {
 /** Process settings a root reads from env vars; each absent field takes the default its reader
  * names. */
 export interface RuntimeSettings {
-  /** HIPPO_ANCHORING=off turns the anchoring hint off; on by default. */
   readonly anchoringHint?: boolean;
-  /** HIPPO_AVAILABILITY=off turns the availability hint off; on by default. */
   readonly availabilityHint?: boolean;
-  /** HIPPO_AUTODEBIAS=off skips the planning-fallacy claim check; on by default. */
   readonly autodebias?: boolean;
-  /** HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1 refuses a fresh tail that names no session. */
   readonly requireSessionScopedFreshTail?: boolean;
-  /** HIPPO_SUMMARY_DEBOOST, used only inside (0, 1]. */
   readonly summaryDeboost?: number;
-  /** HIPPO_QUERY_EMBED_TIMEOUT_MS: how long a recall waits for its query vector. */
   readonly queryEmbedTimeoutMs?: number;
-  /** HIPPO_DAG_REBUILD_CAP: summaries one sleep rebuilds. */
   readonly dagRebuildCap?: number;
-  /** HIPPO_SCOPE, else GSTACK_SKILL, else OPENCLAW_SKILL: the scope recall boosts. */
   readonly activeScope?: string;
-  /** HIPPO_LOSS_AVERSION_RATIO, which scales an error memory's strength; strength scoring
-   * applies its floor. */
   readonly lossAversionRatio?: number;
-  /** HIPPO_READ_ONLY=1: the store refuses every write, so a read skips its own bookkeeping. */
   readonly readOnly?: boolean;
-  /** Where the CLEF rerankers send a request; without it they keep the native order. */
   readonly clef?: ClefSettings;
 }
 
 /** The CLEF rerankers' transport, read by the root: HIPPO_CLEF_ENDPOINT wins over hosted Workers
  * AI. */
 export interface ClefSettings {
-  /** HIPPO_CLEF_ENDPOINT, trimmed. */
   readonly endpoint?: string;
-  /** HIPPO_CLEF_ENDPOINT_TOKEN, sent only to `endpoint`. */
   readonly endpointToken?: string;
-  /** HIPPO_CLEF_TIMEOUT_MS as a whole number above zero; "15s" and "1e3" read as unset. */
   readonly timeoutMs?: number;
-  /** CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, trimmed; empty when unset. */
   readonly cloudflareAccountId: string;
   readonly cloudflareApiToken: string;
 }
@@ -324,7 +305,6 @@ export const DEFAULT_CONFIG: HippoConfig = {
     remote: true,
   },
   sharedStore: false,
-  // About 400 MB of worker heap at the measured 1.6 to 2.3 KB a 384-dim vector.
   vectorGraph: {
     maxVectors: 200_000,
   },

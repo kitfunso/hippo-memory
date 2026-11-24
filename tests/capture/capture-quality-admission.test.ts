@@ -306,7 +306,6 @@ describe('automatic quality does not govern manual or trusted import storage', (
       dryRun: false,
       global: false,
     });
-    // The stated rule replaces the held unpinned copy of its text; the twin is stored beside it.
     const live = loadAllEntries(root, 'default').filter((entry) => entry.supersededBy === null);
     const pairs = live.map((entry) => [entry.content, entry.pinned]);
     expect(pairs.sort()).toEqual(
@@ -332,7 +331,6 @@ describe('automatic quality does not govern manual or trusted import storage', (
       dryRun: false,
       global: false,
     });
-    // The stated rule replaces the held unpinned copy of its text; the twin is stored beside it.
     const live = loadAllEntries(root, 'default').filter((entry) => entry.supersededBy === null);
     const pairs = live.map((entry) => [entry.content, entry.pinned]);
     expect(pairs.sort()).toEqual(

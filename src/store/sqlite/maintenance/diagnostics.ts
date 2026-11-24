@@ -1,4 +1,3 @@
-// What `hippo doctor` and `hippo support-bundle` read from a store's handle: plain data out.
 import {
   countTableRows,
   ftsRowCounts,
@@ -30,13 +29,10 @@ function attempt<T>(read: () => T): Attempt<T> {
   try {
     return { ok: true, value: read() };
   } catch (err) {
-    // The caller turns the message into its own check, so the error stops here.
     return { ok: false, message: errorMessage(err) };
   }
 }
 
-/** Everything `hippo doctor` reads from one store; throws when its schema version cannot be
- * read. */
 function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth {
   return {
     schemaVersion: getSchemaVersion(db),
@@ -51,8 +47,6 @@ function storeHealth(db: DatabaseSyncLike, cutoffs: HealthCutoffs): StoreHealth 
   };
 }
 
-/** Schema version, oldest allowed binary and row count of every table, for a support bundle;
- * never reads a memory column. */
 function storeInventory(db: DatabaseSyncLike): StoreInventory {
   const schemaVersion = getSchemaVersion(db);
   const minCompatibleBinary = getMeta(db, META_KEY.minCompatibleBinary, '') || null;
@@ -61,8 +55,6 @@ function storeInventory(db: DatabaseSyncLike): StoreInventory {
   return { schemaVersion, minCompatibleBinary, tables };
 }
 
-/** Compaction records in all, those with a summary whose memories never got saved, and those
- * still without a summary; each cutoff is an ISO time. */
 function compactionCounts(
   db: DatabaseSyncLike,
   stuckBefore: string,
@@ -85,8 +77,6 @@ function compactionCounts(
   };
 }
 
-/** Memory blocks injected since `sinceIso`, the tokens they sent and the tokens later model
- * calls re-read. */
 function tokenTallySince(db: DatabaseSyncLike, sinceIso: string): TokenTally {
   const row = cachedStatement(
     db,

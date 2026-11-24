@@ -29,16 +29,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RUNNER = Path.home() / "hippo-bench" / "memory-benchmarks"
 LOCOMO = Path.home() / "hippo-bench" / "locomo"
-RETRIEVAL = Path.home() / "hippo-bench" / "retrieval-v3-locomo"  # hippo 3.5.1 retrieval (Amendment 6 rev. 1 item 1)
-RETRIEVAL_OF = {"hippo-emb": Path.home() / "hippo-bench" / "retrieval-emb-locomo",  # extra arms (dated notes 5 and 9)
+RETRIEVAL = Path.home() / "hippo-bench" / "retrieval-v3-locomo"
+RETRIEVAL_OF = {"hippo-emb": Path.home() / "hippo-bench" / "retrieval-emb-locomo",
                 "hippo-best": Path.home() / "hippo-bench" / "retrieval-best-locomo"}
 ARM_CUTOFFS = {"hippo-best": (50, 10)}
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
 ARMS, CUTOFFS, LABELS = ("hippo365", "bm25", "mem0"), (200, 50, 10), ("CORRECT", "WRONG")
-INGEST = {"mem0": "ingest"}  # the Mem0 arm's ingestion under --run, gated
+INGEST = {"mem0": "ingest"}
 PAIRS = (("hippo365", "mem0"), ("bm25", "mem0"), ("hippo365", "bm25"))
 JUDGES = {"claude": ("verdicts.jsonl", "calls-judge.jsonl"), "codex": ("verdicts-codex.jsonl", "calls-judge-codex.jsonl")}
-FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")  # a whole-reply code fence, as claude_llm.json_reply reads it
+FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")
 CAT = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 
 sys.path[:0] = [str(HERE), str(HERE.parent), str(RUNNER)]
@@ -52,7 +52,6 @@ from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, 
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    """The file's records. A kill mid-write can leave a last record without its newline: kept if whole, else cut off."""
     if not path.exists():
         return []
     raw = path.read_bytes()
@@ -60,11 +59,11 @@ def read_jsonl(path: Path) -> list[dict]:
     if cut < len(raw):
         try:
             whole = isinstance(json.loads(raw[cut:].decode("utf-8")), dict)
-        except ValueError:  # a record or a UTF-8 character cut short
+        except ValueError:
             whole = False
         if whole:
             with path.open("ab") as f:
-                f.write(b"\n")  # so the next append starts a line of its own
+                f.write(b"\n")
             raw += b"\n"
         else:
             print(f"dropped a partial last record from {path.name}: {raw[cut:][:80]!r}", file=sys.stderr)
@@ -76,12 +75,10 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 def answer_of(text: str) -> str:
-    """The runner's answer parse: the text after the last ANSWER:, else the whole reply."""
     return text.rsplit("ANSWER:", 1)[-1].strip() if "ANSWER:" in text else text
 
 
 def records(path: Path, by) -> dict:
-    """The file's records by key; a key seen twice means two runs wrote at once, so it stops."""
     out = {}
     for r in read_jsonl(path):
         if by(r) in out:
@@ -115,7 +112,6 @@ def tokens_in(rec: dict) -> int:
 
 
 def check_gate(run: Path, arms: tuple[str, ...] = ARMS) -> None:
-    """Each arm's retrieval folder still matches its manifest, and Mem0's ingestion has a passing gate for its files."""
     for folder in sorted({RETRIEVAL_OF.get(arm, RETRIEVAL) for arm in arms if arm not in INGEST}):
         manifest = folder / "MANIFEST-locomo.sha256"
         if not manifest.is_file():
@@ -133,7 +129,6 @@ def check_gate(run: Path, arms: tuple[str, ...] = ARMS) -> None:
 
 
 def answer_prompts(a: argparse.Namespace) -> dict:
-    """Every answer prompt the design calls for, by (arm, cutoff, qid): how many memories it shows and its log item."""
     prompts = {}
     for arm in a.arms:
         for qid in a.qids:
@@ -147,8 +142,6 @@ def answer_prompts(a: argparse.Namespace) -> dict:
 
 
 def all_answers(a: argparse.Namespace) -> dict:
-    """Every design answer as its call log settles it, or stop while one still has asks left. An exhausted answer
-    holds None and scores wrong."""
     ledger, answers = Ledger(a.logs / "calls-answer.jsonl"), {}
     for k, (n, item) in answer_prompts(a).items():
         c = ledger.choose(item)
@@ -158,7 +151,6 @@ def all_answers(a: argparse.Namespace) -> dict:
 
 
 def judge_key(out: Path, answers: dict) -> dict:
-    """The blind key, checked to map one to one onto the valid answers as they are now."""
     key, valid = load(out / "judge_key.json"), {k: r["answer"] for k, r in answers.items() if r["answer"] is not None}
     items = {(k["arm"], k["cutoff"], k["qid"]): k["sha"] for k in key.values()}
     if len(items) != len(key) or set(items) != set(valid) or any(s != sha(valid[i]) for i, s in items.items()):
@@ -167,8 +159,6 @@ def judge_key(out: Path, answers: dict) -> dict:
 
 
 def verdict(text: str) -> dict | None:
-    """A judge reply read as the runner reads it (llm_client.py:285-293), once a code fence around the whole reply is
-    removed, since `claude -p` has no JSON mode. None if it holds no CORRECT or WRONG label."""
     t = text.strip()
     fenced = FENCE.fullmatch(t)
     try:
@@ -176,15 +166,13 @@ def verdict(text: str) -> dict | None:
         if isinstance(v, dict) and len(v) == 1 and "final" in v:
             inner = v["final"]
             v = json.loads(inner) if isinstance(inner, str) else inner if isinstance(inner, dict) else v
-    except ValueError:  # the runner's parse fails here too and it asks again
+    except ValueError:
         return None
     label = str(v.get("label", "")).upper() if isinstance(v, dict) else ""
     return {"label": label, "reasoning": v.get("reasoning", "")} if label in LABELS else None
 
 
 def judge_items(key: dict, answers: dict, data: list, judge: str) -> dict:
-    """Each keyed answer's judge prompt as a log item: the question, LoCoMo's answer as the runner prepares it, and the
-    answer, under the judge's manifest."""
     items = {}
     for jid, k in key.items():
         qa = qa_of(data, k["qid"])
@@ -195,8 +183,6 @@ def judge_items(key: dict, answers: dict, data: list, judge: str) -> dict:
 
 
 def judge_scores(a: argparse.Namespace, judge: str, key: dict, answers: dict, data: list) -> tuple[dict, dict]:
-    """One judge's score per design answer from its call log: 1 for CORRECT; 0 for WRONG, for an exhausted verdict and
-    for an exhausted answer, which has nothing to judge. Stops while a verdict still has asks left."""
     ledger = Ledger(a.logs / JUDGES[judge][1])
     choices = {jid: ledger.choose(item) for jid, item in judge_items(key, answers, data, judge).items()}
     unsettled(choices, f"{judge} verdicts")
@@ -208,14 +194,13 @@ def judge_scores(a: argparse.Namespace, judge: str, key: dict, answers: dict, da
 
 
 def run_all(jobs: list[tuple], fn, out: Path, slots: int) -> None:
-    """Runs every job, appending each result as it lands, so a rerun resumes; failed jobs are named, never skipped."""
     failed = []
     with ThreadPoolExecutor(slots) as pool:
-        futs = {pool.submit(fn, j): j[:-1] for j in jobs}  # a job's last field is its prompt
+        futs = {pool.submit(fn, j): j[:-1] for j in jobs}
         for n, f in enumerate(as_completed(futs), 1):
             try:
                 rec = f.result()
-            except Exception as e:  # named below and retried by a rerun; the other results still land
+            except Exception as e:
                 failed.append(f"{futs[f]}: {type(e).__name__}: {e}")
                 continue
             with out.open("a", encoding="utf-8") as fh:
@@ -227,12 +212,11 @@ def run_all(jobs: list[tuple], fn, out: Path, slots: int) -> None:
 
 
 def answer(a: argparse.Namespace) -> None:
-    """Asks each design answer that has no valid reply in the log, up to its 3rd ask counted across every run."""
     check_gate(a.run, a.arms)
     prompts, ledger = answer_prompts(a), Ledger(a.logs / "calls-answer.jsonl")
     got = {k: ledger.choose(item) for k, (_, item) in prompts.items()}
     jobs = [(*k, prompts[k][1]) for k, c in got.items() if c.status == "open"]
-    random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits every arm alike
+    random.Random(4).shuffle(jobs)
     print(f"{len(jobs)} answers to ask, {sum(c.status == 'valid' for c in got.values())} valid in the log", flush=True)
     print("\n".join(exhausted_lines(got, "answers")), flush=True)
     if not jobs:
@@ -250,7 +234,6 @@ def answer(a: argparse.Namespace) -> None:
 
 
 def judge(a: argparse.Namespace) -> None:
-    """Asks each keyed answer's verdict that has no valid reply in the log, up to its 3rd ask across every run."""
     data, answers = load(LOCOMO / "data" / "locomo10.json"), all_answers(a)
     key_path = a.out / "judge_key.json"
     if not key_path.exists():
@@ -260,7 +243,7 @@ def judge(a: argparse.Namespace) -> None:
                for i, (arm, c, qid) in enumerate(items)}
         tmp = key_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(key, indent=0), encoding="utf-8")
-        tmp.replace(key_path)  # whole or absent: a kill mid-write never leaves half a key
+        tmp.replace(key_path)
     key = judge_key(a.out, answers)
     items, log = judge_items(key, answers, data, a.judge), a.logs / JUDGES[a.judge][1]
     ledger = Ledger(log)
@@ -271,7 +254,7 @@ def judge(a: argparse.Namespace) -> None:
     if not jobs:
         return
     if a.judge == "codex":
-        from qa.codex_judge import CodexJudge  # gpt-5.6-sol at medium through codex exec; read once, so smoke can pass first
+        from qa.codex_judge import CodexJudge
         llm, manifest = CodexJudge(log=log, slots=a.slots), JUDGE
     else:
         llm, manifest = Claude(a.logs / "claude", log, a.slots), ANSWERER
@@ -286,7 +269,6 @@ def judge(a: argparse.Namespace) -> None:
 
 
 def reading(d: float, lo: float, hi: float) -> str:
-    """Amendment 2's rule, checked in its order."""
     if lo > 0 and d >= 0.03:
         return "beats"
     if hi < 0 and d <= -0.03:
@@ -297,7 +279,6 @@ def reading(d: float, lo: float, hi: float) -> str:
 
 
 def by_unit(diff: dict, ids: list, unit_of, level: float = 0.95) -> tuple[float, float, float, int]:
-    """The mean of paired differences, its interval over the unit that owns a store, and how many units there are."""
     units: dict = {}
     for i in ids:
         units.setdefault(unit_of(i), []).append(diff[i])
@@ -305,14 +286,11 @@ def by_unit(diff: dict, ids: list, unit_of, level: float = 0.95) -> tuple[float,
 
 
 def paired(diff: dict, ids: list, unit_of, level: float = 0.95) -> str:
-    """by_unit as a score line, with Amendment 2's reading."""
     d, lo, hi, n = by_unit(diff, ids, unit_of, level)
     return f"{100 * d:+5.1f} pp [{100 * lo:+5.1f}, {100 * hi:+5.1f}] n={len(ids)} over {n} units  {reading(d, lo, hi)}"
 
 
 def primary_lines(label: str, diff: dict, primary: list, everyone: list, unit_of, k: int | None) -> list[str]:
-    """A primary as every score stage prints it (prereg Amendment 6 revision 1 items 4, 9 and 10): smoke items left
-    out, then the all-items line, then with --bonferroni k the interval at 1 - 0.05/k."""
     out = [f"PRIMARY {label}: {paired(diff, primary, unit_of)}",
            f"  secondary, all items with the smoke items: {paired(diff, everyone, unit_of)}"]
     if k:
@@ -328,7 +306,7 @@ def f1_scores(answers: dict, data: list) -> dict:
     out = {}
     with contextlib.redirect_stdout(io.StringIO()):
         for (arm, c, qid), r in answers.items():
-            if r["answer"] is None:  # exhausted: scores wrong
+            if r["answer"] is None:
                 out[(arm, c, qid)] = 0.0
                 continue
             qa = qa_of(data, qid)
@@ -338,17 +316,16 @@ def f1_scores(answers: dict, data: list) -> dict:
 
 
 def score(a: argparse.Namespace) -> None:
-    """F1 and both judges per arm, the primary without the smoke items (dated notes 1), every exhausted item listed."""
     check_gate(a.run, a.arms)
     data, sample, answers = load(LOCOMO / "data" / "locomo10.json"), a.qids, all_answers(a)
     key = judge_key(a.out, answers)
-    smoke = set() if a.limit else smoke_excluded("locomo", load(SAMPLE))  # a smoke run is never scored
+    smoke = set() if a.limit else smoke_excluded("locomo", load(SAMPLE))
     primary = [q for q in sample if q not in smoke]
     metric, lines = {"F1": f1_scores(answers, data)}, [f"answers {len(answers)}, primary questions {len(primary)}"]
     listed = exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")
     if a.limit:
         lines.insert(0, f"SMOKE: first {a.limit} questions, cutoffs {a.cutoffs}; never scored or reused")
-    for judge, name in (("claude", "judge"), ("codex", "judge2")):  # judge2 is the secondary, run only if its log exists
+    for judge, name in (("claude", "judge"), ("codex", "judge2")):
         if judge == "codex" and not (a.logs / JUDGES[judge][1]).exists():
             lines.append("judge2 (codex gpt-5.6-sol, secondary): not run")
             continue
@@ -380,9 +357,6 @@ def score(a: argparse.Namespace) -> None:
 
 
 def pair_lines(a: argparse.Namespace, data: list, primary: list, metric: dict) -> list[str]:
-    """Dated notes 5 and 9: the extra arm minus each arm of the registered run and of each --also-pairs-with run,
-    paired by question, at each of the extra arm's cutoffs and for each metric both runs hold. Each run is re-made from
-    its own call logs at its own cutoffs and checked as its own score stage checks it."""
     lines = []
     for run, out, arms, arm in [(*a.pairs_with, ARMS, None), *((Path(r), Path(o), (x,), x) for x, r, o in a.also_pairs_with)]:
         reg = argparse.Namespace(**{**vars(a), "run": run, "out": out, "logs": run, "arms": arms, "arm": arm,
@@ -445,7 +419,7 @@ def main() -> None:
         ap.error("--limit is for smoke runs: it needs a positive N and an --out path with a folder named smoke")
     sample = load(SAMPLE)
     a.qids, a.cutoffs = (sample[:a.limit] if a.limit else sample), ((a.cutoff,) if a.cutoff else ARM_CUTOFFS.get(a.arm, CUTOFFS))
-    a.logs = a.out if a.limit else a.run  # a smoke run never writes into the real run's call logs
+    a.logs = a.out if a.limit else a.run
     a.out.mkdir(parents=True, exist_ok=True)
     {"answer": answer, "judge": judge, "score": score}[a.stage](a)
 

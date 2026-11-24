@@ -1,5 +1,3 @@
-// The failures a root has warned about. A bad key fails every write, so each distinct failure warns
-// once in full and its repeats are counted, then summed at most once per interval.
 import { MINUTE_MS } from './time.js';
 
 const NOTICE_KEY_CAP = 64;
@@ -21,7 +19,6 @@ export type FailureNotice =
 export class FailureNotices {
   readonly #seen = new Map<string, Seen>();
 
-  /** Records one failure under `key` at `nowMs` and says what to print for it. */
   note(key: string, nowMs: number): FailureNotice {
     const seen = this.#seen.get(key);
     if (seen) {
@@ -32,7 +29,6 @@ export class FailureNotices {
       seen.lastNoticeAt = nowMs;
       return { kind: 'repeats', count };
     }
-    // Oldest key out, so a full set still lets a new failure warn.
     const oldest = this.#seen.size >= NOTICE_KEY_CAP ? this.#seen.keys().next() : undefined;
     if (oldest !== undefined && !oldest.done) this.#seen.delete(oldest.value);
     this.#seen.set(key, { lastNoticeAt: nowMs, suppressed: 0 });

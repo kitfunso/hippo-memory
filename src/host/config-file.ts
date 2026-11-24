@@ -1,5 +1,3 @@
-// Reads a store's config.json from disk; src/base/config/config-keys.ts holds each key's rule and
-// config.ts the shape and the defaults.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -16,8 +14,6 @@ import { realpathOrResolve } from './real-path.js';
 /** Reads the folder's config.json on every call; a root that loads often holds a configReader
  * instead. */
 export function loadConfig(hippoRoot: string): HippoConfig {
-  // A caller that names no folder, as an add-on serving another store does, gets the defaults,
-  // never the working folder's config.json.
   if (hippoRoot === '') return { ...DEFAULT_CONFIG };
   const configPath = path.join(hippoRoot, 'config.json');
   return fileStamp(configPath) === null ? { ...DEFAULT_CONFIG } : parseConfigFile(configPath);
@@ -37,8 +33,6 @@ const PARSED_CONFIGS_MAX = 64;
  * never share one. `runtime` is the root's environment read, taken on each call so every command
  * or request sees the current one. */
 export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
-  // Keyed by the file's stamp, so an unchanged file costs one stat and no parse, and an edit shows
-  // on the next call.
   const parsed = new Map<string, { stamp: string | null; config: HippoConfig }>();
   const read = (hippoRoot: string): HippoConfig => {
     if (hippoRoot === '') return { ...DEFAULT_CONFIG };
@@ -55,9 +49,6 @@ export function configReader(runtime?: () => RuntimeSettings): ConfigReader {
   return runtime === undefined ? read : (hippoRoot) => ({ ...read(hippoRoot), runtime: runtime() });
 }
 
-/** A file's mtime and size, which an edit changes; null when it is missing. A permission refusal
- * throws, as readConfigFile does: the file is there, and defaults would silently drop its
- * settings. */
 function fileStamp(file: string): string | null {
   try {
     const stat = fs.statSync(file, { throwIfNoEntry: false });
@@ -71,7 +62,6 @@ function fileStamp(file: string): string | null {
         { cause: err },
       );
     }
-    // ENOTDIR and ELOOP mean the path is simply not there.
     log.debug(
       `config: ${file} is not reachable, read as missing: ${errorMessage(err)}`,
       errorFields(err),
@@ -80,8 +70,6 @@ function fileStamp(file: string): string | null {
   }
 }
 
-/** A config.json that exists must load: running on defaults would silently drop the user's
- * settings, such as `sharedStore`. */
 function readConfigFile(configPath: string): ConfigFile {
   let raw: JsonValue;
   try {

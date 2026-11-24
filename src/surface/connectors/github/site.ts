@@ -1,16 +1,9 @@
-/** Which GitHub server the connector talks to: github.com, or the GHES server GITHUB_ENTERPRISE_URL
- * names; and the host check the webhook and the DLQ replay share. */
-
 import { isJsonObject, type JsonValue } from '../../../base/util/json.js';
 import { parseOutboundUrl, tryParseUrl } from '../../../base/util/net.js';
 
 export interface GitHubSite {
-  /** The GHES host name that refs, repo: tags, scopes and cursors carry; undefined on github.com. */
   readonly host: string | undefined;
-  /** Where every backfill URL starts. */
   readonly apiBase: string;
-  /** True only when the operator set GITHUB_ENTERPRISE_BARE_REFS_HOST to this host: a ref with no
-   * host is then a row this server stored before the setting existed. */
   readonly ownsBareRefs: boolean;
 }
 
@@ -44,7 +37,6 @@ export function parseGitHubEnterpriseUrl(
   }
   const host = url.hostname;
   if (host.endsWith('.')) throw new Error(`${SETTING} must not end its host name with a dot`);
-  // An owner login never holds a dot or a colon, so a ref cannot read this host as an owner.
   if (!/[.:]/.test(host)) {
     throw new Error(`${SETTING} needs a dotted host name, like https://ghes.example.com`);
   }

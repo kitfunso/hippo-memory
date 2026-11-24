@@ -1,5 +1,3 @@
-// B3 Task 7: CLI recall, run in process, weights an active goal's retrieval policy: error-prioritized ranks
-// error-tagged rows first, and the composed multiplier stays under MAX_FINAL_MULTIPLIER (3.0x) at errorPriority 9.0.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -12,7 +10,6 @@ import { pushGoal } from '../_helpers/root-forms.js';
 
 const savedCwd = process.cwd();
 
-/** `hippo recall <query> --json` in this process under `sessionId` ('' for none), with the empty recall rings a fresh `hippo` starts with. */
 async function recallCli(query: string, sessionId: string): Promise<Array<{ content: string; score: number }>> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
   const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '4000']));
@@ -29,7 +26,6 @@ describe('retrieval policy', () => {
     vi.stubEnv('HIPPO_HOME', env.globalRoot);
     vi.stubEnv('HIPPO_TENANT', 'default');
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    // The CLI looks for the store in `.hippo` under the working directory.
     process.chdir(env.cwd);
   });
 
@@ -63,7 +59,6 @@ describe('retrieval policy', () => {
     const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'high-error lesson', tags: ['plan-x', 'error'] });
 
-    // Baseline: no session → no boost.
     const base = await recallCli('high-error lesson', '');
     const baseScore = base[0]?.score ?? 1.0;
 
@@ -76,9 +71,7 @@ describe('retrieval policy', () => {
     const boosted = await recallCli('high-error lesson', 's-p2');
     const boostedScore = boosted[0]?.score ?? 0;
 
-    // Allow tiny floating-point slop above 3.0x base.
     expect(boostedScore / baseScore).toBeLessThanOrEqual(3.01);
-    // And the boost did fire (proves the cap isn't masking a no-op).
     expect(boostedScore / baseScore).toBeGreaterThan(1.5);
   });
 });

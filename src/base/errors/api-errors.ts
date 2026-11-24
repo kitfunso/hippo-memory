@@ -1,8 +1,3 @@
-/**
- * Errors whose HTTP status is part of the API contract; the server maps by class, so message text
- * can change freely.
- */
-
 import { DIGEST_DISPLAY_CHARS } from '../util/token-text.js';
 
 export type ApiErrorStatus = 400 | 403 | 404 | 409;
@@ -84,7 +79,6 @@ export class RejectedValueError extends BadRequestError {
     entryId: string;
     reason: string | null;
     rejectedAt: string;
-    /** Optional so a store-kit adapter that builds this error keeps compiling; absent means value-wide. */
     leadInScoped?: boolean;
   }) {
     super(refusalMessage(opts));

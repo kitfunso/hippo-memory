@@ -19,14 +19,10 @@ const REQUEST_ID_MAX_CHARS = 64;
 const DEFAULT_TIMEOUT_MS = 5_000;
 const TRUNCATE_CHARS = 1200;
 
-// Number.isFinite rejects a string or null without coercing it, which the declared type cannot
-// promise about a third-party payload.
 function isProbability(v: JsonValue | undefined): v is number {
   return isJsonNumber(v) && Number.isFinite(v) && v >= 0 && v <= 1;
 }
 
-// A half-scored list ranks worse than the order it would replace, so one bad answer voids the whole
-// response.
 function parseScores(body: JsonValue, n: number): number[] | null {
   const answers = isJsonObject(body) ? body.answers : undefined;
   const out: number[] = [];
@@ -51,7 +47,6 @@ export function buildRelevanceRequest(
   query: string,
   head: readonly SearchResult[],
 ): RelevanceRequest {
-  // Strict: this text leaves the machine, so Bearer, Basic-auth and JWT shapes go too.
   const lines = head.map(
     (r, i) =>
       `[${i + 1}] ${truncateWithEllipsis(redactSecretsStrict(findableText(r.entry)), TRUNCATE_CHARS)}`,
@@ -69,8 +64,6 @@ export function buildRelevanceRequest(
   return { state, questions };
 }
 
-/** One batched request for the whole candidate list, sent over `http` and stopped by `signal`.
- * Rejects with the reason when there are no usable scores. */
 async function requestScores(
   { http, signal }: { readonly http: Http; readonly signal: AbortSignal | undefined },
   query: string,
@@ -89,7 +82,6 @@ async function requestScores(
     signal,
   });
   if (!resp.ok) {
-    // A third-party header ends up on stderr, so keep printable ASCII only.
     const requestId = resp.headers
       .get('x-request-id')
       ?.replace(/[^\x20-\x7e]/g, '')
@@ -115,8 +107,6 @@ export function createJevReranker(localFallback: RerankerFn, http: Http): Rerank
       scores = await requestScores({ http, signal: options?.signal }, query, head);
       outage.answered();
     } catch (err) {
-      // A read path never throws, and never hands back the unranked order without saying so: warn,
-      // then use the free local reranker.
       outage.failed(errorMessage(err), { signal: options?.signal });
       return localFallback(query, head, options);
     }
@@ -136,7 +126,6 @@ export function rankByScores(
     preRerankRank: r.preRerankRank ?? i + 1,
     postRerankRank: 0,
   }));
-  // Stable sort: ties fall back to the prior relevance order.
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return scored;

@@ -1,11 +1,3 @@
-/**
- * v0.30 / E3 of DAG live-coupling — sleep-cycle rebuildDirtySummaries tests.
- *
- * Locks the rebuild contract: happy path, idempotency, multi-tenant isolation,
- * cap enforcement, zero-child case, fetcher null/throw, atomicity (single UPDATE
- * statement), apiKey/dryRun gate, born-dirty regression lock (E3 HIGH #2),
- * race-loser no-op (E3 MED #5), cap hard-ceiling clamping (E3 R2 must-fix).
- */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -50,7 +42,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     writeEntry(hippoRoot, child1);
     writeEntry(hippoRoot, child2);
     writeEntry(hippoRoot, child3);
-    // Children's writeEntry calls marked summary dirty via E2 hook — keep that
     forceMarkDirty(hippoRoot, summary.id);
 
     const fetcher = makeOkFetcher('newly-generated-summary-content-X');
@@ -66,7 +57,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.zeroChildSkipped).toBe(0);
     expect(result.capped).toBe(false);
 
-    // Verify the row state
     const db = openHippoDb(hippoRoot);
     try {
       const row = getRow<{
@@ -93,7 +83,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.earliest_at).toBe(child1.created);
       expect(row.latest_at).toBe(child3.created);
 
-      // Audit row emitted
       const auditRow = getRow<{ op: string; metadata_json: string }>(
         db,
         `
@@ -107,9 +96,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(meta.zero_children).toBe(false);
       expect(meta.descendant_count).toBe(3);
 
-      // FTS row synced — query content column for the rebuilt token
-      // We don't expect the dashed string to tokenize cleanly; just verify
-      // FTS row was rewritten by reading its content directly.
       const ftsAll = getRow<{ content: string }>(db, `SELECT content FROM memories_fts WHERE id = ?`, summary.id);
       expect(ftsAll?.content).toBe('newly-generated-summary-content-X');
     } finally {
@@ -131,7 +117,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       cap: 20,
     });
 
-    // Second call — should be no-op
     const result2 = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
@@ -143,7 +128,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result2.zeroChildSkipped).toBe(0);
     expect(result2.capped).toBe(false);
 
-    // Row state UNCHANGED from first call
     const db = openHippoDb(hippoRoot);
     try {
       const row = getRow<{ summary_dirty: number; rebuild_count: number | null }>(
@@ -188,7 +172,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     expect(result.rebuilt).toBe(2);
     expect(seenPayloads.length).toBe(2);
-    // One payload mentions tenant A's child, the other tenant B's child; no leak
     const aHits = seenPayloads.filter((p) => p.includes('tenant A specific fact xyz'));
     const bHits = seenPayloads.filter((p) => p.includes('tenant B specific fact qrs'));
     expect(aHits.length).toBe(1);
@@ -211,7 +194,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.rebuilt).toBe(20);
     expect(result.capped).toBe(true);
 
-    // 5 should remain dirty
     const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(5);
   });
@@ -221,9 +203,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     writeEntry(hippoRoot, summary);
     const child = makeChild(summary.id, 'soon to be archived');
     writeEntry(hippoRoot, child);
-    // archiveRawMemory takes (db, id, opts) not (hippoRoot, id, opts)
-    // But the child is Layer.Episodic with kind!=raw — archiveRawMemory rejects.
-    // Simulate "no live children" by direct SQL: mark child kind='archived'.
     const db0 = openHippoDb(hippoRoot);
     db0.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(child.id);
     closeHippoDb(db0);
@@ -262,10 +241,8 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(row.descendant_count).toBe(0);
       expect(row.earliest_at).toBeNull();
       expect(row.latest_at).toBeNull();
-      // rebuild_count UNCHANGED — no semantic rebuild happened
       expect(row.rebuild_count ?? 0).toBe(0);
 
-      // Audit row with zero_children=true
       const auditRow = getRow<{ metadata_json: string }>(
         db,
         `
@@ -283,7 +260,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('fetcher throws: summary stays dirty, rebuild_count UNCHANGED, NEXT summary in queue still processed', async () => {
-    // Setup TWO dirty summaries — fetcher throws on first call, succeeds on second
     const sum1 = makeSummary('summary 1');
     const sum2 = makeSummary('summary 2');
     writeEntry(hippoRoot, sum1);
@@ -312,7 +288,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.failed).toBe(1);
     expect(result.rebuilt).toBe(1);
 
-    // Verify per-summary state — exactly one stayed dirty
     const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(1);
   });
@@ -330,7 +305,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     let call = 0;
     const fetcher = vi.fn<typeof fetch>(async () => {
       call++;
-      // A 400, because fetchWithRetry would retry a 5xx into the second summary's reply.
       if (call === 1) return new Response('bad request', { status: 400 });
       return new Response(JSON.stringify({ content: [{ text: 'second-ok-content-zz' }] }), { status: 200 });
     });
@@ -350,12 +324,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     writeEntry(hippoRoot, summary);
     forceMarkDirty(hippoRoot, summary.id);
 
-    // Spy at the db.prepare layer by inspecting what SQL strings get prepared
-    // during applyRebuildResult. We open our own connection so this is the
-    // applyRebuildResult-internal db, but to spy we need to wrap openHippoDb.
-    // Simpler: just call applyRebuildResult and verify the UPDATE-against-memories
-    // SQL contains all 7 columns (or 4 for zero-child) in ONE statement.
-    // The plan-eng-r2 reframe accepts SQL-string inspection.
     const sql = `UPDATE memories
               SET content = ?,
                   descendant_count = ?,
@@ -369,7 +337,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
               AND dag_level = 2
               AND summary_dirty = 1
               AND kind != 'archived'`;
-    // Assert the SQL has all 7 column assignments in one UPDATE
     expect(sql.match(/SET /g)?.length).toBe(1);
     expect(sql).toContain('content =');
     expect(sql).toContain('descendant_count =');
@@ -378,9 +345,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(sql).toContain('last_rebuilt_at =');
     expect(sql).toContain('rebuild_count = COALESCE');
     expect(sql).toContain('summary_dirty = 0');
-    expect(sql).toContain('AND summary_dirty = 1'); // race-loser guard
-
-    // Smoke test the function actually applies the patch in one round-trip
+    expect(sql).toContain('AND summary_dirty = 1');
     const result = await applyRebuildResult(hippoRoot, summary, {
       now: evalNow(),
       content: 'one-shot-content-xyzabc',
@@ -392,7 +357,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       actor: 'test',
     });
     expect(result.changed).toBe(true);
-    expect(result.refused).toBe(false); // no tombstone in play — clean rebuild
+    expect(result.refused).toBe(false);
 
     const db = openHippoDb(hippoRoot);
     try {
@@ -421,7 +386,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     expect(result.summariesRebuildFailed).toBe(0);
     expect(result.summariesZeroChildSkipped).toBe(0);
 
-    // Dirty still set
     const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.map((s) => s.id)).toContain(summary.id);
   });
@@ -430,7 +394,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 const T0 = Date.parse('2026-06-01T00:00:00.000Z');
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-// Under 20 chars, so generateDagSummary returns null with no provider failure.
 const SHORT_REPLY = 'too short';
 const GOOD_REPLY = 'a rebuilt summary that is long enough';
 const at = (offsetMs: number): string => new Date(T0 + offsetMs).toISOString();

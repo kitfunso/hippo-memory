@@ -93,7 +93,6 @@ function isGitHubSender(x: JsonValue): x is JsonValue & GitHubSender {
 
 export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWebhookEnvelope {
   if (!isObjectOrArray(x)) return false;
-  // Duck-type: an envelope must at least carry an action OR a repository field.
   return isJsonString(x.action) || isObjectOrArray(x.repository);
 }
 

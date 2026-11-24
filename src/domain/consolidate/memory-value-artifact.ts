@@ -1,6 +1,3 @@
-// The boundary to benchmarks/memory-value/*.json, whose keys are snake_case: the domain holds
-// camelCase, and this is the only place a key changes case on the way in.
-
 const toCamel = (key: string): string =>
   key.replace(/_([a-z])/g, (_m, c: string) => c.toUpperCase());
 

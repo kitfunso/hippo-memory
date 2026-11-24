@@ -1,5 +1,3 @@
-// The PreCompact hook: records the compaction and saves a working-state snapshot before the host
-// summarises.
 import { flushDeliveryRecorder, startDeliveryRecorder } from '../../../api/ledger-db.js';
 import { envCaptureScripted } from '../../../base/util/env.js';
 import { preCompactHook } from '../../capture/compact.js';
@@ -25,8 +23,6 @@ export async function handlePreCompact({
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const storeRoot = hookStoreRoot(root);
   await cliHookRequest(async () => {
-    // Started before any store wait, so two fires of one hook carry timestamps close enough to
-    // match as duplicates.
     const rec = await startDeliveryRecorder(cliApiContext(storeRoot, tenantId), {
       stdinText,
       runtime,
@@ -34,8 +30,6 @@ export async function handlePreCompact({
       envSessionId: hostSessionId(),
     });
     await resetHookInjection(root, tenantId, stdinText, null);
-    // Started at the boundary, so the row lands then; awaited after, as the boundary callback
-    // cannot wait.
     let flushed: Promise<void> | undefined;
     try {
       await preCompactHook(storeRoot, cliStore(storeRoot), {

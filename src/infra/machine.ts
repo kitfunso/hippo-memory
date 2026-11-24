@@ -1,5 +1,3 @@
-// The machine this process runs on, with its real disk reader and git: what a root hands the
-// agent-memory adapters.
 import { diskAgentFiles } from './agent-files.js';
 import type { Machine } from '../base/util/agent-homes.js';
 import { processHomes } from '../host/agent-homes.js';

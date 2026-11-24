@@ -1,5 +1,3 @@
-"""Load-bearing numbers for dolphinbench-feasibility.md, from the clone and the public Claude Code + Mem0 evidence.
-Usage: C:/Users/<user>/AppData/Local/Programs/Python/Python312/python.exe dolphin_stats.py [history|tests|results|evidence]"""
 import gzip
 import json
 import statistics as st
@@ -9,7 +7,7 @@ from collections import Counter
 import tiktoken
 import yaml
 
-from dolphin_home import BENCH, ROOT  # the clone and evidence stay outside this checkout
+from dolphin_home import BENCH, ROOT
 
 PERSONAS = ("morgan", "alex", "riley")
 

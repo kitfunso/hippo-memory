@@ -1,5 +1,3 @@
-// Keyset pages of memories: loadAllEntries' order, (created, id), read on the tenant-led index, and
-// id order for a walk that needs each row once. No page sorts the table.
 import { keysetPage, type KeysetPage } from '../../../base/util/keyset.js';
 import { ALL_TENANTS, type TenantId } from '../../../base/util/tenant.js';
 import { tenantAnd } from './tenant.js';
@@ -88,9 +86,6 @@ function oneTenantRows(tenant: SqlFragment, range: SqlFragment, order: string): 
   };
 }
 
-// No index orders memories by created across tenants, so each tenant's first `keep` rows come off
-// its own index, one seek per tenant in a loose scan, and the statement sorts only those. INDEXED
-// BY: a filter the origin index covers would otherwise sort the whole tenant.
 function everyTenantRows(range: SqlFragment, keep: number, order: string): EntryRows {
   return {
     match: (filter) =>

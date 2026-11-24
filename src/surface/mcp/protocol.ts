@@ -1,6 +1,3 @@
-// MCP wire types, the caller context, and the JSON predicates every tool handler narrows its
-// arguments with.
-
 import * as fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mapApiError } from '../../api/error-reply.js';
@@ -88,41 +85,23 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   hippoRoot: string;
   tenantId: string;
   actor: string;
-  /** The caller's authenticated role. Required so no transport can forget it; only stdio, which
-   * passes no context, is admin without one. */
   role: Role;
-  /** Scope grants for the HTTP-MCP caller's key. Absent for stdio (admin, needs none). */
   scopes?: readonly string[];
   viaAuthResolver?: true;
-  /** Set by the HTTP transport for the host's operator; never implied by the role. */
   hostAdmin?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
-  project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
-  /** The store this transport's calls run on. */
+  project?: CallerProject;
   store: S;
-  /** A store the host proved at boot, as this call reaches it (a request's view on HTTP). */
   storeFor: <T extends HippoStore>(own: T) => T;
-  /** The store's config, loaded by the transport's root for this call. */
   config: HippoConfig;
-  /** Set by the stdio host: the operator's own process, so no shared-store gate applies. */
   stdio?: true;
   reach?: ContextReach;
-  /** The transport root's per-caller state; without it no session ring, last-shown list or
-   * auto-sleep is kept. */
   callers?: CallerState;
-  /** The outside services the transport's root built; every tool call's api Context carries
-   * them. */
   infra: InfraPorts;
-  /** Per-client key for state isolation under HTTP-MCP, a hash of bearer and address built in
-   * src/surface/server/mcp-http.ts; absent on stdio, which keys by process and tenant. */
   clientKey?: string;
-  /** Aborts when the call passes its deadline, so a tool stops starting work nobody waits for. */
   signal?: AbortSignal;
-  /** The transport root's keeper of work a call does not wait on; unset, each call waits for it. */
   detached?: DetachedWork;
-  /** The server's gate on a write under a caller's project; unset, none is asked. */
   projectWriteGate?: ProjectWriteGate;
-  /** Deadline for one gate call; unset, the 5000 ms default. */
   projectWriteGateTimeoutMs?: number;
 }
 
@@ -181,8 +160,6 @@ export function mcpApiContext(ctx: McpCaller): ApiContext {
   };
 }
 
-/** The transport's client key, else `stdio-<pid>:<tenant>`; a caller's project narrows either,
- * so two repos on one shared store keep apart lists. */
 function mcpClientKey(ctx: McpCaller): string {
   const base = ctx.clientKey || `stdio-${process.pid}:${ctx.tenantId || DEFAULT_TENANT_ID}`;
   return ctx.project ? `${base}:${ctx.project.name}` : base;
@@ -193,8 +170,6 @@ function mcpClientKey(ctx: McpCaller): string {
 export function ownsServerCwd(ctx: McpCaller | undefined): boolean {
   return mcpActor(ctx).hostAdmin === true;
 }
-
-// ── JSON-ish domain type for untrusted MCP tool-call arguments ──
 
 /** The context of a tool call on a folder, built by the frame's composition root. */
 export type McpContextFor<S extends RequiredStore = RequiredStore> = (
@@ -207,8 +182,6 @@ export type McpContextFor<S extends RequiredStore = RequiredStore> = (
  * src/surface/mcp does not. */
 export interface McpHost<S extends RequiredStore = RequiredStore> {
   runFrame<T>(signal: AbortSignal, run: (contextFor: McpContextFor<S>) => Promise<T>): Promise<T>;
-  /** Waits up to `withinMs` for the work the frames handed off, such as an embed; resolves with
-   * how many were still running. */
   settle(withinMs: number): Promise<number>;
 }
 

@@ -1,4 +1,3 @@
-// Each savable kind answers: rows, order, refusals and audit rows.
 import { describe, expect, it } from 'vitest';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import {
@@ -39,11 +38,9 @@ sessionPerTest();
 useObjectsConformance();
 
 describe.each(CASES)('Objects, the $kind kind', (c) => {
-  // A decision's supersede also weakens the replaced row's mirror: a `superseded` tag and one more remember row.
   const weakens = c.kind === 'decision';
   const weakened = (d: ReturnType<typeof saving>) =>
     weakens ? { ...mirrorView(c, d), tags: [...mirrorView(c, d).tags, 'superseded'] } : mirrorView(c, d);
-  /** The rows saving `next` over row `replaced` appends from audit id `nth`, then the remember row of the weakened `prior` mirror. */
   const replacing = (
     nth: number,
     ids: { replaced: number; id: number },
@@ -213,7 +210,6 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
     expect(added(side).slice(before)).toEqual([auditRow(before, T3, closeOp(c.kind), '2', { [c.idKey]: 2 })]);
   });
 
-  /** Ids 1 to 8, id 5 in the other tenant: three instants each shared by two of the tenant's rows, then 1 closed and 2 superseded by 8. Odd ids hold the alpha filter value. */
   const seed = (): Call[] => {
     const row = (n: number, at: string, opts: DraftOptions = {}): Call =>
       save(c, saving(c, n, { at, group: odd(n) ? 'alpha' : 'beta', ...opts }));
@@ -251,7 +247,6 @@ describe.each(CASES)('Objects, the $kind kind', (c) => {
     ]);
     const every = [8, 7, 6, 4, 3, 2, 1];
     const active = [8, 7, 6, 4, 3];
-    // A kind with no filter column ignores the filter.
     const filtered = c.filtered ? [[7, 3, 1], [8, 6, 4, 2], [7, 3], [], [5]] : [every, every, active, every, [5]];
     expect(side.outcomes.slice(SEEDED)).toEqual([
       { value: every },

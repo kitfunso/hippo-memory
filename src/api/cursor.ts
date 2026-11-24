@@ -1,5 +1,3 @@
-// Opaque list cursors for the /v1 routes and the dashboard: base64url JSON of the last returned
-// row's sort key and id.
 import { BadRequestError } from '../base/errors/api-errors.js';
 import type { KeysetPosition } from '../base/util/keyset.js';
 import { type JsonValue, isJsonString, isJsonNumber } from '../base/util/json.js';

@@ -1,4 +1,3 @@
-// Physics ranking under asOf on a real store: no row, and no physics state, from after the cut may reach the results.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -33,7 +32,6 @@ function mk(id: string, content: string, validFrom: string): MemoryEntry {
   return { ...base, id, created: validFrom, lastRetrieved: validFrom, validFrom: validFrom };
 }
 
-// pre1 and pre2 existed at the cut; post was written after it and sits right on the query with a heavy particle.
 const PRE1 = mk('pre1', 'deploy pipeline runs on jenkins', '2026-05-01T00:00:00.000Z');
 const PRE2 = mk('pre2', 'deploy pipeline needs ops approval', '2026-04-01T00:00:00.000Z');
 const POST = mk('post', 'deploy pipeline moved to github actions', '2026-07-01T00:00:00.000Z');
@@ -95,7 +93,6 @@ describe('physicsSearch with asOf', () => {
     expect(ids(physics)).not.toContain('post');
     expect(ids(physics)).toEqual(ids(hybrid));
     expect(physics.map((r) => r.score)).toEqual(hybrid.map((r) => r.score));
-    // Particle positions and masses are today's, so none may shape a past-dated ranking.
     expect(physics.every((r) => r.breakdown?.mode !== 'physics')).toBe(true);
   });
 

@@ -1,6 +1,3 @@
-// First-class object verbs for predictions: record a claim, close it against the actual, and read
-// the class base rate.
-
 import * as predictionsApi from '../../api/objects/predictions.js';
 import type { ContextWith } from '../../api/types.js';
 import { type ClosureState, VALID_CLOSURE_STATES } from '../../base/records/prediction.js';
@@ -66,8 +63,6 @@ async function loadPredictionList(
   }
   const closureState = requireStatus(status, VALID_CLOSURE_STATES);
   if (!classTag) {
-    // status filter without class: scan all classes is more complex; v1 requires --class for
-    // non-default status
     fail('--status filter (non-open) requires --class to be set.');
   }
   return predictionsApi.predictionList(ctx, {
@@ -122,7 +117,6 @@ async function predictShow(ctx: ContextWith<'objects'>, args: string[]): Promise
 }
 
 async function predictBaserate(ctx: ContextWith<'objects'>, flags: CliFlags): Promise<void> {
-  // Reference-class / planning-fallacy detector
   const classTag = stringFlag(flags, 'class')?.trim();
   if (!classTag) {
     fail('Usage: hippo predict baserate --class <c>');
@@ -169,7 +163,6 @@ export async function handlePredict({
   if (subcommand === 'list') return predictList(ctx, flags);
   if (subcommand === 'show') return predictShow(ctx, args);
   if (subcommand === 'baserate') return predictBaserate(ctx, flags);
-  // Default subcommand: create. args[0] is the claim text.
   return predictCreate(ctx, subcommand, flags);
 }
 

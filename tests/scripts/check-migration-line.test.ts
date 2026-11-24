@@ -1,4 +1,3 @@
-// scripts/checks/check-migration-line.mjs keeps a publish from shipping a MIGRATIONS list with a missing version.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

@@ -1,5 +1,3 @@
-// Hosts a bind may name without auth or TLS: the loopback literals, and 'localhost' only if it
-// resolves to loopback.
 import { promises as dns } from 'node:dns';
 import { errorFields, log } from '../../base/util/log.js';
 import { isLoopbackAddress } from '../../base/util/net.js';

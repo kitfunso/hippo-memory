@@ -1,4 +1,3 @@
-// Git warnings on stderr must not leak into the auto-detected context query; only changed file names count.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -24,7 +23,6 @@ beforeEach(() => {
   fs.writeFileSync(path.join(repo, 'deployment.txt'), 'one\n');
   git('add', 'deployment.txt');
   git('commit', '-qm', 'init');
-  // An LF file under autocrlf=true makes `git diff` print a line-ending warning on stderr while exiting 0.
   fs.writeFileSync(path.join(repo, 'deployment.txt'), 'one\ntwo\n');
   process.chdir(repo);
 });
@@ -40,7 +38,6 @@ describe('autoDetectContext', () => {
   });
 
   it('logs at debug why no git-derived query came back, and returns empty', () => {
-    // A repo with no commit makes `git diff HEAD` fail, which stands for any git error or timeout.
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ctx-auto-empty-'));
     execFileSync('git', ['init', '-q'], { cwd: empty, stdio: 'ignore', windowsHide: true });
     process.chdir(empty);

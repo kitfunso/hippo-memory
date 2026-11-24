@@ -1,5 +1,3 @@
-// Pins every `hippo card` subcommand's stdout, stderr and exit code, in process, so a reshuffle of handleCard
-// that changes a byte or an exit path fails here. Ids and timestamps are masked; their order is kept.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { handleCard } from '../../src/surface/cli/card.js';
@@ -22,7 +20,6 @@ afterEach(() => {
   removeDir(root);
 });
 
-/** Replaces each distinct card id with its first-seen order and every ISO timestamp with <ts>. */
 function masker(): (text: string) => string {
   const ids = new Map<string, string>();
   return (text) =>

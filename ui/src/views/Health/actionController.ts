@@ -36,15 +36,10 @@ export interface Controller {
   canUndo: () => boolean;
   pause: () => void;
   resume: () => void;
-  /** Shows a message; while another toast is up it waits its turn, so it never cuts an Undo window short. */
   notify: (text: string) => void;
-  /** Sends the pending action now; `keepalive` is for pagehide. */
   commitPending: (keepalive: boolean) => void;
-  /** The drawer registers what it shows, or null when it shows nothing. */
   bindDrawer: (sink: DrawerSink | null) => void;
-  /** The drawer holds detail for `id` from `snapshotId`: settled entries that detail covers can go. */
   release: (id: string, snapshotId: number) => void;
-  /** A page restored from the back-forward cache: drops every entry and refetches. */
   restored: () => void;
   dispose: () => void;
 }
@@ -59,7 +54,6 @@ export interface ActionStore {
 /** Name of the undo shortcut on this platform. */
 export const undoKey = (): string => (/Mac|iPhone|iPad/.test(navigator.platform) ? "Cmd+Z" : "Ctrl+Z");
 
-/** What the interpreter keeps besides the state: the real timer, the drawer's accept function and the pin chain. */
 interface Runtime {
   hooks: ControllerHooks;
   state: ControllerState;
@@ -74,7 +68,6 @@ function stopTimer(rt: Runtime): void {
   rt.timer = undefined;
 }
 
-// The timer follows `state.timer`; it is armed here, inside dispatch, so a click and its 6 s window start together.
 function armTimer(rt: Runtime): void {
   stopTimer(rt);
   const { timer } = rt.state;
@@ -101,7 +94,6 @@ function runEffect(rt: Runtime, effect: Effect): void {
 
 function sendPin(rt: Runtime, id: string, pinned: boolean): Promise<Outcome> {
   const run = rt.tail.then(() => postPin(id, pinned)).then((detail): Outcome => ({ note: null, detail }));
-  // Keeps the chain alive after a failure; runJob reports the same rejection through `run`.
   rt.tail = run.catch(() => undefined);
   return run;
 }
@@ -128,7 +120,6 @@ async function runJob(rt: Runtime, job: Job, keepalive: boolean): Promise<void> 
   try {
     outcome = await sendJob(rt, job, keepalive);
   } catch (err) {
-    // On pagehide there is no page left to show the message on.
     dispatch(rt, { type: "failed", owner: job.owner, message: keepalive ? null : errorMessage(err) });
     return;
   }

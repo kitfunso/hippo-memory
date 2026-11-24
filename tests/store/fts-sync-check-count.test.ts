@@ -1,5 +1,3 @@
-// backfillFtsIndex counted the FTS5 virtual table itself on every open,
-// walking every document. Real SQLite store, no mocks.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
@@ -24,7 +22,6 @@ interface PlanStep {
   detail: string;
 }
 
-/** Plan steps that scan the full-text table once per row of an outer loop: a correlated subquery, or the inner side of a join. */
 function indexScansPerRow(db: DatabaseSyncLike, sql: string): string[] {
   // SAFETY: EXPLAIN QUERY PLAN answers one row per step: its id, its parent's id and its text.
   const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as PlanStep[];
@@ -82,7 +79,6 @@ describe('FTS sync check does not count the virtual table itself', () => {
 });
 
 describe('FTS drift repair', () => {
-  // `id` is UNINDEXED in memories_fts, so a per-row lookup scans the whole index and the repair grows with the square of the store.
   it('heals one missing row in a 10,000-row store with no scan of the index per memory', () => {
     const db = openHippoDb(root);
     try {
@@ -106,8 +102,6 @@ describe('FTS drift repair', () => {
         .prepare(`SELECT COUNT(*) AS c FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)`)
         .get() as { c: number };
       expect(Number(missing.c)).toBe(0);
-      // The work sits inside each statement, where no statement or row count sees it; the plan names the loop.
-      // The insert of missing rows and the orphan delete; the drift count reads the docsize shadow table instead.
       expect(statements.filter((sql) => /memories_fts(?!_)/.test(sql))).toHaveLength(2);
       expect(statements.flatMap((sql) => indexScansPerRow(db, sql))).toEqual([]);
     } finally {

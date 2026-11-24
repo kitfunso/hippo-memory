@@ -1,4 +1,3 @@
-// The seams a server uses to end a session and to keep two owners and two request ids apart.
 import { describe, expect, it } from 'vitest';
 import { BadRequestError, ConflictError } from '../../src/base/errors/api-errors.js';
 import {
@@ -43,7 +42,6 @@ useCallerStore();
 describe('sessionEndHandoffForCaller', () => {
   it("writes the owner's handoff and closes only the owner's snapshot", async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
-    // Bob's row names the same session id, so only the key keeps the close off it.
     const bobs = saveActiveTaskSnapshot(
       root,
       TENANT,
@@ -76,7 +74,6 @@ describe('sessionEndHandoffForCaller', () => {
 
   it('retry after a failed close writes no second handoff', async () => {
     const mine = saveActiveTaskSnapshot(root, TENANT, { ...snapshotFields(STATE), sessionId: 'sA' }, ALICE);
-    // An earlier save time, so the handoff is strictly newer than the snapshot it covers.
     withDb((db) =>
       db
         .prepare(`UPDATE task_snapshots SET updated_at = ? WHERE id = ?`)
@@ -127,7 +124,6 @@ describe('a second owner on the same session', () => {
       failure_log: 0,
       memories: 0,
     });
-    // The session's own owner still gets through.
     expect(await caught(() => call(owned('alice')))).toBeNull();
   });
 });
@@ -161,7 +157,6 @@ describe('a request id another session sent', () => {
   it.each(senders)(
     'capture-error: the same id from %s is a 409 and leaves the first row alone',
     async (_who, owner, sessionId) => {
-      // A failed first store leaves a row a retry settles, which a foreign id would otherwise rewrite.
       const undo = failOn('memories', 'INSERT', 'store boom');
       await expect(captureFailureForCaller(owned('alice'), failure())).rejects.toThrow('store boom');
       undo();
@@ -187,7 +182,6 @@ describe('a request id another session sent', () => {
   it.each(senders)(
     'post-compact: the same id from %s is a 409 and never finishes the first record',
     async (_who, owner, sessionId) => {
-      // Items that failed leave the record summarized, which a foreign id would otherwise finish under its own session.
       const undo = failOn('memories', 'INSERT', 'items boom');
       await expect(items('alice', 'sA')).rejects.toThrow('items boom');
       undo();

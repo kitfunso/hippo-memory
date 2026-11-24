@@ -1,14 +1,3 @@
-/**
- * E2 customer_note first-class object (entity-scoped) - store-layer tests.
- * Docs: docs/plans/2026-06-01-e2-customer-note-object.md
- *
- * Covers what only notes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. saveCustomerNote creates memory + customer_notes row (+ create audit), v1
- * 2. memory mirror carries customer:<lc> tag (lowercased; colon-in-customer safe)
- * 3. status + customer filters; MANY notes per customer
- * 4. validation: missing customer/note; single-line customer; caps
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
@@ -47,7 +36,6 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       customer: 'Acme Corp',
       note: 'renewal call notes',
     });
-    // The first row of a fresh AUTOINCREMENT table.
     expect(n.id).toBe(1);
     expect(n.memoryId).not.toBeNull();
     expect(n.customer).toBe('Acme Corp');
@@ -91,8 +79,7 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
       ).memoryId!,
     );
     expect(n).toContain('customer_note');
-    expect(n).toContain('customer:acme corp'); // lowercased
-    // a customer containing a colon does not corrupt the tag (it is one element)
+    expect(n).toContain('customer:acme corp');
     const n2 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       customer: 'acme:corp',
       note: 'y',
@@ -104,7 +91,6 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
   });
 
   it('status + customer filters; MANY active notes per customer', async () => {
-    // a single customer accrues MANY notes (the key difference from project_brief)
     const a1 = await saveCustomerNote(objectsAt(home), loadConfig(home).defaultHalfLifeDays, 'default', {
       customer: 'Acme',
       note: 'note 1',
@@ -125,11 +111,11 @@ describe('customer_notes store (entity-scoped first-class object)', () => {
     });
     const acmeActive = await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Acme', status: 'active' });
     expect(acmeActive.map((x) => x.id).sort()).toEqual([a1.id, a2.id].sort());
-    expect(acmeActive.length).toBe(2); // MANY-per-customer
+    expect(acmeActive.length).toBe(2);
     expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta' })).length).toBe(1);
     expect((await loadCustomerNotes(objectsAt(home), 'default', { customer: 'Beta', status: 'active' })).length).toBe(
       0,
-    ); // closed
+    );
     expect((await loadCustomerNotes(objectsAt(home), 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
       b1.id,
     ]);

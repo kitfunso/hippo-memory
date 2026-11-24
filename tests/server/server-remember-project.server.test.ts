@@ -1,4 +1,3 @@
-// POST /v1/memories stamps the caller's `project.name`, or NULL on a shared store, and never the served folder.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -25,7 +24,6 @@ let tmp: string;
 let store: string;
 let handle: ServerHandle | null = null;
 
-/** Serves `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 async function start(config: Record<string, JsonValue>): Promise<ServerHandle> {
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });

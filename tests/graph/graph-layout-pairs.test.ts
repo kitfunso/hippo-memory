@@ -1,4 +1,3 @@
-// The layout looks at the pairs near each node, not every pair, and still lays out finite, bounded, repeatable points.
 import { describe, expect, it } from 'vitest';
 import { layoutGraph, type GraphModel } from '../../src/domain/graph/view.js';
 
@@ -24,7 +23,6 @@ describe('layoutGraph at 600 nodes', () => {
     layoutGraph(ring(NODES), { iterations: PASSES, visits });
 
     expect(visits.pairs).toBeGreaterThan(0);
-    // All pairs would be 179,700 per pass; the grid keeps to the nodes in the 3 by 3 cells around each node.
     expect(visits.pairs).toBeLessThan((ALL_PAIRS_PER_PASS * PASSES) / 4);
   });
 

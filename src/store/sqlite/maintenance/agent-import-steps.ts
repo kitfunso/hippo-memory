@@ -1,5 +1,3 @@
-// One container's planned steps on the caller's write scope: the rows they name are re-read first,
-// and a plan whose rows moved on since the sync read them writes nothing.
 import { SYNC_ACTOR } from '../../../base/memory/agent-memory-tools.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { isSuperseded } from '../../../base/memory/liveness.js';
@@ -37,14 +35,12 @@ import type {
 import type { SetAsideWhy } from '../../../base/ports/store/project-tags.js';
 import type { EntryCursor } from '../../../base/ports/store/types.js';
 
-/** What the steps did, and the rows whose mirror files follow the commit. */
 interface StepsRun {
   readonly outcomes: StepOutcome[];
   readonly mirror: MemoryEntry[];
   readonly purge: string[];
 }
 
-/** The tenant's live rows under `prefix`, one bounded statement per page. */
 function liveUnder(db: DatabaseSyncLike, tenantId: string, prefix: string): MemoryEntry[] {
   const filter = { tenantId, sourcePrefix: prefix, live: true } as const;
   return [
@@ -65,8 +61,6 @@ export function runSteps(
   return rows === null ? null : new ContainerSteps(db, files, plan, rows).run();
 }
 
-/** The rows under the plan's prefixes and those its steps name outside them, by id; null when
- * the prefixes no longer hold exactly the planned rows or an adopted row left its legacy source. */
 function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, MemoryEntry> | null {
   const rows = new Map<string, MemoryEntry>();
   for (const prefix of outermost(plan.prefixes)) {
@@ -95,7 +89,6 @@ function standingRows(db: DatabaseSyncLike, plan: ContainerApply): Map<string, M
   return adoptable ? rows : null;
 }
 
-/** A prefix under another listed one reads only rows that one already returns. */
 function outermost(prefixes: readonly string[]): string[] {
   const unique = [...new Set(prefixes)];
   return unique.filter((p) => !unique.some((q) => q !== p && p.startsWith(q)));
@@ -167,7 +160,6 @@ class ContainerSteps {
     return this.moved(tagged);
   }
 
-  /** Later steps see the row as it now stands, and its mirror is rewritten after the commit. */
   private moved(entry: MemoryEntry): StepOutcome {
     this.rows.set(entry.id, entry);
     this.mirror.push(entry);
@@ -188,8 +180,6 @@ class ContainerSteps {
     return 'done';
   }
 
-  /** api.supersede's steps on this transaction; false when the row is gone or another writer
-   * superseded it first. */
   private supersede(id: string, by: string): boolean {
     const old = this.rows.get(id);
     if (old === undefined) return false;
@@ -227,8 +217,6 @@ class ContainerSteps {
     return result;
   }
 
-  /** A deleted note came back unchanged: its old row returns with its id and history, under the
-   * sync's own audit op. */
   private restore(step: RestoreStep): StepOutcome {
     const tenantId = this.plan.tenantId;
     const snap = readDormantSnapshot(this.db, tenantId, step.dormantId);

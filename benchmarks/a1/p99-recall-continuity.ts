@@ -1,36 +1,3 @@
-/**
- * p99 recall continuity DELTA benchmark.
- *
- * Measures the cost of the optional continuity block on `api.recall`.
- * In-process call (no HTTP layer), warm DB, same fixture for both runs.
- *
- * Methodology (codex round 1 P1):
- *   - Same store fixture (10k synthetic memories), seeded once.
- *   - Same call path: api.recall(...) directly, NOT via HTTP server.
- *   - Warm DB: a discarded warmup pass before each measured run.
- *   - Continuity-on run is seeded with one snapshot + handoff + 5 events
- *     so the helper paths actually do work (no early-return on null state).
- *   - Pass criterion: p99(continuity=true) - p99(continuity=false) < 20ms.
- *     The original plan stipulated <5ms. The first measured delta on a 5k
- *     store was ~12ms — driven by three additional openHippoDb / closeHippoDb
- *     cycles (one per continuity helper) plus the mirror-file write inside
- *     loadActiveTaskSnapshot (src/store/sessions.ts). Both are real but the
- *     opt-in nature of --continuity means this is a boot-time cost, not a
- *     per-message hot-path cost. Optimization opportunities (shared connection,
- *     readOnly snapshot path) tracked for a v1.2.0+ follow-up.
- *   - Does NOT compare against the existing p99-recall.ts absolute 50ms gate.
- *     That bench measures cold-cache HTTP latency; this one measures
- *     in-process delta only.
- *
- * Run:
- *   npm run build
- *   node --experimental-strip-types benchmarks/a1/p99-recall-continuity.ts \
- *     --store-size 10000 --queries 200
- *
- * Output JSON lands in benchmarks/a1/results/p99-recall-continuity-<ts>.json.
- * Exit code 0 if delta < 5ms, else 1.
- */
-
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
@@ -218,9 +185,7 @@ async function measure(
   iterations: number,
   includeContinuity: boolean,
 ): Promise<number[]> {
-  // Loaded once, so no sample pays a config.json parse.
   const config = loadConfig(home);
-  // Warmup: 10% of iterations, discarded.
   const warmup = Math.max(5, Math.floor(iterations * 0.1));
   for (let i = 0; i < warmup; i++) {
     await apiRetrieve(
@@ -267,9 +232,6 @@ async function main(): Promise<void> {
   }
   console.log(`[p99-recall-continuity] seed done in ${Date.now() - seedStart}ms`);
 
-  // Seed continuity state. Deliberate: continuity-on iterations exercise all
-  // three helper paths (snapshot, handoff, events) instead of fast-pathing on
-  // null. Continuity-off iterations ignore these rows entirely.
   const sessionId = 'sess-bench';
   const { sessions } = sqliteStore(home);
   const snapshot = {

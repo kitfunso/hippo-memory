@@ -1,25 +1,8 @@
-/**
- * F5 (v1.6.5) — MCP render path for RecallContractError.
- *
- * MCP `hippo_recall` calls api.recall internally. When the env gate is on
- * AND tool args include fresh_tail_count > 0 without fresh_tail_session_id,
- * api.recall throws RecallContractError. Per the documented MCP contract
- * (handleMcpRequest JSDoc: "Errors thrown by executeTool are the caller's
- * problem — wrap with try/catch on the transport side"), the throw
- * propagates to whichever transport invoked it. This test asserts:
- *   1. The throw reaches the call site as a RecallContractError with the
- *      typed `.code` field intact (no swallowing inside MCP dispatch).
- *   2. Both transports, stdio and HTTP-MCP, answer the throw through
- *      mcpErrorResponse: a JSON-RPC -32603 error that keeps the typed
- *      error's message.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { RecallContractError } from '../../src/api/index.js';
-// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -136,7 +119,6 @@ describe('mcp hippo_recall fresh-tail policy', () => {
     };
     expect(r.error).toBeUndefined();
     const text = r.result?.content?.[0]?.text ?? '';
-    // 'event' matches every sess-A row, so the ranked list shows all three and the tail section repeats none.
     expect(text).toContain('Found 3 memories:');
     for (let i = 0; i < 3; i++) expect(text).toContain(`\nevent ${i}\n`);
     expect(text).not.toContain('[tail]');

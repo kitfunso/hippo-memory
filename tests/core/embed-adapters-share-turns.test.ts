@@ -1,5 +1,3 @@
-// The index adapter and the store adapter wait on one queue per index key, so an embed through each
-// on one root never overlaps.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import type { EmbeddingProvider } from '../../src/base/ports/embedder.js';
@@ -62,7 +60,6 @@ describe('embed adapters', () => {
     });
     let release: () => void = () => undefined;
     const held = embedTurns.run(KEY, () => new Promise<void>((resolve) => (release = resolve)));
-    // Each adapter that takes the turn joins the queue behind the held one; one that skips it touches its target at once.
     const queued = new Promise<void>((resolve) => {
       let joined = 0;
       const run = embedTurns.run.bind(embedTurns);

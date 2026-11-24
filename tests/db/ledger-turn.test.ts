@@ -1,4 +1,3 @@
-// One turn's token rows and delivery event through hippo.db's Ledger (src/store/sqlite/ledger/ledger.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -68,7 +67,6 @@ function recorder(): DeliveryRecorder {
   });
 }
 
-/** Makes every insert on `surface` fail, so one row of a turn can fail while the others land. */
 function failRowsOn(surface: string): void {
   onDb((db) =>
     db.exec(

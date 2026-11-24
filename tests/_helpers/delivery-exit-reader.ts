@@ -1,4 +1,3 @@
-// Event and row builders, a ledger writer and the readers the delivery exit-reader tests share.
 import { expect, beforeEach } from 'vitest';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

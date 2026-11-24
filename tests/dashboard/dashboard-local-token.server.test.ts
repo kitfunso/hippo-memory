@@ -1,7 +1,3 @@
-// The dashboard binds loopback, but any local process or user could still read every
-// memory through it, so the URL in dashboard.url carries a one-time ticket, never the
-// per-start token; the first page load trades it for a cookie, and every reply pins what a browser may load.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
@@ -20,7 +16,6 @@ describe('dashboard local access token', () => {
   let hippoRoot: string;
   let server: DashboardHandle | undefined;
   let port: number;
-  /** A fresh one-time ticket from the running dashboard. */
   const ticket = (): string => server!.ticket();
   const urlFile = (): string =>
     process.platform === 'win32' ? join(home, '.hippo-global', 'dashboard.url') : join(hippoRoot, 'dashboard.url');
@@ -53,7 +48,6 @@ describe('dashboard local access token', () => {
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Strict/i);
     const pair = cookie.split(';')[0]!;
-    // The issue time is in the value, so a cookie rebuilt from it must match the one the server sent.
     const issuedAt = Number(pair.slice(pair.indexOf('=') + 1).split('.')[0]);
     expect(pair).toBe(sessionCookie(port, TOKEN, issuedAt));
 
@@ -151,7 +145,6 @@ describe('dashboard local access token', () => {
       [["'none'"], ["'self'"], ["'self'"], ["'none'"]],
     );
     expect(policy).not.toMatch(/unsafe-inline|unsafe-eval|\*/);
-    // A page that breaks its own policy renders blank: every script comes from a file, every style block is named by hash.
     const html = await page.text();
     for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
       expect([/\ssrc=/.test(script[1]!), script[2]!.trim()]).toEqual([true, '']);
@@ -192,7 +185,6 @@ describe('dashboard local access token', () => {
     expect(status).toBe(403);
   });
 
-  /** The lines the start banner prints with stdout's isTTY forced to `tty`. */
   function bannerLines(tty: boolean): string[] {
     const lines: string[] = [];
     const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {

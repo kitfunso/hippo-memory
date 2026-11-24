@@ -1,10 +1,3 @@
-/**
- * Dormant memories: what sleep does with a faded memory instead of deleting it. On by default
- * (`"dormant": { "enabled": false }` opts out). The sleep decay pass moves a memory that faded below the threshold
- * into the dormant store. Dormant memories never reach recall or context, sit out every later sleep, and can be
- * listed, searched, restored or permanently forgotten. Guardrails: a faded secret is deleted, never kept dormant, and
- * a dormant memory older than `retentionDays` (default 180, 0 = forever) is deleted for good. Real SQLite throughout.
- */
 import { describe, it, expect, vi } from 'vitest';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { entryMirrorFiles } from '../_helpers/entry-mirror-files.js';
@@ -45,7 +38,6 @@ pinClock();
 const DORMANT_ON = { replay: { count: 0 }, dormant: { enabled: true } };
 const DORMANT_OFF = { replay: { count: 0 }, dormant: { enabled: false } };
 
-/** `entry` aged `days`, on the pre-1.46 7-day base so it fades within the test's horizon. */
 function aged(entry: MemoryEntry, days: number): MemoryEntry {
   const then = new Date(Date.now() - days * DAY_MS).toISOString();
   return {
@@ -258,7 +250,6 @@ describe('dormant retention', () => {
     }
     let pauses = 0;
     let kept = '';
-    // A zero hold commits after every row; the first gap re-dates a row the run has not reached, as a restore and a new sleep would.
     const pause = async (): Promise<void> => {
       if (pauses++ > 0) return;
       const other = openHippoDb(home);
@@ -306,8 +297,6 @@ describe('with dormant memories enabled', () => {
     expect(result.dormant).toBe(1);
     expect(detailLines(result).some((d) => d.includes(faded.id) && d.includes('dormant'))).toBe(true);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toEqual([fresh.id]);
-    // The markdown mirror goes too, so a bootstrap of an empty table
-    // cannot re-import the row as active.
     expect(entryMirrorFiles(home, faded.id)).toEqual([]);
 
     const dormant = await api.dormantList(ctxFor(home));
@@ -440,8 +429,6 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(await api.dormantList(ctxFor(home), { query: 'STAGING' })).toHaveLength(2);
     expect((await api.dormantList(ctxFor(home), { query: '100%' })).map((m) => m.id)).toEqual([ids[2]]);
     expect((await api.dormantList(ctxFor(home), { query: 'hippo_tenant' })).map((m) => m.id)).toEqual([ids[3]]);
-    // As LIKE wildcards these would match "staging database" and
-    // "to Staging need"; taken literally they match nothing.
     expect(await api.dormantList(ctxFor(home), { query: 'g_d' })).toEqual([]);
     expect(await api.dormantList(ctxFor(home), { query: 'to%need' })).toEqual([]);
     expect(await api.dormantList(ctxFor(home), { limit: 2 })).toHaveLength(2);
@@ -467,7 +454,6 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(next.dormant).toBe(0);
     expect(loadAllEntries(home, 'default').map((e) => e.id)).toContain(ids[0]);
 
-    // The restore is logged as a "forgot it, then needed it" label.
     const db = openHippoDb(home);
     try {
       // SAFETY: rows' shape matches the two columns named in the SELECT.
@@ -490,8 +476,6 @@ describe('listing, restoring and forgetting dormant memories', () => {
     await expect(api.dormantRestore(ctxFor(home, 'tenant-b'), ids[0])).rejects.toThrow(/dormant memory not found/);
     expect(await api.dormantList(ctxFor(home, 'tenant-b'))).toEqual([]);
 
-    // Same id written back as active (e.g. by an old binary): restore must
-    // not overwrite the live row with the older snapshot.
     const live = {
       ...createMemory('live copy under the same id', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       id: ids[0],
@@ -509,7 +493,6 @@ describe('listing, restoring and forgetting dormant memories', () => {
       value: 'the staging api key lives in the shared vault entry',
       reason: 'stale secret pointer',
     });
-    // A rejected value may not linger in dormant storage either.
     expect(await api.dormantList(ctxFor(home))).toEqual([]);
     await expect(api.dormantRestore(ctxFor(home), ids[0])).rejects.toThrow(/dormant memory not found/);
   });
@@ -518,7 +501,6 @@ describe('listing, restoring and forgetting dormant memories', () => {
     const { home, ids } = await storeWithDormant('dormant-guard-old', [
       'the staging api key lives in the shared vault entry',
     ]);
-    // Simulate a tombstone written without the dormant purge (an old binary sharing the store): insert the row directly.
     const db = openHippoDb(home);
     try {
       insertRejectedValue(db, {
@@ -581,12 +563,10 @@ describe('listing, restoring and forgetting dormant memories', () => {
     expect(auditRows(home, 'forget').map((e) => [e.targetId, e.actor, e.metadata])).toEqual([
       [ids[0], 'test', { dormant: true }],
     ]);
-    // Counted like forget and archiveRaw (review finding on PR #227).
     expect(Number((await sqliteStore(home).reports.stats()).total_forgotten)).toBe(1);
   });
 });
 
-/** Rows of `table` that still point at `memoryId`. */
 function linkedRows(home: string, table: string, memoryId: string): number {
   const db = openHippoDb(home);
   try {
@@ -677,7 +657,6 @@ describe('memories that back a first-class object', () => {
     async (_kind, table, save) => {
       const home = makeRoot('dormant-linked', { config: {} });
       const memoryId = (await save(home)).memoryId!;
-      // Fade it far below the threshold, as years without recall would.
       const faded = aged(
         loadAllEntries(home, 'default').find((e) => e.id === memoryId)!,
         3000,
@@ -720,7 +699,6 @@ describe('memories that back a first-class object', () => {
         .prepare(`SELECT m.name AS name FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
         WHERE m.type = 'table' AND f."table" = 'memories' AND f.on_delete = 'SET NULL'`)
         .all() as { name: string }[];
-      // Graph rows drop their memory pointer by design (src/db/index.ts, the entities and relations schema).
       const objectTables = rows.map((r) => r.name).filter((t) => t !== 'entities' && t !== 'relations');
       expect([...MEMORY_BACKED_TABLES].sort()).toEqual(objectTables.sort());
     } finally {
@@ -730,7 +708,6 @@ describe('memories that back a first-class object', () => {
 });
 
 describe('hippo dormant CLI', () => {
-  // In process, so coverage sees the dormant verb; out is stdout, plus stderr on a failure, as the spawned run gave.
   async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; status: number }> {
     const r = await runCliAs(args, { cwd, env: { ...process.env } });
     return r.status === 0 ? { out: r.stdout, status: 0 } : { out: `${r.stdout}${r.stderr}`, status: r.status ?? 1 };
@@ -774,7 +751,6 @@ describe('hippo dormant CLI', () => {
     expect((await runCli(workspace, 'dormant')).out).toContain('No dormant memories');
     expect((await runCli(workspace, 'dormant', 'restore', drop.id)).status).not.toBe(0);
 
-    // `hippo forget` on a dormant id points at the dormant command instead of a bare "not found".
     writeEntry(
       hippoRoot,
       aged(

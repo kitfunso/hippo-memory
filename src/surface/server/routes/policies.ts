@@ -1,4 +1,3 @@
-// /v1/policies routes.
 import { policiesInForce } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
@@ -24,8 +23,6 @@ export const POLICY_ROUTES: VersionedRouteConfig<'policy'> = {
   noun: 'policy',
   field: 'policy',
   listField: 'policies',
-  // The date fields get a type and length check only: the store parses them, and the cap bounds a
-  // junk string before it reaches the Date parser.
   create: (ctx, body) =>
     objectCreate(ctx, 'policy', {
       policyName: requiredString(body, 'policyName', { max: MAX_SHORT_FIELD_LEN }),

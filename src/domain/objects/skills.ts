@@ -1,7 +1,3 @@
-/** Skill object: an agent-followable `instructions` body plus an optional `trigger`, evolving via supersession.
- *  `skillsMarkdown` renders ACTIVE skills into AGENTS.md / CLAUDE.md rules; running code from a skill is deferred
- *  (security). `trigger` is stored in `trigger_text` because it is an SQL reserved keyword. */
-
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { SavableDescriptor } from './descriptor.js';
 import { capText, oneLine, requireLine, requireText } from './fields.js';
@@ -28,24 +24,17 @@ export const MAX_EXPORT_SKILLS = 1000;
 export interface SaveSkillOptions {
   skillName: string;
   instructions: string;
-  /** Optional "when to apply" trigger. */
   trigger?: string;
-  /** The delta note for a supersession; ignored (stored NULL) on a fresh create. */
   changeSummary?: string;
-  /** Table id of an ACTIVE skill this new version supersedes. */
   supersedesSkillId?: number;
-  /** Extra memory tags merged after ['skill']. */
   extraTags?: string[];
 }
 
-/** The trigger as stored, or null for none. One line, because a newline would forge a heading inside the exported
- *  **When:** line. */
 function checkTrigger(trigger: string | undefined): string | null {
   if (trigger === undefined || trigger === null || trigger.trim().length === 0) return null;
   return oneLine(capText(trigger, MAX_SKILL_TRIGGER_LEN, 'trigger'), 'trigger');
 }
 
-/** Recall-surface content for the memory mirror: name, optional trigger, instructions. */
 function buildSkillContent(
   skillName: string,
   instructions: string,
@@ -64,7 +53,6 @@ export const SKILL: SavableDescriptor<'skill', SaveSkillOptions> = {
   states: VALID_SKILL_STATES,
   closableFrom: ['active'],
   draft(opts, now) {
-    // The name becomes an H2 header in the export, so it must be one line.
     const name = requireLine(opts.skillName, MAX_SKILL_NAME_LEN, 'skillName');
     const instructions = requireText(opts.instructions, MAX_SKILL_INSTRUCTIONS_LEN, 'instructions');
     const trigger = checkTrigger(opts.trigger);

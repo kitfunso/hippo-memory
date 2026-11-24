@@ -35,9 +35,9 @@ BENCH = {
 }
 LME_SMOKE_TYPES = "single-session-user,single-session-assistant,multi-session,knowledge-update,temporal-reasoning"
 BAD_LOG = re.compile(rf"failed|error|traceback|exception|{FELL_BACK.pattern}", re.I)
-SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")  # a search never changes a store: the retry's result stands
-ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")  # a retried add may be stored twice
-DEAD_URL = "http://127.0.0.1:9/v1"  # port 9 (discard) refuses connections: no model call can leave this machine
+SEARCH_RETRY = re.compile(r"SEARCH attempt \d+/\d+ failed")
+ADD_RETRY = re.compile(r"ADD attempt \d+/\d+ failed \(user=([^)]+)\)")
+DEAD_URL = "http://127.0.0.1:9/v1"
 MAX_RESTARTS = 20
 
 
@@ -46,8 +46,6 @@ def sha_file(p: Path) -> str:
 
 
 def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[list[str], list[list[str]], list[set[str]]]:
-    """(every question id, one runner flag list per shard, each shard's units for unit_of), read from the dataset the
-    way the runner reads it."""
     sys.path.insert(0, str(RUNNER))
     kind, what = BENCH[bench]
     if kind == "beam":
@@ -56,7 +54,7 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
         n = min(a.limit_convs or len(convs), len(convs))
         ids = [f"{what}_{ci}_q{qi}_{q['question_type']}" for ci in range(n)
                for qi, q in enumerate(extract_probing_questions(convs[ci]))]
-        picks = [list(range(s, n, shards)) for s in range(shards)]  # round robin: sizes differ a little between convs
+        picks = [list(range(s, n, shards)) for s in range(shards)]
         return (ids, [["--chat-sizes", what, "--conversations", ",".join(map(str, p))] for p in picks if p],
                 [{f"{what}_{ci}" for ci in p} for p in picks if p])
     from benchmarks.longmemeval.run import load_dataset, sample_questions_stratified
@@ -80,7 +78,6 @@ def plan(bench: str, a: argparse.Namespace, shards: int, out: Path) -> tuple[lis
 
 
 def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
-    """Waits for /health, then stops unless the server runs the arm's backend with the arm's flags (server_arms)."""
     for _ in range(120):
         if proc.poll() is not None:
             sys.exit(f"hippo-mem0-server on {port} exited with {proc.returncode}")
@@ -98,13 +95,10 @@ def wait_health(port: int, proc: subprocess.Popen, arm: str) -> None:
 
 
 def last_launch(log: Path) -> str:
-    """What the runner's last launch logged: an earlier, killed launch's users were redone from scratch."""
     return log.read_bytes().decode("utf-8", "replace").split("\n=== ")[-1] if log.exists() else ""
 
 
 def drop_retried_users(pred: Path, log: Path, port: int) -> int:
-    """On --resume: every user with a retried add in the last launch is deleted with its question and ingestion files,
-    so the runner ingests and searches it again whole."""
     users = set(ADD_RETRY.findall(last_launch(log)))
     if not users:
         return 0
@@ -122,7 +116,6 @@ def drop_retried_users(pred: Path, log: Path, port: int) -> int:
 
 
 def drop_partial_users(pred: Path, port: int) -> int:
-    """On --resume: a user whose ingestion stopped part way is deleted and ingested again whole, so no chunk is stored twice."""
     n = 0
     for prog in sorted(pred.glob("_progress_*.json")):
         uid = json.loads(prog.read_text(encoding="utf-8")).get("user_id")
@@ -135,8 +128,6 @@ def drop_partial_users(pred: Path, port: int) -> int:
 
 
 def drop_failed_searches(pred: Path, port: int) -> int:
-    """On --resume: a question whose search failed (the runner writes it with no results) is deleted with its ingestion
-    file and its user's store, so the runner ingests and searches it again; the check would fail it forever otherwise."""
     n = 0
     for p in sorted(pred.glob("*.json")):
         if p.name.startswith("_"):
@@ -155,16 +146,12 @@ def drop_failed_searches(pred: Path, port: int) -> int:
 
 
 class Shard:
-    """One server and one runner process, supervised: a killed server or runner is started again and the run resumes.
-
-    The users whose ingestion was cut off are deleted and ingested again whole, so no chunk is stored twice."""
-
     def __init__(self, bench: str, arm: str, idx: int, port: int, dirp: Path, flags: list[str], resume: bool) -> None:
         self.arm, self.idx, self.port, self.dir = arm, idx, port, dirp
         self.server_restarts = self.runner_restarts = 0
         self.rc: int | None = None
         self.sweep_users: set[str] = set()
-        self.sweeps = BENCH[bench][0] == "lme"  # each LongMemEval question searches right after its own ingest
+        self.sweeps = BENCH[bench][0] == "lme"
         self.pred = dirp / f"predicted_{bench}"
         dirp.mkdir(parents=True, exist_ok=True)
         self.store = dirp / "store"
@@ -222,8 +209,8 @@ class Shard:
                 if self.sweeps and ticks % 20 == 0:
                     self._sweep()
                 rc = self.runner.poll()
-                if rc is None and self.srv.poll() is not None:  # the runner's own retries would outlast a restart, but a
-                    self.runner.kill()                          # cut-off add may be stored: redo the user whole
+                if rc is None and self.srv.poll() is not None:
+                    self.runner.kill()
                     self.runner.wait()
                     rc = -1
                 if self.srv.poll() is not None and self.server_restarts < MAX_RESTARTS:
@@ -241,14 +228,12 @@ class Shard:
             self._launch()
 
     def _sweep(self) -> None:
-        """Deletes the store of every user whose question file is written: the search is done and the store is only disk
-        (LongMemEval-M stores run to tens of GB per arm)."""
         for p in self.pred.glob("*.json"):
             if p.name.startswith("_"):
                 continue
             try:
                 uid = json.loads(p.read_text(encoding="utf-8")).get("user_id")
-            except ValueError:  # still being written; the next sweep gets it
+            except ValueError:
                 continue
             if uid and uid not in self.sweep_users:
                 try:
@@ -256,7 +241,7 @@ class Shard:
                         f"http://127.0.0.1:{self.port}/memories?user_id={uid}", method="DELETE"), timeout=600).read()
                     self.sweep_users.add(uid)
                 except OSError:
-                    pass  # server busy or restarting; the next sweep tries again
+                    pass
 
     def _note(self, msg: str) -> None:
         with (self.dir / "supervisor.log").open("a", encoding="utf-8") as f:
@@ -272,14 +257,11 @@ class Shard:
 
 
 def unit_of(bench: str, name: str) -> str:
-    """The shard unit a predicted file belongs to: its LongMemEval question, or its BEAM conversation."""
     stem = re.sub(r"^_(ingestion|progress)_", "", name.removesuffix(".json"))
     return stem if BENCH[bench][0] == "lme" else "_".join(stem.split("_")[:2])
 
 
 def unmerge(bench: str, arm_dir: Path, units: list[set[str]]) -> int:
-    """On --resume after a merge: every merged file goes back to its shard, so each runner skips what it already did
-    and drop_retried_users can find its users. Without it a resumed sharded run would redo every question."""
     src = arm_dir / f"predicted_{bench}"
     owner = {u: k for k, us in enumerate(units) for u in us}
     moved = 0
@@ -297,7 +279,6 @@ def unmerge(bench: str, arm_dir: Path, units: list[set[str]]) -> int:
 
 
 def merge(bench: str, shards: list[Shard], arm_dir: Path) -> Path:
-    """The arm's predicted dir: every shard's files moved into one."""
     dest = arm_dir / f"predicted_{bench}"
     if len(shards) == 1 and shards[0].dir == arm_dir:
         return shards[0].pred
@@ -311,7 +292,6 @@ def merge(bench: str, shards: list[Shard], arm_dir: Path) -> Path:
 
 
 def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list[Path], started: float) -> dict:
-    """The retrieval check: every question file, no failed add or search, no failed ingestion. Written, never overridden."""
     problems = []
     files = {p.stem: p for p in pred.glob("*.json") if not p.name.startswith("_")}
     missing = [i for i in ids if i not in files]
@@ -336,7 +316,6 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
             failed_ingest.append(cp.name)
     if failed_ingest:
         problems.append(f"{len(failed_ingest)} ingestions had failed adds, e.g. {failed_ingest[0]}")
-    # only each runner's last launch: what an earlier, killed launch logged was redone from scratch for its users
     bad = [ln for lp in runner_logs for ln in re.split(r"[\r\n]+", last_launch(lp))
            if BAD_LOG.search(ln) and not SEARCH_RETRY.search(ln)]
     if bad:
@@ -351,13 +330,10 @@ def check(pred: Path, ids: list[str], runner_logs: list[Path], server_logs: list
             "seconds": round(time.time() - started, 1)}
 
 
-MMR_ROWS = 100  # src/domain/search/rerank.ts: MMR re-orders the first 100 rows, the cross-encoder the first 50
+MMR_ROWS = 100
 
 
 def same_shown(pred: Path, other: Path, ids: list[str]) -> list[str]:
-    """Dated notes 9: hippo-best must show hippo-emb's first 100 memories in any order, then its rows 101 to 200 in the
-    same order, which neither re-ranker touches, so another query or store shows there. Text and date, as ids are new
-    in every store. Returns the questions that differ."""
     def shown(d: Path, i: str) -> tuple:
         res = json.loads((d / f"{i}.json").read_text(encoding="utf-8"))["retrieval"]["search_results"]
         rows = [(r["memory"], r.get("created_at")) for r in res]

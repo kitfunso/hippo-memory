@@ -1,5 +1,3 @@
-// Write path: remember stores one memory after secret vetting and the one write screen (write-screen.ts).
-
 import type {
   ConnectorEvent,
   ConnectorWrite,
@@ -43,8 +41,6 @@ export interface RememberLocal {
   schemaFit?: number;
   traceOutcome?: TraceOutcome;
   sourceSessionId?: string | null;
-  /** A salience gate's start-weak verdict: the row starts at `strength`, and its half-life is
-   * multiplied by `halfLifeFactor`, never below one day. */
   weaken?: { readonly strength: number; readonly halfLifeFactor: number };
 }
 
@@ -54,28 +50,16 @@ export interface RememberOptions {
   scope?: string;
   owner?: string;
   artifactRef?: string;
-  /** The conversation text that led into `content`. It is trimmed, redacted and cut to its last
-   * MAX_LEAD_IN_CHARS characters, and the instruction check reads it with the content. */
   leadIn?: string;
   tags?: string[];
-  /** The caller's project: its name becomes the row's origin. Without it the store's fallback
-   * applies (NULL on a shared store). */
   project?: { readonly name: string; readonly aliases?: readonly string[] };
-  /** Store it in the caller's own personal scope, readable by its owner alone in every project;
-   * needs an owner on the actor and no `scope`. */
   personal?: boolean;
-  /** Never set from a request body: a route or tool that copied it would let a client pin a row
-   * or pick its layer and source. */
   local?: RememberLocal;
 }
 
 /** A connector's write of content an agent doesn't control. */
 export interface ConnectorRememberOptions extends RememberOptions {
-  /** The connector event this write answers. The store logs it in the memory's own transaction;
-   * an event logged before stores nothing and answers `duplicate`. */
   event?: ConnectorEvent;
-  /** The connector's own rule holds the write for review whatever the check finds, as GitHub
-   * does for an outside author. */
   hold?: { readonly reason: string };
 }
 
@@ -90,18 +74,11 @@ export interface RememberResult {
   id: string;
   kind: MemoryKind;
   tenantId: string;
-  /** The row as written, so a caller can show it without reading it back. */
   halfLifeDays: number;
   tags: string[];
-  /** Set when the write was held for review: connector content flagged or held by its connector's rule, or a
-   * member's shared write flagged on a store that reviews. */
   quarantined?: { reason: string };
-  /** Set only when the content held secret material, which was redacted before storing. */
   warnings?: string[];
-  /** Set only when the write's event was logged before: nothing was stored, so `id` names no
-   * row; `memoryId` is the id the first write logged. */
   duplicate?: { memoryId: string | null };
-  /** Set only when the salience gate started the row weakened. */
   startedWeak?: { reason: string; strength: number };
 }
 
@@ -110,14 +87,10 @@ export interface RememberSkipped {
   skipped: { reason: string; score: number };
 }
 
-/** The scope a write lands in: the caller's own personal scope when asked for, else the
- * client's, which may not be a personal or quarantine one and must be one the same actor could
- * read (a private scope needs its grant). */
 function rememberScope(ctx: Context, opts: RememberOptions, untrusted: boolean): string | null {
   if (!opts.personal) {
     assertClientScope(opts.scope);
     const scope = opts.scope ?? null;
-    // Only the quarantine step below stamps a quarantine scope, so no client request may name one.
     if (isQuarantineScope(scope) || (scope !== null && !canReadScope(ctx.actor, scope))) {
       throw new ScopeForbiddenError(scope!);
     }
@@ -136,15 +109,12 @@ function rememberScope(ctx: Context, opts: RememberOptions, untrusted: boolean):
   return own;
 }
 
-/** A row's owner is the person behind the caller's key; only an admin may write one for someone
- * else. */
 function assertOwnerIsCallers(ctx: Context, owner: string | undefined): void {
   if (owner === undefined || owner === ctx.actor.owner) return;
   if (ctx.actor.role === 'admin' || ctx.actor.hostAdmin) return;
   throw new ForbiddenError("owner must be the caller's own unless the caller is an admin");
 }
 
-/** The vetted row a remember writes and, for a held write, the review record that commits with it. */
 interface PreparedRemember {
   readonly entry: MemoryEntry;
   readonly quarantine: ConnectorWrite['quarantine'];
@@ -156,8 +126,6 @@ interface NormalizedLeadIn {
   readonly warnings: readonly string[];
 }
 
-/** Pure and idempotent: the gate and prepareRemember each call it and get one lead-in. It redacts
- * before it cuts, so a cut never leaves the tail of a secret. */
 function normalizeLeadIn(raw: string | null | undefined): NormalizedLeadIn {
   const trimmed = raw?.trim() ?? '';
   if (trimmed === '') return { leadIn: null, warnings: [] };
@@ -170,11 +138,9 @@ function normalizeLeadIn(raw: string | null | undefined): NormalizedLeadIn {
 
 function lastChars(text: string, count: number): string {
   const tail = text.slice(-count);
-  // A cut inside an emoji leaves a lone surrogate, which a stored string does not keep.
   return (/^[\uDC00-\uDFFF]/.test(tail) ? tail.slice(1) : tail).trim();
 }
 
-/** `screen.untrusted` marks connector content; `screen.holds` says the store writes a review record. */
 function prepareRemember(
   ctx: Context,
   opts: ConnectorRememberOptions,
@@ -187,7 +153,6 @@ function prepareRemember(
   const lead = normalizeLeadIn(opts.leadIn);
   const tags = opts.tags && withoutCaptureTags(opts.tags);
   const verdict = screenWrite(ctx.actor, {
-    // Recall shows the lead-in to an agent, so the check reads it with the content.
     text: { content: vetted.content, leadIn: lead.leadIn },
     tags,
     scope: requestedScope,
@@ -225,8 +190,6 @@ function prepareRemember(
   };
 }
 
-/** Aliases only widen what a reader matches; a row has one origin. A personal row's '' follows its
- * owner into every project. */
 function withOrigin(entry: MemoryEntry, opts: RememberOptions): MemoryEntry {
   const origin = opts.personal ? '' : opts.project?.name;
   return origin !== undefined ? { ...entry, originProject: origin } : entry;
@@ -259,20 +222,15 @@ function rememberResult(
   return result;
 }
 
-// The newest rows the gate compares against, whatever `recentWindow` says: a window below 1 once
-// meant the whole tenant, and a window past this reads more than a duplicate check needs.
 const MAX_SALIENCE_ROWS = 500;
 const WEAK_HALF_LIFE_FACTOR = 0.5;
 
-/** The gate's verdict on one write, or null where it does not judge: the store has it off, or
- * the write is pinned. */
 async function salienceVerdict(
   ctx: Context,
   opts: RememberOptions,
 ): Promise<SalienceResult | null> {
   const { salience } = ctx.config;
   if (!salience.enabled || opts.local?.pinned) return null;
-  // computeSalience compares against the last `recentWindow` rows only.
   const window = Math.trunc(salience.recentWindow);
   const rows =
     Number.isSafeInteger(window) && window >= 1
@@ -282,9 +240,7 @@ async function salienceVerdict(
     { tenantId: ctx.tenantId },
     { limit: rows, newest: true },
   );
-  // A held or rejected row is not a memory anyone can recall, so it is no duplicate of this write.
   const live = newest.entries.filter((e) => !isQuarantineScope(e.scope ?? null));
-  // The gate keys on the lead-in the row stores, so "Yes." under a new lead-in is not a copy.
   const leadIn = normalizeLeadIn(opts.leadIn).leadIn;
   const text = identityText({ content: opts.content, leadIn });
   return computeSalience(text, [...(opts.tags ?? [])], live.reverse(), {
@@ -307,7 +263,6 @@ export async function remember(
   ctx: Context,
   opts: RememberOptions | GatedRememberOptions,
 ): Promise<RememberResult | RememberSkipped> {
-  // First, so a refused write reads no salience rows and never reaches the screen or a review hold.
   if (!opts.personal) await admitProjectWrite(ctx, opts.project ?? null);
   const verdict =
     'salienceGate' in opts && opts.salienceGate ? await salienceVerdict(ctx, opts) : null;
@@ -329,8 +284,6 @@ export async function remember(
   return startedWeak ? { ...result, startedWeak } : result;
 }
 
-/** entryWrites writes the row and its one remember audit row under the caller's subject; a held row goes
- * through the reviewer, which commits its review record in the same transaction. */
 async function writeRemembered(
   ctx: ContextWith<never, ReviewGroup>,
   opts: RememberOptions,

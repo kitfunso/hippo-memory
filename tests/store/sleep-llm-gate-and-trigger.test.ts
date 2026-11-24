@@ -1,6 +1,3 @@
-// H3, H11, L2: sleep calls the LLM only when allowed and never with a secret in the
-// prompt, auto-sleep counts only what arrived since the last sleep, and remember
-// honours the configured half-life.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -103,7 +100,6 @@ describe('the sleep LLM gate', () => {
 
       const result = await consolidate(root, { fetcher });
 
-      // The failure stops the launches; calls already in flight, at most three, still land.
       expect(fetcher.mock.calls.length).toBeLessThanOrEqual(1 + 3);
       const details = detailLines(result).join('\n');
       expect(details).toMatch(/extraction: HTTP 401: .*authentication_error/);
@@ -124,7 +120,6 @@ describe('the sleep LLM gate', () => {
 
       const result = await consolidate(root, { fetcher });
 
-      // The pool launches four calls at once; the failure stops every launch after them.
       expect(fetcher.mock.calls.length).toBeLessThanOrEqual(4);
       const details = detailLines(result).join('\n');
       expect(details).toContain('HTTP 302: the endpoint answered a redirect (302)');
@@ -140,7 +135,6 @@ describe('the sleep LLM gate', () => {
 
       const result = await consolidate(root, { fetcher });
 
-      // Three attempts per candidate: the retry policy's own, and no candidate skipped.
       expect(fetcher).toHaveBeenCalledTimes(3 * TOPICS.length);
       expect(detailLines(result).join('\n')).not.toContain('candidates skipped');
     });
@@ -162,7 +156,6 @@ describe('the sleep LLM gate', () => {
     function trackedFetcher(failOrdinal: number | null) {
       vi.stubEnv('ANTHROPIC_API_KEY', 'test-not-a-key');
       const seen = { launched: 0, inFlight: 0, peak: 0 };
-      // The first CAP calls wait on a latch until all are in flight, so overlap never depends on timing; later calls pause 5 ms.
       let capFull!: () => void;
       const full = new Promise<void>((resolve) => {
         capFull = resolve;

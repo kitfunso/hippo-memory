@@ -44,23 +44,13 @@ import { userMessageItems, userMessageRef } from './user-messages.js';
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
   filePath?: string;
-  /** Explicit transcript path for `--last-session`. Without one, `stdinText` is used, then
-   * auto-discovery under `<claude config dir>/projects/` on a manual run. */
   transcriptPath?: string;
-  /** Read from stdin by the caller (cli.ts), which owns the bounded wait.
-   * `stdinTimedOut` marks an empty read "unknown", not "no payload". */
   stdinText?: string;
   stdinTimedOut?: boolean;
   sessionTurns?: readonly SessionTurn[];
-  /** HIPPO_CAPTURE_SCRIPTED: a scripted session's user turns are the person's. */
   scriptedIsHuman?: boolean;
-  /** The session the turns came from; without it a transcript's file name stands in. */
   sessionId?: string;
-  /** Save the messages the person typed too. Only a session-end worker sets it, and only for the
-   * folder's own store, so a scanned transcript or the global store never gets them. */
   saveMessages?: boolean;
-  /** False when `sessionTurns` is a later slice of the session (a turn capture), so its first user
-   * turn answers the agent. */
   fromStart?: boolean;
   /** Tee stdout/stderr to this log file while capture runs, so SessionEnd output (lost in TUI teardown) shows via
    *  `hippo last-sleep`.
@@ -68,13 +58,7 @@ export interface CaptureOptions {
   logFile?: string | null;
   dryRun: boolean;
   global: boolean;
-  /**
-   * The caller's tenant: the dedup read counts only its memories, except under `global`, which
-   * counts every tenant's.
-   */
   tenantId: string;
-  /** The session's project: rows are stamped with its id, and dedup reads its rows under either
-   * name. */
   originProject?: ProjectRef;
 }
 
@@ -84,19 +68,13 @@ export interface CaptureTarget {
   readonly root: string;
   readonly config: HippoConfig;
   readonly store: Pick<StoreGroups, 'captures' | 'folderFiles' | 'rejections'>;
-  /** Embeds each captured row, off the capture's path. */
   readonly embed: (entry: MemoryEntry) => void;
-  /** Picks the rules in the person's follow-up turns; without it capture reads word patterns only. */
   readonly llm?: Llm;
-  /** The model a customer-endpoint `llm` always calls, named in the usage line; unset for Anthropic's. */
   readonly llmModel?: string;
-  /** Why no `llm` came when the config asked for one; printed inside the capture's log. */
   readonly llmMissing?: string;
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
-  // Tee to a log file for the SessionEnd hook; APPEND, because `hippo sleep` runs first in that
-  // sequence and already wrote its header and body.
   const restoreStdio = options.logFile ? beginLogTee(options.logFile) : null;
   try {
     await runCaptureCore(target, options);
@@ -109,16 +87,12 @@ export async function runCapture(target: CaptureTarget, options: CaptureOptions)
   }
 }
 
-/** Append-mode tee: mirror every stdout/stderr chunk to `logFile` until the returned restore
- * function is called. */
 function beginLogTee(logFile: string): () => void {
   if (!writeLogBanner(logFile)) return () => {};
 
   return teeStdStreams(logFile);
 }
 
-/** Creates the log's folder and appends the banner line; false, after a warning, when the log
- * cannot be written. */
 function writeLogBanner(logFile: string): boolean {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
@@ -134,7 +108,6 @@ function writeLogBanner(logFile: string): boolean {
   return true;
 }
 
-// Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
     await target.store.folderFiles.ensure();
@@ -143,7 +116,6 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
         `Run \`hippo init\` first.`,
     );
-    // Set, not exit, so runCapture's finally restores the tee'd stdio.
     process.exitCode = 1;
     return;
   }
@@ -157,14 +129,11 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  // Scrub the texts and again each item: bold removal can rebuild an address or key the first
-  // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
   const dedup = await captureDedup(target.store.folderFiles, options);
   const rules = await modelRules(target, dedup, followUps);
   const patterned = extractFromTexts(scrubbed, userTexts, firstFollowUp);
-  // A message dedupes only against messages, so a rule it states is kept as a rule too.
   const keepsMessages = options.saveMessages === true && target.config.capture.userMessages;
   const messages = keepsMessages ? userMessageItems(turns, scrub) : [];
   const extracted = [
@@ -184,7 +153,6 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
 const warnLine: LineLog = (line, opts) => log.warn(line, opts?.fields);
 
-/** The rules the model finds in the person's later turns, when the target has one. */
 async function modelRules(
   { llm, llmModel, llmMissing }: CaptureTarget,
   { ruleProject = [] }: CaptureDedup,
@@ -194,7 +162,6 @@ async function modelRules(
     if (llmMissing) warnLine(llmMissing);
     return [];
   }
-  // A rule with no project to belong to would pin into every project.
   if (ruleProject.length === 0) return [];
   const { rules, usage } = await followUpRules(followUps, llm, warnLine);
   if (usage) console.log(usageLine(usage, llmModel));
@@ -236,8 +203,6 @@ export function scrubbedItems(
   return oncePerText(items.map((item) => ({ ...item, content: scrub(item.content) })));
 }
 
-/** A message is the transcript and an item is what capture made of it, so each dedupes in its own
- * lane: the same text can be both, and a held message never stops a rule. */
 function laneKey(item: { readonly content: string; readonly tags?: readonly string[] }): string {
   const key = duplicateKey(item.content);
   return isUserMessage(item) ? `${USER_MESSAGE_TAG}\n${key}` : key;
@@ -277,36 +242,28 @@ function twinKeys(rows: readonly HeldText[], twins: readonly BoldTwin[]): string
     .map((twin) => duplicateKey(twin.clean));
 }
 
-/** The held keys, and those that also stop a stated rule. */
 interface HeldKeys {
   readonly keys: Set<string>;
   readonly ruleKeys: ReadonlySet<string>;
 }
 
-// Dedup only against rows this capture's reader sees: another tenant's or project's rows are
-// hidden, so they must not stop its own copy.
 async function storedKeysInView(
   store: Pick<StoreGroups, 'captures'>,
   { tenantId, project, everyScope, ruleProject = [] }: CaptureDedup,
   extracted: readonly ExtractedItem[],
   twins: readonly BoldTwin[],
 ): Promise<HeldKeys> {
-  // The lookup matches stored text exactly, so it also asks for the lines as capture once stored them.
   const texts = [...extracted.map((item) => item.content), ...twins.map((twin) => twin.old)];
   const rows = await store.captures.textsHolding(tenantId, texts, { project, everyScope });
   return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins, ruleProject) };
 }
 
-/** The rows a capture's dedup reads, as data, so the store's write can read them again in its
- * own transaction, and the project a stated rule is written for. */
 async function captureDedup(
   folderFiles: StoreGroups['folderFiles'],
   options: CaptureOptions,
 ): Promise<CaptureDedup> {
   const tenantId = options.global ? ALL_TENANTS : options.tenantId;
   const origin = options.originProject;
-  // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and
-  // user-global rows.
   if (origin !== undefined && projectId(origin) !== '') {
     const names = projectNames(origin);
     return { tenantId, everyScope: true, project: names, ruleProject: names };
@@ -315,8 +272,6 @@ async function captureDedup(
   return { tenantId, everyScope: true, ruleProject };
 }
 
-/** The names of the project the store stamps on a row that names none: none for a shared or a
- * user-global store. */
 async function stampedProject(folderFiles: StoreGroups['folderFiles']): Promise<readonly string[]> {
   const { shared, project } = await folderFiles.home();
   return shared || projectId(project) === '' ? [] : projectNames(project);
@@ -335,20 +290,14 @@ function printCaptureTally(
   );
 }
 
-/** A capture's raw texts, the person's first: user turns before `firstFollowUp` are the request,
- * the rest answer the agent. `followUps` holds those later turns whole, for the model. */
 interface CaptureTexts {
   readonly texts: string[];
   readonly userTexts: number;
   readonly firstFollowUp?: number;
   readonly followUps: string[];
-  /** Every turn of the session or slice, for the messages the person typed. */
   readonly turns: readonly SessionTurn[];
 }
 
-/** The raw texts for the chosen source, one per session turn, the person's turns first; null after printing why a
- *  last-session capture has nothing.
- *  Only a session says who spoke, so a piped or file capture counts no user texts. */
 function readCaptureTexts(options: CaptureOptions): CaptureTexts | null {
   switch (options.source) {
     case 'stdin': {
@@ -403,7 +352,6 @@ function readSessionTexts(options: CaptureOptions): CaptureTexts | null {
     console.log('Transcript had no user/assistant messages to summarise.');
     return null;
   }
-  // The first user turn is the request; a tail that cut it off, or a later slice, holds only replies.
   const userTurns = turns.filter((t) => t.role === 'user').map((t) => t.text);
   const opener = options.fromStart !== false && users.length === userTurns.length ? 1 : 0;
   return {
@@ -427,13 +375,9 @@ export interface CaptureWriteOptions {
   readonly tenantId: string | undefined;
   readonly originProject: ProjectRef | undefined;
   readonly sessionId?: string;
-  /** The audit actor; the CLI's own writes leave it out and audit as `cli`. */
   readonly actor?: string;
-  /** No stats and no embedding, since embedding runs a model in a server process. */
   readonly lean: boolean;
-  /** The rows the dedup read; the store's write reads them again before it writes. */
   readonly dedup: CaptureDedup;
-  /** The instant each captured memory is stamped with. */
   readonly now: Date;
 }
 
@@ -445,16 +389,12 @@ export interface ConfiguredStore {
   readonly embed: (entry: MemoryEntry) => void;
 }
 
-/** The entries to write, and per item the entry whose outcome it takes, or -1 for a text the
- * store already holds. */
 interface CapturePlan {
   readonly entries: MemoryEntry[];
   readonly keys: string[];
   readonly slots: number[];
 }
 
-/** One entry per new text: building can throw, so a held text or a repeat within the batch is
- * never built. */
 function planCapture(
   extracted: readonly ExtractedItem[],
   isHeld: (item: ExtractedItem, key: string) => boolean,
@@ -475,7 +415,6 @@ function planCapture(
   return plan;
 }
 
-/** Whether a held text stops `item`: any copy stops a note, only a `ruleKeys` copy a stated rule. */
 function heldCheck(
   keys: ReadonlySet<string>,
   ruleKeys: ReadonlySet<string>,
@@ -517,8 +456,6 @@ interface PreviewStore {
   readonly config: Pick<HippoConfig, 'defaultHalfLifeDays'>;
 }
 
-/** A dry run asks the store the same rejected-value question the write's gate does, so a
- * tombstoned item previews as rejected rather than captured. */
 async function previewCapture(
   { store: { rejections }, config }: PreviewStore,
   options: CaptureWriteOptions,
@@ -559,9 +496,6 @@ function captureEntry(
   baseHalfLifeDays: number,
 ): MemoryEntry {
   if (isUserMessage(item)) return userMessageEntry(item, options, baseHalfLifeDays);
-  // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
-  // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
-  // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
   // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
   // outgrow the hook budget. The from-user tag marks the same pin as the person's rule for the hooks.
   const stated = isStatedRule(item);
@@ -583,8 +517,6 @@ function captureEntry(
   return { ...created, originProject: projectId(options.originProject) };
 }
 
-/** A message the person typed is raw transcript, so it is stored as written (MEMORY_ENVELOPE.md)
- * with its owner and source. */
 function userMessageEntry(
   item: ExtractedItem,
   options: CaptureWriteOptions,

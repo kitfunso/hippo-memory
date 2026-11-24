@@ -1,11 +1,9 @@
-// Z0 arms (docs/evals/2026-09-29-z0-built-in-memory-prereg.md, "Arms"): settings, environment, PATH and the hippo shims.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, STRIP_ENV, pathKey } from './exec.mjs';
 
 export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
 export const ARMS = ['A0', 'A1', 'A2', 'A4', 'A5', ...X_ARMS];
-// Prereg "Seeds": A0's, A4's and X4's gates need a large effect, so they run two.
 export const ARM_SEEDS = { A0: 2, A1: 3, A2: 3, A4: 2, A5: 3, X1: 3, X2: 3, X3: 3, X4: 2 };
 const NO_AUTO_MEMORY = new Set(['A0', 'A4']);
 export const HIPPO_ARMS = new Set(['A2', 'A5', 'X2']);
@@ -14,7 +12,6 @@ export const CARRY_ARMS = new Set(['A1', 'A2', 'A5', ...X_ARMS]);
 export const armSet = (arm) => (X_ARMS.includes(arm) ? 'X' : 'RN');
 export const TOKEN_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
-// PostToolUse holds `hippo note-written`, which imports the notes a session writes: a capture hook too.
 const CAPTURE_EVENTS = ['SessionEnd', 'PreCompact', 'PostCompact', 'PostToolUseFailure', 'PostToolUse'];
 // OPENAI_: an operator API key would turn a plan-login Codex session into a paid one.
 const STRIP_PREFIXES = ['ANTHROPIC_', 'CLAUDE_', 'AWS_', 'CODEX_', 'HIPPO_', 'OPENAI_'];
@@ -22,13 +19,11 @@ const STRIP_EXACT = new Set(['CLAUDECODE', ...STRIP_ENV].map((k) => k.toUpperCas
 const LAUNCHERS = ['hippo', 'hippo.cmd', 'hippo.ps1', 'hippo.exe', 'hippo.bat'];
 const REQUIRED_TOOLS = ['node', 'npm', 'npx', 'git'];
 const SHAM_COMMANDS = ['remember', 'capture', 'learn', 'outcome'];
-// The keys armEnv sets itself: a --pass-env copy would silently override the arm (and a second PATH key on Windows).
 const RUNNER_KEYS = ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME', 'CLAUDE_CODE_DISABLE_AUTO_MEMORY', 'HIPPO_AGENT_MEMORY_TOOLS', 'HIPPO_CAPTURE_SCRIPTED', 'DISABLE_AUTOUPDATER', 'EVAL_SEED', TOKEN_KEY, 'PATH'];
 
 /** The `--settings` file for an arm; `hippoSettings` is what hippo's installer writes for Claude Code. */
 export function armSettings(arm, hippoSettings) {
   if (NO_AUTO_MEMORY.has(arm)) return { autoMemoryEnabled: false };
-  // Each X arm's Claude teach is the A arm it copies: X2 is A2, the rest are A1.
   if (arm === 'A1' || arm === 'X1' || arm === 'X3' || arm === 'X4') return {};
   if (arm === 'A2' || arm === 'X2') return hippoSettings;
   if (arm === 'A5') {
@@ -66,7 +61,6 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
   env.HIPPO_HOME = dirs.hippoHome;
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = NO_AUTO_MEMORY.has(arm) ? '1' : '0';
   env.HIPPO_AGENT_MEMORY_TOOLS = 'claude-code,codex';
-  // The teach turn is a scripted `claude -p` resume playing the person, so capture must read it.
   env.HIPPO_CAPTURE_SCRIPTED = '1';
   env.DISABLE_AUTOUPDATER = '1';
   env.EVAL_SEED = String(dirs.seed);
@@ -84,7 +78,6 @@ export function armEnv(arm, dirs, baseEnv, { passEnv = [] } = {}) {
 export function childEnv(env, { keepBin = false } = {}) {
   const out = Object.fromEntries(Object.entries(env).filter(([k]) => k.toUpperCase() !== TOKEN_KEY));
   if (!keepBin && out.CLAUDE_CONFIG_DIR) {
-    // The run's bin/ is its config dir's sibling, so it is found without a second argument.
     const bin = path.join(path.dirname(out.CLAUDE_CONFIG_DIR), 'bin');
     const key = pathKey(out);
     out[key] = (out[key] ?? '').split(path.delimiter).filter((e) => e !== bin).join(path.delimiter);
@@ -95,10 +88,8 @@ export function childEnv(env, { keepBin = false } = {}) {
 /** A `hippo` on PATH that runs this checkout; `sham` turns the capture commands into silent no-ops (A5). */
 export function writeHippoShim(binDir, fakeHome, mode) {
   if (mode !== 'real' && mode !== 'sham') throw new Error(`unknown shim mode ${mode}`);
-  // A fake HOME keeps hippo off the operator's ~/.claude (MEMORY.md import, capture scans, hook installs).
   fs.mkdirSync(binDir, { recursive: true });
   fs.mkdirSync(fakeHome, { recursive: true });
-  // Only the prereg's capture commands are sham; note, customer-note, sleep and import stay real.
   const shCase = mode === 'sham' ? `case "$1" in ${SHAM_COMMANDS.join('|')}) exit 0;; esac\n` : '';
   const cmdIfs = mode === 'sham' ? SHAM_COMMANDS.map((c) => `@if /i "%~1"=="${c}" exit /b 0\r\n`).join('') : '';
   fs.writeFileSync(path.join(binDir, 'hippo'), `#!/bin/sh\n${shCase}export HOME="${fakeHome}" USERPROFILE="${fakeHome}"\nexec "${process.execPath}" "${HIPPO_JS}" "$@"\n`, { mode: 0o755 });

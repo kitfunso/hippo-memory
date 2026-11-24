@@ -12,7 +12,6 @@ export async function refineOne(
   sources: readonly MemoryEntry[],
   opts: { llm: Llm },
 ): Promise<string | null> {
-  // The label keeps "refine" out of the path, since tests filter stderr on that word.
   const root = makeRoot('consolidated');
   const entry = {
     ...createMemory(`[Consolidated from ${sources.length} related memories]\n\n${merged}`, { layer: Layer.Semantic }),

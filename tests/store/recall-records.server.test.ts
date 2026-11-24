@@ -1,6 +1,3 @@
-// What a recall records once it has ranked, on HTTP (GET /v1/memories) and the CLI (`hippo recall`): the audit rows,
-// the recalled counter, the trace, the token ledger row, the stats mirror and the session ring.
-
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,7 +28,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { recallAuditOps, recallWrites } from '../_helpers/recall-rows.js';
 import { createCallerState, type CallerState } from '../../src/api/callers.js';
 
-// Each case is one process, so its CLI commands share one CallerState.
 let callers: CallerState;
 
 beforeEach(() => {
@@ -49,7 +45,6 @@ interface RecallCall {
   cli?: CliFlags;
 }
 
-/** What the caller got back: the HTTP status, header and body, or the CLI exit status and streams; `hint` is the memory it anchored on. */
 interface Reply {
   status: number;
   cacheControl: string | null;
@@ -101,7 +96,6 @@ async function viaCli(s: Store, c: RecallCall): Promise<Reply> {
   };
 }
 
-/** The calls in order on one surface; HTTP keeps one server up for all of them, as a long-lived client sees it. */
 async function recallOn(
   surface: Surface,
   s: Store,
@@ -121,12 +115,10 @@ async function recallOn(
   }
 }
 
-/** Every row a recall writes plus the stats.json mirror the counter bump rewrites. */
 function recorded(s: Store) {
   return { ...rowsOf(s.root), mirror: statsMirror(s.root) };
 }
 
-/** The rows a test asserts: audit ops, writes, and the recalled count the stats mirror holds, or null with no mirror. */
 function summarised(s: Store) {
   const mirror = statsMirror(s.root);
   // SAFETY: stats.json is the object writeStatsMirror serialises, total_recalled among its keys.
@@ -159,7 +151,6 @@ const CLI_LOCAL = [
   'mem_p_scoped',
   'mem_p_new',
 ];
-/** Each row shown `times` times; the goal row starts the seed at 3. */
 const bumped = (shown: readonly string[], times: number, goal: number) => ({
   ...Object.fromEntries(shown.map((id) => [id, times])),
   mem_p_goal: goal,
@@ -189,7 +180,6 @@ function refuseRecallAudit(root: string, on: boolean): void {
   }
 }
 
-/** The continuity a recall can return: a live snapshot, its handoff and one session event. */
 async function seedContinuity(root: string): Promise<void> {
   saveActiveTaskSnapshot(root, TENANT, {
     task: 'ship the eu cluster',
@@ -206,7 +196,6 @@ async function seedContinuity(root: string): Promise<void> {
   await appendSessionEvent(root, TENANT, { sessionId: SESSION, eventType: 'note', content: 'canary passed' });
 }
 
-/** A store with no memory in it and no global store beside it. */
 function emptyStore(): Store {
   const home = makeRoot('records-empty', { init: false });
   const root = join(home, 'store');
@@ -215,7 +204,6 @@ function emptyStore(): Store {
   return { home, root, globalRoot: join(home, 'global'), goalId: 'no-goal' };
 }
 
-/** Runs `fn` with the store's folder as the working folder, so nothing resolves a store from the repo checkout. */
 async function onStore<T>(s: Store, fn: (s: Store) => Promise<T>): Promise<T> {
   process.chdir(s.home);
   try {
@@ -263,7 +251,6 @@ describe('what a recall records, HTTP and CLI', () => {
       event: 'inject',
     });
     expect(got.recalled).toBe(got.ledger[0]!.items);
-    // 12 local deploy rows are neither superseded nor private; HTTP caps them at its limit of 10, the CLI adds the global row.
     expect(got.recalled).toBe(surface === 'http' ? 10 : 13);
     expect(got.rows).toEqual(
       surface === 'http'
@@ -298,7 +285,6 @@ describe('what a recall records, HTTP and CLI', () => {
     });
     expect(got.replies.map((r) => r.hint === null)).toEqual([true, false]);
     expect(got.ledger).toHaveLength(2);
-    // HTTP books the recall's session; the CLI books the host agent's, and none is set here.
     expect(got.ledger.map((row) => row.session_id)).toEqual(surface === 'http' ? [SESSION, SESSION] : [null, null]);
     expect(got.recalled).toBe(got.ledger[0]!.items + got.ledger[1]!.items);
     const { ranked, ...rows } = got.rows;
@@ -323,7 +309,6 @@ describe('what a recall records, HTTP and CLI', () => {
     expect(String(got.replies[1]!.body)).toMatch(
       /^\[anchored_on: mem_p_global\] Same query phrasing as a recent recall returned the same top result \(mem_p_global\); you may be re-asking the same question\.\n\nFound 13 memories/,
     );
-    // The goal row leads the local rows once the session's goal boosts it, on both recalls.
     expect([ranked.slice(0, 2), ranked.slice(13, 15)]).toEqual([
       ['mem_p_global', 'mem_p_goal'],
       ['mem_p_global', 'mem_p_goal'],
@@ -366,18 +351,15 @@ describe('what a recall records, HTTP and CLI', () => {
       const [reply] = await recallOn(surface, s, [
         { query: 'deploy', http: { include_continuity: 'true' }, cli: { continuity: true } },
       ]);
-      // Priced before the times in the printed block are normalized; console.log adds the one newline the estimate leaves out.
       const printed = surface === 'cli' ? estimateTokens(String(reply!.body).replace(/\n$/, '')) : null;
       return { reply, printed, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
     });
     expect(got.ledger).toHaveLength(1);
-    // Continuity changes what is printed, never which rows a recall writes.
     const { audit, recalled, traces, ranked, mirrored } = got.rows;
     if (surface === 'http') {
       // SAFETY: a 200 from /v1/memories is a serialised RecallResult.
       const body = got.reply!.body as RecallResult;
       expect(got.reply!.cacheControl).toBe('no-store');
-      // Snapshot 5 + 4 + 4, handoff 6 + 3, event 4, each at Math.ceil(len/4).
       expect(body.continuityTokens).toBe(26);
       expect(got.ledger[0]).toMatchObject({
         surface: 'http_recall',
@@ -396,7 +378,6 @@ describe('what a recall records, HTTP and CLI', () => {
       });
       return;
     }
-    // The CLI books the block it printed.
     expect(got.ledger[0]).toMatchObject({ surface: 'recall', tokens: got.printed });
     const printed = String(got.reply!.body);
     expect(printed).toMatch(/^## Active Task Snapshot\n\n- Task: ship the eu cluster\n- Status: active\n/);
@@ -432,10 +413,8 @@ describe('what a recall records, HTTP and CLI', () => {
       return { failed, before, after, laterHints: later.map((r) => r.hint) };
     });
     expect(got.failed!.status).toBe(surface === 'http' ? 400 : 1);
-    // The CLI's ranking stages ran before the bad flag stopped it, so the goal log rows they earned stay; HTTP wrote nothing at all.
     if (surface === 'http') expect(got.after).toEqual(got.before);
     expect({ ...got.after, goalRecallLog: [] }).toEqual({ ...got.before, goalRecallLog: [] });
-    // Had the failed call reached the ring, the first good recall would read as a repeat.
     expect(got.laterHints[0]).toBeNull();
     expect(got.laterHints[1]).toBe(surface === 'http' ? 'mem_p_pinned' : 'mem_p_global');
     expect([got.failed!.body, got.failed!.stderr]).toEqual(
@@ -497,7 +476,6 @@ describe('what a recall records, HTTP and CLI', () => {
 
   it.each(SURFACES)('%s: a recall that finds nothing', async (surface) => {
     const got = await onStore(emptyStore(), async (s) => {
-      // Removed first, so the file is back only if this recall went to the stats write.
       rmSync(join(s.root, 'stats.json'), { force: true });
       const [reply] = await recallOn(surface, s, [{ query: 'deploy' }]);
       return { reply, rows: summarised(s), ledger: ledgerOf(s), recalled: totalRecalled(s) };
@@ -505,7 +483,6 @@ describe('what a recall records, HTTP and CLI', () => {
     expect(got.recalled).toBe(0);
     expect(got.ledger).toHaveLength(1);
     expect(got.ledger[0]!.items).toBe(0);
-    // HTTP sends an empty count to the stats write, which rewrites the mirror; the CLI skips the write for an empty list.
     expect(got.rows.mirrored).toBe(surface === 'cli' ? null : 0);
     const actor = surface === 'http' ? 'localhost:cli' : 'cli';
     expect(got.rows.audit).toEqual([`${actor} recall_anchor_skipped_no_session`, `${actor} recall 0`]);

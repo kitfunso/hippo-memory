@@ -1,5 +1,3 @@
-// `hippo session`: log, show, complete and resume one agent session.
-
 import { continuityLatest } from '../../api/continuity/continuity.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import {
@@ -20,7 +18,6 @@ import {
 import { fail } from './exit.js';
 import { SESSION_EVENT_LIMIT } from '../../base/util/limits.js';
 
-/** The flags every `hippo session` subcommand reads up front. */
 interface SessionArgs {
   readonly sessionId: string;
   readonly task: string;

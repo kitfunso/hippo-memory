@@ -1,5 +1,3 @@
-// Object lists and the session-digest read run off the v56 indexes: no table scan and no sort step.
-
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -55,7 +53,6 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** The SQL the store really prepares for one call, picked out by a fragment only that statement holds. */
 async function preparedSql(fn: () => void | Promise<void>, fragment: string): Promise<string> {
   const { statements } = await recordStatementsAsync(async () => {
     await fn();
@@ -151,7 +148,6 @@ describe('object list query plan', () => {
   });
 });
 
-// The filter the session digest reads its injected digests with.
 const DIGESTS = { tenantId: 'default', source: 'session-digest', tag: 'session-digest', live: true } as const;
 
 describe('session digest read plan', () => {

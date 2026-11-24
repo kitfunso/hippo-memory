@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Z0 sizing, part 2 of 2 (stage 2 step S5, D6): reads calibration records, estimates the spreads and not-applicable rates,
- * searches a repositories-by-families grid for the sizes prereg 209-215 asks for, and prices sessions and days of plan usage.
- * Writes JSON to stdout, or to --out with a one-line summary per effect on stdout. Exit 0 on a report, 1 on bad input. */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -82,14 +79,11 @@ export function parseArgs(argv) {
   return args;
 }
 
-/** Share of the arm pair's apply lessons marked not applicable on the first attempt. */
 function naRate(s, armT, armC, keep) {
   const lessons = s.filter((r) => (r.arm === armT || r.arm === armC) && r.kind === 'apply' && keep(r)).flatMap((r) => r.lessons);
   return lessons.length === 0 ? 0 : lessons.filter((l) => l.first === 'na').length / lessons.length;
 }
 
-/** H1 or H2 spreads per coding. The effect is defined on applicable checks, and `violation` counts na as a fail
- * in both arms, so it carries (1 - na rate) of the effect; `loss` is the share of units a coding drops. */
 function repeatCalibration(s, armT, armC, keep, bound) {
   const na = naRate(s, armT, armC, keep);
   const per = byCoding((coding) => {
@@ -105,7 +99,6 @@ function repeatCalibration(s, armT, armC, keep, bound) {
 
 const sdOf = (xs) => Math.sqrt(xs.length < 2 ? 0 : sum(xs.map((x) => (x - mean(xs)) ** 2)) / (xs.length - 1));
 
-/** Spread of log(A2 cost / A1 cost) by family, sequence and residual, and of the control's log cost, which weights the ratio. */
 function ratioCalibration(units, bound) {
   const priced = units.filter((u) => u.t.cost > 0 && u.c.cost > 0);
   const components = spreadComponents(priced.map((u) => ({ repo: u.repo, family: u.family, seed: u.seed, value: Math.log(u.t.cost / u.c.cost) })), bound);
@@ -114,8 +107,6 @@ function ratioCalibration(units, bound) {
   return { components, controlSd, sim: { family: components.family, sequence: components.sequence, noise: components.noise, controlSd } };
 }
 
-/** Set N's spreads plus its resolve pairs. A true zero makes the two discordant cells equal, so each gets half the discordant
- * share, taken at its exact one-sided upper bound at `bound` (few pairs barely estimate it). */
 function harmCalibration(units, bound) {
   const cost = ratioCalibration(units, bound);
   if (cost.sim === undefined) return { reason: 'needs set N pairs in a repository with 2 tasks and 2 seeds' };
@@ -224,7 +215,6 @@ const seedsFor = (h1, h2) => (arm) => {
   return RULE_ARMS.H1.includes(arm) ? h1 : RULE_ARMS.H2.includes(arm) ? h2 : SEEDS;
 };
 
-/** One grid row: each hypothesis's smallest size at this many repositories, the sets they imply, and their usage. */
 function gridRow(ctx, repos, m) {
   const { searches, layout, arms, table, quota } = ctx;
   const [h1, h2, h4] = [searches.H1?.(repos, m), searches.H2?.(repos, m), searches.H4?.(repos)];
@@ -247,8 +237,6 @@ function gridRow(ctx, repos, m) {
   };
 }
 
-/** Rows that fit, those that pass at the bounds first, then the smallest set R families, set X families, and fewer repositories
- * (prereg 209: K is the smallest that passes). Seeds cannot shrink the family term, so a row that passes only at the estimates is the fallback. */
 function choose(rows) {
   const fit = rows.filter((r) => r.fits);
   fit.sort((a, b) => Number(b.boundsPass) - Number(a.boundsPass) || a.setR.families - b.setR.families || a.setX.families - b.setX.families || a.repos - b.repos);
@@ -270,7 +258,6 @@ function searchesOf(cal, layout, opts) {
     H1: cal.H1.simUpper ? repeatSizer(cal.H1.simUpper, full, 'H1 bounds') : null,
     H2: cal.H2.simUpper && layout.X ? repeatSizer(cal.H2.simUpper, full, 'H2 bounds') : null,
   };
-  // Every bisection step at the full sim count re-simulates the design, so a cheap one finds the size and the full count confirms it.
   const search = (h, evaluate, passes, cap) => {
     const found = smallestPassing((n) => evaluate(sizers[0][h], n), passes, cap);
     return stages.length === 1 ? found : confirmSize((n) => evaluate(sizers[1][h], n), passes, cap, found.n);
@@ -294,7 +281,6 @@ function searchesOf(cal, layout, opts) {
   };
 }
 
-/** The level of H1's test, and H2's when sized, at the chosen design: `held: false` stops the freeze. */
 function levelOf(cal, chosen, m, opts) {
   const check = (h, families) => levelCheck(cal[h].sim, cal[h].simUpper, { repos: chosen.repos, families }, m,
     { sims: opts.levelSims, seed: opts.seed, cap: opts.seedCap, targetZ: opts.targetZ, label: h });

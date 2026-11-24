@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Paired comparison of two E1 arms at the final epoch (docs/evals/2026-09-23-mechanism-audit-prereg.md).
-// Usage: node scripts/e1-lifecycle/compare.mjs --a <dir>:<arm> --b <dir>:<arm> [--seeds 21-40] [--boot 10000]
-// CIs follow June's analyze.mjs: resample seeds, then probes within each seed, one mulberry32(1) stream per row.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { mulberry32 } from '../lib/prng.mjs';
@@ -46,7 +43,6 @@ function load(spec) {
 const quantile = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)))];
 const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
 
-// bySeed[i] holds one array of paired per-probe diffs per group; stat turns the group means into the reported number.
 function boot(bySeed, stat) {
   const rand = mulberry32(1);
   const n = bySeed.length;
@@ -72,7 +68,6 @@ A.forEach((a, i) => {
   if (a.hash !== Bf[i].hash) throw new Error(`seed ${seeds[i]}: protocolHash differs between arms`);
 });
 
-// Per seed: arm means and paired diffs over the endpoint's eligible rows, cross-checked against the stored aggregate.
 function seedRows(ep) {
   const { elig, val } = ENDPOINTS[ep];
   const out = [];
@@ -107,9 +102,6 @@ for (const ep of Object.keys(ENDPOINTS)) {
   console.log(`${ep} | ${mean(rs.map((r) => r.a)).toFixed(3)} | ${mean(rs.map((r) => r.b)).toFixed(3)} | ${pp(delta)} | ${ci(band)} | ${rs.length}`);
 }
 
-// s*: the share of queries exposed to an intruder (a superseded or a demoted memory) at which A and B
-// tie on current-without-intruder@5; A wins below it. The composite is linear in the share, so
-// s* = dRest / (dRest - dExposed) when the signs differ.
 const sStarOf = (dExposed, dRest) => (dRest <= 0 ? 0 : dExposed >= 0 ? 1 : dRest / (dRest - dExposed));
 for (const [name, exposedEp, restEp, count] of [
   ['superseded', 'cleanStaleR5', 'nonStaleR5', 'staleEligible'],

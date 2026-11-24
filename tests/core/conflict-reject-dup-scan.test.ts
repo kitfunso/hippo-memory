@@ -1,4 +1,3 @@
-// Rejecting a conflict loser's value streams the tenant's rows instead of holding them all, and removes the same duplicates.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -20,7 +19,6 @@ const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; all() takes SQL params and returns the row array.
 const { StatementSync } = require('node:sqlite') as { StatementSync: { prototype: StatementProto } };
 
-/** The duplicate scan: every other row of the loser's tenant. */
 const DUP_SCAN = 'SELECT id, kind, content, lead_in, scope FROM memories WHERE tenant_id = ?';
 const LOSER = 'Use && to chain commands in PowerShell';
 
@@ -41,7 +39,6 @@ interface RejectedLoser {
   resolve: () => Promise<ResolveMemoryConflictResult>;
 }
 
-/** SQL of every statement whose rows `fn` took as one array, until `fn` settles. */
 async function arrayReads<T>(fn: () => Promise<T>): Promise<ArrayReads<T>> {
   const sql: string[] = [];
   const all = StatementSync.prototype.all;
@@ -86,7 +83,6 @@ function removedIds(): string[] {
   }
 }
 
-/** Ids moved to raw_archive: an archived raw row leaves the memories table. */
 function archivedRawIds(): string[] {
   const db = openHippoDb(root);
   try {

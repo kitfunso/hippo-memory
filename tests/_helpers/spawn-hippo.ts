@@ -1,14 +1,11 @@
-// One place that spawns bin/hippo.js for tests, so a test file states its cwd, env and input and nothing else.
 import { execFileSync, spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { HIPPO_BIN } from './hippo-bin.js';
 
 export interface HippoSpawnOptions {
   readonly cwd?: string;
-  /** The full child env: the caller composes it, so a test that must drop PATH or HOME keys can. */
   readonly env?: NodeJS.ProcessEnv;
   readonly input?: string;
   readonly timeout?: number;
-  /** Node binary to run; a test that wants the PATH one passes 'node'. */
   readonly exe?: string;
 }
 

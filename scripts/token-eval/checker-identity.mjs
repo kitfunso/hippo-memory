@@ -1,4 +1,3 @@
-// Z0 checker identity: the bytes of every file a lesson checker loads, so a changed helper reads as a changed checker.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -24,7 +23,6 @@ const lineError = (sf, pos, text) => new Error(`checker ${path.basename(sf.fileN
 
 let typescript;
 
-// Loaded on the first call, so a script that only imports this file does not pay for the parser.
 function parser() {
   if (typescript) return typescript;
   let ts;
@@ -56,7 +54,6 @@ function parse(ts, file, text, asModule) {
   throw lineError(sf, bad.start, `the harness cannot parse this file as ${way}, so it could miss an import (${ts.flattenDiagnosticMessageText(bad.messageText, ' ')})${both}`);
 }
 
-/** Whether a node loads a module by call: import(), import.source(), require(), (require)() or new require(). */
 function isLoadCall(ts, n) {
   if (!ts.isCallExpression(n) && !ts.isNewExpression(n)) return false;
   let callee = n.expression;
@@ -70,7 +67,6 @@ const isHtmlComment = (ts, sf, n) => ts.isBinaryExpression(n) && n.operatorToken
 // node has no types, so a type in the tree means the parser took a path node does not; a bare "extends X" is the one type-kind node plain JavaScript has.
 const isType = (ts, n) => ts.isTypeNode(n) && !(ts.isExpressionWithTypeArguments(n) && !n.typeArguments);
 
-/** Every module specifier in the tree; a specifier that is not a plain string stops the load. */
 function specifiers(ts, sf, asModule) {
   const found = [];
   const plain = (n, arg) => {
@@ -92,7 +88,6 @@ function specifiers(ts, sf, asModule) {
   return found;
 }
 
-/** The local specifiers of one code file; packages and node: stay outside, and a path that cannot be hashed stops the load. */
 function localImports(file, text) {
   const ts = parser();
   const specs = new Set();
@@ -109,7 +104,6 @@ function localImports(file, text) {
   });
 }
 
-/** The real path and bytes a local specifier names; any failure tells the author how to write the import. */
 function follow(from, spec) {
   const who = `checker ${path.basename(from)} imports "${spec}"`;
   if (URL_SYNTAX.test(spec)) throw new Error(`${who}, which holds a backslash, %, ?, #, a control character or a trailing space; ${OWN_NAME}`);

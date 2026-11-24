@@ -10,7 +10,6 @@ export interface SlackHistoryPage {
 
 export type SlackHistoryFetcher = (args: {
   channelId: string;
-  /** Slack's opaque pagination token. Null on first page of a backfill run. */
   cursor: string | null;
   /** Incremental-resume bound: skip messages with ts <= oldest, from `slack_cursors.latest_ts`
    * on the first page only. Kept apart from `cursor`: Slack treats `cursor` as an opaque token,
@@ -22,7 +21,6 @@ export interface BackfillOptions {
   teamId: string;
   channel: ChannelMeta;
   fetcher: SlackHistoryFetcher;
-  /** Stop after this many messages. Default: unlimited. */
   maxMessages?: number;
 }
 

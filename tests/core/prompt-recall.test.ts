@@ -12,7 +12,6 @@ import {
   type PromptRecallGate,
 } from '../../src/base/rank/prompt-recall.js';
 
-// promptTokens reads only this many prompt chars; pinned here so a change to the cut shows up as a test edit.
 const PROMPT_RECALL_MAX_CHARS = 4000;
 
 function cand(id: string, tokens: string[]) {
@@ -29,7 +28,7 @@ const gate = (over: Partial<PromptRecallGate> = {}): PromptRecallGate => ({
 
 describe('contentTokens / promptTokens', () => {
   it('drops stop words and tokens of length <= 2', () => {
-    const toks = contentTokens('the api is a sql and or up to'); // "up"/"to"/"an" are length <= 2 or stop words; "db" itself is length 2 so excluded too
+    const toks = contentTokens('the api is a sql and or up to');
     expect([...toks]).toEqual(['api', 'sql']);
   });
 
@@ -38,13 +37,13 @@ describe('contentTokens / promptTokens', () => {
   });
 
   it('keeps a token that ends exactly at the cut', () => {
-    const pad = 'a '.repeat((PROMPT_RECALL_MAX_CHARS - 4) / 2) + 'zulu'; // pad ends in a space, then a 4-char word up to the cut
+    const pad = 'a '.repeat((PROMPT_RECALL_MAX_CHARS - 4) / 2) + 'zulu';
     const toks = promptTokens(pad);
     expect(toks.has('zulu')).toBe(true);
   });
 
   it('ignores a token that only appears after char 4000', () => {
-    const pad = 'a '.repeat(PROMPT_RECALL_MAX_CHARS / 2); // exactly 4000 chars, ends on a space
+    const pad = 'a '.repeat(PROMPT_RECALL_MAX_CHARS / 2);
     const toks = promptTokens(pad + 'unique');
     expect(toks.has('unique')).toBe(false);
   });
@@ -86,8 +85,7 @@ describe('gatePromptRecall', () => {
   });
 
   it('keeps only candidates at or above the threshold (inclusive boundary)', () => {
-    const p = new Set(['a', 'b', 'c', 'd']); // size 4
-    // shared=2 over |P|=4,|M|=4 -> jaccard = 2/6 = 0.3333, above 0.2
+    const p = new Set(['a', 'b', 'c', 'd']);
     const atThreshold = cand('exact', ['a', 'b', 'x', 'y']);
     const g = gate({ threshold: 2 / 6, minShared: 2 });
     const out = gatePromptRecall(p, [atThreshold], g);

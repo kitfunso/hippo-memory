@@ -1,6 +1,3 @@
-// The one search-engine choice every ranker over a candidate pool makes: recall's band, MCP's wide
-// list, the CLI core and context.
-
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { PhysicsConfig } from '../../base/rank/physics-config.js';
 import type { RankTime, SearchResult } from '../../base/rank/search-types.js';
@@ -9,7 +6,6 @@ import { rankPhysics } from './physics-search.js';
 import type { VectorSource } from './vector.js';
 
 export interface SearchByEngineOptions {
-  /** Unset where the store keeps no vectors: the search ranks by BM25. */
   readonly source: VectorSource | undefined;
   readonly query: string;
   readonly pool: MemoryEntry[];

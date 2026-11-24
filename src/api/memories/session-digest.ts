@@ -1,5 +1,3 @@
-// The session digest's write: which sessions earn one, the text the echo filters leave, and one row
-// per session.
 import type { HippoConfig } from '../../base/config/config.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
 import { createMemory, Layer, type MemoryEntry } from '../../base/memory/entry.js';
@@ -23,26 +21,19 @@ export type DigestContext = Pick<Context, 'tenantId' | 'actor'> & {
 /** The repo's paths as the disk has them; the surface reads them, so the api names no file
  * system. */
 export interface DigestRepo {
-  /** The repo folder with links followed, or null when it sits on a network path. */
   root(): string | null;
-  /** `p` relative to `root` with forward slashes, '' for the root itself, null outside it or
-   * when it cannot resolve. */
   relative(p: string, root: string): string | null;
-  /** The files the session's edits changed inside `root`, repo-relative, each once. */
   changedFiles(root: string): string[];
 }
 
 /** One ended session as the digest reads it. */
 export interface SessionDigestRequest {
-  /** Session id, or the transcript's basename when the host gives none. */
   readonly key: string;
   readonly prompts: readonly string[];
   readonly finalText: string;
-  /** The first working folder the transcript names: where the session ran. */
   readonly cwd: string | null;
   readonly editCount: number;
   readonly repo: DigestRepo;
-  /** The instant the digest is stamped with. */
   readonly now: Date;
 }
 
@@ -57,9 +48,6 @@ function skipped(reason: string): DigestOutcome {
   return { written: false, reason, sentences: 0, files: 0 };
 }
 
-/** What hippo could have injected into the session: the newest live digests (prompt recall
- * reaches older ones too, but the echo filter only needs the recent ones a session most likely
- * saw) and the ambient handoff, never this session's own. */
 async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]> {
   const filter = {
     tenantId: ctx.tenantId,
@@ -93,8 +81,6 @@ async function injectedTexts(ctx: DigestContext, key: string): Promise<string[]>
   ];
 }
 
-/** The reason a session earns no digest, in the order the checks run, else the repo root it ran
- * in. */
 function skipReason(req: SessionDigestRequest): { reason: string } | { root: string } {
   if (req.prompts.length === 0) return { reason: 'no human prompt' };
   if (!req.finalText.trim() && req.editCount === 0) {

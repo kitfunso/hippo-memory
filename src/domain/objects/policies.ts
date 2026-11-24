@@ -1,7 +1,3 @@
-/** Policy object: a rule in force over a valid-time range [valid_from, valid_to), evolving via supersession;
- *  `policiesAsOf` queries it. Transaction-time travel is deferred; superseding keeps the predecessor's range.
- *  Dates are normalized to ISO-8601 (`toISOString`) at the store boundary, so lexical half-open comparison is sound. */
-
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
@@ -39,7 +35,6 @@ export interface SavePolicyOptions {
 export interface ListPoliciesOptions {
   status?: PolicyStatus;
   limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 
@@ -76,7 +71,6 @@ export function validatePolicyDates(
   return { validFrom, validTo };
 }
 
-/** Recall-surface content for the memory mirror: name + rule + effective range. */
 function buildPolicyContent({
   policyName,
   policyText,
@@ -97,9 +91,6 @@ export const POLICY: SavableDescriptor<'policy', SavePolicyOptions> = {
     const policyName = requireText(opts.policyName, MAX_SHORT_FIELD_LEN, 'policyName');
     const policyText = requireText(opts.policyText, MAX_SHORT_FIELD_LEN, 'policyText');
     const at = now.toISOString();
-    // valid_from defaults to the creation instant. A date-only as-of is widened to end-of-day on
-    // the read side, because backdating valid_from to midnight would report the policy in force
-    // earlier that day.
     const { validFrom, validTo } = validatePolicyDates(opts.validFrom, opts.validTo, at);
     return {
       fields: { policyName, policyText, validFrom, validTo },
@@ -132,15 +123,12 @@ export async function policiesAsOf(
   return objects.listObjects(tenantId, 'policy', inForceQuery(tenantId, asOfDate, opts));
 }
 
-/** The as-of read, checked before a store is asked. */
 function inForceQuery(
   tenantId: string,
   asOfDate: string,
   opts: { name?: string; limit?: number },
 ): PoliciesInForceQuery {
   assertTenantId('policiesAsOf', tenantId);
-  // A bare date means the whole of that day, so it reads as the day's last instant; a datetime is
-  // used as given.
   const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfDate.trim())
     ? normalizePolicyDate(`${asOfDate.trim()}T23:59:59.999Z`, 'asOfDate')
     : normalizePolicyDate(asOfDate, 'asOfDate');

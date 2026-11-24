@@ -1,4 +1,3 @@
-/** Z0 lesson reach read: tag classes, No-lead forms, JSON-string decoding, hook-block bounds and dedupe, hippoReach routes, unscored pairs, the JSON shape and the errors it names. */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -85,7 +84,6 @@ function rec(arm: string, kind: 'teach' | 'apply', position: number, extra: Part
   return r;
 }
 
-/** One logged request; an array puts several text parts in the same request, as a real session's history does. */
 const logLine = (parts: string | string[]): string => {
   const content = (Array.isArray(parts) ? parts : [parts]).map((text) => ({ type: 'text', text }));
   const body = JSON.stringify({ tools: [{}, {}, {}, {}], messages: [{ role: 'user', content }] });
@@ -97,7 +95,6 @@ function write(file: string, text: string): void {
   fs.writeFileSync(file, text);
 }
 
-/** A scored folder shaped like round 3's: one run, its records, key phrases, request logs and the blind file. */
 function build(records: Rec[], phrases: Phrase[], logs: LogFile[]): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-reach-'));
   write(path.join(dir, 'r3run/ab-w1/run/runs.jsonl'), records.map((r) => JSON.stringify(r)).join('\n'));
@@ -109,7 +106,6 @@ function build(records: Rec[], phrases: Phrase[], logs: LogFile[]): string {
   return dir;
 }
 
-/** One A2 and one A5 first apply at position 3, their teaches and logs; options bend one part at a time. */
 function scoredDir(o: Options = {}): string {
   const teach = (arm: string): Rec => rec(arm, 'teach', 0, o.teachForm === null ? {} : { teachForm: o.teachForm ?? 'correction' });
   const a5Apply = rec('A5', 'apply', 3);
@@ -123,7 +119,6 @@ function scoredDir(o: Options = {}): string {
   return build(records, phrases, logs);
 }
 
-/** Four A2 lessons, one for each way hippo can reach the model, each with its own A2 and A5 outcome. */
 function routesDir(cases: RouteCase[]): string {
   const records: Rec[] = [];
   const logs: LogFile[] = [];

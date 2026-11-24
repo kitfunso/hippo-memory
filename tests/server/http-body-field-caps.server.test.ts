@@ -1,5 +1,3 @@
-// Every body field on the memory, key and prediction routes has a length cap; an over-long value is a 400 that names the
-// field and the cap, not the value.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

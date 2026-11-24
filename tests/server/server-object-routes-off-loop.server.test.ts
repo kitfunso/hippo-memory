@@ -1,4 +1,3 @@
-// The typed-object routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -40,26 +39,21 @@ const REFUSED = 'the decision a person rejected';
 const BLOCKED_LINE = 'opened on the server thread by a route';
 
 interface ObjectRoute {
-  /** `METHOD /v1/<kind>[/:id[/verb]]`, a regex row read as its pattern would be. */
   readonly label: string;
 }
 
-/** Every V1_ROUTES row under an object kind's path, in table order, read from the live table. */
 function objectRoutes(): ObjectRoute[] {
   return V1_ROWS.filter(({ key }) => OBJECT_ROW.test(key)).map(({ key }) => ({ label: key }));
 }
 
 interface Sent {
-  /** `$receipt` stands for a seeded memory id. */
   readonly body?: JsonValue;
-  /** `$cursor` stands for the cursor the last page named. */
   readonly query?: string;
   readonly status: number;
 }
 
 const AS_OF = '?date=2099-01-01T00:00:00.000Z';
 
-/** One request per object route that its handler answers in full, in an order where each finds the row the one before it left. */
 const SENDS = new Map(
   Object.entries<Sent>({
     'POST /v1/decisions': {
@@ -133,13 +127,11 @@ const SENDS = new Map(
 interface Callers {
   readonly main: string;
   readonly other: string;
-  /** Well formed, and in no store. */
   readonly unknown: string;
 }
 
 type Step = readonly [label: string, route: string, sent: Sent, as?: keyof Callers];
 
-/** What the store refuses and what it throws, after the route steps have left one closed object of each kind. */
 const EDGE_STEPS: readonly Step[] = [
   ['close the closed decision', 'POST /v1/decisions/:id/close', { status: 409 }],
   ['supersede the closed decision', 'POST /v1/decisions/:id/supersede', { body: { text: 'never saved' }, status: 409 }],
@@ -195,7 +187,6 @@ interface Run {
   readonly server: ServerHandle;
   readonly keys: Callers;
   readonly receipts: readonly string[];
-  /** `/v1/<kind>` to the id the last write of that kind answered with, which fills `:id`. */
   readonly newest: Map<string, string>;
   cursor?: string;
 }
@@ -280,7 +271,6 @@ function storedRows(root: string): string[] {
   );
 }
 
-/** `steps` against a fresh store, on the worker-backed store when `inProcess` is false, plus what they left behind. */
 async function runSteps(steps: readonly Step[], inProcess: boolean) {
   const root = newRoot('object-routes');
   const { keyIds, ...seeded } = seedStore(root);
@@ -297,7 +287,6 @@ async function runSteps(steps: readonly Step[], inProcess: boolean) {
 const statuses = (steps: readonly Step[]): Array<[string, number]> =>
   steps.map(([label, , sent]) => [label, sent.status]);
 
-/** tenant, actor and op of every audit row an object write left. */
 function objectAudit(rows: readonly string[]): string[] {
   const named = rows.map(
     (row) => /^\{"tenant_id":"([^"]+)","actor":"([^"]+)","op":"([^"]+)"/.exec(row)?.slice(1).join(' ') ?? row,
@@ -309,7 +298,6 @@ function objectAudit(rows: readonly string[]): string[] {
 
 const WRITER = 'default api_key:<key 0>';
 
-/** A save over an older version audits the older row first, so a supersede step leaves a supersede row and then a create row. */
 const versioned = (kind: string): string[] => [
   `${kind}_create`,
   `${kind}_supersede`,
@@ -317,7 +305,6 @@ const versioned = (kind: string): string[] => [
   `${kind}_close`,
 ];
 
-/** What the route steps and then the edge steps leave in the audit log, in order. */
 const AUDIT = [
   ...versioned('decision'),
   'incident_open',
@@ -434,7 +421,6 @@ describe('the server-thread block of the object routes', () => {
     const before = [auditRows(root, keyIds), storedRows(root), mirrorFiles(root)];
     const info = vi.spyOn(log, 'trail');
     const steps = routeSteps(objectRoutes());
-    // The worker-backed store with the objects group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), { objects: serverThreadPart(root).objects });
     const run: Run = { server: await start(root, store), ...seeded, newest: new Map() };
 
@@ -476,7 +462,6 @@ describe('an object write waiting for the write lock', () => {
     await sent('objects.saveObject', saves + 1);
     const answered: Array<[string, number]> = [];
     for (const step of reads) {
-      // A read sent to the writer thread waits behind the blocked save until the lock is released, so it hangs here.
       answered.push([step[0], (await send(run, step)).status]);
     }
     const landedUnderLock = landed;
@@ -484,7 +469,6 @@ describe('an object write waiting for the write lock', () => {
 
     expect(answered).toEqual(reads.map(([label]) => [label, 200]));
     expect(landedUnderLock).toBe(false);
-    // A reader's connection refuses every write, so a save that lands ran on the writer.
     expect((await write).status).toBe(201);
     expect(
       storedRows(root).filter((row) => row.includes('behind the lock') && row.startsWith('customer_notes ')),

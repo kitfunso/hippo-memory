@@ -1,9 +1,3 @@
-/**
- * v39 S4 secret detection + producer/consumer vetoes
- * (docs/plans/2026-07-01-memory-scope-isolation.md).
- * Real-DB per project convention for the store-level tests.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -30,7 +24,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Built at runtime, so no secret-shaped literal sits in source.
 const HIPPO_KEY = 'hk_' + 'a'.repeat(24) + '.' + 'b'.repeat(32);
 const NPM = 'npm_' + 'A1'.repeat(18);
 const HF = 'hf_' + 'Ab'.repeat(17);
@@ -50,7 +43,6 @@ describe('detectSecret patterns', () => {
     expect(flagged('stripe sk_live_abcdefghijklmnop1234')).toBe(true);
     expect(flagged('-----BEGIN RSA PRIVATE KEY-----')).toBe(true);
     expect(flagged('the prod API key is sk-abcdefghij0123456789xyz')).toBe(true);
-    // The shape from the 2026-06-30 incident (synthetic value - never a real key).
     expect(flagged('project-i prod API key for the personal account: sk_vendor_1a2b3c4d')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
@@ -89,13 +81,8 @@ describe('detectSecret patterns', () => {
   });
 
   it('does not flag code snippets or prose in assignment position', () => {
-    // Both were verified false positives of the pre-fix generic pattern:
-    // ordinary code-lesson memories would silently vanish from ambient
-    // context everywhere. The value must now LOOK like a credential
-    // (token charset + at least one digit).
     expect(flagged('lesson: token = estimateTokens(entry.content) counts words not chars')).toBe(false);
     expect(flagged('the secret: incremental-rollout worked well for the beta')).toBe(false);
-    // Credential-shaped values still flag.
     expect(flagged('password: MyDogsName2024x')).toBe(true);
     expect(flagged('config sets api_key=9f8e7d6c5b4a3210ffff')).toBe(true);
   });
@@ -148,7 +135,6 @@ describe('detectSecret patterns', () => {
 });
 
 describe('redactSecretsStrict', () => {
-  // Built at runtime, so no secret-shaped literal sits in source.
   const AWS = runtimeJoin('AKIA', '1234567890ABCDEF');
   const GHP = 'ghp_' + 'A'.repeat(36);
   const GH_PAT = 'github_pat_' + 'A'.repeat(24);
@@ -215,7 +201,6 @@ describe('redactSecretsStrict', () => {
     }
   });
 
-  // JavaScript counts no regex backtracking steps; rescanning a 1 MiB run from every repeat outlasts the watchdog by hours.
   it.each(['eyJ-', 'token='])(
     'redactSecretsStrict scrubs a crafted 1 MiB run of %s before the watchdog fires',
     (unit) => {
@@ -280,7 +265,6 @@ describe('producer + sync vetoes (real stores)', () => {
   });
 
   it('autoShare silently skips secret rows and still shares clean ones', async () => {
-    // error tag + pin push transferScore over the 0.6 bar for both rows.
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     const shared = await autoShare(...sharingStores(projA), {
@@ -295,8 +279,6 @@ describe('producer + sync vetoes (real stores)', () => {
   it('autoShare stats counts only shares actually withheld by the secret veto', async () => {
     writeEntry(projA, createMemory(SECRET_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
     writeEntry(projA, createMemory(CLEAN_ROW, { pinned: true, tags: ['error', 'gotcha'] }));
-    // Below the transfer bar: secret-flagged but never a share candidate, so
-    // it must NOT increment the counter.
     writeEntry(projA, createMemory('low transfer secret sk_vendor_cafebabe999888 note'));
     const stats = { secretSkipped: 0 };
     const shared = await autoShare(...sharingStores(projA), {
@@ -373,7 +355,7 @@ describe('producer + sync vetoes (real stores)', () => {
       detached: TEST_DETACHED,
       includeCrossProject: true,
     });
-    expect(withCross).toBe(1); // proj-b row now copies; the secret still never does
+    expect(withCross).toBe(1);
     expect(loadAllEntries(projA, 'default').map((e) => e.content)).not.toContain(SECRET_ROW);
   });
 
@@ -405,8 +387,6 @@ describe('producer + sync vetoes (real stores)', () => {
     const legacyMode = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-a' });
     expect(legacyMode.entries).toHaveLength(0);
 
-    // Inside the owning project the project-owned secret is ambient again;
-    // the origin-less one stays out everywhere.
     const owner = await contextGet(ctx, { pinnedOnly: true, currentProject: 'proj-b' });
     expect(owner.entries.map((r) => r.entry.content)).toEqual([SECRET_ROW]);
   });

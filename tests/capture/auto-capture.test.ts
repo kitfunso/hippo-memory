@@ -1,12 +1,3 @@
-/**
- * Automatic capture on Claude Code hooks: what compaction mines from the
- * transcript, which failed tool calls become error memories, and that both
- * install routes (`hippo init`, `hippo hook install claude-code`) wire the
- * same hooks. Found by running a real Claude Code `/compact` against
- * hippo's hooks (2026-09-24): the compaction mined Claude Code's own
- * boilerplate and missed the user's decision.
- * Real CLI, real stores, real settings files. No mocks.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -29,7 +20,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A scratch directory and a child environment rooted in it. */
 interface Scratch {
   dir: string;
   env: NodeJS.ProcessEnv;
@@ -42,7 +32,6 @@ function scratch(): Scratch {
   delete env.HIPPO_SESSION_ID;
   return { dir, env };
 }
-// In process, so coverage sees capture and the compaction hooks.
 function run(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) {
   return runCliAs(args, { cwd, env, input });
 }
@@ -154,7 +143,6 @@ describe('transcript mining', () => {
   });
 
   it('after compaction the user is told what hippo saved, and the summariser is asked for memories', async () => {
-    // PreCompact stdout goes to the summarizing model as instructions; the user's line comes from PostCompact.
     const { dir, env } = scratch();
     try {
       expect((await run(['init', '--no-hooks', '--no-schedule', '--no-learn'], dir, env)).status).toBe(0);
@@ -211,12 +199,10 @@ describe('transcript mining', () => {
       expect(shown.status).toBe(0);
       expect(shown.stdout).toBe('Hippo saved 1 memory from this compaction and restored your task snapshot.\n');
 
-      // Another session's snapshot is not claimed.
       expect((await compact('s1')).status).toBe(0);
       expect((await post('s2', ['none'])).stdout).toBe(
         "Hippo kept this compaction's summary; it listed no new memories.\n",
       );
-      // No payload, nothing saved, nothing said.
       expect((await run(['post-compact', '--log-file', path.join(dir, 'none', 'x.log')], dir, env, '')).stdout).toBe(
         '',
       );
@@ -477,7 +463,6 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     fs.mkdirSync(proj);
     fs.writeFileSync(path.join(proj, 'CLAUDE.md'), '# Project\n');
     expect((await run(['init', '--no-schedule', '--no-learn'], proj, env)).status).toBe(0);
-    // Simulate an install from before PreCompact and PostToolUseFailure existed.
     const settingsPath = path.join(dir, '.claude', 'settings.json');
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
     delete settings.hooks.PreCompact;
@@ -485,7 +470,6 @@ describe('both install routes wire compaction and failed-tool capture', () => {
     delete settings.hooks.PostCompact;
     delete settings.hooks.PostToolUse;
     fs.writeFileSync(settingsPath, JSON.stringify(settings));
-    // An install from before those hooks existed left no record, and a recorded hook that is gone counts as removed by the user.
     fs.rmSync(path.join(dir, '.hippo', 'installed-hooks.json'));
     expect(fs.readFileSync(path.join(proj, 'CLAUDE.md'), 'utf8')).toContain('hippo');
 

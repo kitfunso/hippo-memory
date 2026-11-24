@@ -1,7 +1,3 @@
-// Domain API layer: Context-taking functions that the CLI, the HTTP server and MCP all call, so the
-// business logic lives in one place. The code lives in src/api/, one module per domain; this barrel
-// keeps every import path that callers already use.
-
 export {
   ApiError,
   BadRequestError,
@@ -10,8 +6,6 @@ export {
   NotFoundError,
 } from '../base/errors/api-errors.js';
 
-// The recall-side scope predicates live in recall-scope.ts (leaf) so shared.ts can use them without
-// an import cycle.
 export {
   isPrivateScope,
   passesScopeFilterForRecall,
@@ -25,7 +19,6 @@ export type {
 } from '../base/ports/store/ledger.js';
 export type { FailureSummary } from '../base/ports/store/rejections.js';
 
-// classifyOriginProject lives in project-identity.ts (leaf) for the same reason.
 export { classifyOriginProject } from '../base/scope/project-identity.js';
 
 export {

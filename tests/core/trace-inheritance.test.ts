@@ -1,12 +1,3 @@
-/**
- * Inheritance smoke tests — lock the claim that Layer.Trace memories inherit
- * the core MemoryEntry mechanics "for free".
- *
- * If any of these tests starts failing after a refactor, the "inherits for
- * free" claim has quietly broken and we owe users either a fix or explicit
- * per-layer plumbing.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { calculateStrength } from '../../src/entry/memory.js';
@@ -24,7 +15,6 @@ import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
 pinClock();
 
-/** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
@@ -41,7 +31,6 @@ describe('Trace layer inherits core memory mechanics', () => {
       traceOutcome: 'success',
     });
 
-    // Back-date last_retrieved by many half-lives so strength drops.
     const aged = {
       ...trace,
       lastRetrieved: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
@@ -73,8 +62,6 @@ describe('Trace layer inherits core memory mechanics', () => {
   });
 
   it('traces are candidates for the replay pass', async () => {
-    // Seed several traces — sampleForReplay draws from whatever survivors
-    // exist, so as long as traces are eligible at all they can be picked.
     const traces = Array.from({ length: 5 }, (_, i) =>
       createMemory7(`Task: scenario ${i}\nOutcome: success\nSteps:\n  1. step ${i}`, {
         layer: Layer.Trace,
@@ -84,26 +71,19 @@ describe('Trace layer inherits core memory mechanics', () => {
 
     const picked = await sampleForReplay({ survivors: traces, count: 5, now: new Date(), seed: 42 });
     expect(picked.length).toBeGreaterThanOrEqual(1);
-    // Every picked entry should be a trace (the only thing in the pool).
     for (const id of picked) expect(traces.find((t) => t.id === id)?.layer).toBe(Layer.Trace);
   });
 
   it('physics state is created for traces on first consolidate', async () => {
-    // Persist a trace.
     const trace = createMemory7('Task: physics trace\nOutcome: success\nSteps:\n  1. do thing', {
       layer: Layer.Trace,
       traceOutcome: 'success',
     });
     writeEntry(tmpDir, trace);
 
-    // Simulate what embeddings.ts does when embeddings are available:
-    // initialize a particle for the trace entry and persist it. This is the
-    // same code path non-trace memories use — no trace-specific branch
-    // exists, which is exactly the "inherits for free" claim.
     const fakeEmbedding = Array.from({ length: 16 }, (_, i) => Math.sin(i));
     const db = openHippoDb(tmpDir);
     try {
-      // At its own last_retrieved an unretrieved neutral trace has strength 1, so its mass is 1.
       const particle = initializeParticle(trace, fakeEmbedding, PRODUCTION_STRENGTH, new Date(trace.lastRetrieved));
       savePhysicsState(db, [particle]);
       const map = loadPhysicsState(db, [trace.id]);
@@ -113,8 +93,6 @@ describe('Trace layer inherits core memory mechanics', () => {
       closeHippoDb(db);
     }
 
-    // And consolidate() runs cleanly over a store that contains a trace
-    // with physics state — no layer-specific crash, no data loss.
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
     expect(result.dryRun).toBe(false);
     const survivors = loadAllEntries(tmpDir, 'default');

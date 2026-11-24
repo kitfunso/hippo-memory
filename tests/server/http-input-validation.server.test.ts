@@ -1,6 +1,3 @@
-// Every /v1 write route rejects a malformed body with a 400 that names the field, and writes nothing;
-// supersede of a missing row is a 404 and a dangling reference a 409, against a real store over HTTP.
-
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { request } from 'node:http';
 import type { ServerHandle } from '../../src/server.js';
@@ -45,7 +42,6 @@ beforeAll(async () => {
   } finally {
     closeHippoDb(db);
   }
-  // Seventy requests from one IP would trip the per-IP and per-caller limiters; both are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0, keep: ROUTE_GROUPS });
@@ -439,7 +435,6 @@ describe('HTTP input validation', () => {
     expect(incident.status).toBe(409);
   });
 
-  // Decision supersede answers 201 but process and skill answer 200; this pins today's contract.
   it('a supersede carries its optional context, description and trigger into the new version', async () => {
     const d = await call('POST', `/v1/decisions/${ids.decision}/supersede`, { text: 'use postgres', context: 'scale' });
     expect(d.status).toBe(201);
@@ -475,10 +470,8 @@ describe('HTTP input validation', () => {
     const since = async (iso: string): Promise<number> => {
       const r = await call('GET', `/v1/audit?since=${encodeURIComponent(iso)}`);
       expect(r.status).toBe(200);
-      // /v1/audit answers auditList's event array as the whole body.
       return Array.isArray(r.json) ? r.json.length : -1;
     };
-    // Only the seven beforeAll creates are certain; earlier tests' writes add more depending on which ran.
     expect(await since('2020-01-01T00:00:00Z')).toBeGreaterThanOrEqual(7);
     expect(await since('2999-01-01T00:00:00Z')).toBe(0);
   });

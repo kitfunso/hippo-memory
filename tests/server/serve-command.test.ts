@@ -1,4 +1,3 @@
-// `hippo serve` in process on port 0: process.on/once and exit are stubbed, so its SIGTERM handler stops it without ending the worker.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';

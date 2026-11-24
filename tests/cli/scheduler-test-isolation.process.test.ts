@@ -1,15 +1,12 @@
-// The suite sets HIPPO_SKIP_SCHEDULE, so a test that forgets --no-schedule still cannot reach the real schtasks or crontab.
 import { describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 
-// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const REFUSE_SCHEDULER = resolve(__dirname, '..', '_helpers', 'refuse-scheduler.cjs').replaceAll('\\', '/');
 const SKIP_LINE = 'HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.';
 
-/** `hippo init` with no flags, under a preload that logs and refuses every scheduler call. */
 function initWithNoFlags(dir: string, extraEnv: Record<string, string>) {
   const project = join(dir, 'proj');
   const emptyPath = join(dir, 'empty-path');
@@ -17,7 +14,6 @@ function initWithNoFlags(dir: string, extraEnv: Record<string, string>) {
   mkdirSync(emptyPath);
   writeFileSync(join(project, 'CLAUDE.md'), '# project\n');
   const calls = join(dir, 'scheduler-calls.log');
-  // An empty PATH as well, so a preload that missed a call still finds no schtasks or crontab to run.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([k]) => k.toUpperCase() !== 'PATH'));
   const env = {
     ...inherited,
@@ -42,7 +38,6 @@ describe('the suite never reaches the real scheduler', () => {
       const r = initWithNoFlags(dir, {});
       expect(r.status, r.stderr).toBe(0);
       expect(r.stdout).toContain(SKIP_LINE);
-      // The preload line proves the refusing wrapper was live in the child; any other line would be a scheduler call.
       expect(r.calls).toEqual(['preload']);
       const fakeHome = process.env.HIPPO_TEST_TMP_USERHOME;
       expect(fakeHome).toMatch(/[\\/]hippo-test-userhome-\w{6}$/);

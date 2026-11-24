@@ -1,5 +1,3 @@
-// Pin or unpin a memory, so decay and sleep leave it alone.
-
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { scopeReaderOf } from '../../base/scope/recall-scope.js';
 import type { Context } from '../types.js';

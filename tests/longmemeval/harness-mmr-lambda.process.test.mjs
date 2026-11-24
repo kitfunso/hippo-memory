@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-// The harness imports the build, so the store it reads is seeded through the build too.
 import { initStore, writeEntry } from '../../dist/entry/testing.js';
 import { createMemory } from '../../dist/entry/memory.js';
 
@@ -51,7 +50,6 @@ test('harness reads --mmr-lambda and passes it to hybridSearch', () => {
     .split('\n')
     .map((line) => JSON.parse(line));
   expect(records.map((r) => r.question_id)).toEqual(['syn_001', 'syn_002']);
-  // Both stored rows share 'authentication flow' with the first question and fit the default budget.
   expect(records[0].num_retrieved).toBe(2);
   expect(records.every((r) => r.error === undefined)).toBe(true);
 });

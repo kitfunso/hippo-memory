@@ -1,7 +1,3 @@
-// The eval kit's snake_case forms. Frozen eval scripts read and write MemoryWire keys, so each
-// function here wraps the domain function its name starts with and converts at the edge; a script
-// takes one by re-pointing its import line.
-
 import { ambientSecretAdmit } from '../base/scope/read-admission.js';
 import { isWorthSurfacing } from '../base/memory/memory-quality.js';
 import { calculateStrength, createMemory, type DecayOptions } from './memory.js';

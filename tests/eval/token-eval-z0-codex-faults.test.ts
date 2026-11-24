@@ -1,4 +1,3 @@
-// Z0 set X faults through runAll: the limit retry, timeout, memory wait, and the faults that stop the run (E6 plan tests 13-16, 21, 26, 27).
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,7 +12,6 @@ afterEach(cleanup);
 const sha = (f: string) => createHash('sha256').update(readFileSync(f)).digest('hex');
 const records = xRecords;
 
-/** No file under out and no vault holds the operator's tokens, and the operator login is the same bytes. */
 function noTokenLeft(out: string, op: Operator, before: string) {
   expect(filesHolding(out, op.tokens)).toEqual([]);
   expect(vaultsHolding(op.tokens)).toEqual([]);
@@ -26,7 +24,6 @@ describe('limit retry in a Codex apply (test 16)', () => {
     await xRun(xTrio(makeRepo(), { 'a-xa': 'LIMIT\nNOISE\nFIX' }), ['X1'], out, op, { limitWaitMs: 0 });
     const a = find(records(out), 'X1', 'a-xa');
     expect([a.invalid, a.limitRetries, a.surfaceRestored, a.usage?.firstSession.inputTokens]).toEqual([null, 1, true, 500]);
-    // The cut-off rollout holds 400 in, 100 cached and 10 out; none of it may sit in the totals.
     expect(a.usage?.firstSession).toEqual({ inputTokens: 500, cacheWriteTokens: 0, cacheReadTokens: 1500, outputTokens: 120 });
     const home = join(runRoot(out, 'X1'), 'codex-home');
     expect([existsSync(join(home, 'memories', 'cutoff.md')), existsSync(join(home, 'state.json'))]).toEqual([false, false]);
@@ -61,13 +58,11 @@ describe('timeout in a Codex apply (test 21)', () => {
 describe('memory wait and memories switch through the runner (tests 13, 14)', () => {
   it('records the wait, leaves it out of wallMs, and records memories off', async () => {
     const { out, op, codexLog } = xIsolate('wait');
-    // Writes for 20 s keep one cell's wait long; a wallMs that held the wait would count it twice inside the cell's own step.
     await xRun(xTrio(makeRepo(), { 'a-xa': 'MEMWRITE:500x40' }), ['X1'], out, op, { codexMemoryWait: 'poll:3000:60000', codexMemories: 'off' });
     const a = find(records(out), 'X1', 'a-xa');
     const waitMs = a.codexMemoryWait?.ms ?? 0;
     expect(waitMs).toBeGreaterThanOrEqual(8000);
     expect(a.codexMemoryWait?.timedOut).toBe(false);
-    // a-xa's step runs from its start to the next cell's start, which load only stretches.
     const starts = readFileSync(join(out, 'runs.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).map((rec) => [rec.taskId, Date.parse(rec.startedAt)] as const);
     const aStart = starts.find(([id]) => id === 'a-xa')![1];
     const stepMs = Math.min(...starts.map(([, t]) => t).filter((t) => t > aStart)) - aStart;

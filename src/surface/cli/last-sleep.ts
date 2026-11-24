@@ -1,5 +1,3 @@
-// `hippo last-sleep`: the previous session's sleep log for the debug log, and one problems line for
-// the user.
 import * as fs from 'node:fs';
 import { REPLAY_AFTER_MS } from '../../base/session/compaction-timing.js';
 import { SPOOL_PROBLEM } from '../../infra/spool-files.js';
@@ -53,7 +51,6 @@ export function handleLastSleep(
 
   if (!fs.existsSync(logPath)) return;
 
-  // Removed or locked since the exists check: there is nothing to show this session.
   const content = ignoringCodes([...PATH_UNREADABLE, 'EBUSY'], () =>
     fs.readFileSync(logPath, 'utf8'),
   );

@@ -1,5 +1,3 @@
-// hippo.db as serve() runs it by default: every method in the op table answers from a worker
-// thread, and the server thread's own part of the store refuses to open hippo.db.
 import { existsSync } from 'node:fs';
 import { getHippoDbPath, SERVER_DB_WAIT_MS } from '../../../db/index.js';
 import { currentRequestId, type RequestLimits } from '../../../base/util/request-scope.js';
@@ -26,14 +24,11 @@ import {
 import { asHippoDb } from './hippo-db-stores.js';
 import { handlesOf } from './handles.js';
 
-/** The worker a call goes to and the request it answers. */
 interface Sender {
   readonly executor: SqliteExecutor;
   readonly limits: RequestLimits;
 }
 
-// Non-enumerable marks on their owners: a worker store, and each method that answers from a worker
-// with how to make it again for another request's limits.
 const OFF_LOOP = Symbol('answers from workers');
 const REBIND = Symbol('worker call rebind');
 
@@ -68,7 +63,6 @@ function send<T>(
     deadlineAt: deadline?.at,
     signal,
   });
-  // The request's own timer then waits for this call's answer, which names what became of a write.
   return deadline ? deadline.track(call) : call;
 }
 
@@ -79,8 +73,6 @@ function workerCall(sender: Sender, op: string, mode: OpRoute): Function {
   return call;
 }
 
-/** `inProcess` with each method the op table places on a worker answered from one, so a new
- * method of a group needs its tag and no body here. */
 function onWorkers<G>(sender: Sender, group: WorkerGroup, places: OpPlaces<G>, inProcess: G): G {
   const moved = Object.entries<OpRoute>(places).map(([method, place]) => [
     method,
@@ -93,8 +85,6 @@ type SentParts = {
   readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>>;
 };
 
-// Stored vectors come back as one moved buffer, and the port's Map of views is rebuilt here. No ids
-// reads nothing, as in process.
 function storedOnWorkers(sender: Sender): VectorReads['stored'] {
   const mode = WORKER_OPS.vectors.stored;
   const sent: SentParts = {
@@ -118,8 +108,6 @@ function vectorGroups(sender: Sender, inProcess: VectorReads): Pick<StoreGroups,
   };
 }
 
-// A probe must not create the store, and a worker's first job sets it up, so a root with no
-// hippo.db is ready before any thread starts.
 function probing(hippoRoot: string, served: Readiness): Readiness {
   return {
     ping: async () => {
@@ -128,8 +116,6 @@ function probing(hippoRoot: string, served: Readiness): Readiness {
   };
 }
 
-/** The groups with a body of their own below: base sits on the store itself, vectors rebuild a
- * Map, readiness is probed. */
 type CustomGroup = 'base' | 'vectors' | 'readiness';
 type PlainGroup = Exclude<WorkerGroup, CustomGroup>;
 
@@ -139,8 +125,6 @@ const isPlainGroup = (group: WorkerGroup): group is PlainGroup =>
 // SAFETY: Object.keys of the WORKER_OPS literal lists exactly its WorkerGroup keys.
 const PLAIN_GROUPS = (Object.keys(WORKER_OPS) as WorkerGroup[]).filter(isPlainGroup);
 
-/** Every other group, wrapped the same way; the op table's `satisfies` check makes a group it
- * misses a compile error. */
 function plainGroups(sender: Sender, inProcess: StoreGroups): Pick<StoreGroups, PlainGroup> {
   const wrapped = PLAIN_GROUPS.map((group) => [
     group,
@@ -165,8 +149,6 @@ export function workerSqliteStore(
   executor: SqliteExecutor = createSqliteExecutor(hippoRoot),
   { runtime, ...rules }: WorkerStoreOptions = {},
 ): HippoStore & StoreGroups {
-  // A method the op table missed would run here, on the server thread, where every open of this
-  // part refuses.
   const inProcess = sqliteStoreOn(handlesOf(hippoRoot, { ...rules, runtime, workerOnly: true }));
   const sender: Sender = { executor, limits: {} };
   const store: HippoStore & StoreGroups = {
@@ -212,7 +194,6 @@ export function storeForRequest<S extends HippoStore>(store: S, limits: RequestL
   return markOffLoop(bound as S);
 }
 
-/** The operator's global stores a server opens beside its own, closed with it. */
 interface GlobalStores {
   readonly open: (root: string) => HippoStore & StoreGroups;
   readonly close: () => Promise<void>;

@@ -1,4 +1,3 @@
-// A client abort ends a reranker's post and is not a reranker outage; a real failure warns with the error's fields.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
@@ -21,7 +20,6 @@ const inputs = (): SearchResult[] =>
     tokens: 10,
   }));
 
-/** A fetch that never answers and rejects when its signal aborts. */
 interface Seen {
   signal?: AbortSignal;
 }

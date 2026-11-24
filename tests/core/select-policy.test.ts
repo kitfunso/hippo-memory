@@ -1,4 +1,3 @@
-// The budget policy of a context block and of session-rules, on plain rows with no store.
 import { describe, expect, it } from 'vitest';
 import { type HippoConfig, DEFAULT_CONFIG } from '../../src/base/config/config.js';
 import {
@@ -13,7 +12,6 @@ import { createMemory } from '../_helpers/default-half-life-memory.js';
 const DAY_MS = 86_400_000;
 const FIRST_MS = Date.UTC(2026, 0, 1);
 
-/** A priced row; a higher `day` is newer. */
 function row(id: string, day: number, score: number, tokens: number): PricedRow {
   const entry = { ...createMemory(`row ${id}`), id, created: new Date(FIRST_MS + day * DAY_MS).toISOString() };
   return { entry, score, tokens };
@@ -101,7 +99,6 @@ describe('promptRecallShareOf and sessionRulesBudgetOf', () => {
     ...DEFAULT_CONFIG.pinnedInject,
     ...keys,
   });
-  // A config built in code before these keys existed has neither.
   const { promptRecallShare: _share, sessionRulesBudget: _budget, ...withoutKeys } = DEFAULT_CONFIG.pinnedInject;
 
   it('reads a missing share key and NaN as 0.25', () => {

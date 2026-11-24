@@ -1,25 +1,9 @@
-/**
- * Build-time social proof. Astro SSG runs component frontmatter at BUILD, so this
- * fetches GitHub stars + npm downloads once per build and bakes the numbers into the
- * static HTML. No runtime fetch, no cookies.
- *
- * Robust by design: AbortController timeout (native fetch has no timeout option) +
- * try/catch per source -> falls back to last-known constants so an offline / CI build
- * NEVER fails. The module-level promise cache means many awaits = one fetch, and the
- * cached promise never rejects (all errors are caught internally). A fallback emits a
- * build-log warning so a persistently-failing fetch is noticed, not silently shipped.
- */
-
 import { execFileSync } from 'node:child_process';
 
 const REPO_API = 'https://api.github.com/repos/kitfunso/hippo-memory';
-// hippo-memory's first npm publish date. Lifetime total, not last-month: a monotonic
-// headline number reads better than a monthly figure that dips between release spikes,
-// and matches how the milestone is talked about elsewhere (README, announcements).
 const NPM_PUBLISH_DATE = '2026-03-15';
 const NPM_API = `https://api.npmjs.org/downloads/point/${NPM_PUBLISH_DATE}:${new Date().toISOString().slice(0, 10)}/hippo-memory`;
 
-// Last-known values (2026-08-09), used only when a fetch fails.
 const FALLBACK = { stars: 725, downloads: 25811 } as const;
 
 export interface Stats {
@@ -31,15 +15,10 @@ export interface Stats {
 
 let cache: Promise<Stats> | null = null;
 
-/** GitHub repo API response — only the field this module reads. Its value
- * is left `unknown` because the actual response is external, untyped
- * input; callers runtime-check it (see getStats() below) before use. */
 interface GitHubRepoResponse {
   stargazers_count?: unknown;
 }
 
-/** npm downloads-point API response — same "unknown until checked" shape
- * as GitHubRepoResponse, for the same reason. */
 interface NpmDownloadsResponse {
   downloads?: unknown;
 }
@@ -55,7 +34,7 @@ function githubToken(): string | null {
   try {
     return execFileSync('gh', ['auth', 'token'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).trim() || null;
   } catch {
-    return null; // no gh CLI or not logged in: the anonymous call runs, and a failure names the missing token
+    return null;
   }
 }
 
@@ -74,7 +53,6 @@ async function fetchJson<T>(url: string, headers: Record<string, string> = {}, m
   }
 }
 
-/** 9858 -> "9.9k", 679 -> "679", 1200000 -> "1.2M". */
 function compact(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';

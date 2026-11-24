@@ -1,5 +1,3 @@
-// OpenClaw keeps its durable memory in one MEMORY.md; the daily notes, USER.md and DREAMS.md are
-// left out on purpose.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import { textItemKeys } from './keys.js';

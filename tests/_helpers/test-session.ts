@@ -1,5 +1,3 @@
-// The handle forms the root-keyed helpers open with: on the running test's session when its file holds one per test
-// (sessionPerTest), else on a handle of their own, so a helper call costs what one call in a CLI command costs.
 import type { DatabaseSyncLike, RequestStores } from '../../src/db/index.js';
 import { grantFor, type HandleOptions, type SqliteStoreOptions } from '../../src/store/sqlite/runtime/grant.js';
 import * as handles from '../../src/store/sqlite/runtime/handles.js';

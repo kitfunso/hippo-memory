@@ -1,5 +1,3 @@
-// Finding and stripping hippo's handlers inside a settings file's hook arrays.
-
 import {
   type JsonValue,
   isJsonString,

@@ -1,8 +1,5 @@
 #!/usr/bin/env node
 /**
- * Real token usage from Claude Code's own session records, joined to what
- * hippo sent in the same sessions (ROADMAP Part IX, TE0 on a desktop).
- *
  * Claude Code writes every session to ~/.claude/projects/<project>/<session>.jsonl.
  * Each assistant message carries the usage the API billed for it:
  * input_tokens, cache_creation_input_tokens, cache_read_input_tokens,
@@ -10,21 +7,6 @@
  * count towards their parent session. One API message is written as several
  * lines (one per content block) that repeat the same usage, so usage is
  * counted once per message id; summing lines would overcount.
- *
- * hippo's token ledger (`token_ledger`, schema v45) records the session id
- * from the hook payload, which is the transcript's file name, so the two join
- * exactly. hippo's numbers are estimates (characters / 4); Claude Code's are
- * the API's own counts.
- *
- * What this measures: what sessions cost, and how much of the new context
- * written in them was hippo's text. It does not measure savings; that needs
- * the paired A/B (TE5), because a session without hippo is a different
- * session.
- *
- * Run on the machine where Claude Code runs:
- *   npm run build && node scripts/token-eval/claude-usage.mjs
- *     [--projects ~/.claude/projects] [--days 30] [--hippo-root DIR ...]
- *     [--prices FILE] [--json] [--out FILE]
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -155,8 +137,6 @@ export function report(sessions, ledger, prices = null) {
       uncachedEquivalentInput: Math.round(uncachedEquivalentInput(s.usage)),
       usd: prices ? priceUsage(s.usage, prices) : null,
       hippo: h,
-      // Each hippo block enters the conversation as new context once, so
-      // compare it with the new context written (cache writes + uncached input).
       hippoShareOfNewContext: h && s.usage.cacheWriteTokens + s.usage.inputTokens > 0
         ? h.sent / (s.usage.cacheWriteTokens + s.usage.inputTokens)
         : null,

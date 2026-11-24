@@ -1,4 +1,3 @@
-// The vector-groups adapter: vector pages written through a store, under the same embed turn.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { Clock } from '../../base/ports/infra.js';
@@ -34,8 +33,6 @@ interface WriteVectorPageOptions {
   readonly particles: ParticleScoring | undefined;
 }
 
-/** Writes one page's vectors, one writeVectors per tenant, and stops at the first refused write;
- * `particles`, when given, scores the particle each memory seeds. */
 async function writeVectorPage({
   writes,
   write,
@@ -73,8 +70,6 @@ interface BackfillInStoreOptions {
   readonly particles: ParticleScoring;
 }
 
-/** Embeds every memory with no vector under `model`, page by page, so a provider failure keeps
- * the pages written; a rebuild reseeds the particles it drops. */
 async function backfillInStore({
   writes,
   provider,
@@ -104,15 +99,11 @@ async function backfillInStore({
       vectors,
       particles: rebuild ? particles : undefined,
     });
-    // Another process rebuilt the index mid-run; every later page would be refused too, after
-    // paying the provider for it.
     if (result.modelMismatch) throw new Error(OTHER_MODEL_INDEX);
     count += result.written;
   }
 }
 
-/** embedAll on a store: a model change re-embeds every memory, and the first page written drops
- * the old index. */
 async function embedAllInStore(
   { groups }: StoreEmbedTarget,
   provider: EmbeddingProvider,
@@ -131,9 +122,6 @@ async function embedAllInStore(
   });
 }
 
-/** embedMemory on a store; like the hippo.db path it resolves whatever fails. Unlike it, it
- * leaves a model change to embedAll, so a stale read here never drops another process's rebuild;
- * the read only saves a paid embed call, as the write refuses another model itself. */
 async function embedMemoryInStore(
   target: StoreEmbedTarget,
   provider: EmbeddingProvider,

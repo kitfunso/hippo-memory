@@ -1,5 +1,3 @@
-// The detached agent-note import (`__note-import-worker`): one session folder's notes, with no
-// hook time limit, and a log line for what it did.
 import { importSessionFolder } from '../../../api/agent-memories.js';
 import { summaryLine } from '../../../base/memory/agent-memory-report.js';
 import { isInitialized } from '../../../host/project-identity.js';
@@ -15,7 +13,6 @@ import {
 
 /** What a hook hands the worker: the session's transcript, which names its notes folder. */
 export interface NoteImportJob {
-  /** The hook that asked, which prefixes each log line. */
   readonly from: 'note-written' | 'post-compact';
   readonly transcriptPath: string;
   readonly cwd: string | null;
@@ -43,7 +40,6 @@ export async function handleNoteImportWorker({
   const from = stringFlag(flags, 'from') ?? 'note-written';
   const say = (line: string): void => appendSessionEndCloseLog(logFile, `${from}: ${line}`);
   const store = hookStoreRoot(hippoRoot);
-  // A hook fires in every folder, and none may create a store.
   if (transcript === undefined || !isInitialized(store)) return;
   try {
     const sync = cliSyncOptions(tenantId, currentMachine());

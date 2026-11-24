@@ -1,6 +1,3 @@
-// The recall and context input rules in one copy, so MCP and HTTP reject the same inputs with the
-// same messages. retrieveWithCliCore ranks with rankRecall under BUDGET_RANKED, then records the
-// list shown once.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
@@ -44,10 +41,7 @@ import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 import type { RecallTraceInput } from '../../base/ports/store/recall-writes.js';
 
 const MAX_RECALL_LIMIT = 1000;
-// recall() owns the shape rule for scorer_window (invalid_scorer_window); this cap bounds remote
-// cost.
 const MAX_SCORER_WINDOW = 1000;
-// Bounds BM25 tokenisation cost while covering pasted error messages.
 const MAX_CONTEXT_QUERY_LEN = 1024;
 const RECALL_MODES = ['bm25', 'hybrid', 'physics'] as const;
 
@@ -110,8 +104,6 @@ function nonNegativeParam(params: RequestParams, name: string): number | undefin
   return n;
 }
 
-// Only `true`, "1" and "true" turn a flag on, so `?summarize_overflow=banana` or an empty value
-// stays off.
 function flagParam(params: RequestParams, name: string): boolean {
   const value = params.get(name);
   return value === true || value === '1' || value === 'true';
@@ -128,7 +120,6 @@ function stringParam(params: RequestParams, name: string): string | undefined {
   return isJsonString(value) && value.length > 0 ? value : undefined;
 }
 
-/** An id-shaped string capped at MAX_ID_LEN; empty reads as absent. */
 function idParam(params: RequestParams, name: string): string | undefined {
   const value = params.get(name);
   if (isJsonString(value) && value.length > MAX_ID_LEN) {
@@ -161,7 +152,6 @@ function scorerWindowParam(params: RequestParams): number | undefined {
   return scorerWindow;
 }
 
-/** Trimmed, and absent when blank, so a whitespace id never keys a goal stack or a session ring. */
 function sessionIdParam(params: RequestParams): string | undefined {
   const value = idParam(params, 'session_id');
   const trimmed = value?.trim() ?? '';
@@ -230,9 +220,6 @@ export async function retrieveWithCliCore(
   opts: CliCoreQuery,
   core: CliCoreRanker,
 ): Promise<RecallResult> {
-  // A CliCoreQuery carries no scope, so the scope preflight of the other rankers has nothing to
-  // check here. This ranker applies the operator's scope rule and may search a second store, so no
-  // bearer client may reach it.
   if (!ctx.actor.hostAdmin) {
     throw new ForbiddenError('The CLI ranking core serves the host admin only');
   }
@@ -304,8 +291,6 @@ interface RecordShownOptions {
   readonly done: ShownCliRecall;
 }
 
-/** Audit rows first: a recall they cannot be written for leaves no strengthen, trace, marker or
- * count, as under the other rankers. */
 async function recordShown(
   ctx: Context,
   { store, opts, core, done }: RecordShownOptions,
@@ -335,8 +320,6 @@ async function recordShown(
     !readOnlyOf(ctx) &&
     (await finishOrReport(() => finishShown(store, core.lastRecall, writes, ids.length > 0)));
   if (audited && second !== undefined) await finishSecond(ctx, second, recallRow, heldElsewhere);
-  // The caller prints whether or not the record was written, so the ring and the ledger still take
-  // this list; `written` holds back the count.
   await recordShownRecall(ctx, store, RECALL_RECORDING.cli, {
     query: opts.query,
     sessionId: opts.boost?.sessionId,
@@ -348,8 +331,6 @@ async function recordShown(
   });
 }
 
-// The second store logs that it was searched, and strengthens only the rows the first does not
-// hold.
 function finishSecond(
   ctx: Context,
   second: RequiredStore,
@@ -365,8 +346,6 @@ function finishSecond(
   );
 }
 
-/** The second store ranked, as the caller's own store when that is the global one, so its graph
- * walks once. */
 function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource | undefined {
   if (sources === undefined) return undefined;
   if (ctx.reach?.isGlobal === true) {
@@ -375,15 +354,11 @@ function rankGlobal(ctx: Context, sources: CliCoreRanker['sources']): RankSource
   return { store: sources.store, config: sources.config, onHippoDb: true };
 }
 
-/** The second store takes its own recall rows, unless the caller's store is the global one
- * already. */
 function secondStore(ctx: Context, core: CliCoreRecall): RequiredStore | undefined {
   const sources = core.sources;
   return sources !== undefined && ctx.reach?.isGlobal !== true ? sources.store : undefined;
 }
 
-// The caller has ranked and is about to print, so a failed audit write is logged and counted, never
-// thrown.
 async function finishOrReport(finish: () => Promise<number | null | void>): Promise<boolean> {
   try {
     await finish();
@@ -403,7 +378,6 @@ async function idsNotHeld(
   return ids.filter((id) => !held.has(id));
 }
 
-// An empty list is traced too, so a coverage gap still reaches the training corpus.
 function traceOf(
   ctx: Context,
   opts: CliCoreQuery,
@@ -424,8 +398,6 @@ function traceOf(
   };
 }
 
-// A non-empty list is also the last recall, one write with its trace so `hippo outcome` never pairs
-// these ids with an older trace; an empty one leaves the marker on the previous recall.
 function finishShown(
   store: RequiredStore,
   lastRecall: LastRecall,

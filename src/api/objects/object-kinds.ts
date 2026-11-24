@@ -1,6 +1,3 @@
-// What only one typed-object kind does: an incident's open and resolve, the policies in force at a
-// date, the skills export, a brief built from its repo's receipts, and the memory a new decision
-// replaces.
 import type { Incident, Policy, ProjectBrief } from '../../base/records/object-types.js';
 import { MAX_CUSTOMER_LEN, MAX_NOTE_LEN } from '../../domain/objects/customer-notes.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';

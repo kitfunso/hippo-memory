@@ -1,8 +1,3 @@
-/**
- * LC1 schema migration v40 (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- * Mirrors tests/db/goal-stack-migration.test.ts conventions.
- */
-
 import { describe, it, expect } from 'vitest';
 import {
   openHippoDb,
@@ -92,7 +87,6 @@ describe('schema migration v40', () => {
           )
           .run(new Date().toISOString(), 'default', 'api', 'abc123', 5, 1).lastInsertRowid,
       );
-      // memory_id references a memory that never existed — must succeed (no FK).
       expect(() => {
         db.prepare(
           `INSERT INTO recall_trace_results (trace_id, tenant_id, memory_id, result_rank, score) VALUES (?, ?, ?, ?, ?)`,
@@ -160,8 +154,6 @@ describe('schema migration v40', () => {
 
   it('a v39 store upgrades to v40 cleanly without data loss', () => {
     const home = makeRoot('lc1-mig');
-    // Open once to reach v40, insert a trace row, then roll schema_version
-    // back to 39 and drop the three new tables to simulate a pre-v40 store.
     let db = openHippoDb(home);
     closeHippoDb(db);
     db = openHippoDb(home);
@@ -174,7 +166,6 @@ describe('schema migration v40', () => {
       closeHippoDb(db);
     }
 
-    // Re-open triggers runMigrations, which should re-run v40.
     db = openHippoDb(home);
     try {
       expect(getMeta(db, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);

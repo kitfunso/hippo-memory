@@ -1,4 +1,3 @@
-// The store functions capture code calls with a folder and plain values: each opens its own handle on a real store.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { summarizeFailures } from '../../src/store/sqlite/capture/failure-log.js';

@@ -1,5 +1,3 @@
-// Reads the model calls out of a Claude Code transcript, line by line, so a 100 MB file never sits
-// in memory.
 import { open } from 'node:fs/promises';
 import {
   isSyntheticMessage,
@@ -18,15 +16,12 @@ export async function readApiCalls(transcriptPath: string): Promise<TranscriptCa
   let malformed = 0;
   try {
     for await (const line of file.readLines({ encoding: 'utf8' })) {
-      // Transcripts can pass 100 MB, so only lines that can be a call or a boundary are parsed.
       if (!line.includes('"usage"') && !line.includes('"compact_boundary"')) continue;
       const entry = tryParseJson(line);
       if (entry === undefined) {
-        malformed += 1; // reported by the caller: one torn line must not void the session
+        malformed += 1;
         continue;
       }
-      // Sidechain calls, sidechain compactions and `<synthetic>` messages never touch the main
-      // context.
       if (!isJsonObjectLiteral(entry) || entry.isSidechain === true) continue;
       if (entry.subtype === 'compact_boundary') {
         compactions += 1;

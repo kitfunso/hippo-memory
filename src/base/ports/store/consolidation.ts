@@ -1,5 +1,3 @@
-// The store work of one sleep, kept apart from port.ts: reads and writes only, each one call on the
-// store. What to decay, merge, promote, rebuild and expire is decided in src/domain/consolidate.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { PhysicsParticle } from '../../rank/physics.js';
 import type { HalfLifeOutcome } from '../../memory/half-life-plan.js';
@@ -19,62 +17,36 @@ export type {
 
 /** What sleep reads and writes on hippo.db, every tenant at once. */
 export interface Consolidation {
-  /** A sleep's opening upkeep, each write its own transaction as before: the half-life move to
-   * base `to` (nothing under dryRun), then the full-text re-sync (only counted under dryRun);
-   * then the reads its passes start from. */
   begin(to: number, opts: SleepBegin): Promise<SleepStart>;
-  /** Up to `page.limit` memory ids of every tenant, by created then id, after `page.after`. */
   entryIdsPage(page: {
     readonly limit: number;
     readonly after?: EntryCursor;
   }): Promise<EntryIdPage>;
-  /** The tenant's tombstones among `digests`, in their order, in one read however many are
-   * asked. */
   rejected(tenantId: string, digests: readonly string[]): Promise<RejectedValueRow[]>;
-  /** The memory id of every stored physics particle, in load order. */
   particleIds(): Promise<string[]>;
-  /** Up to `page.limit` memories that have a stored particle, in recall order, after
-   * `page.after`. */
   particlesByRecall(page: {
     readonly limit: number;
     readonly after?: RecallCursor;
   }): Promise<RecallPage>;
-  /** Writes the particles over their stored state, as one batch. */
   saveParticles(particles: PhysicsParticle[]): Promise<void>;
-  /** The `limit` dirty summaries changed last, each with its live children by created then id,
-   * and whether more were waiting. With `at`, a summary held past it is skipped and counted in
-   * `held`; an adapter that ignores `at` stores no hold unless it has `noteRebuildFailures`. */
   dirtySummaries(limit: number, at?: string): Promise<DirtySummaries>;
-  /** Stores one pass's counted rebuild failures in one write; an item lands only while the stored
-   * count equals its `priorFailures`. Optional: a store without it keeps no holds and sleep sends
-   * every dirty summary as before. */
   noteRebuildFailures?(
     failed: ReadonlyArray<{
       readonly id: string;
       readonly tenantId: string;
       readonly priorFailures: number;
       readonly failures: number;
-      /** The ISO time the summary is next sent to the model; null while it is not held. */
       readonly retryAfter: string | null;
     }>,
   ): Promise<void>;
-  /** Up to `page.limit` empty extraction marks by source id, after the id `page.after`, and the id
-   * to continue after (null on the last page). A mark says extraction found nothing in that
-   * text of the source. Optional: a store without it keeps no marks and sleep offers every
-   * source as before. */
   emptyExtractions?(page: { readonly limit: number; readonly after?: string }): Promise<{
     readonly marks: ReadonlyArray<{
       readonly id: string;
-      /** The hash of the source text the model found nothing in. */
       readonly digest: string;
-      /** The ISO time of that call. */
       readonly at: string;
     }>;
     readonly next: string | null;
   }>;
-  /** Stores `mark` and drops the marks of the ids in `clear`, in one write; a mark lands only for
-   * a source that is live (neither archived nor superseded), and the marks of sources that are
-   * gone or no longer live are dropped with it. Optional, as `emptyExtractions` is. */
   noteEmptyExtractions?(note: {
     readonly mark: ReadonlyArray<{
       readonly id: string;
@@ -83,38 +55,18 @@ export interface Consolidation {
     }>;
     readonly clear: readonly string[];
   }): Promise<void>;
-  /** Up to `page.limit` of the L2 topic summaries with no L3 profile above them, oldest first,
-   * after `page.after`. */
   unprofiledTopicSummaries(page: {
     readonly limit: number;
     readonly after?: EntryCursor;
   }): Promise<EntryPage>;
-  /** Lands `settle` on a summary that is still dirty, with its audit rows, in one transaction.
-   * New content a tombstone names is kept out, with a refusal row, and the rest still lands. */
   settleSummary(settle: SummarySettle): Promise<SummarySettled>;
-  /** The sleep's chunked writes under its own lock wait: the flush, each component whole, in
-   * transactions of about `holdMs` with a gap for other writers between them; then the dormant
-   * expiry in the same way. */
   commit(commit: SleepCommit): Promise<SleepCommitted>;
-  /** Replaces the detected conflicts, appends the run row and adds one to the sleep count, each
-   * its own write. */
   recordSleep(record: SleepRecord): Promise<void>;
-  /** Appends each row as its own write; a failed row is logged and counted, and the failures
-   * returned as a count. */
   auditEachRow(events: readonly AppendAuditOptions[]): Promise<number>;
-  /** The current distilled memories that may share a text with another, and the order partitions
-   * first appear in. */
   duplicateCandidates(): Promise<DuplicateCandidates>;
-  /** Tenants with pending graph work, each with its highest pending queue id. */
   dirtyGraphTenants(): Promise<{ tenantId: string; maxPendingId: number }[]>;
-  /** Marks the tenant's pending graph work up to `maxId` processed; returns how many rows it
-   * marked. */
   markGraphDrained(tenantId: string, maxId: number): Promise<number>;
-  /** Takes the right to run a sleep on this store; `held` says another sleep has it and since
-   * when. One holder at a time across processes, and a holder that dies frees it. Optional: a
-   * store without it runs its sleeps unguarded. */
   claimSleep?(): Promise<SleepClaim>;
-  /** Gives back a claim this store took; a claim not taken, or already given back, is a no-op. */
   releaseSleep?(): Promise<void>;
 }
 
@@ -149,25 +101,16 @@ export const CONSOLIDATION_EFFECTS = {
 
 export interface SleepBegin {
   readonly dryRun: boolean;
-  /** Who the half-life move's audit rows name. */
   readonly actor: string;
-  /** The tenant whose sessions completed at or after `sinceMs` with no trace yet are read;
-   * unset, none are. */
   readonly traces?: { readonly tenantId: string; readonly sinceMs: number };
 }
 
 export interface SleepStart {
-  /** The base the half-lives were on. */
   readonly from: number;
-  /** Null when no move was due. */
   readonly outcome: HalfLifeOutcome | null;
-  /** The full-text index's counts when they drifted from `memories`, else null. */
   readonly fts: { readonly memories: number; readonly fts: number } | null;
-  /** The stored sleep count, 0 when none was recorded. */
   readonly sleepCount: number;
-  /** The newest 20 run times, newest first. */
   readonly recentRuns: readonly string[];
-  /** The sessions `traces` asked for, each with its newest events. */
   readonly sessions: readonly UntracedSession[];
 }
 
@@ -204,13 +147,9 @@ export interface DirtySummaries {
   readonly summaries: ReadonlyArray<{
     readonly summary: MemoryEntry;
     readonly children: MemoryEntry[];
-    /** The rebuild failures in a row stored for it; 0 when none, and unset by a store that keeps
-     * none. */
     readonly failures?: number;
   }>;
   readonly more: boolean;
-  /** Dirty summaries skipped because their hold had not ended at `at`; unset when `at` was not
-   * given or the store keeps no holds. */
   readonly held?: number;
 }
 
@@ -218,17 +157,13 @@ export interface DirtySummaries {
 export interface SummarySettle {
   readonly id: string;
   readonly tenantId: string;
-  /** Who a refusal row names. */
   readonly actor: string;
-  /** The rebuilt fields; unset, only the dirty mark is cleared. */
   readonly fields?: {
-    /** New content; the store stamps the rebuild time and adds one to the rebuild count with it. */
     readonly content?: { readonly text: string; readonly rebuiltAt: string };
     readonly descendantCount: number;
     readonly earliestAt: string | null;
     readonly latestAt: string | null;
   };
-  /** Appended in order when the row changes, after a refusal row. */
   readonly audit: readonly AppendAuditOptions[];
 }
 
@@ -240,31 +175,22 @@ export interface SummarySettled {
 }
 
 export interface SleepCommit {
-  /** The flush, null for none; `snapshot` holds each changed row as sleep loaded it, a Map so it
-   * crosses threads. */
   readonly flush: {
     readonly components: readonly FlushComponent[];
     readonly snapshot: ReadonlyMap<string, MemoryEntry>;
   } | null;
-  /** Dormant rows moved before this ISO time are deleted for good, or only counted under dryRun;
-   * null keeps them. */
   readonly expireBefore: string | null;
   readonly dryRun: boolean;
-  /** How long one transaction may hold the write lock; zero commits one component per
-   * transaction. */
   readonly holdMs: number;
 }
 
 export interface SleepCommitted {
-  /** The ids the flush removed from active memory. */
   readonly removedIds: string[];
-  /** Dormant memories expired, or that would be under dryRun. */
   readonly expired: number;
 }
 
 export interface SleepRecord {
   readonly conflicts: DetectedConflict[];
-  /** The run's ISO time: the conflicts' detected time and the run row's. */
   readonly at: string;
   readonly decayed: number;
   readonly merged: number;
@@ -281,7 +207,6 @@ export type DetectedConflict = {
 /** Ops that must commit in one transaction, so a flush split across several never lands part of
  * one. */
 export interface FlushComponent {
-  /** Decay's new strengths, each set on the row as it stands at commit; they go before `writes`. */
   refreshes: readonly StrengthRefresh[];
   writes: readonly MemoryEntry[];
   deletes: readonly string[];
@@ -296,12 +221,9 @@ export interface StrengthRefresh {
 
 /** One memory that sleep is moving out of active memory into the dormant store. */
 export interface DormantMove {
-  /** The memory as it stood when it faded; restored verbatim apart from its recall clock. */
   entry: MemoryEntry;
-  /** Live strength at the moment it went dormant (below the decay threshold). */
   strength: number;
   reason: DormantReason;
-  /** ISO time of the sleep that made it dormant. */
   dormantAt: string;
 }
 

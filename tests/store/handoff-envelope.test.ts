@@ -1,5 +1,3 @@
-// W1 handoff envelope (trajectories/01M2BQTM4AGFVMYY7G2XV5G7WY/plan.md), tests 1-6 and fix 4: schema, round trip, opts, stamping, session-end write.
-// Real temp SQLite stores throughout; no mocked DB.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   openHippoDb,
@@ -48,7 +46,6 @@ function setMeta(db: DatabaseSyncLike, key: string, value: string): void {
   db.prepare(`UPDATE meta SET value = ? WHERE key = ?`).run(value, key);
 }
 
-// Pre-W1 shape of session_handoffs (the DDL as it stood before the v42 migration).
 const PRE_W1_SESSION_HANDOFFS_DDL = `
   CREATE TABLE session_handoffs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,7 +212,6 @@ describe('round trip of new fields', () => {
       closeHippoDb(db);
     }
 
-    // A column an earlier case named at warn repeats at debug for the rest of the process, so this case reads at debug.
     vi.stubEnv('HIPPO_LOG', 'debug');
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     let logged: string;
@@ -260,7 +256,6 @@ describe('loadLatestHandoff opts', () => {
       outcome: null,
     });
 
-    // No opts: existing behaviour, newest row regardless of outcome.
     const newest = loadLatestHandoff(root, 'default', 'sess-multi');
     expect(newest!.summary).toBe('second (newest)');
 
@@ -272,7 +267,6 @@ describe('loadLatestHandoff opts', () => {
     } finally {
       closeHippoDb(db);
     }
-    // Both rows are now 'success'; unfinishedOnly must find none.
     expect(loadLatestHandoff(root, 'default', 'sess-multi', { unfinishedOnly: true })).toBeNull();
 
     saveSessionHandoff(root, 'default', {
@@ -285,7 +279,6 @@ describe('loadLatestHandoff opts', () => {
     const unfinished = loadLatestHandoff(root, 'default', 'sess-multi', { unfinishedOnly: true });
     expect(unfinished!.summary).toBe('third partial');
 
-    // Isolated session: only row is old, so maxAgeMs has nothing else to fall back to.
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-age', summary: 'stale', artifacts: [] });
     const db2 = openHippoDb(root);
     try {
@@ -312,7 +305,6 @@ describe('stampHandoffOutcome', () => {
     const newest = loadLatestHandoff(root, 'default', 'sess-stamp');
     expect(newest!.outcome).toBe('success');
 
-    // Newest already stamped: a second stamp call must not touch the older row.
     expect(stampHandoffOutcome(root, 'default', 'sess-stamp', 'failure')).toBe(0);
 
     expect(stampHandoffOutcome(root, 'default', 'sess-no-rows', 'success')).toBe(0);

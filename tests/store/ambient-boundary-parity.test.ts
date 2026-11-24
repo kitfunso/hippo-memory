@@ -1,4 +1,3 @@
-// The JS tally and the SQL aggregate share one freshness window and one schema-fit threshold, so they agree at the edges.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { AMBIENT_FRESH_WINDOW_MS, tallyAmbientEntries } from '../../src/base/memory/ambient.js';

@@ -1,12 +1,3 @@
-/**
- * E2 incident first-class object — HTTP route parity test.
- * Docs: docs/plans/2026-05-29-e2-incident-object.md
- *
- * Covers what only incidents have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/incidents lists + status filter
- * 2. POST /v1/incidents/:id/resolve resolves open (+409 on re-resolve)
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -78,7 +69,6 @@ describe('HTTP /v1/incidents (incident first-class object)', () => {
     expect(resolved.status).toBe('resolved');
     expect(resolved.resolutionText).toBe('restarted workers');
 
-    // re-resolving the already-resolved incident -> 409
     const conflict = await fetch(`${handle.url}/v1/incidents/${inc.id}/resolve`, {
       method: 'POST',
       headers: authHeaders(apiKey),

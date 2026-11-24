@@ -1,5 +1,3 @@
-// How long each of sleep's flush transactions holds the write lock, on a store built under the OS temp folder.
-// Run by hand after `npm run build`, never in CI: node benchmarks/flush-chunk-hold.mjs [rows]. Exits 1 when a chunk holds over 150 ms.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -15,7 +13,6 @@ const DAY = 86_400_000;
 const NOW = new Date('2026-06-01T12:00:00.000Z');
 const ROWS = Number(process.argv[2] ?? 20_000);
 
-/** 5% of rows in three-row merge clusters, 5% faded enough to go dormant, the rest decay writes with no text change. */
 function fixture(n) {
   let k = 0;
   const row = (text, ageDays, idleDays, extra = {}) => ({
@@ -47,7 +44,6 @@ function seed(root, rows) {
   }
 }
 
-/** Records BEGIN IMMEDIATE to COMMIT for every transaction the flush opens, and nothing else's. */
 function timeFlushChunks() {
   const holds = [];
   const begunAt = new WeakMap();

@@ -1,6 +1,3 @@
-// Reads and writes hippo's GitHub Copilot files: the hooks file, the MCP configs and the
-// instructions under the Copilot home and each VS Code User folder. What goes in them is
-// rules/copilot.ts.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
@@ -41,7 +38,6 @@ import {
   writeSettingsFile,
 } from './json-hooks.js';
 
-// The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
 export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from './rules/copilot.js';
 
 function profileDirs(userDir: string): string[] {
@@ -69,8 +65,6 @@ export function copilotPaths(): CopilotPaths {
   };
 }
 
-/** Null for a file with comments, one that is not JSON, or one whose shape a merge would
- * overwrite; a missing file reads as empty. */
 function readMcpConfig(file: string, host: McpHost): McpConfig | null {
   let config: JsonValue = {};
   if (fs.existsSync(file)) {
@@ -80,7 +74,6 @@ function readMcpConfig(file: string, host: McpHost): McpConfig | null {
       // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown
       // with its own message.
       if (!(err instanceof SyntaxError)) throw err;
-      // An empty file is a new one with no servers yet, not one with comments.
       if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
     }
   }
@@ -104,8 +97,6 @@ function removeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpRemo
   return status;
 }
 
-/** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the
- * instructions still install. */
 function mcpStep<S extends string>(step: () => S): S | McpFailure {
   try {
     return step();
@@ -115,7 +106,6 @@ function mcpStep<S extends string>(step: () => S): S | McpFailure {
   }
 }
 
-/** Creates the file when missing. */
 function ensureInstructionsBlock(file: string): InstructionsInstallStatus {
   const plan = planInstructionsBlock(fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '');
   if (plan.status === 'written') writeFileAtomic(file, plan.next);
@@ -138,7 +128,6 @@ function ensureVscodeInstructions(file: string): VscodeInstructionsInstallStatus
   return status;
 }
 
-/** Deletes the file only when it still holds exactly what a hippo release wrote. */
 function removeVscodeInstructions(file: string): VscodeInstructionsRemoveStatus {
   if (!fs.existsSync(file)) return 'absent';
   if (!isHipposVscodeInstructions(fs.readFileSync(file, 'utf8'))) return 'kept';
@@ -156,7 +145,6 @@ export function isCopilotCliPresent(home: string = copilotHomeDir(processHomes()
 
 export function installCopilot(): CopilotInstallResult {
   const paths = copilotPaths();
-  // Read before the hooks install, which makes the folder on a machine with only VS Code.
   const cli = isCopilotCliPresent();
   return {
     paths,

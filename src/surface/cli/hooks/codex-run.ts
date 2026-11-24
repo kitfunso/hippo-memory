@@ -1,4 +1,3 @@
-// `hippo codex-run`: launches the real Codex, then starts the session-end worker once Codex exits.
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -113,7 +112,6 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
   ];
 
   if (await detachedWorkerStarted(workerArgs)) return;
-  // Awaited so the sleep write can't be killed by the exit calls below.
   try {
     await handleCodexSessionEndWorker({
       hippoRoot,
@@ -135,10 +133,6 @@ async function launchCodexSessionEndWorker(options: CodexSessionEndWorkerOptions
   }
 }
 
-/**
- * Resolves true once the detached worker is running, false when the spawn fails, whether it throws
- * or reports later.
- */
 function detachedWorkerStarted(workerArgs: readonly string[]): Promise<boolean> {
   return new Promise((resolve) => {
     const failed = <E>(err: E): void => {

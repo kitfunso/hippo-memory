@@ -1,7 +1,3 @@
-"""Benchmarks-page data: hippo's answer scores and its paired rivals from the score files, published rows from competitors.json.
-
-Usage: python benchmarks/public/site_data.py [results dir]   (writes website/src/data/public-benchmarks.json)
-"""
 import json
 import re
 import sys
@@ -11,8 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 RESULTS = ROOT / "benchmarks/public/results/2026-11-12-answer-accuracy"
 OUT = ROOT / "website/src/data/public-benchmarks.json"
 PAIR = r"\s*{metric}:\s+([+-][\d.]+) pp \[\s*([+-][\d.]+),\s*([+-][\d.]+)\] n=(\d+)"
-# name, score-file stem, hippo's value pattern, the paired-line prefix and metric, the unit shown, hippo's settings answered at
-# the card's cutoff. The card shows the higher setting and names it; LoCoMo and LongMemEval-S ran hippo-best only at 50 and 10.
 BENCHES = [
     ("LoCoMo", "locomo-h2h", r"=== top 200 ===\n{arm}\s+n=\d+\s+F1\s+[\d.]+\s+judge\s+([\d.]+)", "top 200 ", "judge", "%", ("hippo-emb",)),
     ("LongMemEval-S", "longmemeval-s", r"{arm}\s+acc@200\s+n=\d+\s+mean\s+([\d.]+)", "secondary acc@200 ", "", "%", ("hippo-emb",)),
@@ -23,14 +17,13 @@ BENCHES = [
 SETTING = {"hippo-emb": "local embedder", "hippo-best": "local embedder and reranker"}
 ARM = {"hippo365": "hippo, embeddings off", "hippo-emb": "hippo, embedder only", "bm25": "BM25", "mem0": "Mem0",
        "full": "Full chat"}
-MEMORY_SYSTEMS_HERE = {"Mem0"}  # rivals run here that are memory products; BM25 and full chat are controls
-SKIP = re.compile(r"recall|R@|not answer accuracy|retrieval|^F1$|DeepEval", re.I)  # measures other than answer accuracy
-FOLD = {"Mem0g": "Mem0", "Mastra RAG": "Mastra", "Mastra Observational Memory": "Mastra"}  # one row per vendor
-NEVER = {"gbrain"}  # never on the site, not even in a rank (Keith, 18 Nov 2026)
+MEMORY_SYSTEMS_HERE = {"Mem0"}
+SKIP = re.compile(r"recall|R@|not answer accuracy|retrieval|^F1$|DeepEval", re.I)
+FOLD = {"Mem0g": "Mem0", "Mastra RAG": "Mastra", "Mastra Observational Memory": "Mastra"}
+NEVER = {"gbrain"}
 
 
 def value(score: str) -> float | None:
-    """A published row's best figure: per ';' segment the first percentage (the top of an 'X% to Y%' range)."""
     best = None
     for seg in score.replace(",", "").split(";"):
         pct = [float(x) for x in re.findall(r"(\d+(?:\.\d+)?)%", seg)]
@@ -81,7 +74,6 @@ def published(rows: list[dict], bench: str) -> list[dict]:
 
 
 def rank(hippo: float, rivals: list[dict], pub: list[dict]) -> tuple[int, int] | None:
-    """hippo's place among memory systems: each vendor's best, published or run here; controls and models alone left out."""
     field: dict[str, float] = {}
     for p in pub:
         if p["kind"] == "product" and p["name"] != "Full chat":

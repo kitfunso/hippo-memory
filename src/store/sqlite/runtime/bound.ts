@@ -1,12 +1,7 @@
-// A group is one object of SQL bodies that take the handle first, bound to the store's handles here
-// once, so no group method forwards to its body by hand. A body that writes the mirror files closes
-// over them when its group is built.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { HandleOpener, OnHandle } from './open.js';
 import { portError } from './port-errors.js';
 
-// A void method's body returns nothing too: `void` alone would let a value through to callers the
-// port promised none.
 type BodyOf<M> = M extends (...args: infer A) => infer R
   ? (
       db: DatabaseSyncLike,
@@ -25,10 +20,7 @@ export function bound<G>(on: OnHandle, bodies: Bodies<G>, open?: HandleOpener): 
   // SAFETY: Object.keys lists the own keys of the bodies, which are the keys of G by the Bodies
   // mapping.
   for (const key of Object.keys(bodies) as (keyof G)[]) {
-    // Typed as Function so that apply can pass each body its own argument list.
     const body: Function = bodies[key];
-    // Built here, not in a helper: an error stack keeps only 10 frames, and helper frames would
-    // push the caller out.
     const method = (...args: never[]) => {
       try {
         return Promise.resolve(on((db) => body.apply(undefined, [db, ...args]), open));

@@ -1,4 +1,3 @@
-// A Claude Code session read into a run record: the result's usage, the transcript's work counts, and the record shapes.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -7,7 +6,6 @@ const LIMIT_RE = /usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limi
 
 /** A plan usage limit or an overload: not a task failure, so the session is rerun. */
 export function isUsageLimit(result, output) {
-  // The run's own --max-budget-usd or turn cap is a real outcome, never retried.
   if (String(result?.subtype ?? '').startsWith('error_max')) return false;
   return (result === null || Boolean(result.is_error)) && LIMIT_RE.test(output);
 }
@@ -51,7 +49,6 @@ export function segmentText(seg) {
   return bytes.subarray(fromBytes, toBytes ?? bytes.length).toString('utf8');
 }
 
-/** Parsed lines of each segment; a missing file has none. */
 function* segmentLines(segments) {
   for (const seg of segments) {
     if (!seg.file || !fs.existsSync(seg.file)) continue;
@@ -114,7 +111,6 @@ function parseLine(line) {
   }
 }
 
-/** Each path or segment once, its path resolved. */
 function uniqueSegments(items) {
   const seen = new Map();
   for (const item of (items ?? []).filter(Boolean)) {
@@ -126,7 +122,6 @@ function uniqueSegments(items) {
   return [...seen.values()];
 }
 
-/** Parsed lines of each transcript file or segment, each once, as `{file, o}`. */
 function* fileLines(items) {
   for (const seg of uniqueSegments(items)) {
     for (const line of segmentText(seg).split('\n')) {
@@ -136,7 +131,6 @@ function* fileLines(items) {
   }
 }
 
-/** tool_use and tool_result blocks across transcript files as `{file, block, cwd}`, each tool_use id once; cwd is the line's own, when it has one. */
 function* fileBlocks(files) {
   const seen = new Set();
   for (const { file, o } of fileLines(files)) {

@@ -1,4 +1,3 @@
-// An imported row's source, `agent-memory:<tool>:<container>/<item>#<hash>`, and the stored text.
 import type { Machine } from '../../base/util/agent-homes.js';
 import { truncateCodePointSafe } from '../../base/util/code-point-cut.js';
 import { maskEmails } from '../../base/util/secret-detect.js';
@@ -43,7 +42,6 @@ export function itemSource(
 /** Joins a long note's key to a part's `<heading slug>/<12 hex>`. */
 export const PART_MARK = '::';
 
-// A file name may hold "::", so only the exact tail the splitter writes, at the key's end, is a part.
 const PART_TAIL = new RegExp(`${PART_MARK}[a-z0-9-]+/[0-9a-f]{${ID_SUFFIX_CHARS}}(?:~\\d+)?$`);
 
 /** The note a key belongs to: the key before its part tail, else the whole key. */

@@ -1,5 +1,3 @@
-// A request opens each store it reads on the server thread once, however many api helpers it runs, and not at all when its store work runs on worker threads.
-// Counts real DatabaseSync connections per database file by patching the prototype, as the hook open-count test does.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { realpathSync } from 'node:fs';
@@ -55,7 +53,6 @@ let root: string;
 let server: ServerHandle;
 let spies: Array<{ mockRestore(): void }>;
 
-/** Connections opened while `fn` ran, per store: `local`, `global`, or the file path. */
 async function opensDuring(fn: () => Promise<void>, at = root): Promise<Record<string, number>> {
   const start = opened.length;
   await fn();
@@ -94,14 +91,11 @@ beforeAll(async () => {
   const made = makeStore('request-open-count');
   tmp = realpathSync.native(made.base);
   root = realpathSync.native(made.root);
-  // A global store left by another file in this worker would add its own open to every recall.
   vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
   const opts = { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS };
   writeEntry(root, createMemory('the postgres migration needs a rollback plan and a dry run', opts));
   writeEntry(root, createMemory('deploy windows are Tuesday and Thursday afternoons only', opts));
   spies = countConnections();
-  // Boot opens the held connection, so every count below is the requests' own.
-  // An add-on route that runs two api helpers, as a hook route does.
   const addon: AddonRoute = {
     path: '/v1/test/remember-then-recall',
     handler: async ({ ctx: given }) => {
@@ -162,7 +156,6 @@ describe('store opens per request', () => {
 describe('a remember on an in-process store', () => {
   it("opens hippo.db once, so auto-sleep's count of new rows ran on the request's own session", async () => {
     const own = realpathSync.native(makeStore('request-open-count-auto-sleep').root);
-    // Auto-sleep is on by default; a threshold no test reaches keeps the sleep itself from starting.
     expect(loadConfig(own).autoSleep.enabled).toBe(true);
     const inProcess = await serveKeyed({ hippoRoot: own, port: 0, store: sqliteStore(own) }, serve);
     try {

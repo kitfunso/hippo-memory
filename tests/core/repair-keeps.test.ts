@@ -1,4 +1,3 @@
-// Quality repair's protection is data the store applies: each field keeps the rows it names, and only those.
 import { describe, expect, it } from 'vitest';
 import {
   PROTECTED_ROWS as repairProtection,

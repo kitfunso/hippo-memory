@@ -14,10 +14,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeTmpStore(): string {
   const dir = makeRoot('test');
   return dir;
@@ -28,10 +24,6 @@ function cleanUp(...dirs: string[]): void {
     removeDir(d);
   }
 }
-
-// ---------------------------------------------------------------------------
-// getGlobalRoot
-// ---------------------------------------------------------------------------
 
 describe('getGlobalRoot', () => {
   it('falls back to ~/.hippo when neither env var is set', () => {
@@ -54,10 +46,6 @@ describe('getGlobalRoot', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// initGlobal / copyToGlobal
-// ---------------------------------------------------------------------------
-
 describe('copyToGlobal', () => {
   let localRoot: string;
   let globalRoot: string;
@@ -76,8 +64,6 @@ describe('copyToGlobal', () => {
     const entry = createMemory('shared lesson about pipeline errors');
     writeEntry(localRoot, entry);
 
-    // HIPPO_HOME is pointed at a temp global store in beforeEach, so this
-    // promote lands in that temp store, not the developer's real ~/.hippo.
     const promoted = await copyToGlobal(localRoot, entry.id);
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe(entry.content);
@@ -93,19 +79,13 @@ describe('copyToGlobal', () => {
     writeEntry(localRoot, a);
     writeEntry(localRoot, b);
 
-    // Promoting tenant-a's entry with opts.tenantId='tenant-a' succeeds.
     const promoted = await copyToGlobal(localRoot, a.id, { tenantId: 'tenant-a' });
     expect(promoted.id).toMatch(/^g_/);
     expect(promoted.content).toBe('tenant-a content');
 
-    // Promoting tenant-a's entry as tenant-b throws: promote's tenant pre-check answers not found.
     await expect(copyToGlobal(localRoot, a.id, { tenantId: 'tenant-b' })).rejects.toThrow(/memory not found/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// syncGlobalToLocal
-// ---------------------------------------------------------------------------
 
 describe('syncGlobalToLocal', () => {
   let localRoot: string;
@@ -141,7 +121,7 @@ describe('syncGlobalToLocal', () => {
   it('skips entries already in local store', async () => {
     const entry = createMemory('already local');
     writeEntry(globalRoot, entry);
-    writeEntry(localRoot, entry); // already exists
+    writeEntry(localRoot, entry);
 
     const count = await syncGlobalToLocal(...sharingStores(localRoot, globalRoot), {
       embed: TEST_RUN,

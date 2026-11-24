@@ -10,7 +10,6 @@ import { writeEntry } from '../_helpers/root-forms.js';
 let tmpDir: string;
 let hippoDir: string;
 
-/** `hippo <args>` run in this process from tmpDir with `env` set, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function runHippo(args: string[], env: Record<string, string> = {}): Promise<string> {
   const vars = {
     HIPPO_HOME: path.join(tmpDir, 'global'),
@@ -41,7 +40,6 @@ afterEach(() => {
 
 describe('scope boost scoring', () => {
   it('scoped memory ranks higher when scope matches', async () => {
-    // Create two memories with similar content but different scope tags
     const scoped = createMemory('always use real DB for integration tests', {
       layer: Layer.Episodic,
       tags: ['scope:plan-eng-review'],
@@ -55,12 +53,10 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    // Recall with matching scope
     const out = await runHippo(['recall', 'real DB tests', '--scope', 'plan-eng-review', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
 
-    // The scoped memory should rank first (1.5x boost)
     const scopedResult = parsed.results.find((r: { id: string }) => r.id === scoped.id);
     const unscopedResult = parsed.results.find((r: { id: string }) => r.id === unscoped.id);
     expect(scopedResult?.id).toBe(scoped.id);
@@ -82,7 +78,6 @@ describe('scope boost scoring', () => {
     writeEntry(hippoDir, scoped);
     writeEntry(hippoDir, unscoped);
 
-    // Recall with mismatching scope: scoped memory gets 0.5x, unscoped gets 1.0x
     const out = await runHippo(['recall', 'real DB tests', '--scope', 'qa', '--json', '--limit', '5']);
     const parsed = JSON.parse(out);
     expect(parsed.results.length).toBeGreaterThanOrEqual(2);
@@ -91,7 +86,6 @@ describe('scope boost scoring', () => {
     const unscopedResult = parsed.results.find((r: { id: string }) => r.id === unscoped.id);
     expect(scopedResult?.id).toBe(scoped.id);
     expect(unscopedResult?.id).toBe(unscoped.id);
-    // Mismatched scope (0.5x) should score lower than neutral (1.0x)
     expect(unscopedResult.score).toBeGreaterThan(scopedResult.score);
   });
 

@@ -1,5 +1,3 @@
-// Session capture saves each message the person types as a raw row, so a fact told in chat can be recalled later.
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -18,9 +16,7 @@ import { Layer, USER_MESSAGE_TAG, USER_RULE_TAG } from '../../src/base/memory/en
 const KIBO = "[2023-01-11] gave kibo a bite of my curry and now he won't come near me. cats hold grudges";
 const PRIYA = "Priya's onboarding mocks landed well in review today";
 const REPLY = 'Noted, sounds like Kibo has had a long day.';
-// The worth check that guards capture's own extracts drops this short fact.
 const COLOUR = 'my favourite colour is green';
-// The cap in src/surface/capture/user-messages.ts.
 const MAX_CHARS = 2000;
 
 describe('capture saves what the person types', () => {
@@ -40,7 +36,6 @@ describe('capture saves what the person types', () => {
       ...extra,
     });
   const messages = () => loadAllEntries(root, 'default').filter((e) => e.tags.includes(USER_MESSAGE_TAG));
-  // One capture stamps every row with one instant, so the store's order among them is by random id.
   const texts = () =>
     messages()
       .map((e) => e.content)
@@ -155,7 +150,6 @@ describe('capture saves what the person types', () => {
     const lesson = 'Run npm run build before the tests in hippo, because the tests import dist/.';
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     writeEntry(root, { ...createMemory(lesson, { layer: Layer.Episodic }), created: dayAgo });
-    // Each message clears the quality floor, and 40 outrun the store's recent read unless it skips them.
     await capture(
       Array.from({ length: 40 }, (_, i) => ({
         role: 'user' as const,

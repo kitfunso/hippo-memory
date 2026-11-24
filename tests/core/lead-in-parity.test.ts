@@ -1,4 +1,3 @@
-// The text a memory is found by has one rule, and each copy of it is held equal: the FTS row, its SQL repair, the BM25 document and the embed text.
 import { describe, expect, it } from 'vitest';
 import { embeddingInputText } from '../../src/base/embeddings/index-identity.js';
 import { FINDABLE_TEXT_SQL, findableText } from '../../src/base/memory/lead-in.js';
@@ -12,7 +11,6 @@ import { batchWriteAndDeleteInFolder, loadSearchEntries, writeEntry } from '../_
 
 const CONTENT = 'Three times a week; it keeps us on track.';
 const LEAD_IN = 'user: How often do Keith and Mel run the zephyrline';
-// A row with no lead-in has NULL in the column; the empty one is a hand-edited store.
 const CASES = [
   ['no lead-in', undefined],
   ['a lead-in', LEAD_IN],

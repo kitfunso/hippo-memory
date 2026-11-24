@@ -1,4 +1,3 @@
-// transcriptNotesProject walked the disk for the project; it now asks the machine, so a machine held in memory answers.
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {

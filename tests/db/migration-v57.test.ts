@@ -1,4 +1,3 @@
-// Schema v57 adds the decay-key index that listContextCandidates reads past the cap.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,7 +14,6 @@ import { v57 } from '../../src/db/migrations/v57.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 
-// The schema of a store at version 56, frozen as SQL: the last version before migration 60.
 const V56_SCHEMA = join(__dirname, '..', 'fixtures', 'schema-v56.sql');
 
 let home: string;
@@ -58,7 +56,6 @@ describe('schema v57', () => {
     home = makeRoot('migration-v57-old', { init: false });
     const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite');
     const old = new DatabaseSync(getHippoDbPath(home));
-    // One transaction: on a rollback journal each statement of the schema would otherwise flush the disk on its own.
     old.exec(`BEGIN;\n${readFileSync(V56_SCHEMA, 'utf8')}\nCOMMIT;`);
     old
       .prepare(

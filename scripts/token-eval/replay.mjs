@@ -1,32 +1,4 @@
 #!/usr/bin/env node
-/**
- * Session replay harness (ROADMAP Part IX, TE4).
- *
- * Replays recorded or synthetic agent sessions through hippo's real
- * per-prompt hook (`hippo context --pinned-only --include-recent 5
- * --format additional-context`, the command `hippo hook install
- * claude-code` registers) and measures what hippo itself adds to the
- * agent's context. No LLM is called, so it is deterministic and cheap enough
- * to gate CI.
- *
- * Arms:
- *   every-turn      `pinnedInject.skipUnchanged: false`, the behaviour before TE2
- *   skip-unchanged  the default: skip a block the session already has
- *
- * Per arm it reports tokens injected, how often an unchanged block rendered
- * byte-identically (TE1), and a cache-priced cost of hippo's text in
- * uncached-equivalent tokens: each injected block is written to the prompt
- * cache once (1.25x) and re-read on every later prompt (0.1x) until a
- * compaction drops it. It prices only hippo's text, not the whole
- * conversation.
- *
- * A trace is JSON: { name, description, synthetic, pinned: string[],
- * events: [{type:'prompt'} | {type:'remember', text} | {type:'compact'}] }.
- * Bundled traces live in benchmarks/token-eval/traces/ and are synthetic.
- *
- * Run: npm run build && node scripts/token-eval/replay.mjs
- *      [--traces DIR] [--out FILE]
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -64,7 +36,6 @@ export function replayTrace(trace, arm) {
   const hippoRoot = path.join(workDir, '.hippo');
   try {
     initStore(hippoRoot);
-    // Traces carry no prompt text, so prompt recall (default on since 1.55.0) would never fire.
     const pinnedInject = { promptRecall: false };
     if (arm === 'every-turn') pinnedInject.skipUnchanged = false;
     fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ pinnedInject }));
@@ -92,7 +63,6 @@ export function replayTrace(trace, arm) {
         active = [];
         changedSincePrev = true;
       } else if (ev.type === 'prompt') {
-        // Everything injected earlier is re-read from the cache on this prompt.
         cacheReadTokens += active.reduce((s, k) => s + k, 0);
         const out = runCli(workDir, HOOK_ARGS, payload).trim();
         let block = '';
@@ -122,8 +92,6 @@ export function replayTrace(trace, arm) {
       injectedTokens: cacheWriteTokens,
       cacheReadTokens,
       uncachedEquivalent: Math.round(uncachedEquivalentInput(usage, DEFAULT_CACHE_RATIOS)),
-      // TE1: share of unchanged-memory re-renders that were byte-identical.
-      // Measured in the every-turn arm, where every prompt renders.
       identicalWhenUnchanged: unchangedOpportunities === 0 ? null : unchangedIdentical / unchangedOpportunities,
       perPrompt,
     };

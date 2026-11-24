@@ -1,4 +1,3 @@
-// Quarantine answers: the same records, the same order, the same refusals and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,7 +39,6 @@ const T2 = '2026-03-01T12:00:02.000Z';
 const ACTOR = 'api_key:reviewer';
 const ALPHA_HELD = 'quarantine:private:team:alpha';
 
-/** A memory row as a caller can tell where it sits. */
 interface ScopeView {
   readonly id: string;
   readonly scope: string | null;
@@ -58,7 +56,6 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'quarantine', calls);
 }
 
-/** Sets the clock inside the call, so each step reads a time the test names. */
 const at =
   (iso: string, call: Call): Call =>
   (g, store) => {
@@ -88,7 +85,6 @@ const scopeOf =
     (await store.entriesByIds([id], tenantId)).map((e) => ({ id: e.id, scope: e.scope ?? null }));
 const below = (second: number, id: string): KeysetPosition => ({ key: heldAt(second), id });
 
-/** Every page of `limit` records, each resumed from the last record of the one before, until a page comes back empty. */
 const pages =
   (limit: number, tenantId = TENANT_A): Call =>
   async (g) => {
@@ -129,7 +125,6 @@ const values = (side: Side): Value[] =>
     return o.value;
   });
 
-/** The rows a run added, each under the next audit id in turn. */
 const added = (side: Side): AuditEvent[] => side.audit.slice(baseline.audit.length);
 
 function auditRow(
@@ -146,7 +141,6 @@ function auditRow(
 const A_PENDING = [HELD.moved, HELD.a3, HELD.a2, HELD.a1];
 const A_ALL = [HELD.moved, HELD.gone, HELD.a3, HELD.a2, HELD.a1];
 const BULK_IDS = Array.from({ length: BULK_RECORDS }, (_, i) => bulkId(BULK_RECORDS - 1 - i));
-/** Everything a refused decision could have touched, read through the port. */
 const STATE: readonly Call[] = [
   list(all()),
   list(all(), TENANT_B),
@@ -423,7 +417,6 @@ describe('Quarantine.decideQuarantined reject', () => {
 });
 
 const DECIDERS = { approve, reject };
-// first decision, second decision, the status the first leaves, the scope the first leaves the memory under
 const DECIDED_TWICE = [
   ['approve', 'approve', 'approved', 'team:alpha'],
   ['approve', 'reject', 'approved', 'team:alpha'],
@@ -455,7 +448,6 @@ describe('Quarantine.decideQuarantined on a decided record', () => {
 describe('on hippo.db, a decision whose audit row is refused', () => {
   let root: string;
 
-  /** The record and the memory row as hippo.db holds them. */
   const stored = () => {
     const db = openHippoDb(root);
     try {

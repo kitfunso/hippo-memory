@@ -1,4 +1,3 @@
-// The lock is the operating system's: one holder per file, freed the moment its holder dies.
 import { afterAll, describe, expect, it } from 'vitest';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -40,7 +39,6 @@ const identity = (path: string): FileIdentity | undefined => {
   return s === undefined ? undefined : { dev: s.dev, ino: s.ino, ctimeNs: s.ctimeNs };
 };
 
-/** A stat whose answers change by a nanosecond on every call while `moving()` is true. */
 function driftingStat(moving: () => boolean): StatFn {
   let n = 0n;
   return (path) => {
@@ -97,7 +95,6 @@ describe('two processes taking one file lock', () => {
   }, 30_000);
 });
 
-/** Runs `count` looper processes on one path and checks the log: no overlapping enter, no unusable, all exit 0. */
 async function loopTakers(count: number, durationMs: number, holdMs: number): Promise<Set<string>> {
   const dir = scratch();
   const log = join(dir, 'log.txt');
@@ -166,7 +163,6 @@ describe('one process', () => {
 
   it('keeps a lock its taker no longer references until the thread that took it ends', async () => {
     const path = join(scratch(), 's.lock.db');
-    // The thread drops its FileLock and collects garbage before it reports, then idles until terminated.
     const code = `const { parentPort } = require('node:worker_threads');
       require('node:v8').setFlagsFromString('--expose-gc');
       const collect = require('node:vm').runInNewContext('gc');

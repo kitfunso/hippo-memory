@@ -1,5 +1,3 @@
-// The built app is read once into a map, so a path the map does not hold is never read from disk; each file goes out
-// gzipped when the client takes it, with a strong ETag that a second request turns into a 304.
 import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, get as httpGet, type IncomingHttpHeaders, type Server } from 'node:http';
@@ -53,7 +51,6 @@ interface Reply {
   readonly body: Buffer;
 }
 
-/** GETs `urlPath` from a server that answers with sendAsset, with exactly `headers`; fetch would add its own. */
 async function request(files: StaticFiles, urlPath: string, headers: Record<string, string> = {}): Promise<Reply> {
   server ??= createServer((req, res) => {
     const asset = assetFor(files, req.url ?? '/');

@@ -1,4 +1,3 @@
-// Z0 G5 regrade (prereg 166): resuming, idempotence, the lock, the evidence guard, tree checks and the post-fix pass.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -62,13 +61,11 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 1 cells (0 with errors), skipped 7 done ones\n' });
     expect(rowsOf(c.out).at(-1)!.key).toBe(keyOf('a2'));
 
-    // The checker's args and the hidden tests' fixRef and file list are inputs too: a change re-runs the cells that use them.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     lessonOf(raw, 'f1-l1').check.args = ['--strict'];
     taskOf(raw, 'a2').fixRef = `${taskOf(raw, 'a2').fixRef}^{commit}`;
     taskOf(raw, 'n1').testFiles = [...taskOf(raw, 'n1').testFiles, ...taskOf(raw, 'n1').testFiles];
     writeFileSync(c.tasks, JSON.stringify(raw));
-    // Changed args are a changed checker, so a repro pass refuses the three f1-l1 cells instead of regrading them.
     expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 5 cells (3 with errors), skipped 3 done ones\n' });
 
     raw.families[0].lessons[0].check.script = join(dirname(raw.families[0].lessons[0].check.script), 'crash-on-toggle.mjs');
@@ -111,7 +108,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
 
   it('a cell that writes under the run root stops the whole regrade, names the cell and the path, and leaves no lock (R23)', async () => {
     const c = copyOut(shared);
-    // The target names the copy's own run root, so the setup goes in once the copy exists.
     const target = join(c.out, 'runs', 'seqF', 'A0', 'seed1', 'evil.txt').replaceAll('\\', '/');
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     taskOf(raw, 'a1').setup = node(`require('node:fs').writeFileSync('${target}','x')`);
@@ -137,7 +133,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(rowFor(stray.out, 'a1')).toMatchObject({ status: 'done' });
   }, 300_000);
 
-  // A repro pass plus a post-fix pass that runs every check twice: about three regrades, slow on a loaded Windows box.
   it('flippedLessons is the union of the repro and post-fix passes (19)', async () => {
     const c = copyOut(shared);
     expect(await regrade(c, [], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
@@ -153,7 +148,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
     const older = [join(c.out, 'grading.json'), join(c.out, 'runs.regraded.jsonl')];
     for (const f of older) writeFileSync(f, 'from an older pass\n');
     expect(await regrade(c, ['--post-fix', '--cell', keyOf('a1')], { Z0_TOGGLE: 'regrade' })).toMatchObject({ code: 0 });
-    // A pass that starts removes an older pass's outputs, and a --cell pass writes neither again.
     expect(older.map((f) => existsSync(f))).toEqual([false, false]);
     expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: true, reason: 'verdict' });
   }, 300_000);
@@ -172,7 +166,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
 
   it('a late harness fault keeps the checks that ran before it, and their flips count after a clean retry (R7)', async () => {
     const c = copyOut(shared);
-    // t1's checker spoils .git during its first check, so the final check's checkout fails with that flip already seen.
     expect(await regrade(c, ['--cell', keyOf('t1')], { Z0_TOGGLE: 'regrade', Z0_TOGGLE_BREAK_GIT: '1' })).toMatchObject({ code: 0 });
     expect(rowFor(c.out, 't1')).toMatchObject({ status: 'error', error: { stage: 'git' }, checks: [expect.objectContaining({ which: 'first', saved: 'pass', regraded: 'fail', flip: true })] });
     expect(await regrade(c)).toMatchObject({ code: 0, stdout: 'repro: regraded 8 cells (0 with errors), skipped 0 done ones\n' });
@@ -197,7 +190,6 @@ describe('z0-regrade resume, guards and post-fix', () => {
     const c = copyOut(shared);
     const env = { Z0_TOGGLE: 'regrade', Z0_TOGGLE_TEST: 'regrade' };
     expect(await regrade(c, [], env)).toMatchObject({ code: 0 });
-    // The fixed checker: new bytes, so its post-fix verdicts may move from the saved ones without a flip.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     const { check } = lessonOf(raw, 'f1-l1');
     const fixed = join(tmp('z0-rg-fix-'), 'toggle-fixed.mjs');
@@ -212,13 +204,11 @@ describe('z0-regrade resume, guards and post-fix', () => {
     expect(pick(before, 'a1')).toMatchObject({ acceptancePassed: true, resolved: true, lessons: [{ first: 'pass', final: 'pass' }], chain: { shown: true, followed: true } });
     expect(pick(after, 'a1')).toMatchObject({ acceptancePassed: true, resolved: false, lessons: [{ first: 'fail', final: 'fail' }], chain: { shown: true, followed: false } });
     expect(rowFor(c.out, 'a1', 'postfix').acceptance).toMatchObject({ saved: true, regraded: false, flip: true });
-    // A changed checker's verdict that differs from the saved one is the fix working; only its two runs disagreeing flip.
     expect(rowFor(c.out, 'a1', 'postfix').checks[0]).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: false });
     expect(pick(after, 'a4').lessons[0]).toMatchObject({ first: 'pass', staleFollow: false });
     expect(pick(after, 'n1')).toEqual(pick(before, 'n1'));
     expect(after).toHaveLength(before.length);
 
-    // The analyzer's default key path is beside the first --runs file, so both files find the same key.
     writeFileSync(join(c.out, 'prices.json'), JSON.stringify(PRICES));
     const args = (runs: string) => ['--runs', runs, '--plan', 'plan.json', '--prices', 'prices.json'];
     expect(analyze(args('runs.jsonl'), c.out).code).toBe(0);

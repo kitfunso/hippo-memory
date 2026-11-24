@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# LoCoMo trial through Mem0's own runner: hippo vs BM25 (vs mem0-oss when
-# Docker is available), then scored by the runner's judge and by the LoCoMo
-# authors' F1. Plan: docs/evals/2026-09-24-public-benchmarks-prereg.md.
-#
-# Needs: Node 22.16+, Python 3.10+, git, OPENAI_API_KEY. Optional: Docker (mem0-oss arm).
-# Usage: OPENAI_API_KEY=... benchmarks/public/run-locomo-trial.sh [model]   (default gpt-4o-mini)
 set -euo pipefail
 MODEL="${1:-gpt-4o-mini}"
 HIPPO="$(cd "$(dirname "$0")/../.." && pwd)"

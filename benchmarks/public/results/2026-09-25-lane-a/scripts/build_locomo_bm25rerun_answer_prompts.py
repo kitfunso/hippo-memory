@@ -12,7 +12,6 @@ OUT = os.path.join(LANE_A, 'locomo', 'bm25-rerun')
 sample = json.load(io.open(os.path.join(LANE_A, 'locomo', 'sample.json'), encoding='utf-8'))
 assert len(sample) == 400, len(sample)
 
-# same batch composition as hippo365: batch i = same questions (sample.json order is fixed)
 BATCH_SIZE = 40
 for i, qid in enumerate(sample):
     batch = i // BATCH_SIZE

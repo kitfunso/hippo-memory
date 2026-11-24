@@ -11,9 +11,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Minimal fetch-Response-shaped result so the assertions below (res.status,
-// await res.text(), await res.json()) did not need to change when the
-// transport switched off fetch/undici.
 interface TracedResponse {
   status: number;
   text: () => Promise<string>;
@@ -39,26 +36,6 @@ function errorCode(err: Error): string | undefined {
   return causeCode ?? (err as NodeJS.ErrnoException).code;
 }
 
-// T3c (hardening-1.26.2): fresh-TCP-connection transport, replacing fetch.
-// T3b captured the mechanism with T3a's diagnostics: "worker 6 req 11
-// read-chunk 10: ECONNRESET" / cause read ECONNRESET — a second-chunk reader
-// GET reused a kept-alive socket that had idled through the prior chunk
-// while the full suite saturated the host; Node's server-side default
-// keepAliveTimeout (5s) closed the socket exactly as undici tried to reuse
-// it. `node:http`'s `agent: false` opts out of connection pooling entirely
-// (an unmanaged, un-pooled socket per request, `Connection: close` sent
-// automatically), so this test's requests never depend on keep-alive
-// reuse timing again. undici is NOT a dependency here and none is added.
-//
-// Connection reuse is orthogonal to this test's actual claim (SQLite
-// single-writer correctness under concurrent requests, not HTTP keep-alive
-// behavior); the socket-lifecycle race itself belongs to T2's server
-// keep-alive/headers timeout hardening, not to this test avoiding it.
-//
-// Permanent failure diagnostics (T3a, ported from the fetch transport):
-// a rejection rethrows enriched with worker/request/phase context plus the
-// underlying cause code, so any future flake self-describes instead of a
-// bare ECONNRESET.
 function tracedRequest(label: string, url: string, init?: TracedRequestInit): Promise<TracedResponse> {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
@@ -92,14 +69,14 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
         });
         res.on('error', (err) => {
           const code = errorCode(err);
-          req.destroy(); // free the un-pooled socket on mid-response failure
+          req.destroy();
           reject(new Error(`${label}: ${code}`, { cause: err }));
         });
       },
     );
     req.on('error', (err) => {
       const code = errorCode(err);
-      req.destroy(); // free the un-pooled socket on request-phase failure
+      req.destroy();
       reject(new Error(`${label}: ${code}`, { cause: err }));
     });
     if (init?.body !== undefined) req.write(init.body);
@@ -107,15 +84,10 @@ function tracedRequest(label: string, url: string, init?: TracedRequestInit): Pr
   });
 }
 
-// Concurrent recall + write under SQLite single-writer (real DB).
-// Proves no SQLite locked errors when readers and a writer hammer the
-// server simultaneously. ROADMAP A1 commitment.
 describe('server concurrency — recall + write under single-writer', () => {
   it.skipIf(needsHippoDb('db'))('handles 10 readers x 50 GETs + 50 writes with no SQLite locked errors', async () => {
     const home = makeRoot('srv-conc');
 
-    // Pre-seed 100 memories spanning a small pool of search terms so
-    // recall queries land hits.
     const seedTerms = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
     for (let i = 0; i < 100; i++) {
       const term = seedTerms[i % seedTerms.length]!;
@@ -125,7 +97,6 @@ describe('server concurrency — recall + write under single-writer', () => {
     }
 
     vi.stubEnv('HIPPO_V1_RPS', '0');
-    // The count below is the rows this test wrote; a sleep a REST write starts would add its own.
     const handle = await serveKeyed({ hippoRoot: home, port: 0, autoSleep: false });
     const lockedErrors: string[] = [];
 
@@ -135,8 +106,6 @@ describe('server concurrency — recall + write under single-writer', () => {
       // (10 at a time per worker) to avoid bursting all 500 SYN packets
       // into the loopback listener simultaneously, which trips
       // ECONNREFUSED on Windows when the kernel accept queue overflows.
-      // Across all 10 workers we still keep ~100 reads in flight at any
-      // moment, plenty to exercise the WAL-mode concurrent-reader path.
       const readerCount = 10;
       const readsPerWorker = 50;
       const readChunk = 10;
@@ -161,7 +130,6 @@ describe('server concurrency — recall + write under single-writer', () => {
         return responses;
       });
 
-      // 1 writer worker, sequential POSTs with unique markers.
       const writeCount = 50;
       const writerWork = (async () => {
         const responses: TracedResponse[] = [];
@@ -181,7 +149,6 @@ describe('server concurrency — recall + write under single-writer', () => {
 
       const [readerResultsByWorker, writerResults] = await Promise.all([Promise.all(readerWork), writerWork]);
 
-      // Validate writes: 50 x 200 with valid envelopes.
       expect(writerResults).toHaveLength(writeCount);
       for (const [idx, res] of writerResults.entries()) {
         if (res.status !== 200) {
@@ -197,7 +164,6 @@ describe('server concurrency — recall + write under single-writer', () => {
         expect(body.tenantId).toBe('default');
       }
 
-      // Validate reads: 10 * 50 = 500 x 200, no locked errors.
       const flatReads = readerResultsByWorker.flat();
       expect(flatReads).toHaveLength(readerCount * readsPerWorker);
       for (const [idx, res] of flatReads.entries()) {
@@ -208,13 +174,11 @@ describe('server concurrency — recall + write under single-writer', () => {
           }
           throw new Error(`reader #${idx} status=${res.status} body=${text}`);
         }
-        // Drain the body so the socket is released.
         await res.json();
       }
 
       expect(lockedErrors).toEqual([]);
 
-      // Final DB state: exactly 150 memories (100 seed + 50 concurrent).
       const db = openHippoDb(home);
       try {
         // SAFETY: literal COUNT(*) query against the known memories schema
@@ -222,7 +186,6 @@ describe('server concurrency — recall + write under single-writer', () => {
         const row = db.prepare(`SELECT COUNT(*) AS n FROM memories WHERE tenant_id = 'default'`).get() as { n: number };
         expect(row.n).toBe(150);
 
-        // Spot-check: every concurrent-canary-N marker landed.
         const stmt = db.prepare(`SELECT COUNT(*) AS n FROM memories WHERE content = ? AND tenant_id = 'default'`);
         for (let n = 0; n < writeCount; n++) {
           // SAFETY: literal COUNT(*) query against the known memories schema

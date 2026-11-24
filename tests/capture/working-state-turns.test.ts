@@ -1,4 +1,3 @@
-// The task and next step come from the last human user turn and the last main-agent assistant text, each skipping the lines that are neither.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

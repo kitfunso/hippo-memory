@@ -9,7 +9,6 @@ export class DeadlineError extends Error {
   }
 }
 
-// Local, since capture-contract imports util and a return import would close a feature cycle.
 function isCallable<F>(value: F | undefined): value is F {
   return typeof value === 'function';
 }
@@ -61,7 +60,6 @@ export async function withDeadline<T>(
     );
   });
   const start = performance.now();
-  // The stamp sits on the callback, since a later block on the thread is not the callback's lateness.
   let doneAt: number | undefined;
   const stamp = (): void => {
     doneAt = performance.now();

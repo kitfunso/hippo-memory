@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-/**
- * Compact version of run_hybrid_tuning.mjs that deletes JSONL files
- * after evaluating them to conserve disk space.
- * Produces the same eval.json + leaderboard.json outputs.
- * Also updates results/hybrid_tuning_winners.json after each stage.
- */
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -35,7 +29,6 @@ function runOne(label, args) {
   ], { stdio: 'inherit' });
   if (r.status !== 0) throw new Error(`Run ${label} failed exit=${r.status}`);
 
-  // Evaluate immediately
   const evalOut = path.join(sweepDir, `${label}.eval.json`);
   console.error(`Evaluating ${label}...`);
   const ev = spawnSync('python3', [
@@ -46,7 +39,6 @@ function runOne(label, args) {
   ], { stdio: 'inherit' });
   if (ev.status !== 0) throw new Error(`Eval ${label} failed exit=${ev.status}`);
 
-  // Delete JSONL to free disk space
   fs.rmSync(out);
   console.error(`Deleted ${out} to free disk space`);
 
@@ -83,7 +75,6 @@ if (STAGE === 'stage1') {
   throw new Error(`Unknown stage: ${STAGE}`);
 }
 
-// Build leaderboard from eval files
 const rows = [];
 for (const { label, evalOut } of evalFiles) {
   const ev = JSON.parse(fs.readFileSync(evalOut, 'utf8'));
@@ -94,7 +85,6 @@ fs.writeFileSync(path.join(sweepDir, 'leaderboard.json'), JSON.stringify(rows, n
 console.log('\nlabel\trecall@1\trecall@3\trecall@5\trecall@10');
 for (const r of rows) console.log(`${r.label}\t${r['recall@1']}\t${r['recall@3']}\t${r['recall@5']}\t${r['recall@10']}`);
 
-// Update winners
 const winnersPath = 'results/hybrid_tuning_winners.json';
 const winners = fs.existsSync(winnersPath) ? JSON.parse(fs.readFileSync(winnersPath, 'utf8')) : {};
 const top = rows[0].label;

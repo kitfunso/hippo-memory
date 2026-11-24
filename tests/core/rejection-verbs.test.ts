@@ -1,9 +1,3 @@
-/**
- * AT1 T2 smoke tests: reject/unreject/rejections (api.ts + src/domain/trust/reject-flow.ts)
- * and resolveConflict's rejectLoserValue + audit wiring.
- * docs/plans/2026-08-15-at1-rejected-value-tombstone.md
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
@@ -35,7 +29,7 @@ function ctx(tenantId: string = 'default'): FullContext {
 describe('api.reject / api.unreject / listRejectionsForTenant', () => {
   it('reject by id removes the row + all same-digest duplicates, one reject_value audit, zero forget audits', async () => {
     const a = createMemory('duplicate offending value', { tags: ['x'] });
-    const b = createMemory('DUPLICATE OFFENDING VALUE', { tags: ['y'] }); // same normalized digest
+    const b = createMemory('DUPLICATE OFFENDING VALUE', { tags: ['y'] });
     const unrelated = createMemory('unrelated safe value', { tags: ['z'] });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
@@ -136,8 +130,6 @@ describe('api.reject / api.unreject / listRejectionsForTenant', () => {
 
     await expect(api.unreject(ctx(), '')).rejects.toThrow();
     await expect(api.unreject(ctx(), '   ')).rejects.toThrow();
-    // The tombstone must survive an accidental blank call, not get wiped by
-    // an empty-string startsWith-matches-everything prefix scan.
     expect((await listRejectionsForTenant(sqliteStore(tmpDir), 'default')).length).toBe(1);
   });
 });
@@ -218,12 +210,9 @@ describe('resolveConflict rejection wiring', () => {
     const { aId, bId, conflictId } = await seedConflict();
     const loserContent = 'Use && to chain commands in PowerShell';
 
-    // Same-tenant duplicate of the loser's content — must be swept up too.
     const dup = createMemory(loserContent, { tags: ['dup'] });
     writeEntry(tmpDir, dup);
 
-    // Identical content in a DIFFERENT tenant — tombstones are tenant-scoped
-    // by design; this row must survive untouched.
     const otherTenantDup = createMemory(loserContent, { tags: ['dup'], tenantId: 'other-tenant' });
     writeEntry(tmpDir, otherTenantDup);
 
@@ -304,10 +293,6 @@ describe('resolveConflict rejection wiring', () => {
     const conflicts = await listMemoryConflicts(tmpDir, 'open');
     const conflictId = conflicts[0]!.id;
 
-    // Plain --forget, deliberately WITHOUT rejectLoserValue — before P1b the
-    // post-commit purge gate required rejectLoserValue too, so this path
-    // left the raw mirror orphaned (only the reaper would eventually catch
-    // it; a non-raw loser would never be caught at all).
     await api.conflictResolve(ctx(), conflictId, { keepId: a.id, forget: true });
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     expect(fs.existsSync(mirrorPath)).toBe(false);
@@ -352,8 +337,6 @@ describe('resolveConflict rejection wiring', () => {
       }),
     ).resolves.toEqual({ conflictId, keptId: a.id, loserId: rawLoser.id });
 
-    // Archived, not hard-deleted: the row is gone from `memories` but a
-    // raw_archive row exists (append-only trigger respected).
     expect(readEntry(tmpDir, rawLoser.id)).toBeNull();
     const db = openHippoDb(tmpDir);
     try {
@@ -363,7 +346,6 @@ describe('resolveConflict rejection wiring', () => {
       closeHippoDb(db);
     }
 
-    // Tombstone written: re-remembering the raw loser's content is refused.
     await expect(
       api.remember(ctx(), { content: 'raw loser content later rejected via the reject-loser path' }),
     ).rejects.toThrow(RejectedValueError);
@@ -382,11 +364,6 @@ describe('resolveConflict rejection wiring', () => {
 
 describe('supersedeMemory write-order contract', () => {
   it('a refused successor write leaves the old row without a dangling superseded_by pointer', async () => {
-    // Replicates supersedeMemory's REORDERED two-write flow (cli.ts): the
-    // successor is written FIRST so the rejection guard fires before any
-    // mutation of the old row. The old ordering committed
-    // old.superseded_by = newEntry.id before the guarded write, leaving a
-    // dangling pointer to an id that was never created.
     const old = createMemory('the old belief to correct', { tags: ['s'] });
     writeEntry(tmpDir, old);
 
@@ -397,14 +374,11 @@ describe('supersedeMemory write-order contract', () => {
       confidence: 'verified',
     });
 
-    // Successor write first: refused, and nothing has been mutated.
     expect(() => writeEntry(tmpDir, newEntry)).toThrow(RejectedValueError);
 
-    // The old row must be untouched: no dangling pointer, still live.
     const oldAfter = readEntry(tmpDir, old.id);
     expect(oldAfter).not.toBeNull();
     expect(oldAfter!.supersededBy).toBeNull();
-    // And the successor id must not exist.
     expect(readEntry(tmpDir, newEntry.id)).toBeNull();
   });
 });

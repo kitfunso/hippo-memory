@@ -1,4 +1,3 @@
-// The store port tells admin from member only: graphView folds a viewer into member before the port sees it.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { graphView } from '../../src/api/objects/graph.js';

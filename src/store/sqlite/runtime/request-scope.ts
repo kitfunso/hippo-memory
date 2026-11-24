@@ -1,6 +1,3 @@
-// The sessions the composition roots (cli, server, stdio MCP) run their requests in. A busy code
-// that escapes a session's work leaves it as the port's StoreBusyError, as one from a store call
-// does.
 import {
   HOOK_DB_WAIT_MS,
   noteStoreBusy,
@@ -15,8 +12,6 @@ import { inPortTerms, rethrowInPortTerms } from './port-errors.js';
 
 export type RequestPreset = 'cli' | 'hook' | 'server';
 
-/** Lock wait per root; a hook also skips later writes once one wait runs out, so it never stalls
- * its host. */
 const PRESETS = {
   cli: {},
   hook: { busyWaitMs: HOOK_DB_WAIT_MS, failFastWhenBusy: true },

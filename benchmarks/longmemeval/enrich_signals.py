@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""F10 (Track 3) enrichment driver.
-
-Two subcommands:
-  build-batches: split LongMemEval sessions into per-batch JSON files
-                 (input to Claude subagents that extract entry-level signals).
-  merge:         merge per-batch signal output JSONs into a single
-                 signals.jsonl that ingest_enriched.py consumes.
-
-Per `docs/plans/2026-05-11-r5-track3-richer-ingest.md` Task 2.
-"""
 from __future__ import annotations
 
 import argparse
@@ -30,8 +20,6 @@ def cmd_build_batches(args: argparse.Namespace) -> None:
                 continue
             content_chunks = [f"[{t['role']}] {t['content']}" for t in turns]
             full_text = '\n'.join(content_chunks)
-            # Truncate to bound per-subagent prompt size at the prereg's
-            # 35-40KB upper estimate (50 sessions × max_chars + rubric ≈ that).
             truncated = full_text[: args.max_chars]
             sessions[sid] = {
                 'session_id': sid,

@@ -1,15 +1,11 @@
-// The arithmetic of the floor check: pass counts, p99, the queries where arms disagree, and the locked decision rule.
-
 import { ARMS, type Arm } from './queries.ts';
 
-// The pre-registered margin: an arm wins on pass count only when it leads every other arm by this many queries.
 const WIN_MARGIN = 2;
 
 export interface Cell {
   readonly arm: Arm;
   readonly query: string;
   readonly passed: boolean;
-  /** Stages the arm cannot run. Non-empty means the query failed by the pre-registered rule and never reached the arm. */
   readonly notRun: readonly string[];
   readonly top: readonly string[];
 }

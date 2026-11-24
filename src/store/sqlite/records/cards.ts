@@ -1,5 +1,3 @@
-// hippo.db's Cards group, the agent work board: create, list, detail and the comment write.
-
 import { generateId } from '../../../base/memory/entry.js';
 import { withWriteScope, type DatabaseSyncLike, withReadSnapshot } from '../../../db/index.js';
 import { SessionHandoff, rowToSessionHandoff } from '../../../base/session/handoff.js';
@@ -49,8 +47,6 @@ function assertCardCreate(input: CardCreate): void {
   }
 }
 
-/** Creates a card; status is ready with no deps or once every dependsOn id is done, else backlog.
- * An unknown dependsOn id throws and commits nothing. A repeated dependsOn id is recorded once. */
 function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): Card {
   assertTenantId('createCard', tenantId);
   assertCardCreate(input);
@@ -58,8 +54,6 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
   let id = '';
 
   withWriteScope(db, 'create_card', () => {
-    // Probe runs inside the transaction (mirrors batchWriteAndDelete): a parent completing between
-    // an outside-the-lock read and the INSERT would strand the child.
     const allParentsDone = everyParentDone(db, tenantId, dependsOn);
 
     id = generateId('card');
@@ -94,8 +88,6 @@ function createCard(db: DatabaseSyncLike, tenantId: string, input: CardCreate): 
   return readCardRow(db, tenantId, id)!;
 }
 
-/** Whether every dependsOn card is done, true for none; throws on an id that is no card of the
- * tenant. Call inside the write scope. */
 function everyParentDone(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -107,7 +99,6 @@ function everyParentDone(
     `SELECT id, status FROM cards WHERE tenant_id = ? AND id IN (SELECT value FROM json_each(?))`,
   ).all(tenantId, JSON.stringify(dependsOn)) as Array<{ id: string; status: string }>;
   const found = new Map(rows.map((r) => [r.id, r.status]));
-  // Pre-check before any write: a typo'd --depends-on can never commit a card row.
   for (const parentId of dependsOn) {
     if (!found.has(parentId)) {
       throw unknownParentCard(parentId);
@@ -116,7 +107,6 @@ function everyParentDone(
   return dependsOn.every((pid) => found.get(pid) === 'done');
 }
 
-/** One page of the tenant's cards, optionally of one status, newest-updated first. */
 function listCards(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -201,8 +191,6 @@ function readLatestHandoffForCard(
   return row ? rowToSessionHandoff(row) : null;
 }
 
-/** Appends a comment to cardId in any card status; throws if cardId is not a card of this
- * tenant. */
 function addCardComment(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -215,8 +203,6 @@ function addCardComment(
   return insertCardComment(db, { tenantId, cardId, author, body });
 }
 
-/** Loads the detail behind `hippo card show` and `GET /api/cards/:id` (null when the tenant has
- * no such card), the five reads on one snapshot. */
 function readCardDetail(db: DatabaseSyncLike, tenantId: string, id: string): CardDetail | null {
   assertTenantId('readCardDetail', tenantId);
   return withReadSnapshot(db, () => cardDetail(db, tenantId, id));

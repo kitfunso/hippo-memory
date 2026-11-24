@@ -1,4 +1,3 @@
-// The GitHub rate-limit wait is bounded, a failed rollback cannot hide the original error, and four silent fallbacks now log.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -81,7 +80,6 @@ describe('GitHub backfill rate-limit bound', () => {
 });
 
 describe('write scope rollback failure', () => {
-  // Real store; only the named statement is made to fail, so the scope is still open when the undo runs.
   function failingOn(db: DatabaseSyncLike, failing: string, message: string): DatabaseSyncLike {
     return {
       exec: (sql) => {

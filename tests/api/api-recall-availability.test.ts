@@ -1,18 +1,3 @@
-/**
- * J2 availability-bias — api.recall integration tests.
- *
- * Guards the two HIGH issues codex-review-critic caught at review round 1:
- *  - api.recall computes the hint over the SCOPE-FILTERED pool (`entries`), NOT
- *    the raw `all` load, so private / cross-scope rows never inflate the signal
- *    or leak hidden pool shape (HIGH-2).
- *  - api.recall does NOT compute/emit when opts.suppressAvailabilityHint is set
- *    (the MCP pipeline computes its own), so one recall never double-emits the
- *    audit op (HIGH-1).
- * Plus env-gate + audit-emission + result-immutability wiring.
- *
- * Real DB throughout (project convention).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -42,9 +27,6 @@ function countAuditOps(root: string, op: string): number {
   }
 }
 
-/** Seed a query-matching memory with a controllable age (days) + optional scope.
- *  createMemory fixes created=now; we override it before writeEntry to age the row.
- *  last_retrieved stays recent so the row is not decayed out of recall. */
 function seedAged(root: string, content: string, ageDays: number, scope?: string): string {
   const options: Parameters<typeof createMemory>[1] = {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -60,9 +42,6 @@ function seedAged(root: string, content: string, ageDays: number, scope?: string
   return mem.id;
 }
 
-// Strong match carries all 3 query tokens; weak match carries 1. BM25 ranks the
-// recent strong-match cluster into the top-K, leaving the older weak matches in
-// the pool but out of the returned slice.
 const QUERY = 'zephyr quasar nimbus';
 function seedFiringFixture(root: string): void {
   for (let i = 0; i < 4; i++) seedAged(root, `zephyr quasar nimbus recent ${i}`, 0);
@@ -110,8 +89,6 @@ describe('api.recall availabilityHint', () => {
     for (let i = 0; i < 4; i++) seedAged(root, `zephyr quasar nimbus recent ${i}`, 0);
     for (let i = 0; i < 6; i++) seedAged(root, `zephyr older weak public ${i}`, 40);
     for (let i = 0; i < 3; i++) seedAged(root, `zephyr older weak private ${i}`, 40, 'slack:private:x');
-    // No scope on the recall = default-deny private rows. With the fix (pool=entries)
-    // only the 6 public olds count; the buggy pool=all would have counted 9.
     const result = await retrieve(ctxFor(root), { query: QUERY, window: { limit: 4 } });
     expect(result.availabilityHint!.olderCandidatesPassedOver).toBe(6);
   });

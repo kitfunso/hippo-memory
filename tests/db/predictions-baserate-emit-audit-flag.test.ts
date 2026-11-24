@@ -1,22 +1,3 @@
-/**
- * J3.2 — emitAudit flag on computePredictionBaserate.
- *
- * The flag was added so the J3.2 orchestrator (planningFallacyEvidence)
- * can call the baserate helper WITHOUT emitting a predict_baserate audit
- * row (the orchestrator emits its own recall_autodebias_hint row, with
- * n_closed + mean_ratio in metadata, so no telemetry is lost). This keeps
- * the predict_baserate audit channel scoped to deliberate CLI / HTTP /
- * MCP predict-baserate calls; without the flag, every recall containing
- * a forward-claim phrase would pollute the channel.
- *
- * This test locks both code paths in computePredictionBaserate:
- *   - n=0 (empty class) path
- *   - n>0 (populated class) path
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 2, Task 9).
- * Project rule: always use real DB for tests.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';

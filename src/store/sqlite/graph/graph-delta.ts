@@ -1,21 +1,15 @@
-// hippo.db's graph rebuild diff: store/rules/graph-delta.ts diffGraph run in SQL, so a rebuild
-// reads back the rows that change instead of every entity and relation of the tenant.
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import type { DesiredGraph, GraphOp } from '../../../base/ports/store/graph.js';
 import { entityKey, wantedEntities, wantedRelations } from '../../rules/graph-delta.js';
 
-// provenanceOf for the desired row joined to memories as `m`; IFNULL spells a NULL kind as the JS
-// template does.
 const PROVENANCE = `CASE WHEN m.id IS NULL THEN '|distilled' ELSE m.id || '|' || IFNULL(m.kind, 'null') END`;
 const STORED_KEY = `entity_type || '|' || source_object_type || ':' || source_object_id`;
 
-// The lowest-id stored entity of each wanted key; every other stored entity is deleted.
 const KEPT = `kept AS MATERIALIZED (
   SELECT min(id) AS id, k FROM (SELECT id, ${STORED_KEY} AS k FROM entities WHERE tenant_id = ?)
   WHERE k IN (SELECT k FROM want_e) GROUP BY k)`;
 
-// json_each(?) holds one [key, name, memoryId] per wanted entity in desired order.
 const ENTITY_DELTA = `WITH want_e AS MATERIALIZED (
   SELECT w.key AS idx, json_extract(w.value, '$[0]') AS k, json_extract(w.value, '$[1]') AS name, ${PROVENANCE} AS prov
   FROM json_each(?) w LEFT JOIN memories m ON m.id = json_extract(w.value, '$[2]')),
@@ -28,9 +22,6 @@ UNION ALL
 SELECT 2, idx, NULL FROM want_e WHERE k NOT IN (SELECT k FROM kept)
 ORDER BY step, at`;
 
-// An edge whose ends are not both kept goes with its entity through the v38 cascade, so it gets no
-// op. The kept edge of a key is the lowest id that matches the wanted one in full; json_each(?)
-// holds [key, memoryId, type, id] rows.
 const RELATION_DELTA = `WITH want_e AS MATERIALIZED (SELECT json_extract(value, '$[0]') AS k FROM json_each(?)),
 ${KEPT},
 want_r AS MATERIALIZED (

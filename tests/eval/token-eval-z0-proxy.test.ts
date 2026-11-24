@@ -1,4 +1,3 @@
-// The G1 request log (smoke report point 1): the proxy forwards and records bodies but never headers, and the read check voids on what it recorded.
 import { describe, it, expect, afterEach } from 'vitest';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -12,7 +11,6 @@ import { cleanup, tmp } from '../fixtures/z0-harness.js';
 
 const LOGIN = 'Bearer plan-login-not-for-logs-0123456789';
 
-/** A local upstream that answers 200 and keeps what it was sent. */
 async function upstream() {
   const seen: { url?: string; auth?: string; body: string }[] = [];
   const server = createServer((req: IncomingMessage, res) => {
@@ -75,7 +73,6 @@ describe('startLogProxy', () => {
 describe('request-log voids', () => {
   afterEach(cleanup);
 
-  /** G1 for one `arm` session whose only evidence is a request log holding `body`. */
   function verdict(arm: string, body: string, canaries: string[] = []) {
     const out = tmp('z0-reqvoid-');
     const dirs = runDirs(out, 'seqP', arm, 1);

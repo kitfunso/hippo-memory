@@ -1,5 +1,3 @@
-// `hippo recall` and `hippo context` on a store a `hippo serve` holds ask that server for the nearest rows and print
-// what they print with no server; a server that does not answer costs one warn line and the local scan.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -21,11 +19,9 @@ import { ROUTED_CLI_ENV } from '../_helpers/routed-cli-env.js';
 import { hippoRunAsync } from '../_helpers/spawn-hippo.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
-// Past the graph threshold of 1,000 vectors, so the CLI asks the server; the first case fails if the threshold rises.
 const ROWS = 1_100;
 const QUERY = 'deploys pipelines';
 const PROJECT = 'nearest-demo';
-// In this order on every copy, so the retrieval bumps of the first leave the same store for the second.
 const COMMANDS = [
   ['recall', QUERY, '--budget', '1500'],
   ['context', QUERY, '--budget', '1500'],
@@ -37,11 +33,8 @@ type Run = Awaited<ReturnType<typeof hippoRunAsync>>;
 let embeddings: HashedEmbeddings;
 let template: string;
 let globalRoot: string;
-// After the rows are written, and the same for every run, so a strength reads alike on each.
 let fakeNow: string;
 
-// Each case gets its own copy, so one case's retrieval bumps never reach the store another reads; the project file
-// gives every copy the project its rows came from.
 function copyOfTemplate(): MadeStore {
   const made = makeStore('nearest-run', { init: false });
   copyTree(template, made.root);

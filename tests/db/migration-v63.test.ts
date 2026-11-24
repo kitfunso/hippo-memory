@@ -1,4 +1,3 @@
-// Schema v63 stores "no successor" one way: it clears a blank superseded_by link and leaves every other row as stored.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, getSchemaVersion, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { v63 } from '../../src/db/migrations/v63.js';
@@ -21,7 +20,6 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Every column of every row but the link, updated_at included. */
 function rowsWithoutLink(db: DatabaseSyncLike): unknown[] {
   // SAFETY: the SELECT names one TEXT column, name.
   const columns = db
@@ -30,7 +28,6 @@ function rowsWithoutLink(db: DatabaseSyncLike): unknown[] {
   return db.prepare(`SELECT ${columns.map((column) => column.name).join(', ')} FROM memories ORDER BY id`).all();
 }
 
-/** The stored link of each row, by id. */
 function links(db: DatabaseSyncLike): Record<string, string | null> {
   // SAFETY: the SELECT names both columns, id and superseded_by.
   const rows = db.prepare('SELECT id, superseded_by FROM memories').all() as Array<{
@@ -46,7 +43,6 @@ function triggerNames(db: DatabaseSyncLike): string[] {
   return rows.map((row) => row.name).sort();
 }
 
-/** Takes a current store back to v62: both versions stamped 62, so the next open runs v63. */
 function toV62(db: DatabaseSyncLike): void {
   setMeta(db, 'schema_version', '62');
   db.exec('PRAGMA user_version = 62');
@@ -62,7 +58,6 @@ interface Seeded {
   unlinked: string;
 }
 
-/** One blank row per valid kind, one row with a link and one with none, all stamped with a fixed updated_at. */
 function seed(root: string): Seeded {
   const blank = MEMORY_KINDS.map((kind) => createMemory(`a blank link on a ${kind} row`, { kind }));
   const linked = createMemory('a link to a successor', { kind: 'superseded' });
@@ -110,7 +105,6 @@ describe('migration v63', () => {
       db.prepare(`UPDATE memories SET kind = 'unknown', superseded_by = '' WHERE id = ?`).run(oddKind.id);
       for (const { sql } of guards) db.exec(sql);
       toV62(db);
-      // The guard is back, so a clear that skipped the kind filter would abort the migration here.
       expect(() => db.exec(`UPDATE memories SET superseded_by = NULL WHERE superseded_by = ''`)).toThrow(
         /invalid kind/,
       );

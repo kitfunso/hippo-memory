@@ -1,5 +1,3 @@
-// The status parts print from the config and embedder on the context they are given, not from a
-// fresh read of the folder.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { handleStatus, physicsEnergyText } from '../../src/surface/cli/status.js';
 import { cliApiContext } from '../../src/surface/cli/api-context.js';

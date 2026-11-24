@@ -1,6 +1,3 @@
-// Handwritten HNSW graph (Malkov and Yashunin) over plain data: no database, no I/O. Same seed and
-// insert order give the same graph.
-
 import { stepMulberry32 } from '../base/util/prng.js';
 import { ZERO_NORM, cosineToQuery, dot, norm } from '../base/rank/cosine.js';
 
@@ -25,29 +22,22 @@ export interface VectorGraph {
   entry: number;
   maxLevel: number;
   readonly nodes: Map<number, GraphNodeData>;
-  // The unit-length vector of every node.
   readonly unit: Map<number, Float32Array>;
 }
 
 /** A graph a search can walk, held in memory or read from a file as the walk reaches each node. */
 export interface GraphView {
   readonly dim: number;
-  /** The node every search starts from; -1 for an empty graph. */
   readonly entry: number;
   readonly maxLevel: number;
-  /** The links of `node` at `level`; a view over a file throws on a link it cannot trust. */
   linksOf(node: number, level: number): ArrayLike<number>;
 }
 
 export interface SearchOptions {
   k: number;
   ef: number;
-  /** Checked for every candidate before it can enter the result; a rejected node is still walked
-   * through. */
   admit?: (node: number) => boolean;
-  /** Most vectors the walk may score; past it the search stops with `aborted`. */
   visitBudget?: number;
-  /** The vector a node is scored by; the graph's own unit vectors when omitted. */
   vectorOf?: VectorLookup;
 }
 
@@ -64,12 +54,9 @@ export type SearchResult =
 
 type VectorLookup = (node: number) => Float32Array;
 
-// A larger M or efConstruction cost far more build than it bought recall; docs/ARCHITECTURE.md has
-// the bench.
 export const GRAPH_M = 16;
 export const GRAPH_EF_CONSTRUCTION = 100;
 const MAX_LEVEL = 15;
-// Float32 rounding leaves a normalised vector's squared length within about 1e-6 of one.
 const UNIT_TOLERANCE = 1e-5;
 
 export function createVectorGraph(opts: VectorGraphOptions): VectorGraph {
@@ -98,7 +85,6 @@ function nextRandom(graph: VectorGraph): number {
 class Heap {
   private readonly keys: number[] = [];
   private readonly vals: number[] = [];
-  // sign 1 pops the largest key first, -1 the smallest.
   constructor(private readonly sign: 1 | -1) {}
   get size(): number {
     return this.keys.length;
@@ -157,15 +143,10 @@ interface WalkContext {
   graph: GraphView;
   score: (node: number) => number;
   admit?: (node: number) => boolean;
-  /** Vectors still allowed to be scored, shared by every layer of one search; negative means no
-   * budget. */
   budget: { left: number };
-  /** Nodes the last layer's walk reached. */
   visited: number;
 }
 
-/** Best-first walk of one layer: the ef best admitted candidates, best first, or null when the
- * budget ran out. */
 function searchLayer(
   ctx: WalkContext,
   entries: GraphHit[],
@@ -206,8 +187,6 @@ function searchLayer(
   return out.reverse();
 }
 
-/** Walk down from the entry through the upper layers (ef 1, no filter) and return the entries
- * for layer `stop`. */
 function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
   const { graph } = ctx;
   let cur: GraphHit[] = [{ node: graph.entry, score: ctx.score(graph.entry) }];
@@ -221,7 +200,6 @@ function descend(ctx: WalkContext, stop: number): GraphHit[] | null {
 
 const NO_LINKS: readonly number[] = [];
 
-/** The in-memory graph as a search walks it. */
 function viewOf(graph: VectorGraph): GraphView {
   const { dim, entry, maxLevel, nodes } = graph;
   return {
@@ -254,7 +232,6 @@ export function searchView(
   }
   const qNorm = norm(query);
   const vectorOf = opts.vectorOf;
-  // A directionless query or row scores 0, where the full scan in vector-match.ts drops it.
   const score = (n: number): number =>
     qNorm < ZERO_NORM ? 0 : (cosineToQuery(query, qNorm, vectorOf(n)) ?? 0);
   const seen = new Map<number, boolean>();
@@ -289,8 +266,6 @@ function unitOf(graph: VectorGraph, node: number): Float32Array {
   return unit;
 }
 
-/** Algorithm 4 without extendCandidates or keepPrunedConnections; `cands` must be sorted best
- * first. */
 function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): number[] {
   const kept: number[] = [];
   for (const c of cands) {
@@ -301,7 +276,6 @@ function selectNeighbours(cands: GraphHit[], m: number, unitFor: VectorLookup): 
   return kept;
 }
 
-/** A link from node `from` to node `to` at `level`. */
 interface BackLinkOptions {
   readonly from: number;
   readonly to: number;
@@ -327,7 +301,6 @@ function addBackLink(
   data.links[level] = selectNeighbours(cands, cap, unitFor);
 }
 
-// Only a search with a visit budget can return null, and an insert sets none.
 function unreachable(): never {
   throw new Error('vector graph: insert walk ran out of budget');
 }

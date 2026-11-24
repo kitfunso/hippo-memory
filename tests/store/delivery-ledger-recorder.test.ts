@@ -1,4 +1,3 @@
-// contextGet with the delivery observer attached: same result, no writes, and a reason for every rejected candidate.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -55,7 +54,6 @@ function configure(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
       pinnedInject: { promptRecallThreshold: 0.1, promptRecallMinShared: 1, ...pinnedInject },
     }),
   );
-  // The root loads config once per command, so the next call sees the file through a reloaded ctx.config.
   ctx = { ...ctx, config: loadConfig(local) };
 }
 
@@ -85,7 +83,6 @@ const baseOpts: ContextOptions = {
   currentSessionId: 's1',
 };
 
-/** Runs contextGet without and then with an observer, asserts both results match, and returns the event. */
 async function observed(opts: ContextOptions = baseOpts): Promise<DeliveryEventInput> {
   const without = await contextGet(ctx, opts);
   const rec = recorder();
@@ -210,14 +207,12 @@ describe('rejection reasons', () => {
     const event = await observed({ ...baseOpts, budget: 40 });
     const row = rowsOf(event).find((c) => c.memoryId === big.id);
     expect([row?.stage, row?.reason, row?.pool]).toEqual(['budget', 'budget', 'pin']);
-    // A pin with no wrong marks has strength exactly 1, and the recent pool adds no boost.
     expect(row?.score).toBe(1);
     expect(row?.tokens).toBeGreaterThan(40);
   });
 
   it('gate-below-threshold with its overlap score, and gate-max-items past the item cap', async () => {
     configure({ promptRecall: true, promptRecallMinShared: 2, promptRecallMaxItems: 1 });
-    // The recall order puts the first row ahead: it holds four prompt words, `second` three.
     seed(local, 'the postgres migration script needs a rollback plan before deploy');
     const second = seed(local, 'a migration rollback plan should name the owner and the restore point');
     const weak = seed(local, 'postgres connection pooling settings need tuning for the reporting cluster');
@@ -229,7 +224,6 @@ describe('rejection reasons', () => {
       'gate-below-threshold',
       'prompt-recall',
     ]);
-    // Jaccard over content words: 'postgres' is the one word shared by the prompt's six and the memory's eight.
     expect(rows.get(weak.id)?.score).toBeCloseTo(1 / 13, 10);
   });
 

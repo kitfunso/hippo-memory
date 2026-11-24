@@ -1,8 +1,3 @@
-"""Unit tests for ContextEntry.projected() helper (v0.2.0).
-
-Pure model tests — no server required.
-"""
-
 from __future__ import annotations
 
 from hippo_memory.models import ContextEntry, MemoryEnvelope
@@ -43,20 +38,17 @@ def test_projected_global_true_when_is_global_set():
 
 
 def test_projected_global_false_when_is_global_none():
-    """is_global=None defaults to False in the projection (not None)."""
     entry = MemoryEnvelope(id="mem_local_001", content="local-only")
     ctx_entry = ContextEntry(entry=entry, score=0.5, tokens=10)
     assert ctx_entry.projected()["global"] is False
 
 
 def test_projected_optional_fields_pass_through_as_none():
-    """When MemoryEnvelope has None for strength/confidence/tags, the projection mirrors that."""
     entry = MemoryEnvelope(id="mem_partial_001", content="bare entry")
     ctx_entry = ContextEntry(entry=entry, score=0.1, tokens=5)
     projected = ctx_entry.projected()
     assert projected["strength"] is None
     assert projected["confidence"] is None
-    # tags defaults to [] (Field(default_factory=list)), not None
     assert projected["tags"] == []
 
 

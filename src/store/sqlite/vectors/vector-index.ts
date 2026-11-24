@@ -1,5 +1,3 @@
-// Owns hippo.db's stored vectors, the identity of the model that built them, and the particle rows:
-// every read and write of the three.
 import {
   getMeta,
   setMeta,
@@ -79,7 +77,6 @@ export function storedIndexState(db: DatabaseSyncLike): EmbeddingIndexState {
   };
 }
 
-/** Records `identity` as what built the index. */
 function saveIndexIdentity(db: DatabaseSyncLike, identity: string): void {
   setMeta(db, EMBEDDING_MODEL_META_KEY, identity);
 }
@@ -145,9 +142,7 @@ export function readStoredVectorViews(
 /** Vectors staged by page on a handle of their own, so neither the live index nor the caller
  * holds them all. */
 export interface VectorRebuild {
-  /** Stages one page, skipping empty or non-finite vectors; answers how many it staged. */
   stage(rows: ReadonlyArray<readonly [string, readonly number[]]>): number;
-  /** In one transaction, swaps the staged vectors in and records `model` as what built them. */
   commit(model: string): void;
   close(): void;
 }
@@ -218,8 +213,6 @@ function ownedIds(db: DatabaseSyncLike, ids: readonly string[], tenantId: string
   return owned;
 }
 
-// savePhysicsState opens its own transaction and overwrites, so the first particle for a memory is
-// inserted here instead.
 function insertNewParticles(db: DatabaseSyncLike, rows: readonly VectorRowWrite[]): void {
   const stmt = cachedStatement(
     db,
@@ -266,7 +259,6 @@ export function writeVectors(db: DatabaseSyncLike, write: VectorWrite): VectorWr
   });
 }
 
-/** Every particle stored under `hippoRoot`. */
 function listStoredParticles(db: DatabaseSyncLike): PhysicsParticle[] {
   return Array.from(loadAllPhysicsState(db).values());
 }
@@ -329,8 +321,6 @@ export function saveStoredParticles(db: DatabaseSyncLike, particles: PhysicsPart
 const PARTICLE_PAGE = 64;
 const RESET_ID_PAGE = 1000;
 
-/** Every memory with a stored vector, paired with it, in id order, since a reset seeds each
- * once; only one page of each is held. */
 function* storedSeeds(db: DatabaseSyncLike): Generator<ParticleSeed> {
   let afterId: string | undefined;
   do {

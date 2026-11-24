@@ -1,4 +1,3 @@
-// With ctx.store, a connector's write and archive go through the store's connectorWrites group and never open hippo.db.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -39,7 +38,6 @@ function copyOf(): string {
   return root;
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 function markedFolder(): string {
   const root = join(home, `marked-${String(++n)}`);
   mkdirSync(root);
@@ -47,7 +45,6 @@ function markedFolder(): string {
   return root;
 }
 
-/** What a connector hands to rememberUntrusted: its transform's fields, with the event it answers. */
 function ingestOpts(opts: RememberOptions | null, event: ConnectorEvent): ConnectorRememberOptions {
   if (!opts) throw new Error('the transform kept nothing of this event');
   return { ...opts, event };

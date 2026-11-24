@@ -1,5 +1,3 @@
-// Pins stdout, stderr and exit code of every brief, note, policy, process and skill verb, run through runCli on a
-// real store, so one shared handler set cannot change a byte unseen. Memory ids and timestamps are masked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
@@ -75,7 +73,6 @@ let root = '';
 
 beforeEach(() => {
   root = makeRoot('versioned-cli');
-  // The CLI looks for the store in `.hippo` under the working directory.
   initTestStore(join(root, '.hippo'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');

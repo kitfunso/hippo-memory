@@ -1,4 +1,3 @@
-// W1 handoff envelope: the ambient handoff pop-off, scope filtering on the continuity reads, and the carry-forward fixes.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { contextGet, adminActor } from '../../src/api/index.js';
 import { cwdProject } from '../_helpers/api-ctx.js';
@@ -141,7 +140,6 @@ describe('scope filtering on the continuity read paths', () => {
     });
     const ctx = apiCtx(root, 'default', adminActor('test'));
     const result = await contextGet(ctx, { currentProject: cwdProject(), currentSessionId: 'sess-a' });
-    // pre-fix: activeSnapshot (scope-filtered) was null, so keying on activeSnapshot?.session_id fell through to the ambient unfinishedOnly lookup and surfaced sess-b's handoff.
     expect(result.activeSnapshot).toBeUndefined();
     expect(result.sessionHandoff).toBeUndefined();
   });
@@ -181,10 +179,8 @@ describe('fix 1: unfinishedOnly selects the newest revision per session', () => 
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-s', summary: 'newer', artifacts: [] });
     expect(stampHandoffOutcome(root, 'default', 'sess-s', 'success')).toBe(1);
 
-    // Session S is fully done: ambient unfinishedOnly must not fall back to its older null row.
     expect(loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true })).toBeNull();
 
-    // A genuinely unfinished session still surfaces.
     saveSessionHandoff(root, 'default', { version: 1, sessionId: 'sess-t', summary: 'still open', artifacts: [] });
     const unfinished = loadLatestHandoff(root, 'default', undefined, { unfinishedOnly: true });
     expect(unfinished!.sessionId).toBe('sess-t');
@@ -268,7 +264,6 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
     expect(refreshed!.artifacts).toEqual(['file.ts']);
     expect(refreshed!.repoRoot).toBe('/repo/root');
 
-    // Different task on refresh: nothing carries forward.
     saveSessionHandoff(root, 'default', {
       version: 1,
       sessionId: 'sess-diff',
@@ -308,7 +303,6 @@ describe('fix 3: writeSessionEndHandoff carries forward same-task envelope metad
       repoRoot: '/repo/root',
       scope: 'proj:private:x',
     });
-    // Unscoped snapshot for the same task/session, as pre-compact and `snapshot save` produce.
     saveActiveTaskSnapshot(root, 'default', {
       task: 'T',
       summary: 'snapshot summary',

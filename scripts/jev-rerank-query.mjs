@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lanes 9a/9b/11 of docs/EXPERIMENT-PROTOCOL.md WAVE 2: does Jev seeing the QUERY beat
- *  hippo's own ranking as a selector (9a, one choice call) or a scorer (9b, 40 batched
- *  nouls)? Both lanes share one 40-candidate set and base rank per query. */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -185,7 +182,6 @@ async function runGate(gateCases) {
     );
     console.log(`    raw: [${raw.map((v) => (v == null ? 'MISSING' : v.toFixed(3))).join(', ')}]`);
   }
-  // Per-response check: each call must itself be non-degenerate, not just the pool of all 5.
   const pass = out.length > 0 && out.every((g) => g.pass);
   console.log(
     `\nAMENDMENT 2 GATE: ${pass ? 'PASS' : 'FAIL'} (${out.filter((g) => g.pass).length}/${out.length} queries clean)\n`,
@@ -229,8 +225,6 @@ const results9a = await runPool(
 );
 const t9aWallMs = Date.now() - t9aStart;
 
-// Hoisting the picked candidate to rank 1 only shifts items that were originally
-// ranked ABOVE it (they move down by one); everything at or below it is untouched.
 function hoistRank(baseRank, pickedRank, isPicked) {
   if (isPicked) return 1;
   if (baseRank < pickedRank) return baseRank + 1;
@@ -342,8 +336,6 @@ function ciFromDeltas(sortedDeltas, alpha) {
   return { lo, hi };
 }
 
-// One resample index matrix per report, reused by every metric below it (protocol
-// requirement): correlated metrics must be bootstrapped off the same resamples.
 function report(label, validRows, metrics, primaryName, secondaryNames) {
   const n = validRows.length;
   const matrix = buildResampleMatrix(n, BOOTSTRAP_DRAWS);
@@ -515,8 +507,6 @@ writeFileSync(
       lane_9b: report9b,
       lane_11_cost_latency: lane11,
       rows: rows.map((r) => ({
-        // JSON.stringify turns Infinity into null on its own, so "never surfaced" and
-        // "call failed" both serialize as null with no extra mapping needed here.
         id: r.id,
         query: r.query,
         baseRank: r.baseRank,

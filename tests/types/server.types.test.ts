@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory/server` (src/server.ts). */
-
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
@@ -36,7 +34,6 @@ describe('hippo-memory/server entry types', () => {
   it('serve takes ServeOptions and resolves to a ServerHandle', () => {
     expectTypeOf(serve).parameters.toEqualTypeOf<[ServeOptions]>();
     expectTypeOf(serve).returns.toEqualTypeOf<Promise<ServerHandle>>();
-    // hippoRoot is required, and the argument is an options object
     expectTypeOf<{ port: number }>().not.toMatchTypeOf<ServeOptions>();
     expectTypeOf<string>().not.toMatchTypeOf<ServeOptions>();
   });

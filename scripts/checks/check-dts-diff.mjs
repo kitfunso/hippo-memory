@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Writes (--write) or verifies (--check) api/hippo-memory.api.txt: one sorted line per exported name and declaration kind
-// of every published entry under dist. A PR that changes the public API must change the report in the same diff.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,7 +10,6 @@ const NAMED_LIST = /^export\s+(?:type\s+)?\{([^}]*)\}/gm;
 const STAR = /^export\s+(?:type\s+)?\*(?:\s+as\s+([\w$]+))?\s+from\s+['"]([^'"]+)['"]/gm;
 const DEFAULT = /^export\s+default\b/m;
 
-/** Rows `name kind` a d.ts text exports; only column-0 `export` lines count, so a namespace's members stay out. */
 function exportedRows(text) {
   const src = stripComments(text);
   const rows = [];
@@ -34,7 +31,6 @@ function exportedRows(text) {
   return rows;
 }
 
-/** The published entry declarations: dist/index.d.ts, dist/server.d.ts and dist/entry/*.d.ts. */
 function entryFiles(root) {
   return readdirSync(root, { recursive: true, encoding: 'utf8' })
     .map((p) => p.replace(/\\/g, '/'))
@@ -49,7 +45,6 @@ function buildReport(root) {
   return [...new Set(lines)].sort().join('\n') + '\n';
 }
 
-/** Lines only in `was` get `-`, lines only in `now` get `+`. */
 function diffReports(was, now) {
   const a = new Set(was.split('\n').filter(Boolean));
   const b = new Set(now.split('\n').filter(Boolean));

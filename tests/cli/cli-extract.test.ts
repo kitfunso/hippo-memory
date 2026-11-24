@@ -18,7 +18,6 @@ describe('hippo remember --extract', () => {
   });
 
   it('saves memory even when extraction skips (no API key)', async () => {
-    // `cwd` MUST be an isolated temp dir: the CLI walks up from cwd to find `.hippo`, and HIPPO_HOME only moves the global store.
     home = mkdtempSync(join(tmpdir(), 'hippo-extract-'));
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo'));
     vi.stubEnv('ANTHROPIC_API_KEY', '');
@@ -26,7 +25,6 @@ describe('hippo remember --extract', () => {
     const init = await hippo('init', '--no-hooks', '--no-schedule', '--no-learn');
     expect(init.status, init.stderr).toBe(0);
 
-    // Without an API key --extract may exit non-zero; the recall below is the check.
     await hippo('remember', 'John loves basketball', '--extract');
 
     const recall = await hippo('recall', 'basketball', '--json');

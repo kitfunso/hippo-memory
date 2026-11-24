@@ -1,5 +1,3 @@
-// The api's write functions answer through a Promise on every store kind; the HTTP edge refuses a last-recall outcome
-// on a store without that group (store-port-capabilities.process.test.ts).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -63,7 +61,6 @@ function vaultFolder(): string {
   return vault;
 }
 
-/** Each case readies its rows, then hands back the one call under test. */
 type Case = (ctx: FullContext) => Promise<() => PromiseLike<object>>;
 
 const CASES = {
@@ -80,7 +77,6 @@ const CASES = {
   supersede: async (ctx) => () => supersede(ctx, 'mem_second', 'the billing service freezes deploys on mondays'),
   rawArchive: async (ctx) => () => rawArchive(ctx, 'mem_raw', 'user asked'),
   remember: async (ctx) => () => remember(ctx, { content: 'the api gateway retries three times' }),
-  // importVault takes no store and rememberLocally gets the folder's own: both write through its sqliteStore.
   rememberLocally: async (ctx) => () =>
     rememberLocally(apiCtx(ctx.hippoRoot, ctx.tenantId, ctx.actor), {
       content: 'the cache warms on every deploy',
@@ -90,7 +86,6 @@ const CASES = {
     importVault(vaultFolder(), { hippoRoot: ctx.hippoRoot, tenantId: ctx.tenantId, name: 'notes' }),
 } satisfies Record<string, Case>;
 
-// The key fields each call answers with, so a resolved value that lost its shape fails here.
 const str = expect.any(String);
 const REPLIES = {
   authCreate: { keyId: str, plaintext: str, tenantId: ACME, role: 'member', expiresAt: str },

@@ -1,5 +1,3 @@
-// The local Transformers.js embedder: it imports the package and loads each model's pipeline once
-// per process.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEFAULT_EMBEDDING_MODEL, resolveTransformersPackage } from '../base/embeddings/local.js';
@@ -9,17 +7,11 @@ import { errorFields, errorMessage, log } from '../base/util/log.js';
 import { MINUTE_MS } from '../base/util/time.js';
 import { createModelLoads, importTransformers, MODEL_LOAD_POLICY } from './transformers.js';
 
-/** Opens once a model's load starts downloading weights; only then does a recall stop waiting at
- * its deadline. */
 interface FetchGate {
   readonly opened: Promise<void>;
   readonly open: () => void;
 }
 
-/**
- * The one call this file makes on a Transformers.js feature-extraction pipeline, and the part of
- * its tensor it reads.
- */
 interface EmbeddingPipeline {
   (
     input: string,
@@ -33,15 +25,12 @@ type PipelineFactory = (
   options: { quantized: boolean },
 ) => Promise<EmbeddingPipeline>;
 
-/** The settings written on the package's `env` object. */
 interface TransformersEnv {
   cacheDir?: string;
   localModelPath?: string;
   allowRemoteModels?: boolean;
 }
 
-/** The parts of the optional package's module this file reads; either export spelling may carry
- * `pipeline`. */
 interface TransformersModule {
   env?: TransformersEnv;
   pipeline?: PipelineFactory;
@@ -65,9 +54,7 @@ export function prefixFor(model: string, role?: EmbeddingRole): string {
 
 /** The optional package as the local embedder reaches it; tests hand in a stand-in. */
 export interface LocalTransformers {
-  /** Whether a package is installed, answered without importing it. */
   installed(): boolean;
-  /** The package's module, or null when neither package is installed. */
   load(): Promise<{ readonly name: string; readonly mod: TransformersModule } | null>;
 }
 
@@ -76,19 +63,13 @@ const INSTALLED_TRANSFORMERS: LocalTransformers = {
   load: () => importTransformers<TransformersModule>(),
 };
 
-// Sharing the model-load backoff is deliberate: one window, one attempt.
 const INSTALL_RECHECK_MS = MODEL_LOAD_POLICY.backoffMs;
 
-/** A package that is missing is asked about again once `retryAt` (epoch ms) has passed. */
 type Availability = { readonly kind: 'yes' } | { readonly kind: 'no'; readonly retryAt: number };
 
 export interface LocalEmbedder {
   isAvailable(): boolean;
-  /** Throws, with the reason, when the model's pipeline cannot load: a provider-level failure,
-   * not a per-item skip. `signal` ends the wait, never the load, and only once the load is
-   * downloading: a load from disk ends soon on its own, a download may not. */
   requirePipeline(model: string, signal?: AbortSignal): Promise<void>;
-  /** `text`'s vector, or `[]` when the model is missing or fails; `role` adds e5-style prefixes. */
   embed(text: string, model: string, role?: EmbeddingRole): Promise<number[]>;
 }
 
@@ -125,8 +106,6 @@ export function createLocalEmbedder(
         });
         return Array.from(output.data);
       } catch (err) {
-        // The caller sees `[]` and names the memory; the first failure per model warns, then every
-        // 100th repeat.
         log.warnThenSample(
           `local-embed:${model}`,
           `local embedding with ${model} failed: ${errorMessage(err)}`,
@@ -146,14 +125,11 @@ function warnLoadFailure(model: string, err: Error): void {
   );
 }
 
-/** The model's pipeline; throws the reason it cannot load. */
 async function createPipeline(
   transformers: LocalTransformers,
   model: string,
   gates: Map<string, FetchGate>,
 ): Promise<EmbeddingPipeline> {
-  // The package is an optional peer, so the dynamic import is typed by what this file reads; a
-  // missing export throws below.
   const imported = await transformers.load();
   if (!imported) throw new Error('no transformers package is installed');
   const { name, mod } = imported;
@@ -166,8 +142,6 @@ async function createPipeline(
   const pipelineFn = mod.pipeline ?? mod.default?.pipeline;
   if (!pipelineFn) throw new Error(`${name} exports no pipeline function`);
 
-  // The offline bundle used in egress-blocked sandboxes ships only the FP32 model, so use whichever
-  // file is on disk.
   const quantized =
     !cache || fs.existsSync(path.join(cache, model, 'onnx', 'model_quantized.onnx'));
   if (fetchesWeights(mod.env, model)) gateOf(gates, model).open();
@@ -178,8 +152,6 @@ async function createPipeline(
   }
 }
 
-/** Whether the load will download: remote models are allowed and no folder the package reads
- * holds the model's ONNX files. */
 function fetchesWeights(env: TransformersEnv | undefined, model: string): boolean {
   if (env?.allowRemoteModels === false) return false;
   return ![env?.localModelPath, env?.cacheDir].some(
@@ -200,8 +172,6 @@ function gateOf(gates: Map<string, FetchGate>, model: string): FetchGate {
   return gate;
 }
 
-/** `done` removes the listener when the wait ends without an abort, so a long-lived signal
- * collects none. */
 function rejectOnAbort(signal: AbortSignal, done: AbortSignal): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     if (signal.aborted) reject(signal.reason);
@@ -222,7 +192,6 @@ async function waitForPipeline(
       ? Promise.race([loading, downloading.then(() => rejectOnAbort(signal, left.signal))])
       : loading);
   } catch (err) {
-    // The download goes on, and the first call after it lands gets the model.
     if (signal?.aborted && err === signal.reason) throw err;
     throw new Error(`local embedding model did not load: ${errorMessage(err)}`, { cause: err });
   } finally {

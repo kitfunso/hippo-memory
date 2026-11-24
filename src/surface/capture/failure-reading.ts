@@ -1,5 +1,3 @@
-// What a PostToolUseFailure payload says, read with no store, so a hook with no store sends the
-// same reading the local log keeps.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { scrubForSharing } from './share-scrub.js';
 import { blockHash } from '../../base/util/token-text.js';
@@ -18,7 +16,6 @@ export type FailureReading =
   | { skip: 'skipped-routine'; rule: RoutineRule; text: string; detail: string }
   | { skip: 'skipped-interrupt' | 'skipped-invalid'; text: null; detail: null };
 
-/** The PostToolUseFailure payload fields this module reads. */
 interface ToolFailurePayload {
   session_id?: JsonValue;
   tool_name?: JsonValue;
@@ -31,18 +28,14 @@ interface ToolFailurePayload {
  * copying it. */
 export const FAILURE_TEXT_MAX_CHARS = 200;
 
-/** The user, a permission prompt or a hook said no: routine, not a lesson. */
 const DECLINED = new RegExp(
   String.raw`user (?:doesn't|does not) want|denied by (?:the )?user|user (?:rejected|declined|denied)|` +
     String.raw`permission to use|was blocked by (?:a )?hook`,
   'i',
 );
 
-/** The OS or a remote host refused access (EACCES, SSH publickey): routine too, but nobody
- * declined anything. */
 const OS_PERMISSION = /permission denied/i;
 
-/** Leading `cd` or `pushd` steps say where a command ran, not what it ran. */
 const LEADING_CD = /^\s*(?:(?:cd|pushd)\b[^;&|]*(?:&&|\|\||;)\s*)+/;
 
 const NO_MATCH = /\bno (?:matches|files|results) found\b/i;

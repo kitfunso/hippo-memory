@@ -1,4 +1,3 @@
-// /v1/processes routes: supersede creates a new version that keeps the predecessor's name.
 import { OBJECT_CAPS } from '../../../api/objects/object-kinds.js';
 import { objectCreate } from '../../../api/objects/objects.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
@@ -7,8 +6,6 @@ import { MAX_SHORT_FIELD_LEN } from '../../../base/util/limits.js';
 import type { JsonValue } from '../../../base/util/json.js';
 import type { VersionedRouteConfig } from './object-routes.js';
 
-// HTTP-boundary validation for an untrusted process `steps` body; the save re-validates and trims,
-// this is the fail-fast 400 gate.
 function validateProcessStepsBody(body: Record<string, JsonValue>): string[] {
   return (
     getStringArray({

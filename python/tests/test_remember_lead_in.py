@@ -1,5 +1,3 @@
-"""The body `remember` posts for `lead_in`, with no server: a stub transport records the request."""
-
 from __future__ import annotations
 
 import json

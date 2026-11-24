@@ -1,4 +1,3 @@
-// Which Claude Code handlers hippo treats as its own, and which hooks values it refuses to merge into.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +6,6 @@ import { resolveJsonHookPaths } from '../../src/surface/hooks-install/json-hooks
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 
-// The SessionEnd command hippo 0.20.3 wrote, with a `(` in front of `hippo sleep`.
 const HIPPO_0_20_3 =
   "echo '[hippo] consolidating memory...' && (hippo sleep && echo '[hippo] sleep complete' || echo '[hippo] sleep failed')";
 const LOOKALIKES = [

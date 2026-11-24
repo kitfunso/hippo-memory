@@ -1,5 +1,3 @@
-// What a dirty DAG summary settles to after a rebuild or a fresh build, with the audit rows and log line each writes;
-// the store lands it in one write while the summary is still dirty.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { rejectionDigest } from '../../base/records/rejection-digest.js';
 import { log } from '../../base/util/log.js';
@@ -10,7 +8,6 @@ import type { SummarySettled } from '../../base/ports/store/consolidation.js';
 /** A rebuild's result for one summary; `bumpRebuildCount` is false for the zero-child case, true
  * for a normal one. */
 export interface RebuildPatch {
-  /** New content for a normal rebuild; the summary's own for zero children. */
   content: string;
   descendantCount: number;
   earliestAt: string | null;
@@ -50,7 +47,6 @@ export async function applyRebuild(
         op: 'summary_rebuilt',
         targetId: id,
         metadata: {
-          // The summary's own level: L2 -> 2, L3 -> 3.
           dag_level: summary.dagLevel,
           source: 'E3-rebuild',
           zero_children: patch.zeroChildren,

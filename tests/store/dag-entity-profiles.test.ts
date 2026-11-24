@@ -1,14 +1,3 @@
-/**
- * v0.30 / E5 of DAG live-coupling — level-3 entity profiles + drillDown depth.
- *
- * Locks: buildEntityProfiles L2->L3 aggregation, born-dirty cancellation on
- * L3, widened dag_level guards (markSummaryDirtyInTx + applyRebuildResult +
- * clearSummaryDirtyAfterBuild all handle L2+L3 uniformly), audit metadata
- * reads actual level (NOT hardcoded), drillDown depth N + visited Set dedup
- * + totalChildren semantics + tenant isolation per level, isDagSummary
- * widened to L2+L3 with E4 deboost still firing.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
@@ -78,7 +67,6 @@ function forceMarkDirty(hippoRoot: string, summaryId: string): void {
   }
 }
 
-/** Narrows a drillDown outcome to its success shape, failing the test clearly if not. */
 function assertDrillDownSucceeded(outcome: DrillDownOutcome): asserts outcome is DrillDownResult {
   expect('failure' in outcome).toBe(false);
 }
@@ -136,7 +124,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(profile.earliest_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(profile.latest_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
-      // All 3 L2s now have dag_parent_id pointing to profile
       // SAFETY: the db driver's .all() returns `unknown[]`; the row shape is guaranteed
       // by the `SELECT id` projection above.
       const linkedRows = db.prepare(`SELECT id FROM memories WHERE dag_parent_id = ?`).all(profile.id) as Array<{
@@ -173,9 +160,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher() }),
     });
-    // Only the 2 unparented ones cluster
     expect(result.l2sLinked).toBe(2);
-    // M2 fold: confirm the parented L2 STILL points at `existing`, not the new L3.
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
@@ -223,7 +208,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(cleanRows).toHaveLength(1);
       const meta = JSON.parse(cleanRows[0].metadata_json);
       expect(meta.source).toBe('buildEntityProfiles-clean');
-      expect(meta.dag_level).toBe(3); // H1 fold: read actual level, NOT hardcoded 2
+      expect(meta.dag_level).toBe(3);
     } finally {
       closeHippoDb(db);
     }
@@ -236,7 +221,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
     db1.prepare(`UPDATE memories SET summary_dirty = 0 WHERE id = ?`).run(l3.id);
     closeHippoDb(db1);
 
-    // Write a NEW L2 with dag_parent_id pointing to the L3 -> E2 hook fires.
     const newL2 = makeL2Summary('new alice topic', 'alice', l3.id);
     writeEntry(hippoRoot, newL2);
 
@@ -255,9 +239,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_dirty' AND target_id = ?
       `)
         .all(l3.id) as Array<{ metadata_json: string }>;
-      expect(auditRows).toHaveLength(1); // only the 0 to 1 flip audits, and the raw UPDATE above wrote none
+      expect(auditRows).toHaveLength(1);
       const meta = JSON.parse(auditRows[0].metadata_json);
-      expect(meta.dag_level).toBe(3); // H1 fold: actual level
+      expect(meta.dag_level).toBe(3);
     } finally {
       closeHippoDb(db);
     }
@@ -268,7 +252,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const builtAtIso = '2026-01-01T00:00:00.000Z';
     l3.dagLevel3BuiltAt = builtAtIso;
     writeEntry(hippoRoot, l3);
-    // Add a child L2 so rebuild has children to read
     const childL2 = makeL2Summary('alice topic for rebuild test', 'alice', l3.id);
     writeEntry(hippoRoot, childL2);
     forceMarkDirty(hippoRoot, l3.id);
@@ -312,10 +295,8 @@ describe('level-3 entity profiles + drillDown depth', () => {
       expect(row.rebuild_count).toBe(1);
       expect(row.last_rebuilt_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(row.summary_dirty).toBe(0);
-      // dag_level_3_built_at UNCHANGED (set once at create, not bumped on rebuild)
       expect(row.dag_level_3_built_at).toBe(builtAtIso);
 
-      // Audit row has dag_level: 3 in metadata (NOT hardcoded 2)
       // SAFETY: the db driver's .get() returns `unknown`; the row shape is guaranteed
       // by the `SELECT metadata_json` projection above (undefined if no audit row).
       const auditRow = db
@@ -330,7 +311,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
     } finally {
       closeHippoDb(db);
     }
-    // Label derivation: prompt contains the speaker:alice tag's value 'alice'
     expect(capturedPrompt).toContain('alice');
   });
 
@@ -348,7 +328,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
   it('drillDown depth=2 from L3 returns L2s + L1s with dedup + totalChildren=8', async () => {
     const l3 = makeL3Profile('alice profile for depth test', 'alice');
-    l3.descendantCount = 2; // stored direct-child count (2 L2 kids)
+    l3.descendantCount = 2;
     writeEntry(hippoRoot, l3);
     const l2a = makeL2Summary('alice topic A for depth', 'alice', l3.id);
     const l2b = makeL2Summary('alice topic B for depth', 'alice', l3.id);
@@ -361,12 +341,9 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2 });
     assertDrillDownSucceeded(r);
-    // 2 L2s + 6 L1s = 8 entries
     expect(r.children.length).toBe(8);
     expect(r.totalChildren).toBe(8);
-    // descendantCount stays at the L3's stored value (2 L2 direct children)
     expect(r.summary.descendantCount).toBe(2);
-    // All returned ids unique (visited Set dedup lock)
     const ids = new Set(r.children.map((c) => c.id));
     expect(ids.size).toBe(8);
   });
@@ -381,7 +358,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 3 });
     assertDrillDownSucceeded(r);
-    // 1 L2 + 2 L1s = 3 entries; depth=3 doesn't over-walk into nothing
     expect(r.children.length).toBe(3);
     expect(r.totalChildren).toBe(3);
   });
@@ -398,7 +374,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
       );
     }
 
-    // Very tight budget — should truncate
     const r = await drillDown(defaultCtx(hippoRoot), l3.id, { depth: 2, budget: 30 });
     assertDrillDownSucceeded(r);
     expect(r.truncated).toBe(true);
@@ -411,12 +386,10 @@ describe('level-3 entity profiles + drillDown depth', () => {
     const l2a = makeL2Summary('alice topic A in tenant-a', 'alice', l3.id);
     writeEntry(hippoRoot, l2a);
 
-    // Anomaly: L1s in tenant-b with dag_parent_id pointing to tenant-a's L2-A
     const db = openHippoDb(hippoRoot);
     try {
       for (let i = 0; i < 3; i++) {
         const l1 = makeL1Fact(l2a.id, `cross-tenant-fact-${i} content here`);
-        // Direct SQL to simulate cross-tenant data anomaly
         db.prepare(`
           INSERT INTO memories (id, content, layer, tags_json, dag_level, dag_parent_id, tenant_id, created, last_retrieved, retrieval_count, strength, half_life_days, emotional_valence, schema_fit, source, outcome_score, outcome_positive, outcome_negative, conflicts_with_json, pinned, confidence, parents_json, starred, kind, valid_from, summary_dirty)
           VALUES (?, ?, 'episodic', '["extracted"]', 1, ?, 'tenant-b', ?, ?, 0, 1.0, 7, 0, 1, 'extraction', 0, 0, 0, '[]', 0, 'inferred', '[]', 0, 'distilled', ?, 0)
@@ -428,7 +401,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
 
     const r = await drillDown(defaultCtx(hippoRoot, 'default'), l3.id, { depth: 2 });
     assertDrillDownSucceeded(r);
-    // Should return only L2-A (tenant-a), NOT the L1s in tenant-b
     expect(r.children.length).toBe(1);
     expect(r.children[0]!.id).toBe(l2a.id);
   });
@@ -445,7 +417,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
   });
 
   it('buildEntityProfiles partitions clusters by tenantId', async () => {
-    // 3 alice L2s in tenant-A, 3 alice L2s in tenant-B with similar content
     const tenantAL2s = [
       'alice does python in tenant A repo one',
       'alice prefers type hints in tenant A repo one',
@@ -471,7 +442,6 @@ describe('level-3 entity profiles + drillDown depth', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'k', fetcher: makeOkFetcher('synthetic-multi-tenant-profile-content-xyz') }),
     });
-    // 2 L3s expected — one per tenant cluster (NOT one merged L3 in 'default')
     expect(result.profilesCreated).toBe(2);
     expect(result.l2sLinked).toBe(6);
 
@@ -487,7 +457,7 @@ describe('level-3 entity profiles + drillDown depth', () => {
       const tenants = new Set(profiles.map((p) => p.tenant_id));
       expect(tenants.has('tenant-a')).toBe(true);
       expect(tenants.has('tenant-b')).toBe(true);
-      expect(tenants.has('default')).toBe(false); // would indicate cross-tenant conflation
+      expect(tenants.has('default')).toBe(false);
     } finally {
       closeHippoDb(db);
     }

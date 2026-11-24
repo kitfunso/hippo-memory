@@ -1,5 +1,3 @@
-// A held lock leaves the SQLite adapter as the port's StoreBusyError, with the driver's error as its cause and its text
-// kept, wherever it escapes: a served store call, a request scope, a hook scope and a batch.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, isSqliteBusy, openHippoDb } from '../../src/db/index.js';
 import { isStoreBusy, StoreBusyError } from '../../src/base/ports/store.js';
@@ -15,7 +13,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 const root = makeRoot('busy-port-error');
 const SNAPSHOT = { task: 'ship', summary: 'half done', nextStep: 'merge', sessionId: 's1' };
 
-/** Runs `fn` while another connection holds the write lock. */
 async function whileHeld<T>(fn: () => Promise<T>): Promise<T> {
   const holder = openHippoDb(root);
   holder.exec('BEGIN IMMEDIATE');
@@ -27,7 +24,6 @@ async function whileHeld<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** A genuine busy error from node:sqlite: a second handle asks for the lock the first holds, with no wait. */
 function driverBusyError(): Error {
   const holder = openHippoDb(root);
   const other = openHippoDb(root);

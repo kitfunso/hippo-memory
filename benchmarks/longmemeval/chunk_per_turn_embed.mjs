@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/**
- * F13: turn-level e5-large embedding for LongMemEval oracle.
- *
- * Reads data/longmemeval_oracle.json, extracts every distinct turn across all
- * 940 sessions, embeds each with `passage: <content>` via multilingual-e5-large,
- * and writes a turn-index JSON to disk.
- *
- * Output format (gitignored artifact at benchmarks/longmemeval/data/turn_index_e5.json):
- *   {
- *     "model": "Xenova/multilingual-e5-large",
- *     "dim": 1024,
- *     "turns": [
- *       { "session_id": "...", "turn_idx": 0, "role": "user"|"assistant", "content": "...", "vec": [...1024 floats...] },
- *       ...
- *     ]
- *   }
- *
- * Dedupe: a (session_id, turn_idx) tuple is unique per turn. Two questions
- * sharing the same session_id contribute the same turn rows; we keep one
- * physical embedding per unique (session_id, turn_idx).
- *
- * Cost: ~11k turns × ~150-300 ms inference = 30-60 min wall time.
- * Set HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache before running.
- */
 import { readFileSync, renameSync, mkdirSync, existsSync, openSync, writeSync, closeSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -41,9 +17,6 @@ if (!process.env.HIPPO_MODEL_CACHE) {
   process.env.HIPPO_MODEL_CACHE = resolve('benchmarks/longmemeval/data/model-cache');
 }
 
-// Use the @huggingface/transformers backend that F12 wired in (it handles
-// external-data ONNX correctly, which @xenova/transformers v2 does not).
-// LME_TRANSFORMERS swaps the backend, e.g. a file:// URL to @xenova/transformers v2 (int8 by default) to replay June 2026.
 const { pipeline, env } = await import(process.env.LME_TRANSFORMERS || '@huggingface/transformers');
 env.cacheDir = process.env.HIPPO_MODEL_CACHE;
 env.localModelPath = process.env.HIPPO_MODEL_CACHE;
@@ -56,7 +29,6 @@ console.log(`[F13] loaded in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
 const data = JSON.parse(readFileSync(DATA, 'utf8'));
 
-// Build a unique map keyed by (session_id, turn_idx)
 const uniq = new Map();
 for (const q of data) {
   for (let si = 0; si < q.haystack_session_ids.length; si++) {
@@ -88,18 +60,17 @@ mkdirSync(dirname(OUT), { recursive: true });
 // single string. See chunk_per_turn_retrieve.mjs for the matching loader.
 const PARTIAL = OUT + '.partial.jsonl';
 const FINAL_JSONL = OUT + '.jsonl';
-const done = new Set(); // keys "sid|tidx" already embedded
+const done = new Set();
 let resumedCount = 0;
 let resumedDim = 0;
 
-// Helper: load resume state from JSONL.
 async function loadJsonlIntoDone(path) {
   const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
   for await (const line of rl) {
     if (!line) continue;
     let t;
     try { t = JSON.parse(line); } catch { continue; }
-    if (t && t._meta) continue; // skip metadata line
+    if (t && t._meta) continue;
     if (t && t.session_id != null && t.turn_idx != null && Array.isArray(t.vec)) {
       const key = `${t.session_id}|${t.turn_idx}`;
       if (!done.has(key)) {
@@ -111,7 +82,6 @@ async function loadJsonlIntoDone(path) {
   }
 }
 
-// Helper: load resume state from legacy single-blob JSON (pre-v1.9.3 format).
 function loadLegacyJsonIntoDone(path) {
   const prev = JSON.parse(readFileSync(path, 'utf8'));
   if (prev && Array.isArray(prev.turns)) {
@@ -127,11 +97,6 @@ function loadLegacyJsonIntoDone(path) {
   return prev?.turns ?? [];
 }
 
-// Resume sequence:
-// 1. If FINAL_JSONL exists, treat as complete: rehydrate done set, then re-check whether anything is missing.
-// 2. Else if PARTIAL (.jsonl) exists, resume from it.
-// 3. Else if legacy .json.partial exists, convert it to JSONL, then resume.
-// 4. Else if legacy .json (the final from a prior good run) exists, convert and finish.
 const LEGACY_PARTIAL = OUT + '.partial';
 const LEGACY_FINAL = OUT;
 
@@ -147,10 +112,8 @@ if (existsSync(FINAL_JSONL)) {
   await loadJsonlIntoDone(PARTIAL);
   console.log(`[F13] resuming from JSONL partial: ${PARTIAL} (${resumedCount} turns)`);
 } else if (existsSync(LEGACY_PARTIAL)) {
-  // Migrate legacy .json.partial -> .partial.jsonl
   console.log(`[F13] migrating legacy partial ${LEGACY_PARTIAL} -> ${PARTIAL}`);
   const legacyTurns = loadLegacyJsonIntoDone(LEGACY_PARTIAL);
-  // Write JSONL atomically.
   const tmp = PARTIAL + '.tmp';
   const fd = openSync(tmp, 'w');
   writeSync(fd, JSON.stringify({ _meta: { model: MODEL, dim: resumedDim, count: legacyTurns.length } }) + '\n');
@@ -172,12 +135,7 @@ if (existsSync(FINAL_JSONL)) {
 const remaining = allTurns.filter(t => !done.has(`${t.session_id}|${t.turn_idx}`));
 console.log(`[F13] turns remaining to embed: ${remaining.length}`);
 
-// Append-mode writer. Each turn is one line; flushes via fsync are
-// expensive at this rate, so we rely on the OS page cache + fast
-// `writeSync` semantics. A SIGKILL mid-line truncates one record at
-// worst — the resume loader skips malformed last lines.
 appendFd = openAppend(PARTIAL);
-// If file is empty (fresh start), write the metadata header.
 if (resumedCount === 0) {
   writeSync(appendFd, JSON.stringify({ _meta: { model: MODEL, dim: 0, count: 0, note: 'dim filled in by retrieve loader if 0' } }) + '\n');
 }
@@ -213,6 +171,5 @@ closeSync(appendFd);
 const wall = (Date.now() - embedT0) / 1000;
 console.log(`[F13] embed wall: ${wall.toFixed(1)}s for ${remaining.length} new turns (${(remaining.length / wall || 0).toFixed(2)}/s)`);
 
-// Atomically promote PARTIAL -> FINAL_JSONL by renaming.
 renameSync(PARTIAL, FINAL_JSONL);
 console.log(`[F13] wrote ${FINAL_JSONL}`);

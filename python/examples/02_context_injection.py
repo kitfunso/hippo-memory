@@ -1,13 +1,3 @@
-"""Example 2: assemble a context bundle and render it as markdown.
-
-Use case: your agent loop calls `get_context(...)` at the start of each
-turn and injects the rendered output into the system prompt. The SDK
-returns structured data; you render it however you like.
-
-Run::
-    uv run python examples/02_context_injection.py
-"""
-
 import asyncio
 import os
 
@@ -15,7 +5,6 @@ from hippo_memory import Hippo
 
 
 def render(ctx) -> str:
-    """Minimal markdown renderer mirroring the CLI's printContextMarkdown."""
     lines = [f"## Project Memory ({len(ctx.entries)} entries, {ctx.tokens} tokens)\n"]
     for item in ctx.entries:
         e = item.entry
@@ -27,7 +16,6 @@ def render(ctx) -> str:
 
 async def main() -> None:
     async with Hippo(base_url="http://127.0.0.1:6789", api_key=os.environ["HIPPO_API_KEY"]) as client:
-        # Seed a handful so the bundle has something to assemble
         for content in [
             "always use real DB for tests",
             "no em dashes in commit messages or release notes",

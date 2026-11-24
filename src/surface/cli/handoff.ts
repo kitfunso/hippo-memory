@@ -1,5 +1,3 @@
-// `hippo handoff`: write and read the note one session leaves for the next.
-
 import { cliStore } from './api-context.js';
 import {
   isHandoffOutcome,
@@ -42,7 +40,6 @@ async function handoffCreate(hippoRoot: string, tenantId: string, flags: CliFlag
 function handoffOutcomeFlag(flags: CliFlags): HandoffOutcome | undefined {
   const outcomeRaw = stringFlag(flags, 'outcome');
   if (hasFlag(flags, 'outcome') && !isHandoffOutcome(outcomeRaw)) {
-    // A bare --outcome parses as true, and the message has always echoed it.
     fail(`Invalid outcome: "${outcomeRaw ?? 'true'}". Must be one of: success, failure, partial.`);
   }
   // SAFETY: isHandoffOutcome above already refused any non-matching value.

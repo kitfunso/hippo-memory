@@ -1,13 +1,3 @@
-/**
- * E2 skill first-class object (executable/exportable) - HTTP route parity test.
- * Docs: docs/plans/2026-05-30-e2-skill-object.md
- *
- * Covers what only skills have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/skills lists + status filter
- * 2. GET /v1/skills/export renders active skills markdown (+ not-404-as-id)
- * 3. the export is tenant-scoped
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -77,7 +67,6 @@ describe('HTTP /v1/skills (executable/exportable first-class object)', () => {
     expect(body.markdown).toContain('## Alpha');
     expect(body.markdown).toContain('**When:** on start');
     expect(body.markdown).toContain('## Bravo');
-    // name-ASC order
     expect(body.markdown.indexOf('## Alpha')).toBeLessThan(body.markdown.indexOf('## Bravo'));
   });
 

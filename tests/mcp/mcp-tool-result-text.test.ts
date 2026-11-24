@@ -1,4 +1,3 @@
-// Pins each MCP tool's reply text on a seeded store, including the early-return and refusal lines, so the per-tool dispatch cannot drift.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,7 +35,6 @@ async function call(name: string, args: Wire = {}): Promise<string> {
   );
 }
 
-/** A tool that throws reaches the transport raw, so the thrown message is part of the contract too. */
 async function settle(name: string, args: Wire): Promise<string> {
   try {
     return await call(name, args);
@@ -45,7 +43,6 @@ async function settle(name: string, args: Wire): Promise<string> {
   }
 }
 
-/** Generated ids vary per run; everything around them is the contract. */
 function masked(s: string): string {
   return s.replace(/\b[a-z]+_[0-9a-f]{12}\b/g, '<id>');
 }
@@ -55,7 +52,6 @@ beforeEach(() => {
   writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: false } }), 'utf8');
   vi.stubEnv('HIPPO_HOME', join(home, 'global'));
   vi.stubEnv('ANTHROPIC_API_KEY', '');
-  // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
   vi.stubEnv('GIT_DIR', join(home, 'no-repo'));
   const store = sqliteStore(root);
   ctx = mcpContext({
@@ -65,7 +61,6 @@ beforeEach(() => {
     role: 'admin',
     hostAdmin: true,
     clientKey: 'client-1',
-    // The test is the transport root, so it keeps the client's last recall that an outcome with no ids lands on.
     callers: createCallerState(),
     store,
     reach: testReach(root, store),

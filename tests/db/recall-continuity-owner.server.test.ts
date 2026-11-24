@@ -1,4 +1,3 @@
-// Recall's continuity block on a shared store is the caller's own task state, keyed by owner and project, or empty.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -57,8 +56,6 @@ describe('continuity on a shared store', () => {
   });
 
   it('no project: empty block on REST recall, and MCP hippo_recall refuses', async () => {
-    // Ownerless rows and other people's rows are what an unkeyed read would hand to anyone.
-    // Seeded by hand, as a row from before v54: an unkeyed save on a shared store throws.
     const seed = openHippoDb(home);
     try {
       const at = new Date().toISOString();

@@ -1,4 +1,3 @@
-// The sleep physics pass is all-pairs per substep, so past its particle cap it moves only the most recently recalled.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -54,7 +53,6 @@ function storedParticles(root: string): Map<string, PhysicsParticle> {
   }
 }
 
-/** The state consolidate hands the physics pass after decay, with every entry a survivor and nothing pending. */
 function sleepRunOver(root: string, entries: MemoryEntry[]): SleepRun {
   const store = sqliteStore(root);
   const rows = new SleepRows(store, new Map(), READ_PAGE_ROWS);
@@ -138,14 +136,12 @@ describe('sleep physics cap', () => {
       closeHippoDb(db);
     }
     const run = sleepRunOver(root, entries);
-    // The oldest on disk, recalled in this run as replay does: the store sees the new time only at the flush.
     const rehearsed = { ...entries[0]!, lastRetrieved: run.now.toISOString() };
     await run.survivors.set([rehearsed]);
     await physicsPass(run, CAP);
 
     const after = storedParticles(root);
     expect(after.get(rehearsed.id)?.lastSimulation).not.toBe(STALE_SIM);
-    // The cap still holds: the least recently recalled of the rest gives up its place.
     expect(after.get(entries[STORED - CAP]!.id)?.lastSimulation).toBe(STALE_SIM);
     expect(run.result.physicsSimulated).toBe(CAP);
   });
@@ -157,7 +153,6 @@ describe('sleep physics cap', () => {
 
   it('keeps load order and every particle under the cap, and fills past it from the unranked by memory id', () => {
     const stored = ['c', 'a', 'd', 'b'];
-    // Ranked by the caller, most recently recalled first.
     const recalled = ['b', 'a', 'c'];
 
     expect(particlesToSimulate(stored, recalled, 4)).toBe(stored);

@@ -29,7 +29,6 @@ describe('slack idempotency', () => {
     const db = openHippoDb(root);
     try {
       markEventSeen(db, 'Ev1', 'm123');
-      // Second call must not throw and must not overwrite the original memory_id.
       markEventSeen(db, 'Ev1', 'mDIFFERENT');
       expect(lookupMemoryByEvent(db, 'Ev1')).toBe('m123');
     } finally {

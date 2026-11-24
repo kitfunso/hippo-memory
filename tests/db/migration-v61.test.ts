@@ -1,5 +1,3 @@
-// Schema v61 adds the trigram index substring search reads, the duplicate hash the duplicate read groups on, and the
-// audit and conflict indexes the bounded reads use.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { v61 } from '../../src/db/migrations/v61.js';
@@ -38,7 +36,6 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Takes a current store back to v60's shape: no trigram index, no duplicate hash and none of v61's indexes. */
 function toV60(db: DatabaseSyncLike): void {
   for (const name of V61_INDEXES) db.exec(`DROP INDEX ${name}`);
   db.exec('DROP TRIGGER memories_duplicate_hash_stale');
@@ -124,7 +121,6 @@ describe('migration v61', () => {
       expect(unhashed()).toBe(0);
 
       db.exec(`UPDATE memories SET content = 'ab c' WHERE content = 'kept apart'`);
-      // An older binary's insert leaves the column it does not know empty.
       db.exec(`CREATE TEMP TABLE copied AS SELECT * FROM memories WHERE content = 'x y'`);
       db.exec(`UPDATE copied SET id = 'old_binary', content = 'x' || char(9) || 'y', duplicate_hash = NULL`);
       db.exec(`INSERT INTO memories SELECT * FROM copied`);

@@ -1,4 +1,3 @@
-// The Codex login as a secret (E6 plan D3, R4, R6, R24): one vault copy outside the out dir, a run copy only while a session runs.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -9,20 +8,17 @@ export const CODEX_AUTH_RE = /401 Unauthorized|refresh token|log in again|not lo
 const SECRET_KEY = /token|secret|api_key/i;
 const AUTH_FILE = 'auth.json';
 
-/** String leaves under a secret-named key, 8 chars or longer, so a short flag value never turns into a redaction. */
 function secretLeaves(value, underSecret = false) {
   if (Array.isArray(value)) return value.flatMap((v) => secretLeaves(v, underSecret));
   if (value !== null && value !== undefined && value.constructor === Object) return Object.entries(value).flatMap(([k, v]) => secretLeaves(v, underSecret || SECRET_KEY.test(k)));
   return underSecret && value !== null && value !== undefined && value.constructor === String && value.length >= 8 ? [value] : [];
 }
 
-/** The token strings in an auth file; a file that is not JSON holds none the runner can name. */
 function fileTokens(file) {
   if (!fs.existsSync(file)) return [];
   try {
     return secretLeaves(JSON.parse(fs.readFileSync(file, 'utf8')));
   } catch {
-    // A half-written refresh is caught by the next authOut, which reads the file again.
     return [];
   }
 }
@@ -61,7 +57,6 @@ export function authOut(vault, codexHome) {
   for (const name of fs.readdirSync(codexHome)) if (name.startsWith(AUTH_FILE)) fs.rmSync(path.join(codexHome, name), { force: true });
 }
 
-/** Every token the runner has seen, the run copy's current ones included, longest first so a token inside another is never left half. */
 function knownTokens(vault, codexHome) {
   const all = new Set([...vault.seen, ...fileTokens(vault.file), ...(codexHome ? fileTokens(path.join(codexHome, AUTH_FILE)) : [])]);
   return [...all].sort((a, b) => b.length - a.length);
@@ -74,12 +69,10 @@ export function redact(vault, codexHome, text) {
   return out;
 }
 
-/** `read()`, or null when its path is gone; any error but ENOENT still throws. */
 function unlessGone(read) {
   try {
     return read();
   } catch (err) {
-    // A hippo worker may still be closing its store under the sweep, and a file that no longer exists holds no token.
     if (err.code !== 'ENOENT') throw err;
     return null;
   }
@@ -110,7 +103,6 @@ function* walk(dir, fail) {
 export function tokenSweep(vault, roots, outDir) {
   const tokens = knownTokens(vault, null).map((t) => Buffer.from(t, 'utf8'));
   const hits = [];
-  // A per-path error is recorded and the walk goes on, so one locked file never hides a later token (plan R24).
   const fail = (p, note) => hits.push(`${path.relative(outDir, p).split(path.sep).join('/')} (${note})`);
   for (const root of roots) {
     if (!fs.existsSync(root)) continue;

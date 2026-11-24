@@ -1,4 +1,3 @@
-// The API embedding provider reads every reply under a size cap, against a real local endpoint.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -13,7 +12,6 @@ afterEach(() => {
 });
 
 const KEY = 'sk-reply-cap-test';
-// One input may reply with up to 64 KiB + 512 KiB; two inputs with 64 KiB + 1 MiB.
 const ONE_INPUT_CAP = 64 * 1024 + 512 * 1024;
 
 describe('embedding provider reply cap', () => {
@@ -23,7 +21,6 @@ describe('embedding provider reply cap', () => {
   let closedEarly = false;
   let handler: (req: http.IncomingMessage, res: http.ServerResponse) => void;
 
-  /** Streams `status` and spaces until the client hangs up or 200 MiB went out. */
   function streamForever(res: http.ServerResponse, status: number, contentType: string): void {
     res.writeHead(status, { 'content-type': contentType });
     const chunk = Buffer.alloc(64 * 1024, 0x20);

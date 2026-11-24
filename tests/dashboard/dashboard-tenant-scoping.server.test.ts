@@ -1,5 +1,3 @@
-// The dashboard serves the tenant its CLI root resolved.
-// A pin for another tenant's memory id must return 404 and leave the row untouched.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
@@ -47,8 +45,6 @@ describe('dashboard tenant-scoping', () => {
 
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('dash-tenant'));
-    // Isolate the dashboard's resolved global store from the developer's real
-    // ~/.hippo for the duration of the test.
     vi.stubEnv('HIPPO_HOME', join(home, '.hippo-global'));
   });
 
@@ -58,7 +54,6 @@ describe('dashboard tenant-scoping', () => {
   });
 
   it('POST /api/memory/:id/pin denies a cross-tenant mutation', async () => {
-    // Seed a memory under tenant_a in the local store.
     const a = createMemory('tenant_a memory', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tenantId: 'tenant_a',
@@ -66,14 +61,12 @@ describe('dashboard tenant-scoping', () => {
     });
     writeEntry(hippoRoot, a);
 
-    // Run the dashboard as tenant_b on an ephemeral port.
     server = await serveDashboard({ hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'tenant_b' });
     const { port } = server;
 
     const res = await post(port, `/api/memory/${a.id}/pin`, '{"pinned":true}');
     expect(res.status).toBe(404);
 
-    // The tenant_a memory is still unpinned in the DB.
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: the SELECT names one column of the row seeded above, which exists.

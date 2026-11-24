@@ -1,5 +1,3 @@
-// Store health and admin tool handlers: base rates, status, conflicts, resolve, share and peers.
-
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { predictionBaserate } from '../../api/objects/predictions.js';
 import { conflictListOpen, conflictPages, conflictResolve } from '../../api/memories/conflicts.js';
@@ -18,8 +16,6 @@ export async function runPredictBaserateTool({
   args,
   api,
 }: GroupToolCall<'objects'>): Promise<string> {
-  // Text-only reply, matching the other MCP tools; the group's read writes the audit row, so no
-  // surface can skip it.
   const classTag = stringArg(args, 'class_tag', MAX_ID_LEN).trim();
   if (!classTag) {
     return 'No class_tag provided. Usage: pass class_tag matching a class used in past predictions (e.g. "migration-effort").';
@@ -94,8 +90,6 @@ export async function runResolveTool({ args, api }: GroupToolCall<'conflicts'>):
   try {
     ({ loserId } = await conflictResolve(api, conflictId, { keepId, forget, rejectLoser, reason }));
   } catch (err) {
-    // A missing, unreachable or settled conflict answers alike, so the reply says nothing of a pair
-    // the caller cannot touch.
     if (err instanceof NotFoundError || err instanceof ConflictError) return NOT_RESOLVED;
     throw err;
   }
@@ -112,8 +106,6 @@ export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise
   if (!shareId) return 'Required: id (memory ID to share).';
   const force = boolArg(args, 'force');
   const apiCtx = mcpApiContext(ctx);
-  // The share reads the id in the caller's tenant only, so tenant A cannot copy tenant B's row to
-  // the global store.
   const shared = await shareToGlobal({ ...apiCtx, store }, shareId, { force });
   if (shared.kind === 'low-score') return 'Transfer score too low. Use force=true to override.';
   if (shared.kind === 'already-shared') {
@@ -123,7 +115,6 @@ export async function runShareTool({ args, ctx, store }: LocalToolCall): Promise
 }
 
 export async function runPeersTool({ ctx }: LocalToolCall): Promise<string> {
-  // Tenant-scope peer discovery to the caller, as hippo_share does.
   const peers = await sharePeers(mcpApiContext(ctx));
   if (peers.length === 0) return 'No peers found.';
   return peers

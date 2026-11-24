@@ -1,6 +1,3 @@
-// Store-wide status reads: counts, stats, vector index state and the correction and provenance
-// reports.
-
 import { isJsonObject, isJsonString } from '../base/util/json.js';
 import type { LegacyStats } from '../base/ports/store/reports.js';
 import type {
@@ -73,7 +70,6 @@ export async function storedParticleStats(
   return indexStep(ctx.store.embeddingIndex, { kind: 'particles', fullUpTo });
 }
 
-/** Every correction link, one keyset page per store call. */
 async function allCorrectionLinks(reports: Reports): Promise<CorrectionLink[]> {
   const links: CorrectionLink[] = [];
   for (let page: ReportPage = { limit: READ_PAGE_ROWS }; ;) {
@@ -84,7 +80,6 @@ async function allCorrectionLinks(reports: Reports): Promise<CorrectionLink[]> {
   }
 }
 
-/** The raw count and every raw row missing provenance, one keyset page per store call. */
 async function allRawProvenance(reports: Reports): Promise<RawProvenance> {
   const gaps: RawProvenance['gaps'] = [];
   for (let page: ReportPage = { limit: READ_PAGE_ROWS }; ;) {

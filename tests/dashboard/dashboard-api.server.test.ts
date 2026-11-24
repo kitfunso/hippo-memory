@@ -1,5 +1,3 @@
-// The read routes of the Health view: overview, project, memory page, detail and search, their validation, and the removed endpoints.
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -55,7 +53,6 @@ afterAll(async () => {
   store.cleanup();
 });
 
-/** Builds a read over a store of its own holding only `entries`, so a case needs no server. */
 async function inStoreOf<T>(entries: MemoryEntry[], read: (view: ReturnType<typeof dashboardOf>) => Promise<T>) {
   const own = makeStore('hippo-dash-api-own');
   try {
@@ -194,7 +191,6 @@ describe('memory page', () => {
     expect((await memories('?smax=0.5')).rows.map((r) => r.content)).toEqual(['mid fading']);
     expect((await memories('?amin=100')).rows.map((r) => r.content)).toEqual(['mid fading']);
     expect((await memories('?q=RISK')).rows.map((r) => r.content)).toEqual(['risk of loss']);
-    // One character is below the search minimum, so it filters nothing.
     expect((await memories('?q=z')).total).toBe(7);
   });
 

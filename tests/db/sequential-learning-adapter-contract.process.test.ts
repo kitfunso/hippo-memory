@@ -1,14 +1,3 @@
-/**
- * v1.7.5 Task 1 — sequential-learning adapter contract gains optional
- * pushGoal/completeGoal hooks for B3 dlPFC goal-stack exercising.
- * Optional so non-goal-aware adapters keep working unchanged.
- *
- * Plus one integration test that proves the goal-stack boost actually
- * fires through the public benchmark adapter (the eval can't run without
- * this) — pushes a goal `bare_except`, stores a memory tagged
- * `bare_except`, recalls, then asserts `goal_recall_log` has rows.
- */
-
 import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -56,29 +45,16 @@ describe('sequential-learning adapter contract', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Integration: goal-stack boost fires end-to-end through the hippo adapter.
-// This is the load-bearing assertion for the v1.7.5 eval. If `goal_recall_log`
-// stays empty, the boost mechanism cannot fire and the eval cannot run.
-// ---------------------------------------------------------------------------
-
 describe('hippo adapter goal-stack boost fires end-to-end', () => {
-  // Each adapter call starts the built CLI: init, the goal, the store and the recall.
   it('writes one row to goal_recall_log after pushGoal+store+recall', async () => {
-    // We use the public adapter so any wiring bug surfaces. The adapter
-    // creates its own temp HIPPO_HOME and sets HIPPO_SESSION_ID for us.
     await hippoAdapter.init();
     if (!hippoAdapter.pushGoal || !hippoAdapter.completeGoal) {
       throw new Error('the hippo adapter must supply the goal hooks');
     }
     try {
-      // Push a goal whose name MATCHES a tag we will store.
       const goalId = await hippoAdapter.pushGoal('bare_except');
       expect(goalId).toMatch(/^g_[0-9a-f]{16}$/);
 
-      // Store a memory tagged with the goal name (this is the boost-firing
-      // tag-fix that simulate() applies). recall() must see the memory under
-      // the active goal so goal_recall_log gets a row.
       await hippoAdapter.store('Never use bare except: pass. It swallows all errors silently.', [
         'bare_except',
         'error-handling',
@@ -91,15 +67,10 @@ describe('hippo adapter goal-stack boost fires end-to-end', () => {
       expect(Array.isArray(recalled)).toBe(true);
       expect(recalled.map((r) => r.content)).toEqual(['Never use bare except: pass. It swallows all errors silently.']);
 
-      // Query the temp store directly. The adapter exposes _storeDir.
       const storeDir = storeDirOf(hippoAdapter);
       if (!storeDir) throw new Error('init() left no store dir');
       expect(existsSync(storeDir)).toBe(true);
 
-      // hippo doesn't ship a `goal recall-log` subcommand, so we open the db
-      // directly via node's native `node:sqlite` (same module hippo uses).
-      // The benchmark adapter runs `hippo init --no-schedule` from cwd =
-      // storeDir, which creates the local store at <storeDir>/.hippo/hippo.db.
       const localDbPath = join(storeDir, '.hippo', 'hippo.db');
       const globalDbPath = join(storeDir, 'hippo.db');
       const dbToOpen = existsSync(localDbPath) ? localDbPath : globalDbPath;

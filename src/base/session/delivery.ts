@@ -1,6 +1,3 @@
-// The delivery event a store writes: the shape of one row the ledger group books, and the two facts
-// about it the recorder and the store share.
-
 export type DeliveryRuntime = 'claude-code' | 'codex' | 'copilot' | 'unknown';
 
 export type DeliveryEventType =
@@ -82,9 +79,7 @@ export interface DeliveryEventInput {
   recallHash: string | null;
   emittedHash: string | null;
   elapsedMs: number;
-  /** The host's id for the tool call; set on `tool-failure` rows only. */
   toolUseId?: string | null;
-  /** The `failure_log` row the failure was logged as; set on `tool-failure` rows only. */
   failureId?: number | null;
   candidates: readonly DeliveryCandidateInput[];
 }

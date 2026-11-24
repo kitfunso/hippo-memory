@@ -1,4 +1,3 @@
-// The sleep child's job body in process: its 'message' listener is captured on import, and send and exit are stubbed.
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
@@ -25,7 +24,6 @@ beforeEach(async () => {
   vi.stubEnv('HIPPO_HOME', home);
   sent = [];
   hadSend = 'send' in process;
-  // A worker that is not an IPC child has no process.send; this stands in for the channel.
   Object.defineProperty(process, 'send', {
     configurable: true,
     writable: true,

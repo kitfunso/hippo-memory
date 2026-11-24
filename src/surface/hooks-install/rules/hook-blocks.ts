@@ -1,5 +1,3 @@
-// The hippo block each agent's instruction file carries, and how init recognises one it wrote
-// earlier.
 import { createHash } from 'node:crypto';
 import { escapeRegex } from '../../../base/util/escape.js';
 
@@ -14,18 +12,14 @@ export interface HookSpec {
   description: string;
 }
 
-// Keyed by agent name; callers look an agent up by a string they were given.
 export interface HookTable {
   [agent: string]: HookSpec;
 }
 
-// Shared by the agents that differ only in the noun, a recall paragraph, the capture lead-in and a
-// footer.
 const PI_FOOTER =
   'For full integration, copy the hippo-memory Pi extension to `~/.pi/agent/extensions/hippo-memory/`.';
 const CODEX_CAPTURE = `When Hippo's Codex wrapper is installed, session-end capture runs automatically.
 If the wrapper is not installed, capture a brief summary manually:`;
-// Codex runs hippo's prompt hook, which already injects pinned rules and matching memories.
 const HOOKED_INTRO = `When Hippo's prompt hook is installed, it injects pinned rules and the
 memories that match each prompt, so never load them yourself. If no hippo
 memory block has appeared in this session, run this at the start of a task
@@ -116,8 +110,6 @@ ends, so there is nothing to record or run by hand.
   },
 };
 
-// sha256 of every block text hippo has shipped, current ones included, so init refreshes only
-// blocks nobody edited. scripts/checks/check-hook-block-hashes.mjs fails while a text is unlisted.
 const SHIPPED_HOOK_HASHES = new Map([
   ['c80e760208aed70f6094757736b9a2f496ba5c30d88bc2a7ae3e128b403dcc6b', 'claude-code'],
   ['75937be6b7fdc2b87bcb08b7fec56757808075db129d99eff3e9f769f80a7781', 'claude-code'],

@@ -1,7 +1,3 @@
-/**
- * `hippo doctor`: read-only health report with a fix for every warn or fail.
- * Real stores, real settings files, the built CLI for the exit code.
- */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, utimesSync } from 'node:fs';

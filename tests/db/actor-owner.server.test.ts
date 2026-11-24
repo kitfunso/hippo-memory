@@ -1,4 +1,3 @@
-// Actor.owner is the person behind a call: an owned key's owner_subject or the resolver's subject, never set by plugin code.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -17,7 +16,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 const WHOAMI = '/v1/x-whoami';
@@ -141,7 +139,6 @@ describe('Actor.owner', () => {
   it('store record with no ownerSubject reads as no owner', async () => {
     const key = mint('alice@corp.example');
     const inner = sqliteStore(home);
-    // A store written before the field existed omits it; the key must fall back to its own id, not borrow anyone's.
     const legacy: HippoStore = {
       ...inner,
       findApiKey: async (id: string): Promise<ApiKeyRecord | null> => {

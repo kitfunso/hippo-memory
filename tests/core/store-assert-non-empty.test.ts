@@ -1,12 +1,3 @@
-/**
- * v1.7.3 — runtime test for the module-load throw path on
- * RECALL_DEFAULT_DENY_SCOPES. Codex P1-3 from v1.7.2 review.
- *
- * The inline guard fires on module import; direct testing of the constant
- * is impossible (the throw runs before any test code). The guard is
- * extracted as `assertNonEmpty(arr, name)` and tested here directly.
- */
-
 import { describe, it, expect } from 'vitest';
 import { assertNonEmpty, RECALL_DEFAULT_DENY_SCOPES } from '../../src/base/scope/recall-scope.js';
 

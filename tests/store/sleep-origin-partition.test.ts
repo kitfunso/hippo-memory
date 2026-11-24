@@ -1,5 +1,3 @@
-/** Sleep in a store shared by projects (the global store) never blends, dedups or conflicts two projects' memories. */
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';

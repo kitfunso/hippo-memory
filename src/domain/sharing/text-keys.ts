@@ -1,5 +1,3 @@
-// The store share and sync down read, and its text keys a page at a time, so no one read returns
-// every row.
 import type { EntryTextKey, Sharing, StoreWith } from '../../base/ports/store.js';
 import type { TenantId } from '../../base/util/tenant.js';
 import type { EntryCursor } from '../../base/ports/store/types.js';

@@ -10,8 +10,6 @@ let root: string;
 
 beforeEach(() => {
   root = makeRoot('mirror');
-  // A non-empty store short-circuits initStore's legacy-markdown bootstrap scan,
-  // which would otherwise try to read the blocking directory below as a .md file.
   writeEntry(root, createMemory('seed row so legacy bootstrap never rescans'));
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
@@ -20,7 +18,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Writes no longer touch index.json, so the failure vector is a directory at the entry's own .md path.
 function blockMarkdownMirror(entryId: string, layer: string): void {
   fs.mkdirSync(path.join(root, layer, `${entryId}.md`));
 }

@@ -1,4 +1,3 @@
-// A no-query contextGet reads a page of the strongest rows sized from its budget, not the 2000 rows the cap allows.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { copyFileSync } from 'node:fs';
 import { contextGet } from '../../src/api/index.js';
@@ -13,13 +12,11 @@ import { removeDir } from '../_helpers/remove-dir.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
 const ROWS = 2300;
-/** The statement that returns the candidate rows: the decay-key subset, or the ranked scan beneath it. */
 const CANDIDATE_READ = /WITH top AS MATERIALIZED|ORDER BY pinned DESC/;
 let seeded: string;
 let ids: string[];
 let root: string;
 
-// Row i is i days old with one half-life for all, so strength order is recency order and the page holds the newest.
 function seed(): string[] {
   const db = openHippoDb(seeded);
   const ids: string[] = [];
@@ -44,7 +41,6 @@ function seed(): string[] {
   return ids;
 }
 
-// Seeded once, outside any request, so its close checkpoints the WAL into hippo.db before a test copies it.
 beforeAll(() => {
   seeded = makeRoot('ctx-page-seed');
   ids = seed();

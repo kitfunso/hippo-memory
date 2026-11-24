@@ -1,4 +1,3 @@
-// W2a work-queue cards: the card verb round trip through the CLI and the flag parser (tests 10-11).
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,7 +45,6 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
       return { out: toUtf8(err.stdout) + toUtf8(err.stderr), status: err.status ?? 1 };
     }
   }
-  // In process: these cases read exit codes and printed bytes; the first CLI case keeps the built CLI pinned in a real child.
   async function runCli(cwd: string, env: Record<string, string>, ...args: string[]) {
     const r = await runCliAs(args, { cwd, env: { ...process.env, ...env } });
     return { out: r.status === 0 ? r.stdout : r.stdout + r.stderr, status: r.status };
@@ -97,7 +95,6 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
     try {
       initTestStore(join(home, '.hippo'));
-      // parseArgs collects --depends-on into an array, so the in-process call passes one.
       const create = await runInProcess(() =>
         handleCard({
           hippoRoot: join(home, '.hippo'),
@@ -229,7 +226,6 @@ describe('CLI round trip: card create -> handoff create --card-id -> card show -
   it('an unrecognized flag, a wrong name, or a glued --flag=value with a bad value, exits 1 and creates no card', async () => {
     const { home, env } = await setupCliHome();
     try {
-      // --depends-on=nope is a real flag now, so it fails on the parent lookup instead of on parsing.
       const equalsForm = await runCli(home, env, 'card', 'create', '--title', 't', '--depends-on=nope');
       expect(equalsForm.status).toBe(1);
       expect(equalsForm.out).toContain('unknown parent card id: nope');

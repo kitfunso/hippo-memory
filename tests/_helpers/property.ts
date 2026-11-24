@@ -1,4 +1,3 @@
-// Seeded property checks with no dependency: a fixed seed replays a run, and a failure names the seed, the run and the smallest failing input found.
 import { inspect } from 'node:util';
 
 /** Numbers in [0, 1); one seed always gives one sequence. */
@@ -70,7 +69,6 @@ export function both<A, B>(a: Gen<A>, b: Gen<B>): Gen<[A, B]> {
   return (rng) => pairSample(a(rng), b(rng));
 }
 
-// Single-item drops past this index are skipped, so one shrink round of a long array stays cheap.
 const DROP_LIMIT = 24;
 
 function arrSample<T>(items: readonly Sample<T>[], min: number): Sample<T[]> {
@@ -121,10 +119,8 @@ export function str(alphabet: string, min: number, max: number): Gen<string> {
   return map(arr(pick([...alphabet]), min, max), (chars) => chars.join(''));
 }
 
-// A check that still fails after this many tries is reported as it stands.
 const SHRINK_BUDGET = 600;
 
-/** A check may be async, so a property can write to and read from a real store on each run. */
 type Check<T> = (value: T) => void | Promise<void>;
 
 async function failureOf<T>(check: Check<T>, value: T): Promise<Error | null> {
@@ -155,7 +151,6 @@ async function shrink<T>(start: Sample<T>, startError: Error, check: Check<T>) {
   return { sample, error };
 }
 
-/** Printable ASCII only, so an invisible or look-alike character in a failing input can be read and pasted back. */
 function show<T>(value: T): string {
   return inspect(value, { depth: 8, breakLength: Infinity, maxArrayLength: 200, maxStringLength: 4000 }).replace(
     /[^\x20-\x7e\n]/gu,

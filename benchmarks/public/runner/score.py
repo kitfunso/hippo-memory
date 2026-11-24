@@ -28,7 +28,7 @@ from qa.ledger import smoke_excluded  # noqa: E402
 
 EXPECT = {"longmemeval-s": 500, "longmemeval-m": 500, "beam-100k": 400, "beam-500k": 700, "beam-1m": 700, "beam-10m": 200}
 X, Y = "hippo365", "bm25"
-POOLED = "beam"  # --bench value for the four BEAM sizes scored as one primary
+POOLED = "beam"
 
 
 def lme_metrics(arm: str) -> tuple[str, ...]:
@@ -36,12 +36,10 @@ def lme_metrics(arm: str) -> tuple[str, ...]:
 
 
 def unit_of(bench: str):
-    """The unit that owns a store: a LongMemEval question has its own haystack; a BEAM id is <size>_<conv>_q<i>_<type>."""
     return str if aj.kind_of(bench) == "lme" else (lambda qid: qid.rsplit("_q", 1)[0])
 
 
 def per_question(bench: str, recs: dict) -> dict[str, dict]:
-    """{metric: {(arm, qid): value}} and {"type": {qid: type}}. A question with no valid answer in 3 asks scores 0."""
     m: dict[str, dict] = defaultdict(dict)
     for (arm, qid), r in recs.items():
         res = r["result"]
@@ -67,7 +65,6 @@ def per_question(bench: str, recs: dict) -> dict[str, dict]:
 
 def metric_lines(bench: str, m: dict, ids: list[str], kept: list[str], arms: list[str],
                  k: int | None) -> tuple[list[str], dict]:
-    """Each metric's arm means over the primary's questions and hippo365 - bm25 overall and per question type."""
     unit, types = unit_of(bench), sorted(set(m["type"].values()))
     primary, secondary = ("acc@200", ["acc@10"]) if aj.kind_of(bench) == "lme" else ("score", ["pass"])
     lines: list[str] = []
@@ -95,8 +92,6 @@ def pair_record(diff: dict, sel: list[str], unit) -> dict:
 
 
 def load_size(bench: str, arms: dict[str, Path], out: Path):
-    """One size's saved results, loaded and checked as every score run does: both arms hold exactly the benchmark's
-    questions, the results match the call logs, the retrieval checks pass. Returns ids, results, notes, metrics, smoke."""
     ids = sorted(set.intersection(*(set(aj.pred_files(d)) for d in arms.values())))
     if len(ids) != EXPECT[bench]:
         sys.exit(f"{len(ids)} questions in every arm, {EXPECT[bench]} expected: never scored partial")
@@ -112,7 +107,7 @@ def memory_lines(m: dict, arms: list[str]) -> list[str]:
     lines = []
     for arm in arms:
         key = next(k for k in ("memories@200", "memories@10", "memories") if any(ar == arm for ar, _ in m.get(k, {})))
-        mem = [v for (ar, _), v in m[key].items() if ar == arm]  # the arm's widest answered cutoff
+        mem = [v for (ar, _), v in m[key].items() if ar == arm]
         lines.append(f"{arm:>9}  memories per answer at the primary cutoff {sum(mem) / len(mem):6.1f}")
     if "tau_missing" in m:
         lines.append("event-ordering questions whose tau-b step failed and was dropped: " + ", ".join(
@@ -137,8 +132,6 @@ def single(bench: str, arms: dict[str, Path], out: Path, k: int | None) -> tuple
 
 
 def extra_arm(bench: str, arms: dict[str, Path], out: Path, runs: list[Path]) -> tuple[list[str], dict]:
-    """Dated notes 5: the extra arm's means, then the arm minus each arm of each registered run, paired by question,
-    over the primary's questions with the benchmark's unit. Each run is loaded and checked as `single` loads it."""
     ids, recs, notes, m, smoke = load_size(bench, arms, out)
     kept, unit, (arm,) = [q for q in ids if q not in smoke], unit_of(bench), arms
     metrics = lme_metrics(arm) if aj.kind_of(bench) == "lme" else ("score", "pass")
@@ -165,11 +158,8 @@ def extra_arm(bench: str, arms: dict[str, Path], out: Path, runs: list[Path]) ->
 
 
 def pooled(root: Path, sizes: tuple[str, ...], k: int | None) -> tuple[list[str], dict]:
-    """The registered BEAM primary (prereg Amendment 6 dated notes 3, entry 1): every size loaded as `single` loads it,
-    then one hippo365 - bm25 line over all questions but each size's smoke items, equal weight per question, resampled
-    by conversation. Each size is a secondary line, and its exhausted items are listed."""
     layout = {b: (root / b, {arm: root / b / "retrieval" / arm / f"predicted_{b}" for arm in (X, Y)}) for b in sizes}
-    for bench, (size_dir, arms) in layout.items():  # before the first replay, which takes minutes
+    for bench, (size_dir, arms) in layout.items():
         missing = [p for p in (size_dir, size_dir / "results.jsonl", *arms.values()) if not p.exists()]
         if missing:
             sys.exit(f"{bench}: {missing[0]} is missing; BEAM is scored pooled only when every size is answered")
@@ -186,9 +176,9 @@ def pooled(root: Path, sizes: tuple[str, ...], k: int | None) -> tuple[list[str]
         notes += [f"{bench} {n}" for n in s_notes]
         spent += spent_lines(recs, f"{bench}: ")
         n_recs += len(recs)
-    ids = sorted(ids)  # one order whatever the sizes' order: the resampling draws units in it
+    ids = sorted(ids)
     kept = [q for q in ids if q not in smoke]
-    body, pairs = metric_lines(sizes[0], m, ids, kept, [X, Y], k)  # any BEAM size: it reads only the kind and the unit
+    body, pairs = metric_lines(sizes[0], m, ids, kept, [X, Y], k)
     diff, unit = {q: m["score"][(X, q)] - m["score"][(Y, q)] for q in ids}, unit_of(sizes[0])
     by_size_lines = ["\n=== score by size  secondary ==="]
     for bench in sizes:

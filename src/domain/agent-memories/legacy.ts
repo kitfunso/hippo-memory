@@ -1,5 +1,3 @@
-// Rows the old Claude import wrote (`claude-memory:<file>`), taken over by the notes they came
-// from.
 import path from 'node:path';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey } from '../../base/util/same-text.js';
@@ -18,9 +16,7 @@ export interface ContainerLegacy {
 }
 
 export interface LegacyWork {
-  /** By container path. */
   readonly byContainer: ReadonlyMap<string, ContainerLegacy>;
-  /** Rows about to take a note's key, which stop counting as text another path stored. */
   readonly adopted: ReadonlySet<string>;
 }
 
@@ -29,7 +25,6 @@ interface LegacyTargets {
   readonly targets: readonly LegacyTarget[];
 }
 
-// A long note's old row goes to its first part that will be written, so a secret part is passed.
 function noTarget(item: MemoryItem): boolean {
   if (item.text.trim().length < MIN_ITEM_CHARS) return true;
   return (
@@ -79,8 +74,6 @@ export async function legacyWork(
 
   const { refs, targets } = legacyTargets(containers);
   const match = matchLegacy(
-    // The old import kept emails in clear, and targets are masked; without the mask those rows
-    // never matched and imported twice.
     rows.map((r) => ({
       id: r.id,
       file: r.source.slice(LEGACY_SOURCE_PREFIX.length),

@@ -1,5 +1,3 @@
-// The card run lifecycle: claim, heartbeat, block, review, complete and reclaim, with their run checks.
-
 import { withWriteScope, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import { HandoffOutcome, isHandoffOutcome } from '../../../base/session/handoff.js';
 import {
@@ -15,7 +13,6 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 import { assertFilled, insertCardComment, readCardRow, unknownCard } from './card-rows.js';
 
-/** The lease a move to running or a heartbeat at `now` sets. */
 const leaseUntilFrom = (now: string): string =>
   new Date(Date.parse(now) + CARD_LEASE_MS).toISOString();
 
@@ -25,13 +22,10 @@ function assertRunId(runId: number): void {
   }
 }
 
-/** Throws on an outcome a caller outside TypeScript sent that is none of the handoff outcomes. */
 function assertCardOutcome(outcome: HandoffOutcome): void {
   if (!isHandoffOutcome(outcome)) throw new Error(`invalid card outcome: ${String(outcome)}`);
 }
 
-/** Whether `runId` is the card's run that has not ended. A second such run means a corrupt
- * store, so this throws rather than guess which run the caller means. */
 function isLiveRun(cardId: string, liveRunIds: readonly number[], runId: number): boolean {
   if (liveRunIds.length > 1) {
     throw new Error(`card ${cardId} has ${liveRunIds.length} runs that have not ended`);
@@ -51,7 +45,6 @@ function liveRunIs(db: DatabaseSyncLike, tenantId: string, cardId: string, runId
   );
 }
 
-/** A tenant's card, how its live run ended and when. */
 interface CloseRunOptions {
   readonly tenantId: string;
   readonly cardId: string;
@@ -72,8 +65,6 @@ function closeLiveRun(
   ).run(now, outcome, now, cardId, tenantId);
 }
 
-// Every card status change goes through this one function. CARD_TRANSITIONS is the only source of
-// allowed moves, so a hand-copied wrong `from` list fails fast here.
 interface TransitionCardOptions {
   readonly from: CardStatus[];
   readonly to: CardStatus;
@@ -89,8 +80,6 @@ function transitionCard(
   return transitionCards(db, tenantId, [cardId], options);
 }
 
-/** transitionCard for every card in `cardIds`, as one statement with one timestamp; returns how
- * many moved. */
 function transitionCards(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -100,8 +89,6 @@ function transitionCards(
   const { from, to, extra } = options;
   assertCardTransition(from, to);
   const now = handleStamp(db);
-  // Lease columns follow status: set on the move to running, cleared on every other move, so the
-  // lease never outlives the status.
   const lease = to === 'running' ? [leaseUntilFrom(now), now] : [null, null];
   const fromPlaceholders = placeholders(from.length);
   const sql = `
@@ -222,8 +209,6 @@ export function blockCard(
       return rollback(false);
     }
     const now = handleStamp(db);
-    // Close the interrupted run here so completeCard's ended IS NULL scope only ever matches the
-    // live run.
     closeLiveRun(db, { tenantId, cardId: id, outcome: 'blocked', now });
     insertCardComment(db, { tenantId, cardId: id, author: 'system', body: reason });
     return true;
@@ -287,8 +272,6 @@ export function completeCard(
     const now = handleStamp(db);
     closeLiveRun(db, { tenantId, cardId: id, outcome, now });
 
-    // Not best-effort: promotion runs in this same transaction, so a card can never be `done` with
-    // an un-evaluated child.
     return target === 'done' ? promoteUnblockedChildren(db, tenantId, id) : [];
   });
   return promoted === null
@@ -296,15 +279,11 @@ export function completeCard(
     : { card: readCardRow(db, tenantId, id)!, promotedChildren: promoted };
 }
 
-/** Moves to ready each backlog child of `parentId` whose parents are all done, and returns their
- * ids. Call inside the write scope. */
 function promoteUnblockedChildren(
   db: DatabaseSyncLike,
   tenantId: string,
   parentId: string,
 ): string[] {
-  // The child's status and its open parents are result columns, not joins, so the rows keep the
-  // order of a plain read of the parent's children.
   const children = cachedStatement(
     db,
     `
@@ -335,7 +314,6 @@ function promoteUnblockedChildren(
 export function reclaimExpiredCards(db: DatabaseSyncLike, tenantId: string): string[] {
   assertTenantId('reclaimExpiredCards', tenantId);
   return withWriteScope(db, 'reclaim_expired_cards', () => {
-    // Read lease times under the write lock, so a heartbeat that committed while we waited wins.
     const now = handleStamp(db);
     const ids = (
       cachedStatement(

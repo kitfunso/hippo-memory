@@ -1,8 +1,3 @@
-/**
- * LLM refinement of consolidated semantic memories (`hippo refine`): a separate command so
- * API-key users opt in; idempotent via the `llm-refined` tag. Calls the model through the Llm
- * port; on any failure the original memory is untouched. */
-
 import { MemoryEntry, Layer } from '../../base/memory/entry.js';
 import { REFINED_TAG, storeRefinement } from '../../api/index.js';
 import { memoryList, memoryListByIds, type TenantReach } from '../../api/memories/memories.js';
@@ -14,7 +9,6 @@ import { log } from '../../base/util/log.js';
 const MAX_REFINE_SOURCES = 8;
 const REFINE_SOURCE_CHARS = 400;
 
-// Output budget for one refined memory, and the shortest reply kept as a refinement.
 const REFINE_MAX_TOKENS = 800;
 const REFINE_MIN_CHARS = 10;
 const CONSOLIDATED_MARKERS = ['[Consolidated from', '[Consolidated pattern from'];
@@ -24,12 +18,7 @@ export interface RefineOptions {
   model?: string;
   limit?: number;
   dryRun?: boolean;
-  /** Ignore the llm-refined tag and re-refine everything eligible. */
   all?: boolean;
-  /**
-   * Tenant scope: only that tenant's consolidated entries are scanned; cross-tenant parents return
-   * null and are skipped.
-   */
   tenantId?: string;
 }
 
@@ -41,10 +30,6 @@ export interface RefineResult {
   details: Array<{ id: string; status: 'refined' | 'skipped' | 'failed'; reason?: string }>;
 }
 
-/**
- * Ask Claude to synthesize a clean semantic memory from the merged content and its sources; returns
- * null when the API call failed.
- */
 async function refineSemanticMemory(
   merged: string,
   sources: MemoryEntry[],
@@ -124,7 +109,6 @@ export async function refineStore(hippoRoot: string, opts: RefineOptions): Promi
     details: [],
   };
 
-  // No tenant means every tenant, so the ctx's own tenant is never read.
   const ctx = cliApiContext(hippoRoot, opts.tenantId ?? '');
   const reach: TenantReach = { everyTenant: opts.tenantId === undefined };
   const entries = await memoryList(ctx, reach);
@@ -160,11 +144,7 @@ async function refineOneEntry(
   ctx: CliContext,
   { reach, entry, opts, result }: RefineOneEntryOptions,
 ): Promise<void> {
-  // Best-effort: walk parents_json (schema v9) to fetch originals. When parents aren't recorded we
-  // still refine using just the merged content.
   const parentIds = Array.isArray(entry.parents) ? entry.parents : [];
-  // Parent lookup is tenant-scoped; cross-tenant parents are absent and skipped, so refine still
-  // works from the merged content alone.
   const found = new Map((await memoryListByIds(ctx, parentIds, reach)).map((p) => [p.id, p]));
   const sources = parentIds.flatMap((pid) => found.get(pid) ?? []);
 

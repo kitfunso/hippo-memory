@@ -1,5 +1,3 @@
-// The sharing and agent-import copy reads: one statement per chunk of texts, only copies back, and the same copies a
-// whole scan finds, with the full-text index in sync and out of sync.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { AGENT_MEMORY_SOURCE_PREFIX } from '../../src/base/memory/agent-memory-tools.js';
@@ -41,7 +39,6 @@ const LEFT_OUT = [
   row(TEXT, { source: `${AGENT_MEMORY_SOURCE_PREFIX}claude-code` }),
 ];
 
-// The answer with no bound: per text, the rows `admits` keeps that heldTextKeys says hold it.
 function wholeScan(root: string, admits: (r: ScanRow) => boolean): string[][] {
   // SAFETY: the SELECT names exactly the ScanRow columns.
   const rows = withDb(root, (db) => db.prepare('SELECT * FROM memories').all() as ScanRow[]);
@@ -83,7 +80,6 @@ describe('copy reads by whole text', () => {
         .sort(),
     );
     expect(found).toEqual(whole);
-    // The 2 copies plus the superseded and agent-memory rows, which this read keeps; none of the 50 sharing rows.
     expect(result.map((k) => k.id).sort()).toEqual(whole.flat().sort());
     expect(peakRowsRead(reads, 'json_each')).toBe(4);
   });

@@ -1,6 +1,3 @@
-// What the local remember pipeline of `hippo remember` and `hippo watch` stores, counts, embeds and prints with no
-// server: each salience verdict, extraction with no key and the embedding kick-off. The flag cases live in
-// cli-write-verbs. The first case of each verb spawns the built CLI; the rest run it in process.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,7 +14,6 @@ const LEARNED: Ran = {
 };
 const NO_KEY = '  (extraction skipped: no model set; set HIPPO_LLM_BASE_URL or ANTHROPIC_API_KEY)\n';
 
-/** The part of `config.json` a case sets. */
 interface StoreConfig {
   salience?: { enabled: boolean };
   extraction?: { enabled: boolean };
@@ -30,7 +26,6 @@ function configure(root: string, config: StoreConfig): void {
   writeFileSync(file, JSON.stringify({ ...held, ...config }));
 }
 
-/** A command that fails the same way in every shell. */
 function failingScript(s: Store): void {
   writeFileSync(join(s.cwd, 'fail.js'), `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`);
 }
@@ -49,7 +44,6 @@ describe('hippo remember with the salience gate on (built CLI, no server)', () =
       await s.run('remember', TEXT, '--pin'),
     ];
     const rows = s.rows();
-    // A forced or pinned repeat is stored at half the half-life of the first.
     expect(rows.map((r) => [r['content'], r['half_life_days'], r['pinned']])).toEqual([
       [TEXT, 365, 0],
       [TEXT, 182.5, 0],
@@ -129,7 +123,6 @@ describe('hippo remember with the salience gate on (built CLI, no server)', () =
 });
 
 describe('hippo remember extraction with no key (built CLI, no server)', () => {
-  /** A store with no Anthropic key, so extraction says why it did not run. */
   function keyless(opts: { spawned?: boolean } = {}): Store {
     const s = new Store(opts);
     s.env['ANTHROPIC_API_KEY'] = '';
@@ -195,7 +188,6 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     await embeddings.close();
   });
 
-  // Spawned: a failed command ends after its embedding lands, as a success does; only a process that ends shows it.
   it('remember and a failed watch each leave a vector for their row', async () => {
     const s = new Store({ spawned: true });
     s.env['OPENAI_API_KEY'] = 'test-key-not-secret';
@@ -210,7 +202,6 @@ describe('embedding after a local write (built CLI, local embeddings server)', (
     expect(s.counters()['total_remembered']).toBe('2');
   });
 
-  // In process, a slow embed shows whether the command returns before its vector lands, as a runCli caller sees it.
   it('remember and a failed watch run in process return after their vectors land', async () => {
     const s = new Store();
     s.env['OPENAI_API_KEY'] = 'test-key-not-secret';

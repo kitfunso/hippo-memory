@@ -1,5 +1,3 @@
-// Which agent tools this machine has, read from their config folders; `hippo setup` picks its
-// installs from it.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -51,7 +49,6 @@ export function detectInstalledTools(): ToolDetection[] {
 
 type HomeHas = (...parts: string[]) => boolean;
 
-/** Claude Code, the two plugin hosts and Codex, in setup's order. */
 function detectClaudeToCodex(home: string, exists: HomeHas): ToolDetection[] {
   const claudeDir = claudeConfigDir(os.homedir(), processEnv());
   return [
@@ -86,7 +83,6 @@ function detectClaudeToCodex(home: string, exists: HomeHas): ToolDetection[] {
   ];
 }
 
-/** Copilot and the two tools with no hook API, in setup's order. */
 function detectCopilotToPi(exists: HomeHas): ToolDetection[] {
   return [
     {

@@ -21,7 +21,6 @@ describe('capture reads markdown the way it renders', () => {
     expect(items.some(startsInsideCut)).toBe(false);
   });
 
-  // Each expected list is what base 3.1.0 gives; the aside rule must leave these alone.
   it.each([
     ['(Important: never push to main. Always run tests first.)', ['Always run tests first.)']],
     [
@@ -49,7 +48,6 @@ describe('capture reads markdown the way it renders', () => {
       'Never use (foo as a name. Always run the linter before you push.',
       ['Never use (foo as a name', 'Always run the linter before you push'],
     ],
-    // A "(" between quote marks is text, so a later quoted ")" is not an aside close.
     [
       `The parser expected '('. Never use the suffix "test)" for generated filenames.`,
       ['Never use the suffix "test)" for generated filenames'],
@@ -58,7 +56,6 @@ describe('capture reads markdown the way it renders', () => {
       'The parser expected ‘(’. Never use the suffix “test)” for generated filenames.',
       ['Never use the suffix “test)” for generated filenames'],
     ],
-    // No "(" before it, a list-marker ")", an emoticon "(", and a digit before the ")".
     ['Skip that line) Always run tests first.', ['Skip that line) Always run tests first']],
     ['Note (see below. Never skip step a) before deploying.', ['Never skip step a) before deploying']],
     ['I was sad :( about it. Skip that line) Always run tests first.', ['Skip that line) Always run tests first']],
@@ -129,7 +126,6 @@ describe('capture reads markdown the way it renders', () => {
     ]);
   });
 
-  // Each list is what base 3.1.0 gives but for the removed `**`: a cut beside a sentence end merges nothing.
   it.each([
     [
       'Never deploy **production**.Always deploy staging.',
@@ -187,13 +183,11 @@ describe('capture reads markdown the way it renders', () => {
   });
 
   it('removes the pairs of a line with 50,000 bold words before the watchdog fires', () => {
-    // Linear takes tens of milliseconds; a slice per marker takes seconds, well past the deadline.
     const text = `Always ${'**word** '.repeat(50_000)}.`;
     expect(() => scanWithinWatchdog((line) => extractFromTexts([line]), text, 2_000)).not.toThrow();
     expect(() => scanWithinWatchdog((line) => boldTwins([line], (value) => value), text, 2_000)).not.toThrow();
   }, 20_000);
 
-  // Each list is what base 3.1.0 gives: a span that wraps onto a capital letter splits the rule.
   it.each([
     [
       'Never open `a\nbc` here.\nAlways run the tests.',
@@ -247,7 +241,6 @@ describe('capture reads markdown the way it renders', () => {
     expect(extractFromTexts([text]).map((item) => [item.category, item.content])).toEqual(expected);
   });
 
-  // 3.1.0 cut these at the label too and kept its `**`; capture cuts the pair, the span has no closer.
   it.each([
     ['Never change `**Warning.**\nContinued text\nend` in the help text.', [['rule', 'Never change `Warning']]],
     [
@@ -264,7 +257,6 @@ describe('capture reads markdown the way it renders', () => {
     },
   );
 
-  // Each list is what base 3.1.0 gives: a backtick run with no closer is plain text, so it joins nothing.
   it.each([
     [
       'Never use a lone ` in names\nAlways run lint before push',
@@ -375,7 +367,6 @@ describe('capture reads markdown the way it renders', () => {
   });
 
   it('reads 1,500 backtick runs with no closer before the watchdog fires', () => {
-    // Every run has its own length, so none closes; a rescan of the rest per run takes seconds.
     const runs = Array.from({ length: 1_500 }, (_, i) => '`'.repeat(i + 1));
     const text = `Never use a lone ${runs.join(' plain ')}`;
     expect(() => scanWithinWatchdog((value) => extractFromTexts([value]), text, 2_000)).not.toThrow();

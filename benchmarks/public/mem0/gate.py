@@ -21,19 +21,15 @@ from pathlib import Path
 LOCOMO = Path.home() / "hippo-bench" / "locomo" / "data" / "locomo10.json"
 COLLECTION, QUESTIONS, CATEGORIES = "locomo_mem0", 1540, (1, 2, 3, 4)
 LOGS = ("calls-extract.jsonl", "server.log", "runner.log")
-# Mem0, the runner's client and mem0_server.py log every loss at WARNING or above
 ALARM = re.compile(r"WARNING|ERROR|CRITICAL|Traceback|Warning|Exception")
-UPSTREAM = re.compile(r'HTTP Request: (\w+) http://127\.0\.0\.1:(\d+)(/[^\s?"]*)\S* "HTTP/[\d.]+ (\d{3})')  # Mem0 to Qdrant, Ollama, proxy
-SERVED = re.compile(r'"(\w+) (/[^ ?"]*)\S* HTTP/[\d.]+" (\d{3})')  # uvicorn's line for each request the runner made
-# Failed requests Mem0 redoes piece by piece, where a failed piece logs WARNING or ERROR or fails the add: a batch
-# embedding (Ollama), a batch search (qdrant.py:394-396) and a batch insert of memories (main.py:686-692).
+UPSTREAM = re.compile(r'HTTP Request: (\w+) http://127\.0\.0\.1:(\d+)(/[^\s?"]*)\S* "HTTP/[\d.]+ (\d{3})')
+SERVED = re.compile(r'"(\w+) (/[^ ?"]*)\S* HTTP/[\d.]+" (\d{3})')
 REDONE = re.compile(r"\w+ 11434 /\S*|POST 6333 /collections/[^/]+/points/query/batch|PUT 6333 /collections/locomo_mem0/points")
-RECOVERED = "Batch search failed, falling back to sequential"  # qdrant.py:395, the batch search in REDONE
-QDRANT_BODY = "Raw response content:"  # qdrant_client puts an error's body on two more lines (exceptions.py:37-38)
+RECOVERED = "Batch search failed, falling back to sequential"
+QDRANT_BODY = "Raw response content:"
 
 
 def fingerprint(ingest: Path) -> dict:
-    """Hashes of the logs and every predicted file, so a later change voids the gate."""
     pred = hashlib.sha256()
     for p in sorted((ingest / "predicted_locomo-mem0").glob("*.json")):
         pred.update(p.name.encode() + b"\0" + p.read_bytes())
@@ -41,11 +37,10 @@ def fingerprint(ingest: Path) -> dict:
 
 
 def md5(text: str) -> str:
-    return hashlib.md5(text.encode()).hexdigest()  # Mem0's memory hash (main.py:649)
+    return hashlib.md5(text.encode()).hexdigest()
 
 
 def stamp(date: str | None) -> str | None:
-    """A session date as mem0_server.py stores it, parsed as the runner parses it (run.py:127-140)."""
     for fmt in ("%I:%M %p on %d %B, %Y", "%I:%M %p on %d %b, %Y"):
         try:
             when = datetime.strptime(date, fmt).replace(tzinfo=timezone.utc)
@@ -56,11 +51,10 @@ def stamp(date: str | None) -> str | None:
 
 
 def text_of(path: Path) -> str:
-    return path.read_bytes().decode("utf-8", "replace")  # the server's console may not write UTF-8
+    return path.read_bytes().decode("utf-8", "replace")
 
 
 def parse_reply(text: str) -> list | str:
-    """The memories Mem0 takes from an extraction reply (main.py:601-622), or why it would lose some or all of them."""
     from mem0.memory.utils import extract_json, remove_code_blocks
     t = remove_code_blocks(text)
     try:
@@ -98,7 +92,6 @@ def points(qdrant: str) -> list[dict]:
 
 
 def alarms_in(lines: list[str]) -> list[str]:
-    """Lines holding an alarm word, less Mem0's recovery WARNING and the two body lines Qdrant's error text adds to it."""
     out, skip = [], 0
     for i, line in enumerate(lines):
         if skip:
@@ -112,7 +105,6 @@ def alarms_in(lines: list[str]) -> list[str]:
 
 
 def logs(ingest: Path, turns: int, asked: int) -> tuple[list[tuple[bool, str]], list[list]]:
-    """The extraction, server and runner logs. Also returns the memories of each successful extraction call."""
     # records split on LF alone: a reply may hold U+2028 or U+0085, which str.splitlines() also splits on
     recs = [json.loads(line) for line in (ingest / "calls-extract.jsonl").read_bytes().split(b"\n") if line.strip()]
     events = Counter(r["event"] for r in recs)
@@ -120,7 +112,7 @@ def logs(ingest: Path, turns: int, asked: int) -> tuple[list[tuple[bool, str]], 
     bad = [p for p in parsed if isinstance(p, str)]
     calls = [p for p in parsed if isinstance(p, list)]
     server = text_of(ingest / "server.log").split("\n")
-    runner = re.split(r"[\r\n]+", text_of(ingest / "runner.log"))  # progress bars redraw with \r
+    runner = re.split(r"[\r\n]+", text_of(ingest / "runner.log"))
     alarms = alarms_in(server) + alarms_in(runner)
     failed = [(f"{m[1]} {m[2]} {m[3]}", m[4]) for line in server if (m := UPSTREAM.search(line)) and m[4][0] != "2"]
     redone = Counter(req for req, _ in failed if REDONE.fullmatch(req))
@@ -145,8 +137,6 @@ def logs(ingest: Path, turns: int, asked: int) -> tuple[list[tuple[bool, str]], 
 
 
 def questions(ingest: Path, data: list, users: dict, stored: dict) -> tuple[bool, str]:
-    """Each question file holds the question LoCoMo asks under that name, searched as its conversation's user, and
-    memories that user has stored, word for word and date for date."""
     asked = {f"conv{i}_q{j}": (i, qa) for i, c in enumerate(data) for j, qa in enumerate(c["qa"])
              if qa.get("category") in CATEGORIES}
     files = {p.stem: json.loads(p.read_text(encoding="utf-8"))
@@ -179,10 +169,8 @@ def questions(ingest: Path, data: list, users: dict, stored: dict) -> tuple[bool
 
 
 def bm25_wrong(pts: list[dict]) -> int:
-    """Memories whose stored BM25 terms are not the ones their text encodes to, encoded as qdrant.py:182-186 does at
-    insert; fastembed gives some texts, such as punctuation, none."""
     from fastembed import SparseTextEmbedding
-    encoder = SparseTextEmbedding(model_name="Qdrant/bm25")  # as qdrant.py:88 builds it, from the same model cache
+    encoder = SparseTextEmbedding(model_name="Qdrant/bm25")
     texts = [p["payload"].get("text_lemmatized") or p["payload"].get("data") or "" for p in pts]
     wrong = 0
     for p, e in zip(pts, encoder.embed(texts)):
@@ -194,24 +182,21 @@ def bm25_wrong(pts: list[dict]) -> int:
 
 
 def unlinked(qdrant: str, pts: list[dict]) -> int:
-    """Memories with entities that no entity links. Mem0 updates a matched entity from its search result, so two names
-    in one add that match the same entity keep only the second's new links (main.py:769-781), with no log."""
     linked = {i for e in scroll(qdrant, f"{COLLECTION}_entities", with_payload=["linked_memory_ids"])
               for i in e["payload"].get("linked_memory_ids") or []}
     bare = [p for p in pts if p["id"] not in linked]
-    from mem0.utils.entity_extraction import extract_entities_batch  # as main.py:719 extracts them
+    from mem0.utils.entity_extraction import extract_entities_batch
     return sum(bool(e) for e in extract_entities_batch([p["payload"].get("data") or "" for p in bare]))
 
 
 def store(qdrant: str, pts: list[dict], calls: list[list], users: dict, dates: dict) -> list[tuple[bool, str]]:
-    """Qdrant against the replies: nothing stored that no reply gave, and nothing a reply gave lost without a log line."""
     pay = [p["payload"] for p in pts]
     bad_bm25 = bm25_wrong(pts)
     per_user = Counter(p.get("user_id") for p in pay)
     bad_hash = sum(p.get("hash") != md5(p.get("data") or "") for p in pay)
     stored = Counter(p.get("hash") for p in pay)
     extracted = Counter(md5(m["text"]) for c in calls for m in c)
-    unexplained = stored - extracted  # stored more often than the replies gave it
+    unexplained = stored - extracted
     lost = [h for h in extracted if not stored[h]]
     holders, said_by, kept_by, turns_of = defaultdict(set), defaultdict(set), defaultdict(set), Counter()
     for c in calls:
@@ -221,7 +206,6 @@ def store(qdrant: str, pts: list[dict], calls: list[list], users: dict, dates: d
     for p in pay:
         holders[p.get("hash")].add(p.get("user_id"))
         kept_by[p.get("hash")].add(str(p.get("attributed_to") or ""))
-    # Mem0 skips a text only when the same user holds a copy (main.py:634-652), so one user holds every text of a reply
     owners = [set.intersection(*(holders[md5(m["text"])] for m in c)) for c in calls if c]
     conv = {u: i for i, u in users.items()}
     undated = sum(p.get("created_at") not in dates.get(conv.get(p.get("user_id")), ()) for p in pay)
@@ -285,7 +269,7 @@ def main() -> None:
     tmp.write_text(json.dumps({
         "pass": ok, "checked": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "fingerprint": fingerprint(ingest), "lines": lines}, indent=1), encoding="utf-8")
-    tmp.replace(ingest / "gate.json")  # whole or absent: a kill mid-write never leaves half a gate
+    tmp.replace(ingest / "gate.json")
 
 
 if __name__ == "__main__":

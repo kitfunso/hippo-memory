@@ -1,5 +1,3 @@
-// `hippo setup`: detect the agent tools on this machine and wire each one.
-
 import { installJsonHooks, resolveJsonHookPaths } from '../hooks-install/json-hooks.js';
 import type { JsonHookTarget, ToolDetection } from '../hooks-install/rules/shared.js';
 import { detectInstalledTools } from '../hooks-install/detect.js';
@@ -61,9 +59,6 @@ function setupDetectedTools(
   }
 }
 
-// `hippo setup` -- one-shot configuration for every AI coding tool on the box.
-// Detection and install logic live in src/surface/hooks-install/.
-
 export async function handleSetup({ tenantId, flags }: CommandContext): Promise<void> {
   const dryRun = boolFlag(flags, 'dry-run');
   const forceAll = boolFlag(flags, 'all');
@@ -118,8 +113,6 @@ function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {
   // (rules/shared.ts), and copilot returned above.
   const target = tool.name as JsonHookTarget;
   if (dryRun) {
-    // Resolve the real settings path so the filename is right for each tool (claude-code ->
-    // settings.json, opencode -> opencode.json).
     const { settings } = resolveJsonHookPaths(target);
     console.log(`[dry-run] would install hooks in ${settings}`);
     return;
@@ -175,7 +168,6 @@ function setupWrapperTool(tool: ToolDetection, dryRun: boolean): void {
 
 function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
   if (tool.name !== 'opencode') {
-    // Other plugin tools (openclaw) have their own installer; the notes line points the user at it.
     console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     return;
   }

@@ -1,7 +1,3 @@
-/** Typed judgment over capture candidates via TypeSafe's Jev (System One).
- *  Regex picks WHAT is a candidate; it cannot say what is worth keeping, so every captured memory currently lands on a
- *  flat schema_fit of 0.5. */
-
 import { ConfidenceLevel, EmotionalValence } from '../base/memory/entry.js';
 import type { Http } from '../base/ports/http.js';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
@@ -15,32 +11,23 @@ const MAX_CONCURRENCY = 8;
 export type JudgedKind = 'error' | 'decision' | 'convention' | 'preference' | 'trivia';
 
 export interface Judgment {
-  /** Jev noul, 0..1. Maps to `schema_fit` on the written entry. */
   durable: number;
   kind: JudgedKind;
   valence: EmotionalValence;
   confidence: ConfidenceLevel;
-  /** Jev's calibrated confidence on the kind choice, 0..1. */
   kindConfidence: number;
 }
 
 export interface JudgeOptions {
   apiKey: string;
   model?: string;
-  /** Sends each request; a root passes the real one, a test one over its own fetch. */
   http: Http;
-  /** Bounded parallelism for `judgeOver`. */
   concurrency?: number;
 }
 
 const JUDGE_MAX_ERROR_BYTES = 4096;
-// The kind-confidence at or above which a judged answer counts as observed, not inferred.
 const OBSERVED_CONFIDENCE_MIN = 0.8;
 
-/**
- * One named answer of a Jev reply `{ answers: { <name>: Answer } }`; an empty object when the reply
- * has none of that shape.
- */
 function answerNamed(reply: JsonValue, name: string): { [key: string]: JsonValue } {
   const answers = isJsonObject(reply) ? reply.answers : undefined;
   const answer = isJsonObject(answers) ? answers[name] : undefined;
@@ -83,14 +70,11 @@ const QUESTIONS = {
 const KINDS: readonly JudgedKind[] = ['error', 'decision', 'convention', 'preference', 'trivia'];
 const VALENCES: readonly EmotionalValence[] = ['critical', 'negative', 'positive', 'neutral'];
 
-/** `verified` is unreachable: that tier means a human or a test confirmed it. */
 function toConfidenceTier(kindConfidence: number): ConfidenceLevel {
   if (kindConfidence >= OBSERVED_CONFIDENCE_MIN) return 'observed';
   return 'inferred';
 }
 
-/** Capture-time judging must not hold a write for long: one budget for the call, shorter than
- * the LLM calls. */
 const JUDGE_TIMEOUT_MS = 15_000;
 
 async function post(content: string, opts: JudgeOptions): Promise<Response | null> {
@@ -107,7 +91,6 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
     return null;
   }
   if (res.ok) return res;
-  // The body is the server's reply, never the request, so it cannot hold the key.
   const snippet = (
     await readCappedText(res, JUDGE_MAX_ERROR_BYTES).catch((err) => {
       log.debug(`judge: error body unreadable: ${errorMessage(err)}`, errorFields(err));
@@ -118,8 +101,6 @@ async function post(content: string, opts: JudgeOptions): Promise<Response | nul
   return null;
 }
 
-/** `null` on any failure, so a Jev outage degrades capture to today's behaviour instead of
- * blocking the write. */
 async function judge(content: string, opts: JudgeOptions): Promise<Judgment | null> {
   const trimmed = content.trim();
   if (trimmed.length < 3) return null;

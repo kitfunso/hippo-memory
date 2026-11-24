@@ -1,4 +1,3 @@
-// A failure read with no store must hash like the local failure log, or repeat counts split between a laptop and its server.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -90,14 +89,12 @@ describe('failureReport', () => {
     expect(report.text).toBe(
       `Bash: mail to [email] and [home]/.npmrc failed. ${'Retry the deploy. '.repeat(12)}`.slice(0, 200),
     );
-    // Only what leaves the machine is masked: the local reading and the detail hash are as before.
     expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toContain('a@b.co');
     await captureToolFailure(failureTarget(root), { tool_name: 'Bash', error });
     expect(report.detail_hash).toBe(logRows()[0]?.detail_hash);
   });
 
   it('cuts the text on a code point, never inside a surrogate pair', () => {
-    // 'Bash: ' plus 193 characters puts the emoji's halves at 199 and 200, so a 200-unit cut would keep a lone high surrogate.
     const before = 'build failed '.repeat(20).slice(0, 193);
     const error = `${before}\u{1F600} after it`;
     expect(lessonFromFailure({ tool_name: 'Bash', error }).text).toBe(`Bash: ${before}`);

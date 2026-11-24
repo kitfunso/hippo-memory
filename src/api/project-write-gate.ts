@@ -18,12 +18,10 @@ export async function admitProjectWrite(
 ): Promise<void> {
   const gate = ctx.projectWriteGate;
   if (gate === undefined) return;
-  // Validation first, so a malformed name answers 400 and never reaches the gate.
   if (project !== null) assertCallerProject(project);
   const t = ctx.projectWriteGateTimeoutMs;
   const deadlineMs = t !== undefined && Number.isFinite(t) && t > 0 ? t : DEFAULT_GATE_DEADLINE_MS;
   const actor = frozenActor(ctx.actor);
-  // Widened to unknown, so a JS gate that returns nothing or a non-string refuses instead of letting the write run.
   let answer: unknown;
   try {
     answer = await withDeadline(deadlineMs, (signal) =>
@@ -34,10 +32,8 @@ export async function admitProjectWrite(
       log.error(`project write gate: ${err.message}`, errorFields(err));
       throw new HttpError(503, 'project write gate unavailable');
     }
-    // A busy store keeps its 503 and Retry-After; its text is fixed, so no gate text leaks.
     if (isStoreBusy(err)) throw err;
     log.error('project write gate: the gate threw', errorFields(err));
-    // A plain Error answers 500; an HttpError or ApiError from the gate would keep its own status and text.
     throw new Error('project write gate failed', { cause: err });
   }
   if (answer === null) return;

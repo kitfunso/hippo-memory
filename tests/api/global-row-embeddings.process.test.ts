@@ -26,17 +26,8 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 import { TEST_ACTOR, TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
-// docs/plans/2026-07-18-global-row-embeddings.md: rows written to the global
-// store by promote/share/autoShare/sync/import must enter that store's
-// embedding index under the same best-effort contract as `remember`.
-
 const HIPPO_BIN = fileURLToPath(new URL('../../bin/hippo.js', import.meta.url));
-// Xenova/all-MiniLM-L6-v2, the default local embedding model these stores use, emits 384 numbers.
 const MINILM_DIMENSIONS = 384;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeTmpStore(): string {
   const dir = makeRoot('gre');
@@ -55,8 +46,6 @@ function cleanUp(...dirs: string[]): void {
 
 let _embeddingFunctional: boolean | null = null;
 
-// isEmbeddingAvailable() only proves the package resolves; one real embed call (cached) proves the pipeline loads
-// before a test depends on a vector.
 async function embeddingIsFunctional(): Promise<boolean> {
   if (_embeddingFunctional !== null) return _embeddingFunctional;
   if (!isEmbeddingAvailable()) {
@@ -69,10 +58,6 @@ async function embeddingIsFunctional(): Promise<boolean> {
   _embeddingFunctional = Array.isArray(vector) && vector.length > 0;
   return _embeddingFunctional;
 }
-
-// ---------------------------------------------------------------------------
-// Deterministic: embeddings.enabled=false on the destination store
-// ---------------------------------------------------------------------------
 
 describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   let localRoot: string;
@@ -98,9 +83,6 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
     const promoted = await promote(apiCtx(localRoot), entry.id);
     expect(promoted.globalId).toMatch(/^g_/);
 
-    // provider.isAvailable() is synchronous and false here (config-disabled),
-    // so embedMemory's fire-and-forget call returns before any fs write,
-    // no waitFor needed, the absence is observable immediately.
     const index = loadEmbeddingIndex(globalRoot);
     expect(index[promoted.globalId]).toBeUndefined();
   });
@@ -163,10 +145,6 @@ describe('global-row-embeddings: embeddings disabled (deterministic)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Awaited batch producers (embeddings available)
-// ---------------------------------------------------------------------------
-
 describe('global-row-embeddings: awaited batch producers', () => {
   let localRoot: string;
   let globalRoot: string;
@@ -194,10 +172,6 @@ describe('global-row-embeddings: awaited batch producers', () => {
     });
     expect(count).toBe(1);
 
-    // syncGlobalToLocal already fired its own embedAll(localRoot); this call
-    // is idempotent and, because embed writes are serialized through the
-    // module's embed lock, awaiting it guarantees the earlier fire-and-forget
-    // call has also settled by the time this resolves.
     await embedAll(localIndex(localRoot));
 
     const index = loadEmbeddingIndex(localRoot);
@@ -226,10 +200,6 @@ describe('global-row-embeddings: awaited batch producers', () => {
   }, 60_000);
 });
 
-// ---------------------------------------------------------------------------
-// Single-row producers: the call waits for the embed of its copy
-// ---------------------------------------------------------------------------
-
 describe('global-row-embeddings: promote waits for its embed', () => {
   let localRoot: string;
   let globalRoot: string;
@@ -244,7 +214,6 @@ describe('global-row-embeddings: promote waits for its embed', () => {
     cleanUp(localRoot, globalRoot);
   });
 
-  // Generous timeout: first-run model load can be slow.
   it('promote embeds the global copy before it returns', async (ctx) => {
     skipWithoutEmbeddings(ctx, await embeddingIsFunctional());
     const entry = createMemory('promote waits for its embed test content gamma', {
@@ -267,7 +236,6 @@ describe('global-row-embeddings: the first promote, before any global store exis
     embeddings = await startHashedEmbeddings();
     localRoot = makeTmpStore();
     globalRoot = makeRoot('gre-noglobal', { init: false });
-    // Only hippo.db marks a store as initialized, so the context's reach has no global store yet.
     const config = { embeddings: { provider: 'openai', model: 'hashed-16', apiBaseUrl: embeddings.url } };
     fs.writeFileSync(path.join(globalRoot, 'config.json'), JSON.stringify(config), 'utf8');
     vi.stubEnv('HIPPO_HOME', globalRoot);
@@ -294,10 +262,6 @@ describe('global-row-embeddings: the first promote, before any global store exis
   });
 });
 
-// ---------------------------------------------------------------------------
-// hippo embed --global (CLI)
-// ---------------------------------------------------------------------------
-
 describe('global-row-embeddings: hippo embed --global CLI', () => {
   it('embeds a seeded global row from a cwd with no local store, without requireInit failing', async () => {
     const home = makeRoot('gre-cli-home', { init: false });
@@ -306,18 +270,12 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
     const env = { ...process.env, HIPPO_HOME: globalRoot };
 
     try {
-      // Seed an unembedded global row directly, bypassing the CLI, so the
-      // row predates any embed call.
       initTestStore(globalRoot);
       const entry = createMemory('cli embed --global test content delta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       writeEntry(globalRoot, entry);
 
-      // In process, so coverage sees the embed verb; the promote wiring case below keeps the real child.
       const { status: exitCode, stderr } = await runCliAs(['embed', '--global'], { cwd, env });
 
-      // Ungated: cwd has no local .hippo at all, so --global must skip
-      // requireInit entirely (the r1 must-fix), regardless of embedding
-      // availability in this environment.
       expect(stderr).not.toMatch(/No \.hippo directory found/);
 
       if (isEmbeddingAvailable()) {
@@ -331,19 +289,8 @@ describe('global-row-embeddings: hippo embed --global CLI', () => {
   }, 60_000);
 });
 
-// ---------------------------------------------------------------------------
-// promote producer wiring (subprocess, real node process)
-// ---------------------------------------------------------------------------
-
 describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
-  // Real-process counterpart of the in-process "promote waits for its embed"
-  // test above; it covers the built CLI path. Spawns real `node` subprocesses
-  // (same pattern as the "hippo embed --global CLI" test above) so the actual
-  // promote -> embedMemory fire is exercised end-to-end: init, remember,
-  // embed (warms the local vector + model cache), promote, then poll the
   // GLOBAL store's embedding index for the minted g_ id. A producer-wiring
-  // regression (wrong root, dropped void embed call) would fail this test even
-  // when every in-process test above is skipping.
   it('promoting a remembered row lands a vector in the GLOBAL embedding index', async () => {
     const home = makeRoot('gre-wiring-home', { init: false });
     const cwd = makeRoot('gre-wiring-cwd', { init: false });
@@ -367,9 +314,6 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       expect(rememberMatch).not.toBeNull();
       const localId = rememberMatch![1];
 
-      // Ensures the local vector exists (deterministic, not racing remember's
-      // own fire-and-forget embed) and warms the on-disk model cache before
-      // promote runs.
       if (isEmbeddingAvailable()) execFileSync('node', [HIPPO_BIN, 'embed'], { cwd, env, encoding: 'utf-8' });
 
       const promoteOut = execFileSync('node', [HIPPO_BIN, 'promote', localId], { cwd, env, encoding: 'utf-8' });
@@ -378,7 +322,6 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
       const globalId = promoteMatch![1];
       expect(globalId).toMatch(/^g_/);
 
-      // The command settles its embeds before it exits, so the vector is there once execFileSync returns.
       if (isEmbeddingAvailable()) expect(loadEmbeddingIndex(globalRoot)[globalId]).toHaveLength(MINILM_DIMENSIONS);
     } finally {
       cleanUp(home, cwd);
@@ -386,12 +329,7 @@ describe('global-row-embeddings: promote producer wiring (subprocess)', () => {
   }, 90_000);
 });
 
-// ---------------------------------------------------------------------------
-// CLI verbs: each embeds the rows it copies before the command returns, since the command's runtime closes then
-// ---------------------------------------------------------------------------
-
 describe('global-row-embeddings: a CLI verb that copies rows embeds them before it returns', () => {
-  // Long enough that a command which does not wait for its embed returns first.
   const EMBED_DELAY_MS = 300;
   const savedCwd = process.cwd();
   let localRoot: string;

@@ -1,5 +1,3 @@
-// `hippo import`: bring memories in from a file, an agent's memory folder or a vault.
-
 import * as fs from 'node:fs';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -45,8 +43,6 @@ import { fail } from './exit.js';
 
 const MAX_ENTRIES_SHOWN = 10;
 
-/** The rows are saved either way; a failed backfill only delays vectors, so it warns with how
- * many wait and the command that finishes them. */
 async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err: E): Promise<void> {
   let waiting: string;
   try {
@@ -62,8 +58,6 @@ async function warnBackfillFailed<E>(ctx: CliContext, embedCommand: string, err:
   );
 }
 
-/** Batch-embeds freshly imported rows before the command returns, since the command's store
- * runtime closes then. */
 async function backfillVectors(ctx: CliContext, embedCommand: string): Promise<void> {
   try {
     await memoryEmbedMissing(ctx);
@@ -125,7 +119,6 @@ interface ImportRun {
   readonly extraTags: string[];
 }
 
-/** A vault folder or one file, written to the store `--global` picked. */
 async function importIntoStore(run: ImportRun): Promise<void> {
   const { hippoRoot, tenantId, targetRoot, args, flags, useGlobal, dryRun, extraTags } = run;
   const importOptions: TargetedImport = {
@@ -137,9 +130,6 @@ async function importIntoStore(run: ImportRun): Promise<void> {
     target: { root: targetRoot, batch: cliImportBatch(targetRoot), clock: cliInfra().clock },
   };
 
-  // Vault import is a FOLDER importer that dispatches apart from the single-file slot below; it
-  // writes through tenant-scoped api calls, so the tenant is resolved and passed through. --global
-  // is unsupported (the connector raw-archive path is tenant-local).
   const vault = stringFlagOrExit(flags, 'vault');
   if (vault) {
     return await importVaultFolder({
@@ -163,7 +153,6 @@ interface PickedImporter {
   importerName: string;
 }
 
-// Determine which importer to use based on flag
 function pickImporter(args: string[], flags: CliFlags): PickedImporter {
   if (boolFlag(flags, 'chatgpt')) {
     return {
@@ -200,7 +189,6 @@ function pickImporter(args: string[], flags: CliFlags): PickedImporter {
       importerName: 'Markdown',
     };
   }
-  // Positional: try to auto-detect from extension
   if (args[0]) return { filePath: args[0], importer: importGenericFileInto, importerName: 'File' };
   return { filePath: undefined, importer: undefined, importerName: '' };
 }
@@ -236,7 +224,6 @@ async function importFromFile(
   const storeLabel = useGlobal ? `global (${hippoHomeDir()})` : targetRoot;
   printFileImportSummary(result, { importerName, filePath, storeLabel, dryRun });
 
-  // The importers' writeEntry sites don't embed, so the new rows are embedded here in one pass.
   if (!dryRun && result.imported >= 1) {
     await backfillVectors(
       cliApiContext(targetRoot, tenantId),
@@ -286,8 +273,6 @@ async function importAgentMemories(
   { useGlobal, dryRun }: { useGlobal: boolean; dryRun: boolean },
 ): Promise<void> {
   const opts = cliSyncOptions(tenantId, currentMachine(), { dryRun });
-  // A folder without a store of its own imports as session end would there, so its notes are not
-  // hidden.
   const report =
     useGlobal || isInitialized(hippoRoot)
       ? await importForStore(useGlobal ? hippoHomeDir() : hippoRoot, opts)
@@ -321,8 +306,6 @@ async function importVaultFolder(options: VaultFolderOptions): Promise<void> {
   });
   const ctx = cliApiContext(hippoRoot, tenantId);
   printVaultSummary(vaultResult, folderPath, ctx, dryRun);
-  // Vault rows write through api.remember, which never embeds, so backfill them as the single-file
-  // import does.
   if (!dryRun && vaultResult.imported >= 1) await backfillVectors(ctx, 'hippo embed');
 }
 
@@ -334,17 +317,11 @@ function checkVaultArgs(folderPath: string, flags: CliFlags, useGlobal: boolean)
     fail('hippo import --vault does not support --global (raw rows are tenant-local).');
   }
   if (!stringFlag(flags, 'name')?.trim()) {
-    // --name keys the destructive source-deletion sync; a folder-basename default lets
-    // same-basename vaults clobber each other, and a valueless `--name` (boolean true) would
-    // silently import under vault:true:*.
     fail(
       'hippo import --vault requires --name <vault> (a non-empty identity key for source-deletion sync).',
     );
   }
   if (hasFlag(flags, 'scope') && !stringFlag(flags, 'scope')?.trim()) {
-    // Same valueless-flag trap: a bare `--scope` must not become scope "true". The example uses the
-    // source-prefixed private form, since a bare `private` scope is not treated as private by
-    // recall and importVault rejects it.
     fail('hippo import --vault: --scope requires a value (e.g. --scope vault:private:notes).');
   }
 }

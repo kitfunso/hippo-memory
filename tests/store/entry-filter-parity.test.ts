@@ -1,5 +1,3 @@
-// The entry filter's WHERE terms (sqlite/entries/entry-filter.ts) keep the rows each field means, in order, over memories and
-// dormant snapshots alike.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -29,7 +27,6 @@ function row(id: string, minute: number, over: Partial<MemoryEntry> = {}): Memor
 const IMPORTED = 'agent-memory:claude:p/';
 const DIGEST = { source: 'session-digest', tags: ['session-digest'] };
 
-// Each field's edges: the byte after a prefix, case and wildcard refs, superseded and kind spreads, ties on created.
 const ROWS: readonly MemoryEntry[] = [
   row('f01', 1, { source: 'cli', tags: ['deploy'] }),
   row('f02', 2, { source: `${IMPORTED}a.md#h`, originProject: 'alpha', tags: ['claude-code-memory'] }),
@@ -61,7 +58,6 @@ const DORMANT: readonly MemoryEntry[] = [
   row('d04', 23, { source: `${IMPORTED}old.md#h`, originProject: 'beta', kind: 'raw', supersededBy: 'mem_f01' }),
 ];
 
-/** The rows, then those the writer cannot make: tags that are a JSON string or not JSON, an empty superseded_by. */
 function oddColumns(dir: string): void {
   writeEntriesTogether(dir, ROWS);
   const db = openHippoDb(dir);

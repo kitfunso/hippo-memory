@@ -1,4 +1,3 @@
-// The status guard sits in the UPDATE: a row outside a transition's from-set is left alone, and a one-row move on it throws.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeRoot } from '../_helpers/make-root.js';
 import { ALL_TENANTS } from '../../src/base/util/tenant.js';
@@ -24,13 +23,10 @@ interface Spec {
   readonly key: 'id' | 'memory_id';
   readonly from: readonly string[];
   readonly to: readonly string[];
-  /** Statuses the table holds that a move from `from` must leave alone. */
   readonly illegal: readonly string[];
-  /** The columns a move sets besides status, as the row holds them afterwards. */
   readonly moved: Readonly<Record<string, string | number>>;
   readonly tenanted: boolean;
   readonly idOf: (n: number) => Id;
-  /** One row with only the NOT NULL columns the table asks for. */
   readonly seed: (db: DatabaseSyncLike, row: { id: Id; status: string; tenant: string }) => void;
 }
 
@@ -143,7 +139,6 @@ function seedQuarantine(
   ).run(tenant, id, status, STAMP);
 }
 
-// A store-kit caller passes a plain string, so `to` is typed loosely here and the runtime check owns it.
 type Moves = {
   [N in TransitionName]: {
     readonly many: (ids: Ids, to: string) => StatusMove<N>;

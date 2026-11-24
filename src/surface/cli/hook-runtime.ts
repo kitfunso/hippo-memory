@@ -1,6 +1,3 @@
-// What the hook commands share: session id, store choice, delivery recorder, session-end log and
-// store-busy handling.
-
 import { envClaudeCodeSessionId, envHippoSessionId } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -76,13 +73,10 @@ export function appendSessionEndCloseLog(
   if (!logFile) return;
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-    // sanitizeLogMessage: `message` interpolates the payload-controlled session_id, the same
-    // log-forgery guard appendPreCompactLog applies.
     const write = opts.startFresh ? fs.writeFileSync : fs.appendFileSync;
     const text = sanitizeLogMessage(`${message}${formatFields(opts.fields)}`);
     write(logFile, `[hippo] ${new Date().toISOString()} ${text}\n`, 'utf8');
   } catch (err) {
-    // A log-write failure must never fail the hook, but a log that never fills is told.
     log.warn(`session-end log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
@@ -140,7 +134,6 @@ export async function resetHookInjection(
   requiredSource: string | null,
 ): Promise<void> {
   const sessionId = hookPayloadSessionId(stdinText, requiredSource);
-  // A sub-agent's compaction leaves its parent's context, and the blocks in it, as they were.
   if (sessionId === null || isSubagentPayload(stdinText)) return;
   await bookTokenUse(
     {
@@ -187,8 +180,6 @@ export function payloadCwdRoot(
   const cwd = runtime === 'copilot' ? hookPayloadString(stdinText, 'cwd') : null;
   if (cwd === null || cwd.trim() === '') return hippoRoot;
   try {
-    // Moving, not just re-rooting, keeps project identity, scope, handoff evidence and the
-    // session-end worker on that folder too.
     process.chdir(cwd);
   } catch (err) {
     log.warn(
@@ -215,7 +206,6 @@ export async function inPilotHoldout(
  * and the model a whole capture asks for follow-up rules when the folder's config turns it on. */
 export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
   const folder = cliFolder(root);
-  // A per-reply capture sees only the turns since the last reply, and would pay for a call per reply.
   const askModel = mode === 'full' && folder.config.capture.followUpRules === 'model';
   const llm = askModel ? llmFromEnv() : undefined;
   const route = askModel ? llmRoute() : undefined;

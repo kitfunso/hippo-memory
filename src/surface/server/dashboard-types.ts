@@ -1,5 +1,3 @@
-// The dashboard's route shape: the /v1 rows' endpoint forms behind the one auth kind no /v1 row may
-// take.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ContextWith } from '../../api/types.js';
 import type { OptionalGroup } from '../../base/ports/store.js';
@@ -21,13 +19,9 @@ export interface DashboardRouteRequest {
   readonly res: ServerResponse;
   readonly query: URLSearchParams;
   readonly session: DashboardSession;
-  /** The api Context the cards and the writes run as: the CLI's tenant, audited as the
-   * dashboard. */
   readonly ctx: DashboardContext;
-  /** The dashboard reads, answered off the server thread. */
   readonly reader: DashboardReader;
   readonly bodyDeadlineMs: number;
-  /** The built React app, read at start, or null when it is not built. */
   readonly staticFiles: StaticFiles | null;
 }
 

@@ -1,4 +1,3 @@
-// Every API response carries an X-Request-Id, the caller's when it is a sane token, else a fresh one, and tells a browser not to guess its type.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { request } from 'node:http';
 import { writeFileSync } from 'node:fs';
@@ -90,7 +89,6 @@ describe('X-Request-Id', () => {
     vi.stubEnv('HIPPO_LOG', 'info');
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      // An encoded slash is refused by a thrown HttpError, so it reaches the server's failure path.
       const res = await send('/v1/memories/a%2Fb', { 'x-request-id': 'req-err-1' });
       expect(res.status).toBe(400);
       expect(res.requestId).toBe('req-err-1');
@@ -98,7 +96,6 @@ describe('X-Request-Id', () => {
         .map((c) => String(c[0]))
         .filter((l) => l.includes('requestId=req-err-1') && l.includes(' failed: '));
       expect(logged).toHaveLength(1);
-      // Refused before any route matched, so the line names no route and never repeats the path sent.
       expect(logged[0]).toMatch(
         /^\[hippo\] info: GET unmatched failed: .* requestId=req-err-1 status=400 errorClass=HttpError\n$/,
       );
@@ -110,7 +107,6 @@ describe('X-Request-Id', () => {
   it('rides, with a timestamp, on a line logged below the route by code that was never handed the id', async () => {
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      // A bad value makes the config reader warn from inside the request.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-deep-1' });
       const warned = stderrSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('"pilot.holdoutRateBp"'));
@@ -140,7 +136,6 @@ describe('the access line', () => {
         headers: { 'content-type': 'application/json', 'x-request-id': 'acc-4' },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
       }).then((res) => res.text());
-      // The line is written when the response finishes, which the client can see first.
       await vi.waitFor(() => expect(accessLines(stderrSpy)).toHaveLength(5), { timeout: 5000 });
       const lines = accessLines(stderrSpy).map((l) =>
         l.replace(/ ts=\S+/, '').replace(/durationMs=\d+/, 'durationMs=N'),
@@ -180,7 +175,6 @@ describe('the access line', () => {
     try {
       await send('/health');
       await send('/v1/memories?q=x');
-      // Positive control: a warn that IS written at this level, through the same logger and stream, marks the point the access lines would have been captured by.
       writeFileSync(join(home, 'config.json'), JSON.stringify({ pilot: { holdoutRateBp: -1 } }));
       await send('/v1/context?q=anything', { 'x-request-id': 'req-marker-1' });
       await vi.waitFor(
@@ -237,10 +231,8 @@ describe('a request still unanswered past the slow threshold', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('x-request-id')).toBe('req-slow-1');
 
-      // A request answered inside the threshold never logs: its timer went with the reply.
       const quick = await fetch(`${slow.url}/health`, { headers: { 'x-request-id': 'req-quick-1' } });
       expect(quick.status).toBe(200);
-      // Positive control: a second held request warns later than the quick one's timer would have, so its warn proves the quick one stayed silent.
       gate = new Promise<void>((ok) => {
         release = ok;
       });

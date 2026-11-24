@@ -1,32 +1,9 @@
-// deploy/aml/adapter/adapter.mjs
-//
-// Translating proxy in front of hippo's HTTP API. hippo speaks its own
-// /v1/memories contract; the Agent Memory Leaderboard (AML) speaks a
-// different one (agentmemories.ai/api-guide, read 2026-08-25). This adapter
-// sits between them and does nothing else.
-//
-// Plain Node 22, zero npm dependencies, single file, no build step.
-//
-// Config (env):
-//   ADAPTER_PORT  port this adapter listens on. Default 8090.
-//   HIPPO_URL     base URL of the hippo HTTP server. Default http://127.0.0.1:18080.
-//
-// Routes:
-//   GET  /health   unauthenticated. Mirrors hippo's health as {ok: boolean}.
-//   POST /add      AML Add. Joins messages into one transcript, writes it as
-//                  one hippo memory scoped to the caller's user_id.
-//   POST /search   AML Search. Reads hippo's recall results back into AML's
-//                  {data: [...]} shape, scoped to the caller's user_id.
-//   anything else  404 {error}.
-
 import { createServer } from 'node:http';
 
 const ADAPTER_PORT = Number(process.env.ADAPTER_PORT || 8090);
 const HIPPO_URL = (process.env.HIPPO_URL || 'http://127.0.0.1:18080').replace(/\/+$/, '');
 const HIPPO_TIMEOUT_MS = 120_000;
 const MAX_BODY_BYTES = 1024 * 1024;
-
-// ---- small helpers ---------------------------------------------------
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -41,9 +18,6 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
-// Reads the request body up to maxBytes. Throws an error carrying
-// statusCode 413 once the cap is crossed, and destroys the socket so the
-// client is not kept waiting on a request we have already rejected.
 function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -83,9 +57,6 @@ async function parseJsonBody(req) {
   }
 }
 
-// Client may send Authorization: Bearer <key>, Authorization: Token <key>,
-// or X-Api-Key: <key>. Normalize whichever arrives into one opaque
-// credential string, or undefined when none is present. Never logged.
 function extractCredential(req) {
   const rawAuth = req.headers['authorization'];
   const auth = Array.isArray(rawAuth) ? rawAuth[0] : rawAuth;
@@ -109,14 +80,6 @@ function clientIpOf(req) {
   return isNonEmptyString(value) ? value : undefined;
 }
 
-// Calls hippo. When credential is undefined, no Authorization header is
-// sent at all, so hippo's own auth gate decides the outcome (401 when
-// hippo requires auth, as the production deployment always does).
-// clientIp, when present, is forwarded as cf-connecting-ip so hippo's
-// per-client rate limiter keys on the real caller instead of collapsing
-// every adapter-relayed request into the adapter's own address. Only the
-// Cloudflare-stamped inbound value is ever forwarded; the adapter is not
-// reachable except through the tunnel, so the header is trustworthy.
 async function callHippo(method, path, { credential, jsonBody, clientIp } = {}) {
   const headers = { Accept: 'application/json' };
   if (jsonBody !== undefined) headers['Content-Type'] = 'application/json';
@@ -151,8 +114,6 @@ function hippoErrorBody(hippoBody) {
   return { error: 'hippo request failed' };
 }
 
-// ---- /health -----------------------------------------------------------
-
 const HEALTH_TIMEOUT_MS = 5_000;
 
 async function handleHealth(_req, res) {
@@ -168,8 +129,6 @@ async function handleHealth(_req, res) {
     clearTimeout(timer);
   }
 }
-
-// ---- /add ----------------------------------------------------------------
 
 function validateAddBody(body) {
   if (!body || typeof body !== 'object') return 'request body must be a JSON object';
@@ -222,9 +181,6 @@ async function handleAdd(req, res) {
     return;
   }
 
-  // hippo's remember() writes synchronously before returning 200, so a 200
-  // here means the memory is already persisted. Echo the three ids exactly
-  // as received, no re-derivation.
   sendJson(res, 200, {
     success: true,
     request_id: body.request_id,
@@ -232,8 +188,6 @@ async function handleAdd(req, res) {
     session_id: body.session_id,
   });
 }
-
-// ---- /search ---------------------------------------------------------
 
 function validateSearchBody(body) {
   if (!body || typeof body !== 'object') return 'request body must be a JSON object';
@@ -256,7 +210,6 @@ async function handleSearch(req, res) {
   const credential = extractCredential(req);
   const clientIp = clientIpOf(req);
   const topK = Math.floor(body.top_k);
-  // options is accepted and ignored: hippo takes the query only.
   const params = new URLSearchParams({
     q: body.query,
     limit: String(topK),
@@ -283,15 +236,11 @@ async function handleSearch(req, res) {
   sendJson(res, 200, { data });
 }
 
-// ---- server ------------------------------------------------------------
-
 const server = createServer((req, res) => {
   const start = Date.now();
   const method = req.method || 'GET';
   const path = (req.url || '/').split('?')[0];
 
-  // One line per request, method + path + status + duration only. Never
-  // credentials, never memory content.
   res.on('finish', () => {
     console.log(`${method} ${path} ${res.statusCode} ${Date.now() - start}ms`);
   });
@@ -320,14 +269,10 @@ const server = createServer((req, res) => {
     });
 });
 
-// Bound the slow-client window: Cloudflare fronts this, but a stalled body
-// should not hold a connection for Node's default 300s.
 server.headersTimeout = 15_000;
 server.requestTimeout = 30_000;
 
 server.listen(ADAPTER_PORT, () => {
-  // server.address().port is the actual bound port. Matters when
-  // ADAPTER_PORT=0 asks the OS for an ephemeral port (tests do this).
   const address = server.address();
   const boundPort = address && typeof address === 'object' ? address.port : ADAPTER_PORT;
   console.log(`aml adapter listening on :${boundPort}, upstream hippo ${HIPPO_URL}`);

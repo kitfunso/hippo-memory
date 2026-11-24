@@ -1,5 +1,3 @@
-// Each best-effort catch around a hippo.db open on a recall path rethrows SqliteBlockedError, so an unported path under
-// another store answers 501 instead of falling back quietly; any other error keeps the catch's fallback.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -24,7 +22,6 @@ const entry = createMemory('deploy pipeline notes for the api', { baseHalfLifeDa
 
 const ranked = (results: readonly unknown[]): string => `ranked ${results.length}`;
 
-/** [catch site, a frame the blocked error's stack must name, the call, what the call returns when the open fails otherwise]. */
 type Row = readonly [string, RegExp, (root: string) => Promise<string>, string];
 
 const ROWS: readonly Row[] = [
@@ -91,11 +88,9 @@ let root: string;
 const STACK_LIMIT = Error.stackTraceLimit;
 
 beforeEach(() => {
-  // The site frame sits under the grant check and the open path, past the default 10 frames.
   Error.stackTraceLimit = 50;
   root = mkdtempSync(join(tmpdir(), 'hippo-blocked-catch-'));
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
-  // An API provider with a stubbed fetch, so the vector arm and physics reach their opens without a local model or the network.
   writeFileSync(
     join(root, 'config.json'),
     JSON.stringify({ embeddings: { provider: 'openai', model: 'text-embedding-3-small' } }),
@@ -117,7 +112,6 @@ afterEach(() => {
 
 describe('best-effort catches around a hippo.db open', () => {
   it.each(ROWS)('%s rethrows SqliteBlockedError under another store', async (_site, reach, run) => {
-    // As a store-kit adapter marks its folder, so every hippo.db open on it throws.
     writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
     const err = await run(root).then(
       () => null,

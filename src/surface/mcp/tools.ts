@@ -1,5 +1,3 @@
-// Tool definitions and input schemas served by tools/list.
-
 import type { ToolInputSchema } from './tool-args.js';
 import {
   DEFAULT_RECALL_BUDGET,
@@ -16,10 +14,6 @@ import {
 } from '../../base/util/limits.js';
 import { DEFAULT_CONFIG } from '../../base/config/config.js';
 
-// ── Tool definitions ──
-
-// HTTP sets no budget cap; 25x the recall default leaves room for large-context clients while
-// bounding one call's work.
 const FRESH_TAIL_NOTE = `(default ${DEFAULT_FRESH_TAIL_COUNT}). These are never evicted.`;
 const FRESH_TAIL_DESCRIPTION = `Recent raw rows always kept verbatim ${FRESH_TAIL_NOTE}`;
 const MAX_BUDGET_TOKENS = 25 * DEFAULT_RECALL_BUDGET;
@@ -366,8 +360,6 @@ export const WRITE_TOOLS: ReadonlySet<string> = new Set([
   'hippo_share',
 ]);
 
-// api.retrieve rejects these itself, so MCP and HTTP callers get the same typed error code for the
-// same bad value.
 export const ARGS_CHECKED_BY_API = new Map<string, ReadonlySet<string>>([
   ['hippo_recall', new Set(['scorer_window'])],
 ]);

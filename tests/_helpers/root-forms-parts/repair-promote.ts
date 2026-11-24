@@ -1,5 +1,3 @@
-// Root-keyed repair and promote forms tests call; production code goes through the port or the handle-first forms.
-
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { ALL_TENANTS } from '../../../src/base/util/tenant.js';
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';

@@ -1,12 +1,3 @@
-/**
- * v1.6.3 patch — covers what /review caught after v1.6.2 shipped.
- *
- *   P0-1: assemble truncated/totalRaw was misleading on long sessions.
- *   P1-1: MCP hippo_recall didn't expose fresh_tail_session_id.
- *   P1-3: HTTP fresh_tail_session_id had no length cap.
- *   P1-4: HTTP summarize_overflow accepted any non-'0' string as true.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -68,9 +59,7 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
     }
     const r = await assemble(ctxFor(root), 'sess-big', { rowCap: 5, budget: 100000 });
     expect(r.truncated).toBe(true);
-    // Pre-v1.6.3: totalRaw=5 (the cap). Post-v1.6.3: totalRaw=12 (the truth).
     expect(r.totalRaw).toBe(12);
-    // items[] is still the windowed view (newest 5).
     expect(r.items.length).toBeLessThanOrEqual(5);
   });
 
@@ -86,9 +75,6 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
   });
 
   it('rowCap == session size: truncated=true with matching totalRaw (boundary)', async () => {
-    // Exactly N rows + cap=N triggers truncated=true (rows.length === rowCap).
-    // The unbounded COUNT then runs and reports the same N. Documented in the
-    // /review report as a subtle case worth pinning.
     for (let i = 0; i < 5; i++) {
       const e = makeRaw(`exact-cap row ${i}`, 'sess-exact');
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
@@ -101,9 +87,6 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
   });
 
   it('truncated session with private rows: scope-aware COUNT does NOT leak', async () => {
-    // codex P1 / senior P0: pre-fix, an unscoped COUNT(*) let a no-scope
-    // caller infer how many private rows existed by comparing totalRaw to
-    // items.length. v1.6.3 SQL-encodes the default-deny rule.
     for (let i = 0; i < 4; i++) {
       const e = makeRaw(`public chatter ${i}`, 'sess-mixed', { scope: 'slack:public:CGEN' });
       e.created = `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`;
@@ -114,8 +97,6 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
       e.created = `2026-01-${String(i + 5).padStart(2, '0')}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    // No-scope caller, rowCap forces truncation. totalRaw must equal the
-    // PUBLIC count (4), NOT the full session count (10).
     const r = await assemble(ctxFor(root), 'sess-mixed', { rowCap: 3, budget: 100000 });
     expect(r.truncated).toBe(true);
     expect(r.totalRaw).toBe(4);
@@ -127,9 +108,6 @@ describe('assemble.totalRaw reports unbounded count when truncated', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    // Explicit scope match unlocks the count for the authorised caller.
-    // rowCap=2 truncates; totalRaw should equal the count of rows matching
-    // the explicit scope (3).
     const r = await assemble(ctxFor(root), 'sess-priv', {
       rowCap: 2,
       budget: 100000,
@@ -243,12 +221,6 @@ describe('HTTP /v1/memories input validation', () => {
   });
 
   it('summarize_overflow=banana is treated as false', async () => {
-    // No fixture rows; just verify the request succeeds and the parse
-    // doesn't throw. Pre-v1.6.3, banana → true; post-v1.6.3, banana → false.
-    // Caller can't observe summarize_overflow directly in a row-less
-    // recall, but the 200 status confirms the parser doesn't reject the
-    // input — and a follow-up test in the JS API path covers the
-    // semantic effect via RecallOptions.summarizeOverflow.
     const res = await fetch(`${handle.url}/v1/memories?q=test&summarize_overflow=banana`);
     expect(res.status).toBe(200);
   });

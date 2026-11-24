@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// README <-> site drift guard. The site reads the comparison table and the FAQ out of README.md at build,
-// so here they only have to parse; the checks after that cover copy that is still hand-written.
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -21,7 +19,6 @@ try {
   const { systems, rows } = parseComparison(readmeLf);
   const faq = parseFaq(readmeLf);
   parsed = `${systems.length} systems x ${rows.length} comparison rows, ${faq.length} FAQ answers`;
-  // FAQPage JSON-LD carries these answers as plain text, so no markdown may survive mdText.
   for (const { q, a } of faq) {
     if (/`|\]\(|\*\*|__/.test(mdText(a))) missing.push(`faq: markdown left in the JSON-LD answer to "${q}"`);
   }
@@ -29,7 +26,6 @@ try {
   missing.push(`parse: ${err.message} (the site build reads this section)`);
 }
 
-// The test figure lives once in site.ts; the README and llms.txt must carry the same one.
 const testsFloor = (site.match(/^\s*tests:\s*'([^']+)'/m) || [])[1];
 const llms = await readFile(join(root, 'public', 'llms.txt'), 'utf8');
 if (!testsFloor) {
@@ -40,7 +36,6 @@ if (!testsFloor) {
   }
 }
 
-// Keep setup limits and commercial availability on the owning rendered surfaces.
 for (const field of ['notice', 'availability']) {
   const value = (site.match(new RegExp(`^\\s*${field}:\\s*'([^']+)'`, 'm')) || [])[1];
   if (!value) {
@@ -58,13 +53,11 @@ const withoutComments = (text) => text.replace(/<!--[\s\S]*?-->/g, '').replace(/
 if (!withoutComments(quickstart).includes('{getStarted.notice}')) missing.push('notice: quickstart.astro no longer renders the setup limit');
 if (!withoutComments(teams).includes('{enterprise.availability}')) missing.push('availability: teams.astro no longer renders the edition status');
 
-// Public copy states results, not limits; limits stay in the result docs (owner rule, 22 Nov 2026).
 const limitLines = /lesson capture switched off|capture removed|no measured result|can't yet say|where hippo lost|hippo trails/i;
 for (const [name, text] of [['home', withoutComments(home)], ['README.md', readme], ['llms.txt', llms]]) {
   if (limitLines.test(text)) missing.push(`limits: ${name} carries a limit line; state the result instead`);
 }
 
-// README's "Public memory tests" table is built from the home table's data, never typed by hand.
 const board = JSON.parse(await readFile(join(root, 'src', 'data', 'all-benchmarks.json'), 'utf8'));
 try {
   const readmeLf = readme.replace(/\r\n/g, '\n');
@@ -75,7 +68,6 @@ try {
   missing.push(`public tests: ${err.message}`);
 }
 
-// gbrain is never named on the site, in the README or in llms.txt (owner rule, 18 Nov 2026).
 for (const [name, text] of [['README.md', readme], ['llms.txt', llms]]) {
   if (/gbrain/i.test(text)) missing.push(`gbrain: ${name} names it; take it out`);
 }

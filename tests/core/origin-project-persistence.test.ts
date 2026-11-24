@@ -75,10 +75,8 @@ describe('writeEntry origin stamping (v39)', () => {
     }
     const [legacy] = loadAllEntries(storeRoot, 'default');
     expect(legacy.originProject).toBeNull();
-    // Simulate the markRetrieved writeback: writeEntry on the loaded row.
     writeEntry(storeRoot, legacy);
     expect(loadAllEntries(storeRoot, 'default')[0].originProject).toBeNull();
-    // The pure helper preserves null too.
     expect(stampOriginProject(storeFilesOf(storeRoot), { ...legacy, originProject: null }).originProject).toBeNull();
   });
 
@@ -144,7 +142,7 @@ describe('v39 migration backfill', () => {
     writeEntry(storeRoot, createMemory('an old row written before v39'));
     regressStoreToV38(storeRoot);
 
-    const db = openHippoDb(storeRoot); // reopening runs the v39 migration
+    const db = openHippoDb(storeRoot);
     try {
       expect(getSchemaVersion(db)).toBeGreaterThanOrEqual(39);
     } finally {
@@ -167,7 +165,7 @@ describe('v39 migration backfill', () => {
     );
     regressStoreToV38(storeRoot);
 
-    closeHippoDb(openHippoDb(storeRoot)); // migrate
+    closeHippoDb(openHippoDb(storeRoot));
     const entries = loadAllEntries(storeRoot, 'default');
     const fromB = entries.find((e) => e.source.startsWith('shared:Proj-B'));
     const fromHome = entries.find((e) => e.source.startsWith(`shared:${homeName}`));
@@ -181,24 +179,21 @@ describe('v39 migration backfill', () => {
     writeEntry(storeRoot, createMemory('promoted from project b long ago', { source: `promoted:${promotedFrom}` }));
     regressStoreToV38(storeRoot);
 
-    closeHippoDb(openHippoDb(storeRoot)); // migrate
+    closeHippoDb(openHippoDb(storeRoot));
     const [entry] = loadAllEntries(storeRoot, 'default');
     expect(entry.originProject).toBe('proj-b');
   });
 
   it('legacy markdown bootstrap honors source evidence over the destination store origin', () => {
-    // A pre-v39 markdown-only store: a shared:proj-b row imported into a
-    // proj-a store must keep proj-b, not become proj-a (codex round 3 P1).
     const projectDir = path.join(tmpRoot, 'proj-a');
     const storeRoot = path.join(projectDir, '.hippo');
     fs.mkdirSync(path.join(storeRoot, 'episodic'), { recursive: true });
-    // Legacy markdown has no origin field at all: leave the origin unstamped.
     const sharedRow = createMemory('markdown row shared from proj b', { source: 'shared:Proj-B:2026-01-01T00:00:00Z' });
     const plainRow = createMemory('markdown row written here long ago');
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${sharedRow.id}.md`), serializeEntry(sharedRow));
     fs.writeFileSync(path.join(storeRoot, 'episodic', `${plainRow.id}.md`), serializeEntry(plainRow));
 
-    initTestStore(storeRoot); // bootstrapLegacyStore imports the markdown
+    initTestStore(storeRoot);
     const entries = loadAllEntries(storeRoot, 'default');
     const shared = entries.find((e) => e.source.startsWith('shared:'));
     const plain = entries.find((e) => !e.source.startsWith('shared:'));
@@ -221,9 +216,6 @@ describe('v39 migration backfill', () => {
   });
 
   it('a global store nested in a git repo (HIPPO_HOME in dotfiles) still backfills user-global', () => {
-    // Post-merge review P1: without the global-root special case, the walk
-    // finds the surrounding repo's .git and stamps the ENTIRE global corpus
-    // with that repo's name - hiding it from every project.
     const dotfiles = path.join(tmpRoot, 'dotfiles');
     fs.mkdirSync(path.join(dotfiles, '.git'), { recursive: true });
     const globalRoot = path.join(dotfiles, 'hippo-global');
@@ -234,7 +226,7 @@ describe('v39 migration backfill', () => {
       originProject: '',
     });
     regressStoreToV38(globalRoot);
-    closeHippoDb(openHippoDb(globalRoot)); // migrate
+    closeHippoDb(openHippoDb(globalRoot));
     const [entry] = loadAllEntries(globalRoot, 'default');
     expect(entry.originProject).toBe('');
   });

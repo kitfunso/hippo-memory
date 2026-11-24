@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Recomputes the prereg's E1 workload-validity gates from the final epoch of each run file.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

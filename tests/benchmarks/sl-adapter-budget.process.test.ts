@@ -4,33 +4,25 @@ import baselineAdapter from '../../benchmarks/sequential-learning/adapters/basel
 import staticAdapter from '../../benchmarks/sequential-learning/adapters/static.mjs';
 
 describe('sequential-learning adapter recall budget', () => {
-  // Starts the built CLI nine times: init, six stores and two recalls.
   it('hippo adapter honors the budget arg with OBSERVABLE result-count delta at extreme budgets', async () => {
     await hippoAdapter.init();
     try {
-      // One more memory than the adapter's five-result cap, so budget 2000 fills the cap and budget 1 must cut it.
       for (let i = 0; i < 6; i++) {
         await hippoAdapter.store(`lesson ${i}: do not commit broken code, item ${i}`, ['lesson', `lesson_${i}`]);
       }
       const wide = await hippoAdapter.recall('do not commit broken code', 2000);
       const tiny = await hippoAdapter.recall('do not commit broken code', 1);
-      // Budget=1 must collapse the result set well below budget=2000. We assert
-      // an OBSERVABLE delta (not just <=), so the test cannot pass if --budget
-      // is silently ignored. If hippo's --budget enforcement is strict, tiny=0;
-      // if lenient (returns at least 1 hit), it MUST be strictly fewer than wide.
-      expect(wide.length).toBeGreaterThanOrEqual(3); // sanity: 6 memories, query matches
-      expect(tiny.length).toBeLessThan(wide.length); // STRICT inequality, not <=
+      expect(wide.length).toBeGreaterThanOrEqual(3);
+      expect(tiny.length).toBeLessThan(wide.length);
     } finally {
       await hippoAdapter.cleanup();
     }
   });
 
-  // Starts the built CLI three times: init, the store and the recall.
   it('hippo adapter defaults to 2000 when budget arg is omitted (backward compat)', async () => {
     await hippoAdapter.init();
     try {
       await hippoAdapter.store('compat lesson', ['compat']);
-      // Single-arg signature must not throw.
       const results = await hippoAdapter.recall('compat lesson');
       expect(Array.isArray(results)).toBe(true);
     } finally {
@@ -43,7 +35,6 @@ describe('sequential-learning adapter recall budget', () => {
     try {
       const r1 = await baselineAdapter.recall('anything', 100);
       const r2 = await baselineAdapter.recall('anything');
-      // Baseline always returns []; budget arg must not throw.
       expect(r1).toEqual([]);
       expect(r2).toEqual([]);
     } finally {
@@ -56,7 +47,6 @@ describe('sequential-learning adapter recall budget', () => {
     try {
       const r1 = await staticAdapter.recall('overwrite production', 100);
       const r2 = await staticAdapter.recall('overwrite production');
-      // Static returns the full pre-loaded lesson set; budget arg must not throw.
       expect(Array.isArray(r1)).toBe(true);
       expect(Array.isArray(r2)).toBe(true);
     } finally {

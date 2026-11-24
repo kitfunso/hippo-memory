@@ -41,7 +41,6 @@ describe('decision memory', () => {
     });
     writeEntry(hippoRoot, mem);
 
-    // Supersede
     const old = readEntry(hippoRoot, mem.id)!;
     old.halfLifeDays = Math.max(1, Math.floor(old.halfLifeDays / 2));
     old.confidence = 'stale';

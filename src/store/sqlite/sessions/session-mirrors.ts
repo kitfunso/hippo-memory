@@ -1,5 +1,3 @@
-// The buffer files that mirror the active task snapshot and the recent session trail, per tenant.
-
 import { DEFAULT_TENANT_ID } from '../../../base/util/tenant.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -8,8 +6,6 @@ import type { TaskSnapshot, SessionEvent } from '../../../base/ports/store/sessi
 import { PRIVATE_DIR } from '../../../host/private-dir.js';
 import { writeMirror } from '../folder-files/mirrors.js';
 
-// Tenant-scoped mirror paths: the 'default' tenant keeps the original `active-task.md` / `recent-session.md` names;
-// other tenants get a `.<tenantId>` suffix so one cannot overwrite another's mirror.
 function activeTaskMirrorPath(hippoRoot: string, tenantId: string): string {
   const file = tenantId === DEFAULT_TENANT_ID ? 'active-task.md' : `active-task.${tenantId}.md`;
   return path.join(hippoRoot, 'buffer', file);

@@ -1,5 +1,3 @@
-// The sleep claim of a store folder, in process and on the store worker: one holder at a time, kept by the operating system,
-// so it frees itself when its holder is gone and a folder that cannot keep one never stops a sleep.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +17,6 @@ afterEach(async () => {
   for (const run of undo.splice(0).reverse()) await run();
 });
 
-/** The store's consolidation group, its claim released and the store closed after the test. */
 function groupOf(kind: 'in process' | 'on the store worker', root: string): Consolidation {
   const store = kind === 'in process' ? sqliteStore(root) : workerSqliteStore(root);
   undo.push(async () => {
@@ -29,7 +26,6 @@ function groupOf(kind: 'in process' | 'on the store worker', root: string): Cons
   return store.consolidation;
 }
 
-/** The lock another process would hold on the folder. */
 function holdAsAnotherProcess(root: string): { release: () => void } {
   const take = takeFileLock(join(root, LOCK_FILE));
   if (take.kind !== 'taken') throw new Error(`test setup: the claim was already ${take.kind}`);

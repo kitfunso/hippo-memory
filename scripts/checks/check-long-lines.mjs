@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // CI gate: no src/ line over 120 characters. oxfmt wraps code but not strings or comments, and oxlint
 // has no line-length rule; files in .long-lines-baseline.json may lose long lines, never gain one.
-// Usage: check-long-lines.mjs [--update]. --update rewrites the baseline after long lines go.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,12 +17,10 @@ function tsFiles(dir, out = []) {
   return out.sort();
 }
 
-/** Lines longer than LINE_LIMIT characters; a trailing CR is not counted. */
 function longLineCount(text) {
   return text.split('\n').filter((l) => l.replace(/\r$/, '').length > LINE_LIMIT).length;
 }
 
-/** { path: count } of every src file with a long line, keys sorted. */
 function findLongLines() {
   const out = {};
   for (const file of existsSync('src') ? tsFiles('src') : []) {

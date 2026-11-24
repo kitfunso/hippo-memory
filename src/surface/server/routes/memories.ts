@@ -1,4 +1,3 @@
-// Memory write routes: create, graph, archive, supersede, promote, forget, outcome, sleep.
 import { graphEntityOf, graphView } from '../../../api/objects/graph.js';
 import { rawArchive, forget, outcome, promote, remember, supersede } from '../../../api/index.js';
 import { MEMORY_KINDS, type MemoryKind } from '../../../base/memory/entry.js';
@@ -29,7 +28,6 @@ import { sleepEventLines } from '../../render/sleep-events.js';
 const VALID_KINDS: ReadonlySet<MemoryKind> = new Set(MEMORY_KINDS);
 const MAX_OUTCOME_IDS = 1000;
 
-// POST /v1/memories
 export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const content = getString(body, 'content', MAX_CONTENT_LEN);
@@ -69,7 +67,6 @@ export async function handleCreateMemory({ req, res, ctx }: AuthedRouteRequest):
   return;
 }
 
-// GET /v1/graph?entity=NAME&limit=N — read-only entity/relation graph (tenant-scoped)
 export async function handleGetGraph({
   res,
   ctx,
@@ -81,7 +78,6 @@ export async function handleGetGraph({
   return;
 }
 
-// /v1/memories/:id/* and DELETE /v1/memories/:id
 export async function handleArchiveMemory(
   { req, res, ctx }: AuthedRouteRequest,
   { id }: RouteParams,
@@ -117,7 +113,6 @@ export async function handlePromoteMemory(
   { id }: RouteParams,
 ): Promise<void> {
   validateIdSegment(id, 'memory id');
-  // Only a shared store reads the body; a laptop server keeps ignoring it.
   const project = sharedStoreOf(ctx) ? getCallerProject(await parseJsonBody(req, ctx)) : undefined;
   const result = await promote(ctx, id, { project });
   sendJson(res, 200, result);
@@ -134,19 +129,12 @@ export async function handleForgetMemory(
   return;
 }
 
-// POST /v1/outcome: applies a positive/negative outcome to memory ids; without ids it lands on the
-// ids this client's last recall or context call showed, and returns {applied, ids}, so callers can
-// tell "no recent recall" from "all ids skipped". Each applied id writes one audit_log row
-// (op='outcome').
 export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const good = body['good'];
   if (!isJsonBoolean(good)) {
     throw new HttpError(400, 'good is required (boolean)');
   }
-  // Bounds the ids one call binds and audits: outcome runs a fixed set of statements whatever the
-  // count, and writes the mirrors after its job. Auth runs first, so only a caller with a key
-  // reaches it.
   const ids = getStringArray({
     obj: body,
     key: 'ids',
@@ -172,8 +160,6 @@ export async function handleApplyOutcome({ req, res, ctx }: AuthedRouteRequest):
   return;
 }
 
-/** The reply keeps `details` as the printed lines where the result carries events, so the JSON
- * shape is as it was. */
 function sleepReply(result: SleepResult): Record<string, JsonValue> {
   return Object.fromEntries(
     Object.entries(result).map(([key, value]): [string, JsonValue] =>
@@ -184,9 +170,6 @@ function sleepReply(result: SleepResult): Record<string, JsonValue> {
   );
 }
 
-// POST /v1/sleep: host-wide consolidation (consolidate, dedup, audit, share, ambient); api.sleep
-// spans the WHOLE hippoRoot, cross-tenant by design, so the row's host-admin-local gate is the
-// trust boundary. Body {dry_run?, no_share?}; returns SleepResult JSON.
 export async function handleRunSleep({ req, res, ctx, opts }: AuthedRouteRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const dryRunRaw = body['dry_run'];

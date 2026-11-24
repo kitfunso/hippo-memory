@@ -1,24 +1,9 @@
 #!/usr/bin/env node
-/**
- * Model profile benchmark runner.
- *
- * For each (model, profile, case):
- *   1. Create a fresh temp hippo store (HIPPO_HOME=<tmp>)
- *   2. Inject memories via `hippo remember`
- *   3. Build the prompt: `hippo context --auto` output + optional distractor + user query
- *   4. Call the model via `claude -p --model <id>` (no API key — uses subscription)
- *   5. Judge the response via scripts/model-profile-judge.mjs
- *   6. Record verdict
- *
- * Results written to JSON for Phase C comparison.
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { judge } from './model-profile-judge.mjs';
-
-// ---- flags ----
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -43,8 +28,6 @@ const CASES_LIMIT = flag('--cases', 0);
 const OUT = String(flag('--out', 'evals/baseline-profile-bench.json'));
 const VERBOSE = hasFlag('--verbose');
 
-// ---- profile definitions (for Phase A this is just 'default'; Phase C adds 'tuned') ----
-
 const PROFILE_TABLE = {
   default: { budget: 1500, framing: 'observe' },
   // 'tuned' is applied implicitly in Phase C by letting hippo auto-detect — see C1.
@@ -56,9 +39,6 @@ function resolveProfile(name) {
   if (!p) throw new Error(`Unknown profile: ${name}`);
   return p;
 }
-
-// ---- distractor generator ----
-// Used for noise-rejection cases: ~10 KB of realistic-looking but irrelevant text.
 
 const DISTRACTOR_BLOCK = `
 ## Release notes for unrelated library v3.14.2
@@ -126,9 +106,7 @@ no-op. The new default strategy subsumes it in all tested workloads.
 Funded in part by the Open Source Infrastructure Grant program. Testing
 resources provided by the CloudCompute partner network. All trademarks are the
 property of their respective owners.
-`.repeat(12); // ~10 KB
-
-// ---- helpers ----
+`.repeat(12);
 
 function mkTmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-bench-'));
@@ -176,10 +154,6 @@ function hippoCall(args, env, input, cwd) {
 }
 
 function setupHippoStore(tmpDir, memories) {
-  // Each case gets its own isolated tmpDir that serves as BOTH cwd and
-  // HIPPO_HOME. This way local (.hippo under cwd) and global (HIPPO_HOME)
-  // both resolve inside tmpDir, preventing leakage from the user's real
-  // stores.
   try {
     hippoCall(['init', '--no-hooks', '--no-schedule', '--no-learn'], { HIPPO_HOME: tmpDir }, undefined, tmpDir);
   } catch {
@@ -251,8 +225,6 @@ function askModel(model, prompt) {
     return { text: '', error: err.message };
   }
 }
-
-// ---- main ----
 
 function aggregate(runs) {
   const byCell = new Map();

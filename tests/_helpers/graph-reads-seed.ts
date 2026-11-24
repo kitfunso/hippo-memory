@@ -1,5 +1,3 @@
-// The graph fixture: entities and relations in four tenants under three scopes, a policy-anchored entity and a
-// batch-crossing run of same-named entities, written straight to hippo.db.
 import { vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -38,7 +36,6 @@ type Elsewhere = 'sharedB' | 'otherB' | 'solo' | 'tailA' | 'tailB';
 export interface SeededGraph {
   readonly e: Readonly<Record<InTenantA | Elsewhere, number>>;
   readonly many: readonly number[];
-  /** Memory ids by the scope each sits under in tenant A. */
   readonly memories: Readonly<Record<'team' | 'held' | 'alice', string>>;
 }
 
@@ -90,7 +87,6 @@ function seedTenantA(db: Db, dir: string, policyId: number): SeededTenantA {
   const twinOpen = entity(TENANT_A, 5, 'Twin', 'person', memories.team);
   const lone = entity(TENANT_A, 6, 'Lone', 'decision', memories.team);
   const shared = entity(TENANT_A, 7, 'Shared', 'project', memories.team);
-  // Stamped with the second `shared` left on the clock, so the two newest entities share a timestamp.
   const anchored = insertEntityRow(db, TENANT_A, {
     entityType: 'policy',
     name: 'Anchored',
@@ -128,7 +124,6 @@ export async function seedGraphRows(dir: string): Promise<SeededGraph> {
     const tailA = entity(BULK_TENANT, 1, 'TailA', 'system', memBulk);
     const tailB = entity(BULK_TENANT, 1, 'TailB', 'system', memBulk);
     const many = Array.from({ length: MANY }, () => entity(BULK_TENANT, 2, 'Many', 'project', memBulk));
-    // The older relation hangs off the first batch of 400 and the newer off the second.
     relation(BULK_TENANT, 3, many[0]!, tailA, memBulk);
     relation(BULK_TENANT, 4, many[MANY - 1]!, tailB, memBulk);
     return { memories: a.memories, e: { ...a.e, sharedB, otherB, solo, tailA, tailB }, many };

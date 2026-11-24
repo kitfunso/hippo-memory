@@ -52,8 +52,6 @@ export const HEALED_TRIGGERS = [
 
 const HEALED_OBJECTS = [...HEALED_INDEXES, ...HEALED_TRIGGERS] as const;
 
-// The request indexes' tables: never healed, since a store that lost one still opens so its hooks
-// can log the step.
 const REQUEST_TABLES = ['compactions', 'failure_log'] as const;
 
 interface ChainObject {
@@ -68,8 +66,6 @@ export function missingHealedTables(db: DatabaseSyncLike): Set<string> {
   return new Set<string>(HEALED_TABLES.filter((table) => !tableExists(db, table)));
 }
 
-// Before the loop on stamped stores: the chain never re-runs a stamped migration, and v4/v16/v22
-// ALTER or read these tables. Call it under the write lock, so its check and its CREATE see one state.
 export function ensureContinuityTables(db: DatabaseSyncLike): void {
   const missing = missingHealedTables(db);
   if (missing.size === 0) return;
@@ -77,8 +73,6 @@ export function ensureContinuityTables(db: DatabaseSyncLike): void {
   for (const { table, sql } of chainObjects.values()) if (missing.has(table)) db.exec(sql);
 }
 
-// After the loop, when every column an index names exists; only a store missing an index or a
-// trigger builds the chain.
 export function ensureContinuityObjects(db: DatabaseSyncLike): void {
   // SAFETY: one TEXT column named name.
   const present = db
@@ -96,13 +90,10 @@ export function ensureContinuityObjects(db: DatabaseSyncLike): void {
   }
 }
 
-/** Each healed table's CREATE TABLE, then every index and trigger on it and on the request tables,
- * keyed by object name, as the migration chain leaves them on an empty database. */
 function objectsFromChain(): ReadonlyMap<string, ChainObject> {
   const db = new DatabaseSync(':memory:');
   try {
     ensureMetaTable(db);
-    // No root: only v39 reads it, to backfill rows an empty database does not have.
     for (const migration of MIGRATIONS) migration.up(db, {});
     const tables = [...HEALED_TABLES, ...REQUEST_TABLES];
     // SAFETY: rows follow the selected columns, and the WHERE drops the autoindexes whose sql is
@@ -122,6 +113,5 @@ function objectsFromChain(): ReadonlyMap<string, ChainObject> {
   }
 }
 
-// sqlite_master keeps each CREATE without its IF NOT EXISTS.
 const ifNotExists = (sql: string): string =>
   sql.replace(/^CREATE (UNIQUE )?(TABLE|INDEX|TRIGGER) /, 'CREATE $1$2 IF NOT EXISTS ');

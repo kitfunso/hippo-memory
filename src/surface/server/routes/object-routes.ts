@@ -1,6 +1,3 @@
-// The rows of a typed-object kind, from one config: create, list, get and close for every kind,
-// plus supersede for a kind that versions. Each handler parses and replies; the work is one api
-// call.
 import type { ContextWith } from '../../../api/types.js';
 import {
   objectClose,
@@ -25,27 +22,18 @@ import { kindRows, type IdHandler, type NamedRoute, type ObjectRequest } from '.
 type Body = Record<string, JsonValue>;
 
 export interface ObjectRouteConfig<K extends ObjectKind> {
-  /** The collection path, such as `/v1/customer-notes`. */
   readonly base: string;
   readonly kind: K;
-  /** Names the object in the 404 text, e.g. "customer note". */
   readonly noun: string;
-  /** Reply field that carries one object, e.g. "note". */
   readonly field: string;
-  /** Reply field that carries a page, e.g. "notes". */
   readonly listField: string;
-  /** List query parameter matched against the kind's filter column, e.g. "customer". */
   readonly filterParam?: string;
-  /** Checks the body, then saves the new object. */
   readonly create: (ctx: ContextWith<'objects'>, body: Body) => Promise<ObjectByKind[K]>;
   readonly named?: readonly NamedRoute[];
-  /** `POST /:id/<action>` rows only this kind has; they come before close. */
   readonly actions?: Readonly<Record<string, IdHandler>>;
 }
 
 export interface VersionedRouteConfig<K extends SavableKind> extends ObjectRouteConfig<K> {
-  /** Checks the body, then returns the successor's write: two steps, so a bad body answers 400
-   * before a missing row answers 404. */
   readonly revise: (body: Body) => (existing: ObjectByKind[K], id: number) => ObjectWrites[K];
 }
 
@@ -62,7 +50,6 @@ async function createRoute<K extends ObjectKind>(
   try {
     sendJson(res, 201, { [cfg.field]: await cfg.create(ctx, body) });
   } catch (e) {
-    // A missing referenced row is a conflict with the create, not a missing target.
     if (e instanceof NotFoundError) throw new HttpError(409, e.message);
     throw e;
   }

@@ -1,4 +1,3 @@
-// Scratch homes, projects and stores for the agent memory sync tests; nothing here reads the real home.
 import type { FullContext } from './api-ctx.js';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';

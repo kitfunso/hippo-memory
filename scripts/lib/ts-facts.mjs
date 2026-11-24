@@ -1,6 +1,3 @@
-// One TypeScript parse per file for the check scripts: imports and strings.
-// No program and no type checker, so a gate reads syntax only and a comment or string never counts as code.
-
 import ts from 'typescript';
 
 const LOCAL_SPEC = /^\.\.?\//;
@@ -57,7 +54,6 @@ function exportFact(node, line) {
 
 const ALL = ['imports', 'strings'];
 
-/** Static imports and re-exports sit at the top level, so no tree walk is needed for them. */
 function readTopLevel(sourceFile, facts, lineOf) {
   for (const n of sourceFile.statements) {
     if (ts.isImportDeclaration(n) && ts.isStringLiteral(n.moduleSpecifier)) {
@@ -68,7 +64,6 @@ function readTopLevel(sourceFile, facts, lineOf) {
   }
 }
 
-/** Every string and template piece, at any depth. */
 function readStrings(sourceFile, facts, lineOf) {
   const visit = (n) => {
     if (ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) {
@@ -93,7 +88,6 @@ function readStrings(sourceFile, facts, lineOf) {
  * }}
  */
 export function readFacts(text, fileName = 'file.ts', wanted = ALL) {
-  // No parent pointers: no fact needs them, and setting them costs a second pass over every node.
   const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, false);
   const facts = { sourceFile, imports: [], strings: [] };
   const want = new Set(wanted);

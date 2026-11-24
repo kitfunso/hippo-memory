@@ -1,4 +1,3 @@
-// serve({ publicJson }): fixed JSON at plain GET /v1 paths, sent to anyone with no auth, body read or store access.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -61,7 +60,6 @@ async function send(method: string, path: string, authorization?: string): Promi
   };
 }
 
-/** The error serve() throws for this publicJson, or null when it started; a started server is stopped so a case never leaks one. */
 async function bootError(publicJson: Readonly<Record<string, JsonValue>>): Promise<Error | null> {
   return serve({ hippoRoot: root, host: '127.0.0.1', port: 0, publicJson }).then(
     async (h) => {
@@ -142,7 +140,6 @@ describe('a publicJson path under a store that is not hippo.db', () => {
       await start({ [INFO]: BODY }, bare, store);
       expect(await send('GET', INFO, `Bearer ${WELL_FORMED_KEY}`)).toEqual(served);
       expect(lookups).toBe(0);
-      // The same key on a core route does reach the store, so the zero above is the public path skipping it.
       expect((await send('GET', '/v1/memories?q=x', `Bearer ${WELL_FORMED_KEY}`)).status).toBe(401);
       expect(lookups).toBe(1);
       expect(readdirSync(bare).sort()).toEqual(['.gitignore', 'server.key', 'server.pid']);

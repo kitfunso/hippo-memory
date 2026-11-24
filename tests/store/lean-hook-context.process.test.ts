@@ -1,4 +1,3 @@
-// What the installed hooks put into the model's context: no consolidation log, one copy of each memory.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -20,7 +19,6 @@ let home: string;
 let project: string;
 let env: NodeJS.ProcessEnv;
 
-// In process unless `spawned`: the first SessionStart case runs its hooks in a real child, the rest read bytes and rows.
 async function hippo(
   args: string[],
   input?: string,
@@ -47,7 +45,6 @@ beforeEach(async () => {
   await hippo(['hook', 'install', 'claude-code']);
 });
 
-/** The commands `hippo hook install claude-code` wrote for one event. */
 function installedCommands(event: string): string[] {
   const settings = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'settings.json'), 'utf8'));
   return settings.hooks[event].flatMap((entry: { hooks: Array<{ command: string }> }) =>
@@ -62,7 +59,6 @@ interface HookPayload {
   prompt?: string;
 }
 
-/** Runs an installed `hippo ...` command line against the built CLI, as Claude Code would. */
 async function runHook(command: string, payload: HookPayload, spawned = false): ReturnType<typeof hippo> {
   const [bin, ...args] = (command.match(/"[^"]*"|\S+/g) ?? []).map((a) => a.replace(/^"(.*)"$/, '$1'));
   expect(bin).toBe('hippo');
@@ -89,7 +85,6 @@ async function promptContext(prompt: string): Promise<string> {
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
-/** Z1: the per-prompt hook recalls memories that match the prompt instead of the newest ones. */
 function enablePromptRecall(): void {
   const file = path.join(project, '.hippo', 'config.json');
   const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
@@ -107,7 +102,6 @@ describe('SessionStart hooks', () => {
     const commands = installedCommands('SessionStart');
     const logFile = /--path "([^"]+)"/.exec(commands.find((c) => c.startsWith('hippo last-sleep')) ?? '')?.[1] ?? '';
     expect(logFile).not.toBe('');
-    // The SessionEnd worker leaves the output of a real sleep run in this log.
     await remember('the release script needs the staging flag or it publishes to production');
     await hippo(['sleep', '--log-file', logFile]);
     const lines = fs
@@ -115,7 +109,6 @@ describe('SessionStart hooks', () => {
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean);
-    // In process the console spies bypass the tee, so only handleSleep's opening line is certain; teed warnings may follow.
     expect(lines[0]).toMatch(/^\[hippo\] \S+ consolidating memory\.\.\.$/);
 
     const runs = [];
@@ -171,7 +164,6 @@ describe('a memory with a copy in the global store', () => {
   const newest = 'run the migration check before tagging a release, it catches missing indexes';
 
   it('reaches the prompt hook once, and the freed recent slot goes to the next memory', async () => {
-    // The freed slot is a newest-5 backfill, so pin the pre-1.55.0 default.
     fs.writeFileSync(
       path.join(project, '.hippo', 'config.json'),
       JSON.stringify({ pinnedInject: { promptRecall: false } }),
@@ -186,7 +178,6 @@ describe('a memory with a copy in the global store', () => {
     expect(count(context, older)).toBe(1);
     expect(context).not.toContain('[global]');
 
-    // Two recent slots: the copy of the newest memory used to take the second one.
     const narrow = additionalContext(
       (await hippo(['context', '--pinned-only', '--include-recent', '2', '--format', 'additional-context'])).stdout,
     );
@@ -299,7 +290,6 @@ describe('a memory with a copy in the global store', () => {
       relType: 'references',
       memoryId: seed.id,
     });
-    // The global graph holds a third memory that links to shared copies of both local ones.
     const other = mem(global, newest);
     const linkedCopy = mem(global, older);
     const seedCopy = mem(global, rule);

@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Undeclared diagnostic from the independent critique: final-epoch currentR5 split by how many
-// same-template lookalikes of a fact are dated after its current version, and by that version's session.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';

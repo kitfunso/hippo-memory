@@ -1,6 +1,3 @@
-/** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering
- * main(); the verb table in verbs/health.ts dispatches to handleGitHub. */
-
 import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
@@ -31,8 +28,6 @@ import { cliApiContext, cliStore } from './api-context.js';
 import { CliExit } from './exit.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
-/** Map a parsed envelope + eventName header to an IngestEvent; null for unknown event types or
- * shapes failing the type guards. */
 function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent | null {
   if (eventName === 'issues' && isGitHubIssueEvent(parsed, eventName)) {
     return { eventName: 'issues', payload: parsed };
@@ -52,8 +47,6 @@ function parsedToIngestEvent(parsed: JsonValue, eventName: string): IngestEvent 
   return null;
 }
 
-// Console lines below are the `hippo github` command's printed result and usage text, so they stay
-// off the logger.
 export function printGitHubBackfillUsage(): void {
   console.log('hippo github backfill --repo <owner/name> [--since ISO] [--max <N>]');
   console.log('  --repo   GitHub repository in owner/name format (required, e.g. acme/widgets)');
@@ -69,7 +62,6 @@ export function printGitHubBackfillUsage(): void {
   );
 }
 
-/** `--max` as a whole positive count; undefined (no cap) when absent or not one. */
 function maxPerStreamFlag(flags: CliFlags): number | undefined {
   const maxRaw = stringFlag(flags, 'max');
   if (maxRaw === undefined) return undefined;
@@ -77,7 +69,6 @@ function maxPerStreamFlag(flags: CliFlags): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
 }
 
-/** GITHUB_ENTERPRISE_URL's site; a bad value exits 2 with its reason, as a missing token does. */
 function githubSiteOrExit(): GitHubSite {
   try {
     return githubSiteFromEnv();
@@ -103,7 +94,6 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   const site = githubSiteOrExit();
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
-  // Backfill fetches from site.apiBase, so every item is from the configured site.
   const trustedUserIds = githubTrustedUserIds();
 
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
@@ -172,8 +162,6 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
     if (!event) {
       return { memoryId: null };
     }
-    // A replayed comment `.deleted` row must route to the deletion handler, NOT to ingestEvent, which
-    // would write the deleted comment as a NEW raw memory instead of archiving the matching ones.
     if (
       (event.eventName === 'issue_comment' || event.eventName === 'pull_request_review_comment') &&
       event.payload.action === 'deleted'
@@ -190,8 +178,6 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
         eventName: event.eventName,
         ownsBareRefs,
       });
-      // archivedCount maps to memoryId only loosely (the archive can affect multiple rows), so return
-      // null; the replay audit trail is github_dlq.retry_count + retried_at.
       return { memoryId: r.archivedCount > 0 ? 'archived' : null };
     }
     const r = await ingestEvent(innerCtx, {
@@ -200,7 +186,6 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
       deliveryId: args.deliveryId,
       host,
       ownsBareRefs,
-      // The parked row keeps no header, so the payload's repository host alone says the server.
       trustedUserIds: payloadFromSite(host, payloadHost(parsed))
         ? trustedUserIds
         : NO_TRUSTED_USER_IDS,
@@ -216,11 +201,8 @@ export async function replayGitHubDlq(
   flags: CliFlags,
 ): Promise<void> {
   const site = githubSiteOrExit();
-  // A bad entry throws here, before any row is touched, as it refuses serve and backfill.
   const trustedUserIds = githubTrustedUserIds();
   const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
-  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook
-  // re-runs ingest.
   await runDlqReplay('github', args[0], flags, (id, force) =>
     replayGithubDlqEntry(ctx, id, {
       force,

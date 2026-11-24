@@ -1,5 +1,3 @@
-/** Keyset cursor paging on the /v1 list routes, against a real SQLite store and a real server: no mocks. */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -35,7 +33,6 @@ const PAGE = 3;
 
 interface ListRoute {
   path: string;
-  /** Body key holding the list; null for routes whose body is a bare array (cursor rides X-Next-Cursor). */
   key: string | null;
 }
 
@@ -110,9 +107,7 @@ beforeAll(async () => {
     closeHippoDb(db);
   }
   await seedTenant('default', ROWS);
-  // Another tenant's rows must never leak into a page, even when the tenant filter sits beside a cursor.
   await seedTenant('tenant-b', 3);
-  // Paging every route makes well over the per-IP and per-caller bursts; both limiters are read once, at serve().
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('HIPPO_CALLER_RPS', '0');
   handle = await serve({ hippoRoot: home, port: 0, keep: ['objects', 'quarantine'] });
@@ -187,7 +182,6 @@ describe('no paging params: the body a small store got before cursors existed', 
   const ctx = (): FullContext => apiCtx(home, 'default', api.adminActor('test'));
   const json = <T>(value: T): JsonValue => JSON.parse(JSON.stringify(value));
 
-  // Each reference is the store call the route made before paging, with the same arguments.
   const before = new Map<string, () => JsonValue | Promise<JsonValue>>([
     ['/v1/quarantine', async () => json(await api.quarantineList(ctx(), { status: 'pending' }))],
     ['/v1/predictions', async () => json(await loadAllPredictions(home, 'default', { limit: 100 }))],
@@ -236,7 +230,6 @@ describe('rows that share a sort key', () => {
   it('tie-break on id, so a page boundary inside a tie skips and repeats nothing', async () => {
     const db = openHippoDb(home);
     try {
-      // The test is about SQL ordering, so it pins the timestamps with SQL.
       db.prepare(`UPDATE decisions SET created_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`).run();
       db.prepare(
         `UPDATE memory_quarantine SET quarantined_at = '2026-01-01T00:00:00.000Z' WHERE tenant_id = 'default'`,

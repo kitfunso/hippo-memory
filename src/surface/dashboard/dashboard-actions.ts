@@ -1,5 +1,3 @@
-// The four dashboard writes, each the api call the CLI makes; the router owns HTTP and the cache.
-
 import * as api from '../../api/index.js';
 import type { ContextWith } from '../../api/types.js';
 import { memoryGet } from '../../api/memories/memories.js';
@@ -14,10 +12,7 @@ import type { ForgetResult, ResolveResult } from '../../api/dashboard/types.js';
 export interface ActionResult {
   status: number;
   body: unknown;
-  /** True when a write committed, so the router moves the snapshot id. */
   changed: boolean;
-  /** The live entry an action acted on, so the router can build the detail after the cache is
-   * dropped. */
   entry?: MemoryEntry;
 }
 
@@ -52,7 +47,6 @@ export async function pinMemory(
 export async function markWrong(ctx: api.Context, rawId: string): Promise<ActionResult> {
   const id = parseMemoryId(rawId);
   if ((await liveEntry(ctx, id)) === null) return notFound();
-  // outcome() answers `applied: 0` for a missing or out-of-reach id instead of throwing.
   if ((await api.outcome(ctx, [id], false)).applied === 0) return notFound();
   const entry = await memoryGet(ctx, id);
   return entry === null ? notFound() : { status: 200, body: null, changed: true, entry };
@@ -91,7 +85,6 @@ export async function resolveOpenConflict(
     const result: ResolveResult = { ok: true, conflictId, keptId: keep, weakenedId: loserId };
     return { status: 200, body: result, changed: true };
   } catch (err) {
-    // The dashboard acts as an unowned admin, so a pair holding a personal row reads as missing.
     if (err instanceof NotFoundError) return notFound();
     if (err instanceof ConflictError) {
       return { status: 409, body: { error: 'This conflict is already resolved' }, changed: false };

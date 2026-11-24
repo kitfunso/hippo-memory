@@ -24,7 +24,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# A usage-limit wait behind the proxy can last hours; the proxy does all retrying, so the SDK must not.
 mem0_openai.OpenAI = functools.partial(mem0_openai.OpenAI, timeout=12 * 3600.0, max_retries=0)
 
 _obs = threading.local()
@@ -53,7 +52,7 @@ def _surface_quiet_losses(mem: Any, log: Any) -> None:
         try:
             return embed(*args, **kwargs)
         except Exception as e:
-            if getattr(_in_batch, "on", False):  # Mem0 embeds each text of a failed batch again, one at a time
+            if getattr(_in_batch, "on", False):
                 log.info("an embedding inside a batch failed; Mem0 retries the batch's texts one at a time")
             else:
                 log.warning(f"embedding failed, so Mem0 drops this text: {e!r}")
@@ -112,7 +111,7 @@ def build_app(runner: Path) -> FastAPI:
         meta = dict(req.metadata or {})
         if req.timestamp is not None:
             when = datetime.fromtimestamp(req.timestamp, tz=timezone.utc)
-            meta["created_at"] = when.isoformat(timespec="milliseconds").replace("+00:00", "Z")  # as hippo's server
+            meta["created_at"] = when.isoformat(timespec="milliseconds").replace("+00:00", "Z")
             _obs.date = when.date().isoformat()
         if meta:
             params["metadata"] = meta

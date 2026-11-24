@@ -1,5 +1,3 @@
-// End to end: the session-end worker pins nothing from a `claude -p` session's prompts, unless the
-// harness that wrote them sets HIPPO_CAPTURE_SCRIPTED=1. Real CLI and stores, no mocks.
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

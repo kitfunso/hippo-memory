@@ -1,4 +1,3 @@
-// Sleep's tombstone checks answer per tenant and write their refusal rows through the store; a dry run answers the same and writes nothing.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,7 +17,6 @@ afterEach(() => {
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
-/** A store where tenant `ta` has rejected one value. */
 function storeWithTombstone(): string {
   const root = makeRoot('tombstone-checks');
   roots.push(root);

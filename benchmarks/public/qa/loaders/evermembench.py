@@ -1,14 +1,3 @@
-"""EverMemBench-Dynamic (Hu et al., KDD 2026, arXiv 2602.01313): five multi-party group-chat topics, 2,400 questions.
-
-Authors' repository EverMind-AI/EverMemBench at e10b3d52f0e4 (`eval/`); data HF EverMind-AI/EverMemBench-Dynamic at
-a6b210a32248 (Apache-2.0), files 0N/dialogue.json and 0N/qa_0N.json (N 1 to 5) under ~/hippo-bench/datasets/evermembench/.
-The paper and the dataset card's `qars` config (0[1-5]/qa_*.json) both give 2,400 questions: 1,638 multiple choice, scored
-by match, and 762 open-ended, scored by an LLM judge. The repository's README paths `dataset/00x/` hold another
-release (dialogue_en.json, 3,121 questions); it is not used.
-Pipeline: add each topic's messages one by one, group by group, day by day (mem0_adapter.py:125-152, memos_adapter.py:145);
-search the question alone (pipeline.py:271-277) at top-k 10 (mem0.yaml:24, memos.yaml:27, zep.yaml:26, evermemos.yaml:29;
-pipeline.yaml sets none); one user per topic, so a question searches all three groups of its topic.
-"""
 from __future__ import annotations
 
 import datetime as dt
@@ -26,7 +15,6 @@ TOPICS = tuple(os.environ.get("EVERMEM_TOPICS", "01,02,03,04,05").split(","))
 assert set(TOPICS) <= {"01", "02", "03", "04", "05"}, f"EVERMEM_TOPICS holds an unknown topic: {TOPICS}"
 DATA_FILES = [p for t in TOPICS for p in (DATA / t / "dialogue.json", DATA / t / f"qa_{t}.json")]
 
-# prompts.yaml:7-35 (answer.multiple_choice), verbatim as the YAML loads it.
 MC_PROMPT = """You are a rigorous question-answering assistant. You will be given retrieved memories from
 a multi-person group chat and one multiple-choice question with four options.
 Your task is to choose the single best answer (A/B/C/D) based ONLY on the provided memories.
@@ -57,7 +45,6 @@ Output ONLY a single uppercase letter: A or B or C or D
 {options}
 """
 
-# prompts.yaml:38-67 (answer.open_ended), verbatim as the YAML loads it.
 OE_PROMPT = """You are an intelligent memory assistant tasked with retrieving accurate information from conversation memories. You will be given retrieved memories from a multi-person group chat and one open-ended question.
 Your task is to answer the question using ONLY the information in the memories.
 
@@ -89,10 +76,8 @@ Output ONLY the answer text
 {question}
 """
 
-# prompts.yaml:116-117 (llm_judge.system_prompt), verbatim as the YAML loads it.
 JUDGE_SYSTEM = "You are an expert grader that determines if answers to questions match a gold standard answer.\n"
 
-# prompts.yaml:119-154 (llm_judge.user_prompt), verbatim as the YAML loads it; {{ }} are the authors' escaped braces.
 JUDGE_PROMPT = """Your task is to label an answer to a question as 'CORRECT' or 'WRONG'. You will be given:
     (1) a question (about a multi-person group chat),
     (2) a 'gold' (ground truth) answer,
@@ -130,35 +115,29 @@ Do NOT include both CORRECT and WRONG in your response.
 Return the label in JSON format with the key "label": {{"label": "CORRECT"}} or {{"label": "WRONG"}}
 """
 
-EMPTY_CONTEXT = "(No memories retrieved)"  # mem0_adapter.py:466
-LEAD = re.compile(r"^user: ")  # the server stores "role: content"; the role is not part of the authors' text
+EMPTY_CONTEXT = "(No memories retrieved)"
+LEAD = re.compile(r"^user: ")
 
 
 def _ts(time_str: str) -> float:
-    """loaders.py:432-467: the time field read as a naive datetime, taken as UTC (mem0_adapter.py:218-223)."""
     t = dt.datetime.strptime(time_str.strip(), "%Y-%m-%d %H:%M:%S")
     return t.replace(tzinfo=dt.timezone.utc).timestamp()
 
 
 def conversations():
-    """One user per topic. Turns follow the authors' add loop: days by date, groups in file order, messages in order, one
-    add each, as `[Group: X][Speaker: Name]content` (memos_adapter.py:196; Memobase and Zep use the same text). Dated at
-    the message's own time."""
     for t in TOPICS:
         days = json.loads((DATA / t / "dialogue.json").read_text(encoding="utf-8"))
         turns = []
         for day in sorted(days, key=lambda d: d["date"]):
             for group, msgs in day["dialogues"].items():
                 for m in msgs or []:
-                    text = m.get("dialogue", "") or m.get("text", "")  # loaders.py:410
+                    text = m.get("dialogue", "") or m.get("text", "")
                     turns.append({"role": "user", "content": f"[Group: {group}][Speaker: {m['speaker']}]{text}",
                                   "timestamp": _ts(m["time"])})
         yield t, turns
 
 
 def questions() -> list[dict]:
-    """The 2,400 questions of 0N/qa_0N.json in file order. A question with a non-empty options dict is multiple choice
-    and its gold is the letter (qa_loader.py:145-153); the rest are open-ended. Category is the id's prefix."""
     out = []
     for t in TOPICS:
         for x in json.loads((DATA / t / f"qa_{t}.json").read_text(encoding="utf-8")):
@@ -168,22 +147,18 @@ def questions() -> list[dict]:
                  "category": "_".join(x["id"].split("_")[:-2]), "ask_after": None,
                  "qtype": "multiple_choice" if mc else "open_ended"}
             if mc:
-                q["choices"] = [f"{k}. {opts[k]}" for k in sorted(opts)]  # qa_loader.py:149-151
+                q["choices"] = [f"{k}. {opts[k]}" for k in sorted(opts)]
             out.append(q)
     return out
 
 
 def _context(memories: list[dict]) -> str:
-    """The Mem0 adapter's line for a memory that carries a date (mem0_adapter.py:468-476), without its group, weekday and
-    user fields: the memory text already holds the group and speaker."""
     if not memories:
         return EMPTY_CONTEXT
     return "\n".join(f"- {m['created_at']}: {LEAD.sub('', m['memory'], count=1)}" for m in memories)
 
 
 def answer_prompt(q: dict, memories: list[dict]) -> tuple[str, str]:
-    """The authors send one user message and no system message (answerer.py:328-335): prompts.yaml's text with the context,
-    the question and, for multiple choice, the options (answerer.py:265-273, 299-302)."""
     ctx = _context(memories)
     if q["qtype"] == "multiple_choice":
         return "", MC_PROMPT.format(context=ctx, question=q["question"], options="\n".join(q["choices"]))
@@ -191,7 +166,6 @@ def answer_prompt(q: dict, memories: list[dict]) -> tuple[str, str]:
 
 
 def parse_mc_answer(response: str) -> str:
-    """answerer.py:395-441 (_parse_mc_answer), verbatim."""
     if response.startswith("[LLM_CALL_FAILED]"):
         return "[FAILED]"
     response = response.strip().upper()
@@ -213,7 +187,6 @@ def parse_mc_answer(response: str) -> str:
 
 
 def _eval_parse_mc(response: str) -> str:
-    """evaluator.py:256-297 (_parse_mc_answer), verbatim."""
     response = response.strip().upper()
     if not response:
         return ""
@@ -233,7 +206,6 @@ def _eval_parse_mc(response: str) -> str:
 
 
 def eval_mc(generated: str, golden_answer: str) -> bool:
-    """evaluator.py:224-254 (_evaluate_mc), verbatim apart from taking strings."""
     generated = generated.strip()
     if generated.startswith("[") and generated.endswith("]"):
         return False
@@ -245,7 +217,6 @@ def eval_mc(generated: str, golden_answer: str) -> bool:
 
 
 def _authors_judge_parse(content: str) -> bool:
-    """evaluator.py:440-483 (_parse_judge_response), verbatim."""
     try:
         if "```json" in content:
             json_start = content.find("```json") + 7
@@ -276,8 +247,6 @@ def _authors_judge_parse(content: str) -> bool:
 
 
 def parse(reply: str) -> bool | None:
-    """The authors' parse. One difference, from prereg Amendment 6 item 5: a reply holding neither CORRECT nor WRONG is no
-    verdict (None, asked again), where the authors' parse counts it WRONG."""
     up = reply.upper()
     if "CORRECT" not in up and "WRONG" not in up:
         return None
@@ -285,8 +254,6 @@ def parse(reply: str) -> bool | None:
 
 
 def judge(q: dict, answer: str):
-    """Multiple choice: the authors' two-stage letter parse and a match (answerer.py:278-279, evaluator.py:150-152).
-    Open-ended: their judge prompt, evaluator.py:389-407, with the answer as the authors store it (answerer.py:311)."""
     if q["qtype"] == "multiple_choice":
         return "match", eval_mc(parse_mc_answer(answer), q["gold"])
     return "llm", JUDGE_SYSTEM, JUDGE_PROMPT.format(question=q["question"], golden_answer=q["gold"],

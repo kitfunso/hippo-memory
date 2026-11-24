@@ -8,11 +8,9 @@ import { makeRoot } from '../_helpers/make-root.js';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BUILT = pathToFileURL(resolve(REPO_ROOT, 'dist', 'db', 'wal-checkpointer.js')).href;
 
-// The test runner keeps its own event loop alive, so only a process with nothing else open shows a stop that ends it.
 describe('the WAL checkpointer stop', () => {
   it('settles after its worker started, in a process with nothing else open', () => {
     const dbPath = getHippoDbPath(makeRoot('wal-checkpointer-stop'));
-    // 32 responses (RESPONSES_PER_CHECKPOINT) start the worker; the code after the stop must then still run.
     const script = [
       `import { startWalCheckpointer } from ${JSON.stringify(BUILT)};`,
       `const checkpointer = startWalCheckpointer(${JSON.stringify(dbPath)});`,

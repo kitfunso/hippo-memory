@@ -1,6 +1,3 @@
-// The text `hippo sleep` prints for an api.sleep result, kept pure so tests read the lines
-// directly.
-
 import type * as api from '../../api/index.js';
 import { renderAmbientSummary } from '../../base/memory/ambient.js';
 import { plural } from '../../base/util/format.js';
@@ -33,7 +30,6 @@ function sleepCountLines(result: api.SleepResult): string[] {
     `   Active memories:  ${result.active}`,
     `   Removed (decayed): ${result.removed}`,
   ];
-  // Only when dormant.enabled moved something, so every other render stays byte-identical.
   if (result.dormant !== undefined && result.dormant > 0) {
     lines.push(`   Kept dormant:      ${result.dormant}  (hippo dormant to list)`);
   }
@@ -86,7 +82,6 @@ function sleepShareAndGraphLines(result: api.SleepResult): string[] {
     lines.push(`\nAuto-shared ${result.shared} high-value memories to global store.`);
   }
   if (result.secretSkipped !== undefined && result.secretSkipped > 0) {
-    // The secret veto is never silent.
     lines.push(
       `\nAuto-share: withheld ${result.secretSkipped} secret-flagged ` +
         `${result.secretSkipped === 1 ? 'memory' : 'memories'} (secret veto).`,

@@ -122,7 +122,6 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('9. issue_comment.deleted → archives previously-ingested comment', async () => {
-    // First, ingest a comment.
     const createBody = issueCommentBody('created');
     const createRes = await postWebhook(handle.port, createBody, defaultHeaders(createBody, 'issue_comment', 'd-9a'));
     expect(createRes.status).toBe(200);
@@ -131,7 +130,6 @@ describe('POST /v1/connectors/github/events', () => {
     );
     expect(beforeRaws.length).toBe(1);
 
-    // Now delete it.
     const delBody = issueCommentBody('deleted');
     const delRes = await postWebhook(handle.port, delBody, defaultHeaders(delBody, 'issue_comment', 'd-9b'));
     expect(delRes.status).toBe(200);
@@ -146,7 +144,6 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('10. unknown installation in multi-tenant install → DLQ unroutable + 200', async () => {
-    // Seed github_installations with a different installation_id (multi-tenant).
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
@@ -158,7 +155,7 @@ describe('POST /v1/connectors/github/events', () => {
       closeHippoDb(db);
     }
 
-    const body = issueBody({ installationId: 12345 }); // unknown
+    const body = issueBody({ installationId: 12345 });
     const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'd-10'));
     expect(res.status).toBe(200);
     const json = await jsonAs<{ status: string }>(res);
@@ -174,7 +171,6 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('11. PAT-mode webhook with no repo mapping → DLQ unroutable + 200', async () => {
-    // Seed github_installations non-empty so PAT-mode falls through to repo lookup.
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
@@ -202,8 +198,6 @@ describe('POST /v1/connectors/github/events', () => {
   });
 
   it('12. PAT-mode webhook with repo mapping → ingested under mapped tenant', async () => {
-    // Seed both routing tables: installations is non-empty (forces multi-tenant
-    // mode) and repositories has a mapping for the inbound repo.
     const db = openHippoDb(root);
     try {
       db.prepare(`INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)`).run(
@@ -331,7 +325,6 @@ describe('POST /v1/connectors/github/events', () => {
       ).status,
     ).toBe('ingested');
     await handle.stop();
-    // A fresh module graph is a fresh process's memory; only the store's hold can still know d-restart.
     vi.resetModules();
     const restarted: typeof import('../../src/server.js') = await import('../../src/server.js');
     handle = await restarted.serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
@@ -436,7 +429,6 @@ describe('POST /v1/connectors/github/events', () => {
     });
     expect(liveRaws().length).toBe(0);
 
-    // Nothing was parked: the delete was handled, not left for an operator.
     const db = openHippoDb(root);
     try {
       expect(queryOne<{ n: number }>(db, `SELECT COUNT(*) AS n FROM github_dlq`).n).toBe(0);

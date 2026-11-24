@@ -36,7 +36,6 @@ describe('hippo auth CLI', () => {
     expect(keyMatch?.[1], 'key_id missing in output').toMatch(/^hk_[a-z2-7]{24}$/);
     expect(plainMatch?.[1], 'plaintext missing in output').toMatch(/^hk_[a-z2-7]{24}\.[a-z2-7]+$/);
     const keyId = keyMatch![1]!;
-    // No --role means a member key that expires, so the mint says so: on stderr, and without the key.
     expect(created.stderr).toContain('no --role given, so this is a member key');
     expect(created.stderr).not.toContain(plainMatch![1]!);
     const narrow = await run('auth', 'create', '--role', 'member', '--global');

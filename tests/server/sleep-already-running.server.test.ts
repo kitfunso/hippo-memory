@@ -1,5 +1,3 @@
-// POST /v1/sleep and the server's auto-sleep queue while another process holds the store's sleep claim: the sleep answers 200
-// with nothing done, saves no vector graph file, and a refused auto-sleep is a normal answer, not an error.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,7 +13,6 @@ import { needsHippoDb } from '../_helpers/store-switch.js';
 import { sleepRuns } from '../_helpers/sleep-runs.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
-// A sleep saves the vector graph file only for a store of at least 1,000 vectors, so a sleep that ran leaves this file.
 const VECTOR_DIM = 32;
 const VECTORS = 1_100;
 
@@ -51,7 +48,6 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-/** The claim, held by a connection of the test's own, as another process would hold it. */
 function holdClaim(): { release: () => void } {
   const take = takeFileLock(join(home, 'sleep.lock.db'));
   if (take.kind !== 'taken') throw new Error(`test setup: the claim was already ${take.kind}`);
@@ -83,7 +79,6 @@ describe.skipIf(needsHippoDb('sleep'))('POST /v1/sleep while another sleep holds
       dryRun: false,
       alreadyRunning: { since: expect.stringMatching(/^\d{4}-\d\d-\d\dT[\d:.]+Z$/) },
     });
-    // Stopping waits for the sleep child to leave, which is when it would have saved the file.
     await handle?.stop();
     expect(existsSync(graphFile)).toBe(false);
   });

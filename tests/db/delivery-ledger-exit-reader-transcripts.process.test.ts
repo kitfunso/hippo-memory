@@ -1,4 +1,3 @@
-// The delivery reader against host transcripts: a lesson copied to the global store, prompt pairing and the transcript parser.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

@@ -1,5 +1,3 @@
-// README.md is the source of truth for the comparison table and the FAQ; parsing both at build time
-// means the site cannot drift from it, and a parse that finds nothing fails the build.
 import raw from '../../../README.md?raw';
 import { LINK, REPO, mdText, parseComparison, parseFaq, unescapeMd } from './readme-parse.mjs';
 
@@ -11,14 +9,12 @@ export const readmeFaq = parseFaq(readmeText);
 
 const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// README links are relative to the repo; off GitHub they must point back at it.
 export function absoluteUrl(url: string): string {
   if (/^(https?:|mailto:)/.test(url)) return url;
   if (url.startsWith('#')) return `${REPO}${url}`;
   return `${REPO}/blob/master/${url.replace(/^\.\//, '')}`;
 }
 
-// `anchors` sends README anchors to site pages (e.g. '#mcp-server' -> '/mcp/'); other links open in a new tab.
 export function mdInline(md: string, anchors: Record<string, string> = {}): string {
   const code: string[] = [];
   const text = md.replace(/`([^`]+)`/g, (_, c: string) => `\u{E000}${code.push(c) - 1}\u{E000}`);
@@ -31,7 +27,6 @@ export function mdInline(md: string, anchors: Record<string, string> = {}): stri
     .replace(/\u{E000}(\d+)\u{E000}/gu, (_, i: string) => `<code>${escHtml(code[Number(i)])}</code>`);
 }
 
-// README anchors that have a page of their own on the site.
 const siteAnchors = { '#mcp-server': '/mcp/' } satisfies Record<string, string>;
 
 /** A README answer as HTML paragraphs, one per blank-line-separated block. */

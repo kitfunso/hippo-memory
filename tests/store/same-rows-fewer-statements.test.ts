@@ -1,4 +1,3 @@
-// Reads and writes that once spent more statements or a wider scan now answer the same rows. Real store.
 import { describe, expect, it } from 'vitest';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

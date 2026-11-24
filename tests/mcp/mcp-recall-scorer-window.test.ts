@@ -1,15 +1,3 @@
-/**
- * v1.7.2 T4 — MCP hippo_recall accepts scorer_window arg.
- *
- * Behavioural assertion: narrower scorer_window returns less rendered
- * content than the default (formatMemories does NOT include windowSize in
- * text — codex P2-3 — so we assert observable behaviour).
- *
- * Cross-transport invariant (codex CRITICAL[2]): MCP must Number-coerce
- * non-numeric input so `scorer_window: "abc"` produces the same typed
- * RecallContractError as HTTP `?scorer_window=abc`.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -46,7 +34,6 @@ function callTool(
   );
 }
 
-/** Extract the rendered text from a `hippo_recall` MCP tool result. */
 function extractResultText(response: McpResponse | null): string {
   // SAFETY: hippo_recall's success response is written by this MCP server
   // under test (src/surface/mcp/server.ts) and always shapes `result` as
@@ -74,7 +61,6 @@ describe('MCP hippo_recall scorer_window', () => {
 
   afterEach(() => removeDir(home));
 
-  // 'abc' is Number-coerced by the transport so recall() rejects it like HTTP does.
   it.each([0, 'abc'])('scorer_window=%s throws RecallContractError with code=invalid_scorer_window', async (value) => {
     const call = callTool(
       'hippo_recall',
@@ -86,17 +72,6 @@ describe('MCP hippo_recall scorer_window', () => {
   });
 
   it('scorer_window+fresh_tail_count exercises the api.recall appendix path', async () => {
-    // The appendix-marker assertion is non-deterministic in this test
-    // because the physics scorer dedupes fresh-tail rows that already
-    // appear in the primary ranked block. With all alpha-matching content,
-    // fresh-tail rows are usually all in physics's top set → empty
-    // appendix. Mix in non-matching rows so fresh-tail surfaces unique IDs
-    // physics never scored.
-    //
-    // Insert beta rows AFTER the alpha seeds (set up in beforeEach) so
-    // they're newest. fresh_tail_count=5 surfaces last 5 regardless of
-    // query 'alpha'. BM25 / physics only score alpha rows. Beta rows in
-    // fresh-tail dedup-survive into the appendix.
     for (let i = 0; i < 5; i++) {
       writeEntry(
         home,
@@ -114,9 +89,6 @@ describe('MCP hippo_recall scorer_window', () => {
     );
     const text = extractResultText(result);
     expect(text).toContain('Found 30 memories:');
-    // Appendix renders "## Fresh tail / substituted summaries" header
-    // (src/surface/mcp/server.ts:470). Confirm the appendix path fired with the
-    // beta rows that physics didn't score.
     expect(text).toContain('Fresh tail / substituted summaries');
   });
 });

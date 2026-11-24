@@ -1,4 +1,3 @@
-// Pins output text, JSON key order and exit codes of CLI verbs whose long functions were split, where coverage was thin.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -14,7 +13,6 @@ let root: string;
 
 beforeEach(() => {
   root = makeRoot('q10cli');
-  // The CLI looks for <cwd>/.hippo; makeRoot made that folder but put its store at the root.
   initTestStore(path.join(root, '.hippo'));
   vi.stubEnv('HIPPO_HOME', path.join(root, 'global'));
   vi.stubEnv('HOME', root);
@@ -248,7 +246,6 @@ describe('a memory with a lead-in', () => {
 
   it('explain, trace, inspect and the markdown export show it too', async () => {
     const id = await remember(REPLY, '--lead-in', LEAD);
-    // The table's 48-character preview shows the memory, so a lead-in cannot fill it.
     const table = (await run('explain', 'Mel')).stdout;
     expect(table).toContain(REPLY);
     expect(table).not.toContain(LEAD);

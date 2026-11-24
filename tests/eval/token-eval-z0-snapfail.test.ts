@@ -1,4 +1,3 @@
-// A pre-session snapshot copy that fails (EBUSY on Windows) never abandons the run; the retry says the restore failed.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cpSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,7 +19,6 @@ const busyPreSession: typeof cpSync = (from, to, opts) => {
 };
 
 describe('a failed snapshot copy', () => {
-  // A two-task run over a real git repo with fake Claude sessions, one of them retried after a limit.
   it('marks the snapshot unrestorable and the retry unrestored, and the run goes on', async () => {
     const { out } = isolate('snapfail');
     const r = makeRepo();

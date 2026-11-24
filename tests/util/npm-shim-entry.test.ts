@@ -1,4 +1,3 @@
-// An npm .ps1 shim names the script it runs; codex-run starts that script with Node instead of PowerShell.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

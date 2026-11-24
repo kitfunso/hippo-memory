@@ -1,5 +1,3 @@
-// EntryWrites answers: the same values, the same errors, the same rows read back
-// and the same audit rows, over two tenants with personal, raw, summary and tombstoned rows.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -25,7 +23,6 @@ const ALICE = 'personal:private:alice';
 const BANNED = 'the launch date is march third';
 const ACTOR = 'api_key:caller';
 
-/** The columns these writes change, so a row compares to its expected value without the fields the store fills. */
 type Row = Pick<
   MemoryEntry,
   | 'id'
@@ -75,7 +72,6 @@ async function seed(dir: string): Promise<Seeded> {
     rawB: createMemory('globex raw ticket text', { tenantId: TENANT_B, kind: 'raw' }),
   };
   const summary = a('summary of the release process', { dagLevel: 2 });
-  // The children go in first, so the summary starts clean.
   const child = a('release notes are drafted on mondays', { dagParentId: summary.id });
   const rawChild = a('raw standup transcript about releases', { kind: 'raw', dagParentId: summary.id });
   for (const entry of [...Object.values(rows), child, rawChild, summary]) writeEntry(dir, entry, { actor: 'cli' });
@@ -107,7 +103,6 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'entryWrites', calls);
 }
 
-/** The audit rows a run added, without the ids and times both sides already matched on. */
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
   side.audit.slice(baseline.audit.length).map(({ id: _id, ts, ...row }) => {
     expect(ts).toBe(NOW);
@@ -472,7 +467,6 @@ describe('EntryWrites.forget', () => {
       forget(personal.id),
       forget(personal.id, ALICE),
       readBack(TENANT_A, raw.id, personal.id),
-      // The CLI and dashboard tell this refusal apart by its class, so the store must throw that class.
       (g) =>
         g.forget(target(raw.id)).then(
           () => 'kept',
@@ -496,7 +490,6 @@ const BOB = 'user:bob';
 
 describe('a restricted scope by id', () => {
   const OPS = 'slack:private:Cops';
-  // Bob owns the rows, so only the grant decides reach here; write rights get their own block below.
   const secret = fresh('the ops rota sits in the locked channel', { scope: OPS, owner: BOB });
   const secretRaw = fresh('raw ops channel message about the rota', { scope: OPS, kind: 'raw', owner: BOB });
   const successor = fresh('the ops rota moved to the wiki', { scope: OPS });
@@ -504,7 +497,6 @@ describe('a restricted scope by id', () => {
     for (const entry of [secret, secretRaw]) await g.writeEntry({ entry, actor: ACTOR });
   };
   const ops = readBack(TENANT_A, secret.id, secretRaw.id, successor.id);
-  /** Every write by id on the restricted rows: outcome, pin, supersede, archive and forget, in that order. */
   const writesAs = (reader: Reader): Call[] => [
     outcomeOn([secret.id], true, null, reader),
     async (g) => project([await g.setPinned({ ...target(secret.id, null, TENANT_A, reader), pinned: true })]),
@@ -551,7 +543,6 @@ describe('write rights on a team row', () => {
   };
   const team = readBack(TENANT_A, owned.id, ownedRaw.id, unowned.id, unownedRaw.id);
   const bobKey: Reader = { role: 'member', owner: BOB };
-  /** Pin, archive, supersede and forget, in that order, on `row` and its raw twin. */
   const changesAs = (reader: Reader, row: MemoryEntry, raw: MemoryEntry): Call[] => [
     async (g) => project([await g.setPinned({ ...target(row.id, null, TENANT_A, reader), pinned: true })]),
     (g) => g.archiveRaw({ ...target(raw.id, null, TENANT_A, reader), reason: 'r' }),

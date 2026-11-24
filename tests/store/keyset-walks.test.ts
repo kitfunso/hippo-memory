@@ -1,5 +1,3 @@
-// Full walks read an index in order, so no page sorts the table, and a walk over many ties on created hands back each
-// row once, in the pages the one sorted query over every row gives. Real store.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -28,8 +26,6 @@ const CREATED = ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:01.000Z', '2026-0
 const SORT_OF_ORDER = 'USE TEMP B-TREE FOR ORDER BY';
 const PICKED_ROWS = 'SEARCH memories USING INTEGER PRIMARY KEY (rowid=?)';
 
-/** True unless the plan sorts more than the rows each tenant's own index read picked: an every-tenant page takes at
- * most a page from each tenant on its index, then sorts only those, so no plan sorts the table. */
 function sortsAtMostPickedRows(detail: string): boolean {
   if (!detail.includes(SORT_OF_ORDER)) return true;
   const sorts = detail.split(SORT_OF_ORDER).length - 1;
@@ -47,7 +43,6 @@ interface IdsPage<C> {
   readonly next: C | null;
 }
 
-/** Every page of a walk, `read` given the cursor the page before ended at. */
 function pagesOf<C>(read: (after: C | undefined) => IdsPage<C>): string[][] {
   const pages: string[][] = [];
   let after: C | undefined;
@@ -64,7 +59,6 @@ const entryIds = (page: { entries: MemoryEntry[]; next: EntryCursor | null }): I
   next: page.next,
 });
 
-/** Each walk a store pass makes, three rows a page, for `tenantId` where it takes one. */
 function walks(db: DatabaseSyncLike, tenantId: TenantId) {
   const tenant = tenantId === ALL_TENANTS ? 'default' : tenantId;
   const page = (after?: EntryCursor) => ({ limit: 3, after });
@@ -132,7 +126,6 @@ describe('a full walk', () => {
     const db = openHippoDb(root);
     try {
       upsertVectors(db, [[rows[0]!.id, [1, 0]]], 'm');
-      // The detector is live: the old cross-tenant read sorts every row for each page.
       expect(plan(db, 'SELECT id, created FROM memories ORDER BY created ASC, id ASC LIMIT ?')).toContain(
         SORT_OF_ORDER,
       );
@@ -143,7 +136,6 @@ describe('a full walk', () => {
           expect(reads.length, name).toBeGreaterThan(0);
           for (const sql of reads) {
             const detail = plan(db, sql);
-            // A source prefix seeks its own range and sorts only the rows that match it, never the tenant.
             if (name === 'sourcePrefix') {
               expect(detail, sql).toMatch(/SEARCH memories USING INDEX idx_memories_source_tenant_created/);
               continue;
@@ -158,7 +150,6 @@ describe('a full walk', () => {
   });
 });
 
-/** mulberry32: the same rows on every run, so a failure replays. */
 function random(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -172,7 +163,6 @@ function random(seed: number): () => number {
 // Ids past U+FFFF and between U+E000 and U+FFFF sort one way by UTF-16 unit and the other by SQLite's UTF-8 bytes.
 const ODD_IDS = ['id-\u{1F600}', 'id-Ａ', 'id-a', 'id-é'];
 
-/** The pages the one sorted query over every row gives: what each walk page held before the walks read the index. */
 function sortedPages(db: DatabaseSyncLike, limit: number, tenantId?: string): string[][] {
   const tenant = tenantId === undefined ? '' : ' AND tenant_id = ?';
   const sql = `SELECT id, created FROM memories WHERE (created, id) > (?, ?)${tenant} ORDER BY created, id LIMIT ?`;

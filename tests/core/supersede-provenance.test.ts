@@ -1,5 +1,3 @@
-// Supersede hands the old row's origin and session to its replacement, so a project row stays in its project.
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';

@@ -1,6 +1,3 @@
-// J5 loss aversion: HIPPO_LOSS_AVERSION_RATIO scales only the negative multiplier, and a value under the 0.5 floor
-// falls back to 1.0 so sleep never deletes an error-tagged memory for it. Each case sets the env var and reads strength
-// through what a root builds from it.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -23,7 +20,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// One instant for every entry age and strength call: two real-clock reads a pause apart moved a ratio past its tolerance.
 const NOW = new Date();
 const RATIO_ENV = 'HIPPO_LOSS_AVERSION_RATIO';
 
@@ -35,13 +31,11 @@ function safeRmSync(p: string): void {
   }
 }
 
-/** The strength options a root builds once HIPPO_LOSS_AVERSION_RATIO reads `raw`. */
 function underEnv(raw: string): StrengthModel {
   vi.stubEnv(RATIO_ENV, raw);
   return withLossAversion(PRODUCTION_STRENGTH, envRuntimeSettings().lossAversionRatio);
 }
 
-/** An entry 5 days past its last recall with a 3-day half-life: decay ~0.315 keeps every multiplier under the clamp. */
 function makeEntry(valence: EmotionalValence, content = `test memory with valence ${valence}`): MemoryEntry {
   const e = createMemory(content, {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -55,7 +49,6 @@ function makeEntry(valence: EmotionalValence, content = `test memory with valenc
   return e;
 }
 
-/** Strength of `valence` under the ratio the env var names, over the same entry at ratio 1.0. */
 function scaledOverBaseline(valence: EmotionalValence, raw: string): number {
   const e = makeEntry(valence);
   return calculateStrength(e, NOW, underEnv(raw)) / calculateStrength(e, NOW);
@@ -113,7 +106,6 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
     }
   });
 
-  // Number() is the parser, so whitespace, scientific notation and hex all count as numbers.
   describe('5b. env permissive parse semantics (Number() coercion)', () => {
     it('whitespace tolerated: " 0.5 " parses as 0.5', () => {
       expect(scaledOverBaseline('negative', ' 0.5 ')).toBeCloseTo(0.5, 6);
@@ -150,7 +142,6 @@ describe('EMOTIONAL_MULTIPLIERS defaults', () => {
 });
 
 describe('the CLI root reads the ratio into the store it builds', () => {
-  /** The strength a bad outcome leaves on an aged negative entry, applied through the CLI's context under `raw`. */
   async function strengthAfterBadOutcome(raw: string): Promise<number> {
     vi.stubEnv(RATIO_ENV, raw);
     const root = makeRoot('j5-root');
@@ -168,7 +159,6 @@ describe('the CLI root reads the ratio into the store it builds', () => {
     const scaled = await strengthAfterBadOutcome('0.5');
     const baseline = await strengthAfterBadOutcome('1.0');
     expect(baseline).toBeLessThan(1.0);
-    // The outcome scores on the real clock, so the two writes are ms apart; 4 places allow seconds of drift.
     expect(scaled / baseline).toBeCloseTo(0.5, 4);
   });
 });
@@ -182,7 +172,6 @@ describe('behavioral: env=0 ranking effect', () => {
     safeRmSync(root);
   });
 
-  /** Recall's strength for the `negative` variant after seeding `valences` scored under `rules`. */
   async function recalledNegative(at: string, valences: EmotionalValence[], rules: StrengthModel): Promise<number> {
     for (const valence of valences) {
       const e = makeEntry(valence, `shared ranking keyword variant ${valence} test`);
@@ -198,7 +187,6 @@ describe('behavioral: env=0 ranking effect', () => {
   }
 
   it('9. env=0.5 (the previous floor) reduces error-tagged memory strength vs default', async () => {
-    // Recall returns the strength stored at write time, so the ratio shows in what the write scored.
     const negStrength = await recalledNegative(root, ['positive', 'negative', 'critical', 'neutral'], underEnv('0.5'));
     expect(negStrength).toBeGreaterThan(0.05);
     const root2 = makeRoot('j5-behavioral-baseline');

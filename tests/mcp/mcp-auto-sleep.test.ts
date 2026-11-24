@@ -1,4 +1,3 @@
-// MCP auto-sleep: a remember that lands while a sleep runs on the same store must not start a second one.
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,7 +20,6 @@ afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
 });
 
-/** A remember through `host`, whose callers hold the stores with a sleep in flight. */
 function remember(host: McpHost<CliStore>, hippoRoot: string, text: string) {
   return host.runFrame(new AbortController().signal, (contextFor) =>
     handleMcpRequest(
@@ -36,7 +34,6 @@ describe('MCP auto-sleep', () => {
     const root = makeRoot('mcp-autosleep');
     roots.push(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    // A sleep sends each new episodic memory to fact extraction, so holding that reply keeps the sleep running.
     const sent: string[] = [];
     let release = (): void => undefined;
     const held = new Promise<void>((resolve) => {
@@ -68,7 +65,6 @@ describe('MCP auto-sleep', () => {
     const root = makeRoot('mcp-autosleep-scope');
     roots.push(root);
     writeFileSync(join(root, 'config.json'), JSON.stringify({ autoSleep: { enabled: true, threshold: 1 } }));
-    // Every open on a session goes through its SESSION_OPEN method, so its `this` names the session that made it.
     const sessions: RequestStores[] = [];
     const sessionOpen = RequestStores.prototype[SESSION_OPEN];
     const opens = vi.spyOn(RequestStores.prototype, SESSION_OPEN).mockImplementation(function (
@@ -93,7 +89,6 @@ describe('MCP auto-sleep', () => {
     const frame = sessions[0];
     await vi.waitFor(() => expect(sleepRuns(root)).toBe(1));
     opens.mockRestore();
-    // One episodic memory is one extraction call; no later LLM pass has the facts or summaries it needs.
     expect(seen).toHaveLength(1);
     expect(frame?.closed).toBe(true);
     for (const s of seen) {
@@ -135,7 +130,6 @@ describe('MCP auto-sleep and the store claim', () => {
     return root;
   }
 
-  /** How many times a sleep reached for the store's claim, read from the lock it takes on the folder. */
   function claimsAsked(takes: MockInstance<typeof fileLock.takeFileLock>): number {
     return takes.mock.calls.filter(([file]) => file.endsWith('sleep.lock.db')).length;
   }
@@ -149,7 +143,6 @@ describe('MCP auto-sleep and the store claim', () => {
     const host = cliStdioHost();
 
     try {
-      // Ten seconds apart, all inside the minute after the first refusal.
       for (const second of ['00', '10', '20', '30', '40']) {
         vi.stubEnv('HIPPO_FAKE_NOW', `2026-06-01T12:00:${second}.000Z`);
         await remember(host, root, `alice reviewed change ${second} to the deploy`);
@@ -160,7 +153,6 @@ describe('MCP auto-sleep and the store claim', () => {
       expect(skipped.mock.calls.filter(([message]) => message.includes('already running'))).toHaveLength(1);
       expect(sleepRuns(root)).toBe(0);
     } finally {
-      // The folder cannot be removed while the lock file is open.
       rival.lock.release();
     }
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:01:01.000Z');

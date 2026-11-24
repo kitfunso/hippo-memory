@@ -1,4 +1,3 @@
-// Pins the whole settings.json the Claude Code installer leaves behind, from a legacy file and from nothing, so splitting installJsonHooks cannot reorder or drop an entry.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,13 +22,11 @@ afterEach(() => {
   env.cleanup();
 });
 
-/** Settings with the fake home folded to `~` and separators unified, so the shape reads the same on every OS. */
 function settingsAsWritten(file: string): string {
   const raw = fs.readFileSync(file, 'utf8');
   return raw.split(JSON.stringify(env.home).slice(1, -1)).join('~').replace(/\\\\/g, '/');
 }
 
-/** Every JSON string in a hooks file that runs hippo, whatever key holds it, so a new hook form is covered unnamed. */
 function hippoCommandsIn(file: string): string[] {
   const strings = [...fs.readFileSync(file, 'utf8').matchAll(/"(?:[^"\\]|\\.)*"/g)].map((m) =>
     String(JSON.parse(m[0])),
@@ -37,7 +34,6 @@ function hippoCommandsIn(file: string): string[] {
   return strings.filter((text) => /^hippo(\.cmd)? /.test(text));
 }
 
-/** The hippo lines the plugin's exec-form hooks run: scripts/hook.mjs starts `hippo` with the args after the script. */
 function pluginHippoLines(file: string): string[] {
   // SAFETY: the plugin's hooks.json is a checked-in file; claude-code-plugin-hooks.test.ts fails if its shape differs.
   const { hooks } = JSON.parse(fs.readFileSync(file, 'utf8')) as {
@@ -48,7 +44,6 @@ function pluginHippoLines(file: string): string[] {
   );
 }
 
-/** A hook line as argv: cut at the first shell operator, then split on spaces outside quotes. */
 function hookArgv(line: string): string[] {
   const command = line.split(/\s(?:2>|\|\||&&|<<<)/)[0];
   return [...command.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]);

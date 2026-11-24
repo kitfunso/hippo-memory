@@ -1,5 +1,3 @@
-// No module holds state keyed by a store or a server: each server owns its key checks and local key,
-// the scrypt bound is the one process-wide limit, and a store's reopen rides on the store itself.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { insertApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { KeyVerifier } from '../../src/surface/server/api-key.js';
@@ -87,7 +85,6 @@ describe('the scrypt bound', () => {
       });
     const charged = (): void => undefined;
     const [first, second] = [new KeyVerifier(), new KeyVerifier()];
-    // Distinct key ids and addresses, so only the process's two-derivation cap can hold the third.
     const one = first.boundFor('10.0.0.1', charged)('hk_state_one', held('hk_state_one'));
     const two = second.boundFor('10.0.0.2', charged)('hk_state_two', held('hk_state_two'));
     const three = first.boundFor('10.0.0.3', charged)('hk_state_three', held('hk_state_three'));
@@ -128,7 +125,6 @@ describe('inSqliteSession', () => {
   });
 });
 
-// A marker is an own property: a store made with Object.create over a marked one is the caller's, not the marked store.
 describe('a store decorated with Object.create', () => {
   it('keeps its methods and groups through storeForRequest when it decorates a worker store', async () => {
     const worker = workerSqliteStore(root('decorated-worker'));

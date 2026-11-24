@@ -1,6 +1,3 @@
-// A store with the four required groups and no optional one still remembers, recalls in every mode and
-// builds context: with no vectors each search ranks by BM25, and none of them warns. An embedding provider is
-// live, so only the store's missing vectors group keeps the vector arm off.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { contextGet, remember, retrieve } from '../../src/api/index.js';

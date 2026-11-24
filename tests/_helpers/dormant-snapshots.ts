@@ -1,4 +1,3 @@
-// Every dormant snapshot of a tenant, for tests that check what a whole store holds; production reads by id or origin.
 import type { DatabaseSyncLike } from '../../src/db/sqlite.js';
 import { dormantSnapshotsByIds } from '../../src/store/sqlite/dormant/dormant-rows.js';
 import type { DormantSnapshot } from '../../src/base/ports/store/types.js';

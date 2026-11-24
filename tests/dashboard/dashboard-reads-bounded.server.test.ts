@@ -1,5 +1,3 @@
-// Each dashboard read hands JavaScript the same rows on a tenant five times larger: counts come from SQL aggregates, a
-// page from one sorted LIMIT, the scatter from a fixed grid past its point cap.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -12,7 +10,6 @@ import { dashboardOf, embed, isoAgo, makeStore, NOW, type TmpStore } from '../_h
 
 const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace] as const;
 const BASE_ROWS = 100;
-// 4,100 alpha rows, past the scatter's 4,000 point cap, so both sizes draw the grid.
 const FIRST_COPIES = 41;
 const FIVE_TIMES = FIRST_COPIES * 5;
 
@@ -42,7 +39,6 @@ function baseRows(): MemoryEntry[] {
   }));
 }
 
-/** Copies every base alpha row until the project holds `copies` of each, as raw rows with fresh ids. */
 function growAlphaTo(root: string, copies: number): void {
   const db = openHippoDb(root);
   try {
@@ -59,7 +55,6 @@ function growAlphaTo(root: string, copies: number): void {
   }
 }
 
-/** Rows each read handed JavaScript, keyed by read. */
 async function rowsReadPerRead(): Promise<Record<string, number>> {
   const { reads, clock } = dashboardOf(store.hippoRoot, () => NOW);
   try {

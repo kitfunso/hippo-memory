@@ -1,8 +1,3 @@
-/**
- * Embedding vectors in the `memory_vectors` table: one Float32 BLOB per memory id, plus the
- * one-time import of the old JSON index.
- */
-
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -13,16 +8,10 @@ import { tryParseJson } from '../base/util/json.js';
 import { cachedStatement } from './statement-cache.js';
 import { META_KEY } from './meta.js';
 
-/** Legacy whole-file index; imported once into `memory_vectors`, then kept beside the store as a
- * renamed backup. */
 const LEGACY_EMBEDDINGS_FILE = 'embeddings.json';
 export const EMBEDDING_MODEL_META_KEY = META_KEY.embeddingModel;
-// Never equal to a real index identity, so the next embed run treats it as a model change and
-// rebuilds every vector.
 const QUARANTINED_INDEX_IDENTITY = 'quarantined-corrupt-index';
 
-// No FK to memories: a vector may outlive its row until `hippo embed` prunes it, and the trigger
-// covers deletes.
 export const MEMORY_VECTORS_DDL = `
   CREATE TABLE IF NOT EXISTS memory_vectors (
     memory_id TEXT PRIMARY KEY,
@@ -65,8 +54,6 @@ export function upsertVectors(
   return written;
 }
 
-// A TEMP table: only the handle that made it sees it, and it goes with that handle, so a crash
-// leaves nothing staged.
 const STAGED_VECTORS_DDL =
   'CREATE TEMP TABLE IF NOT EXISTS staged_vectors (memory_id TEXT PRIMARY KEY, dim INTEGER NOT NULL, vector BLOB ' +
   'NOT NULL)';
@@ -118,7 +105,6 @@ export function replaceVectorsWithStaged(db: DatabaseSyncLike, model: string): v
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 export interface VectorCounts {
   readonly vectors: number;
-  /** Vectors whose memory row still exists. */
   readonly embedded: number;
 }
 
@@ -146,7 +132,6 @@ export function deleteOrphanVectors(db: DatabaseSyncLike): number {
 // Uint8Array.
 type StoredVectorRow = { memory_id: string; vector: Uint8Array };
 
-// One read behind the copied and the viewed shape, so the two can never return different rows.
 function eachStoredVector(
   db: DatabaseSyncLike,
   ids: readonly string[] | undefined,
@@ -221,10 +206,6 @@ function stamp(): string {
 // would fail a copy too.
 const RENAME_BLOCKED_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
 
-/**
- * Rename `fp` to `aside`; a rename blocked by an open handle falls back to a copy, so the bytes are
- * kept either way.
- */
 function moveAside(fp: string, aside: string): boolean {
   try {
     fs.renameSync(fp, aside);
@@ -241,8 +222,6 @@ function moveAside(fp: string, aside: string): boolean {
     try {
       fs.rmSync(fp, { force: true });
     } catch (rmErr) {
-      // The original stays for the next open to retry, so a copy left beside it would pile up one
-      // per open.
       fs.rmSync(aside, { force: true });
       throw rmErr;
     }
@@ -250,10 +229,7 @@ function moveAside(fp: string, aside: string): boolean {
   }
 }
 
-// The old writer only wrote a plain object of id to number[]; any other shape is corrupt, and
-// non-numeric entries are dropped.
 function parseLegacyIndex(raw: string): Map<string, number[]> | null {
-  // Text that is not JSON reads as corrupt: the caller quarantines the file and logs it.
   const parsed: unknown = tryParseJson(raw);
   if (!(parsed instanceof Object) || Array.isArray(parsed)) return null;
   const index = new Map<string, number[]>();
@@ -269,7 +245,6 @@ function parseLegacyIndex(raw: string): Map<string, number[]> | null {
  */
 export function importLegacyEmbeddingIndex(db: DatabaseSyncLike, hippoRoot: string): void {
   const fp = path.join(hippoRoot, LEGACY_EMBEDDINGS_FILE);
-  // A stat is cheaper than the failed read this open would otherwise make.
   if (!fs.existsSync(fp)) return;
   let raw: string;
   try {

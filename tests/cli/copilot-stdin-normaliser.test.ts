@@ -1,4 +1,3 @@
-// normalizeHookPayload gives every hook reader the snake_case keys it looks up, from a Copilot payload, and leaves Claude Code's alone.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it, expect } from 'vitest';
@@ -40,7 +39,6 @@ function deliveryEvent(stdinText: string | undefined, runtime?: DeliveryRuntime)
 }
 
 describe('normalizeHookPayload on Copilot camelCase payloads', () => {
-  // Payloads from docs.github.com/en/copilot/reference/hooks-reference, "Hook event input payloads", camelCase format.
   it('maps postToolUseFailure fields and parses the toolArgs JSON string (GH hooks reference and the use-hooks guide sample)', () => {
     expect(normalized(copilotPayload('postToolUseFailureBash', CWD))).toEqual({
       sessionId: 'copilot-sess-1',
@@ -109,7 +107,6 @@ describe('normalizeHookPayload on Copilot camelCase payloads', () => {
 });
 
 describe('normalizeHookPayload leaves other payloads untouched', () => {
-  // Five real Claude Code PostCompact payloads, the same fixture compaction-items.test.ts reads, plus a PostToolUseFailure with its error string.
   it('returns each Claude Code payload byte for byte', () => {
     const lines = fs.readFileSync(CLAUDE_FIXTURE, 'utf8').split('\n').filter(Boolean);
     expect(lines).toHaveLength(5);
@@ -155,7 +152,6 @@ describe('every payload reader sees session_id and the copilot runtime', () => {
     const camel = deliveryEvent(normalizeHookPayload(copilotPayload('sessionStart', CWD)), 'copilot');
     expect(camel).toMatchObject({ sessionId: 'copilot-sess-1', sessionState: 'payload', runtime: 'copilot' });
     const snake = copilotPayload('SessionStart', CWD);
-    // VS Code sends hook_event_name, so without the flag the recorder would book a Copilot call as Claude Code.
     expect(deliveryEvent(snake).runtime).toBe('claude-code');
     expect(deliveryEvent(snake, 'copilot')).toMatchObject({ sessionId: 'vscode-sess-1', runtime: 'copilot' });
   });

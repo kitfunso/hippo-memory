@@ -1,4 +1,3 @@
-// VectorWrites answers: the same values, the same errors and no audit rows.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
@@ -60,7 +59,6 @@ function memory(id: string, tenantId: string, day: number, extra: Partial<Memory
   };
 }
 
-/** Ids interleave the tenants in byte order: mem_1 has a vector and a particle, mem_3 a vector under OLD, mem_4 a vector in tenant B. */
 function seedMemories(dir: string): void {
   const rows = [
     memory('mem_1', TENANT_A, 1),

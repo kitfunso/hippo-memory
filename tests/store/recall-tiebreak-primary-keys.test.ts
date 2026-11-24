@@ -1,19 +1,3 @@
-/**
- * T3 primary-key-preservation tests (docs/plans/2026-07-09-recall-determinism.md).
- *
- * The T2 rule for non-score-primary sort sites is: the site's true primary
- * key must keep winning; compareEntryIdentity (src/base/rank/compare.ts) is ONLY a
- * tail for when the primary key ties. Each site below gets a "primary
- * wins" case (real pipeline where practical) plus a "tail decides" tie
- * case (comparator-level where invoking the full pipeline to engineer an
- * exact tie would be disproportionate — sanctioned by the plan).
- *
- * Sites covered:
- *   - api.ts:833      DAG-substitution ordering (overflow-child count desc)
- *   - cli.ts:1167     --evc-adaptive ordering (recency desc)
- *   - graph-recall.ts:248  graph-hop ordering (hops asc, then score desc)
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -28,10 +12,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, sqliteStore, apiCtx } = sessionPerTest();
-
-// ---------------------------------------------------------------------------
-// api.ts:833 — DAG-substitution ordering (overflow-child count desc)
-// ---------------------------------------------------------------------------
 
 describe('api.ts:833 DAG substitution ordering', () => {
   function ctxFor(root: string, tenantId: string = 'default'): FullContext {
@@ -64,16 +44,6 @@ describe('api.ts:833 DAG substitution ordering', () => {
   });
 
   it('primary wins: the summary with MORE overflowing children is substituted, not the one with fewer', async () => {
-    // Every leaf under both topics tokenizes to the SAME 4-term bag ("alpha
-    // zulu topic event") — the numeric/letter suffix ("a-0", "b-3", ...) is
-    // stripped by tokenize()'s length>1 filter (hyphen splits it into two
-    // 1-char tokens). So all 9 leaves score EXACTLY equal under BM25; with
-    // limit=1 the single baseSlice winner is decided purely by our T2
-    // content-ascending tiebreak, i.e. deterministically "alpha zulu topic
-    // event a-0" (topic A's own leaf 0). That leaves topic A's overflow
-    // count at 2 (3 - 1) and topic B's at 6 (untouched) REGARDLESS of any
-    // scoring wobble — 6 > 2 always holds, so this isolates the overflow-
-    // count primary key from the tiebreak being tested elsewhere.
     const summaryA = makeSummary('topic A summary', { tags: ['dag-summary', 'topic:a'] });
     writeEntry(root, summaryA);
     for (let i = 0; i < 3; i++) {
@@ -98,22 +68,13 @@ describe('api.ts:833 DAG substitution ordering', () => {
       );
     }
 
-    // maxSub = max(1, ceil(limit * 0.3)) = 1 at limit=1, so only the WINNING
-    // (highest overflow count) summary is substituted — a clean single-slot
-    // assertion instead of inspecting relative order in a longer list.
     const r = await retrieve(ctxFor(root), { query: 'alpha zulu topic event', window: { limit: 1 } });
     const summaries = r.results.filter((it) => it.isSummary);
     expect(summaries.length).toBe(1);
-    expect(summaries[0].id).toBe(summaryB.id); // topic B (6 overflow) beats topic A (2 overflow)
+    expect(summaries[0].id).toBe(summaryB.id);
   });
 
   it('tail decides: equal overflow counts fall back to compareEntryIdentity (content ascending)', () => {
-    // Engineering an EXACT overflow-count tie end-to-end through recall()
-    // depends on which leaf wins baseSlice, which is itself governed by the
-    // same tiebreak under test — disproportionate to pin reliably. Per the
-    // plan's explicit allowance, test the api.ts:833 comparator expression
-    // directly at the sorted-array level (same expression, just inlined —
-    // api.ts does not export it).
     const parentA: EntryIdentity = { id: 'parent-zzz', content: 'zzz summary of topic zzz' };
     const parentB: EntryIdentity = { id: 'parent-aaa', content: 'aaa summary of topic aaa' };
     const overflowByParent = new Map<string, number>([
@@ -126,24 +87,11 @@ describe('api.ts:833 DAG substitution ordering', () => {
       const bc = overflowByParent.get(b.id) ?? 0;
       return bc !== ac ? bc - ac : compareEntryIdentity(a, b);
     });
-    // counts tie -> content ascending: 'aaa summary...' < 'zzz summary...'
     expect(eligibleParents.map((p) => p.id)).toEqual([parentB.id, parentA.id]);
   });
 });
 
-// ---------------------------------------------------------------------------
-// cli.ts:1167 — --evc-adaptive ordering (recency desc)
-// ---------------------------------------------------------------------------
-
 describe('cli.ts:1167 --evc-adaptive ordering', () => {
-  // cli.ts:1167's `onTopic.sort(...)` is a local closure inside `printRecall`
-  // (not exported — printRecall is CLI-internal), and a CLI-process spawn
-  // (execFileSync against bin/hippo.js) would run the COMPILED dist/cli.js,
-  // which this session must not rebuild (shared node_modules junction; the
-  // orchestrator builds after all executors land — see episode brief). So
-  // per the plan's explicit allowance, this is a sorted-array-level test of
-  // the exact comparator expression now at cli.ts:1167, re-declared here
-  // (not exported, to avoid widening cli.ts's public surface for a test).
   interface OnTopicRow {
     entry: { created: string; content: string; id: string };
     score: number;
@@ -165,7 +113,6 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
       entry: { created: '2026-01-01T00:00:00.000Z', content: 'aaa newer but lower score', id: 'id-newer' },
       score: 1,
     };
-    // Shuffle input order so the result isn't an accidental array-order no-op.
     expect(sortOnTopic([older, newer]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
     expect(sortOnTopic([newer, older]).map((r) => r.entry.id)).toEqual([newer.entry.id, older.entry.id]);
   });
@@ -180,19 +127,12 @@ describe('cli.ts:1167 --evc-adaptive ordering', () => {
       entry: { created: tiedTimestamp, content: 'apple lower pre-evc score', id: 'id-a' },
       score: 1,
     };
-    // Recency ties -> content ascending decides ('apple...' < 'zebra...'),
-    // NOT score (which would have put higherScore first) and not input order.
     expect(sortOnTopic([higherScore, lowerScore]).map((r) => r.entry.id)).toEqual([
       lowerScore.entry.id,
       higherScore.entry.id,
     ]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// graph-recall.ts:248 — graph-hop ordering (hops asc, then score desc, then
-// compareEntryIdentity tail)
-// ---------------------------------------------------------------------------
 
 describe('graph-recall.ts:248 graph-hop ordering', () => {
   function mem(home: string, tenant: string, text: string): MemoryEntry {
@@ -220,12 +160,6 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
   });
 
   it('primary wins (hop distance) and the tail decides same-hop ties', async () => {
-    // a (origin, base seed) --1hop--> b, c (tied score: same origin+hop under
-    // the score = originScore * (1 - HOP_DISCOUNT*hops) formula) --1hop from
-    // b--> d (2 hops from a, therefore strictly lower score than b/c under
-    // that SAME formula — hops and score can never disagree for one origin,
-    // which is exactly why this sort's real job is: same-hop ties broken by
-    // content, and hop-groups never interleave).
     const a = mem(home, T, 'origin alpha node for hop ordering test');
     const ea = ent(home, T, a, 'A');
 
@@ -250,9 +184,6 @@ describe('graph-recall.ts:248 graph-hop ordering', () => {
     });
 
     const ids = out.map((r) => r.entry.id);
-    // a (seed) first, then its hits in hitsByOrigin sort order: hop=1 group
-    // (b, c — tied score, content tail puts 'aaa...' before 'zzz...') BEFORE
-    // the hop=2 hit (d), regardless of any score magnitude.
     expect(ids).toEqual([a.id, b.id, c.id, d.id]);
   });
 });

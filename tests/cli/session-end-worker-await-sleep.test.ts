@@ -1,6 +1,3 @@
-// handleSessionEndWorker used to call handleSleep without awaiting it inside its
-// try/catch, so a sleep rejection became an unhandled promise rejection
-// that could crash the process before capture/close ran.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -27,12 +24,9 @@ describe('__session-end-worker awaits handleSleep before finishing', () => {
     dir = mkdtempSync(join(tmpdir(), 'hippo-worker-await-sleep-'));
     const env = withScratchEnv(dir);
 
-    // In process, so coverage sees the worker; a rejection it failed to catch would still fail the run.
     const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: dir, env });
     expect(init.status).toBe(0);
 
-    // Corrupt hippo.db so runSleep's DB open throws synchronously and
-    // fast — deterministic, and independent of any lock-timing behavior.
     writeFileSync(join(dir, 'hippo.db'), 'not a sqlite database, deliberately corrupted for this test');
 
     const logFile = join(dir, 'worker-await.log');
@@ -42,7 +36,6 @@ describe('__session-end-worker awaits handleSleep before finishing', () => {
       input: JSON.stringify({ hook_event_name: 'SessionEnd' }),
     });
 
-    // Pre-fix, an unhandled rejection kills the process non-zero; the fix exits clean.
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('Unhandled');
 
@@ -51,8 +44,6 @@ describe('__session-end-worker awaits handleSleep before finishing', () => {
     const skipCloseAt = log.indexOf('skip: no session_id');
     expect(sleepFailedAt).toBeGreaterThan(-1);
     expect(skipCloseAt).toBeGreaterThan(-1);
-    // Order proves capture + the snapshot-close step ran AFTER the awaited
-    // sleep rejected, not raced by a process killed mid-write.
     expect(skipCloseAt).toBeGreaterThan(sleepFailedAt);
   });
 });

@@ -1,4 +1,3 @@
-// Transcript text naming a network host never reaches the filesystem: existsSync on \\host opens an SMB connection.
 import * as fs from 'node:fs';
 import nodeFs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -26,7 +25,6 @@ beforeEach(() => {
   repo = fs.realpathSync.native(path.join(tmp, 'repo'));
   hippoRoot = path.join(repo, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  // A host-named probe answers false, so a broken guard fails the test without dialing out.
   vi.spyOn(nodeFs, 'existsSync').mockImplementation((p) => {
     probes.push(String(p));
     return HOST.test(String(p)) ? false : realExists(p);
@@ -42,12 +40,10 @@ afterEach(() => {
 
 const touched = (): string[] => probes.filter((p) => HOST.test(p));
 
-/** One session end on a fresh store: the line it logs and the digest it stores, '' for none. */
 async function end(finalText: string, edits: DigestEdit[] = [], cwd = repo) {
   fs.rmSync(hippoRoot, { recursive: true, force: true });
   initTestStore(hippoRoot);
   const store = hookStore(hippoRoot);
-  // Probes count from the session end itself, not the store set-up before it.
   probes.length = 0;
   const log: string[] = [];
   await recordSessionDigest(
@@ -72,7 +68,6 @@ const digest = async (finalText: string, edits: DigestEdit[] = []): Promise<stri
 describe('network paths in a digest', () => {
   it('still probes a local repo path, so the checks below are live', async () => {
     expect(await digest('', [{ filePath: path.join(repo, 'src', 'a.ts'), base: null }])).toBe('Changed: src/a.ts');
-    // Every module's existsSync is recorded; the digest's own probes walk the missing file up to its folder.
     expect(probes).toEqual(expect.arrayContaining([repo, path.join(repo, 'src', 'a.ts'), path.join(repo, 'src')]));
   });
 

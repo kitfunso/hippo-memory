@@ -1,4 +1,3 @@
-// The role ladder, and the rule that maps an IdP groups claim onto it.
 import { isJsonString, type JsonValue } from '../util/json.js';
 
 /** A stored role: 'member' is the editor, and the stored name stays. */
@@ -65,7 +64,6 @@ export function roleFromGroups(
 }
 
 function matched(held: readonly string[], groups: RoleGroups): Role | null {
-  // Plugin code may pass a non-array despite the type, which counts as an empty list.
   const hit = (list: readonly string[] | undefined): boolean =>
     Array.isArray(list) && list.some((g) => held.includes(g));
   if (hit(groups.admin)) return 'admin';

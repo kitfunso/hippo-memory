@@ -1,4 +1,3 @@
-// Port types that two or more groups, or the store itself, share.
 import type { AuditOp } from '../../records/audit-ops.js';
 import type { JsonObject } from '../../util/json.js';
 import type { MemoryEntry } from '../../memory/entry.js';
@@ -122,8 +121,6 @@ export interface AppendAuditOptions {
   actor: string; // 'cli' | 'api_key:hk_...' | 'system'
   op: AuditOp;
   targetId?: string;
-  // Opaque on purpose: appendAuditEvents only JSON.stringify's it wholesale and never reads a
-  // field, so no parsed contract is claimed.
   metadata?: unknown;
 }
 

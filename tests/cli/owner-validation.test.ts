@@ -1,7 +1,3 @@
-/**
- * Pure unit tests for validateOwner (B2 v1.12.6).
- */
-
 import { describe, it, expect } from 'vitest';
 import { validateOwner, isStrictOwnerEnv } from '../../src/surface/cli/owner-validation.js';
 

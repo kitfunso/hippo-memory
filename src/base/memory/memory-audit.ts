@@ -1,4 +1,3 @@
-// The memory-quality audit rules: pure functions of a row, so any store can be audited by them.
 import { canAutoDelete, isKeptForGood } from './keep-rules.js';
 import type { MemoryEntry } from './entry.js';
 import {
@@ -35,8 +34,6 @@ export interface AuditResult {
 
 export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue | null {
   const issue = classifyMemory(entry);
-  // Error means "auto-remove"; a pinned, raw, kept-for-good or object-backing row is never
-  // auto-removed, so it can only warn.
   if (issue?.severity === 'error' && (!canAutoDelete(entry) || backsObject)) {
     const why = entry.pinned
       ? 'pinned'
@@ -52,7 +49,6 @@ export function auditMemory(entry: MemoryEntry, backsObject = false): AuditIssue
 
 type Defect = Pick<AuditIssue, 'severity' | 'reason'>;
 
-/** Text this short is an error, not a weak memory. */
 const TRIVIAL_CHARS = 3;
 
 function classifyMemory(entry: MemoryEntry): AuditIssue | null {
@@ -167,7 +163,6 @@ function structured(entry: MemoryEntry): boolean {
   );
 }
 
-/** A parent that is gone says nothing about who wrote it, so it counts as a person's. */
 function fromAutomaticParents(
   entry: MemoryEntry,
   parents: ReadonlyMap<string, MemoryEntry>,
@@ -188,7 +183,6 @@ export function repairDefect(
   parents: ReadonlyMap<string, MemoryEntry>,
 ): RepairDefect | null {
   if (structured(entry) || !isAutomaticEntry(entry)) return null;
-  // Only a bundle header marks parts; a refined row keeps its lead line, so it is judged whole.
   if (!BUNDLE_HEADER.test(entry.content)) {
     const reason = storedDefect(entry.content);
     return reason === null

@@ -1,5 +1,3 @@
-// The graph extraction queue: the consolidated memories that wait for a graph rebuild, and the
-// watermark the sleep drain marks them by.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { errorMessage, log, errorFields } from '../../../base/util/log.js';
@@ -8,8 +6,6 @@ import { resolveConsolidatedSource } from './graph-writes.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-/** Enqueue a consolidated memory for later graph extraction; rejects a raw / missing /
- * cross-tenant memory (the DB trigger is the backstop). */
 function enqueueExtraction(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -17,8 +13,6 @@ function enqueueExtraction(
 ): GraphQueueItem {
   assertTenantId('enqueueExtraction', tenantId);
   const now = handleStamp(db);
-  // enqueue is memory-keyed (no source object), so a missing memory still throws (correct - you
-  // cannot enqueue a forgotten mirror); memoryId is non-null here by construction.
   const { sourceKind } = resolveConsolidatedSource(db, {
     tenantId,
     memoryId,
@@ -54,8 +48,6 @@ export function markGraphDirty(
   try {
     enqueueExtraction(db, tenantId, memoryId);
   } catch (err) {
-    // Logged (warn) so a SYSTEMATIC enqueue failure surfaces to operators, but swallowed so the
-    // already-committed object write is never rolled back.
     log.warn(
       `markGraphDirty: enqueue failed for tenant=${tenantId} memory=${memoryId}: ${errorMessage(err)}`,
       errorFields(err),

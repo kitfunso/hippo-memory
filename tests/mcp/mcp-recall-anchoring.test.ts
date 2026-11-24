@@ -1,21 +1,9 @@
-/**
- * J1 — MCP hippo_recall anchoringHint integration.
- *
- * Asserts the MCP handler:
- * - Tracks per-(tenant, session) ring buffer keyed by buildSessionKey
- * - Renders `## Anchoring hint` block in text response when hint fires
- * - Bumps mcpSuppressionSummary.suppressedByInterference on R2
- * - Emits `recall_anchor_skipped_no_session` when sessionId absent
- * - Each case builds its own CallerState, so no ring carries over
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
-// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -64,8 +52,6 @@ describe('mcp hippo_recall anchoringHint', () => {
     home = makeRoot('mcp-j1');
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_ANCHORING', undefined);
-    // Seed a memory that matches the test query so MCP physics/hybrid
-    // returns a non-null top-1.
     for (let i = 0; i < 3; i++) {
       writeEntry(
         home,
@@ -91,8 +77,6 @@ describe('mcp hippo_recall anchoringHint', () => {
       infra: testInfra(),
       callers: createCallerState(),
     });
-    // Three recalls with DIFFERENT queries on the same session — same top
-    // memory should win each time and trigger R2 on the 3rd.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);
     const res3 = await callTool(3, 'hippo_recall', { query: 'frobnicate quux yet another', session_id: 'sess1' }, ctx);
@@ -100,11 +84,6 @@ describe('mcp hippo_recall anchoringHint', () => {
     expect(text).toContain('## Anchoring hint');
     expect(text).toContain('[anchored_on:');
     expect(countAuditOps(home, 'recall_anchor_detected_memory_dominance')).toBeGreaterThanOrEqual(1);
-    // Plan v3 Acceptance §6: suppressedByInterference must bump on ALL THREE
-    // user-facing surfaces when R2 fires. MCP's WYSIATI line surfaces the
-    // mcpSuppressionSummary counter — assert the bump is visible there.
-    // Independent-review-critic round 1 catch: prior test docstring claimed
-    // this assertion but had no actual expect() — now backed.
     expect(text).toMatch(/suppressed by interference|interference/i);
   });
 
@@ -155,7 +134,6 @@ describe('mcp hippo_recall anchoringHint', () => {
       infra: testInfra(),
       callers: createCallerState(),
     });
-    // Repeat 3 distinct queries — would normally fire R2.
     await callTool(1, 'hippo_recall', { query: 'frobnicate baz quux', session_id: 'sess1' }, ctx);
     await callTool(2, 'hippo_recall', { query: 'frobnicate baz different words', session_id: 'sess1' }, ctx);
     const res3 = await callTool(3, 'hippo_recall', { query: 'frobnicate quux yet another', session_id: 'sess1' }, ctx);

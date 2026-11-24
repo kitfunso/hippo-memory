@@ -1,12 +1,9 @@
-// ALL_TENANTS is a symbol, which postMessage cannot copy to a store worker, so a job sends null in
-// its place with where it sat, and the worker puts it back.
 import { ALL_TENANTS } from '../../../base/util/tenant.js';
 
 /** An argument's index, and the property of that argument ALL_TENANTS sat in, or null when it
  * was the argument. */
 export type TenantMark = readonly [number, string | null];
 
-/** A job's arguments as postMessage can copy them, and where each ALL_TENANTS sat. */
 interface MarkedArgs {
   readonly args: readonly unknown[];
   readonly allTenants: readonly TenantMark[];

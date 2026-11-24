@@ -1,4 +1,3 @@
-// A viewer's MCP context reads and is refused every write tool before it runs; every tool is classed as read or write.
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import { VIEWER_REFUSAL } from '../../src/server.js';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';

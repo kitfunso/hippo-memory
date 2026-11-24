@@ -1,4 +1,3 @@
-// Which stores a context call reaches and what it may spend.
 import type { StrengthModel } from '../../base/memory/strength.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -26,21 +25,18 @@ import type { AmbientRecallRequest } from '../../base/ports/store/context-reads.
 
 /** One store contextGet reads rows from: its base search and its context reads. */
 export interface ContextSource {
-  /** Sessions is read only for the unfinished handoff, where its absence means none. */
   readonly store: StoreWith<never, 'sessions'>;
   readonly reads: ContextReads;
 }
 
 /** What contextGet resolved from opts and config before it read a row. */
 export interface ContextPlan {
-  /** The served store, else hippo.db under the root. */
   local: ContextSource;
   pinnedOnly: boolean;
   limit: number;
   includeRecent: number;
   activeScope: string;
   exactScope: string | undefined;
-  /** The caller's personal scope, from its authenticated owner; the default deny admits it. */
   ownScope: string | undefined;
   query: string;
   hasLocal: boolean;
@@ -56,13 +52,10 @@ export interface ContextPlan {
   promptRecallPending: boolean;
   cost: ContextCost | undefined;
   price: (entry: MemoryEntry, isGlobal: boolean, promptRecall?: boolean) => number;
-  /** Whether a row prints as the person's own rule for this caller. */
   isUserRule: (entry: MemoryEntry, isGlobal: boolean) => boolean;
   obs: DeliveryObserver | undefined;
-  /** The instant the whole read scores strength at, by the model its Context runs under. */
   now: Date;
   strength: StrengthModel;
-  /** The rank switches the root runs under; absent, production ranking. */
   switches: EvalSwitches | undefined;
 }
 
@@ -77,7 +70,6 @@ export function globalInReach(ctx: Context): GlobalInReach {
   return global;
 }
 
-// The plan's query when the caller gave none: context then ranks by strength instead of searching.
 export const NO_QUERY = '*';
 
 /** A store's base search and context reads, both required on the port. */
@@ -85,18 +77,13 @@ export function sourceOf(store: StoreWith<never, 'sessions'>): ContextSource {
   return { store, reads: store.contextReads };
 }
 
-/** Which stores this read can draw on, and what kind the primary one is. */
 function storesInReach(ctx: Context, opts: ContextOptions) {
-  // No reach means an integrator's own store: one project, no global store beside it.
   const reach: ContextReach = ctx.reach ?? {
     hasLocal: true,
     isGlobal: false,
     shared: ctx.config.sharedStore,
   };
-  // The store's own flag counts too, so no surface can read a shared store as its owner.
   const sharedStore = opts.sharedStore === true || reach.shared;
-  // A store serving many people is not its operator's, so the operator's own global store stays
-  // out; the root sets `global` only beside hippo.db.
   const hasGlobal = !sharedStore && reach.global !== undefined;
   // Global memories do not establish a project boundary for task state.
   return {
@@ -112,8 +99,6 @@ export function globalSource(ctx: Context): ContextSource {
   return sourceOf(globalStoreInReach(ctx));
 }
 
-/** Prices one entry against the budget: the caller's cost model when it gave one, else a token
- * estimate. */
 function entryPricer(
   cost: ContextOptions['cost'],
   currentProject: ContextPlan['currentProject'],
@@ -150,16 +135,11 @@ function reachFields(
   };
 }
 
-// opts.scope is only the tag boost, opts.exactScope the envelope request; other-project memories
-// are excluded unless the caller asks for them (crossProject) or isolation is disabled.
 function readsCrossProject(ctx: Context, opts: ContextOptions, sharedStore: boolean): boolean {
   const isolationEnabled = ctx.config.contextProjectIsolation !== false;
-  // A caller with no project reads every row as its own; on a shared store those rows are other
-  // people's.
   if (sharedStore && projectId(opts.currentProject).trim() === '') {
     throw new BadRequestError("a shared store needs the caller's project");
   }
-  // A laptop config copied onto a team store must not open every member's rows to every prompt.
   if (sharedStore && !isolationEnabled) {
     log.once(
       'context-isolation-ignored',
@@ -177,8 +157,6 @@ export function planContext(ctx: Context, opts: ContextOptions, local: ContextSo
   const config = ctx.config;
   const currentProject = opts.currentProject;
   const includeCrossProject = readsCrossProject(ctx, opts, reach.sharedStore);
-  // Decided before the ambient loads so the pinned-only FTS candidate query can share their
-  // connection. A blank prompt counts as a prompt with no matches, so its pinned block is the same.
   const promptRecallPending =
     pinnedOnly && opts.prompt !== undefined && config.pinnedInject.promptRecall === true;
   const cost = opts.cost;
@@ -219,7 +197,6 @@ export function promptRecallRequest(
   plan: ContextPlan,
 ): AmbientRecallRequest | undefined {
   const { pinnedInject } = plan.config;
-  // Optional: a config built in code before this key existed has none, and reads as no list.
   const excludeTags = pinnedInject.excludeTags ?? [];
   const promptRecallTerms =
     plan.promptRecallPending && pinnedInject.enabled ? promptSearchTerms(opts.prompt ?? '') : [];
@@ -258,7 +235,6 @@ export function openBlockBudget(plan: ContextPlan, opts: ContextOptions, budget:
             cross: plan.includeCrossProject,
             promptRecall: promptRecallPending,
             ambient: !pinnedOnly && config.ambient.enabled,
-            // Unknown until the rows load; userRuleReserve pays it then.
             userRule: false,
           }),
       )

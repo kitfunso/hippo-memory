@@ -1,4 +1,3 @@
-// Schema v54 adds nullable owner and project columns, the session binding table and retry ids, and never raises the floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -45,7 +44,6 @@ function indexSql(db: DatabaseSyncLike, name: string): string | undefined {
   )?.sql;
 }
 
-/** Puts the store back to its v53 shape, keeping every row, with the floor at `floor`; `alsoRun` changes it further before the close. */
 function rewindToV53(floor: string, alsoRun?: (db: DatabaseSyncLike) => void): void {
   withDb((db) => {
     for (const idx of [...OWNER_INDEXES, ...Object.values(REQUEST_INDEXES)]) db.exec(`DROP INDEX IF EXISTS ${idx}`);

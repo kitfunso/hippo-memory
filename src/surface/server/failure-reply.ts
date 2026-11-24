@@ -1,5 +1,3 @@
-// An Error cannot cross to a child process or a worker thread, so a failure travels as its message,
-// its stack and whether the store was busy, and the server rebuilds the error from them.
 import { isStoreBusy, StoreBusyError } from '../../base/ports/store.js';
 import { errorMessage } from '../../base/util/log.js';
 

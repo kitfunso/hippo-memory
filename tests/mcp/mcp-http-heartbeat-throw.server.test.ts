@@ -40,7 +40,6 @@ describe('SSE heartbeat when its tick throws', () => {
         signal: ac.signal,
       });
       expect(res.status).toBe(200);
-      // An outage tick logs a warn inside the verdict handler; a throwing log write makes that handler reject.
       const real = process.stderr.write.bind(process.stderr);
       const seen: string[] = [];
       // SAFETY: the stub takes the one chunk argument every log write passes; no caller here uses encoding or callback.

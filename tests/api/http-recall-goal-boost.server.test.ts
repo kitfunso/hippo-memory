@@ -1,11 +1,3 @@
-/**
- * v1.7.4 -- HTTP /v1/memories accepts `session_id` query param. Validation:
- * 256-char cap mirrors fresh_tail_session_id; over-cap rejects with 400.
- * When set and the (tenant, session) has active goals, api.recall applies
- * the dlPFC goal-stack boost on its primary BM25 band, observable via
- * goal_recall_log writes.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { remember } from '../../src/api/index.js';
@@ -54,7 +46,6 @@ describe('HTTP /v1/memories session_id', () => {
     const db = openHippoDb(home);
     try {
       const count = countGoalRecallLogRows(db, sessionId);
-      // One tagged memory and one goal; the log keeps one row per (memory, goal).
       expect(count).toBe(1);
     } finally {
       closeHippoDb(db);

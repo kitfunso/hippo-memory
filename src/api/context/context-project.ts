@@ -1,4 +1,3 @@
-// Which project a context read is for, decided from the facts of the request.
 import { dirname, resolve } from 'node:path';
 import { assertCallerProject, type ProjectRef } from '../../base/scope/project-identity.js';
 import { sharedStoreOf, type Context } from '../types.js';

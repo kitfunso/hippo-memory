@@ -1,6 +1,3 @@
-// The window fixture: 1,600 seeded memories whose ten targets sit past row 200 of the BM25 order and inside row 1,000.
-// Run alone, it builds the fixture and checks that placement; no arm runs and no embedding is needed.
-
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -26,7 +23,6 @@ const GOOD_OUTCOMES = 3;
 /** Both terms sit in every row, so the BM25 order comes from term count and row length alone. */
 export const WINDOW_QUERY = 'turbine gasket';
 
-// Filler words: none is a query term, and none is a word hippo reads as a signal.
 const VOCAB = (
   'harbor ledger meadow lantern quarry orchard saddle anchor copper willow granite ribbon candle pebble thistle barley ' +
   'walnut feather compass shutter trellis kettle basket mortar plank gravel timber canvas marble pillar lattice ferry ' +
@@ -37,7 +33,6 @@ const VOCAB = (
 
 interface Goal { readonly tag: string; readonly sessionId: string }
 
-// One goal per session, so each goal query boosts its own target and not the other's.
 const GOALS: readonly Goal[] = [
   { tag: 'wfxgoal1', sessionId: 'wfx-session-1' },
   { tag: 'wfxgoal2', sessionId: 'wfx-session-2' },
@@ -45,7 +40,6 @@ const GOALS: readonly Goal[] = [
 
 interface Target {
   readonly id: string;
-  /** A token no other row holds, so a query can name this target without ranking by it. */
   readonly marker: string;
   readonly lift: 'pinned' | 'goal' | 'outcomes' | 'none';
   readonly goal?: Goal;
@@ -140,7 +134,6 @@ export function buildWindowFixture(home: string): Promise<WindowStore> {
   return inSandbox(home, home, async () => {
     const tenantId = resolveTenantId({});
     const baseHalfLifeDays = loadConfig(root).defaultHalfLifeDays;
-    // One stamp for every row, so age lifts none of them over another.
     const stamp = new Date().toISOString();
     for (const row of windowRows()) {
       const entry = createMemory(row.content, { baseHalfLifeDays, tenantId, tags: row.tags, pinned: row.pinned });
@@ -159,7 +152,6 @@ export interface Placement { readonly marker: string; readonly lift: Target['lif
 
 /** Each target's row in the SQL BM25 order every arm loads from. Throws when one is outside rows 201 to 1,000. */
 export function checkPlacement(store: WindowStore): Placement[] {
-  // The 200-row and 1,000-row loads are prefixes of this order: same ORDER BY, a smaller LIMIT.
   const order = loadRecallSearchEntries(store.root, WINDOW_QUERY, WINDOW_ROW_COUNT + 1, store.tenantId, undefined, 'exact', false);
   if (order.length !== WINDOW_ROW_COUNT) throw new Error(`${order.length} rows match the window query, not ${WINDOW_ROW_COUNT}`);
   const placements = TARGETS.map((t): Placement => ({ marker: t.marker, lift: t.lift, row: order.findIndex((e) => e.id === t.id) + 1 }));

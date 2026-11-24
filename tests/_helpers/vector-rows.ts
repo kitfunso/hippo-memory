@@ -1,4 +1,3 @@
-// Memories with stored vectors, written in one transaction through the store's own row writers, and seeded vectors.
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
 import { EMBEDDING_MODEL_META_KEY, upsertVectors } from '../../src/db/vector-store.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';

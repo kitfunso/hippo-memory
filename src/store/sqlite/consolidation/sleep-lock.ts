@@ -1,5 +1,3 @@
-// A sleep's claim on the store: a file lock beside hippo.db that every process on the folder honours,
-// freed by the operating system when its holder dies, so no age or pid check can break a live sleep.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { takeFileLock, type FileLock } from '../../../host/file-lock.js';
@@ -9,12 +7,9 @@ import { answered } from '../runtime/bound.js';
 
 const SLEEP_LOCK_FILE = 'sleep.lock.db';
 
-// A folder that cannot keep a lock warns once for the process, not once per sleep.
 const warnedRoots = new Set<string>();
 
-/** When the holder took the claim: the mtime it stamped on the lock file. */
 function claimedSince(file: string): string {
-  // A file gone under a live holder, or one that cannot be read, has no stamp left, so the time is now.
   try {
     return (fs.statSync(file, { throwIfNoEntry: false })?.mtime ?? new Date()).toISOString();
   } catch (err) {
@@ -54,7 +49,6 @@ function warnUnusable(hippoRoot: string, cause: unknown): void {
 export function sleepClaim(
   hippoRoot: string,
 ): Required<Pick<Consolidation, 'claimSleep' | 'releaseSleep'>> {
-  // Joined at the claim, so a store built on a root that is no path still opens.
   const lockFile = (): string => path.join(hippoRoot, SLEEP_LOCK_FILE);
   let held: FileLock | null = null;
   return {

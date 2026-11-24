@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-/**
- * LC2-E1 — seeded, question-level, stratified-by-question_type split.
- *
- * 60/40 train/held-out over all 500 questions of longmemeval_s_cleaned.json
- * (pre-reg: seed 42, counts multi-session 133, temporal-reasoning 133,
- * knowledge-update 78, single-session-user 70, single-session-assistant 56,
- * single-session-preference 30 -> exactly 300 train / 200 held-out via
- * largest-remainder apportionment per type, see common.mjs
- * apportionLargestRemainder).
- *
- * Determinism: within each question_type bucket, questions are shuffled by
- * a seeded PRNG namespaced 'split'+type, then the first N (per apportionment)
- * go to train. No Math.random.
- *
- * Usage:
- *   node split.mjs --data <path> [--out <path>] [--seed 42] [--train-fraction 0.6]
- */
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CONFIG } from './config.mjs';
@@ -60,7 +43,7 @@ export function computeSplit(questions, opts = {}) {
   const perType = {};
   for (const [type, ids] of byType) {
     const rand = rngFor('split', String(seed), type);
-    const shuffled = seededShuffle(rand, ids.slice().sort()); // sort first: input order must not matter
+    const shuffled = seededShuffle(rand, ids.slice().sort());
     const nTrain = trainTargetByType[type] ?? 0;
     const trainIds = shuffled.slice(0, nTrain);
     const heldoutIds = shuffled.slice(nTrain);

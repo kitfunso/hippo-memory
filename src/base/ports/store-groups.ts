@@ -1,6 +1,3 @@
-// The optional groups only feature verbs reach: connectors, the records kept beside memories, and
-// review. A store without them still serves recall, remember and context; each surface leaves out
-// what needs them when it binds.
 import type { ConnectorEvents, ConnectorWrites } from './store/connectors.js';
 import type { Quarantine } from './store/quarantine.js';
 import type { Objects } from './store/objects.js';

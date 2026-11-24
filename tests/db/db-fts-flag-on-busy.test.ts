@@ -1,4 +1,3 @@
-// Only a missing fts5 module may mark full-text search unavailable; a busy or locked open must leave the flag alone.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { getMeta } from '../../src/db/meta.js';
@@ -10,7 +9,6 @@ const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; this cast mirrors src/db/sqlite.ts's boundary.
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: new (path: string) => DatabaseSyncLike };
 
-/** A migrated in-memory store with the flag at '1'; `failFtsWith` makes the next full-text DDL throw, and a deleted meta default forces the slow open path. */
 function healthyStore() {
   const raw = new DatabaseSync(':memory:');
   let message: string | null = null;

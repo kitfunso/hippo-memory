@@ -1,4 +1,3 @@
-// dedupeExtracted and withDagChildren do one map step per result, so a large result list costs a linear count of reads.
 import { describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { dedupeExtracted, withDagChildren } from '../../src/domain/search/finalize.js';
@@ -11,7 +10,6 @@ function result(entry: MemoryEntry, score = 1): SearchResult {
   return { entry, score, bm25: 0, cosine: 0, tokens: 1 };
 }
 
-/** An entry whose id reads are counted, so a scan over earlier results shows up as reads. */
 function countedEntry(id: string, counter: { reads: number }, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const base = { ...createMemory(`row ${id}`, { baseHalfLifeDays: 30 }), ...extra };
   return Object.defineProperty(base, 'id', {
@@ -44,7 +42,6 @@ describe('dedupeExtracted', () => {
     const counter = { reads: 0 };
     const scored: SearchResult[] = [];
     for (let i = 0; i < N; i++) scored.push(result(countedEntry(`src${i}`, counter)));
-    // Newest source first, so the source each fact drops is the one furthest from the front.
     for (let i = 0; i < N; i++) {
       scored.push(result(countedEntry(`fact${i}`, counter, { extractedFrom: `src${N - 1 - i}` })));
     }
@@ -53,7 +50,6 @@ describe('dedupeExtracted', () => {
 
     expect(out).toHaveLength(N);
     expect(out.every((r) => r.entry.extractedFrom !== undefined)).toBe(true);
-    // The scan this replaced read an id for every earlier result: about N * N / 2 reads here.
     expect(counter.reads).toBeLessThan(10 * N);
   });
 });

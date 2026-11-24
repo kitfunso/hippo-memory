@@ -1,5 +1,3 @@
-// The contract between a tool's adapter, which knows where its memory lives, and the sync, which
-// knows no tool.
 import type { Scope, ToolId } from '../../base/memory/agent-memory-tools.js';
 import type { Machine } from '../../base/util/agent-homes.js';
 import type { StoreWith } from '../../base/ports/store.js';
@@ -11,14 +9,10 @@ export interface AdapterContext extends Machine {
 }
 
 export interface MemoryItem {
-  /** A path inside the container with '/' separators, or `<heading slug>/<text hash>` in a
-   * single-file store; a part is `<path or heading slug>::<heading slug>/<text hash>`. */
   readonly key: string;
   readonly text: string;
   readonly updatedAt: number;
-  /** The note's frontmatter name, else its file name; the head of each part of a long note. */
   readonly title?: string;
-  /** A part of a long note that overlaps text the strict secret check flags in the whole note. */
   readonly flagged?: boolean;
 }
 
@@ -26,15 +20,10 @@ export interface MemoryItem {
 export interface Container {
   readonly scope: Scope;
   readonly path: string;
-  /** False when it exists but could not be read or failed its shape check, so nothing in it is
-   * set aside. */
   readonly readable: boolean;
   readonly items: readonly MemoryItem[];
-  /** Keys of items on disk that were not read (too big, not text, a failed read); their rows are
-   * left alone. */
   readonly skipped: readonly string[];
   readonly warnings: readonly string[];
-  /** Keys made from text, so an edit is matched by heading rather than by key. */
   readonly textKeyed: boolean;
 }
 
@@ -42,8 +31,6 @@ export interface Listing {
   readonly tool: ToolId;
   readonly home: string;
   readonly containers: readonly Container[];
-  /** Problems finding containers, such as a malformed index file; an unlisted container is left
-   * alone. */
   readonly warnings: readonly string[];
 }
 
@@ -58,15 +45,9 @@ export type ImportStore = StoreWith<'agentImport' | 'projectTags' | 'sharing' | 
 /** How a sync reaches each store it targets: the caller's, so the sync never names a store
  * adapter. */
 export interface ImportStores {
-  /** `root`'s store; a set `busyWaitMs` is how long its container writes wait on a locked store. */
   open(root: string, opts: { readonly busyWaitMs?: number }): ImportStore;
-  /** Whether a store has been created at `root`. */
   exists(root: string): boolean;
-  /** Creates the store at `root` with its folders. */
   create(root: string): Promise<void>;
-  /** An empty store in a scratch folder a dry run plans against; closing it deletes the folder. */
   standIn(): ImportStore;
-  /** Whether `err` is a store that stayed locked past its wait; the sync skips that store and
-   * goes on. */
   isBusy<E>(err: E): boolean;
 }

@@ -1,10 +1,3 @@
-/**
- * E3.3 graph-on-consolidated guard - schema v37 shape.
- * Docs: docs/plans/2026-06-01-e3-graph-guard.md
- *
- * Pins the 3 tables + 7 indexes + 6 guard triggers (INSERT and UPDATE per table).
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

@@ -4,7 +4,6 @@ import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 
 function fakeEntry(overrides: Partial<MemoryEntry>): MemoryEntry {
-  // Pad short content to satisfy createMemory's min-3-char check.
   const rawContent = overrides.content ?? 'test memory';
   const padded = rawContent.length < 3 ? `${rawContent}-test-memory` : rawContent;
   const base = createMemory(padded, {
@@ -47,11 +46,9 @@ describe('sampleForReplay', () => {
 
   it('prefers high-reward memories over neutral peers', async () => {
     const entries: MemoryEntry[] = [];
-    // 10 neutral memories
     for (let i = 0; i < 10; i++) {
       entries.push(fakeEntry({ content: `neutral-${i}` }));
     }
-    // 1 high-reward memory
     const hero = fakeEntry({
       content: 'high-reward',
       outcomePositive: 20,
@@ -59,14 +56,12 @@ describe('sampleForReplay', () => {
     });
     entries.push(hero);
 
-    // Over many seeds, hero should be sampled more often than any neutral peer.
     const counts = new Map<string, number>();
     for (let seed = 0; seed < 100; seed++) {
       const sample = await sampleForReplay({ survivors: entries, count: 1, now: new Date(), seed });
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const heroHits = counts.get(hero.id) ?? 0;
-    // Most common neutral memory's count
     const peerHits = Math.max(0, ...[...counts.entries()].filter(([id]) => id !== hero.id).map(([, c]) => c));
     expect(heroHits).toBeGreaterThan(peerHits);
   });
@@ -84,8 +79,6 @@ describe('sampleForReplay', () => {
       for (const id of sample) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     const criticalHits = counts.get(critical.id) ?? 0;
-    // Neutral = weight 1.0, critical = weight 2.0. Expected critical rate = 2/(10+2) = 1/6.
-    // Expected neutral mean rate = 1/12. Require critical to exceed the average neutral.
     const peerHits = [...counts.entries()].filter(([id]) => id !== critical.id).map(([, c]) => c);
     const peerAvg = peerHits.reduce((a, b) => a + b, 0) / Math.max(1, peerHits.length);
     expect(criticalHits).toBeGreaterThan(peerAvg);
@@ -118,7 +111,6 @@ describe('sampleForReplay', () => {
 
 describe('replayPriority', () => {
   it('returns a positive finite number for a plain entry', () => {
-    // createMemory's strength drifts with the clock it runs on, so it is set; at its own last_retrieved every factor is 1.
     const e = fakeEntry({ content: 'x', strength: 1 });
     const p = replayPriority(e, new Date(e.lastRetrieved), false);
     expect(Number.isFinite(p)).toBe(true);
@@ -147,23 +139,17 @@ describe('replayPriority', () => {
   });
 
   it('stays positive even when negative outcomes dominate', () => {
-    // Regression: rewardSignal was `1 + pos*0.5 + (pos-neg)*0.25` without a
-    // clamp, which went negative for neg >> pos. Negative weights broke the
-    // weighted-sample-without-replacement picker in sampleForReplay.
     const now = new Date();
     const doomed = fakeEntry({ content: 'doom', outcomePositive: 0, outcomeNegative: 100, strength: 1 });
-    // `now` predates the entry, so it has no idle time; the reward sits at its 0.1 floor and every other factor is 1.
     expect(replayPriority(doomed, now, false)).toBe(0.1);
   });
 
   it('is finite when last_retrieved is malformed', () => {
     const now = new Date();
     const bad = fakeEntry({ content: 'bad', strength: 1 });
-    // Force an invalid timestamp post-construction to exercise NaN guard.
     const mutated = { ...bad, lastRetrieved: 'not-a-date' };
     const p = replayPriority(mutated, now, false);
     expect(Number.isFinite(p)).toBe(true);
-    // The guard reads an unparseable time as zero idle hours, which leaves every factor at 1.
     expect(p).toBe(1);
   });
 });

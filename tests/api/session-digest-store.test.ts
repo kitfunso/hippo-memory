@@ -1,4 +1,3 @@
-// The digest row in a real store: one per session, echo sources, tombstones, sharing and consolidation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -52,7 +51,6 @@ function scan(finalText: string, over: Partial<SessionScan> = {}): SessionScan {
   };
 }
 
-/** The line recordSessionDigest logs for one run: what it wrote, or why it skipped. */
 async function write(key: string, s: SessionScan): Promise<string> {
   const log: string[] = [];
   await recordSessionDigest(hippoRoot, sqliteStore(hippoRoot), s, {

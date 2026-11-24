@@ -1,5 +1,3 @@
-// hippo.db's Sessions group: snapshots, session events, handoffs, working memory and session-owner
-// binding.
 import { freshActiveSnapshot } from '../../../base/session/session-snapshot.js';
 import {
   HOOK_DB_WAIT_MS,
@@ -52,13 +50,11 @@ import { SESSION_EVENT_LIMIT, WM_MAX_ENTRIES } from '../../../base/util/limits.j
 import { handleNow, handleStamp } from '../runtime/handle-clock.js';
 import { badStatusTarget, moveOneStatus } from '../runtime/status-transitions.js';
 
-/** `status` as a close status, or a throw before any write that names the statuses allowed. */
 function requireSnapshotCloseStatus(status: string): SnapshotCloseStatus {
   if (isSnapshotCloseStatus(status)) return status;
   throw badStatusTarget('snapshotClose', status);
 }
 
-/** Rows closed: the tenant's newest active snapshot, whoever saved it, or none. */
 function clearActiveTaskSnapshot(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -70,7 +66,6 @@ function clearActiveTaskSnapshot(
   assertKeyedOnSharedStore('clearActiveTaskSnapshot', files, undefined);
   const to = requireSnapshotCloseStatus(clearedStatus);
   const now = handleStamp(db);
-  // The read and the move share one write scope, so a second clear finds no active row.
   const closed = withWriteScope(db, 'clear_snapshot', () => {
     const active = cachedStatement(
       db,
@@ -85,16 +80,12 @@ function clearActiveTaskSnapshot(
   return closed;
 }
 
-/** An ending session and the status its active snapshots close with. */
 interface CloseSnapshotsOptions {
   readonly tenantId: string;
   readonly sessionId: string;
   readonly status: string;
 }
 
-/** Close the `active` task snapshot(s) owned by `sessionId` at session end; the WHERE scopes on
- * `session_id` too so an ending session can never close a newer session's snapshot. Returns the
- * number of rows closed. */
 function closeTaskSnapshotsForSession(
   db: DatabaseSyncLike,
   { tenantId, sessionId, status }: CloseSnapshotsOptions,
@@ -103,7 +94,6 @@ function closeTaskSnapshotsForSession(
   assertTenantId('closeTaskSnapshotsForSession', tenantId);
   requireSnapshotCloseStatus(status);
   if (key) continuityStamp(key);
-  // a partial key is a caller bug, so fail loud rather than close nothing
   const owned = key ? continuityWhere(key) : null;
   const now = handleStamp(db);
   const result = cachedStatement(
@@ -185,8 +175,6 @@ function appendSessionEvent(
   assertTenantId('appendSessionEvent', tenantId);
   const now = handleStamp(db);
 
-  // Scope is stored as given, since reads deny by default.
-  // api.recall and printRecall continuity reads skip slack:private:* and 'unknown:legacy' rows.
   const loaded = reloadSessionEvent(db, insertSessionEventRow(db, tenantId, event, now));
   const recent = recentSessionEventsOldestFirst(
     db,
@@ -265,7 +253,6 @@ export function listUntracedSessions(
   return ids.map((sessionId) => ({ sessionId, events: events.get(sessionId) ?? [] }));
 }
 
-/** The owner a session id is bound to, or null. */
 function readSessionOwner(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -278,7 +265,6 @@ function readSessionOwner(
   return row?.owner_subject ?? null;
 }
 
-/** A session's first owner and when it was bound. */
 interface OwnerRowOptions {
   readonly tenantId: string;
   readonly sessionId: string;
@@ -286,7 +272,6 @@ interface OwnerRowOptions {
   readonly createdAt: string;
 }
 
-/** Binds `sessionId` to `owner` unless a binding exists; the count is 1 when this call bound it. */
 function insertOwnerRow(
   db: DatabaseSyncLike,
   { tenantId, sessionId, owner, createdAt }: OwnerRowOptions,
@@ -305,17 +290,13 @@ function deleteSessionOwnersBefore(db: DatabaseSyncLike, cutoffIso: string): voi
   cachedStatement(db, `DELETE FROM session_owners WHERE created_at < ?`).run(cutoffIso);
 }
 
-/** One caller's claim on a session id. */
 interface SessionOwnerBinding {
   readonly tenantId: string;
   readonly sessionId: string;
   readonly owner: string;
-  /** Bindings older than this are pruned in the write that adds a new one. */
   readonly retentionMs: number;
 }
 
-/** Binds under the write lock and returns the stored owner, which is not `owner` when a
- * concurrent first bind won. */
 function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding): string | null {
   const { tenantId, sessionId, owner, retentionMs } = binding;
   withWriteScope(
@@ -324,20 +305,14 @@ function insertSessionOwner(db: DatabaseSyncLike, binding: SessionOwnerBinding):
     () => {
       const row = { tenantId, sessionId, owner, createdAt: handleStamp(db) };
       const bound = insertOwnerRow(db, row);
-      // An older binary supersedes across owners, so the first binding shuts it out in the same
-      // transaction.
       if (bound === 1) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
-      // Pruned on write, as the failure log is; a pruned session id is a UUID no other caller
-      // knows.
       deleteSessionOwnersBefore(db, new Date(handleNow(db).getTime() - retentionMs).toISOString());
     },
     { busyWaitMs: sessionOf(db)?.busyWaitMs ?? HOOK_DB_WAIT_MS },
   );
-  // Re-read, since a concurrent first bind may have won the INSERT OR IGNORE.
   return readSessionOwner(db, tenantId, sessionId);
 }
 
-/** The owner stored for the session id, binding `binding.owner` first when none is stored. */
 function sessionOwnerOrBind(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -345,15 +320,11 @@ function sessionOwnerOrBind(
   owner: string,
   retentionMs: number,
 ): string | null {
-  // A bound session is the common case after the first prompt, so it must not take the write lock.
   return (
     readSessionOwner(db, tenantId, sessionId) ??
     insertSessionOwner(db, { tenantId, sessionId, owner, retentionMs })
   );
 }
-
-/** Working Memory: bounded buffer for current-state notes, separate from long-term memory;
- * scoped, importance-ranked, evicted past WM_MAX_ENTRIES per scope. */
 
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface WorkingMemoryRow {
@@ -369,7 +340,6 @@ interface WorkingMemoryRow {
 }
 
 function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
-  // Damaged metadata logs once and reads as empty: the item still lists with its content.
   const metadata: JsonObject =
     parseStoredObject(
       { table: 'working_memory', id: row.id, column: 'metadata_json' },
@@ -388,8 +358,6 @@ function rowToItem(row: WorkingMemoryRow): WorkingMemoryItem {
   };
 }
 
-/** Push a new entry into working memory; past WM_MAX_ENTRIES the scope's lowest-importance entry
- * is evicted (ties: the oldest, by created_at then id). Returns the new row ID. */
 function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush): number {
   const now = handleStamp(db);
   return withWriteScope(db, 'wm_push', () => {
@@ -421,7 +389,6 @@ function wmPush(db: DatabaseSyncLike, tenantId: string, item: WorkingMemoryPush)
 }
 
 function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string): void {
-  // Evict if over capacity for this scope.
   const countRow = cachedStatement(
     db,
     `
@@ -447,8 +414,6 @@ function evictOverCapacity(db: DatabaseSyncLike, scope: string, tenantId: string
   }
 }
 
-/** The WHERE clause and arguments that narrow working memory to one tenant and, when set, a
- * scope and a session. */
 function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
   const clauses = ['tenant_id = ?'];
   const params = [tenantId];
@@ -463,7 +428,6 @@ function wmWhere(tenantId: string, filter: WorkingMemoryFilter) {
   return { sql: `WHERE ${clauses.join(' AND ')}`, params };
 }
 
-/** Read working memory entries, sorted by importance DESC. */
 function wmRead(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -485,7 +449,6 @@ function wmRead(
   return rows.map(rowToItem);
 }
 
-/** Clear (delete) working memory entries. Returns the count deleted. */
 function wmClear(db: DatabaseSyncLike, tenantId: string, filter: WorkingMemoryFilter): number {
   const where = wmWhere(tenantId, filter);
   const result = cachedStatement(db, `DELETE FROM working_memory ${where.sql}`).run(
@@ -512,7 +475,6 @@ function saveAny(
 }
 
 function readAny(db: DatabaseSyncLike, ...[tenantId, kind, query, key]: SessionReadArgs) {
-  // The port names the session in camelCase; the event rows keep their column's name.
   if (kind === 'event') {
     return listSessionEvents(db, tenantId, {
       session_id: query.sessionId,
@@ -538,7 +500,6 @@ function clearAny(
   return closeTaskSnapshotsForSession(db, closing, key);
 }
 
-// Each kind writes or reads the session's mirror files beside hippo.db as well as its rows.
 function sessionBodies(files: StoreFiles): Bodies<Omit<SessionCalls, 'bindSessionOwner'>> {
   return {
     save: (db, ...args) => saveAny(db, files, ...args),

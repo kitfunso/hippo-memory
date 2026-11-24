@@ -1,5 +1,3 @@
-// The hippo-memory/project-identity subpath: only what the changelog publishes, so the module's
-// other exports stay internal.
 export {
   assertCallerProject,
   MAX_PROJECT_ALIASES,

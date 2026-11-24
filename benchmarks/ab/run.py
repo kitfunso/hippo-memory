@@ -1,38 +1,3 @@
-"""Paired A/B harness for hippo recall flags.
-
-Runs the LoCoMo evidence benchmark twice on the SAME N QAs:
-  * arm A (default): no extra recall args
-  * arm B (feature):  HIPPO_RECALL_EXTRA_ARGS=<flag>
-
-Then pairs per QA and reports:
-  * mean per-QA delta (arm B - arm A)
-  * per-category mean delta
-  * Wilcoxon signed-rank p-value (no scipy dependency — uses ranks-of-abs-diffs
-    + normal approximation, fine for N >= 20)
-  * sign-test (count B>A, B<A, ties)
-  * fire-rate: fraction of QAs where the retrieved_dia_ids differ between arms.
-    A flag that never changes retrieval can't have a non-zero effect; this
-    distinguishes "no signal" from "didn't fire".
-
-Why this beats raw mean-diff at N=50: variance dominates absolute scores, so
-the unpaired smoke A/B I ran earlier (default 0.171 vs EVC-on 0.177) is
-dominated by which QAs landed in the sample, not the feature. Pairing on the
-same QAs cancels that variance — only the feature-induced delta remains.
-
-Usage:
-  # 1. Run both arms (caller can do this manually too)
-  python benchmarks/ab/run.py orchestrate \\
-      --flag --evc-adaptive --tag acc-evc \\
-      --conversations 5 --sample 10
-
-  # 2. Or analyse two existing incremental.jsonl files directly:
-  python benchmarks/ab/run.py compare \\
-      --a benchmarks/locomo/results/hippo-smoke-default-n50.incremental.jsonl \\
-      --b benchmarks/locomo/results/hippo-smoke-acc-evc-on-n50.incremental.jsonl \\
-      --label acc-evc
-
-The orchestrate mode reuses benchmarks/locomo/run.py — no duplication.
-"""
 from __future__ import annotations
 
 import argparse
@@ -51,7 +16,6 @@ HIPPO_ROOT = ROOT.parent.parent
 
 
 def load_jsonl(path: Path) -> dict[tuple[str, int], dict]:
-    """Index per-QA records by (conversation_id, qa_index)."""
     rows: dict[tuple[str, int], dict] = {}
     with path.open(encoding="utf-8") as f:
         for line in f:
@@ -65,14 +29,11 @@ def load_jsonl(path: Path) -> dict[tuple[str, int], dict]:
 
 
 def wilcoxon_pvalue(diffs: list[float]) -> float | None:
-    """Two-sided Wilcoxon signed-rank test, normal approximation.
-    Returns None if N (after dropping zeros) is too small."""
     nonzero = [d for d in diffs if d != 0]
     n = len(nonzero)
     if n < 8:
         return None
     abs_sorted = sorted([(abs(d), 1 if d > 0 else -1) for d in nonzero])
-    # Average ranks for ties on |d|
     ranks: list[float] = [0.0] * n
     i = 0
     while i < n:
@@ -91,7 +52,6 @@ def wilcoxon_pvalue(diffs: list[float]) -> float | None:
     if var <= 0:
         return None
     z = (w - mean) / math.sqrt(var)
-    # Two-sided p-value via standard normal approximation
     p = math.erfc(abs(z) / math.sqrt(2))
     return p
 
@@ -113,7 +73,6 @@ def compare(a_path: Path, b_path: Path, label: str) -> dict:
         diffs.append(d)
         cat = ra.get("category_name", "unknown")
         by_cat[cat].append(d)
-        # Fire rate: top-k retrieval order differs?
         ra_ids = tuple(ra.get("retrieved_dia_ids", []))
         rb_ids = tuple(rb.get("retrieved_dia_ids", []))
         if ra_ids != rb_ids:

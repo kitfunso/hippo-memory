@@ -1,4 +1,3 @@
-// Moving the imported embeddings.json aside: a rename blocked by an open handle is logged and copied; any other rename failure leaves the file for the next open.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as path from 'node:path';
@@ -15,7 +14,6 @@ const RAW = (id: string): string => JSON.stringify({ [id]: [1, 0] });
 const asides = (): string[] => fs.readdirSync(root).filter((f) => f.startsWith('embeddings.json.'));
 const logged = (): string => stderr.mock.calls.map((c) => String(c[0])).join('');
 
-/** Fails `op` on the legacy file only, with an errno `code`; every other path goes through. */
 function failOnLegacy(op: 'renameSync' | 'rmSync', code: string): void {
   const blocked = (target: fs.PathLike): void => {
     if (String(target) === legacy) throw Object.assign(new Error(`${code}: operation blocked, '${legacy}'`), { code });

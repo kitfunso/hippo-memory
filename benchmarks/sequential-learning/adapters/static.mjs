@@ -1,14 +1,3 @@
-/**
- * Static Pre-loaded Memory Adapter
- *
- * All lessons are loaded during init(). No new lessons are stored during the
- * sequence. This simulates a system with perfect prior knowledge but no
- * ability to learn from runtime experience.
- *
- * Uses simple text matching for recall (no external dependencies).
- * The hit rate should be roughly flat across early/mid/late phases.
- */
-
 import { createAdapter } from './interface.mjs';
 import { TRAP_CATEGORIES } from '../traps.mjs';
 
@@ -19,7 +8,6 @@ export default createAdapter({
   _entries: [],
 
   async init() {
-    // Pre-load every lesson from every trap category
     this._entries = TRAP_CATEGORIES.map((cat) => ({
       content: cat.lesson,
       tags: [...cat.tags],
@@ -31,7 +19,6 @@ export default createAdapter({
   },
 
   async recall(query, _budget = undefined) {
-    // v1.7.6 -- accept budget arg for signature compat, ignore.
     const queryLower = query.toLowerCase();
     const queryWords = queryLower.split(/\s+/).filter((w) => w.length > 3);
 
@@ -39,7 +26,6 @@ export default createAdapter({
       const contentLower = entry.content.toLowerCase();
       const tagsJoined = entry.tags.join(' ').toLowerCase();
 
-      // Score: count how many query words appear in content or tags
       let hits = 0;
       for (const word of queryWords) {
         if (contentLower.includes(word)) hits += 1;
@@ -50,7 +36,6 @@ export default createAdapter({
       return { content: entry.content, score, tags: entry.tags };
     });
 
-    // Return top 5, descending by score, excluding zero-score results
     return scored
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score)

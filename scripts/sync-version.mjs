@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// The `version` lifecycle script: `npm version <x> --no-git-tag-version` bumps package.json and the
-// lockfile, then this copies the version to the sites npm does not know about.
-// check-manifest-versions.mjs runs right after it and stays the publish gate.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -22,7 +19,6 @@ const JSON_MANIFESTS = [
 const EVERY_VERSION = new Set(['server.json']);
 
 for (const path of JSON_MANIFESTS) {
-  // Replace in place so each file keeps its own layout; the parse catches a nested "version" listed first.
   const pattern = EVERY_VERSION.has(path) ? /("version"\s*:\s*")[^"]*"/g : /("version"\s*:\s*")[^"]*"/;
   const next = readFileSync(path, 'utf8').replace(pattern, `$1${version}"`);
   const parsed = JSON.parse(next);

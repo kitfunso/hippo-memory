@@ -1,4 +1,3 @@
-// The error reply of each typed-object route for a bad request, one table row per case.
 import { describe, it, expect } from 'vitest';
 import { handle, useObjectsServer, authHeaders } from '../_helpers/http-objects-server.js';
 import {

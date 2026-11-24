@@ -31,17 +31,11 @@ export type IngestEvent =
   | { eventName: 'pull_request_review_comment'; payload: GitHubPullRequestReviewCommentEvent };
 
 export interface IngestInput {
-  /** The X-GitHub-Event header value + parsed body, discriminated. */
   event: IngestEvent;
-  /** The raw HTTP body, used for the idempotency key (replay-safe). */
   rawBody: string;
-  /** X-GitHub-Delivery header value, audit metadata only. */
   deliveryId: string;
-  /** GITHUB_ENTERPRISE_URL's host, which the ref, tags and scope carry; undefined on github.com. */
   host?: string;
-  /** The site's ownsBareRefs: only then is a seen github.com-form key a duplicate of a GHES event. */
   ownsBareRefs?: boolean;
-  /** GitHub user ids GITHUB_TRUSTED_USER_IDS vouches for: their items skip the author rule, never the check. */
   trustedUserIds?: ReadonlySet<number>;
 }
 
@@ -120,15 +114,12 @@ export async function ingestEvent(
   const seen = await events.eventRecord(event);
   if (seen.seen) return { status: 'duplicate', memoryId: seen.memoryId };
 
-  // Only the operator can say the github.com-form keys were this server's; a bare ref proves nothing.
   if (input.host !== undefined && input.ownsBareRefs === true) {
     const legacyKey = computeIdempotencyKey(githubEventRef(input.event, undefined), updatedAt);
     const legacy = await events.eventRecord({ ...event, idempotencyKey: legacyKey });
     if (legacy.seen) return { status: 'duplicate', memoryId: legacy.memoryId };
   }
 
-  // An empty body is logged too, so a retry returns 'duplicate' instead of re-running the
-  // transform.
   return rememberWithEventLog(
     ctx,
     event,

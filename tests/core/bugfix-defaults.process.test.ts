@@ -1,12 +1,3 @@
-/**
- * Regression tests for two defects fixed alongside ROADMAP Part IX:
- *   1. physics scoring was on by default ('auto') although its paired
- *      ablation (benchmarks/physics-ablation/) measured it worse on every
- *      metric with the CI excluding zero;
- *   2. `hippo learn --git` ignored `config.gitLearnPatterns`, which only the
- *      MCP `hippo_learn` tool honoured.
- * Real git, the built CLI, real SQLite. No mocks.
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,6 +1,3 @@
-// Errors that carry an HTTP status. Transport-free, so the api and the store map them without
-// importing node:http.
-
 export class HttpError extends Error {
   status: number;
   /** Sent as the Retry-After header, so a refused caller knows when to come back. */

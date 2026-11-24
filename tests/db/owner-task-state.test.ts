@@ -1,4 +1,3 @@
-// Two developers in one tenant and one project: each keyed store call sees and changes only its own owner's task state.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -168,7 +167,6 @@ describe('handoffs and failures keyed by owner and project', () => {
   it("writeSessionEndHandoff reads only the owner's snapshot and handoff", () => {
     saveActiveTaskSnapshot(home, T, snap('alice task', 'sa'), A);
     saveActiveTaskSnapshot(home, T, snap('bob task', 'sb'), B);
-    // A newer handoff of B's on A's session id would block A's write if it were read.
     saveSessionHandoff(home, T, handoff('bob note', 'sa'), B);
     const written = writeSessionEndHandoff(home, { tenantId: T, sessionId: 'sa', evidence: null, key: A });
     expect(written?.taskId).toBe('alice task');

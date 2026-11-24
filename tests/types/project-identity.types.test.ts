@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory/project-identity` (src/entry/project-identity.ts). */
-
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {

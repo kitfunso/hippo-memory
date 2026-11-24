@@ -1,4 +1,3 @@
-// A resolver role outside the ladder reads as viewer and logs one fixed line that leaves out the value.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { serve, type AuthResolver, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
@@ -40,7 +39,6 @@ async function stderrAfterTwoCalls(role: string | undefined): Promise<string[]> 
   return write.mock.calls.map((c) => String(c[0])).filter((line) => line.includes('read it as viewer'));
 }
 
-// Runs before the coercion case: the warn is one per process, so a later run would hide a false warn.
 describe('a valid resolver role', () => {
   it.each(['admin', 'member', 'viewer'])('logs no coercion line for %s', async (role) => {
     expect(await stderrAfterTwoCalls(role)).toHaveLength(0);

@@ -1,5 +1,3 @@
-// Rejections answers: the same removals, tombstones, refusals and audit rows,
-// over two tenants holding the same text.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -52,7 +50,6 @@ function seed(dir: string): Seeded {
     createMemory(content, { tenantId: TENANT_A, ...extra });
   const summary = a('summary of the launch plan', { dagLevel: 2 });
   const note = a(SHARED);
-  // A second later, since removal runs oldest first and two rows of one millisecond fall back to their random ids.
   const copy = {
     ...a('The Launch date is  MARCH third'),
     created: new Date(Date.parse(note.created) + 1000).toISOString(),
@@ -158,7 +155,6 @@ describe('Rejections.apply', () => {
       async (g, store) => {
         const applied = await g.apply(rejection({ value: 'the office moves in june' }));
         const rows = await store.entriesByIds([merged.id, ...applied.successorIds], TENANT_A);
-        // A successor gets a fresh id as a new merge does, so the test names it by its text.
         return rows.map((r) => ({
           id: r.id === merged.id ? r.id : 'successor',
           tenantId: r.tenantId,

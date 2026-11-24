@@ -40,7 +40,6 @@ export function patchPaths(body: string): string[] {
 
 export interface ShellPatch {
   body: string;
-  /** The `cd <dir> &&` target, relative to the call's working directory. */
   cd: string | null;
 }
 

@@ -1,4 +1,3 @@
-// A session id belongs to the first owner that binds it; a second owner gets 409 so its client sets the record aside.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import {
@@ -62,7 +61,6 @@ function setFloor(v: string): void {
   withDb((db) => db.prepare(`UPDATE meta SET value = ? WHERE key = 'min_compatible_binary'`).run(v));
 }
 
-/** The released binary that shipped neither v53 nor v54. */
 const PREVIOUS_RELEASE = '1.63.2';
 
 function floor(): string | undefined {
@@ -93,7 +91,6 @@ describe('bindSessionOwner', () => {
     const holder = openHippoDb(home);
     holder.exec('BEGIN IMMEDIATE');
     try {
-      // Another connection holds the write lock, so a rebind that asked for it would fail after the request's short wait.
       await withSharedStoreHandles(
         async (request) => {
           await expect(bindSessionOwner(ctx('alice', 'default', request), 's1')).resolves.toBeUndefined();
@@ -130,9 +127,7 @@ describe('bindSessionOwner', () => {
   it('the first bind lifts the floor above the last release before v54, which the open then refuses', async () => {
     setFloor('0.0.1');
     await bindSessionOwner(ctx('alice'), 's1');
-    // The open refuses any binary below the floor (github-rollback-guard-and-deletion-atomicity.test.ts), so a floor above the release shuts it out.
     expect(floor()).toBe(TASK_OWNER_MIN_BINARY);
-    // compareSemver returns the first differing part's difference: the minor of 1.64.0 over 1.63.2.
     expect(compareSemver(floor() ?? '', PREVIOUS_RELEASE)).toBe(1);
   });
 
@@ -140,7 +135,6 @@ describe('bindSessionOwner', () => {
     const get = StatementSync.prototype.get;
     let raced = false;
     let alice: Promise<void> = Promise.resolve();
-    // Alice commits right after Bob's read finds no owner, so he reaches the insert with her row already there.
     const read = vi.spyOn(StatementSync.prototype, 'get').mockImplementation(function (
       this: StatementProto,
       ...params: string[]

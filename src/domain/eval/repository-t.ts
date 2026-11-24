@@ -1,12 +1,6 @@
-/** Student t tests for the built-in memory eval. The repositories are fixed and the family is the unit
- *  (Amendment 2): a variance-components t over family-by-seed tables with Satterthwaite df, plus the older
- *  one-value-per-repository tests (G-1 df).
- *  The t distribution is written here because the package carries no statistics library. */
-
 import { notANumber, type TestedEstimate } from './eval-stats.js';
 
 const ALPHA = 0.05;
-// Equal repository values can leave float noise in the spread; at this size it reads as no spread at all.
 const FLAT = 1e-12;
 
 const LANCZOS = [
@@ -24,7 +18,6 @@ export function lnGamma(z: number): number {
   return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
 }
 
-// Modified Lentz on the incomplete beta continued fraction; it converges fast where x < (a + 1) / (a + b + 2).
 function betaFraction(a: number, b: number, x: number): number {
   const tiny = 1e-300;
   const nonZero = (v: number): number => (Math.abs(v) < tiny ? tiny : v);
@@ -58,7 +51,6 @@ export function incompleteBeta(x: number, a: number, b: number): number {
     : 1 - (front * betaFraction(b, a, 1 - x)) / b;
 }
 
-// Two-sided tail P(|T| >= |t|), from the beta form so a small p never loses digits to 1 - cdf.
 const twoSidedTail = (t: number, df: number): number =>
   incompleteBeta(df / (df + t * t), df / 2, 0.5);
 
@@ -86,8 +78,6 @@ export function studentTQuantile(p: number, df: number): number {
 }
 
 const critical = new Map<number, number>();
-// The sizer asks for the same few df thousands of times; Satterthwaite df are fractional, so the key is df to
-// three decimals and the quantile is taken at that rounded df, or the cache would never hit.
 function criticalValue(df: number): number {
   const key = Math.round(df * 1000) / 1000;
   let q = critical.get(key);
@@ -100,8 +90,6 @@ function criticalValue(df: number): number {
 
 const sum = (xs: readonly number[]): number => xs.reduce((s, x) => s + x, 0);
 
-/** A 95% t interval and a two-sided p against `nullValue`.
- *  With no spread the interval is the estimate itself, and p is 1 on the null and 0 off it. */
 function tResult(estimate: number, se: number, df: number, nullValue: number): TestedEstimate {
   if (!Number.isFinite(estimate) || !Number.isFinite(se)) return notANumber(nullValue, 0);
   const base = { estimate, iterations: 0, dropped: 0, nullValue, df };
@@ -149,7 +137,6 @@ interface Table {
   readonly s: number;
 }
 
-// Mean squares of the family + seed model (F family, Q seed, E residual) with their degrees of freedom.
 interface Components {
   readonly F: number;
   readonly Q: number;
@@ -159,8 +146,6 @@ interface Components {
   readonly dfE: number;
 }
 
-// `ms` is null for a repository too thin to fit: its mean enters the estimate, and the pooled components
-// give its variance.
 interface RepoFit {
   readonly est: number;
   readonly k: number;
@@ -218,7 +203,6 @@ function levelMeans(
   return total.map((x, i) => x / count[i]!);
 }
 
-// Writes the centred effects into `effects` and returns the shift, which belongs to the intercept.
 function centreInto(effects: number[], raw: readonly number[]): number {
   const shift = sum(raw) / raw.length;
   raw.forEach((x, i) => {
@@ -227,13 +211,11 @@ function centreInto(effects: number[], raw: readonly number[]): number {
   return shift;
 }
 
-/** Residual sum of squares about the level means of one factor: the fit with the other factor left out. */
 function rssAbout(cells: readonly Cell[], size: number, level: (c: Cell) => number): number {
   const means = levelMeans(cells, size, level, (c) => c.y);
   return sum(cells.map((c) => (c.y - means[level(c)]!) ** 2));
 }
 
-/** Least squares for y = mu + a_f + b_s on the cells present, by alternating means with a and b centred each pass. */
 function additiveFit(repo: string, t: Table): Fit {
   const a = Array.from({ length: t.k }, () => 0);
   const b = Array.from({ length: t.s }, () => 0);
@@ -269,7 +251,6 @@ function additiveFit(repo: string, t: Table): Fit {
   throw new Error(`additive fit for repository ${repo} did not converge in ${MAX_PASSES} passes`);
 }
 
-// Union-find over the family-seed graph: n - k - s + 1 counts residual df only when the present cells form one block.
 function isConnected(t: Table): boolean {
   const parent = Array.from({ length: t.k + t.s }, (_, i) => i);
   const root = (i: number): number => {
@@ -290,7 +271,6 @@ function fitRepo(repo: string, units: readonly FamilyUnit[]): RepoFit {
   }
   const { mu, rss } = additiveFit(repo, t);
   const [dfF, dfQ] = [t.k - 1, t.s - 1];
-  // Clamped: both reduced fits nest the additive one, so a negative difference is float noise.
   const ssF = Math.max(0, rssAbout(t.cells, t.s, (c) => c.s) - rss);
   const ssQ = Math.max(0, rssAbout(t.cells, t.k, (c) => c.f) - rss);
   return { ...base, est: mu, ms: { F: ssF / dfF, Q: ssQ / dfQ, E: rss / dfE, dfF, dfQ, dfE } };
@@ -371,8 +351,6 @@ export function pooledComponents(units: readonly FamilyUnit[]): PooledComponents
   return { repos: repos.map(({ k, s, n }) => ({ k, s, n })), ...poolMeanSquares(fitted) };
 }
 
-// Variance of the mean of the G repository estimates, with Satterthwaite df. Every repository adds its own
-// coefficients (fitted or not); the mean squares are pooled over the fitted ones, weighted by df.
 function varianceOf(repos: readonly RepoFit[], fitted: readonly Fitted[]): Variance {
   const g = repos.length;
   const { F, Q, E, dfF, dfQ, dfE, sBar, kBar } = poolMeanSquares(fitted);

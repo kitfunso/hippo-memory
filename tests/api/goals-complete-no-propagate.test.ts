@@ -1,18 +1,3 @@
-// tests/api/goals-complete-no-propagate.test.ts
-/**
- * v1.7.4 -- `completeGoal` honours `noPropagate` to skip strength
- * multiplier side-effects on recalled memories.
- *
- * Implementation note (option 2 from plan Task 2): the plan's reference
- * tests call `recall(ctx, { query: 'auth', sessionId })` which depends on
- * `RecallOptions.sessionId` being added by Task 1. Task 1 is not yet shipped,
- * so we seed `goal_recall_log` directly (mirroring the existing
- * `goal-outcome-propagation.test.ts` pattern via `seedRecallLog`). This
- * makes Task 2 tests independent of Task 1 and exercises the propagation
- * block deterministically without relying on the boost helper to populate
- * the log row.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { remember } from '../../src/api/index.js';
@@ -71,12 +56,11 @@ describe('completeGoal noPropagate flag', () => {
 
   it('default propagates strength multiplier on positive outcome', async () => {
     const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
-    // Default strength is 1.0 (ceiling); knock it down so the 1.10x boost shows.
     setStrength(root, m.id, 0.5);
     const goal = await pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
     const beforeStrength = getStrength(root, m.id);
-    await completeGoal(root, goal.id, { outcomeScore: 1.0 }); // positive outcome
+    await completeGoal(root, goal.id, { outcomeScore: 1.0 });
     const afterStrength = getStrength(root, m.id);
     expect(afterStrength).toBeGreaterThan(beforeStrength);
   });
@@ -89,21 +73,17 @@ describe('completeGoal noPropagate flag', () => {
     const beforeStrength = getStrength(root, m.id);
     await completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true });
     const afterStrength = getStrength(root, m.id);
-    expect(afterStrength).toBe(beforeStrength); // unchanged
+    expect(afterStrength).toBe(beforeStrength);
   });
 
   it('second call with noPropagate is a true no-op after first call propagated (idempotency)', async () => {
-    // Status check at src/store/goals.ts:253-257 short-circuits the second call BEFORE
-    // reading opts.noPropagate. So a second call with noPropagate after a propagating
-    // first call leaves strength as the post-first-call value (propagation already
-    // happened on call 1; call 2 is a no-op regardless of noPropagate).
     const m = await remember(ctx(root), { content: 'fix auth bug', tags: ['fix-auth'] });
     setStrength(root, m.id, 0.5);
     const goal = await pushGoal(root, { sessionId, tenantId, goalName: 'fix-auth' });
     seedRecallLog(root, goal.id, m.id, new Date().toISOString());
-    await completeGoal(root, goal.id, { outcomeScore: 1.0 }); // call 1: propagates
+    await completeGoal(root, goal.id, { outcomeScore: 1.0 });
     const afterFirstCall = getStrength(root, m.id);
-    await completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true }); // call 2
-    expect(getStrength(root, m.id)).toBe(afterFirstCall); // call 2 is a no-op
+    await completeGoal(root, goal.id, { outcomeScore: 1.0, noPropagate: true });
+    expect(getStrength(root, m.id)).toBe(afterFirstCall);
   });
 });

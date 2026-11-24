@@ -1,6 +1,3 @@
-"""Project round 4's list-price spend (USD) from round 3's recorded spend: the budget, the ceiling, batch 1, the pilot, the q145 gap and the whole-run check.
-Usage: python -I docs/evals/z0-r4/r4-projection.py ROOT [--manifest FILE]
-Stops unless ROOT's runs files match the manifest."""
 import argparse
 import pathlib
 import sys
@@ -10,17 +7,13 @@ import r3_manifest  # noqa: E402
 import r3_spend  # noqa: E402
 
 ARMS = ('A0', 'A1', 'A2', 'A4', 'A5')
-# Prereg item 12's batch 1: the draw of 10 repositories.
 BATCH1 = ('q12', 'q14', 'q140', 'q145', 'q184', 'q190', 'q212', 'q222', 'q226', 'q238')
 PILOT_BUDGET = 40.0
-# Item 11: 2 repositories x 18 positions (round 3 prereg line 40) x 1 seed; O1 is one arm, S1 and S2 are two.
 PER_ARM_SESSIONS = 2 * 18 * 1
-# The ceiling runs O1, S1, S2 and S5 at 9 seeds against 3.
 CEILING = {'O1': 9 / 3, 'A1': 9 / 3, 'A2': 9 / 3, 'A5': 9 / 3}
 
 
 def project(basis, r, pilot=0.0, scale=None):
-    """O1 at A1's basis plus 0.5 x r x every arm's basis, plus the pilot; scale multiplies the named terms."""
     scale = scale or {}
     o1 = basis['A1'] * scale.get('O1', 1)
     return pilot + o1 + sum(0.5 * r * basis[a] * scale.get(a, 1) for a in ARMS)
@@ -66,13 +59,11 @@ for r in (1, 2):
 for q in ('q145', 'q140'):
     show(f'{q} total', sum(by_sequence[q].values()))
 
-# Item 12's whole-run check before batch 1, at the approved figure of decision 5.
 APPROVED = 2140.0
 MARGIN = 1.25
 
 
 def whole_run(r, seeds):
-    """Spend after the pilot: the whole run at r with q145's gap, O1, S1, S2 and S5 at `seeds` seeds."""
     s = {k: seeds / 3 for k in CEILING}
     return project(basis, r, 0.0, s) + project(gap, r, 0.0, s)
 

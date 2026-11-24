@@ -1,6 +1,3 @@
-// The local embedder's model rules, and whether its optional package is installed, found by
-// resolving the package's path: nothing here imports the package or loads a model, which
-// src/infra/local-embedder.ts does.
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { EmbeddingsConfig } from '../config/config.js';
@@ -31,8 +28,6 @@ export function resolveTransformersPackage(): TransformersPackage | null {
   return null;
 }
 
-// Neither resolver finding the package means it is not installed, and the caller tries the next
-// one.
 const NOT_INSTALLED = ['ERR_MODULE_NOT_FOUND', 'MODULE_NOT_FOUND', 'ERR_PACKAGE_PATH_NOT_EXPORTED'];
 
 function entryUrl(name: string): string | null {

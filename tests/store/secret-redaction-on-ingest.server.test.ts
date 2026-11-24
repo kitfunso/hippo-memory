@@ -1,4 +1,3 @@
-// Text no person typed into hippo (connector events, imported files, tool failures, git log lessons) loses its secret shapes before it is stored.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -31,7 +30,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
 const SLACK_TOKEN = runtimeJoin('xoxb-', '1234567890', '12-', 'AbCdEfGhIjKlMnOp');
 const SIGNING = 'route-test-signing';

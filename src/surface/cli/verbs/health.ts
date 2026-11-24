@@ -1,5 +1,3 @@
-// Store health, connectors, the summary tree and curation verbs, in `hippo help` order.
-
 import { TAIL_MAX_LINES } from '../support-bundle.js';
 import { DEFAULT_ASSEMBLE_BUDGET, DEFAULT_FRESH_TAIL_COUNT } from '../../../api/assemble.js';
 import { DEFAULT_DRILL_DOWN_LIMIT } from '../../../api/objects/drill-down.js';

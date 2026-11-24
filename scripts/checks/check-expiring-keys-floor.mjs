@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// A store's floor rises to one of these constants when it first uses that schema, so each must name a release that
-// ships the schema: an older binary would open the store and misread it. Wired beside check-manifest-versions.mjs.
 
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -23,7 +21,6 @@ function fail(message) {
   process.exit(1);
 }
 
-/** Plain x.y.z as numbers, or null for anything else. */
 function parseVersion(v) {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(v);
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
@@ -48,7 +45,6 @@ const floors = FLOORS.map(([name, schema]) => {
   if (!floorParts || !packageParts) {
     fail(`expected plain x.y.z versions, got ${name} ${floor} and package ${packageVersion}.`);
   }
-  // A floor above the running binary would lock the binary out of every store that reaches it.
   if (isAbove(floorParts, packageParts)) fail(`${name} ${floor} is above the package version ${packageVersion}.`);
   return { name, schema, floor };
 });
@@ -68,7 +64,6 @@ if (tags.size === 0) {
 
 for (const { name, schema, floor } of floors) {
   const tag = `v${floor}`;
-  // An untagged floor can only be the release being cut; any other untagged version was never checked against a schema.
   if (!tags.has(tag)) {
     if (floor !== packageVersion) {
       fail(`${name} ${floor} names no release tag and is not the package version ${packageVersion}.`);

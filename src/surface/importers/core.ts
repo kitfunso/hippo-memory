@@ -1,6 +1,3 @@
-/** Memory importers for Hippo.
- *  Imports memories from ChatGPT, Claude, Cursor, generic files, and structured markdown. */
-
 import { ALL_TENANTS, DEFAULT_TENANT_ID, type TenantId } from '../../base/util/tenant.js';
 import { createMemory, Layer, MemoryEntry } from '../../base/memory/entry.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
@@ -15,9 +12,7 @@ import type { Rejections } from '../../base/ports/store/rejections.js';
 import type { Sharing } from '../../base/ports/store/sharing.js';
 import type { Clock } from '../../base/ports/infra.js';
 
-/** Below this length a chunk holds nothing worth recalling. */
 const MIN_IMPORT_CHARS = 10;
-/** An imported memory keeps at most this much of its chunk; the rest is cut with a warning. */
 const MAX_IMPORT_CHARS = 1000;
 
 export interface ImportResult {
@@ -58,14 +53,11 @@ export interface ImportOptions {
   scope?: string;
 }
 
-/** A port call answered at once: the published importers return their result, never a Promise. */
 type AtOnce<F> = F extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never;
 
 /** The port calls an import makes on its folder's store, answered at once; a composition root
  * builds them. */
 export interface ImportFiles {
-  /** Creates the store's files when they are missing, as a first import to the global store
-   * needs. */
   readonly ensure: () => void;
   readonly writeEntry: AtOnce<EntryWrites['writeEntry']>;
   readonly refusedAmong: AtOnce<Rejections['refusedAmong']>;
@@ -75,10 +67,7 @@ export interface ImportFiles {
 /** The folder an import writes to and its store's calls; a composition root builds it. */
 export interface ImportTarget {
   readonly root: string;
-  /** Runs the import's writes as one batch on the store's calls it hands `run`, which for
-   * hippo.db open it once. */
   readonly batch: <T>(run: (files: ImportFiles) => T) => T;
-  /** The root's clock, which stamps each imported memory. */
   readonly clock: Clock;
 }
 
@@ -103,8 +92,6 @@ export function importEntriesInto(
   const newEntry = (chunk: string): MemoryEntry =>
     createImportEntry({ chunk, source, allTags, options, baseHalfLifeDays });
 
-  // One batch, so the store opens once however many chunks land: each write, or a dry run's guard
-  // probe, shares its handle.
   return options.target.batch((files) =>
     importChunks(chunks, openImportTarget(options, files), options, newEntry),
   );
@@ -138,7 +125,6 @@ function importChunks(
       rejected++;
       continue;
     }
-    // Add to existing so subsequent chunks dedup against freshly imported ones
     if (!options.dryRun) target.written.add(duplicateKey(chunk));
 
     entries.push(entry);
@@ -152,13 +138,10 @@ function importChunks(
 interface OpenImport {
   readonly targetRoot: string;
   readonly files: ImportFiles;
-  /** Whose rows a chunk is checked against. */
   readonly tenantId: TenantId;
-  /** Keys of the chunks this run wrote; a dry run writes none. */
   readonly written: Set<string>;
 }
 
-/** The store the import writes to, made ready. */
 function openImportTarget(
   { global, tenantId, target }: TargetedImport,
   files: ImportFiles,
@@ -174,8 +157,6 @@ function skipReason(chunk: string, target: OpenImport): 'too-short' | 'duplicate
   return null;
 }
 
-/** Only the rows holding the chunk's words can hold the chunk, so the store is asked for those
- * alone. */
 function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
   const key = duplicateKey(chunk);
   return files
@@ -183,7 +164,6 @@ function storeHolds({ files, tenantId }: OpenImport, chunk: string): boolean {
     .some((row) => heldTextKeys(row).includes(key));
 }
 
-/** The secret-vetted chunk capped at MAX_IMPORT_CHARS, and whether vetting changed it. */
 function prepareImportChunk(raw: string) {
   const original = raw.trim();
   const trimmed = vetSecrets(original).content;
@@ -209,9 +189,6 @@ function createImportEntry({
   options,
   baseHalfLifeDays,
 }: CreateImportEntryOptions): MemoryEntry {
-  // kind defaults to 'distilled': these exports are curated user pastes, not raw transcripts from a
-  // system of record (see MEMORY_ENVELOPE.md). The write must use the same tenant as the scoped
-  // dedup read above: global=true writes host-wide, global=false writes to options.tenantId.
   return createMemory(
     chunk,
     {
@@ -226,8 +203,6 @@ function createImportEntry({
   );
 }
 
-/** Writes the entry, or on a dry run only probes the guard; false when a rejected value refuses
- * it. */
 function writeOrProbeImport(
   target: OpenImport,
   entry: MemoryEntry,
@@ -242,7 +217,6 @@ function writeOrProbeImport(
     };
     return !files.refusedAmong([check])[0];
   }
-  // A rejection refuses one chunk, not the whole import, so siblings still land.
   try {
     files.writeEntry({ entry, actor: CLI_ACTOR });
   } catch (err) {

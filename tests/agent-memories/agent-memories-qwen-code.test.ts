@@ -1,6 +1,3 @@
-/**
- * Qwen Code adapter: base folder precedence, project keys, local scope and the note rules.
- */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

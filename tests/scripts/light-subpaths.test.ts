@@ -1,4 +1,3 @@
-// A light subpath loads in a hook process on a machine with no store, so its runtime imports must not reach one.
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -13,7 +12,6 @@ function resolveTs(fromFile: string, spec: string): string | null {
   return candidates.find((c) => existsSync(c) && statSync(c).isFile()) ?? null;
 }
 
-/** Every src module `entry` loads at runtime, as paths relative to src/. */
 function importClosure(entry: string): string[] {
   const seen = new Set<string>();
   const queue = [join(SRC, entry)];
@@ -33,7 +31,6 @@ function importClosure(entry: string): string[] {
 describe('light subpath import closures', () => {
   it('hippo-memory/session-text reaches no store, db, server, api or index module', () => {
     const closure = importClosure('entry/session-text.ts');
-    // The walk follows re-exports, so every module the entry names is in it.
     expect(closure).toEqual(
       expect.arrayContaining([
         'surface/capture/transcript.ts',

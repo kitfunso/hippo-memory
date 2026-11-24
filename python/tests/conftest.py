@@ -1,16 +1,3 @@
-"""pytest fixtures: spawn a real `hippo serve` subprocess per test.
-
-Per project rule "always use real DB for tests". Each test gets a fresh
-HIPPO_HOME (per-test scope) and a freshly-spawned serve subprocess. Cost:
-~200ms per test for the subprocess respawn. Worth it for isolation.
-
-If the serve subprocess fails to come up within the timeout (a setup
-issue, not an SDK bug), the test is SKIPPED locally so a checkout
-without a built bin/hippo.js still runs. CI builds the bin and sets
-HIPPO_REQUIRE_SERVE=1, which turns every such skip into a FAIL: a run
-that never reached a server must not report green.
-"""
-
 from __future__ import annotations
 import json
 import os
@@ -31,14 +18,12 @@ HIPPO_BIN = REPO_ROOT / "bin" / "hippo.js"
 
 
 def _pick_free_port() -> int:
-    """Bind to port 0 to let the OS pick a free port, then return + close."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
 def _unavailable(reason: str) -> NoReturn:
-    """Skip locally; fail under HIPPO_REQUIRE_SERVE (set in CI)."""
     if os.environ.get("HIPPO_REQUIRE_SERVE"):
         pytest.fail(reason)
     pytest.skip(reason)
@@ -63,35 +48,27 @@ _MEMBER_KEYS: dict[str, str] = {}
 
 @pytest.fixture(scope="function")
 def hippo_admin_key(hippo_server: str) -> str:
-    """An admin key for the server `hippo_server` started; a keyless client is only a member."""
     return _ADMIN_KEYS[hippo_server]
 
 
 @pytest.fixture(scope="function")
 def hippo_member_key(hippo_server: str) -> str:
-    """The member key `hippo serve` wrote to server.key, as the hippo CLI on the same machine sends it."""
     return _MEMBER_KEYS[hippo_server]
 
 
 @pytest.fixture(scope="function")
 def hippo_server() -> Iterator[str]:
-    """Spawn `node bin/hippo.js serve` on a free port; yield base URL.
-
-    SIGTERMs the subprocess on teardown. Cleans the per-test HIPPO_HOME.
-    """
     if not HIPPO_BIN.exists():
         _unavailable(f"hippo binary not found at {HIPPO_BIN} (run `npm run build` in repo root)")
 
     home = tempfile.mkdtemp(prefix="hippo-py-test-")
     port = _pick_free_port()
-    # Most SDK tests send the member key serve writes; the ones that need admin use hippo_admin_key.
     env = {
         **os.environ,
         "HIPPO_HOME": home,
         "HIPPO_TENANT": "default",
     }
 
-    # hippo serve requires a .hippo dir to exist. Bootstrap it via `hippo init`.
     init = subprocess.run(
         ["node", str(HIPPO_BIN), "init", "--no-hooks"],
         env=env,
@@ -120,7 +97,7 @@ def hippo_server() -> Iterator[str]:
     proc = subprocess.Popen(
         ["node", str(HIPPO_BIN), "serve", "--port", str(port)],
         env=env,
-        cwd=home,  # serve reads .hippo from cwd; tmp HIPPO_HOME stays scoped to test
+        cwd=home,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

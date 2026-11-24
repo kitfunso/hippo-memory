@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Z6 automatic supersession, shipped baseline: prereg docs/evals/2026-09-28-z6-supersession-prereg.md.
-// Prints AGGREGATE NUMBERS ONLY to stdout: never memory text, transcript text, user names or local paths.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,10 +19,8 @@ const FIXTURE_DEFAULT = path.join(REPO, 'benchmarks', 'z6-supersession', 'fixtur
 const OUT_DEFAULT = path.join(REPO, 'benchmarks', 'z6-supersession', 'results.json');
 const EPOCH_MS = Date.parse('2026-09-01T09:00:00.000Z');
 const ALL_LABELS = ['a', 'x', 'd', 'd0', 's', 'n', 'c', 'b'];
-// 06:15 UTC as an offset from day()'s 09:00 baseline.
 const DAILY_RUNNER_HOURS = 6 + 15 / 60 - 9;
 
-// ISO timestamp for day n (2026-09-01 = day 0) plus an hour offset from that day's 09:00 UTC.
 function day(n, hours = 0) {
   return new Date(EPOCH_MS + n * 86400000 + hours * 3600000).toISOString();
 }
@@ -47,12 +43,9 @@ function parseArgs(argv) {
 
 const isStr = (v) => Object.prototype.toString.call(v) === '[object String]';
 
-// --- child env, spawn and polling ---
-
 function buildEnv(rootBase, fakeNow) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) {
-    // GIT_* too: a GIT_DIR or GIT_WORK_TREE would point learn --git and context --auto at a real repo.
     if (/KEY|TOKEN|SECRET/i.test(k) || k.startsWith('HIPPO_') || k.startsWith('CLAUDE') || k.startsWith('GIT_') || k === 'XDG_DATA_HOME') delete env[k];
   }
   const root = path.join(rootBase, 'qa', 'qb', 'qc');
@@ -68,7 +61,6 @@ const rootDirs = (rootBase) => {
   return { root, home: path.join(root, 'home'), hh: path.join(root, 'hh'), proj: path.join(root, 'proj') };
 };
 
-// Outside the temp dir hippo's store walk (src/core/project-identity.ts:161-170) can reach the user's real ~/.hippo.
 function checkRootBase(base) {
   fs.mkdirSync(base, { recursive: true });
   const rel = path.relative(fs.realpathSync(os.tmpdir()), fs.realpathSync(base));
@@ -90,7 +82,6 @@ function runDailyRunner(proj, env) {
   return r;
 }
 
-// A real blocking wait with no child process, since spawning one per 200ms poll tick is wasteful.
 function blockMs(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
@@ -104,8 +95,6 @@ function pollLog(logPath, pattern, capMs) {
   }
   throw new Error(`poll timeout waiting for session-end worker log at ${logPath}`);
 }
-
-// --- pre-flight (full run and --only; never selftest) ---
 
 function probeKeysGone(env) {
   const keys = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'HIPPO_LLM_RERANKER_KEY', 'TYPESAFE_API_KEY', 'HIPPO_LLM_BASE_URL', 'HIPPO_LLM_API_KEY', 'HIPPO_LLM_MODEL', 'HIPPO_LLM_ALLOW_HTTP'];
@@ -125,8 +114,6 @@ function checkNoEmbeddings() {
     dir = parent;
   }
 }
-
-// --- db reads ---
 
 let DatabaseSyncCtor = null;
 async function getDatabaseSync() {
@@ -168,7 +155,6 @@ async function readBothDbs(proj, hh) {
   return out;
 }
 
-// Rows of a table that may be absent from a store; any other SQL error is a real failure and is rethrown.
 function tableRows(conn, sql) {
   try { return conn.prepare(sql).all(); } catch (err) {
     if (/no such table/i.test(err instanceof Error ? err.message : String(err))) return [];
@@ -178,7 +164,6 @@ function tableRows(conn, sql) {
 
 async function readFinalExtras(proj, hh) {
   const DatabaseSync = await getDatabaseSync();
-  // dormant: id -> half-life in the snapshot sleep kept when the row went dormant.
   const conflictRows = [], forgetRows = [], dormant = new Map();
   for (const file of [path.join(proj, '.hippo', 'hippo.db'), path.join(hh, 'hippo.db')]) {
     if (!fs.existsSync(file)) continue;
@@ -193,8 +178,6 @@ async function readFinalExtras(proj, hh) {
   }
   return { conflictRows, forgetRows, dormant };
 }
-
-// --- transcript writer (capture arm) ---
 
 function writeTranscript(proj, home, sid, nowIso, turns) {
   const slug = proj.replace(/[^a-zA-Z0-9]/g, '-');
@@ -216,8 +199,6 @@ function writeTranscript(proj, home, sid, nowIso, turns) {
   return file;
 }
 
-// --- template build (once per run); R1-R3 ---
-
 function buildTemplate(rootBase, fixture) {
   const qa = path.join(rootBase, 'qa');
   const tpl = path.join(rootBase, 'tpl');
@@ -226,7 +207,6 @@ function buildTemplate(rootBase, fixture) {
   const { home, hh, proj } = rootDirs(rootBase);
   for (const d of [home, hh, proj]) fs.mkdirSync(d, { recursive: true });
 
-  // R3: learn --git must find no repo here, or the daily run reads real commit history.
   const gitCheck = spawnSync('git', ['-C', proj, 'rev-parse', '--is-inside-work-tree'], { encoding: 'utf8', windowsHide: true, env: buildEnv(rootBase) });
   if ((gitCheck.stdout || '').trim() === 'true') throw new Error('proj sits inside a git work tree; learn --git would read it');
 
@@ -261,8 +241,6 @@ function resetFromTemplate(rootBase) {
   fs.rmSync(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   fs.cpSync(tpl, r, { recursive: true });
 }
-
-// --- per-scenario timeline ---
 
 function buildTimeline(scenario) {
   const K = scenario.statements.length;
@@ -316,9 +294,6 @@ function assertBm25Only(blocks) {
   }
 }
 
-// --- one (scenario, arm) run ---
-
-// What the ask saw goes in as one object, so labelling stays a step apart from the run loop.
 function labelScenarioArm(scenario, arm, seen) {
   const { rows, finalIds, extras, filler, captureOutcomes, contextText, autoText, rankedIds, blocks } = seen;
   const K = scenario.statements.length;
@@ -331,7 +306,6 @@ function labelScenarioArm(scenario, arm, seen) {
     label = union.label;
     const sKey = norm(scenario.statements[K - 2].marker), cKey = norm(scenario.statements[K - 1].marker);
     const diag = changeDiagnostics(rows, finalIds, sKey, cKey, extras.conflictRows, extras.forgetRows);
-    // R16: recorded for every arm, not just oracle, so an n/s label can be told apart from a question that never reached a stored clause.
     const sRows = [...rows.values()].filter((r) => r.values.has(sKey));
     const cRows = [...rows.values()].filter((r) => r.values.has(cKey));
     const reach = computeReach(blocks, new Set(sRows.map((r) => r.id)), new Set(cRows.map((r) => r.id)));
@@ -371,7 +345,6 @@ async function runScenarioArm(scenario, arm, rootBase, tplInfo, fixture, fillerN
   const captureOutcomes = [];
   let cursor = 0;
   const askDay = 5 * K;
-  // Baseline: a template row that statement 1's own sleep deletes must still be seen, or it escapes the filler guard.
   await snap(null);
   for (let d = 0; d <= askDay; d++) {
     if (d > 0 && arm !== 'oracle') runDailyRunner(proj, buildEnv(rootBase, day(d, DAILY_RUNNER_HOURS)));
@@ -395,7 +368,6 @@ async function runScenarioArm(scenario, arm, rootBase, tplInfo, fixture, fillerN
   const ctxPayload = JSON.stringify({ session_id: askSid, prompt: scenario.question, cwd: proj, hook_event_name: 'UserPromptSubmit' });
   const ctxR = runHippo(['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'], proj, env, ctxPayload);
   const contextText = ctxR.stdout.trim() ? JSON.parse(ctxR.stdout).hookSpecificOutput.additionalContext : '';
-  // The command the CLAUDE.md block hippo writes tells the agent to run at task start (src/cli.ts:7819).
   const autoText = runHippo(['context', '--auto', '--budget', '1500'], proj, env).stdout;
   const recallR = runHippo(['recall', scenario.question], proj, env);
   const rankedIds = parseRankedIds(recallR.stdout);
@@ -423,8 +395,6 @@ async function runScenarioArm(scenario, arm, rootBase, tplInfo, fixture, fillerN
   return { id: scenario.id, split: scenario.split, category: scenario.category, domain: scenario.domain, arm, label, contextLabel, recallLabel, autoLabel, detail };
 }
 
-// --- summary and verdict ---
-
 function buildSummary(results) {
   const arms = [...new Set(results.map((r) => r.arm))];
   const splits = ['tune', 'heldout', 'all'];
@@ -445,7 +415,6 @@ function buildSummary(results) {
       }
       const perSurface = Object.fromEntries(['context', 'recall', 'auto'].map((sf) => [sf, Object.fromEntries(ALL_LABELS.map((l) => [l, change.filter((r) => r[`${sf}Label`] === l).length]))]));
       const pass = counts.d ?? 0;
-      // The build's second rate: d among scenarios where both S and C were stored, so capture misses do not hide it.
       const storedBoth = change.filter((r) => r.label !== 'a').length;
       const sumOf = (key) => change.reduce((s, r) => s + (r.detail[key] ?? 0), 0);
       summary[arm][split] = {
@@ -494,8 +463,6 @@ function printStdout(results, verdict) {
   console.log(`verdict: ${verdict.status}${verdict.reasons.length ? ' (' + verdict.reasons.join('; ') + ')' : ''}`);
 }
 
-// --- compare mode ---
-
 function compareResults(a, b) {
   console.log(`a verdict: ${a.verdict.status}`);
   console.log(`b verdict: ${b.verdict.status}`);
@@ -510,9 +477,6 @@ function compareResults(a, b) {
   }
 }
 
-// --- main ---
-
-// dist/ is gitignored, so the built code a run measured is named by a hash of every file in it.
 function hashDir(dir) {
   const h = crypto.createHash('sha256');
   const files = fs.readdirSync(dir, { recursive: true }).map((f) => String(f).replace(/\\/g, '/')).filter((f) => fs.statSync(path.join(dir, f)).isFile()).sort();
@@ -565,7 +529,6 @@ async function main() {
   const verdict = computeVerdict(results, args);
   const git = (...a) => spawnSync('git', ['-C', REPO, ...a], { encoding: 'utf8', windowsHide: true }).stdout.trim();
   const commit = git('rev-parse', '--short', 'HEAD');
-  // A rebase rewrites HEAD, so the measured hippo code is named by the last src/ commit; -dirty flags local edits.
   const srcCommit = git('log', '-1', '--format=%h', '--', 'src') + (git('status', '--porcelain', '--', 'src') ? '-dirty' : '');
   const pkg = JSON.parse(fs.readFileSync(path.join(REPO, 'package.json'), 'utf8'));
   const fixtureSha256 = crypto.createHash('sha256').update(fs.readFileSync(fixturePath)).digest('hex');

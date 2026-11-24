@@ -1,5 +1,3 @@
-// Graceful shutdown and the socket deadlines for hippo's HTTP listeners: the API server and the
-// dashboard.
 import type { Server, ServerResponse } from 'node:http';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
 import { bodyDeadlineMs } from '../http/http-util.js';
@@ -28,8 +26,6 @@ export const DEFAULT_SHUTDOWN_DRAIN_MS = 5000;
 /** How long a stop waits for work a request handed off, such as an embed, before the stores close. */
 export const DETACHED_SETTLE_MS = 5000;
 
-// Past the request drain, a stop waits up to DETACHED_SETTLE_MS for handed-off work, then for each
-// store thread to end its statement and close: seconds at most, so longer means a stuck thread.
 const STORE_CLOSE_GRACE_MS = 10_000;
 
 /** How long a signal or crash shutdown may run before the process is ended without it. */

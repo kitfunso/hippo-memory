@@ -1,7 +1,3 @@
-/**
- * CLI integration tests for `hippo audit prune` (v1.12.9).
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -61,7 +57,6 @@ describe('hippo audit prune CLI', () => {
     expect(stdout).toMatch(/would delete 7 rows/);
     expect(stdout).toMatch(/dry-run; re-run without --dry-run/);
 
-    // Confirm nothing was actually deleted (rerun real prune still finds 7).
     const { stdout: stdout2 } = await runCli(root, ['audit', 'prune', '--older-than', '30d']);
     expect(stdout2).toMatch(/deleted 7 rows/);
   });
@@ -79,7 +74,7 @@ describe('hippo audit prune CLI', () => {
   it('accepts plain integer days (no d suffix)', async () => {
     seed(root, 'default', 100, 1);
     const { stdout } = await runCli(root, ['audit', 'prune', '--older-than', '30']);
-    expect(stdout).toMatch(/deleted 1 row /); // singular
+    expect(stdout).toMatch(/deleted 1 row /);
   });
 
   it('--tenant scopes the prune to a specific tenant', async () => {
@@ -89,7 +84,6 @@ describe('hippo audit prune CLI', () => {
     const { stdout } = await runCli(root, ['audit', 'prune', '--older-than', '30d', '--tenant', 'tenant-a']);
     expect(stdout).toMatch(/deleted 4 rows for tenant "tenant-a"/);
 
-    // tenant-b should be untouched
     const { stdout: stdout2 } = await runCli(root, [
       'audit',
       'prune',

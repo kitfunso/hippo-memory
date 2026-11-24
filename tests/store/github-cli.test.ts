@@ -1,12 +1,3 @@
-/**
- * Tests for `hippo github` CLI subcommands (Task 15).
- *
- * Strategy: runCliAs (mirrors tests/connectors/slack-cli.test.ts) for
- * end-to-end argv/exit-code behaviour. The backfill happy paths call
- * handleGitHub in-process against a stubbed global fetch, so no request reaches GitHub. src/surface/cli/github.ts is intentionally kept side-effect
- * free so it can be imported in-process.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
@@ -28,7 +19,6 @@ function runCli(cwd: string, args: string[], extraEnv: Record<string, string> = 
   });
 }
 
-/** Every GitHub list call answers one 200 page with no next link: `issues` on the issues stream, empty elsewhere. */
 function stubGitHubIssues(issues: readonly JsonValue[]): void {
   vi.stubGlobal(
     'fetch',
@@ -68,7 +58,6 @@ describe('hippo github CLI', () => {
   });
 
   it('backfill --repo with GITHUB_TOKEN + stubbed fetch ingests one issue', async () => {
-    // Single issue page, then empty pages on the other two streams.
     stubGitHubIssues([
       {
         number: 1,
@@ -80,7 +69,6 @@ describe('hippo github CLI', () => {
       },
     ]);
     vi.stubEnv('GITHUB_TOKEN', 'fake-token');
-    // Capture stdout so we can parse the JSON result.
     const logs: string[] = [];
     const origLog = console.log;
     console.log = (...a: unknown[]) => logs.push(a.map(String).join(' '));
@@ -103,9 +91,7 @@ describe('hippo github CLI', () => {
     };
     expect(json.ingested.issues).toBe(1);
     expect(json.pages.issues).toBe(1);
-    // Verify the row actually landed in the store.
     const all = loadAllEntries(hippoRoot, 'default');
-    // An issue's memory is its title and body, a blank line apart.
     expect(all.map((e) => e.content)).toEqual(['hello\n\nworld']);
   });
 
@@ -304,7 +290,6 @@ describe('hippo github CLI', () => {
     });
   }
 
-  /** Parks one signed delivery with every column the webhook route writes, and returns the row id. */
   function parkDelivery(
     eventName: string,
     body: string,
@@ -362,7 +347,6 @@ describe('hippo github CLI', () => {
       expect(liveRaws(artifactRef)).toHaveLength(0);
       expect(loadAllEntries(hippoRoot, 'default')).toHaveLength(0);
 
-      // A second replay has nothing left to archive and still stores nothing.
       const again = await replay(deleted);
       expect(again.status).toBe(0);
       expect(again.stdout).toContain('replay ok: status=replayed memory_id=(none) retry_count=2');
@@ -372,7 +356,6 @@ describe('hippo github CLI', () => {
 
   const GHES_ENV = { GITHUB_ENTERPRISE_URL: 'https://ghes.example.com' };
 
-  /** The body with repository.html_url set; the fixtures carry none, so undefined leaves it as is. */
   function withRepoUrl(body: string, htmlUrl: string | undefined): string {
     if (htmlUrl === undefined) return body;
     return body.replace('"repository":{', `"repository":{"html_url":"${htmlUrl}",`);
@@ -608,7 +591,6 @@ describe('hippo github CLI', () => {
     expect(await retryCountOf(id)).toBe(3);
   });
 
-  /** Backfills one page of three issues in-process and returns how many the command reports ingested. */
   async function ingestedOfThreeIssues(repo: string, max: string | boolean): Promise<number> {
     stubGitHubIssues(
       [1, 2, 3].map((number) => ({

@@ -1,6 +1,3 @@
-// Every statement the Slack connector runs on hippo.db: backfill cursors, the event log, the
-// dead-letter queue and workspace routing. Each `xAt(db, ...)` runs on the caller's handle.
-
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
 import {
@@ -19,8 +16,6 @@ import type {
 } from '../../../base/ports/store/connectors.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { handleStamp } from '../runtime/handle-clock.js';
-
-// Backfill cursors
 
 export function slackCursor(
   db: DatabaseSyncLike,
@@ -51,8 +46,6 @@ export function saveSlackCursor(
        excluded.updated_at`,
   ).run(tenantId, channelId, latestTs, handleStamp(db));
 }
-
-// Event log
 
 const SLACK_LOG: EventLogSpec = { table: 'slack_event_log', keyColumn: 'event_id' };
 

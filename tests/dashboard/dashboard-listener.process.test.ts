@@ -1,4 +1,3 @@
-// The dashboard's listener: a port it cannot open, the socket deadlines it shares with the API server, and a stop on a signal.
 import { afterEach, describe, expect, it, onTestFailed } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
@@ -32,7 +31,6 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-/** A scratch project with a store, its own home folder and its own global store. */
 function project(): Scratch {
   const s = scratch();
   scratches.push(s);
@@ -48,7 +46,6 @@ interface Exit {
 interface Watched {
   readonly stderr: () => string;
   readonly output: () => string;
-  /** Settles with the match once stdout holds `pattern`; fails when the child ends first. */
   readonly printed: (pattern: RegExp) => Promise<RegExpExecArray>;
   readonly exited: Promise<Exit>;
 }
@@ -65,7 +62,6 @@ function watch(child: ChildProcessWithoutNullStreams): Watched {
     stderr += chunk.toString('utf8');
   });
   const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
-  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
   onTestFailed(() => {
     console.error(output());
   });
@@ -133,7 +129,6 @@ describe('hippo dashboard listener', () => {
     });
     children.push(child);
     const watched = watch(child);
-    // The ticket is never on stdout; the banner names the URL file that holds it.
     const [, port, urlFile] = await watched.printed(
       /Hippo Dashboard running at http:\/\/localhost:(\d+)\/ \(open the URL with its token from (.+)\)/,
     );
@@ -142,14 +137,12 @@ describe('hippo dashboard listener', () => {
     const signIn = await fetch(ticketUrl, { redirect: 'manual' });
     expect(signIn.status).toBe(303);
     expect((await fetch(ticketUrl, { redirect: 'manual' })).status).toBe(401);
-    // A read wakes the reader thread, and the reply's kept-alive socket is one the stop has to close.
     const overview = await fetch(`http://127.0.0.1:${port}/api/overview`, {
       headers: { cookie: (signIn.headers.get('set-cookie') ?? '').split(';')[0]! },
     });
     expect(overview.status, await overview.text()).toBe(200);
 
     deliverStop(child);
-    // `hippo serve` allows a signal shutdown 15 s, inside the test timeout; a child that never ends fails there.
     expect(await watched.exited, watched.output()).toEqual({ code: 0, signal: null });
     expect(JSON.parse(readFileSync(reportFile, 'utf8'))).toEqual({ atSignal: 1, atExit: 0 });
     expect(watched.stderr()).toMatch(/received SIG(INT|TERM), shutting down/);

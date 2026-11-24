@@ -9,13 +9,6 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadActiveTaskSnapshot, loadLatestHandoff, saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 
-// DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T3 test 6:
-// session-end wiring. `handleSessionEnd` extracts `payload.session_id` from the
-// SessionEnd hook's stdin JSON and passes `--session-id` to the detached
-// `__session-end-worker`; the worker closes that session's own active
-// snapshot AFTER sleep+capture. Real built CLI, real detached child, no
-// mocks, the same idiom as tests/core/pre-compact-e2e.process.test.ts.
-
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-session-end-e2e-'));
   const env: NodeJS.ProcessEnv = {
@@ -47,10 +40,8 @@ function safeRmSync(p: string): void {
   }
 }
 
-// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
 const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
 
-/** A read just after the detached worker's window can still race its last DB write on a loaded machine; retry until it lands. */
 async function loadSnapshotRetrying(
   hippoRoot: string,
   tenantId: string,
@@ -68,10 +59,6 @@ async function loadSnapshotRetrying(
 
 const CLOSE_STEP = /closed \d+ active snapshot\(s\) for session |snapshot close failed: /;
 
-/** The worker's close-step line, success OR failure, so a failed close fails the
- * test fast with the worker's own error instead of waiting out the clock.
- * Reads the worker's `--log-file`, never the database: each database open runs
- * migrations that write, so a database poll made the worker's own close fail. */
 function closeStepLogged(logFile: string): boolean {
   return fs.existsSync(logFile) && CLOSE_STEP.test(fs.readFileSync(logFile, 'utf8'));
 }
@@ -107,8 +94,6 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    // The parent returns immediately; wait on the detached worker's own close
-    // line (see closeStepLogged), then read the row once.
     await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 1 active snapshot(s) for session sess-end-close-me');
     expect(await loadSnapshotRetrying(hippoRoot, 'default')).toBeNull();
@@ -143,14 +128,11 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
       source: 'pre-compact',
     });
 
-    // session-end fires for a DIFFERENT session (B) — A's row must survive.
     const logFile = path.join(dir, 'session-end.log');
     const payload = JSON.stringify({ session_id: 'sess-b-ending', hook_event_name: 'SessionEnd' });
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
-    // Wait until the worker reports its close step, so the survival check
-    // proves it ran and closed nothing rather than that we did not wait long enough.
     await waitForCloseStep(logFile);
     expect(fs.readFileSync(logFile, 'utf8')).toContain('closed 0 active snapshot(s) for session sess-b-ending');
     const snapshot = await loadSnapshotRetrying(hippoRoot, 'default');
@@ -170,7 +152,7 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     });
 
     const logFile = path.join(dir, 'session-end.log');
-    const payload = JSON.stringify({ hook_event_name: 'SessionEnd' }); // no session_id field
+    const payload = JSON.stringify({ hook_event_name: 'SessionEnd' });
     const result = runHippo(['session-end', '--log-file', logFile], dir, env, payload);
     expect(result.status).toBe(0);
 
@@ -188,11 +170,6 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
   });
 
   it('log-forgery guard: a session_id with embedded newlines cannot inject fake [hippo] log lines', async () => {
-    // PR #146 review finding: appendSessionEndCloseLog interpolates the
-    // payload-controlled session_id, so it must run the same
-    // sanitizeLogMessage guard appendPreCompactLog documents (capture.ts
-    // "Log-forgery guard" comment). Red-under-old: without the guard the
-    // crafted id below writes a standalone "FORGED [hippo] fake line".
     const logFile = path.join(dir, 'session-end-forgery.log');
     const evilId = 'sess-evil\nFORGED [hippo] fake line\nsess-tail';
     const payload = JSON.stringify({ session_id: evilId, hook_event_name: 'SessionEnd' });
@@ -202,8 +179,6 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
     await waitForCloseStep(logFile);
 
     const logText = fs.readFileSync(logFile, 'utf8');
-    // No line may START with the injected content — every log line stays
-    // [hippo]-prefixed with the control chars stripped from the id.
     const forgedLine = logText.split('\n').find((l) => l.startsWith('FORGED'));
     expect(forgedLine).toBeUndefined();
     expect(logText).toContain('sess-evilFORGED [hippo] fake linesess-tail');
@@ -249,7 +224,6 @@ describe('6. session-end wiring: --session-id argv + worker close', () => {
       sessionId: 'sess-own',
       source: 'pre-compact',
     });
-    // A tail with nothing to read is the one read that leaves a log line; the slot flip itself cannot be timed from a test.
     const transcriptPath = path.join(dir, 'own.jsonl');
     fs.writeFileSync(transcriptPath, JSON.stringify({ type: 'summary' }) + '\n');
 

@@ -29,7 +29,6 @@ function brushQuery(b: Brush | null): Pick<PageFilters, "amin" | "amax" | "smin"
   return { amin: Math.floor(b.a0), amax: Math.ceil(b.a1), smin: Math.floor(b.s0 * 100) / 100, smax: Math.ceil(b.s1 * 100) / 100 };
 }
 
-/** Reads the hash, not props: a handler that runs right after `navigate` must see the new route. */
 function drawerIsOpen(): boolean {
   const route = parseHash(window.location.hash);
   return route.view === "health" && route.memoryId !== null;
@@ -65,7 +64,6 @@ export function ProjectView({ projectKey, memoryId }: { projectKey: string; memo
   };
   const pages = useMemoryPages(projectKey, filters, clock);
 
-  // Rows the brush selects, before the chip; the last value stays while a new query loads.
   const [selected, setSelected] = useState(0);
   const allCount = pages.counts?.all;
   if (allCount !== undefined && allCount !== selected) setSelected(allCount);

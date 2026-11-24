@@ -1,5 +1,3 @@
-// The dashboard's reads answered from one thread of their own: each runs a synchronous aggregate
-// over a tenant's rows, so on the server thread it would hold every other request.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -22,8 +20,6 @@ export interface DashboardReader {
   memories(key: string, query: MemoryQuery, fresh: boolean): Promise<MemoryPage | null>;
   search(text: string, fresh: boolean): Promise<SearchResult>;
   memory(id: string, fresh: boolean): Promise<MemoryDetail | null>;
-  /** After a dashboard write: moves the snapshot id when it committed, and answers the detail of
-   * `entry` when given. */
   written(changed: boolean, entry?: MemoryEntry): Promise<MemoryDetail | null>;
   close(): Promise<void>;
 }
@@ -70,14 +66,10 @@ export interface ReaderInit {
 }
 
 export interface ReaderClocks {
-  /** Dates the strength projections. */
   readonly now: () => number;
-  /** Ages the snapshot id. */
   readonly cacheClock: () => number;
 }
 
-// Resolved from the package root, so a server run from TypeScript source starts the same built
-// file.
 const THREAD_ENTRY = fileURLToPath(
   new URL('../../../dist/surface/server/dashboard-reader-thread.js', import.meta.url),
 );
@@ -89,14 +81,11 @@ interface Pending {
   readonly reject: (err: Error) => void;
 }
 
-/** The thread's calls in flight, and why it stopped once it has. */
 interface ReaderState {
   readonly pending: Map<number, Pending>;
   gone?: Error;
 }
 
-/** Settles each call from the thread's reply, and every call left once the thread exits;
- * resolves on that exit. */
 function settleReplies(worker: Worker, state: ReaderState): Promise<void> {
   worker.on('message', (reply: ReaderReply) => {
     const waiting = state.pending.get(reply.id);
@@ -128,7 +117,6 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
     execArgv: ['--no-warnings'],
     workerData: init,
   });
-  // The listener keeps the process alive; the thread alone must not.
   worker.unref();
   const state: ReaderState = { pending: new Map() };
   const exited = settleReplies(worker, state);
@@ -152,8 +140,6 @@ export function startDashboardReader(init: ReaderInit, clocks: ReaderClocks): Da
     written: (changed, entry) =>
       call({ op: 'written', changed, ...(entry !== undefined && { entry }) }),
     close: async () => {
-      // The process must not end before the thread has closed its store, as when a failed listen
-      // leaves nothing else.
       worker.ref();
       if (state.gone === undefined) await call<null>({ op: 'close' });
       await exited;

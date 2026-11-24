@@ -1,5 +1,3 @@
-"""runner/score.py pooled BEAM mode (prereg Amendment 6 dated notes 3, entry 1): one primary over the four sizes, each
-size's smoke items left out, the conversation as the unit, every size loaded and checked as a single-size run loads it."""
 from __future__ import annotations
 
 import json
@@ -20,9 +18,9 @@ import score  # noqa: E402
 
 X, Y = score.X, score.Y
 SIZES = tuple(aj.BEAM_SIZES)
-CONVS = {"beam-100k": 2, "beam-500k": 3, "beam-1m": 3, "beam-10m": 1}  # conversations per size
+CONVS = {"beam-100k": 2, "beam-500k": 3, "beam-1m": 3, "beam-10m": 1}
 PER_CONV, TYPES = 4, ("abstention", "event_ordering")
-SPENT = ("bm25", "500K_1_q2_abstention")  # the one answer with no valid reply in 3 asks
+SPENT = ("bm25", "500K_1_q2_abstention")
 
 
 def ids_of(bench: str) -> list[str]:
@@ -30,7 +28,6 @@ def ids_of(bench: str) -> list[str]:
 
 
 def result(qid: str, value: float | None) -> dict:
-    """A saved runner result; None is an answer with no valid reply in 3 asks, which has no cutoff_results."""
     if value is None:
         return {"question_type": "abstention", "exhausted": [f"answer bm25 {qid}: cli"]}
     top = {"score": value, "judgment": "PASS" if value >= 0.5 else "FAIL", "memories_evaluated": 100}
@@ -39,7 +36,6 @@ def result(qid: str, value: float | None) -> dict:
 
 @pytest.fixture
 def world(tmp_path, monkeypatch) -> SimpleNamespace:
-    """Four sizes of answered BEAM results under root/beam-<size>/, the smoke table and the replay stubbed."""
     root, rng, truth = tmp_path / "results-r2", random.Random(7), {}
     smoke = {b: [ids_of(b)[0]] for b in SIZES}
     for bench in SIZES:
@@ -58,7 +54,7 @@ def world(tmp_path, monkeypatch) -> SimpleNamespace:
     table.write_text(json.dumps(smoke), encoding="utf-8")
     verified = []
 
-    def verify(bench, arms, out, ids):  # the replay needs call logs; its own tests are in test_runner_backend.py
+    def verify(bench, arms, out, ids):
         verified.append((bench, out, len(ids)))
         return aj.results_on_file(out)
 
@@ -87,7 +83,7 @@ def test_smoke_items_of_every_size_are_left_out_of_the_primary(world):
     lines, out = score.pooled(world.root, SIZES, None)
     every = [q for b in SIZES for q in ids_of(b)]
     kept = [q for q in every if q not in {s for v in world.smoke.values() for s in v}]
-    want = sum(world.truth[(X, q)] - world.truth[(Y, q)] for q in kept) / len(kept)  # equal weight per question
+    want = sum(world.truth[(X, q)] - world.truth[(Y, q)] for q in kept) / len(kept)
     assert (out["questions"], out["primary_questions"]) == (len(every), len(kept)) == (len(every), len(every) - 4)
     assert out["pairs"]["score/all"]["n"] == len(kept) and out["pairs"]["score/all"]["diff"] == pytest.approx(want)
     assert f"n={len(kept)} over" in primary_line(lines)
@@ -141,7 +137,7 @@ def test_a_missing_size_directory_exits_with_a_clear_message_before_any_scoring(
     with pytest.raises(SystemExit) as e:
         run_cli(monkeypatch, "--bench", "beam", "--root", str(world.root), "--out", str(out))
     assert "beam-1m" in str(e.value) and "scored pooled only when every size is answered" in str(e.value)
-    assert world.verified == [] and not out.exists()  # no replay ran and nothing was written
+    assert world.verified == [] and not out.exists()
 
 
 def test_the_cli_writes_the_pooled_score_files_and_keeps_the_two_modes_apart(world, monkeypatch, capsys):

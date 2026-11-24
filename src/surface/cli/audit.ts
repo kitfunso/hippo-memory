@@ -1,5 +1,3 @@
-// `hippo audit`: list and prune the audit log.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { MAX_AUDIT_LIMIT } from '../../base/util/limits.js';
 import type { AuditResult } from '../../base/memory/memory-audit.js';
@@ -23,8 +21,6 @@ import { AUDIT_OPS } from '../../base/records/audit-ops.js';
 import type { AuditEvent } from '../../base/ports/store/types.js';
 import type { AuditOp } from '../../base/records/audit-ops.js';
 
-// Audit log subcommands (`hippo audit list`)
-
 const VALID_AUDIT_OPS: ReadonlySet<AuditOp> = new Set<AuditOp>(AUDIT_OPS);
 
 function formatAuditRow(ev: AuditEvent): string {
@@ -37,7 +33,6 @@ function readAuditOp(flags: CliFlags): AuditOp | undefined {
   const opFlag = stringFlag(flags, 'op');
   // SAFETY: Set.has only compares by value, so a string outside the audit ops is a plain miss.
   if (opFlag && !VALID_AUDIT_OPS.has(opFlag as AuditOp)) {
-    // Built from the Set so the message cannot drift from the valid ops.
     const expected = Array.from(VALID_AUDIT_OPS).join(' | ');
     fail(`Unknown --op value: ${opFlag}. Expected one of: ${expected}.`);
   }
@@ -221,8 +216,6 @@ export async function handleAudit({
     await auditRepair(hippoRoot, tenantId, flags);
     return;
   }
-  // `audit list` and `audit prune` are the audit-log subcommands; other forms (no sub, --fix) keep
-  // the memory-quality auditor.
   if (args[0] === 'list' || args[0] === 'prune') {
     await printAuditLog(hippoRoot, tenantId, args, flags);
     return;

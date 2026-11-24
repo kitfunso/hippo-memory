@@ -1,5 +1,3 @@
-// SQL for the token_ledger table in the ledger database; callers keep the handle, the transaction
-// and the arithmetic.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { TokenSurface } from '../../../base/ports/store/ledger.js';
 import { placeholders } from '../../../db/sql.js';
@@ -46,7 +44,6 @@ interface LedgerAnchor {
   block_hash: string | null;
 }
 
-/** One session's ledger rows on one surface. */
 interface LedgerSurfaceOptions {
   readonly tenantId: string;
   readonly sessionId: string;

@@ -1,4 +1,3 @@
-// The built-in store's sharing reads: the existing functions, bound to this store.
 import { tallySources } from '../recall/candidates.js';
 import {
   listEntriesWithSignals,

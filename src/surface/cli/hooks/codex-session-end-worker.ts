@@ -1,5 +1,3 @@
-// The Codex wrapper's session-end worker (`__codex-session-end-worker`): sleep, then capture and
-// digest the rollout.
 import * as path from 'node:path';
 import { envCaptureScripted } from '../../../base/util/env.js';
 import { resolveCodexSessionTranscript } from '../../capture/codex-session.js';
@@ -24,7 +22,6 @@ export async function handleCodexSessionEndWorker({
   flags,
 }: CommandContext): Promise<void> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
-  // Like the other hooks: project store, else global; a folder with neither must not get one made.
   const store = hookStoreRoot(hippoRoot);
   if (!isInitialized(store)) {
     appendSessionEndCloseLog(logFile, 'skip: no hippo store for this folder or globally', {
@@ -42,8 +39,6 @@ async function sleepCodexProjectStore(
   tenantId: string,
   logFile: string | null,
 ): Promise<void> {
-  // Sleeping the global store from here would learn this folder's git commits into it; it has its
-  // own daily sleep.
   if (isInitialized(hippoRoot)) {
     try {
       await (
@@ -85,7 +80,6 @@ async function captureCodexTranscript({
 }: CaptureCodexTranscriptOptions): Promise<void> {
   try {
     const transcriptPath = codexTranscriptPath(flags);
-    // No Codex transcript must not fall through to the scan of Claude Code projects.
     if (!transcriptPath) {
       appendSessionEndCloseLog(logFile, 'skip capture: no Codex transcript for this session');
       return;
@@ -135,7 +129,6 @@ async function captureCodexRollout(
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: capture', err);
   }
-  // The Codex wrapper passes no session id, so the rollout file names the session.
   const digestKey = path.basename(transcriptPath, '.jsonl');
   const digestOpts = { key: digestKey, tenantId, log: digestLog, config: cliConfig(hippoRoot) };
   await recordSessionDigest(hippoRoot, cliStore(hippoRoot), scan, digestOpts);

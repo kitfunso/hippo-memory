@@ -1,5 +1,3 @@
-// Every recall the surface goldens pin, plus the branches they skip, run over serve() once on hippo.db and once on a
-// store that answers only through the port; the replies and the rows written must match.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { sqliteStore, type HippoStore } from '../../src/entry/store-kit.js';
@@ -42,7 +40,6 @@ interface Scenario {
 const on = (via: Surface, query: string, args: Args = {}): Call => ({ via, args: { query, ...args } });
 const SURFACES: readonly Surface[] = ['http', 'mcp'];
 const KEYED_TASK = 'ship the eu cluster for the loopback caller';
-// The seeded rows sit in a temp folder outside any project, so they are user-global and any project's recall reaches them.
 const PROJECT = 'golden';
 
 const SCENARIOS: readonly Scenario[] = [
@@ -85,7 +82,6 @@ const SCENARIOS: readonly Scenario[] = [
   ),
 ];
 
-/** MCP replies with text, so only the HTTP body proves a branch ran, except continuity: REST names no project, so a shared store's block is empty. */
 function branchReached(via: Surface, b: (typeof RECALL_BRANCHES)[number]): Scenario['reaches'] {
   if (b.name === 'include_continuity') {
     return via === 'mcp' ? (replies) => expect(JSON.stringify(replies[0]!.body)).toContain(KEYED_TASK) : undefined;
@@ -107,11 +103,9 @@ interface Pass {
 
 let templates: Templates;
 
-/** One scenario on a fresh store copy and a fresh server, so no ring or last-shown list carries over. */
 async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoStore): Promise<Pass> {
   const s = freshStore(templates, scenario.kind);
   try {
-    // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
     const store = makeStore?.(s.root);
     const handle = await serveKeyed({ hippoRoot: s.root, port: 0, store });
@@ -131,7 +125,6 @@ async function runPass(scenario: Scenario, makeStore?: (root: string) => HippoSt
 beforeAll(async () => {
   templates = await seedTemplates(async (root) => {
     await seedPortBranches(root);
-    // A shared store reads only the caller's keyed snapshot, and MCP's loopback caller owns by its subject.
     const key = { owner: 'localhost:cli', project: [PROJECT] };
     saveActiveTaskSnapshot(
       root,
@@ -164,7 +157,6 @@ describe.skipIf(needsHippoDb('parity'))('recall over the port matches recall on 
     const onPort = await runPass(scenario, portOnlyStore);
     expect(onPort.replies).toEqual(onHippoDb.replies);
     expect(onPort.rows).toEqual(onHippoDb.rows);
-    // The default store answers from worker threads; the same store in process must agree with it.
     const inProcess = await runPass(scenario, sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);

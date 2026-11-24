@@ -1,24 +1,3 @@
-/**
- * Runtime test for v1.11.5: lock the api.recall last_retrieval_ids divergence
- * from printRecall.
- *
- * Contract:
- *   - api.recall(ctx, opts) is a READ — it does NOT mutate
- *     index.last_retrieval_ids.
- *   - api.contextGet(ctx, opts) DOES write last_retrieval_ids (used by
- *     the SDK's outcome-after-context workflow).
- *   - The CLI printRecall (cli.ts:1282 region) also writes last_retrieval_ids
- *     because the CLI is interactive — user is about to run
- *     `hippo outcome --good`. This divergence is documented in api.recall's
- *     JSDoc and python/README.md Limitations.
- *
- * Adding the side-effect to api.recall would break SDK callers that batch
- * recall calls in a row (each would overwrite the last). Locked by this
- * test so future "make api.recall write the ids too" attempts trip CI.
- *
- * Real-DB per project convention.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { remember, retrieve, contextGet } from '../../src/api/index.js';
@@ -50,18 +29,15 @@ describe('api.recall divergence from printRecall (no last_retrieval_ids side-eff
       await remember(ctx, { content: 'recall-divergence-target-1' });
       await remember(ctx, { content: 'recall-divergence-target-2 also matches' });
 
-      // Snapshot: index.last_retrieval_ids starts empty.
       const before = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(before).toEqual([]);
 
-      // api.recall — should NOT mutate.
       const recallResult = await retrieve(ctx, { query: 'target', window: { limit: 5 } });
       expect(recallResult.results).toHaveLength(2);
       const afterRecall = loadLastRecall(home).last_retrieval_ids ?? [];
       expect(afterRecall).toEqual(before);
       expect(afterRecall).toEqual([]);
 
-      // api.contextGet - SHOULD mutate. (contextGet opts use `q`, not `query`.)
       const ctxResult = await contextGet(ctx, { currentProject: cwdProject(), q: 'target', budget: 1000 });
       expect(ctxResult.entries).toHaveLength(2);
       const afterContext = loadLastRecall(home).last_retrieval_ids ?? [];
@@ -80,12 +56,10 @@ describe('api.recall divergence from printRecall (no last_retrieval_ids side-eff
       await remember(ctx, { content: 'batched-B' });
       await remember(ctx, { content: 'batched-C' });
 
-      // SDK pattern: batch many recall calls in a row.
       await retrieve(ctx, { query: 'batched-A', window: { limit: 5 } });
       await retrieve(ctx, { query: 'batched-B', window: { limit: 5 } });
       await retrieve(ctx, { query: 'batched-C', window: { limit: 5 } });
 
-      // last_retrieval_ids must remain empty — none of the recalls wrote it.
       const idx = loadLastRecall(home);
       expect(idx.last_retrieval_ids ?? []).toEqual([]);
     } finally {

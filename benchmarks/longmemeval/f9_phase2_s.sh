@@ -1,27 +1,4 @@
 #!/usr/bin/env bash
-#
-# F9 Phase 2 — `_s` 5-cell hybrid eval orchestrator (BINDING Gate-B).
-#
-# Identical 5-cell matrix as Phase 1 oracle, run against the `_s` split
-# instead of oracle. The binding comparison is against F14's R@5 = 42.0
-# baseline + the inherited 97.7 Gate-B threshold (same threshold F14 /
-# F15 / F16 missed; not lowered per the prereg's discipline).
-#
-# Prereqs (must exist before running):
-#   data/lme_s/longmemeval_s_cleaned.json  (SHA-256 d6f21ea9d60a0d56f...)
-#   benchmarks/longmemeval/data/turn_index_bge_s.json.jsonl   (~2.7h re-build)
-#   benchmarks/longmemeval/data/bm25_corpus_s_turns.json
-#   benchmarks/longmemeval/data/bm25_corpus_s_sessions.json
-#   benchmarks/longmemeval/data/model-cache/Xenova/bge-base-en-v1.5/
-#
-# Usage:
-#   bash benchmarks/longmemeval/f9_phase2_s.sh
-#
-# Output:
-#   results/f9_phase2/<cell>/retrieval.jsonl
-#   results/f9_phase2/<cell>/eval.json
-#   results/f9_phase2/summary.json
-#
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -34,7 +11,6 @@ OUTROOT=results/f9_phase2
 
 export HIPPO_MODEL_CACHE="$(pwd)/benchmarks/longmemeval/data/model-cache"
 
-# Sanity-check prereqs.
 for f in "$DENSE" "$BM25_TURN" "$BM25_SESS" "$DATA"; do
   if [ ! -f "$f" ]; then
     echo "MISSING: $f"

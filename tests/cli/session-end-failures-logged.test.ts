@@ -1,4 +1,3 @@
-// End to end through bin/hippo.js: a session-end step that fails leaves a line in the session log and one warn line.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -49,14 +48,12 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-/** The lines of `text` that hold `needle`. */
 const linesWith = (text: string, needle: string): string[] => text.split('\n').filter((line) => line.includes(needle));
 
 describe('a session-end step that fails', () => {
   it('a Codex history file that cannot be read is named in the session log and at warn', async () => {
     const codexHome = path.join(tmp, 'codex');
     const unreadable = path.join(codexHome, 'history.jsonl');
-    // A folder where the history file should be: it exists, and reading it throws.
     fs.mkdirSync(unreadable, { recursive: true });
 
     const run = await hippo([

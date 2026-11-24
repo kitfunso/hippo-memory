@@ -1,5 +1,3 @@
-// The nearest-row read a CLI on this host asks of the served store, whose vector graph answers it;
-// it reaches no row the caller's own recall could not.
 import { BadRequestError, ForbiddenError } from '../../base/errors/api-errors.js';
 import {
   assertScopeRequestAllowed,

@@ -16,12 +16,8 @@ function cleanup(dir: string): void {
   removeDir(dir);
 }
 
-/** A fetch stub that returns a canned Claude-shaped JSON response. */
 function mockFetcher(body: string, ok = true): typeof fetch {
   const status = ok ? 200 : 500;
-  // A real Response satisfies `typeof fetch`'s return type directly, so no
-  // assertion is needed: .ok is derived from `status`, .json()/.text() work
-  // as usual.
   return async () => new Response(JSON.stringify({ content: [{ text: body }] }), { status });
 }
 
@@ -206,13 +202,12 @@ describe('refineStore', () => {
       });
       writeEntry(dir, semantic);
 
-      const fetcher = mockFetcher('ignored', false); // API error
+      const fetcher = mockFetcher('ignored', false);
       const result = await refineStore(dir, { llm: anthropicLlm({ apiKey: 'test', fetcher }) });
 
       expect(result.scanned).toBe(1);
       expect(result.refined).toBe(0);
       expect(result.failed).toBe(1);
-      // Untouched on failure
       expect(readEntry(dir, semantic.id)?.content).toContain('[Consolidated from');
     } finally {
       cleanup(dir);

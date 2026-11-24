@@ -1,5 +1,3 @@
-// The published entry for the store port: the interface every store implements; the roots import
-// the adapter by name.
 export type {
   AmbientCandidateRequest,
   ContextReads,

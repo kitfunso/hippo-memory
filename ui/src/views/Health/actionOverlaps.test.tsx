@@ -24,7 +24,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A POST route that records what it gets and answers only when the test says so. */
 function gate() {
   const seen: { body: string; keepalive: boolean }[] = [];
   const waiting: ((r: Response) => void)[] = [];
@@ -38,7 +37,6 @@ function gate() {
 const STEPS = ["forget", "wrong", "keep", "weaken", "pin", "unpin"] as const;
 type Step = (typeof STEPS)[number];
 
-/** The drawer button each step presses; with two conflicts open the first match is conflict 7. */
 const BUTTON = {
   forget: "Forget",
   wrong: "Mark wrong",
@@ -49,7 +47,6 @@ const BUTTON = {
 } satisfies Record<Step, string>;
 const DEFERRED: Step[] = ["forget", "wrong", "keep"];
 
-/** m1 sits in two conflicts (with m2 and m3) and every action route holds its answer until the test gives it. */
 interface SubjectOpts {
   pinned?: boolean;
   snapshot?: () => number;
@@ -97,13 +94,11 @@ async function openDrawer(id = "m1") {
   return dialog;
 }
 
-/** Presses a step's button in the open drawer; Forget closes the drawer, as in the app. */
 function press(step: Step, id = "m1") {
   const dialog = dialogOf(id)!;
   fireEvent.click(within(dialog).getAllByRole("button", { name: BUTTON[step] })[0]);
 }
 
-/** The same press, opening the drawer on m1 first when a Forget closed it. */
 async function perform(step: Step) {
   if (dialogOf("m1") === null) await openDrawer();
   press(step);
@@ -119,7 +114,6 @@ interface Seen {
   wrongOff: boolean;
 }
 
-/** What the row of m1 and its drawer show right now. */
 async function seen(): Promise<Seen> {
   const dialog = dialogOf("m1") ?? (await openDrawer());
   const pin = within(dialog).getByRole("button", { name: /^(Pin|Unpin)$/ });
@@ -136,7 +130,6 @@ async function seen(): Promise<Seen> {
 
 const present = (...labels: (string | false)[]): string[] => labels.filter((l): l is string => l !== false);
 
-/** What the base shows for m1 after these steps: each fact is its own lane and the later pin step wins the pin lane. */
 function expected(steps: Step[], startsPinned: boolean): Seen {
   const lastPin = steps.filter((s) => s === "pin" || s === "unpin").at(-1);
   const pinned = lastPin === undefined ? startsPinned : lastPin === "pin";
@@ -160,7 +153,6 @@ function expected(steps: Step[], startsPinned: boolean): Seen {
   };
 }
 
-/** Fake setTimeout and clearTimeout, with `Date.now` moved in step so a pause measures the same time the timers run. */
 function fakeClock() {
   let t = 1_700_000_000_000;
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -402,7 +394,6 @@ describe("overlaps: notices and Ctrl+Z", () => {
   });
 });
 
-/** The server moves to snapshot 2 when an action lands, and the next read of m1 waits until `answerGet`. */
 function movingServer(m1At: (snap: number) => Response) {
   let snap = 1;
   let hold = false;
@@ -425,7 +416,6 @@ function movingServer(m1At: (snap: number) => Response) {
 const heldGet = (calls: string[], path: string, n: number) =>
   waitFor(() => expect(calls.filter((c) => c === path)).toHaveLength(n));
 
-/** Presses a step and lets its 6 s window close, then hands the clock back to real time. */
 function pressAndSend(step: Step): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   press(step);
@@ -444,7 +434,6 @@ describe("overlaps: a settled action held for the drawer's fresh detail", () => 
     const server = movingServer((snap) =>
       json(makeMemory("m1", { snapshotId: snap, wrong: snap === 2, conflicts: [C7, C8] })),
     );
-    // Snapshot 0 is older than the drawer's data, so the drawer refuses this detail and the entry is held.
     const { calls } = openSubject({
       snapshot: server.snapshot,
       m1: server.m1,

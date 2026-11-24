@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Smoke lesson checker: pass when VERSION's patch number went up by exactly one and nothing else in it changed.
 import { spawnSync } from 'node:child_process';
 
 const read = (commit) => {

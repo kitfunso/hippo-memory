@@ -1,14 +1,11 @@
 /** @jsxImportSource preact */
 import { useEffect, useRef, useState } from 'preact/hooks';
 
-// One memory, three futures, from calculateStrength and markRetrieved in src/base/memory/memory.ts at their defaults.
-// Labels are HTML over a stretched SVG so text keeps its size at every width.
-
 type Ev = { day: number; kind: 'recall' | 'wrong' };
 type Pt = readonly [day: number, strength: number];
 
 const END = 730;
-const TOP = 1.1; // headroom above full strength for the recall labels
+const TOP = 1.1;
 
 function simulate(events: readonly Ev[]): Pt[] {
   let anchor = 0;
@@ -75,7 +72,7 @@ function Dot({ day, s, color }: { day: number; s: number; color: string }) {
 
 export default function DecayCurve() {
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(true); // SSR and no-JS render the finished chart
+  const [shown, setShown] = useState(true);
   const [animating, setAnimating] = useState(false);
 
   useEffect(() => {
@@ -84,7 +81,7 @@ export default function DecayCurve() {
     setShown(false);
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setAnimating(true)); // arm the transition only after the hidden state paints
+      raf2 = requestAnimationFrame(() => setAnimating(true));
     });
     const io = new IntersectionObserver(
       ([e]) => {

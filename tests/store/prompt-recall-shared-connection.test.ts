@@ -1,5 +1,3 @@
-// Z1's prompt-recall FTS query reopened the store contextGet's ambient
-// load had just opened and closed. Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -86,7 +84,7 @@ describe('prompt recall reuses the ambient load connection', () => {
     const ambientConns = new Set(calls.filter((c) => c.sql.includes('pinned = 1 AND')).map((c) => c.conn));
     const ftsConns = new Set(calls.filter((c) => c.sql.includes('memories_fts MATCH ?')).map((c) => c.conn));
 
-    expect(ambientConns.size).toBe(2); // one per store, local + global
+    expect(ambientConns.size).toBe(2);
     expect(ftsConns.size).toBe(2);
     expect(ftsConns).toEqual(ambientConns);
   });

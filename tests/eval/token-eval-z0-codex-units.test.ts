@@ -1,4 +1,3 @@
-// Z0 set X units: the tasks file, the plan, arm settings and env, the Codex args, rollout parser, waits and auth.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { delimiter, dirname, join } from 'node:path';
@@ -17,7 +16,6 @@ const R: FixtureRepo = { repo: 'r', base: 'b', fix: 'f' };
 interface SeqDef { id: string; cluster: string; repo: string; fixedOrder: boolean; set?: string; tasks: TaskDef[] }
 interface Step { seed: number; position: number; arm: string; sequence: SeqDef; taskId: string; role: { kind: string; set: string } }
 
-/** Three families on one sequence, every teach before its applies with two tasks between. */
 function xFamilies(seq: string, prefix: string) {
   const ids = ['a', 'b', 'c'].map((k) => `${prefix}${k}`);
   const families = ids.map((id) => ({ ...family(id, [lesson(`${id}-l1`, `Rule ${id} holds`)]), sequence: seq }));
@@ -42,7 +40,6 @@ describe('set X in the tasks file (test 1)', () => {
   it('accepts a sequence with set X and gives its tasks role set X', () => {
     const s = validateTasks(xSpec(), CHECKS);
     const steps: Step[] = planRuns(s, ['X1']);
-    // X1's 3 seeds times the 9 tasks: 3 teaches and 6 applies.
     expect(steps).toHaveLength(27);
     for (const st of steps) expect(st.role.set).toBe('X');
   });
@@ -83,7 +80,6 @@ describe('set X in the plan (test 2)', () => {
 
   it('rotates each set on its own, so every arm is first in its set equally often (prereg 120)', () => {
     const tasks = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, kind: 'no-lesson' }));
-    // 20 positions is a multiple of both the 5 A arms and the 4 X arms.
     const spec = { sequences: [{ id: 'sr', fixedOrder: true, tasks: tasks('r', 20) }, { id: 'sx', set: 'X', fixedOrder: true, tasks: tasks('x', 20) }] };
     const steps: Step[] = planRuns(spec, ['A0', 'A1', 'A2', 'A4', 'A5', 'X1', 'X2', 'X3', 'X4']);
     const firstCounts = (sequence: string) => {

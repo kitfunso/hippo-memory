@@ -1,7 +1,3 @@
-// Pins every help and unknown-verb form, that --help runs no verb, and that each help block names and describes the
-// flags its row declares. Each block is its own file under __snapshots__/cli-help/, so one changed block is one small diff.
-// In-process, since a spawn per form cost about a minute of CI time; one spawned run keeps the built binary in the loop.
-
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -16,7 +12,6 @@ import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
 import { runInProcess, type InProcessResult } from '../_helpers/run-in-process.js';
 
-// Read from the dispatch table so a verb added later is covered without editing this file.
 const ROWS = Object.entries<VerbRow>(COMMANDS);
 const ALIASES = ROWS.flatMap(([verb, row]) => (row.aliases ?? []).map((alias) => [alias, verb] as const));
 const VERBS = [...ROWS.map(([verb]) => verb), ...ALIASES.map(([alias]) => alias)];
@@ -33,17 +28,13 @@ const OWN_FLAG = new Map([
   ['github backfill', '--repo'],
 ]);
 const CLI = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
-// No PATH, so a spawned verb that ignored --help could not reach schtasks, crontab or codex.
 const ENV = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'));
 
-// No-op spies, so a verb that ignored --help is caught without running.
 const handlers = Object.entries<{ run: (...args: never[]) => void | Promise<void> }>(COMMANDS).map(
   ([verb, spec]) => [verb, vi.spyOn(spec, 'run').mockImplementation(() => undefined)] as const,
 );
 
-// Pinned rather than read from the rows, so a row that gains or loses --dry-run fails here first.
 const DRY_RUN_VERBS = ['audit', 'capture', 'dedup', 'forget', 'import', 'invalidate', 'refine', 'setup', 'sleep'];
-// Declared flags the help does not name yet: document one, then delete it here; the list may only shrink.
 const UNDOCUMENTED = new Map(
   Object.entries({
     remember: ['artifact-ref', 'extract', 'force', 'kind', 'layer', 'owner', 'scope'],
@@ -67,7 +58,6 @@ const UNDOCUMENTED = new Map(
     graph: ['entity', 'format', 'json', 'open', 'out'],
   }),
 );
-// Named flags whose help line says nothing of what they do: describe one, then delete it here; the list may only shrink.
 const UNDESCRIBED = new Map(
   Object.entries({ snapshot: ['next-step', 'summary', 'task'], session: ['content'], import: ['scope'] }),
 );
@@ -78,10 +68,8 @@ const namesOf = (flags: VerbFlags): string[] => [
   ...(flags.lists ?? []),
 ];
 
-/** Whether a help line whose left column names `--name` says what it does, on that line or the one under it. */
 function describes(lines: readonly string[], name: string): boolean {
   const flag = new RegExp(`--${name}(?![a-z0-9-])`);
-  // `--name <arg> Text`: one space before the text where the placeholder fills the left column.
   const tight = new RegExp(`--${name}(?:[ =]"?<[^>]*>"?)?\\]? [A-Z(]`);
   return lines.some((line, i) => {
     const [left = '', ...right] = line.trimStart().split(/ {2,}/);
@@ -180,7 +168,6 @@ describe('CLI help output is byte-identical and runs nothing', () => {
     const res = await run([verb, '--help']);
     expect([res.ran, res.written, res.status, res.stderr]).toEqual([[], [], 0, '']);
     const own = verbUsage(verb);
-    // The internal __ workers have no block of their own and print the full usage.
     if (own === null) expect(res.stdout).toBe(full.stdout);
     else {
       expect(res.stdout).toBe(`${own}\n`);
@@ -195,7 +182,6 @@ describe('CLI help output is byte-identical and runs nothing', () => {
   });
 
   it('every verb row names a handle<Verb> export and never a cmd<Name>', () => {
-    // Read from source: the spies above replaced each run function.
     const dir = resolve(__dirname, '..', '..', 'src', 'surface', 'cli', 'verbs');
     const rowCall = /\bverb\(\s*\(\) => import\('[^']+'\),\s*'(\w+)'/g;
     const names = readdirSync(dir).flatMap((file) =>
@@ -307,7 +293,6 @@ describe('usage blocks', () => {
     '%s help names and describes every flag the verb declares, and no other',
     async ([verb, spec]) => {
       const subHelp: string[] = [];
-      // One at a time: each run captures the process's stdout.
       for (const sub of SUBCOMMANDS.filter(([own]) => own === verb)) {
         subHelp.push((await run([...sub, '--help'])).stdout);
       }

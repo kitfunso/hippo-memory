@@ -1,4 +1,3 @@
-// Scratch env and verb runners the pre-compact e2e tests share.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -7,8 +6,6 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { hippoRun } from './spawn-hippo.js';
 import { runCliAs } from './run-cli-as.js';
 import type { InProcessResult } from './run-in-process.js';
-
-// Verbs run through runCli in this process; the first case of each verb spawns the local built CLI, never a global install.
 
 /**
  * Scratch $HOME + $HIPPO_HOME + tmp cwd for every test — never a repo

@@ -104,10 +104,6 @@ describe('schema migration v16: api_keys and audit_log tables', () => {
 describe('v16 backfill', () => {
   it('existing memories get tenant_id="default" after migration', () => {
     const home = makeRoot('a5-backfill');
-    // Seed at v15 by running migrations only up to 15. Easiest: open the DB once
-    // (which runs all migrations), then manually insert a row WITHOUT tenant_id and
-    // verify the DEFAULT applies. Pre-existing rows from the live system would have
-    // gone through this path on first open after upgrade.
     const db = openHippoDb(home);
     try {
       db.prepare(

@@ -1,13 +1,5 @@
-/**
- * Statistics and cost accounting for the token-efficiency evals: cost is priced over four buckets
- * (uncached input, cache write, cache read, output). Uncertainty uses paired, cluster
- * (same-repository tasks are not independent) and paired-ratio bootstraps; every resampler takes a
- * seed.
- */
-
 import { mulberry32 } from '../../base/util/prng.js';
 
-// The z0 fixture generator imports this name from dist.
 export { mulberry32 as seededRandom };
 
 const DEFAULT_ITERATIONS = 5000;
@@ -16,13 +8,9 @@ const DEFAULT_ALPHA = 0.05;
 
 /** Token usage for one model call or one whole task, split by how it is billed. */
 export interface Usage {
-  /** Input tokens billed at the base input price (not read from or written to a cache). */
   inputTokens: number;
-  /** Input tokens written to a prompt cache. */
   cacheWriteTokens: number;
-  /** Input tokens read from a prompt cache. */
   cacheReadTokens: number;
-  /** Output tokens, including any reasoning tokens the provider bills as output. */
   outputTokens: number;
 }
 
@@ -88,21 +76,16 @@ export interface Estimate {
   estimate: number;
   low: number;
   high: number;
-  /** Resamples drawn. */
   iterations: number;
 }
 
 /** Options shared by the bootstrap functions. */
 export interface BootstrapOptions {
-  /** Resamples. Default 5000. */
   iterations?: number;
-  /** Two-sided level, e.g. 0.05 for a 95% interval. Default 0.05. */
   alpha?: number;
-  /** PRNG seed. Default 1. */
   seed?: number;
 }
 
-/** Lower and upper ends of a percentile interval. */
 interface Interval {
   low: number;
   high: number;
@@ -169,9 +152,7 @@ export function clusteredPairedBootstrap(
 
 /** One task's outcome in one arm, for {@link costPerResolvedDelta}. */
 export interface ArmOutcome {
-  /** Dollars (or uncached-equivalent tokens) spent on the task. */
   cost: number;
-  /** Whether the task was resolved. */
   resolved: boolean;
 }
 
@@ -179,9 +160,7 @@ export interface ArmOutcome {
 export interface CostPerResolvedDelta {
   control: number;
   treatment: number;
-  /** treatment minus control, with its interval. */
   delta: Estimate;
-  /** (treatment minus control) / control, with its interval. Negative is a saving. */
   relative: Estimate;
 }
 
@@ -282,28 +261,17 @@ export type Repository<T> = readonly Family<T>[];
 
 /** An {@link Estimate} with a two-sided p-value, from bootstrap resamples or from a t test over repositories. */
 export interface TestedEstimate extends Estimate {
-  /** Bootstrap: 2 x min(share <= null, share >= null) of the resamples, capped at 1. t test: the two-sided Student t p.
-   *  NaN with fewer than two repositories. */
   readonly p: number;
-  /** Non-finite resamples, dropped; `iterations + dropped` is the number requested. Both are 0 for a t test. */
   readonly dropped: number;
-  /** The null the p-value tested against; {@link verdict} reads its sides from here. */
   readonly nullValue: number;
-  /** Degrees of freedom of a t test (a fixed-repository test gives a fractional Satterthwaite value);
-   *  absent on a bootstrap. */
   readonly df?: number;
-  /** Standard error of a t test; absent on a bootstrap. */
   readonly se?: number;
 }
 
 /** Options for {@link twoLevelBootstrap}. */
 export interface TwoLevelOptions extends BootstrapOptions {
-  /** Resamples. Default 10,000. */
   readonly iterations?: number;
-  /** Value the p-value tests against: 0 for differences, 1 for ratios. Default 0. */
   readonly nullValue?: number;
-  /** Keep every repository in place and resample families inside each: the stratified twin of a
-   *  fixed-repository t test. Default false. */
   readonly fixedRepositories?: boolean;
 }
 
@@ -328,7 +296,6 @@ function resampleUnits<T>(
   return units;
 }
 
-// Inclusive on both sides, as the p-value is worded; float noise around the null breaks a tie.
 function twoSidedP(samples: readonly number[], nullValue: number): number {
   let below = 0;
   let above = 0;
@@ -391,13 +358,9 @@ export type Verdict = 'loss' | 'win' | 'tie' | 'inconclusive';
 
 /** What a hypothesis needs to be read; see {@link verdict}. */
 export interface VerdictSpec {
-  /** Direction that favours the treatment arm. */
   readonly helpful: 'lower' | 'higher';
-  /** Inclusive band the interval must sit inside for a tie. */
   readonly tieBand: readonly [number, number];
-  /** An estimate on this value or beyond it, on the helpful side, reaches the minimum effect. */
   readonly minimumEffectAt: number;
-  /** Default 0.05. */
   readonly alpha?: number;
 }
 
@@ -448,7 +411,6 @@ export interface HarmGate {
   readonly resolveOk: boolean;
 }
 
-/** Smallest resolve-rate drop the gate tolerates: 5 points below the baseline. */
 const RESOLVE_DIFF_FLOOR = -0.05;
 
 /** Cost ratio's upper bound below 1.10, resolve difference's lower bound (a fraction) above

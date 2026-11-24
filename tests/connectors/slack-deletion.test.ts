@@ -35,7 +35,6 @@ describe('handleMessageDeleted', () => {
     const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
     expect(remaining).toHaveLength(0);
 
-    // raw_archive table now has the row.
     const db = openHippoDb(root);
     try {
       // SAFETY: literal SELECT of these two known columns from the
@@ -60,7 +59,6 @@ describe('handleMessageDeleted', () => {
   });
 
   it('cross-tenant deletion event cannot archive another tenants row', async () => {
-    // Ingest under tenant 'acme'.
     const acmeCtx: FullContext = apiCtx(root, 'acme', { subject: 'connector:slack', role: 'admin' });
     const ingested = await ingestMessage(acmeCtx, {
       teamId: 'T1',
@@ -70,7 +68,6 @@ describe('handleMessageDeleted', () => {
     });
     expect(ingested.status).toBe('ingested');
 
-    // Fire deletion under tenant 'default' for the same artifact_ref.
     const defaultCtx: FullContext = apiCtx(root, 'default', { subject: 'connector:slack', role: 'admin' });
     const r = await handleMessageDeleted(defaultCtx, {
       teamId: 'T1',
@@ -80,7 +77,6 @@ describe('handleMessageDeleted', () => {
     });
     expect(r.status).toBe('not_found');
 
-    // Acme row is still there; raw_archive has no row.
     const remaining = loadEveryTenantEntries(root).filter((e) => e.id === ingested.memoryId);
     expect(remaining).toHaveLength(1);
     const db = openHippoDb(root);

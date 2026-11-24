@@ -1,29 +1,3 @@
-// tests/cli/cli-recall-cutoff-counters.test.ts
-//
-// C5 (2026-08-24 follow-up, episode 01M0SB83EW4JF1RCFC1GAWTAQN): the CLI
-// `hippo recall` path dropped almost every candidate and reported it via
-// counters that never moved. `droppedByBudgetCountCmd` was computed from
-// `results.length - limit` (src/cli.ts) AFTER the search call, but `results`
-// had already been ranked and truncated by hybridSearch/physicsSearch, so
-// the counter read 0 while hundreds of candidates silently vanished. The
-// `Cutoff:` line (guarded on `clauses.length > 0`) never printed as a result.
-//
-// This suite asserts the fix at the level the plan's acceptance criteria
-// name:
-//   1. The invariant `totalCandidates == droppedPreRank + droppedByBudget +
-//      returned` holds across several --limit/query combinations, driven
-//      through the real CLI entry against a real seeded store.
-//   2. The `Cutoff:` line actually PRINTS in CLI text output when a recall
-//      is truncated (the specific gap: no prior test drove the CLI summary
-//      output at all).
-//   3. The line does NOT print when nothing was truncated (guard against
-//      always-on noise).
-//
-// Same isolation harness as tests/api/goal-retrieval-policy.test.ts: per-test cwd
-// tempdir, separate HIPPO_HOME global root, HIPPO_SKIP_AUTO_INTEGRATIONS=1,
-// initStore + api.remember for seeding, the CLI entry run in process for
-// the recall itself (real DB, real CLI, project convention).
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdirSync } from 'node:fs';
@@ -43,7 +17,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, apiCtx } = sessionPerTest();
 
-/** `hippo <args>` run in this process from `cwd` against `globalRoot`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, globalRoot: string, ...args: string[]): Promise<string> {
   vi.stubEnv('HIPPO_HOME', globalRoot);
   vi.stubEnv('HIPPO_TENANT', 'default');
@@ -63,7 +36,6 @@ function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'c5-test', role: 'admin' });
 }
 
-/** Seed `count` distinct memories that all match `keyword`. */
 async function seedMatchingMemories(env: TestEnv, keyword: string, count: number): Promise<void> {
   const ctx = ctxFor(env.hippoRoot);
   for (let i = 0; i < count; i++) {
@@ -98,7 +70,6 @@ describe('printRecall candidate accounting closes', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    // Removed once the test is done, after its session has closed its handles.
     const cwd = env?.cwd;
     if (cwd) onTestFinished(() => removeDir(cwd));
   });
@@ -118,8 +89,6 @@ describe('printRecall candidate accounting closes', () => {
       const returned = out.results.length;
 
       expect(s.totalCandidates).toBe(s.droppedPreRank + s.droppedByBudget + returned);
-      // Sanity: the invariant should not be trivially true by everything
-      // being zero — this recall must actually have candidates and a cut.
       expect(s.totalCandidates).toBeGreaterThanOrEqual(seeded);
       expect(returned).toBeLessThanOrEqual(limit);
     },
@@ -144,15 +113,7 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     vi.unstubAllEnvs();
   });
 
-  // The graph fix has to be proven by EXECUTION, with a real edge. Two
-  // earlier attempts to verify it used fixtures with no entity relations, so
-  // the hops path added nothing and the checks were vacuous. This seeds the
-  // same shape as tests/graph/graph-recall.test.ts: B is lexically orthogonal to
-  // the query and reachable only through a supersedes edge.
   it('a row surfaced by edge is included in the published total and the invariant closes', async () => {
-    // Same root convention as makeEnv: the store ROOT is the .hippo directory
-    // itself. initTestStore(home) with a bare dir leaves cwd/.hippo uninitialized
-    // and the CLI exits "No .hippo directory found".
     home = makeRoot('c5-graph', { init: false });
     const root = join(home, '.hippo');
     const globalRoot = join(home, 'global-hippo');
@@ -177,20 +138,13 @@ describe('graph-expanded recall keeps the published accounting honest', () => {
     const eb = insertEntityAt(root, T, { entityType: 'decision', name: 'B', memoryId: b.id }).id;
     insertRelationAt(root, T, { fromEntityId: eb, toEntityId: ea, relType: 'supersedes', memoryId: b.id });
 
-    // cwd is `home` so no stray local store joins the recall: this test pins
-    // the SINGLE-store graph case. (A worktree cwd would silently merge its
-    // local .hippo - remember() writes to cwd/.hippo, HIPPO_HOME only moves
-    // the global store. That exact confusion made two earlier probes invalid.)
     const raw = await hippo(home, globalRoot, 'recall', 'quokka', '--hops', '1', '--json');
     const d = JSON.parse(raw.slice(raw.indexOf('{')));
     const s: SuppressionSummary = d.suppressionSummary;
     const rows: Array<{ entry?: { id: string }; id?: string }> = d.memories ?? d.results ?? [];
     const ids = rows.map((r) => (r.entry ?? r).id);
 
-    // the edge must actually fire, or this test proves nothing
     expect(ids, 'graph neighbour must be surfaced by edge').toContain(b.id);
-    // the graph-added row must be inside the PUBLISHED total, not only the
-    // internal arithmetic - this is what broke: total said 1, returned said 2
     expect(s.totalCandidates, 'published invariant must close when the graph adds an out-of-pool row').toBe(
       s.droppedPreRank + s.droppedByBudget + rows.length,
     );
@@ -202,18 +156,10 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
   let env: TestEnv;
   afterEach(() => {
     vi.unstubAllEnvs();
-    // Removed once the test is done, after its session has closed its handles.
     const cwd = env?.cwd;
     if (cwd) onTestFinished(() => removeDir(cwd));
   });
 
-  // THE GAP THIS FILE ORIGINALLY MISSED. Every other test here passes
-  // --limit, and the OLD code counted the --limit slice correctly, so those
-  // tests pass on master and prove only that the wording changed.
-  //
-  // The measured production failure was budget/rank driven with NO --limit:
-  // totalCandidates 400, returned 3, droppedByBudget 0, Cutoff line silent.
-  // This is the case that must go red without the derivation fix.
   it('reports drops when a small --budget truncates and --limit is never passed', async () => {
     env = makeEnv('c5-budget-gap');
     await seedMatchingMemories(env, 'widgetbudget', 40);
@@ -223,7 +169,6 @@ describe('BUDGET-driven truncation is counted (the measured failure)', () => {
     const returned = out.results.length;
 
     expect(returned, 'a small budget must truncate').toBeLessThan(s.totalCandidates);
-    // Every printed row costs more than the 40-token budget leaves, so only the one-row floor survives of the 40.
     expect(returned).toBe(1);
     expect(s.totalCandidates).toBe(40);
     expect(s.droppedByBudget, 'budget/rank drops must be counted - this read 0 in production').toBe(39);
@@ -238,7 +183,6 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    // Removed once the test is done, after its session has closed its handles.
     const cwd = env?.cwd;
     if (cwd) onTestFinished(() => removeDir(cwd));
   });
@@ -249,15 +193,6 @@ describe('the `Cutoff:` line prints on a truncated CLI recall', () => {
 
     const output = await recallText(env, 'widgetepsilon', 5);
 
-    // This is the specific gap the plan names: no prior test drove the CLI
-    // summary output, so the line's guard (`clauses.length > 0`) being
-    // permanently false went uncaught.
-    //
-    // The wording is asserted deliberately. It used to read "dropped to fit
-    // limit", which named a control the caller often never passed - review
-    // caught it printing that for a `--budget 20` command with no --limit
-    // flag at all. The residual covers rank, budget AND limit, so the text
-    // must not single one out.
     expect(output).toMatch(/^Cutoff: showing \d+ of \d+ candidates;/m);
     expect(output).toMatch(/not shown \(rank, budget or limit\)/);
     expect(output, 'must not name a control the caller may never have passed').not.toMatch(/dropped to fit limit/);

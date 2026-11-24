@@ -1,5 +1,3 @@
-// End to end: a follow-up rule the model picks at session end prints first, as a plain
-// instruction, in the next session's hook block. Real CLI verbs and stores; fetch is stubbed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

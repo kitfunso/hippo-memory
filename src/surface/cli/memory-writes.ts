@@ -1,7 +1,3 @@
-// The memory writes four CLI verbs make (remember, forget, archive, promote), behind one interface
-// with two implementations: the store itself, or the `hippo serve` that answers for the folder.
-// Each command picks one, once.
-
 import type { ConfidenceLevel, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
 import { Layer } from '../../base/memory/entry.js';
 import { RawAppendOnlyError } from '../../base/errors/raw-append-only.js';
@@ -22,18 +18,13 @@ import { requireInit, workingFolder } from './shared.js';
 /** One `hippo remember`, every flag parsed and checked. */
 export interface RememberRequest {
   readonly content: string;
-  /** Every tag the row stores, the path and scope tags of this process included. */
   readonly tags: readonly string[];
-  /** The tags the caller typed, which schema fit is scored on. */
   readonly fitTags: readonly string[];
   readonly kind: MemoryKind | undefined;
   readonly scope: string | undefined;
   readonly owner: string | undefined;
   readonly artifactRef: string | undefined;
-  /** The conversation text that led into the memory. */
   readonly leadIn: string | undefined;
-  // Only a write on the store honours the fields below, as the server sets its own; the verb writes
-  // locally for them.
   readonly pinned: boolean;
   readonly confidence: ConfidenceLevel;
   readonly force: boolean;
@@ -50,7 +41,6 @@ export type Remembered =
       readonly entry: MemoryEntry;
       readonly startedWeak?: api.StartedWeak;
       readonly warnings: readonly string[];
-      /** Runs fact extraction on the row; the verb calls it once it has reported the write. */
       readonly extraction: () => Promise<api.FactExtraction>;
     }
   | {
@@ -61,15 +51,12 @@ export type Remembered =
       readonly via: string;
       readonly startedWeak?: api.StartedWeak;
       readonly warnings: readonly string[];
-      /** Set when the server held the write for review. */
       readonly quarantined?: { readonly reason: string };
     };
 
 export interface Promoted {
   readonly globalId: string;
-  /** On a shared store: the row's origin project, null when it has none. */
   readonly originProject?: string | null;
-  /** The global store's folder, when this process wrote the copy. */
   readonly globalStore?: string;
 }
 
@@ -98,7 +85,6 @@ export async function forgetRefusal(
       `Archive it instead: hippo forget ${id} --archive --reason "<why>"`
     );
   }
-  // Sleep moved it to the dormant store, so point at the command that owns it.
   if (await api.isDormant(ctx, id)) {
     return (
       `${id} is dormant, not in active memory. Delete it for good: hippo dormant forget ${id} ` +
@@ -145,7 +131,6 @@ export function localWrites(root: string, tenantId: string): MemoryWrites {
       const ctx = context();
       try {
         const { globalId, originProject } = await api.promote(ctx, id);
-        // An in-place promote on a shared store wrote no copy into the global store.
         return globalId === id
           ? { globalId, originProject: originProject ?? null }
           : { globalId, globalStore: hippoHomeDir() };
@@ -178,8 +163,6 @@ async function rememberHere(ctx: CliContext, request: RememberRequest): Promise<
   return { status: 'stored', entry, warnings, extraction, startedWeak };
 }
 
-/** Falling back to the store would mask a misconfiguration and drop HIPPO_API_KEY, so
- * HIPPO_REQUIRE_SERVER throws. */
 function failIfServerRequired(reason: string): void {
   if (envRequireServer()) {
     throw new Error(
@@ -199,15 +182,12 @@ export async function pickWrites(hippoRoot: string, tenantId: string): Promise<M
   return local;
 }
 
-/** Turns an answer the server refused into the verb's own message. */
 type Refused = (err: Error) => never;
 
-/** A refused remember reaches runCli as it is, which prints its message. */
 const passOn: Refused = (err) => {
   throw err;
 };
 
-/** The server's reason, with the key hint when it refused this caller's rights. */
 function servedReason(err: Error): string {
   const refused = err instanceof client.HttpResponseError && err.status === 403;
   return refused ? `${errorMessage(err)}. ${SERVED_KEY_HINT}` : errorMessage(err);
@@ -247,7 +227,6 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
     promote: (id) =>
       send(
         async (): Promise<Promoted> => {
-          // The server learns a shared folder's project from the caller, as remember sends none.
           const infra = cliInfra();
           const project = isSharedStore(hippoRoot)
             ? callerProjectOf(infra.machine.projectIdentity(workingFolder({ infra })))
@@ -260,8 +239,6 @@ function serverWrites(hippoRoot: string, server: ServerInfo, local: MemoryWrites
   };
 }
 
-/** The wire shape of a folder's project: legacyName is a folder name, which would pool every
- * same-named folder, so it never goes. A blank name sends none, and the server says why. */
 function callerProjectOf(
   identity: ProjectIdentity,
 ): { name: string; aliases: string[] } | undefined {
@@ -293,12 +270,9 @@ function relayed(server: ServerInfo, reply: api.RememberResult | api.RememberSki
 interface ServedCall<T> {
   readonly request: () => Promise<T>;
   readonly refused: Refused;
-  /** The same write on the store, for a request the server never got. */
   readonly fallBack: () => Promise<T>;
 }
 
-/** Sends one write. A request that never left runs on the store and heals the stale pidfile; one
- * that may have landed is never replayed, as every write here is non-idempotent. */
 async function sendOrFallBack<T>(
   hippoRoot: string,
   server: ServerInfo,
@@ -307,7 +281,6 @@ async function sendOrFallBack<T>(
   try {
     return await call.request();
   } catch (err) {
-    // The client throws only Error, so anything else is a bug for runCli to report as it is.
     if (!(err instanceof Error)) throw err;
     const failure = client.classifyTransportFailure(err);
     if (failure === 'none') return call.refused(err);
@@ -321,8 +294,6 @@ async function sendOrFallBack<T>(
     }
     failIfServerRequired('the server pidfile was stale (connection refused)');
     log.warn('stale server pidfile detected, falling back to direct mode', errorFields(err));
-    // Removed only if it still names the dead server: a newer server may have rewritten it since
-    // the probe.
     removePidfileIfOwned(hippoRoot, { pid: server.pid, startedAt: server.started_at });
     return call.fallBack();
   }

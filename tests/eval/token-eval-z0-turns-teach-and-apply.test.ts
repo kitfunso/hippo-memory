@@ -1,4 +1,3 @@
-// Z0 lesson tasks end to end with the fake Claude Code: runner git, transcript reads, the reversal family in all arms, and the drawn order.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, utimesSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -23,7 +22,6 @@ describe('runner git', () => {
     const cfg = join(hooks, 'gitconfig');
     writeFileSync(cfg, `[core]\n\thooksPath = ${hooks.replace(/\\/g, '/')}\n[i18n]\n\tcommitEncoding = ISO-8859-1\n`);
     vi.stubEnv('GIT_CONFIG_GLOBAL', cfg);
-    // The control: plain git under this config does run the hook.
     execFileSync('git', ['update-ref', 'refs/z0/probe', r.base], { cwd: r.repo });
     expect(existsSync(marker)).toBe(true);
     rmSync(marker);
@@ -53,12 +51,10 @@ describe('runner git', () => {
     const script = join(d, 'fsmon.sh');
     writeFileSync(script, `#!/bin/sh\necho ran >> "${marker}"\n`, { mode: 0o755 });
     execFileSync('git', ['config', 'core.fsmonitor', script.replace(/\\/g, '/')], { cwd: r.repo });
-    // The control: plain git status in the workspace does run it.
     execFileSync('git', ['status', '--porcelain'], { cwd: r.repo });
     expect(existsSync(marker)).toBe(true);
     rmSync(marker);
     const check = join(d, 'status.mjs');
-    // Exit 2 (a broken checker) if the runner clobbered the caller's own GIT_CONFIG_PARAMETERS.
     writeFileSync(check, [
       "import { spawnSync } from 'node:child_process';",
       "if (!(process.env.GIT_CONFIG_PARAMETERS ?? '').includes('color.ui=never')) process.exit(2);",
@@ -78,13 +74,11 @@ describe('runner git', () => {
     execFileSync('git', ['config', "filter.z0'agent.clean", `sh -c 'echo ran >> "${marker}"; cat'`], { cwd: r.repo });
     execFileSync('git', ['config', "filter.z0'agent.required", 'true'], { cwd: r.repo });
     writeFileSync(join(r.repo, '.gitattributes'), "* filter=z0'agent\n");
-    // Same bytes, a new mtime: status must read the file through the filter to see it is unchanged.
     const restat = () => {
       writeFileSync(join(r.repo, 'lib.js'), readFileSync(join(r.repo, 'lib.js')));
       utimesSync(join(r.repo, 'lib.js'), new Date(), new Date(Date.now() + 60_000));
     };
     restat();
-    // The control: plain git status in the workspace does run it.
     execFileSync('git', ['status', '--porcelain'], { cwd: r.repo });
     expect(existsSync(marker)).toBe(true);
     rmSync(marker);
@@ -127,7 +121,6 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     await run(s, ['A0', 'A1', 'A2', 'A4', 'A5'], out);
     const recs = readRecords(out);
     expect(recs).toHaveLength(40);
-    // Every record names the hippo build the runner checkout holds (stage 2 pins).
     const build = hippoBuild();
     expect(build).toMatchObject({ hippoCommit: expect.stringMatching(/^[0-9a-f]{40}$/), hippoDistHash: expect.stringMatching(/^[0-9a-f]{64}$/) });
     for (const x of recs) expect(x, `${x.arm} ${x.taskId}`).toMatchObject(build);
@@ -138,7 +131,6 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
     for (const arm of ['A0', 'A1', 'A2', 'A4', 'A5']) {
       const get = (id: string) => find(recs, arm, id);
       expect(get('t1'), arm).toMatchObject({ kind: 'teach', set: 'R', teachTurns: 1, correctionTurns: 0, teachForm: 'confirmation', lessons: [{ lessonId: 'f1-l1', first: 'pass', final: 'pass', staleFollow: null }] });
-      // The confirmation resume is priced from its result, where the fake always reports 50 output tokens.
       expect(get('t1').usage?.extra.outputTokens, arm).toBe(50);
       expect(get('t2'), arm).toMatchObject({ teachForm: 'correction', lessons: [{ lessonId: 'f1-l2', first: 'fail', final: 'pass' }] });
       expect(get('a1'), arm).toMatchObject({ kind: 'apply', applyIndex: 1, afterReversal: false, tasksSinceTeach: 2, teachTurns: 0, correctionTurns: 1, teachForm: null, lessons: [{ first: 'fail', final: 'pass', staleFollow: null }] });
@@ -150,7 +142,6 @@ describe('Z0 lesson tasks end to end (fake Claude Code)', () => {
         expect('scored' in x).toBe(false);
       }
     }
-    // CHECK_COMMANDS: session one's commands at the first check, then the correction turn's too at the final check.
     const a1Checks = checkLog(log).filter((c) => c.commands.includes('npm run lint'));
     expect(a1Checks).toHaveLength(10);
     for (const c of a1Checks) expect(c.commands.slice(0, 2)).toEqual(['git status && cat lib.js', 'npm run lint']);

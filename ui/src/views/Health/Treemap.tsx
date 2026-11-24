@@ -24,14 +24,11 @@ export interface TreemapHandle {
 }
 
 interface TreemapProps {
-  /** Projects in treemap order (see treemapOrder). */
   projects: readonly ProjectSummary[];
-  /** Per-project search hits by key, or null when no search is active. */
   hits: ReadonlyMap<string, number> | null;
   query: string;
   memory: RefObject<TreemapMemory>;
   tip: RefObject<TipHandle | null>;
-  /** Open a project; `chip` is set when a band cell was chosen. */
   onOpen: (key: string, chip?: Chip) => void;
   ref?: Ref<TreemapHandle>;
 }

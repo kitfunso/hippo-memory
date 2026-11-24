@@ -1,13 +1,3 @@
-/**
- * v1.7.1 INFO #5 — scorerWindow does not leak across tenants.
- *
- * The store-side LIMIT inside listSearchRows is applied AFTER the tenant
- * predicate (`WHERE tenant_id = ?`). A future refactor that moved the LIMIT
- * before the tenant filter would silently surface cross-tenant rows when
- * scorerWindow > tenant row count. Pin the contract on id-set, not on
- * `result.total` (misleading metadata — we want the actual rows checked).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -37,14 +27,6 @@ describe('scorerWindow tenant isolation', () => {
   beforeEach(() => {
     root = makeRoot('f3-tenant');
   });
-
-  // The scope+tenant SQL clauses are appended to FOUR paths in listSearchRows
-  // (no-terms, FTS, LIKE fallback, full-store fallback). Cover three of the
-  // four explicitly via the recall path: the FTS branch (terms match), the
-  // no-terms branch (empty query), and the LIKE-fallback branch
-  // (a part-word query FTS5 tokens miss). The full-store fallback fires only when
-  // both FTS and LIKE return zero rows on terms — exotic enough that the
-  // shared SQL builder is the relevant unit.
 
   function seedTwoTenants(N: number): Set<string> {
     const tenantAIds = new Set<string>();

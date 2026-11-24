@@ -1,4 +1,3 @@
-// The lead-in contract: the conversation text that led into a memory, capped at the record and vetted at every write.
 import { describe, expect, it } from 'vitest';
 import { remember, rememberUntrusted, retrieve, supersede } from '../../src/api/index.js';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
@@ -23,7 +22,6 @@ const { apiCtx, readEntry, sqliteStore } = sessionPerTest();
 
 const TURN = 'user: How often do you and Mel run?';
 const REPLY = 'Three times a week; it keeps us on track.';
-// Built at runtime, so no secret-shaped literal sits in source.
 const TOKEN = ['ghp', 'a1B2c3D4e5'.repeat(4).slice(0, 36)].join('_');
 const REDACTED_WARNING = /^lead-in: secret-shaped text was redacted before storing \(pattern:github-token\)$/;
 
@@ -93,7 +91,6 @@ describe('remember with a lead-in', () => {
 
   it('redacts a secret that straddles the cut before it cuts, so no piece of it is stored', async () => {
     const ctx = newCtx();
-    // Cut first, the window would start 20 characters into the token and keep its last 20.
     const leadIn = `${'x'.repeat(20)} ${TOKEN} ${'z'.repeat(MAX_LEAD_IN_CHARS - 21)}`;
     expect(leadIn.length - MAX_LEAD_IN_CHARS).toBe(leadIn.indexOf(TOKEN) + 20);
     const result = await remember(ctx, { content: REPLY, leadIn });
@@ -105,7 +102,6 @@ describe('remember with a lead-in', () => {
 
   it('never starts the cut inside a character', async () => {
     const ctx = newCtx();
-    // 2402 characters, so the last 2000 start on the second half of an emoji.
     const result = await remember(ctx, { content: REPLY, leadIn: `a${'😀'.repeat(1200)}z` });
     expect(storedLeadIn(ctx, result.id)).toBe(`${'😀'.repeat(999)}z`);
   });

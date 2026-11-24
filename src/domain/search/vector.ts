@@ -46,22 +46,13 @@ export interface VectorSource {
 
 export interface VectorArmOptions extends CurrentnessOptions {
   vectorCandidates?: HybridVectorCandidates;
-  /** The deadline a caller already started for this recall's query embedding; a fresh budget
-   * when unset. */
   queryEmbedDeadline?: AbortSignal;
-  /** The root's settings; a fresh budget lasts its `queryEmbedTimeoutMs`. */
   runtime?: Pick<RuntimeSettings, 'queryEmbedTimeoutMs'>;
-  /** The request's abort signal; a fresh budget ends with it too. */
   signal?: AbortSignal;
 }
 
-// Jev's default budget (infra/rerankers/jev.ts): each is one off-box call that a recall waits on.
 const QUERY_EMBED_BUDGET_MS = 5_000;
 
-/**
- * How long one recall waits for its query vector, retries included; the root's
- * HIPPO_QUERY_EMBED_TIMEOUT_MS overrides the default.
- */
 function queryEmbedBudgetMs(configured: number | undefined): number {
   return configured ?? QUERY_EMBED_BUDGET_MS;
 }
@@ -93,9 +84,6 @@ export async function embedQueryBy(
   }
 }
 
-// Search runs on every hook prompt, so one line per reason per process says why vectors went unused
-// without flooding stderr. A repeat still logs, at debug and then every 100th at warn, so a
-// fallback that keeps happening stays visible.
 function warnBm25Fallback(reason: string, detail: string, fields?: LogFields): void {
   log.warnThenSample(
     `search.bm25-fallback.${reason}`,
@@ -119,8 +107,6 @@ export async function vectorCandidatesOutside(
   spec: HybridVectorCandidates,
 ): Promise<MemoryEntry[]> {
   const inPool = new Set(entries.map((e) => e.id));
-  // The port takes data alone: `admit` is this side's rule, and a function cannot be sent to a
-  // store on another thread.
   const { admit, ...stored } = spec;
   return (await reads.nearestEntries(queryVector, stored)).filter(
     (e) => !inPool.has(e.id) && (admit?.(e) ?? true),
@@ -190,8 +176,6 @@ async function fillVectorArm(
   arm.useEmbeddings = true;
 }
 
-/** The stored vectors of the arm's rows; null when the index needs a rebuild or none can be
- * used. */
 async function usableVectors(
   arm: VectorArm,
   source: VectorSource,
@@ -208,13 +192,10 @@ async function usableVectors(
     'vectors',
     arm.entries.map((e) => e.id),
   );
-  // Only spend a (possibly paid, off-box) query embedding when there is a stored vector this search
-  // can use.
   if (vectors.size === 0 && !(spec !== undefined && index.hasVectors)) return null;
   return vectors;
 }
 
-/** The query's vector, or null once the embedding budget ran out. */
 async function embedWithinBudget(
   query: string,
   provider: EmbeddingProvider,
@@ -237,7 +218,6 @@ async function embedWithinBudget(
 
 export interface DenseScores {
   cosine: number[];
-  /** Whether each entry had a cached doc vector to compare against. */
   hadVec: boolean[];
 }
 

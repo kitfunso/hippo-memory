@@ -1,5 +1,3 @@
-// Sync down asks the local store about each global row's id and text: the same copies as the whole local key set
-// gave, with the local full-text index in sync or not, and no local row read that holds none of those texts.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, setFtsInSync } from '../../src/db/index.js';
@@ -40,7 +38,6 @@ const row = (content: string, i: number, extra: Partial<MemoryEntry> = {}): Memo
   ...extra,
 });
 
-/** The global rows in store order; the local store holds g[0] by id, g[1] by text, and g[9] inside a merged row. */
 function seed(): MemoryEntry[] {
   const g = [
     row('Shared lesson zero about release tags', 0),

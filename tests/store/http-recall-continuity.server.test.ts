@@ -64,7 +64,6 @@ describe('GET /v1/memories continuity + scope', () => {
       continuityTokens?: number;
     }>(res);
     expect(body.continuity?.activeSnapshot?.task).toBe('HTTP continuity');
-    // Snapshot 4 + 1 + 1, handoff 1 + 1, event 2, each at Math.ceil(len/4).
     expect(body.continuityTokens).toBe(10);
 
     const blank = await fetch(
@@ -110,7 +109,6 @@ describe('GET /v1/memories continuity + scope', () => {
   });
 });
 
-// The port's session rows are camelCase; these pin the snake_case JSON both routes have always sent.
 describe('continuity JSON on the wire', () => {
   const at = (json: string): string => json.replace(/"\d{4}-\d{2}-\d{2}[T ][^"]*"/g, '"<at>"');
   const SNAPSHOT_JSON =

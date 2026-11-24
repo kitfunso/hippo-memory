@@ -1,11 +1,3 @@
-/**
- * E2 process first-class object — HTTP route parity test.
- * Docs: docs/plans/2026-05-29-e2-process-object.md
- *
- * Covers what only processes have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/processes lists + status filter
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

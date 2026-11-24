@@ -1,16 +1,4 @@
 #!/usr/bin/env node
-/**
- * Aggregates per-track *.eval.json files in a sweep directory into one
- * summary.json keyed by track name.
- *
- * Usage:
- *   node scripts/aggregate_reranker_sweep.mjs results/reranker_sweep_<timestamp>/
- *
- * The aggregator stores the FULL eval.json payload per track (not a
- * projection). The result-doc author projects whichever fields they need.
- *
- * Per docs/plans/2026-05-10-f6-reranker-hardening.md Task 10 step 4-5.
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

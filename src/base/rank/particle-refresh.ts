@@ -1,5 +1,3 @@
-// Particle properties follow the memory they stand for; pure, so sleep refreshes them without
-// reaching the store.
 import { calculateStrength, type StrengthModel } from '../memory/strength.js';
 import type { MemoryEntry } from '../memory/entry.js';
 import { computeCharge, computeMass, computeTemperature, type PhysicsParticle } from './physics.js';

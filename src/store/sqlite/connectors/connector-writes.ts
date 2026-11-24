@@ -1,5 +1,3 @@
-// hippo.db's half of the ConnectorWrites store group: a write, archive or held supersede with its
-// companion rows, in one transaction on one handle.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { logEvent, loggedMemory } from './events.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
@@ -21,12 +19,8 @@ import {
   writeInOwnTenant,
 } from '../entries/entry-writes.js';
 
-/** Unwinds a write whose event key is already logged. Caught in this file, so no caller ever
- * sees it. */
 class EventAlreadyLogged extends Error {}
 
-/** The record, then the log row, go in after the memory row and ahead of its remember row, as a
- * second store must order them. */
 function writeWithCompanions(
   db: DatabaseSyncLike,
   { entry, actor, event, quarantine }: ConnectorWrite,
@@ -51,13 +45,10 @@ function writeOnce(db: DatabaseSyncLike, write: ConnectorWrite): ConnectorWriteO
     return { outcome: 'written' };
   } catch (err) {
     if (!(err instanceof EventAlreadyLogged) || !write.event) throw err;
-    // The scope has unwound, so this reads the winner's committed row.
     return { outcome: 'duplicate', memoryId: loggedMemory(db, write.event) };
   }
 }
 
-/** archiveRaw with the event logged in its write; the log write's answer is unread: a key logged
- * before keeps its row and the archive stands. */
 function archiveConnectorEntry(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -68,7 +59,6 @@ function archiveConnectorEntry(
   });
 }
 
-/** supersede with the successor's record and quarantine row in its scope; the mirror follows the commit. */
 function supersedeHeld(db: DatabaseSyncLike, files: StoreFiles, write: HeldSupersede): void {
   const successor = stampOriginProject(files, write.successor);
   const { tenantId, actor, quarantine } = write;

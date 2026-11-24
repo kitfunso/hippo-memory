@@ -109,7 +109,6 @@ describe("VTable access", () => {
 });
 
 describe("T10: token coverage", () => {
-  // Vite reads the sources, so the ui project needs no Node types (CI installs ui/ alone).
   const sources = import.meta.glob<string>(["../../**/*.{css,ts,tsx}", "!../../**/*.test.{ts,tsx}"], { query: "?raw", import: "default", eager: true });
   const tokens = sources["../../tokens.css"] ?? "";
 

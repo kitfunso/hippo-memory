@@ -16,10 +16,6 @@ function isSlackMessage(m: JsonValue): m is { [key: string]: JsonValue } & Slack
   return isJsonObject(m) && m.type === 'message' && isJsonString(m.ts);
 }
 
-/**
- * The reply as a JSON object. The error names the status and the path only, since the query string
- * carries channel ids and cursors.
- */
 async function readHistoryReply(r: Response, url: URL): Promise<{ [key: string]: JsonValue }> {
   const where = `slack: HTTP ${r.status} on ${url.pathname}`;
   let body: JsonValue;

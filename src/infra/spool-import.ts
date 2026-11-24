@@ -1,4 +1,3 @@
-// Importing one waiting spool file: claim it, read it, hand it to the importer, settle the outcome.
 import type { StepFailure } from '../base/ports/store/capture.js';
 import { isStoreBusy } from '../base/ports/store.js';
 import { errorFields, errorMessage } from '../base/util/log.js';
@@ -18,14 +17,11 @@ interface ImportFailedOptions {
   readonly log: Log;
 }
 
-/** After an importer failure: a busy store stops the run with the count unchanged; any other error
- * counts one try toward .bad. */
 function importFailed(fsx: SpoolFs, options: ImportFailedOptions): FileOutcome {
   const { dir, claim, entry, text, recorded, failure, log } = options;
   const { name } = entry;
   const { busy, message, fields } = failure;
   if (recorded) {
-    // The record stays `summarised`, so the stalled-record step of a later replay writes its items.
     log(
       busy
         ? `spool file ${name} saved; its memories wait for the next sleep (store busy)`
@@ -98,7 +94,6 @@ export async function importFile(options: ImportFileOptions): Promise<FileOutcom
   return 'imported';
 }
 
-/** The claim's text; null when it vanished or stayed busy, and a busy one goes back. */
 function readClaim({ fsx, dir, entry, log }: ImportFileOptions, claim: string): string | null {
   const { name } = entry;
   const read = settleCode(

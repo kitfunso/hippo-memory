@@ -1,8 +1,3 @@
-// The local remember pipeline for a caller in this process (`hippo remember`, `hippo watch`):
-// schema fit, the salience gate, the write, the read-back, the `remembered` counter and the
-// embedding, which the Context's keeper owns, in that order. Fact extraction is a second step,
-// which the caller runs after it has reported the write. Nothing here prints.
-
 import type { ConfidenceLevel, Layer, MemoryEntry, MemoryKind } from '../../base/memory/entry.js';
 import {
   embedMemoryInto,
@@ -18,29 +13,22 @@ import { memoryGet } from './memories.js';
 import { remember } from './remember.js';
 import type { Context, ContextWith } from '../types.js';
 
-// The tags a caller in this process adds from the folder it runs in.
 export { extractPathTags } from '../../domain/search/path-context.js';
 
 /** One write by a caller in this process, every field already parsed and checked by it. */
 export interface LocalRememberInput {
   readonly content: string;
-  /** Every tag the row stores; the salience gate reads these. */
   readonly tags: readonly string[];
-  /** The tags schema fit is scored on, for a caller that added path and scope tags of its own to
-   * `tags`; without it, `tags`. */
   readonly fitTags?: readonly string[];
   readonly kind?: MemoryKind;
   readonly scope?: string;
   readonly owner?: string;
   readonly artifactRef?: string;
-  /** The conversation text that led into `content`; remember trims, redacts and caps it. */
   readonly leadIn?: string;
   readonly layer?: Layer;
   readonly pinned?: boolean;
   readonly confidence?: ConfidenceLevel;
   readonly source?: string;
-  /** Store it whatever the salience gate would say, as `hippo remember --force` asks and `hippo
-   * watch` always does. */
   readonly force?: boolean;
 }
 
@@ -60,22 +48,16 @@ export type LocalRememberOutcome =
       readonly entry: MemoryEntry;
       readonly embedding: Promise<EmbedOutcome>;
       readonly startedWeak?: StartedWeak;
-      /** What remember said about secret material it redacted. */
       readonly warnings: readonly string[];
     }
   | { readonly status: 'skipped'; readonly reason: string; readonly score: number };
 
-/**
- * The row `remember` just wrote, as the store holds it: the report, the embedding and the
- * extraction all work on that.
- */
 async function storedEntry(ctx: Context, id: string): Promise<MemoryEntry> {
   const entry = await memoryGet(ctx, id);
   if (!entry) throw new Error(`memory ${id} was written but cannot be read back`);
   return entry;
 }
 
-/** Best-effort and slow (a model load or a network call); a row left out of the index is logged. */
 function indexInBackground(ctx: Context, entry: MemoryEntry): Promise<EmbedOutcome> {
   const folder = { store: ctx.store, config: ctx.config, embedderFor: ctx.infra.embedderFor };
   const target = folderEmbedTarget(folder, ctx.infra);
@@ -132,8 +114,6 @@ export async function rememberLocally(
 
 /** What a caller asks of fact extraction; the model is the one its Context carries. */
 export interface FactExtractionRequest {
-  /** The caller asked for extraction (`--extract`); the store's config can turn it on without
-   * that. */
   readonly requested: boolean;
 }
 
@@ -182,9 +162,7 @@ export async function extractRememberedFacts(
   return { status: 'ran', facts, failures };
 }
 
-/** The memory with its lead-in marked as context, so the model can resolve who and what. */
 function extractionText(entry: MemoryEntry): string {
-  // An untrusted row's lead-in stays out: this prompt has no quarantine frame.
   if (!entry.leadIn || isUntrustedSource(entry.tags)) return entry.content;
   return `Earlier in the conversation (context only):\n${entry.leadIn}\n\nThe memory:\n${entry.content}`;
 }

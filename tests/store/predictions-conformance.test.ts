@@ -1,4 +1,3 @@
-// The prediction kind of Objects answers: the same rows, the same order, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditHighId } from '../_helpers/root-forms.js';
@@ -24,7 +23,6 @@ const T3 = '2026-03-01T12:00:03.000Z';
 const T4 = '2026-03-01T12:00:04.000Z';
 const ACTOR = 'api_key:caller';
 
-/** The mirror as a caller can tell it apart: its row, tenant and what recall matches on. */
 interface MirrorView {
   readonly id: string;
   readonly tenantId: string;
@@ -34,7 +32,6 @@ interface MirrorView {
 
 type Value = Prediction | Prediction[] | number[] | PredictionBaserate | MirrorView[] | null;
 type Call = GroupCall<'objects', Value>;
-/** A close as a test writes it; every call closes as ACTOR. */
 type Close = Omit<PredictionClose, 'actor'>;
 type Side = SideResult<Value>;
 
@@ -46,13 +43,11 @@ async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'objects', calls);
 }
 
-/** Built once per call list, so every call is handed the same mirror id. */
 function claim(classTag: string, fields: Partial<SavePredictionOptions> = {}, tenantId = TENANT_A): PredictionSave {
   const opts: SavePredictionOptions = { classTag, claimText: `the ${classTag} work lands on time`, ...fields };
   return { ...opts, mirror: predictionMirror(tenantId, opts, 30, evalNow()), actor: ACTOR };
 }
 
-/** Sets the clock inside the call, so each step reads a time the test names. */
 const at =
   (iso: string, call: Call): Call =>
   (g, store) => {
@@ -111,7 +106,6 @@ function openRow(id: number, input: PredictionSave, createdAt: string): Predicti
   };
 }
 
-/** The rows a run added, each under the next audit id in turn. */
 function added(side: Side): AuditEvent[] {
   return side.audit.slice(baseline.audit.length);
 }
@@ -238,7 +232,6 @@ describe('Objects, the prediction kind: saveObject and objectById', () => {
 });
 
 describe('Objects, the prediction kind: listObjects', () => {
-  /** Ids 1 to 8, id 5 in the other tenant: three timestamps each shared by rows of one tenant, then 1 and 2 closed and 8 closed-unknown. */
   const seed = (): Call[] => [
     at(T1, save(claim('sprint'))),
     save(claim('sprint')),
@@ -346,7 +339,6 @@ describe('Objects, the prediction kind: closeObject', () => {
   });
 
   it('a close with a null actual and a save with a null estimate audit has_actual and has_estimate false', async () => {
-    // The port types these number | undefined, but an HTTP body can carry null; the store must treat it as none.
     const nothing: undefined = JSON.parse('null');
     const input = claim('sprint', { estimateValue: nothing });
     const side = await conforms([
@@ -438,7 +430,6 @@ describe('Objects.predictionBaserate', () => {
       save(claim('sprint')),
       save(claim('launch', { estimateValue: 9 })),
       save(claim('sprint', { estimateValue: 3 }, TENANT_B)),
-      // Closed newest first, so a store that sums in closing order answers a meanEstimate of 0.15.
       at(T2, close(3, closedAs(0.6))),
       close(2, closedAs(0.4)),
       close(1, closedAs(0.2)),

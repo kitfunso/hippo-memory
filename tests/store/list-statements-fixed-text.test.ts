@@ -1,4 +1,3 @@
-// A cached statement's SQL text is the same for every list length, so three ids and thirty prepare it once.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
@@ -23,7 +22,6 @@ beforeEach(() => {
 });
 afterEach(() => closeHippoDb(db));
 
-/** A parent whose completion promotes `children` backlog children, plus one card that waits on `children` open cards. */
 async function promoteFamily(children: number): Promise<void> {
   const parent = (await cards.create(TENANT, { title: 'parent' })).id;
   const others: string[] = [];

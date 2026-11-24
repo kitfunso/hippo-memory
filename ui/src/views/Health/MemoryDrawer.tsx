@@ -55,7 +55,6 @@ function Fields({ d }: { d: MemoryDetail }) {
 /** Props of the memory drawer. */
 export interface MemoryDrawerProps {
   projectKey: string;
-  /** The memory to show, or null when the drawer is closed. */
   memoryId: string | null;
   onClose: () => void;
 }
@@ -196,7 +195,6 @@ export function MemoryDrawer({ projectKey, memoryId, onClose }: MemoryDrawerProp
                       type="button"
                       className="btn sm quiet"
                       onClick={() => {
-                        // This button unmounts while the other memory loads; the title stays, so focus stays in the drawer.
                         title.current?.focus();
                         navigate({ view: "health", projectKey, memoryId: c.other.id });
                       }}

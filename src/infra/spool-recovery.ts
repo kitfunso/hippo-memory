@@ -1,4 +1,3 @@
-// Putting spool files back in order: stale claims, torn tmp files and the `.bad` side folder.
 import * as path from 'node:path';
 import {
   BAD,
@@ -28,7 +27,6 @@ export function recoverStaleClaims(
   log: Log,
 ): boolean {
   const now = Date.now();
-  // A claim whose unlink stayed busy after its `.bad` landed is a spare copy, not a second failure.
   const setAside = new Set(names.flatMap((name) => BAD.exec(name)?.[1] ?? []));
   let putBackOne = false;
   for (const claim of names.flatMap((name) => claimOf(name) ?? [])) {
@@ -48,7 +46,6 @@ export function recoverStaleClaims(
   return putBackOne;
 }
 
-/** Puts a stale claim back for another try, or sets it aside after its last; true when put back. */
 function putBackStale(fsx: SpoolFs, dir: string, claim: Claim, log: Log): boolean {
   const file = path.join(dir, claim.name);
   const next = claim.attempt + 1;
@@ -96,8 +93,6 @@ export function promoteTmp(
     const stat = settleCode(() => fsx.statSync(file).mtimeMs, log, what);
     if (stat.settled !== 'done' || Math.abs(now - stat.value) <= STALE_MS) continue;
     if (m === null) {
-      // A `.bad` write cut off before its rename: its source goes only after that rename lands, so
-      // this copy is spare.
       settle(() => fsx.unlinkSync(file), log, `spool file ${name} not removed`);
       continue;
     }

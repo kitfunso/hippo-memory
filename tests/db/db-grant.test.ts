@@ -1,5 +1,3 @@
-// A hippo.db grant is a capability: only the SQLite adapter mints one, a look-alike opens nothing,
-// and the server thread's part of a worker store refuses every open.
 import { describe, expect, it } from 'vitest';
 import { DbGrant } from '../../src/db/grant.js';
 import { closeHippoDb } from '../../src/db/index.js';

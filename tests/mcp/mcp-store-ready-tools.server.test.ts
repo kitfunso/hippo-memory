@@ -1,4 +1,3 @@
-// Under a store other than hippo.db, MCP lists and runs only the tools that reach their store through the port.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,7 +25,6 @@ beforeEach(() => {
   root = makeRoot('mcp-ready', { init: false });
 });
 
-// The stub wraps a hippo.db store that nothing blocks, without the local files, so a tool that ran would leave hippo.db behind.
 function storeOfKind(kind: string): HippoStore {
   return kind === 'sqlite' ? sqliteStore(root) : { ...withoutFolderGroups(sqliteStore(root)), kind };
 }
@@ -52,7 +50,6 @@ function listedNames(res: McpResponse | null): string[] {
 
 const declared = TOOLS.map((t) => t.name);
 const notPorted = { jsonrpc: '2.0', id: 1, error: { code: -32603, message: STORE_NOT_PORTED_MESSAGE } };
-// The stub lacks only the local files, so every tool but the two that need them runs on it.
 const READY = [
   'hippo_recall',
   'hippo_assemble',
@@ -130,7 +127,6 @@ const row = (tenantId: string, id: string, m: number, extra: Partial<MemoryEntry
 const raw = (tenantId: string, id: string, m: number): MemoryEntry =>
   row(tenantId, id, m, { kind: 'raw', sourceSessionId: 'sess-mcp' });
 
-// serve() blocks hippo.db for a store of another kind, so a tool that still opened it would answer store_not_ported here.
 describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
   let fixture: TwoTenantFixture;
   let handle: ServerHandle | undefined;
@@ -150,7 +146,6 @@ describe('POST /mcp on a caller-supplied store, with hippo.db blocked', () => {
     rmSync(fixture.dir, { recursive: true, force: true });
   });
 
-  /** The tool's text over POST /mcp as that key, or the whole reply as JSON when it carries no text. */
   async function callServed(
     store: HippoStore,
     token: string,

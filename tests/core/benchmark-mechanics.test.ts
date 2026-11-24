@@ -1,4 +1,3 @@
-// Mechanical behaviour over the benchmark corpus: decay, strengthening, error priority, outcome feedback and the token budget.
 import { describe, it, expect } from 'vitest';
 import { calculateStrength, applyOutcome } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -11,19 +10,14 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 
 useBenchmarkCorpus();
 
-// ---------------------------------------------------------------------------
-// Mechanical behaviour tests
-// ---------------------------------------------------------------------------
-
 describe('Decay mechanics', () => {
   it('strength drops below 0.25 after 14 days without retrieval (default half-life=7d)', () => {
-    initTestStore(tmpDir); // already init, no-op if exists
+    initTestStore(tmpDir);
     const entry = createMemory7('temporary note');
     const fourteenDaysAgo = daysAgo(14);
     const aged: MemoryEntry = { ...entry, lastRetrieved: fourteenDaysAgo };
 
     const s = calculateStrength(aged, new Date());
-    // At 14 days = 2 half-lives: decay = 0.5^2 = 0.25; retrieval_boost=1; emotional=1.0 -> s ≈ 0.25
     expect(s).toBeLessThanOrEqual(0.25);
   });
 
@@ -40,8 +34,6 @@ describe('Decay mechanics', () => {
     const sError = calculateStrength(agedError, now);
     const sNeutral = calculateStrength(agedNeutral, now);
 
-    // Error gets: longer half_life + negative emotional_multiplier (2.0x as of
-    // v1.13.5 / J5; was 1.5x in v1.13.4 and earlier).
     expect(sError).toBeGreaterThan(sNeutral);
   });
 });
@@ -52,21 +44,17 @@ describe('Retrieval strengthening', () => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     let recalled = createMemory7('recalled memory about deployment');
-    // Write to store so markRetrieved can use
     recalled = { ...recalled, lastRetrieved: sevenDaysAgo.toISOString() };
     const originalHalfLife = recalled.halfLifeDays;
 
-    // Simulate 5 retrievals
     const retrieved = markRetrieved(
       markRetrieved(markRetrieved(markRetrieved(markRetrieved([recalled], now), now), now), now),
       now,
     );
     const finalEntry = retrieved[0];
 
-    // 5 retrievals = +2 days each = +10 days to half_life
     expect(finalEntry.halfLifeDays).toBe(originalHalfLife + 10);
 
-    // Compare strength against a same-age unrecalled peer
     const unrecalled: MemoryEntry = {
       ...recalled,
       retrievalCount: 0,
@@ -80,7 +68,6 @@ describe('Error priority', () => {
   it('error-tagged memory has 2x the half_life of identical neutral memory', () => {
     const errorMem = createMemory7('same content here', { tags: ['error'] });
     const neutralMem = createMemory7('same content here', { tags: [] });
-    // error tag -> half_life * 2
     expect(errorMem.halfLifeDays).toBe(neutralMem.halfLifeDays * 2);
   });
 
@@ -94,8 +81,6 @@ describe('Error priority', () => {
     const agedE: MemoryEntry = { ...errorMem, lastRetrieved: sevenDaysAgo };
     const agedN: MemoryEntry = { ...neutralMem, lastRetrieved: sevenDaysAgo };
 
-    // error: half_life=14d, multiplier=1.5 -> decay=0.5^(7/14)=0.707, s=0.707*1.5=1.06 -> clamped to 1
-    // neutral: half_life=7d, multiplier=1.0 -> decay=0.5^(7/7)=0.5, s=0.5
     expect(calculateStrength(agedE, now)).toBeGreaterThanOrEqual(2 * calculateStrength(agedN, now));
   });
 });
@@ -130,18 +115,15 @@ describe('Token budget', () => {
   });
 
   it('returns at least some results even with tight budget', () => {
-    // With budget=50 we should still get at least 1 result (short memories)
     const shortEntry = createMemory7('Use ; not && in PowerShell.');
     writeEntry(tmpDir, shortEntry);
 
     const entries = loadAllEntries(tmpDir, 'default');
     const results = rankBm25('PowerShell', entries, { now: evalNow(), budget: 50 });
-    // The first result is always included even if it exceeds budget
     expect(results.length).toBeGreaterThanOrEqual(1);
-    // Second and beyond should not push total far past budget
     if (results.length > 1) {
       const totalTokens = results.reduce((sum, r) => sum + r.tokens, 0);
-      expect(totalTokens).toBeLessThanOrEqual(100); // generous cap for first-result override
+      expect(totalTokens).toBeLessThanOrEqual(100);
     }
   });
 

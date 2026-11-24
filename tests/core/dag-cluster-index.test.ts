@@ -1,10 +1,8 @@
-// clusterFacts compares a fact only with facts sharing an entity tag, and still returns what the all-pairs scan returned.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { clusterFacts } from '../../src/domain/consolidate/dag.js';
 
-/** The all-pairs scan clusterFacts used to run, kept as the oracle for its output. */
 function allPairsClusters(facts: MemoryEntry[]) {
   const entityTags = facts.map((f) => f.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:')));
   const assigned = new Set<number>();
@@ -33,7 +31,6 @@ function allPairsClusters(facts: MemoryEntry[]) {
   return clusters;
 }
 
-/** Deterministic pseudo-random facts over a small tag pool, with repeated tags and untagged facts mixed in. */
 function randomFacts(seed: number, n: number): MemoryEntry[] {
   let state = seed;
   const next = (k: number): number => {
@@ -60,7 +57,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Set.has and Array.includes calls one clusterFacts run makes over `n` facts in disjoint pairs, each pair one cluster. */
 function membershipChecks(n: number): number {
   const facts = Array.from({ length: n }, (_, i) =>
     createMemory(`fact ${i} about group ${Math.floor(i / 2)}`, { tags: [`topic:group${Math.floor(i / 2)}`] }),
@@ -83,7 +79,6 @@ describe('clusterFacts', () => {
   });
 
   it('compares each fact only with facts that share a tag, so membership checks grow with the facts, not their pairs', () => {
-    // Equal steps mean the checks are linear in n; the all-pairs scan's steps grow with n.
     const [a, b, c] = [300, 600, 900].map(membershipChecks);
     expect(c - b).toBe(b - a);
   });

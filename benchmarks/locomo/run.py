@@ -1,24 +1,3 @@
-"""Run the LoCoMo benchmark against hippo-memory.
-
-For each LoCoMo conversation:
-  1. Create a fresh HIPPO_HOME.
-  2. hippo init.
-  3. Ingest every session turn as a memory via `hippo remember`.
-  4. For every QA in that conversation, run `hippo recall --json`.
-  5. Score the top-K memories with an LLM judge or deterministic gold
-     evidence dia_id recall.
-
-Outputs a single JSON at results/hippo-v{version}.json with per-QA scores +
-overall + per-category aggregates.
-
-Honors the brief's non-negotiables:
-  - Uses the `hippo` CLI (HIPPO_BIN pointed at a build, recommended; or a
-    real `hippo` executable on PATH -- see README.md "Windows / HIPPO_BIN").
-  - Fresh HIPPO_HOME per conversation (no cross-conversation leakage).
-  - No hippo source changes.
-  - Score mode, judge backend, and model id recorded in the output.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -46,9 +25,7 @@ from hippo_subproc import run_hippo_argv
 
 logger = logging.getLogger(__name__)
 
-# --- Configuration ---
-
-JUDGE_MODEL = "claude-opus-4-7"  # label for the `claude -p` CLI used; actual model governed by the CLI install
+JUDGE_MODEL = "claude-opus-4-7"
 OPENAI_JUDGE_MODEL = "gpt-4.1-mini"
 RECALL_PREFLIGHT_BUDGET = 1_000_000
 VERDICT_TOKENS = ("equivalent", "partial", "wrong", "none", "weak", "strong")
@@ -61,7 +38,7 @@ FATAL_JUDGE_MARKERS = (
 
 
 class JudgeError(RuntimeError):
-    """Raised when the external Claude judge fails to return a usable verdict."""
+    ...
 
 JUDGE_PROMPT_TEMPLATE = """\
 You are grading a memory-retrieval system.
@@ -79,7 +56,6 @@ Answer with EXACTLY one word on the first line: equivalent, partial, or wrong.
 - wrong: no retrieved memory supports the answer.
 """
 
-# Adversarial = unanswerable. We score correct if hippo returns nothing substantive.
 JUDGE_PROMPT_ADVERSARIAL = """\
 You are grading a memory-retrieval system on an UNANSWERABLE question.
 
@@ -104,8 +80,6 @@ CATEGORY_NAMES = {
     5: "adversarial",
 }
 
-# --- Data types ---
-
 @dataclass(frozen=True)
 class QAResult:
     conversation_id: str
@@ -116,8 +90,8 @@ class QAResult:
     category_name: str
     is_adversarial: bool
     top_k_memories: list[dict[str, Any]]
-    judge_verdict: str  # "equivalent" / "partial" / "wrong" OR "none"/"weak"/"strong" for adversarial
-    score: float  # 0.0 / 0.5 / 1.0
+    judge_verdict: str
+    score: float
     gold_evidence: list[str] = field(default_factory=list)
     gold_evidence_unmatched: list[str] = field(default_factory=list)
     retrieved_dia_ids: list[str] = field(default_factory=list)
@@ -125,8 +99,6 @@ class QAResult:
     evidence_recall: float | None = None
     evidence_precision: float | None = None
     scored: bool = True
-
-# --- Helpers ---
 
 def load_dataset(data_path: Path) -> list[dict[str, Any]]:
     if not data_path.exists():
@@ -136,7 +108,6 @@ def load_dataset(data_path: Path) -> list[dict[str, Any]]:
 
 
 def collect_turns(conv: dict[str, Any]) -> list[tuple[int, str, str, str]]:
-    """Yield (session_n, dia_id, speaker, text) for every turn in every session."""
     turns: list[tuple[int, str, str, str]] = []
     session_keys = sorted(
         [k for k in conv if re.fullmatch(r"session_\d+", k) and isinstance(conv[k], list)],
@@ -150,8 +121,6 @@ def collect_turns(conv: dict[str, Any]) -> list[tuple[int, str, str, str]]:
             speaker = turn.get("speaker", "unknown")
             text = turn.get("text", "")
             if text:
-                # Prefix with date for temporal grounding — this mirrors what
-                # any sane hippo user would do when ingesting a dated utterance.
                 prefixed = f"[{date}] {speaker}: {text}" if date else f"{speaker}: {text}"
                 turns.append((n, dia_id, speaker, prefixed))
     return turns
@@ -165,15 +134,8 @@ def run_hippo(
     timeout: int = 30,
 ) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "HIPPO_HOME": hippo_home}
-    # Force isolation from global ~/.hippo as a belt-and-braces measure.
     env["HOME"] = hippo_home
     env["USERPROFILE"] = hippo_home
-    # Command resolution (HIPPO_BIN else PATH) and the actual subprocess
-    # call live in hippo_subproc.py: shell=True on win32 used to let cmd.exe
-    # truncate the command line at the first embedded newline in turn text,
-    # silently dropping every --tag argument after it (see
-    # ../LOCOMO_INVESTIGATION.md, "Correction 2026-07-05"). run_hippo_argv
-    # never uses shell=True.
     return run_hippo_argv(
         args,
         env=env,
@@ -192,10 +154,6 @@ def hippo_init(hippo_home: str, salience: bool = False) -> None:
     )
     if result.returncode != 0:
         raise RuntimeError(f"hippo init failed: {result.stderr}")
-    # Salience gate is OFF by default. The 2026-04-24 LoCoMo run with
-    # salience=true collapsed mean_score from 0.279 (v0.32) to 0.020
-    # because the write-time lexical-overlap gate dropped same-conversation
-    # turns as duplicates. Pass --salience to opt in for ablation runs.
     if salience:
         hippo_dir = os.path.join(hippo_home, ".hippo")
         os.makedirs(hippo_dir, exist_ok=True)
@@ -217,8 +175,6 @@ def hippo_remember(hippo_home: str, text: str, tags: list[str]) -> bool:
 
 
 def hippo_recall(hippo_home: str, query: str, budget: int = 4000) -> list[dict[str, Any]]:
-    # HIPPO_RECALL_EXTRA_ARGS lets feature branches A/B compare on LoCoMo
-    # (e.g. HIPPO_RECALL_EXTRA_ARGS="--evc-adaptive"). Default empty.
     extra = shlex.split(os.environ.get("HIPPO_RECALL_EXTRA_ARGS", ""))
     try:
         result = run_hippo(
@@ -240,8 +196,6 @@ def hippo_recall(hippo_home: str, query: str, budget: int = 4000) -> list[dict[s
         data = json.loads(stdout)
         return data.get("results", [])
     except json.JSONDecodeError:
-        # stdout may include SQLite warning lines; strip to the JSON
-        # Find first '{' and parse from there
         brace = stdout.find("{")
         if brace >= 0:
             try:
@@ -371,7 +325,6 @@ def score_evidence_overlap(
 
 
 def extract_verdict(text: str) -> str | None:
-    """Return the first supported verdict token near the start of judge output."""
     words = text.strip().lower().split()
     for token in VERDICT_TOKENS:
         if words and token in words[:5]:
@@ -385,12 +338,6 @@ def is_fatal_judge_error(detail: str) -> bool:
 
 
 def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4) -> str:
-    """Invoke `claude -p` as the judge. Returns the one-word verdict.
-
-    Retries on transient failures (rc!=0, timeout, no-usable-verdict) with
-    exponential backoff. The `claude -p` CLI fails intermittently under
-    parallel load, so a single failure should not abort the whole run.
-    """
     last_err: Exception | None = None
     for attempt in range(max_attempts):
         try:
@@ -418,7 +365,7 @@ def judge_with_claude_cli(prompt: str, timeout: int = 60, max_attempts: int = 4)
                     return verdict
                 last_err = JudgeError(f"judge returned no usable verdict: {result.stdout[:200]}")
         if attempt < max_attempts - 1:
-            time.sleep(2 ** attempt)  # 1, 2, 4 seconds
+            time.sleep(2 ** attempt)
     raise last_err if last_err else JudgeError("judge failed (unknown)")
 
 
@@ -547,8 +494,6 @@ def score_verdict(verdict: str, is_adversarial: bool) -> float:
     return {"equivalent": 1.0, "partial": 0.5, "wrong": 0.0}.get(verdict, 0.0)
 
 
-# --- Main loop ---
-
 def process_conversation(
     conv_entry: dict[str, Any],
     top_k: int,
@@ -571,8 +516,6 @@ def process_conversation(
     if skip_adversarial:
         qa_list = [qa for qa in qa_list if qa.get("category") != 5]
     if sample_n is not None and sample_n < len(qa_list):
-        # Deterministic STRATIFIED sample: proportional allocation across categories.
-        # Seed is fixed per conversation so the same sample is reproducible.
         import random
         seed = int.from_bytes(hashlib.sha256(sample_id.encode("utf-8")).digest()[:4], "big")
         rng = random.Random(0xC0C0 ^ seed)
@@ -582,22 +525,18 @@ def process_conversation(
         sampled: list[dict[str, Any]] = []
         total = len(qa_list)
         for cat, qas in by_cat.items():
-            # Round to at least 1 per category if it exists
             take = max(1, round(sample_n * len(qas) / total))
             rng.shuffle(qas)
             sampled.extend(qas[:take])
-        # Trim or pad to exact sample_n deterministically
         rng.shuffle(sampled)
         qa_list = sampled[:sample_n]
 
     logger.info("[%s] %d QAs to score", sample_id, len(qa_list))
 
-    # Fresh HIPPO_HOME per conversation
     hippo_home = tempfile.mkdtemp(prefix=f"hippo_locomo_{sample_id}_")
     try:
         hippo_init(hippo_home, salience=salience)
 
-        # Ingest all turns
         turns = collect_turns(conv)
         valid_dia_ids = {dia_id for _, dia_id, _, _ in turns if dia_id}
         logger.info("[%s] ingesting %d turns", sample_id, len(turns))
@@ -617,7 +556,6 @@ def process_conversation(
 
         assert_recall_budget_not_capped(hippo_home, qa_list, top_k, budget)
 
-        # Retrieve + judge
         results: list[QAResult] = []
         for i, qa in enumerate(
             tqdm(qa_list, desc=f"Score {sample_id}", unit="qa", leave=False)
@@ -783,7 +721,6 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    # Verify hippo version through the same command path used by the run.
     version_home = tempfile.mkdtemp(prefix="hippo_locomo_version_")
     try:
         v_result = run_hippo(["--version"], cwd=str(Path.cwd()), hippo_home=version_home, timeout=60)
@@ -805,12 +742,8 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     all_results: list[QAResult] = []
 
-    # Incremental save path
     incr_path = args.output_dir / (args.output_name + ".incremental.jsonl")
 
-    # Resume: load already-completed conversations from incremental file.
-    # A conv counts as "complete" only if its QA count matches the dataset.
-    # Partial convs get their rows dropped and are re-run from scratch.
     completed_convs: set[str] = set()
     if args.resume and incr_path.exists():
         expected_qa_counts: dict[str, int] = {}
@@ -848,7 +781,6 @@ def main() -> None:
                 logger.info("Dropping %d partial QA rows for %s (have %d / need %d)",
                             len(entries), conv_id, len(entries), expected)
 
-        # Rewrite incremental file with only complete-conv rows
         with open(incr_path, "w", encoding="utf-8") as f:
             for entry in keep_entries:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -858,7 +790,6 @@ def main() -> None:
                         len(completed_convs), ", ".join(sorted(completed_convs)))
     start_time = time.time()
     failed_conversations: list[dict[str, str]] = []
-    # Resume always appends: we rewrote incr_path with only complete-conv rows above.
     file_mode = "a" if args.resume else "w"
     with open(incr_path, file_mode, encoding="utf-8") as f:
         for entry in data:
@@ -889,7 +820,6 @@ def main() -> None:
                 })
                 continue
             all_results.extend(conv_results)
-            # Periodic aggregate print
             agg = aggregate(all_results)
             logger.info(
                 "Progress: %d QAs | overall mean score = %.3f",

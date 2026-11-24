@@ -1,5 +1,3 @@
-// The reranker registry over the real services: fetch for the hosted rerankers, Transformers.js for
-// the cross-encoder.
 import type { RerankerFn, RerankerLookup } from '../../base/ports/reranker.js';
 import { createCrossEncoderReranker } from '../../domain/rerankers/cross-encoder.js';
 import { transformersCrossEncoder } from '../cross-encoder.js';
@@ -13,7 +11,6 @@ import { createLlmReranker } from './llm.js';
  * once and each outage warning lasts the registry's life.
  */
 export function realRerankers(): RerankerLookup {
-  // jev falls back to the same cross-encoder, so one model loads.
   const crossEncoder = createCrossEncoderReranker(transformersCrossEncoder());
   const registry = {
     clef: createClefReranker('clef', processHttp),

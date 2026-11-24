@@ -1,19 +1,3 @@
-/**
- * DF3 — quality floor on `--include-recent` injection
- * (docs/plans/2026-08-23-df3-include-recent-quality-floor.md).
- *
- * Covers the plan's 7-test list against the `includeRecent` block inside
- * `api.contextGet`'s `pinnedOnly` branch (src/api/index.ts:2456-2491), which now
- * filters candidates with `isWorthSurfacing` (src/base/memory/memory-quality.ts) before
- * slicing to `includeRecent`.
- *
- * Real-DB per project convention. Tests 1-6 seed entries directly via
- * `createMemory` + `writeEntry` (so `pinned` and `created` can be set) and
- * assert on `api.contextGet`, following the `tmpHome` isolation pattern from
- * tests/api/api-context.test.ts. Test 7 goes through the CLI entry, following
- * tests/store/pinned-inject.test.ts's `runHippo` pattern.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import * as path from 'node:path';
@@ -38,8 +22,6 @@ const { writeEntry, apiCtx } = sessionPerTest();
 
 function tmpHome() {
   const home = makeRoot('df3');
-  // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir so
-  // hasGlobal=false inside api.contextGet (same pattern as api-context.test.ts).
   const globalTmp = makeRoot('df3-global', { init: false });
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
@@ -70,8 +52,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Real junk text per DF4's flagged auto-learn class (roadmap acceptance,
-      // verbatim). Newest of the five, so a naive post-slice would still admit it.
       seed(home, 'fixed signals', { created: '2026-08-20T10:00:05.000Z' });
       seed(home, 'clean memory number one with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:04.000Z',
@@ -110,14 +90,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // 8 recent entries, clean/junk interleaved (3 junk, 5 clean — not a
-      // strict 1:1 alternation, because a strict 4/4 split over 8 entries
-      // cannot ever produce "exactly 5 clean" no matter how backfill works;
-      // 5 clean is the minimum needed to prove the N=5 backfill claim).
-      // Newest-to-oldest: junk, clean, junk, clean, junk, clean, clean, clean.
-      // A naive post-slice-then-filter (top 5 by recency, then drop junk)
-      // would only surface 2 clean entries (ranks 2 and 4). The pre-slice
-      // filter must surface all 5.
       seed(home, 'quick patch applied', { created: '2026-08-20T10:00:08.000Z' });
       seed(home, 'clean memory alpha with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:07.000Z',
@@ -164,10 +136,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Pinned entry with content that would fail isContentWorthStoring
-      // (same junk text as test 1) — explicit user intent (pin) wins because
-      // the pinned block (api.ts:2493-2524) is a separate loop that admits
-      // every pinned entry unconditionally, untouched by this plan.
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:00.000Z' });
 
       const result = await contextGet(ctx, {
@@ -189,22 +157,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // The pinned entry fails isContentWorthStoring and is the NEWEST entry,
-      // so it occupies a slot in the recent-N window (includeRecent: 3).
-      // Without the `entry.pinned ||` bypass in the recent filter, this
-      // entry is dropped from the candidate list BEFORE the slice, so the
-      // three clean unpinned entries below backfill into the window and
-      // consume the entire budget in the recent loop. By the time the
-      // dedicated pinned block runs, there is no budget left and the pinned
-      // entry is skipped via `continue` — displacing explicit user intent.
-      // Token costs (estimateTokens, chars/4 rounded up): "fixed signals" = 4,
-      // each clean entry below = 18. budget: 55.
-      //   OLD (bug): recent slice = [alpha, bravo, charlie] (pinned dropped
-      //     pre-slice) -> 18+18+18 = 54 <= 55, all three fit, usedP = 54.
-      //     Pinned block then needs 54+4=58 > 55 -> SKIPPED.
-      //   NEW (fix): recent slice = [pinned, alpha, bravo] (pinned survives
-      //     the filter and is newest) -> 4+18+18 = 40 <= 55, all three fit
-      //     including the pinned entry directly in the recent loop.
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:03.000Z' });
       seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:02.000Z',
@@ -235,11 +187,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Real live fragment text from the plan's measured-scope table. DF3
-      // fixes the vague/no-specificity/version-bump/too-short class; it
-      // cannot catch mid-sentence fragments, which are indistinguishable
-      // from good content at this read surface (DF2's producer job).
-      // This is a deliberate documentation pin, not a bug being reproduced.
       const fragment = 'fetches a quote → blank price';
       seed(home, fragment, { created: '2026-08-20T10:00:00.000Z' });
 
@@ -262,11 +209,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // A pinned clean entry plus a recent junk entry. With includeRecent
-      // unset/0 the whole recent block (and therefore the new filter) is
-      // never entered — the junk is absent because the block never runs,
-      // not because the filter caught it. Compares the absent-vs-explicit-0
-      // shapes to lock the pre-existing default.
       seed(home, 'pinned rule that always injects regardless of recent settings', {
         pinned: true,
         created: '2026-08-20T10:00:01.000Z',
@@ -297,21 +239,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Executed repro from the ship-gate review. Junk "tmp" (1 token) is
-      // the NEWEST entry, three clean 69-70 char entries (18 tokens each)
-      // sit in the middle, and the pin "fixed signals" (4 tokens) is the
-      // OLDEST entry -- outside the includeRecent:3 window either way.
-      //   Junk is filtered pre-slice, so the recent candidate list is the
-      //   three clean entries (54 tokens total).
-      //   Before the reserve fix: the recent loop admits all three clean
-      //     entries against the full 55-token budget (54 <= 55), leaving
-      //     only 1 token. The pinned loop then needs 4, 54+4=58 > 55, so
-      //     the pin is skipped -- MISSING.
-      //   After the reserve fix: pinnedReserve = 4 (the pin alone), so the
-      //     recent loop is capped at 55-4=51. Two clean entries fit
-      //     (18+18=36 <= 51); the third does not (36+18=54 > 51) and is
-      //     dropped. The pinned loop then admits the pin against the full
-      //     55-token budget (36+4=40 <= 55) -- the pin now injects.
       seed(home, 'tmp', { created: '2026-08-20T10:00:04.000Z' });
       seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:03.000Z',
@@ -343,11 +270,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Budget (5) is smaller than any single clean recent entry (18
-      // tokens) but fits the pin (4 tokens) alone. pinnedReserve consumes
-      // the entire budget, so recentBudget floors at 0 -- no recents can
-      // ever be admitted -- and the pinned loop still admits the pin
-      // against the full effBudget.
       seed(home, 'fixed signals', { pinned: true, created: '2026-08-20T10:00:01.000Z' });
       seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:00.000Z',
@@ -372,14 +294,6 @@ describe('includeRecent quality floor (api.contextGet)', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-      // Pin is the OLDEST entry (outside the includeRecent:3 window, same
-      // shape as test 3c) so the three clean entries fill the recent slice
-      // on their own. Budget (2000) comfortably covers the pin plus all
-      // three recent entries. pinnedReserve is computed and subtracted
-      // from the recent cap, but 2000 - 4 = 1996 is still far more than
-      // the 54 tokens the three clean entries need, so nothing is dropped
-      // -- the reserve must not shrink results in the common,
-      // unconstrained case.
       seed(home, 'clean recent entry alpha with plenty of specific detail worth keeping', {
         created: '2026-08-20T10:00:02.000Z',
       });
@@ -446,7 +360,6 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
     hippoDir = path.join(tmpDir, '.hippo');
   });
 
-  /** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
   async function runHippo(args: string[]): Promise<string> {
     vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
     const saved = process.cwd();
@@ -490,30 +403,17 @@ describe('includeRecent quality floor (CLI end-to-end)', () => {
   });
 });
 
-/**
- * Reserve dedupe (codex finding on the budget-reserve commit).
- *
- * `syncGlobalToLocal` copies global rows into the local store PRESERVING
- * `entry.id`, so a synced pin exists in both stores. The pinned admission
- * loop dedupes via `selectedIds`, so it returns that pin once — but the
- * budget reserve walked `rankedPinned` without deduping and charged the pin
- * twice, starving recents of budget a single returned pin never needed.
- */
 describe('pinned budget reserve dedupes mirrored entries', () => {
   let home: string;
   let globalTmp: string;
 
   beforeEach(() => {
     home = makeRoot('df3-dedupe');
-    // An INITIALIZED global store, so api.contextGet takes the hasGlobal path
-    // and pinnedGlobal is populated.
     globalTmp = makeRoot('df3-dedupe-global');
     vi.stubEnv('HIPPO_HOME', globalTmp);
   });
 
   it('a pin mirrored in local+global reserves its cost ONCE, so a recent entry still fits', async () => {
-    // The SAME entry object written to both stores — exactly what
-    // syncGlobalToLocal produces (it skips by id, preserving it).
     const pin = createMemory('pinned rule that is mirrored across both stores', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       pinned: true,
@@ -533,20 +433,11 @@ describe('pinned budget reserve dedupes mirrored entries', () => {
     writeEntry(home, recent);
 
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'test', role: 'admin' });
-    // Budget sized from the MEASURED token costs (pin 12, recent 17) so the
-    // two cases are actually distinguishable:
-    //   deduped reserve   -> 35 - 12 = 23 remaining, recent (17) FITS
-    //   double-reserve    -> 35 - 24 = 11 remaining, recent (17) DROPPED
-    // A larger budget passes either way and proves nothing (verified: at 46
-    // both branches leave room, which is why the first draft of this test was
-    // green against the unfixed code).
     const res = await contextGet(ctx, { currentProject: cwdProject(), pinnedOnly: true, includeRecent: 3, budget: 35 });
     const contents = res.entries.map((e) => e.entry.content);
 
     expect(contents).toContain(pin.content);
-    // Returned once despite living in both stores.
     expect(contents.filter((c) => c === pin.content)).toHaveLength(1);
-    // The point of the fix: the recent entry survives.
     expect(contents).toContain(recent.content);
   });
 });

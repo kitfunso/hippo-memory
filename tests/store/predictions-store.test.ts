@@ -1,18 +1,3 @@
-/**
- * E2 prediction first-class object — store-layer tests.
- * Docs: docs/plans/2026-05-26-e2-prediction-object.md
- *
- * Covers what only predictions have; SAVEPOINT rollback and the INSERT tenant trigger run per table in typed-object-store.test.ts.
- * 1. savePrediction creates both memory and predictions row
- * 2. closePrediction updates the row + emits audit
- * 3. ON DELETE SET NULL: forget the memory, prediction survives with NULL memory_id
- * 4. loadPredictionsByClass filters by class + closure_state
- * 5. loadOpenPredictions excludes closed
- * 6. VALID_CLOSURE_STATES rejection at the closePrediction layer
- * 7. Tenant scoping: cross-tenant load returns empty
- * 8. UPDATE trigger, re-close and missing-id guards; the closure_state CHECK constraint
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -46,8 +31,8 @@ describe('predictions store (first-class object)', () => {
       targetDate: '2026-06-15',
     });
 
-    expect(pred.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
-    expect(pred.memoryId).toMatch(/^sem_/); // the mirror is a semantic-layer memory
+    expect(pred.id).toBe(1);
+    expect(pred.memoryId).toMatch(/^sem_/);
     expect(pred.tenantId).toBe('default');
     expect(pred.classTag).toBe('migration-effort');
     expect(pred.claimText).toBe('migration takes 2 days');
@@ -58,7 +43,6 @@ describe('predictions store (first-class object)', () => {
     expect(pred.closureState).toBe('open');
     expect(pred.closedAt).toBeNull();
 
-    // Memory mirror exists with the prediction tag
     const db = openHippoDb(home);
     try {
       // SAFETY: the query selects the id/content/tags_json columns from memories,
@@ -96,7 +80,6 @@ describe('predictions store (first-class object)', () => {
     expect(closed.closureNote).toBe('higher than expected');
     expect(closed.closedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
-    // Audit row landed
     const db = openHippoDb(home);
     try {
       // SAFETY: the query selects op/target_id/metadata_json from audit_log, whose
@@ -127,11 +110,8 @@ describe('predictions store (first-class object)', () => {
     });
     expect(pred.memoryId).not.toBeNull();
 
-    // Forget the backing memory via deleteEntry (one of the 4 deletion paths
-    // round-1 CRIT identified)
     deleteEntry(home, pred.memoryId!);
 
-    // Prediction row still exists, memory_id is now NULL
     const reloaded = await loadPredictionById(home, 'default', pred.id);
     expect(reloaded).not.toBeNull();
     expect(reloaded!.memoryId).toBeNull();
@@ -197,7 +177,6 @@ describe('predictions store (first-class object)', () => {
   });
 
   it('UPDATE trigger blocks tenant_id-only mutation', () => {
-    // Create memory under tenant-a + a prediction referencing it
     const memA = createMemory('tenant-a prediction memory', {
       tags: ['prediction', 'x'],
       layer: Layer.Semantic,
@@ -215,9 +194,6 @@ describe('predictions store (first-class object)', () => {
         VALUES (?, 'tenant-a', 'x', 'open prediction', 'open', ?)
       `).run(memA.id, new Date().toISOString());
 
-      // Attempt UPDATE that mutates tenant_id only (memory_id unchanged).
-      // Pre-fix: trigger only fired when memory_id changed; this would silently land.
-      // Post-fix: WHEN clause covers tenant_id changes too, trigger ABORTs.
       expect(() => {
         db.prepare(`UPDATE predictions SET tenant_id = 'tenant-b' WHERE memory_id = ?`).run(memA.id);
       }).toThrow(/tenant_id must match memories\.tenant_id/);
@@ -233,14 +209,12 @@ describe('predictions store (first-class object)', () => {
       estimateValue: 1,
     });
 
-    // First close succeeds
     await closePrediction(home, 'default', pred.id, {
       closureState: 'closed',
       actualValue: 2,
       closureNote: 'first close',
     });
 
-    // Second close throws — cannot re-close
     await expect(
       closePrediction(home, 'default', pred.id, {
         closureState: 'closed',
@@ -249,12 +223,10 @@ describe('predictions store (first-class object)', () => {
       }),
     ).rejects.toThrow(/already closed/);
 
-    // Confirm the original close survived (actual_value unchanged)
     const reloaded = await loadPredictionById(home, 'default', pred.id);
     expect(reloaded!.actualValue).toBe(2);
     expect(reloaded!.closureNote).toBe('first close');
 
-    // Confirm only ONE predict_close audit landed (not two)
     const db = openHippoDb(home);
     try {
       // SAFETY: the query selects only the id column from audit_log, an INTEGER

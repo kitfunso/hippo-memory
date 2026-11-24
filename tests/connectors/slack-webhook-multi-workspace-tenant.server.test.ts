@@ -1,28 +1,3 @@
-/**
- * v1.12.8 — e2e webhook test: registered teams route memories to correct tenant.
- *
- * Closes the test gap explicitly tracked in TODOS.md:
- *
- *   "Multi-workspace tenant-routing e2e test. tests/connectors/slack-tenant-routing.test.ts
- *   covers the helper unit; no end-to-end webhook test populates slack_workspaces
- *   and asserts the resolved tenant lands on the memory row. Add one webhook test
- *   that mints a row in slack_workspaces and asserts the ingested memory's
- *   tenant_id matches."
- *
- * Existing coverage map (what we already had):
- *   - tests/connectors/slack-tenant-routing.test.ts: resolveTenant helper unit only
- *   - tests/connectors/slack-hardening.process.test.ts: unroutable foreign team → __unroutable__ DLQ
- *   - tests/connectors/slack-webhook-parse-failure-tenant.server.test.ts (v1.12.6 B4): parse-failure paths
- *   - tests/connectors/slack-workspaces-cli.test.ts (v1.12.5): CLI add/list/remove unit
- *
- * What was missing (and is added here):
- *   - happy path: registered team → webhook arrives with valid envelope →
- *     ingestMessage writes a memory → memory.tenant_id matches the
- *     workspace's mapped tenant
- *   - two-tenant isolation: webhooks from team A only produce memories for
- *     tenant A, never tenant B
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -139,7 +114,6 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     expect(acmeEntries[0]!.content).toContain('multi-workspace alpha sentinel');
     expect(acmeEntries[0]!.kind).toBe('raw');
 
-    // Critical isolation: nothing leaked into the deployment fallback tenant.
     expect(entriesByTenant('deployment-fallback')).toHaveLength(0);
   });
 
@@ -177,8 +151,6 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     expect(acme[0]!.content).toContain('acme private payload bravo');
     expect(globex[0]!.content).toContain('globex private payload charlie');
 
-    // Cross-tenant leak guard: no acme message in globex's tenant, no globex
-    // message in acme's tenant.
     expect(acme.find((e) => e.content?.includes('globex'))).toBeUndefined();
     expect(globex.find((e) => e.content?.includes('acme'))).toBeUndefined();
   });
@@ -187,9 +159,6 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     vi.stubEnv('HIPPO_TENANT', 'deployment-fallback');
     registerWorkspace(root, 'T_KNOWN', 'known-tenant');
 
-    // T_FOREIGN is not registered. Per resolveTenant's fail-closed
-    // contract (v0.39 commit 3), this should NOT fall back to HIPPO_TENANT —
-    // the foreign team is unroutable and the event lands in DLQ.
     const res = await postEvent(
       handle.port,
       makeMessageEvent({
@@ -203,15 +172,12 @@ describe('POST /v1/connectors/slack/events multi-workspace tenant routing', () =
     );
     expect(res.status).toBe(200);
 
-    // No memory in any of the three tenants.
     expect(entriesByTenant('known-tenant')).toHaveLength(0);
     expect(entriesByTenant('deployment-fallback')).toHaveLength(0);
     expect(loadEveryTenantEntries(root).filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
   });
 
   it('single-workspace install (empty slack_workspaces) routes via HIPPO_TENANT', async () => {
-    // No registerWorkspace call → slack_workspaces is empty → env fallback
-    // is safe per resolveTenant.
     vi.stubEnv('HIPPO_TENANT', 'single-deployment');
 
     const res = await postEvent(

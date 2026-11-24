@@ -1,4 +1,3 @@
-// captureSessionTexts: the session-end capture for a caller that read its transcript on another machine.
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -44,7 +43,6 @@ let root: string;
 
 beforeEach(() => {
   dir = makeRoot('session-texts', { init: false });
-  // The store sits in a repo of its own, so a row stamped from its folder would read 'server-repo'.
   repo = path.join(dir, 'srv', 'server-repo');
   fs.mkdirSync(path.join(repo, '.git'), { recursive: true });
   root = path.join(repo, '.hippo');
@@ -132,7 +130,6 @@ describe('captureSessionTexts', () => {
   it('never stamps the folder of a store whose parent is no project', async () => {
     const home = path.join(dir, 'home');
     const homeStore = path.join(home, '.hippo');
-    // Before initStore, which resolves the folder's identity once and caches it.
     vi.stubEnv('USERPROFILE', home);
     vi.stubEnv('HOME', home);
     try {
@@ -161,7 +158,6 @@ describe('captureSessionTexts', () => {
     expect(loadEveryTenantEntries(root)).toEqual([]);
   });
 
-  // The shared store's own check: rows match names verbatim, so a rewritten name would split a project.
   it.each([
     ['an upper-case name', { name: 'Api', legacyName: 'api' }],
     ['a padded name', { name: ' api', legacyName: 'api' }],

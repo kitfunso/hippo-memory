@@ -1,4 +1,3 @@
-/** FE2 staleness-from-code-churn: the invalidate and sleep CLI wiring. */
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -12,11 +11,6 @@ import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_helpers/churn-git-repo.js';
 
-// ---------------------------------------------------------------------------
-// CLI wiring: `hippo invalidate --churn` and `hippo sleep`
-// ---------------------------------------------------------------------------
-
-// In process, so coverage sees invalidate and sleep; a non-zero exit throws unless the case expects it.
 async function runCli(
   cwd: string,
   args: string[],
@@ -127,7 +121,6 @@ describe('hippo sleep + config.churnStaleness.enabled (CLI)', () => {
     const hippoRoot = path.join(repoDir, '.hippo');
     const memId = setupChurnMemory(hippoRoot);
 
-    // Plain `sleep` (no --no-learn) so Phase 1 runs and only the config gate stops the tagging.
     const { stdout } = await runCli(repoDir, ['sleep'], env);
     expect(stdout).not.toContain('churn-stale');
     expect(readEntry(hippoRoot, memId)!.tags).not.toContain(CHURN_STALE_TAG);

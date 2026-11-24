@@ -1,4 +1,3 @@
-// One shared store, two repos: an MCP session in acme never gets beta's, NULL-origin or another tenant's rows, and beta's mirrors it.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -119,7 +118,6 @@ async function tool(repo: Repo, name: string, args: Record<string, JsonValue> = 
   };
 }
 
-/** The named ids whose text hippo_recall or hippo_context printed; every seeded text is unique. */
 async function shown(
   repo: Repo,
   name: 'hippo_recall' | 'hippo_context',
@@ -156,7 +154,6 @@ beforeAll(async () => {
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
   vi.stubEnv('HIPPO_V1_RPS', '0');
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-real');
-  // The server shares this process, so its own requests pass through and only the embedding call is faked.
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -191,7 +188,6 @@ beforeAll(async () => {
   ids.other = seed('othermark lighthouse keeper log in another tenant', 'acme', { tenantId: 'other' });
   ids.alice = seed('alicemark lighthouse keeper log kept by alice', '', { scope: 'personal:private:alice' });
   ids.bob = seed('bobmark lighthouse keeper log kept by bob', '', { scope: 'personal:private:bob' });
-  // Shares no word with the query, so only the vector arm can bring it in.
   ids.betaNear = seed('zebrafinch quokka marmalade', 'beta');
   const vectors: Record<string, number[]> = {};
   for (const id of [ids.acme, ids.beta, ids.global, ids.none, ids.other, ids.alice, ids.bob]) {
@@ -207,7 +203,6 @@ beforeAll(async () => {
   ids.acmeRaw2 = raw('acme raw two closed the ticket', 'acme', ids.acmeSum);
   ids.betaRaw1 = raw('beta raw one opened the ticket', 'beta', ids.betaSum);
   ids.betaRaw2 = raw('beta raw two closed the ticket', 'beta', ids.betaSum);
-  // A DAG link across repos, which no writer makes today: the filter must hold on the summary and on its children.
   ids.acmeOdd1 = raw('acme odd one under the beta rollup', 'acme', ids.betaSum);
   ids.acmeOdd2 = raw('acme odd two under the beta rollup', 'acme', ids.betaSum);
   ids.nullRaw = raw('null raw with no project in the session', null);

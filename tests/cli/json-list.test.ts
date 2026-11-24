@@ -1,4 +1,3 @@
-// printJsonList prints, a page at a time, the bytes one JSON.stringify of the whole list would print.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { printJsonList } from '../../src/surface/cli/json-list.js';
 

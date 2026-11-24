@@ -38,8 +38,6 @@ Issues = "https://github.com/kitfunso/hippo-memory/issues"
 Changelog = "https://github.com/kitfunso/hippo-memory/blob/master/CHANGELOG.md"
 
 [tool.uv.build-backend]
-# Distribution name is hippo-memory-sdk (PyPI similarity blocker on hippo-memory),
-# but the Python import name stays hippo_memory so user code is unchanged.
 module-name = "hippo_memory"
 
 [tool.pytest.ini_options]

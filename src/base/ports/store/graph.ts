@@ -1,4 +1,3 @@
-// The graph groups: the entity graph's reads and the rebuild's writes.
 import type { StoreActor } from '../../scope/recall-scope.js';
 import type { MethodEffects } from './effects.js';
 
@@ -11,10 +10,6 @@ export const GRAPH_ID_BATCH = 400;
  * is in the tenant with a null scope or one `canReadScope(reader, scope)` admits; no `reader`
  * shows every row. */
 export interface GraphViewQuery {
-  /** Unset reads the whole graph. Set, the start entities are the first `limit` of exactly this
-   * name (lowest id first) that show; none left answers empty. Per GRAPH_ID_BATCH start ids, the
-   * newest `limit` relations with an end among them join in, each adding its other end to the
-   * ids held, until `limit` ids are held. */
   readonly entity?: string;
   readonly limit: number;
   readonly reader?: StoreActor;
@@ -23,7 +18,6 @@ export interface GraphViewQuery {
 /** One read of a recall walk: ids go GRAPH_ID_BATCH at a time, rows come back in that order per
  * batch, and `truncated` is false. */
 export type GraphWalkQuery =
-  /** The entities whose memory is among `ids`, id ascending per batch. */
   | { readonly by: 'memory'; readonly ids: readonly string[] }
   /** The entities among `ids`. */
   | { readonly by: 'entity'; readonly ids: readonly number[] }
@@ -32,23 +26,13 @@ export type GraphWalkQuery =
 
 export interface GraphRows {
   readonly entities: Entity[];
-  /** May name an entity `entities` lacks; the caller drops such a relation. */
   readonly relations: Relation[];
-  /** Judged before a row is hidden: true when start entities, joined relations, returned
-   * relations or (whole graph) returned entities came back `limit` long, or the walk held
-   * `limit` ids with a relation still to join. */
   readonly truncated: boolean;
 }
 
 /** The rows behind GET /v1/graph and recall's graph walk. */
 export interface GraphReads {
-  /** A view reads one snapshot, then drops rows that do not show: whole graph, the newest
-   * `limit` entities and relations; from a name, its held entities and the newest `limit`
-   * relations among them. A walk fills one list. */
   graphRows(tenantId: string, query: GraphViewQuery | GraphWalkQuery): Promise<GraphRows>;
-  /** The ops that turn the tenant's stored graph into `desired`, as store/rules/graph-delta.ts
-   * diffGraph plans them. Read outside any write lock, so the apply re-checks each op against
-   * what changed since. */
   graphDelta(tenantId: string, desired: DesiredGraph): Promise<GraphOp[]>;
 }
 
@@ -74,13 +58,8 @@ export interface Entity {
   tenantId: string;
   entityType: EntityType;
   name: string;
-  /** The consolidated source memory this entity came from; null once the mirror is
-   * forgotten/pruned, then provenance is source_object; a memory-only entity goes with its memory, and so does
-   * every relation that ends at it, whoever backs that relation (the FK cascade), as a rebuild drops them. */
   memoryId: string | null;
   sourceKind: SourceKind;
-  /** The authoritative object this entity is anchored to (object-provenance path).
-   *  Set for object-sourced entities; absent for memory-only (prose/NLP) entities. */
   sourceObjectType?: SourceObjectType;
   sourceObjectId?: number;
   createdAt: string;
@@ -92,8 +71,6 @@ export interface Relation {
   fromEntityId: number;
   toEntityId: number;
   relType: RelationType;
-  /** NULL once the mirror is forgotten/pruned; the relation survives via source_object; a memory-only relation
-   * goes with its memory, and any relation goes with an entity it ends at. */
   memoryId: string | null;
   sourceKind: SourceKind;
   sourceObjectType?: SourceObjectType;
@@ -101,11 +78,7 @@ export interface Relation {
   createdAt: string;
 }
 
-// The graph rebuild's writes: ops graphReads.graphDelta planned, applied as plain data.
 export interface GraphRebuild {
-  /** Applies `ops` from `opts.from` in one transaction, stopping at the first op past
-   * `opts.holdMs`. Each insert and update is checked against the rows as they stand, so one a
-   * writer made stale since the diff's read is skipped. */
   applyOps(
     tenantId: string,
     ops: readonly GraphOp[],

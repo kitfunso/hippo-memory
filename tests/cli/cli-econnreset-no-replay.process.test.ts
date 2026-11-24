@@ -19,10 +19,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { seedRows } from '../_helpers/seed-rows.js';
 
-// A server that commits the row then drops the socket looks identical to a
-// refused connection through `isConnectionRefused`, so the CLI used to self-heal
-// its pidfile and write the same memory a second time on the direct path.
-
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
 const CLI_PATH = join(REPO_ROOT, 'dist', 'cli.js');
 
@@ -38,7 +34,6 @@ function assertFreshBuild(): void {
   }
 }
 
-/** Answers /health so detectServer accepts the pidfile, then commits POST /v1/memories and drops the socket unanswered. */
 async function startResettingServer(
   hippoRoot: string,
   startedAt: string,
@@ -73,7 +68,6 @@ const WRITE_ROUTES: readonly (readonly [string, RegExp])[] = [
   ['POST', /^\/v1\/memories\/[^/]+\/(archive|promote)$/],
 ];
 
-/** Answers /health so detectServer accepts the pidfile, then answers every write route with `status` and `body` and commits nothing. */
 async function startReplyServer(
   startedAt: string,
   body: string,
@@ -168,27 +162,22 @@ describe('classifyTransportFailure', () => {
   });
 
   it('calls a socket that broke mid-request unsafe to replay', () => {
-    // What Node's fetch actually reports when a server destroys the socket
-    // before replying, measured 2026-09-07; ECONNRESET is the raw-socket shape.
     expect(classifyTransportFailure(fetchError('UND_ERR_SOCKET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('ECONNRESET'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(fetchError('EPIPE'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }))).toBe(
       'delivery-unknown',
     );
-    // No syscall code to go on, so the conservative answer is the only safe one.
     expect(classifyTransportFailure(fetchError(undefined))).toBe('delivery-unknown');
   });
 
   it('calls only a server answer or an unbuilt request no transport failure', () => {
     expect(classifyTransportFailure(new HttpResponseError('not found: mem_ECONNREFUSED', 404))).toBe('none');
-    // encodeURIComponent throws this before any request exists.
     expect(classifyTransportFailure(new URIError('URI malformed'))).toBe('none');
   });
 
   it('calls an error of an unlisted class possibly delivered', () => {
     expect(classifyTransportFailure(new Error('something else went wrong'))).toBe('delivery-unknown');
-    // Message text alone never classifies: only the error class or syscall code does.
     expect(classifyTransportFailure(new Error('connect ECONNREFUSED 127.0.0.1:9'))).toBe('delivery-unknown');
     expect(classifyTransportFailure(new MalformedReplyError('POST /v1/memories', 'null'))).toBe('delivery-unknown');
   });
@@ -245,7 +234,6 @@ describe('deliveryUnknownReason', () => {
     expect(deliveryUnknownReason(Object.assign(new Error('boom'), { code: 'EHOSTUNREACH' }), URL)).toBe(
       unrecognised(' (EHOSTUNREACH)'),
     );
-    // A code that is not a plain syscall name is never echoed.
     expect(deliveryUnknownReason(Object.assign(new Error('boom'), { code: 'bad code!' }), URL)).toBe(unrecognised(''));
   });
 
@@ -274,8 +262,6 @@ describe('remember over HTTP when the socket resets after the commit', () => {
     const { server, port, posts } = await startResettingServer(hippoRoot, startedAt);
     writePidfile(hippoRoot, port, startedAt);
 
-    // Spawned, not exec'd: execFileSync blocks this process's event loop, so the
-    // stub server could not answer the /health probe and the CLI never routed.
     const content = 'the socket died after the server committed this row';
     const { status, stderr } = await runCli(home, ['remember', content]);
 
@@ -293,10 +279,8 @@ describe('remember over HTTP when the socket resets after the commit', () => {
 
 interface VerbCase {
   readonly verb: string;
-  /** Fields laid over the one local row seeded first; none for a verb that writes its own row. */
   readonly seed?: Partial<MemoryEntry>;
   readonly args: (id: string) => string[];
-  /** Asserts the local effect a replay would have had did not happen. */
   readonly untouched: (hippoRoot: string, id: string, globalHome: string) => void;
 }
 
@@ -328,7 +312,6 @@ const VERB_CASES: readonly VerbCase[] = [
     args: (id) => ['promote', id],
     untouched: (hippoRoot, id, globalHome) => {
       expect(countRows(hippoRoot, 'memories', 'id', id)).toBe(1);
-      // A replay would have created the global store to copy into.
       expect(existsSync(globalHome)).toBe(false);
     },
   },

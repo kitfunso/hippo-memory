@@ -21,7 +21,6 @@ describe('blankCodeSpans', () => {
     expect(blankCodeSpans('x `**` y', '`')).toBe('x ```` y');
   });
 
-  // A rescan from every unclosed opener runs past the test timeout at this size.
   it('judges many unclosed runs of different lengths in one pass', () => {
     const hostile = Array.from({ length: 400 }, (_, i) => '`'.repeat(i + 1)).join(' a ');
     expect(blankCodeSpans(hostile)).toBe(hostile);

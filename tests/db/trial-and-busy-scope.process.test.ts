@@ -1,4 +1,3 @@
-// withTrialScope undoes every write; withWriteScope's busyWaitMs reaches the lock wait. Real SQLite; the lock holder is a child process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import type { Writable } from 'node:stream';
@@ -101,7 +100,6 @@ process.stdout.write('held');
 let holder: Promise<void> | null = null;
 let holderStdin: Writable | null = null;
 
-/** Takes the write lock in another process until the test ends, or for `holdMs` when the waiter blocks this thread. */
 async function holdWriteLock(holdMs?: number): Promise<void> {
   const script = path.join(root, 'holder.cjs');
   fs.writeFileSync(script, HOLDER);
@@ -122,7 +120,6 @@ describe('withWriteScope busyWaitMs', () => {
     const db = openHippoDb(root);
     try {
       db.exec('PRAGMA busy_timeout = 0');
-      // The wait blocks this thread, so the lock goes on the holder's own clock while it waits.
       await holdWriteLock(600);
       withWriteScope(
         db,

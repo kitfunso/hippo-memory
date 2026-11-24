@@ -1,9 +1,6 @@
-// Where a store records the half-life base its memories are on, and the audit rows a move leaves,
-// once for both adapters; the move itself is planned in src/base/memory/half-life-plan.ts.
 import type { HalfLifeMove } from '../../base/memory/half-life-plan.js';
 import type { AppendAuditOptions } from '../../base/ports/store/types.js';
 
-/** The base every store used before the base was recorded. */
 const LEGACY_HALF_LIFE_BASE = 7;
 
 /** The base a stored meta value names: 7 days when none was recorded or it is not a positive
@@ -17,8 +14,6 @@ export function recordedHalfLifeBase(stored: string | undefined): number {
 export function halfLifeAuditRows(move: HalfLifeMove, actor: string): AppendAuditOptions[] {
   const byTenant = new Map<string, Record<string, number>>();
   for (const e of move.entries) {
-    // One record per tenant, filled in place: copying it per row made the write grow with the
-    // square of the store.
     let record = byTenant.get(e.tenantId);
     if (!record) byTenant.set(e.tenantId, (record = {}));
     record[e.id] = e.oldHalfLifeDays;

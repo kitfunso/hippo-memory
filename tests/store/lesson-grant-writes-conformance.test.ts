@@ -1,5 +1,3 @@
-// LessonWrites' word read and batch writes, and KeyWrites' scope change, answer,
-// with the same refusal, remember and grant audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -23,7 +21,6 @@ const ALIAS = 'my deploy alias is dpl';
 
 let fixture: TwoTenantFixture;
 
-// An origin named, so the row does not take the folder's project.
 const entry = (content: string, over: Partial<MemoryEntry> = {}): MemoryEntry => ({
   ...createMemory(content, { tenantId: TENANT_A, source: 'git-learn' }),
   originProject: 'proj',
@@ -50,7 +47,6 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-/** Each call one second after the one before. */
 async function conforms<G extends 'lessonWrites' | 'keyWrites'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
@@ -91,7 +87,6 @@ describe('LessonWrites', () => {
     ]);
     const contents = (o: (typeof outcomes)[number]) =>
       'value' in o && Array.isArray(o.value) ? o.value.map((held: { content: string }) => held.content) : o;
-    // A copy matches a row apart from spacing only: case, a missing word and another tenant's row each miss.
     expect(outcomes.slice(0, 5).map(contents)).toEqual([
       ['Deploy from main after the tests pass', 'the deploy key rotates monthly'],
       ['my deploy alias is dpl', 'the deploy key rotates monthly'],

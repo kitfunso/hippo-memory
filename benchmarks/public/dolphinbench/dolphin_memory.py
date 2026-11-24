@@ -41,7 +41,6 @@ def hook(args: argparse.Namespace) -> int:
     record["seconds"] = round(time.monotonic() - started, 3)
     Path(args.out).write_text(json.dumps(record), encoding="utf-8")
     if "error" in record:
-        # Exit 2 blocks the prompt, so no model call is spent on a turn without its memory.
         print(f"memory hook failed: {record['error']}", file=sys.stderr)
         return 2
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",

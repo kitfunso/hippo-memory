@@ -1,4 +1,3 @@
-// readBody's cap and deadline: a slow body fails with its own error class, and the deadline timer never outlives the read.
 import { describe, it, expect, vi } from 'vitest';
 import type { IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
@@ -8,14 +7,12 @@ import { readBody } from '../../src/surface/http/http-util.js';
 // SAFETY: readBody only iterates the request's chunks, which any Readable also yields.
 const asRequest = (stream: Readable): IncomingMessage => stream as IncomingMessage;
 
-/** One byte every few milliseconds, forever: a client trickling under every size cap. */
 function trickle(): Readable {
   let timer: NodeJS.Timeout | undefined;
   return new Readable({
     read() {
       timer = setTimeout(() => this.push('x'), 5);
     },
-    // Without this a pending push would still count as a live timer in the next test.
     destroy(err, done) {
       clearTimeout(timer);
       done(err);

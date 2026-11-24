@@ -1,5 +1,3 @@
-// contextGet on hippo.db returns and records what each case lists; on a port-only store it answers the same through
-// the store, with hippo.db blocked.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,17 +33,12 @@ import { copyTree } from '../_helpers/copy-tree.js';
 
 type Block = Exclude<keyof ContextResult, 'entries' | 'tokens'>;
 
-/** What the hippo.db pass that reads the global store too returns and records. */
 interface Expected {
-  /** Entry ids in rank order. */
   readonly ids: readonly string[];
   readonly tokens: number;
   readonly blocks: readonly Block[];
-  /** The result count on the one trace row the call writes; absent when it writes none. */
   readonly traced?: number;
-  /** total_recalled in stats.json after the call; absent when the call writes no stats.json. */
   readonly recalled?: number;
-  /** Global-store ids the call counts as retrieved there, in id order; absent when it counts none. */
   readonly globalRetrieved?: readonly string[];
 }
 
@@ -57,11 +50,8 @@ interface Case {
   readonly tenantId?: string;
   readonly shared?: true;
   readonly physicsOff?: true;
-  /** Physics on in the embedded passes only: with no provider it ranks as hybrid. */
   readonly physicsOn?: true;
-  /** Shows the case reached the branch it names, on the hippo.db pass that reads the global store too. */
   readonly reaches?: (pass: Pass) => void;
-  /** Reads the port-only store must have answered, so the case cannot pass on hippo.db's copy. */
   readonly storeReads?: readonly string[];
 }
 
@@ -99,7 +89,6 @@ const CASES: readonly Case[] = [
     },
     reaches: (p) => {
       expect(p.result.activeSnapshot?.task).toBe('unkeyed task for session a');
-      // The session's five newest events, oldest first, less the private ping the scope filter drops.
       expect(p.result.recentEvents?.map((e) => e.content)).toEqual([
         'promoted the canary',
         'paged the on-call',
@@ -269,7 +258,6 @@ function lastRecallMeta(root: string): unknown[] {
   }
 }
 
-/** Every memory row's hashed vector and its particle, so the search's vector arm and physics have rows to read. */
 function seedVectors(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -331,22 +319,17 @@ afterEach(() => {
 });
 
 interface PassOptions {
-  /** HIPPO_HOME points at a copy of the global store, else at no store. */
   readonly withGlobal: boolean;
-  /** The store carries vectors and the local hashed-embedding server is its provider. */
   readonly embedded: boolean;
-  /** Runs on the pass's own copies of the two stores, before the call. */
   readonly prepare?: (root: string, globalRoot: string) => void;
 }
 
-/** The config.json a pass writes, when it sets anything. */
 interface PassConfig {
   embeddings?: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
   physics?: { readonly enabled: boolean };
   sharedStore?: true;
 }
 
-/** One contextGet on a fresh copy of the fixture. */
 async function runPass(
   c: Omit<Case, 'name' | 'expected'>,
   { withGlobal, embedded, prepare }: PassOptions,
@@ -362,14 +345,12 @@ async function runPass(
   if (embedded) config.embeddings = { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url };
   if (c.physicsOff) config.physics = { enabled: false };
   else if (c.physicsOn && embedded) config.physics = { enabled: true };
-  // The store's own flag, which the hippo.db reach and a port-only store's ctx.config both read.
   if (c.shared) config.sharedStore = true;
   if (Object.keys(config).length > 0) writeFileSync(join(root, 'config.json'), JSON.stringify(config));
   prepare?.(root, globalRoot);
   const side = makeSide?.(root);
   const store = side?.store;
   const served = store ?? sqliteStore(root);
-  // A store of another kind gets no reach: the api reads it as one project with no global store.
   const reach =
     served.kind === 'sqlite'
       ? contextReach(sqliteReach({ hippoRoot: root, store: served }), loadConfig, resolveEmbeddingProvider)
@@ -478,7 +459,6 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     const onHippoDb = await runPass(c, { withGlobal: false, embedded: true });
     const before = embeddings.requests();
     let port: PortOnlySide | undefined;
-    // The operator's global store sits under HIPPO_HOME here, and a store other than hippo.db must neither read nor write it.
     const onPort = await runPass(
       c,
       { withGlobal: true, embedded: true },
@@ -487,7 +467,6 @@ describe('contextGet on a port-only store, with hippo.db blocked', () => {
     expect(rounded(onPort.result)).toEqual(rounded(onHippoDb.result));
     expect(onPort.rows.local).toEqual(onHippoDb.rows.local);
     expect(onPort.rows.global).toEqual(globalRows);
-    // The last-recall ids feed only POST /v1/outcome, which no other store serves, so the store path leaves them as seeded.
     expect(onPort.lastRecall).toEqual(seededLastRecall);
     expect(port?.calls).toEqual(expect.arrayContaining([...(c.storeReads ?? [])]));
     if (c.storeReads?.includes('stored:particles') || c.storeReads?.includes('nearestEntries')) {

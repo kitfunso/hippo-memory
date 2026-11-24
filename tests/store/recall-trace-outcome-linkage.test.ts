@@ -1,16 +1,3 @@
-/**
- * LC1 outcome linkage + storage smoke
- * (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- *
- * Covers: recall -> outcome -> recall_trace_outcomes row (E2E, via the CLI's
- * printRecall + handleOutcome last-retrieval flow); outcome with no prior trace
- * -> no row, no error; an explicit `traceId` on hippo.db's outcome write; and
- * the storage-overhead smoke bound (success criterion 3).
- *
- * Real-DB per project convention. Scratch HIPPO_HOME / cwd, never a repo
- * checkout.
- */
-
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, vi, onTestFinished } from 'vitest';
@@ -36,7 +23,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { apiCtx } = sessionPerTest();
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -99,8 +85,6 @@ describe('outcomeForLastRecall — no prior trace', () => {
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const res = await remember(ctx, { content: 'no-trace-outcome-target' });
-      // Seed last_retrieval_ids directly WITHOUT ever calling recall()/contextGet()
-      // — last_trace_id stays unset (fresh store, pre-v40-flow shape).
       const idx = loadLastRecall(home);
       idx.last_retrieval_ids = [res.id];
       saveIndex(home, idx);
@@ -213,7 +197,6 @@ describe('storage overhead smoke (success criterion 3)', () => {
       };
 
       const before = dbSizeBytes();
-      // One handle for the 100 recalls: each fresh open repeats the pragmas and migration check, which is not what this measures.
       await withSharedStoreHandles(async (session) => {
         const shared = onSession(ctx, session);
         for (let i = 0; i < 100; i++) {

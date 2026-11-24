@@ -1,5 +1,3 @@
-// The queries of the ranker floor check, the stage list each one asks for, and which arm can run which stage.
-
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +6,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '..', '..');
 export const MICRO_DIR = join(REPO_ROOT, 'benchmarks', 'micro');
 
-// The pre-registration fixes the corpus, so a changed fixture set stops the run.
 export const MICRO_FIXTURE_COUNT = 13;
 export const MICRO_QUERY_COUNT = 33;
 export const WINDOW_QUERY_COUNT = 5;
@@ -48,7 +45,6 @@ export const ALL_STAGES =
   // SAFETY: STAGE_LABEL satisfies Record<Stage, string>, so its keys are exactly the stages.
   Object.keys(STAGE_LABEL) as Stage[];
 
-// What `retrieve()` can be asked for under each ranker: `cliCore.rank` takes the whole list, the other two a session id only.
 const RUNS = {
   A: new Set<Stage>(ALL_STAGES),
   B: new Set<Stage>(['sessionId']),
@@ -71,10 +67,8 @@ export interface EvalQuery {
   readonly mustContainAny: readonly string[];
   readonly mustNotContainAny: readonly string[];
   readonly stages: StageList;
-  /** The CLI's token budget, which only the CLI core reads. */
   readonly budget: number;
   readonly cwdSubdir?: string;
-  /** Goals pushed in the query's own copy of the store, ahead of the recall. */
   readonly goalPushes: readonly GoalPush[];
 }
 
@@ -112,7 +106,6 @@ export interface MicroFixture {
 
 export interface LoadedFixture { readonly fixture: MicroFixture; readonly queries: readonly EvalQuery[] }
 
-// run.py puts this ahead of a fixture's own flags, so a fixture's --budget overrides it.
 const RUN_PY_BUDGET = 4000;
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -179,7 +172,6 @@ function microQuery(fixture: string, q: FixtureQuery, index: number): EvalQuery 
     if (!pa.name || !pa.session_id) throw new Error(`${id}: goal_push needs name and session_id`);
     return { name: pa.name, sessionId: pa.session_id };
   });
-  // run.py hands the recall the --session-id flag, else the first pushed goal's session through HIPPO_SESSION_ID.
   const sessionId = stages.sessionId ?? goalPushes[0]?.sessionId;
   return {
     id,

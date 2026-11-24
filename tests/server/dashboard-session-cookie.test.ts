@@ -1,5 +1,3 @@
-// The dashboard URL carries a one-time ticket that buys the session cookie; the cookie carries Secure when its request
-// came over TLS, and only then.
 import { randomBytes } from 'node:crypto';
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
@@ -15,7 +13,6 @@ import {
 
 const accessFor = (token: string): DashboardAccess => ({ token, port: 4100, tickets: dashboardTickets() });
 
-/** The Set-Cookie a page load with a fresh ticket gets over `socket`. */
 function cookieOver(socket: Socket): string {
   const access = accessFor(randomBytes(16).toString('hex'));
   const req = new IncomingMessage(socket);
@@ -45,7 +42,6 @@ describe('the dashboard session cookie', () => {
     const token = randomBytes(16).toString('hex');
     const issuedAt = Date.UTC(2026, 9, 21);
 
-    /** The kind of session granted, or the error status, plus the Set-Cookie the request earned. */
     function pass(access: DashboardAccess, cookie: string | undefined, query: URLSearchParams, now: number) {
       const req = new IncomingMessage(new Socket());
       req.headers = { host: '127.0.0.1:4100' };
@@ -61,7 +57,6 @@ describe('the dashboard session cookie', () => {
       }
     }
 
-    /** The cookie pair a fresh ticket buys at `now`. */
     function signIn(access: DashboardAccess, now: number): string {
       const ticket = new URLSearchParams({ token: access.tickets.mint(now) });
       return pass(access, undefined, ticket, now).set.split(';')[0] ?? '';

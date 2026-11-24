@@ -1,5 +1,3 @@
-// Codex's hooks: append hippo's entries, and remove exactly the ones hippo wrote.
-
 import {
   HIPPO_PINNED_INJECT_MARKER,
   HIPPO_PINNED_INJECT_COMMAND,
@@ -54,7 +52,6 @@ export function planCodexHooks(
   };
 }
 
-/** The exact command hippo writes for each Codex event; uninstall removes only these handlers. */
 const CODEX_HOOK_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   ['UserPromptSubmit', HIPPO_PINNED_INJECT_COMMAND],
   ['SessionStart', HIPPO_COMPACT_RESUME_MARKER],

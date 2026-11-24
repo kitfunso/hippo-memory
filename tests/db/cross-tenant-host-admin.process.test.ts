@@ -1,4 +1,3 @@
-// Cross-tenant actions need a host admin: a tenant's own admin key stops at its tenant. Real server, real SQLite.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -163,7 +162,6 @@ describe('hippo_learn needs a host admin', () => {
   });
 });
 
-/** The sleeps this server's writes started, from the /health body a loopback caller reads. */
 async function autoSleeps(): Promise<number> {
   const body = tryParseJson(await (await fetch(`${handle.url}/health`)).text());
   return isJsonObject(body) ? Number(body['auto_sleeps']) : Number.NaN;
@@ -178,11 +176,9 @@ describe('MCP auto-sleep stays with the host tenant', () => {
       key('acme', 'member'),
     );
     expect(res.error).toBeUndefined();
-    // hippo_remember decides before it answers, so a sleep it started is counted by now.
     expect(await autoSleeps()).toBe(0);
     expect(sleepRuns()).toBe(0);
 
-    // The host tenant's write on the same server does start one, so the zeros above come from the tenant gate.
     await mcpCall(
       'hippo_remember',
       { text: 'the host deploys on thursdays after the freeze' },

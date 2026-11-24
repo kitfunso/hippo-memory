@@ -6,7 +6,6 @@ import { dumpSchema } from '../_helpers/schema-dump.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
-// Frozen copy of migration v1's DDL: the oldest store shape a user can still have on disk.
 const V1_DDL = `
   CREATE TABLE memories (
     id TEXT PRIMARY KEY, created TEXT NOT NULL, last_retrieved TEXT NOT NULL,
@@ -82,7 +81,6 @@ describe('upgrading a populated v1 store to the latest schema', () => {
     expect(lesson.created).toBe('2025-01-02T03:04:05.000Z');
   });
 
-  // A fresh store's schema is pinned in db-schema-snapshot, so the upgraded store must match it object for object.
   it('ends with the fresh-store schema after the full migration chain', () => {
     const freshDb = openHippoDb(makeRoot('upgrade-v1-fresh'));
     const db = openHippoDb(root);

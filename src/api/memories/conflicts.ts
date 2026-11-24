@@ -1,5 +1,3 @@
-// Conflict listing and resolution for every front end, so the reach, status, pair and liveness
-// rules live here.
 import { BadRequestError, ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import {
   assertWriteRight,
@@ -35,19 +33,13 @@ export interface ConflictPageOptions {
 
 export interface ConflictPage {
   conflicts: MemoryConflict[];
-  /** Where the next page starts, or null after the last; a filtered page can be short and still
-   * go on. */
   next: KeysetPosition | null;
 }
 
 export interface ResolveMemoryConflictOptions {
-  /** One of the conflict's two memories; the other is the loser. */
   keepId: string;
-  /** Delete the loser instead of weakening its half-life. */
   forget?: boolean;
-  /** Tombstone the loser's value as well, which removes it whatever `forget` says. */
   rejectLoser?: boolean;
-  /** Kept on the tombstone; a conflict-context reason when unset. */
   reason?: string;
 }
 
@@ -57,7 +49,6 @@ export interface ResolveMemoryConflictResult {
   loserId: string;
 }
 
-/** A row the caller could not read hides its whole pair. */
 function touchable(actor: Actor, row: ConflictRow): boolean {
   return [row.a, row.b].every((member) => member !== null && canReadScope(actor, member.scope));
 }
@@ -87,8 +78,6 @@ export async function conflictResolve(
   conflictId: number,
   opts: ResolveMemoryConflictOptions,
 ): Promise<ResolveMemoryConflictResult> {
-  // Any status, so a resolved conflict answers 409 while one holding another person's personal row
-  // stays a 404.
   const row = await touchableConflict(ctx, conflictId);
   if (!row) throw new NotFoundError(`conflict not found: ${conflictId}`);
   if (row.conflict.status !== 'open') {
@@ -113,14 +102,10 @@ export async function conflictResolve(
     reason,
     at: ctx.infra.clock().toISOString(),
   });
-  // Every check passed above, so false here is another resolver, or a scope change, getting there
-  // first.
   if (!resolved) throw new ConflictError(`conflict ${conflictId} is already resolved`);
   return { conflictId, keptId: keep.id, loserId: loser.id };
 }
 
-/** Removing the loser is a forget, so it takes forget's write rights; a loser out of reach is a
- * missing conflict. */
 async function assertMayRemove(
   ctx: ContextWith<'conflicts'>,
   conflictId: number,
@@ -135,7 +120,6 @@ interface ResolveSides {
   readonly loser: ConflictSide;
 }
 
-/** `keepId`'s side and the other one, with the scopes the store must still find at write time. */
 function sidesOf(row: ConflictRow, keepId: string): ResolveSides {
   const { conflict } = row;
   const a = { id: conflict.memoryAId, scope: row.a?.scope ?? null };

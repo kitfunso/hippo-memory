@@ -1,5 +1,3 @@
-// `hippo hook`: install or remove one agent's hippo block and hooks.
-
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import {
@@ -77,18 +75,14 @@ function hookInstall(target: string | undefined, force: boolean): void {
   const hook = HOOKS[target];
   patchAgentFile(hook, target, force);
 
-  // The record of installed hooks is what keeps a removed hook out, so --force forgets it first.
   if (force && (target === 'claude-code' || target === 'codex')) forgetInstalledHooks(target);
 
-  // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
     printClaudeHookInstall(installJsonHooks(target));
   } else if (target === 'opencode') {
     installOpencodeHook();
   } else if (target === 'codex') {
     installCodexMemoryHooks('');
-    // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is
-    // not an error.
     if (detectRealCodexPath()) {
       const result = installCodexWrapper();
       console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
@@ -130,8 +124,6 @@ function patchAgentFile(hook: HookSpec, target: string, force: boolean): void {
       console.log(`Installed Hippo hook in ${hook.file} (appended)`);
     }
   } else {
-    // Do not create an agent-instructions file (CLAUDE.md, AGENTS.md, etc.) in directories without
-    // one, to avoid polluting cwd; the settings.json hook below is still installed for claude-code.
     console.log(`${hook.file} not found in ${process.cwd()} — skipping agent-instructions patch.`);
     console.log(
       `   Create ${hook.file} and re-run \`hippo hook install ${target}\` if you want the agent prompt.`,
@@ -215,7 +207,6 @@ function hookUninstall(target: string | undefined): void {
   }
   unpatchAgentFile(HOOKS[target], target);
 
-  // For Claude Code, also strip its SessionEnd/SessionStart entries.
   if (target === 'claude-code') {
     if (uninstallJsonHooks(target)) {
       console.log(`Removed hippo hooks from ${target} settings`);
@@ -265,7 +256,6 @@ function unpatchAgentFile(hook: HookSpec, target: string): void {
   }
 }
 
-// Older hippo wrote Cursor's block to .cursorrules, creating the file when it was missing.
 function removeLegacyCursorRules(): void {
   const legacy = path.resolve(process.cwd(), '.cursorrules');
   const old = fs.existsSync(legacy) ? fs.readFileSync(legacy, 'utf8') : '';

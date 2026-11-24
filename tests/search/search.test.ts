@@ -31,7 +31,6 @@ describe('BM25 search', () => {
   it('ranks the one memory that matches every query term first', () => {
     const entries = makeEntries();
     const [fredCache, tipsModel, cacheCheck] = entries;
-    // Only fredCache holds FRED, cache and TIPS; tipsModel shares TIPS and cacheCheck shares cache.
     const results = rankBm25('FRED cache TIPS', entries, { now: evalNow(), budget: 10000 });
 
     expect(results[0]!.entry.id).toBe(fredCache!.id);
@@ -59,7 +58,6 @@ describe('BM25 search', () => {
   });
 
   it('respects token budget', () => {
-    // Create many entries with known token sizes
     const bigEntries = Array.from({ length: 20 }, (_, i) =>
       createMemory('cache error in data pipeline refresh ' + 'x'.repeat(200) + ` entry${i}`),
     );
@@ -82,7 +80,6 @@ describe('BM25 search', () => {
 
     const results = rankBm25('cache refresh', [e1, e2], { now: evalNow(), budget: 10000 });
     expect(results.length).toBe(2);
-    // Strong entry should rank higher
     expect(results[0].entry.id).toBe(e1.id);
   });
 });
@@ -110,7 +107,6 @@ describe('textOverlap (Jaccard)', () => {
 
   it('returns partial overlap for related strings', () => {
     const o = textOverlap('cache error in pipeline', 'pipeline cache failure');
-    // Shared {cache, pipeline} over the union {cache, error, in, pipeline, failure}.
     expect(o).toBe(2 / 5);
   });
 
@@ -192,7 +188,6 @@ describe('decision recall boost', () => {
   });
 
   it('decision boost applies as a 1.2x multiplier to composite score', () => {
-    // Use tags that don't overlap with the query so BM25 stays identical
     const withDecision = createMemory('cache refresh data pipeline issue', {
       tags: ['decision', 'ops'],
     });
@@ -200,16 +195,12 @@ describe('decision recall boost', () => {
       tags: ['ops'],
     });
 
-    // Query only on content terms, not on tag terms
     const results = rankBm25('cache refresh', [withDecision, without], { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBe(2);
     const decisionResult = results.find((r) => r.entry.tags.includes('decision'))!;
     const normalResult = results.find((r) => !r.entry.tags.includes('decision'))!;
-    // The decision tag adds "decision" to the BM25 doc text which slightly affects
-    // corpus stats, so we check a looser tolerance
     expect(decisionResult.score).toBeGreaterThan(normalResult.score);
-    // Ratio should be approximately 1.2 (within 10% tolerance)
     expect(decisionResult.score / normalResult.score).toBeGreaterThan(1.1);
     expect(decisionResult.score / normalResult.score).toBeLessThan(1.3);
   });
@@ -233,8 +224,6 @@ describe('markRetrieved', () => {
     expect(updated.halfLifeDays).toBe(beforeHL + 2);
   });
 
-  // Replaces 'wakes stale memories back to observed on retrieval' (471ba86),
-  // whose paired sleep half no longer stores a derived staleness to wake.
   it('leaves a stored stale tier alone on retrieval', () => {
     const entry = createMemory('old memory', { confidence: 'observed' });
     const stale = { ...entry, confidence: 'stale' as const };

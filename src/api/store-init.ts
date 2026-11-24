@@ -1,5 +1,3 @@
-// Creating a store for `hippo init`: the database, its mirror folders and first-run setup.
-
 import { requireHostAdmin, type ContextWith } from './types.js';
 
 /** Create `ctx`'s store, or finish setting up one that exists; a store holds every tenant, so

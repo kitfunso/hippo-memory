@@ -1,6 +1,3 @@
-// openHippoDb ran journal_mode (lock-taking) before busy_timeout was set,
-// so it could throw "database is locked" instantly under concurrent writes
-// instead of waiting (db.ts:2366-2367 order fix).
 import { describe, it, expect, afterEach } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,11 +13,9 @@ afterEach(() => {
   churners = [];
 });
 
-// A churner prints 'wrote' once it has committed this many beside the foreground opens, which then stop.
 const WINDOW_WRITES = 25;
 
 // Pragma-only churn on a WAL store takes no lock; a real INSERT puts a RESERVED lock under the foreground open's pragmas.
-// Each child reports its writes while the go file existed, and every error, so the test sees the contention happened.
 function churnScript(dbPath: string, goFile: string, stopFile: string): string {
   return `
     const { DatabaseSync } = require('node:sqlite');
@@ -52,7 +47,6 @@ interface ChurnReport {
   errors: string[];
 }
 
-/** Starts a churner: `ready` after its first write attempt, `wrote` once it has its window writes, `report` at exit. */
 function spawnChurner(dbPath: string, goFile: string, stopFile: string) {
   const child = spawn(process.execPath, ['-e', churnScript(dbPath, goFile, stopFile)], {
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -98,7 +92,6 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
     writeFileSync(goFile, '');
     let opens = 0;
     const errors: string[] = [];
-    // The opens run until every churner has committed its writes beside them, so the overlap is counted, not timed.
     do {
       try {
         closeHippoDb(openHippoDb(root));
@@ -106,13 +99,11 @@ describe('openHippoDb pragma order: busy_timeout before journal_mode', () => {
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
       }
-      // A turn of the event loop between opens, so the churners' 'wrote' lines are read.
       await new Promise((resolve) => setImmediate(resolve));
     } while (!started.every((c) => c.wrote()));
     writeFileSync(stopFile, '');
     const reports = await Promise.all(started.map((c) => c.report));
 
-    // The open count follows the scheduler, so only the floor of one is fixed.
     expect(opens).toBeGreaterThan(0);
     expect(errors).toEqual([]);
     for (const report of reports) {

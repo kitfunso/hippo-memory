@@ -1,5 +1,3 @@
-"""runner/answer_judge.py and runner/score.py on the ledger: replay takes the first valid reply in 3 asks, an exhausted
-judge step takes the runner's own fallback, an exhausted answer scores the question 0, and the store-owning units."""
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +22,6 @@ def judge_rec(tag: str, user: str, system: str = "", **kw) -> dict:
 
 
 def in_ctx(fn, *args):
-    """Runs one Backend call as the runner does, with (arm, qid) in its own context."""
     ctx = contextvars.copy_context()
     ctx.run(aj.CTX.set, ("bm25", "q1"))
     return ctx.run(fn, *args)
@@ -63,7 +60,6 @@ def test_an_exhausted_answer_raises_and_an_open_one_is_a_missing_reply(tmp_path)
 
 @pytest.fixture
 def fake_lme(monkeypatch):
-    """The runner's LongMemEval step reduced to one answer and one yes/no verdict through the adapters."""
     async def apply(res, ans, jdg, cutoffs):
         text = await ans.generate("sys", "a")
         ok, _ = await jdg.judge_yes_no(text)
@@ -98,7 +94,7 @@ def test_evaluate_names_an_exhausted_verdict_and_leaves_the_key_out_otherwise(tm
 
 def test_the_unit_is_the_question_for_longmemeval_and_the_conversation_for_beam():
     assert score.unit_of("longmemeval-s")("e47becba") == "e47becba"
-    assert score.unit_of("beam-100k")("100K_3_q12_event_ordering") == "100K_3"  # beam/run.py builds this id
+    assert score.unit_of("beam-100k")("100K_3_q12_event_ordering") == "100K_3"
 
 
 @pytest.mark.parametrize("bench,metrics", [("longmemeval-s", ("acc@200", "acc@10")), ("beam-100k", ("score", "pass"))])

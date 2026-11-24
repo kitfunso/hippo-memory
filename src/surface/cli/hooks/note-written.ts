@@ -1,5 +1,3 @@
-// The PostToolUse hook for Claude Code's memory notes: a write of one starts the import in a
-// detached worker; any other write ends here, before a store opens.
 import { isClaudeMemoryNote } from '../../../api/agent-memories.js';
 import { isJsonObjectLiteral, isJsonString, tryParseJson } from '../../../base/util/json.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
@@ -10,7 +8,6 @@ import { readHookStdin } from '../stdin.js';
 import { type CommandContext, stringFlag } from '../flag-values.js';
 import { startNoteImport } from './note-import-worker.js';
 
-/** What a Write or Edit payload names: the file written and the session it came from. */
 interface WrittenFile {
   readonly file: string;
   readonly transcriptPath: string;

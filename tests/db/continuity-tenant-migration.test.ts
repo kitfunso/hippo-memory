@@ -6,8 +6,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 function rowsAs<T>(db: DatabaseSyncLike, sql: string): T[] {
   // SAFETY: T is pinned by each call site to the exact column list of the
   // SQL SELECT/PRAGMA text passed in; the driver's .all() (src/db/index.ts
-  // DatabaseSyncLike, backed by node:sqlite) returns `unknown[]`, so this is
-  // the single place that establishes the row contract for every caller.
   return db.prepare(sql).all() as T[];
 }
 
@@ -70,12 +68,10 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const db = openHippoDb(home);
     try {
       const now = new Date().toISOString();
-      // Seed a task_snapshot under tenantA tied to sess-mapped
       db.prepare(`
         INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at)
         VALUES (?, ?, ?, 'active', 'test', 'sess-mapped', 'tenantA', ?, ?)
       `).run('t', 's', 'n', now, now);
-      // Insert pre-existing rows directly with default tenant (simulates pre-v22 state)
       db.prepare(`UPDATE session_events SET tenant_id='default'`).run();
       db.prepare(`
         INSERT INTO session_events(session_id, event_type, content, source, metadata_json, tenant_id, created_at)
@@ -85,7 +81,6 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, tenant_id, created_at)
         VALUES ('sess-mapped', 'h', '[]', 'default', ?)
       `).run(now);
-      // The migration itself: on a current store its other steps change nothing, so this runs its backfill.
       v22.up(db);
 
       const evt = rowAs<{ tenant_id: string }>(
@@ -108,7 +103,6 @@ describe('schema migration v22: tenant_id + scope on continuity tables', () => {
     const db = openHippoDb(home);
     try {
       const now = new Date().toISOString();
-      // Same session_id under two tenants -> ambiguous
       db.prepare(`
         INSERT INTO task_snapshots(task, summary, next_step, status, source, session_id, tenant_id, created_at, updated_at)
         VALUES ('a','a','a','active','test','sess-shared','tenantA',?,?)

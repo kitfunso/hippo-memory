@@ -1,11 +1,3 @@
-/**
- * No-Memory Baseline Adapter
- *
- * The agent has no memory system. recall() always returns an empty array,
- * store() is a no-op. This represents the worst case: every trap is hit
- * every time, yielding a 100% trap-hit-rate across all phases.
- */
-
 import { createAdapter } from './interface.mjs';
 
 export default createAdapter({
@@ -20,7 +12,6 @@ export default createAdapter({
   },
 
   async recall(_query, _budget = undefined) {
-    // No memory to search; v1.7.6 -- accept budget arg for signature compat, ignore.
     return [];
   },
 

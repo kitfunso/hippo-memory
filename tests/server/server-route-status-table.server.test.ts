@@ -1,4 +1,3 @@
-// Pins the status and error text of every HTTP route, plus one literal field per route's valid reply, so a dispatch change cannot move a reply.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -72,8 +71,6 @@ async function send(base: string, c: Call): Promise<Reply> {
   return reply;
 }
 
-// Literal status and error text per /v1 route, in handleRequest's dispatch order: [method, path, bad bearer, no body on loopback].
-// `:n` is a numeric id, `:m` a memory id; a 200 row has no error text.
 type Outcome = readonly [status: number, error?: string];
 const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['POST', '/v1/memories', [401, 'invalid api key'], [400, 'content is required']],
@@ -162,7 +159,6 @@ const ROUTES: ReadonlyArray<readonly [string, string, Outcome, Outcome]> = [
   ['GET', '/v1/customer-notes/:n', [401, 'invalid api key'], [404, 'customer note 999999 not found']],
 ];
 
-// [name, method, path, body, status, error]
 type Case = readonly [string, string, string, string | undefined, number, string?];
 const NOT_FOUND = 'not found';
 const SLASH = 'URL-encoded slash (%2F) not allowed in path segments';
@@ -274,7 +270,6 @@ describe('HTTP route status table: status and error text per route', () => {
     });
   }
 
-  // A caller on this machine of these routes reaches the global store, the caller's project or sleep.
   const onHippoDbOnly = (path: string): boolean =>
     path.endsWith('/sleep') ? needsHippoDb('sleep') : /\/promote$|^\/v1\/context$/.test(path) && needsHippoDb('team');
   for (const [method, path, , [status, error]] of ROUTES) {

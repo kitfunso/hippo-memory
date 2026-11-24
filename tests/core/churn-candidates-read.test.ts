@@ -1,4 +1,3 @@
-// detectChurnStale reads only the current rows of the projects it checks, and counts and skips the same rows as a whole-tenant read.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { detectChurnStale } from '../../src/domain/learn/churn-stale.js';
@@ -13,9 +12,7 @@ import { removeDir } from '../_helpers/remove-dir.js';
 import { processGit } from '../../src/infra/git-runner.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-/** loadAllEntries' statement: every full row of one tenant. */
 const TENANT_READ = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE tenant_id = ? ORDER BY created ASC, id ASC`;
-// Content with no path, symbol or script, so no candidate needs git and the repo is never read.
 const NO_REFS_REPO = '/no/such/repo';
 
 const roots: string[] = [];
@@ -62,11 +59,9 @@ describe('detectChurnStale candidate read', () => {
     const pinned = new Set<string>();
     checked.add(put(root, 'current'));
     checked.add(put(root, 'kind superseded', { kind: 'superseded' }));
-    // A blank link counts as superseded, so churn skips the row like a linked one.
     setColumn(root, 'superseded_by', '', put(root, 'empty superseded_by'));
     legacyChecked.add(put(root, 'legacy', { originProject: 'legacy' }));
     pinned.add(put(root, 'pinned', { pinned: true }));
-    // Pinned is judged before the date, so a pinned row with no usable date is still reported.
     const pinnedBadDate = put(root, 'pinned bad date', { pinned: true });
     setColumn(root, 'created', 'not a date', pinnedBadDate);
     pinned.add(pinnedBadDate);

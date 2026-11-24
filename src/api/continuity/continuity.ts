@@ -1,5 +1,3 @@
-// Where-you-left-off: the active task snapshot with the session events that follow it.
-
 import type { SessionEvent, TaskSnapshot } from '../../base/ports/store/sessions.js';
 import type { ContextWith } from '../types.js';
 

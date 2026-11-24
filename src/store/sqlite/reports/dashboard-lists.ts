@@ -1,6 +1,3 @@
-// The dashboard's memory lists. One scan sorts a project's kept ids into a TEMP table on the held
-// reader, so the next page of the same stamp reads its rows by position and the project is not
-// scanned again until a commit.
 import type { DatabaseSyncLike, SqlValue } from '../../../db/index.js';
 import type { StoreModel } from '../runtime/open.js';
 import { withReadSnapshot } from '../../../db/busy.js';
@@ -31,11 +28,7 @@ import {
 import { IN_PROJECT, OPEN_PAIRS } from './dashboard-sql.js';
 import { julianDayOfMs, strengthSqlAt } from '../runtime/rule-sql.js';
 
-// One past the list's cut, so the cut and its truncated flag come out as they would on the whole
-// text.
 const HEAD_READ = 241;
-// Each list is a row per kept id in SQLite's temp store, never in JavaScript; the least recently
-// read goes first.
 const LISTS_KEPT = 8;
 const LISTS = 'temp.dashboard_lists';
 
@@ -44,8 +37,6 @@ const LAYER_SLOTS = LAYER_ORDER.map((_, i) => `:layer${i}`).join(', ');
 const rankBy = (column: string, order: readonly string[]): string =>
   `CASE ${column} ${order.map((v, i) => `WHEN '${v}' THEN ${i}`).join(' ')} ELSE ${order.length} END`;
 
-// Each key orders as the old in-memory sort did: text keys as UTF-16 bytes, so as JavaScript's `<`
-// compares them.
 const SORT_SQL = {
   content: 'hippo_head_key(head)',
   layer: rankBy('layer', LAYER_ORDER),
@@ -65,24 +56,17 @@ const FACT_OF_M = FACT_COLUMNS.split(', ')
   .map((c) => `m.${c}`)
   .join(', ');
 
-// toISOString writes YYYY-MM-DDTHH:MM:SS.sssZ for every instant from the first to the last of
-// these, and text in that form sorts as its instant does.
 const PLAIN_FIRST_MS = Date.parse('0000-01-01T00:00:00.000Z');
 const PLAIN_LAST_MS = Date.parse('9999-12-31T23:59:59.999Z');
-// Bounds no plain created text reaches: one below every digit, one above.
 const BEFORE_ALL = '';
 const AFTER_ALL = '~';
 // strftime keeps an hour of 24 as written, where Date.parse moves it to the next day.
 const PLAIN_CREATED = `strftime('%Y-%m-%dT%H:%M:%fZ', created) = created AND substr(created, 12, 2) < '24'`;
 
-// The brush's age test as daysBetween makes it: as text on a plain created, by hippo_days on any
-// other.
 const AGE_KEPT =
   `CASE WHEN :anyAge THEN 1 WHEN ${PLAIN_CREATED} THEN created >= :createdFrom AND created <= :createdTo ` +
   `ELSE hippo_days(created, :now) BETWEEN :minAgeDays AND :maxAgeDays END`;
 
-/** The first instant from PLAIN_FIRST_MS on where `holds` is true, given it stays true; past
- * PLAIN_LAST_MS if none. */
 function firstHolding(holds: (ms: number) => boolean): number {
   let lo = PLAIN_FIRST_MS;
   let hi = PLAIN_LAST_MS + 1;
@@ -94,16 +78,12 @@ function firstHolding(holds: (ms: number) => boolean): number {
   return lo;
 }
 
-/** A brush's age range in days, and the instant each age counts back from. */
 interface AgeBindsOptions {
   readonly minAgeDays: number;
   readonly maxAgeDays: number;
   readonly nowMs: number;
 }
 
-/** AGE_KEPT's parameters: a plain created is kept from createdFrom to createdTo, the instants
- * where daysBetween's arithmetic, done here on each candidate instant, turns the brush's two
- * tests. */
 function ageBinds({ minAgeDays: min, maxAgeDays: max, nowMs }: AgeBindsOptions) {
   const age = (ms: number): number => Math.max(0, (nowMs - ms) / DAY_MS);
   const from = firstHolding((ms) => age(ms) <= max);
@@ -122,8 +102,6 @@ interface ListScan {
   readonly binds: Record<string, SqlValue>;
 }
 
-/** What one list scan computes: its sort, whether a strength brush narrows it, and its text
- * filter. */
 interface ScanPlan {
   readonly sort: DashboardSortKey;
   readonly descending: boolean;
@@ -153,10 +131,6 @@ function scanSql({ sort, descending, byStrength, holds }: ScanPlan, rules: Store
   );
 }
 
-/** The scan that writes list `list`: the filter's tally at position 0, then from 1 each kept id
- * the chip keeps, in sort order; a layer the query leaves out binds NULL, which no row's layer
- * equals. */
-/** The page query with the tenant and the time the scan dates its facts at. */
 type ScanQuery = DashboardPageQuery & { readonly tenantId: string; readonly nowMs: number };
 
 function listScan(
@@ -236,14 +210,11 @@ function listedRow(row: PageRow, nowMs: number, rules: StoreModel): ListedRow {
   };
 }
 
-/** A list's id in the temp table and the filter tally its scan wrote. */
 interface SortedList {
   readonly id: number;
   readonly tally: FilterTally;
 }
 
-// Everything but the page window: a stamp holds one nowMs for every read it dates, so its pages
-// share a list.
 function listKey(tenantId: string, query: DashboardPageQuery, nowMs: number): string {
   const { origin, layers, text, sort, descending, chip } = query;
   const bounds = [query.minAgeDays, query.maxAgeDays, query.minStrength, query.maxStrength, nowMs];
@@ -268,8 +239,6 @@ export class MemoryLists {
     );
   }
 
-  /** The tally of `query`'s filter and its page, from one read snapshot; null when the project
-   * holds no live row. */
   page(
     tenantId: string,
     query: DashboardPageQuery,
@@ -290,8 +259,6 @@ export class MemoryLists {
     });
   }
 
-  // data_version moves on every other connection's commit, and this reader never commits to the
-  // store.
   #follow(version: number): void {
     if (version === this.#version) return;
     if (this.#lists.size > 0) cachedStatement(this.#db, `DELETE FROM ${LISTS}`).run();

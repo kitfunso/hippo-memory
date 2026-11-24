@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Z1c judge-gated failure recall eval: prereg docs/evals/2026-09-27-z1c-judge-gate-prereg.md.
-// Prints AGGREGATE NUMBERS ONLY to stdout: never transcript, command, error, memory text or private paths.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -36,8 +34,6 @@ function parseArgs(argv) {
   return out;
 }
 
-// shared math (used by main flow and --selftest)
-
 function seededShuffle(arr, seed) {
   const rng = mulberry32(seed);
   const out = [...arr];
@@ -48,7 +44,6 @@ function seededShuffle(arr, seed) {
   return out;
 }
 
-// Recurrence pmf(k) from pmf(k-1) avoids BigInt overflow for larger n.
 function signTestP(b, c) {
   const n = b + c;
   if (n === 0) return 1;
@@ -92,7 +87,6 @@ function parseLabels(text) {
   return map;
 }
 
-// Cyclic derangement (no fixed points, ever) then a greedy pass to swap same-session mappings apart.
 function buildDerangement(sessions, seed) {
   const n = sessions.length;
   if (n < 2) return [];
@@ -109,7 +103,7 @@ function buildDerangement(sessions, seed) {
         const i2 = order[k2];
         if (i2 === i) continue;
         const j2 = pi[i2];
-        if (j2 === i || j === i2) continue; // would create a fixed point
+        if (j2 === i || j === i2) continue;
         if (sessions[i] !== sessions[j2] && sessions[i2] !== sessions[j]) {
           pi[i] = j2;
           pi[i2] = j;
@@ -143,7 +137,6 @@ function isPathInside(child, parent) {
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
 }
 
-// step 1: collect transcripts
 function collect(projectsDir, outDir) {
   const kept = [];
   const excluded = { z1c: 0, evalRuns: 0, headless: 0, scratch: 0, stale: 0 };
@@ -166,7 +159,6 @@ function collect(projectsDir, outDir) {
         if (!line) continue;
         let o;
         try { o = JSON.parse(line); } catch { continue; }
-        // Amendment 2: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
         if (o.entrypoint === 'sdk-cli') isHeadless = true;
         if (o.cwd) {
           fileCwds.add(o.cwd);
@@ -194,7 +186,6 @@ function collect(projectsDir, outDir) {
   return { kept, excluded, cwds, latestTs };
 }
 
-// step 2: store copies via VACUUM INTO from a read-only connection
 function vacuumCopy(srcDb, destDb) {
   if (!fs.existsSync(srcDb)) return false;
   fs.mkdirSync(path.dirname(destDb), { recursive: true });
@@ -221,7 +212,7 @@ function findStoreRoot(cwd) {
 }
 
 function collectStores(home, cwds, outDir) {
-  const roots = new Map(); // normPath -> original root
+  const roots = new Map();
   for (const cwd of cwds) {
     const root = findStoreRoot(cwd);
     if (!root || normPath(root) === normPath(home)) continue;
@@ -237,7 +228,6 @@ function collectStores(home, cwds, outDir) {
   return stores;
 }
 
-// step 3: replay
 function runReplay(outDir, home, stores) {
   const args = [
     REPLAY_SCRIPT, '--arm', 'z1b', '--mode', 'final', '--split', 'all', '--since', SINCE,
@@ -252,7 +242,6 @@ function runReplay(outDir, home, stores) {
   return spawnSync(process.execPath, args, { encoding: 'utf8', maxBuffer: 1024 * 1024 * 200 });
 }
 
-// judge invocation (steps 8-9)
 function resolveClaudeExe() {
   if (process.platform !== 'win32') return 'claude';
   // Only a real .exe: Node refuses to spawn a .cmd shim with shell:false, and a shell would re-quote the prompt.
@@ -268,7 +257,6 @@ function callClaude(model, prompt, cwd) {
     '-p', '--safe-mode', '--model', model, '--tools', '', '--no-session-persistence', '--strict-mcp-config',
     '--system-prompt', 'You label items. Follow the user message exactly.',
   ];
-  // Transport retries only (non-zero exit, no labels seen): a transient API refusal must not VOID the one scored run.
   let r;
   for (let attempt = 0; attempt < 3; attempt++) {
     r = spawnSync(exe, args, { cwd, input: prompt, encoding: 'utf8', timeout: 600000, shell: false, maxBuffer: 1024 * 1024 * 20 });
@@ -282,7 +270,6 @@ function renderItem(it) {
   return `### Item ${it.itemId}\nCommand:\n${it.command}\nError:\n${it.error}\nNotes:\n${notes}`;
 }
 
-// Batches of 20; a batch missing any id is re-asked once; still missing => VOID (null labels).
 function judge(model, items, judgeCwd) {
   const labels = new Map();
   let retries = 0;
@@ -309,14 +296,12 @@ function readHeadings(file) {
 }
 
 function isolationOk(model, home, judgeCwd) {
-  // Prereg amendment 1: the first wording ("list everything in your context") drew Opus safeguard refusals.
   const prompt =
     'Quick setup check before a labelling task. If any project instruction files (for example a CLAUDE.md) were ' +
     'loaded for you, copy their markdown section headings here, one per line. If none were loaded, reply NONE.';
   const r = callClaude(model, prompt, judgeCwd);
   const reply = (r.stdout || '').trim();
   fs.writeFileSync(path.join(judgeCwd, '..', `isolation-${model}.txt`), `status=${r.status}\n${reply}\n${r.stderr || ''}`);
-  // A failed or empty probe proves nothing, and the marker comes next.
   if (r.status !== 0 || !reply) return false;
   const bare = (h) => h.replace(/^[\s#]+/, '').trim();
   const replyLines = new Set(reply.split(/\r?\n/).map(bare).filter(Boolean));
@@ -324,7 +309,6 @@ function isolationOk(model, home, judgeCwd) {
   return !headings.map(bare).some((h) => h && replyLines.has(h));
 }
 
-// judge set construction (step 6)
 function buildJudgeSet(outDir, dryRun) {
   const items = JSON.parse(fs.readFileSync(path.join(outDir, 'judge', 'export.json'), 'utf8')).items;
   const key = JSON.parse(fs.readFileSync(path.join(outDir, 'judge', 'export.json.key.json'), 'utf8'));
@@ -359,7 +343,6 @@ function buildJudgeSet(outDir, dryRun) {
   return { events, eventIds, items: finalItems, key: finalKey };
 }
 
-// scoring (step 10)
 function scoreArm(eventIds, events, key, sonnetLabels, opusLabels, arm) {
   const idxByEventArm = new Map();
   for (const k of key) if (k.arm === arm) idxByEventArm.set(k.eventId, k.itemId);
@@ -480,7 +463,6 @@ async function main() {
   const home = path.resolve(args.home || os.homedir());
   const projectsDir = path.resolve(args.projects || path.join(home, '.claude', 'projects'));
   const marker = path.join(home, '.hippo-eval-locks', 'z1c-2026-09-26T23-00-00Z.json');
-  // Refuse before any cleanup, so a refused rerun cannot wipe the scored run's evidence.
   if (args.dryRun === null && fs.existsSync(marker)) {
     console.log('refused: marker already exists, rerun needs a committed prereg amendment');
     process.exit(4);
@@ -556,7 +538,6 @@ async function main() {
 
   const sonnet = judge('sonnet', items, judgeCwd);
   const opus = judge('opus', items, judgeCwd);
-  // Labels are persisted because the stopping rule forbids a second judge pass to recover them.
   const dump = (l) => (l ? Object.fromEntries(l) : null);
   fs.writeFileSync(path.join(outDir, 'judge', 'labels.json'), JSON.stringify({ sonnet: dump(sonnet.labels), opus: dump(opus.labels) }, null, 2));
   if (!sonnet.labels || !opus.labels) {

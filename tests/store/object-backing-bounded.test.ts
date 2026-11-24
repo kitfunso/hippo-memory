@@ -1,4 +1,3 @@
-// The passes that must not delete an object's memory ask about the rows they hold, never for every linked id.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';

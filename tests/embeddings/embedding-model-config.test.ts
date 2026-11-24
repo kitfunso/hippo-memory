@@ -16,15 +16,6 @@ function writeConfig(hippoRoot: string, model: string): void {
   fs.writeFileSync(path.join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { model } }, null, 2), 'utf8');
 }
 
-/**
- * Point config.embeddings at a real API-shaped provider (Voyage) instead of
- * the local transformers.js path: `@huggingface/transformers` is an optional
- * peer dependency that is NOT installed in this repo's devDependencies, so
- * LocalEmbeddingProvider.isAvailable() is always false here. The API
- * provider's isAvailable() only checks for an env var key, so pairing it
- * with a real local HTTP stub (below) exercises hippo's genuine
- * ApiEmbeddingProvider wiring end to end, with zero module mocking.
- */
 function writeVoyageConfig(hippoRoot: string, model: string, apiBaseUrl: string): void {
   fs.writeFileSync(
     path.join(hippoRoot, 'config.json'),
@@ -50,11 +41,6 @@ function serverPort(server: Server): number {
   return (address as AddressInfo).port;
 }
 
-/**
- * A minimal stand-in for the Voyage embeddings endpoint. Records every
- * request body it receives so tests can assert on what hippo actually sent
- * over the wire, instead of intercepting a hippo module.
- */
 async function startEmbeddingStub(vector: number[]): Promise<{
   url: string;
   requests: EmbedRequestBody[];
@@ -85,8 +71,6 @@ describe('embedding model configuration', () => {
   beforeEach(() => {
     vi.resetModules();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-model-'));
-    // Dummy value: the local stub server never validates it. Real presence
-    // check only (ApiEmbeddingProvider.isAvailable()), same as production.
     vi.stubEnv('VOYAGE_API_KEY', 'test-voyage-key');
   });
 
@@ -113,9 +97,6 @@ describe('embedding model configuration', () => {
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
 
-      // The provider is built from the configured model (real resolver, no
-      // interception): 'voyage:custom/model' proves 'custom/model' flowed
-      // from config.json into the provider id.
       const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       expect(providerId).toBe('voyage:custom/model');
 
@@ -123,16 +104,12 @@ describe('embedding model configuration', () => {
       const entry = createMemory('semantic-only match', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
       entry.id = entryId;
 
-      // Seed a real, in-sync embedding cache so hybridSearch's "does any
-      // candidate have a cached vector" guard lets the query embed proceed.
       saveEmbeddingIndex(tmpDir, { [entryId]: [1, 0, 0] });
       saveStoredEmbeddingModel(handlesOf(tmpDir).on, providerId);
 
       await hybridSearch('query text', [entry], { hippoRoot: tmpDir, budget: 1000 });
 
       expect(stub.requests).toHaveLength(1);
-      // ...and the query path embeds with role 'query' (so e5-family/
-      // asymmetric models get the right input_type; symmetric models ignore it).
       expect(stub.requests[0]).toEqual({ model: 'custom/model', input: ['query text'], input_type: 'query' });
     } finally {
       await stub.close();
@@ -159,10 +136,6 @@ describe('embedding model configuration', () => {
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
 
-      // Real staleness: the cached index was built under a DIFFERENT model
-      // identity than the one config.json now selects, so
-      // embeddingModelRequiresReindex genuinely returns true (VOYAGE_API_KEY
-      // is set, so unavailability is not why the embed gets skipped).
       saveEmbeddingIndex(tmpDir, { mem_legacy: [1, 0, 0] });
       saveStoredEmbeddingModel(handlesOf(tmpDir).on, 'voyage:some-other-model');
 
@@ -186,8 +159,6 @@ describe('embedding model configuration', () => {
       const { hybridSearch } = await import('../../src/entry/folder-search.js');
       const { createMemory } = await import('../../src/entry/memory.js');
 
-      // In sync (no reindex needed) but genuinely empty: no embeddings.json
-      // was ever written for this store, so no candidate has a cached vector.
       const providerId = resolveEmbeddingProvider(loadConfig(tmpDir).embeddings).id;
       saveStoredEmbeddingModel(handlesOf(tmpDir).on, providerId);
 
@@ -197,7 +168,6 @@ describe('embedding model configuration', () => {
         budget: 1000,
       });
 
-      // Empty index -> no cached doc vectors -> the query embedding is skipped.
       expect(stub.requests).toHaveLength(0);
       expect(results.map((r) => r.entry.id)).toEqual([entry.id]);
     } finally {

@@ -1,18 +1,14 @@
-// An API key: its shape, its scrypt cost, the mint and the checks a stored row passes, so only a
-// hash of the plaintext ever reaches a store.
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 /** Every minted API key starts with this, so the server can route a bearer token by shape. */
 export const API_KEY_PREFIX = 'hk_';
-const ID_LEN = 24; // base32 chars after prefix
-const SECRET_LEN = 32; // base32 chars after dot
+const ID_LEN = 24;
+const SECRET_LEN = 32;
 const SCRYPT_KEYLEN = 32;
-// Node's defaults, written out so a hash states the cost it was made with.
 const SCRYPT_N = 16384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const SCRYPT_MAXMEM = 64 * 1024 * 1024;
-// A stored row must not be able to make verify hang or exhaust memory.
 const SCRYPT_MAX_N = 2 ** 20;
 const SCRYPT_MAX_R = 32;
 const SCRYPT_MAX_P = 16;
@@ -44,7 +40,6 @@ function randBase32(n: number): string {
 }
 
 function hashKey(plaintext: string): string {
-  // Format: scrypt2$<N>$<r>$<p>$<saltHex>$<hashHex>
   const salt = randomBytes(16);
   const hash = scryptSync(plaintext, salt, SCRYPT_KEYLEN, DEFAULT_SCRYPT);
   return `scrypt2$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`;
@@ -130,7 +125,6 @@ export interface VerifiedApiKey {
   ownerSubject?: string | null;
 }
 
-/** The fields of a stored key row the checks below read. */
 interface KeyRowFacts {
   readonly tenantId: string;
   readonly revokedAt: string | null;
@@ -151,15 +145,12 @@ export function keyExpiryMs(expiresAt: string | null | undefined): number {
 
 /** True for a record that is present, unrevoked and unexpired, before any secret check. */
 export function isUsableKey<R extends KeyRowFacts>(record: R | null, now: number): record is R {
-  // Ids are 120 random bits and not secret, so padding the miss path with scrypt hid nothing and
-  // let junk tokens burn CPU.
   if (!record) return false;
   return !record.revokedAt && now < keyExpiryMs(record.expiresAt);
 }
 
 /** The verified key a usable record whose secret matched carries. */
 export function verifiedKeyOf(keyId: string, record: KeyRowFacts): VerifiedApiKey {
-  // Fail-safe to least privilege: any role value but 'admin' reads as 'member'.
   const role: 'admin' | 'member' = record.role === 'admin' ? 'admin' : 'member';
   const key: VerifiedApiKey = {
     tenantId: record.tenantId,
@@ -167,7 +158,6 @@ export function verifiedKeyOf(keyId: string, record: KeyRowFacts): VerifiedApiKe
     role,
     scopes: [...record.scopes],
   };
-  // Only a real name counts as an owner; anything else leaves the key keyed on its own id.
   if (record.ownerSubject) key.ownerSubject = record.ownerSubject;
   return key;
 }

@@ -1,5 +1,3 @@
-// The row writer stores no link for a blank one, so a memory a writer touches is live; raw SQL can still store a
-// blank, and the writers that rewrite such a row (an outcome, a sleep strength refresh) are where it turns live.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -82,7 +80,6 @@ describe('a blank superseded link is stored as no link', () => {
       await store.close();
     }
 
-    // storedLink maps only the empty string to no link, so a trimming compare would turn a real link live.
     expect(storedLink(home, empty.id)).toEqual(NO_LINK);
     expect(storedLink(home, spaces.id)).toEqual({ superseded_by: '  ' });
   });
@@ -103,13 +100,11 @@ describe('a blank superseded link is stored as no link', () => {
 });
 
 describe('a sleep over rows that raw SQL blanked', () => {
-  // A sleep rewrites a row in its replay pass and in a strength refresh; a replay count of 0 isolates the refresh.
   const sleepCtx = (home: string, replayCount: number) => {
     const ctx = apiCtx(home, 'default', ADMIN);
     const replay = { ...ctx.config.replay, count: replayCount };
     return { ...ctx, config: { ...ctx.config, replay }, infra: { ...ctx.infra, clock: () => FIXED_NOW } };
   };
-  // The score and options the sleep's decay pass uses, so a row stored at this strength gets no refresh.
   const decayedStrength = (ctx: ReturnType<typeof sleepCtx>, entry: MemoryEntry): number =>
     calculateStrength(entry, FIXED_NOW, strengthOf(ctx), {
       decayBasis: ctx.config.decayBasis,

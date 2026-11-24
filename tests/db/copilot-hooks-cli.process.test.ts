@@ -1,5 +1,3 @@
-// The Copilot hook commands, run from the home folder as VS Code runs user-level hooks, so the store must come from the payload's cwd.
-// Hooks run through runCli in this process; runHippo spawns the built CLI where a case reads the hook's pid, preload or env.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
@@ -46,7 +44,6 @@ describe('hippo context --format copilot', () => {
     await pin(GLOBAL_PIN, true);
   });
 
-  // Payloads from docs.github.com/en/copilot/reference/hooks-reference; reply formats from the same page and VS Code's toolCallingLoop.ts.
   it('answers a camelCase sessionStart with top-level additionalContext from the payload cwd store', async () => {
     const r = runHippo(CONTEXT_ARGS, s.dir, s.env, copilotPayload('sessionStart', s.proj));
     expect(r.status, r.stderr).toBe(0);
@@ -108,7 +105,6 @@ describe('hippo context --format copilot', () => {
 });
 
 describe('hippo capture-error --runtime copilot', () => {
-  // postToolUseFailure payloads from the GH hooks reference; the error strings are synthetic, as neither harness documents them.
   it('stores no memory for a quiet grep or bash failure, and logs both in the payload cwd store', async () => {
     for (const name of ['postToolUseFailureGrep', 'postToolUseFailureBash'] as const) {
       const r = await hippo(['capture-error', '--runtime', 'copilot'], s.dir, s.env, copilotPayload(name, s.proj));
@@ -138,7 +134,6 @@ describe('hippo capture-error --runtime copilot', () => {
 });
 
 describe('hippo session-end --runtime copilot', () => {
-  // sessionEnd payload from the GH hooks reference: it names no transcript, so the CLI log is found by session id.
   it('with no transcript for the session still sleeps, skips capture and exits 0', async () => {
     const logFile = path.join(s.dir, 'session-end.log');
     const r = await hippo(
@@ -180,7 +175,6 @@ describe('hippo session-end --runtime copilot', () => {
 });
 
 describe('hippo pre-compact --runtime copilot', () => {
-  // preCompact payload from the GH hooks reference, its transcriptPath pointing at the events.jsonl fixture.
   it('saves a working-state snapshot, opens no compaction record and prints nothing', async () => {
     const transcript = writeCopilotSessionLog(s.copilotHome, SESSION, copilotEventsJsonl());
     const logFile = path.join(s.dir, 'pre-compact.log');

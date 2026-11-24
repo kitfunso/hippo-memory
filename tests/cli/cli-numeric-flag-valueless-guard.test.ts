@@ -1,7 +1,3 @@
-/**
- * A value-less numeric flag parses to NaN, which survives every downstream comparison; mirrors cli-scope-valueless-guard.test.ts.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { runCli as runCliEntry } from '../../src/cli.js';
@@ -13,7 +9,6 @@ import { removeDir } from '../_helpers/remove-dir.js';
 const savedCwd = process.cwd();
 let home = '';
 
-// The guard sits in main() before any verb, so the whole entry runs in process; no process boundary is under test.
 const hippoRun = (...args: string[]): Promise<InProcessResult> =>
   runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
 
@@ -21,7 +16,6 @@ beforeEach(() => {
   home = makeStore('numeric-guard').base;
   vi.stubEnv('HIPPO_HOME', join(home, 'global-hippo'));
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-  // Blank keys so a guard regression cannot turn into a real network or paid-API call (Jev reranker, refine).
   vi.stubEnv('TYPESAFE_API_KEY', '');
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   vi.stubEnv('HIPPO_TENANT', '');
@@ -35,8 +29,6 @@ afterEach(() => {
 });
 
 describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () => {
-  // One case per filed flag, driven on a command that owns it, so a
-  // regression cannot pass by accident of dispatch order.
   it.each([
     { flag: 'days', args: ['learn', '--git', '--days'] },
     { flag: 'threshold', args: ['dedup', '--threshold'] },
@@ -65,8 +57,6 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
     },
   );
 
-  // Pins the GLOBAL semantics: handleStatus takes no flags at all (mirrors the
-  // --scope test's status case), yet the guard still exits 1 pre-dispatch.
   it('status (a command that reads none of the twelve): value-less --limit still exits 1', async () => {
     const res = await hippoRun('status', '--limit');
     expect(res.status).toBe(1);
@@ -75,8 +65,6 @@ describe('global numeric-flag value-less/non-numeric guard - exit-1 cases', () =
 });
 
 describe('refine --limit: the paid-API-runaway pin', () => {
-  // The guard sits before handleRefine's own ANTHROPIC_API_KEY check, so a
-  // value-less --limit must never reach it and must make no API call.
   it('value-less --limit exits 1 before the ANTHROPIC_API_KEY check', async () => {
     const res = await hippoRun('refine', '--limit');
     expect(res.status).toBe(1);
@@ -86,8 +74,6 @@ describe('refine --limit: the paid-API-runaway pin', () => {
 });
 
 describe('dedup --threshold: the no-undo data-loss pin', () => {
-  // Deliberately different texts: dedup removes only copies of the same text,
-  // so a bad --threshold value must fail loud and delete nothing.
   const CONTENT_A = 'The quarterly budget review meeting moved to Thursday afternoon.';
   const CONTENT_B = 'Bananas are a good source of potassium and dietary fiber.';
 
@@ -96,8 +82,6 @@ describe('dedup --threshold: the no-undo data-loss pin', () => {
     expect((await hippoRun('remember', CONTENT_B)).status).toBe(0);
   });
 
-  // Counts the store directly; parsing CLI output would measure the message,
-  // not the rows actually left behind.
   function memoryCount(): number {
     const db = openHippoDb(join(home, '.hippo'));
     try {
@@ -119,7 +103,6 @@ describe('dedup --threshold: the no-undo data-loss pin', () => {
 });
 
 describe('serve --port: the silent-wrong-port pin', () => {
-  // Without the guard this binds port 1 and never settles, so the test times out instead of passing.
   it('value-less --port exits 1 instead of silently binding port 1', async () => {
     const res = await hippoRun('serve', '--port');
     expect(res.status).toBe(1);
@@ -128,7 +111,6 @@ describe('serve --port: the silent-wrong-port pin', () => {
 });
 
 describe('valued numeric flags: the guard must not regress a legitimate call', () => {
-  // --hops is the already-guarded precedent; --local-bump -1 is the negative spelling; 1e3 the exponential one.
   it.each([
     { args: ['recall', 'some query', '--hops', '1'], out: 'No memories found for: some query' },
     { args: ['predict', 'list', '--limit', '5'], out: 'No predictions.' },

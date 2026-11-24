@@ -1,4 +1,3 @@
-// A hook's own log file gets the error class and stack of a failure, as the structured log does, and the lock warning adds one key per error class.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,7 +20,6 @@ let stderr: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   p = project();
   fake = withFakeHome('hippo-side-log-');
-  // The hook exits once stderr drains, so the stub answers the write callback.
   // SAFETY: the stub keeps only the write callback of write's overloads, which is all the hook waits on.
   stderr = vi.spyOn(process.stderr, 'write').mockImplementation(((...args: Array<string | (() => void)>) => {
     for (const arg of args) if (arg instanceof Function) arg();
@@ -78,7 +76,6 @@ describe('the session-end log file', () => {
 
   it('records the class and stack of a cursor it could not save', () => {
     const sessions = path.join(fake.home, '.hippo', 'sessions');
-    // A folder in the cursor's place makes the rename fail.
     fs.mkdirSync(path.join(sessions, 'sess-1.cursor.json', 'held'), { recursive: true });
     const lines: Array<{ message: string; fields: LogFields | undefined }> = [];
     saveTurnPosition('sess-1', path.join(fake.home, 't.jsonl'), [{ role: 'user', text: 'a' }], (message, opts) =>
@@ -95,7 +92,6 @@ describe('a transcript the session-end steps cannot read', () => {
     readonly message: string;
     readonly fields: LogFields | undefined;
   }
-  // A transcript that was never written fails the read.
   const missing = (): string => path.join(fake.home, 'missing.jsonl');
 
   it('logs the digest read failure with the error fields', () => {
@@ -130,7 +126,6 @@ describe('the unusable-lock warning', () => {
     const warned = (): number =>
       stderr.mock.calls.filter((c: unknown[]) => String(c[0]).includes('cannot be taken')).length;
     const run = async (id: string): Promise<void> => {
-      // A folder in the lock's place cannot be opened as a lock database.
       fs.mkdirSync(path.join(sessions, `${id}.lock.db`), { recursive: true });
       await runSessionWorker(id, 'turn', async () => {});
     };

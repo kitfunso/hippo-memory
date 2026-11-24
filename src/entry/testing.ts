@@ -1,5 +1,3 @@
-// Test seams for add-ons and hippo's own suite. Not for production code; no semver guarantee beyond
-// the major version.
 import { fromWire, toWire, type MemoryWire } from '../base/memory/memory-wire.js';
 import {
   batchWriteAndDeleteInFolder,
@@ -8,7 +6,6 @@ import {
   writeEntry,
   type WriteEntryOptions,
 } from '../surface/testing-kit.js';
-// The eval kit: an eval seeds a store folder and reads it back whole, every tenant's rows included.
 export { ambientSecretAdmit } from '../base/scope/read-admission.js';
 export {
   initStore,
@@ -19,8 +16,6 @@ export {
 export type { WriteEntryOptions } from '../surface/testing-kit.js';
 export { embedMemory, loadRecallSearchEntries } from './folder-search.js';
 export { saveCustomerNote, saveDecision, savePolicy, saveProjectBrief } from './object-saves.js';
-// Frozen eval scripts read and write the snake_case keys; a re-pointed import line takes these
-// forms.
 export type { MemoryWire } from '../base/memory/memory-wire.js';
 export {
   ambientSecretAdmitWire,
@@ -32,7 +27,6 @@ export {
   type WireSearchResult,
   type WireStrengthInputs,
 } from './wire-kit.js';
-// Benchmarks and token evals seed and read hippo.db on a handle they open themselves.
 export { resolveTenantId } from '../surface/server/boot.js';
 export {
   buildIndexFromDb,
@@ -45,8 +39,6 @@ export {
   writeIndexMirror,
 } from '../surface/testing-kit.js';
 
-// The wire forms that read or write hippo.db live here, at the root, so wire-kit.ts stays off the
-// hippo.db adapter.
 export function loadAllEntriesWire(hippoRoot: string): MemoryWire[] {
   return loadAllEntries(hippoRoot).map(toWire);
 }

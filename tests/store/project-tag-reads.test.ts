@@ -1,5 +1,3 @@
-// `hippo projects` list, merge and repair plan on a store of several projects, imports, sleep-merged rows and dormant
-// snapshots: the answers the whole-tenant read gave, from reads that skip the rows each one does not touch.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -43,7 +41,6 @@ const SCOPE = { tenantId: T, actor: 'test' };
 const store = () => sqliteStore(root);
 const tags = () => store().projectTags;
 
-/** The store's folder as the api hands it to the repair: a project store, not the global one. */
 async function folder(): Promise<StoreFolder> {
   const { project, shared } = await sqliteStore(root).folderFiles.home();
   return { isGlobal: false, shared, project };
@@ -70,7 +67,6 @@ const merged = (i: number, parents: readonly string[], extra: Partial<MemoryEntr
     ...extra,
   });
 
-/** Rows by their place in store order, and the dormant parent; r[8] shares r[7]'s time, so two projects tie. */
 function seed() {
   const faded = memory('a faded worktree lesson about the cache', 'repo-wt-a', 10);
   const r: MemoryEntry[] = [
@@ -105,7 +101,6 @@ function seed() {
   return { r, faded };
 }
 
-/** Rows and snapshots of a project no call below touches, written in one transaction. */
 function addBystanders(n: number): void {
   withDb((db) => {
     db.exec('BEGIN');

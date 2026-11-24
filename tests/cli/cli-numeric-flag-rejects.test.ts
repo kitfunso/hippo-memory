@@ -1,4 +1,3 @@
-// A junk numeric flag exits 1 with a message; before, it became NaN and slid past every `<` gate.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

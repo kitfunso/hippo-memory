@@ -1,4 +1,3 @@
-// `hippo auth list` prints each key's grants in a last `scopes` column, so an operator sees who reads what.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';

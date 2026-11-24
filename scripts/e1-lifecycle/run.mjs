@@ -1,47 +1,4 @@
 #!/usr/bin/env node
-/**
- * E1 longitudinal lifecycle protocol — the DRIVER.
- *
- * Executes the pre-registered protocol (PREREGISTERED-DESIGN.md v0.2 + A1)
- * for each requested (arm x seed): builds a HERMETIC fresh store (temp
- * HIPPO_HOME, cleaned up after), walks the K simulated sessions in order,
- * and probes READ-ONLY after every session.
- *
- * Mutation/measurement split (design rev #3):
- *   - MUTATORS (the only state writers): session ingestion
- *     (createMemory+writeEntry under HIPPO_FAKE_NOW), scheduled retrievals
- *     (hybridSearch -> markRetrieved -> persistence gated EXACTLY like the
- *     CLI: skipped when isRecallBoostAblated()), and outcome applications
- *     (applyOutcome+writeEntry on EXPLICIT protocol-mapped ids - never
- *     last_retrieval_ids).
- *   - PROBES are in-process hybridSearch calls with an explicit `now`; no
- *     markRetrieved, no writes. (retrieve_inprocess.mjs pattern.)
- *
- * Simulated time: HIPPO_FAKE_NOW env + _resetAblationCacheForTests() per
- * session (in-process equivalent of one process per session). createMemory /
- * markRetrieved / scoring all honor it via evalNow().
- *
- * Arms (env per design section 3; baselines rank differently in the prober):
- *   full            no flags
- *   decay-off       HIPPO_ABLATE_DECAY=1            (A1: co-ablates outcome-slow + read-side boost)
- *   strengthen-off  HIPPO_ABLATE_RECALL_BOOST=1
- *   outcome-off     HIPPO_ABLATE_OUTCOME=1
- *   all-off         all three
- *   bm25-static     all three + probe ranks by raw BM25 component only
- *   recency-window  all three + probe returns the 5 newest entries
- *   Round 2 (docs/evals/2026-09-23-mechanism-audit-round2-prereg.md):
- *   recency-off     HIPPO_ABLATE_RECENCY=1          (the search recency factor only)
- *   bm25-outcome    all off but the fast outcome channel + probe ranks by raw BM25 x outcomeMultiplier
- *   bm25-newest     all three + probe ranks by raw BM25, ties newest first
- *   Flags: --recency-days <n> sets the recency scale; --lookalike-window v1 dates
- *   hard negatives within v1's sessions (both recorded in meta).
- *
- * NO sleep/consolidation in E1 (that is E3's dimension); no embeddings (the
- * lexical+lifecycle composite exercises every mechanism under test; the
- * embedding blend is orthogonal to the ablations).
- *
- * Run (pilot):  node scripts/e1-lifecycle/run.mjs --arms full,all-off --seeds 1 --facts 300
- */
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -63,12 +20,7 @@ import { generateProtocol, GENERATOR_VERSION } from './generate.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const OUT_DIR = path.join(REPO, 'benchmarks', 'e1-lifecycle', 'raw');
-// Half-life robustness sweep (amendment A5, EXPLORATORY - not in the frozen prereg).
-// Module-level so the CLI can vary the decay half-life without changing runArmSeed's
-// signature: probe-replay.mjs imports runArmSeed and relies on the default 7d, which
-// reproduces the registered E1 byte-identically (invariant-tested).
 let SWEEP_HALF_LIFE = 7;
-// Round-2 tuning grid: the search recency scale in days; null keeps the product's 30.
 let SWEEP_RECENCY_DAYS = null;
 
 const ARM_ENV = {
@@ -97,17 +49,16 @@ function setSimulatedNow(iso) {
   _resetAblationCacheForTests();
 }
 
-/** Current version token for a probe at epoch e, or null if fact not yet live. */
 function currentAt(probe, epoch) {
   let cur = null;
   for (const step of probe.versionTimeline) {
     if (step.session <= epoch) cur = step;
   }
-  return cur; // { session, version } | null
+  return cur;
 }
 
 const PROBE_TOP_K = 5;
-const PROBE_BUDGET = 100000; // token budget never binds at top-5 granularity
+const PROBE_BUDGET = 100000;
 
 const byId = (a, b) => a.entry.id.localeCompare(b.entry.id);
 const BASELINE_RANKERS = {
@@ -116,21 +67,17 @@ const BASELINE_RANKERS = {
   'bm25-newest': (a, b) => (b.bm25 - a.bm25) || (Date.parse(b.entry.created) - Date.parse(a.entry.created)) || byId(a, b),
 };
 
-/** The top-5 entries a probe sees under this arm's ranker. */
 async function probeTopEntries(probe, entries, arm, probeNow) {
   if (arm === 'recency-window') {
     return entries.slice().sort((a, b) => Date.parse(b.created) - Date.parse(a.created)).slice(0, PROBE_TOP_K);
   }
   const results = await hybridSearch(probe.query, entries, { budget: PROBE_BUDGET, now: probeNow, minResults: PROBE_TOP_K });
-  // Baseline tie-breaks MUST be independent of the composite order: a bare stable sort would let identical-BM25
-  // candidates (this protocol creates many) keep hybridSearch's lifecycle/recency-tinged ordering (codex P2).
-  // Entry id is deterministic (seed-derived) and content-blind.
   const ranked = BASELINE_RANKERS[arm] ? results.slice().sort(BASELINE_RANKERS[arm]) : results;
   return ranked.slice(0, PROBE_TOP_K).map((r) => r.entry);
 }
 
 async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
-  const probeNow = new Date(Date.parse(epochDate) + 60 * 60 * 1000); // +1h after session
+  const probeNow = new Date(Date.parse(epochDate) + 60 * 60 * 1000);
   let active = 0, current5 = 0, staleEligible = 0, staleHit = 0;
   let trapEligible = 0, trapHit = 0, contraEligible = 0, contraHit = 0;
   let hotActive = 0, hotCurrent5 = 0, mrrSum = 0;
@@ -156,7 +103,6 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
       if (probe.hot) hotCurrent5++;
       mrrSum += 1 / (rank + 1);
     }
-    // Stale intrusion: only meaningful once an update has superseded v1.
     if (row.staleEligible) {
       staleEligible++;
       const staleToks = Object.entries(probe.tokens)
@@ -169,7 +115,6 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
       if (rank >= 0) nonStaleCurrent5++;
     }
     if (probe.trapTokens.length > 0) {
-      // Eligible once the trap memory exists in the store.
       const trapLive = entries.some((e) => probe.trapTokens.some((t) => e.content.includes(t)));
       if (trapLive) {
         trapEligible++;
@@ -198,7 +143,6 @@ async function probeEpoch(protocol, entries, epoch, epochDate, arm) {
     trapEligible, trapPersistenceRate: trapEligible > 0 ? trapHit / trapEligible : null,
     contraEligible, contraIntrusionRate: contraEligible > 0 ? contraHit / contraEligible : null,
     hotActive, hotR5: hotActive > 0 ? hotCurrent5 / hotActive : null,
-    // Split for the break-even superseded share (2026-09-23 mechanism audit prereg).
     cleanStaleR5: staleEligible > 0 ? cleanStale / staleEligible : null,
     nonStaleActive, nonStaleR5: nonStaleActive > 0 ? nonStaleCurrent5 / nonStaleActive : null,
     probes,
@@ -214,8 +158,6 @@ function groupBySession(items) {
   return bySession;
 }
 
-// Entry ids are DERIVED from (seed, protocol id), not random UUIDs: the protocol creates score TIES and
-// same-timestamp rows order by id, so random ids would change top-5 metrics between identical runs (codex P1).
 function ingestMemories(files, seed, memories, idMap) {
   for (const m of memories) {
     const entry = createMemory(m.content, { baseHalfLifeDays: SWEEP_HALF_LIFE });
@@ -225,14 +167,13 @@ function ingestMemories(files, seed, memories, idMap) {
   }
 }
 
-// hybridSearch -> markRetrieved -> persistence gated exactly like cli.ts cmdRecall.
 async function runScheduledRetrievals(files, retrievals) {
   const entriesNow = () => loadAllEntriesIn(files);
   for (const r of retrievals) {
     const entries = entriesNow();
     const results = await hybridSearch(r.query, entries, { budget: PROBE_BUDGET, minResults: PROBE_TOP_K });
     const topEntries = results.slice(0, PROBE_TOP_K).map((x) => x.entry);
-    const updated = markRetrieved(topEntries); // default now = evalNow() (fake)
+    const updated = markRetrieved(topEntries);
     if (!isRecallBoostAblated()) {
       for (const u of updated) writeEntryIn(files, u);
     }
@@ -269,7 +210,7 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
     setSimulatedNow(protocol.sessions[0].date);
     initStore(hippoRoot);
 
-    const idMap = new Map(); // protocol memory id -> hippo entry (latest object)
+    const idMap = new Map();
     const bySession = groupBySession(protocol.memories);
     const retrievalsBySession = groupBySession(protocol.retrievalSchedule);
     const outcomesBySession = groupBySession(protocol.outcomeSchedule);
@@ -278,21 +219,15 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
     await withSharedStoreHandles(async (handles) => {
       const files = storeFilesOf(hippoRoot, { session: handles });
       for (const session of protocol.sessions) {
-        setSimulatedNow(session.date); // mutators stamp simulated time
-
-        // 1. Ingest this session's memories (created/last_retrieved = fake now).
+        setSimulatedNow(session.date);
         ingestMemories(files, seed, bySession.get(session.index) ?? [], idMap);
-        // 2. Scheduled mutating retrievals - CLI-parity block.
         await runScheduledRetrievals(files, retrievalsBySession.get(session.index) ?? []);
-        // 3. Scheduled outcomes on EXPLICIT ids (never last_retrieval_ids).
         applyScheduledOutcomes(files, outcomesBySession.get(session.index) ?? [], idMap, session.index);
 
-        // 4. READ-ONLY probes (explicit now; no markRetrieved; no writes).
         const entries = loadAllEntriesIn(files);
         epochs.push(await probeEpoch(protocol, entries, session.index, session.date, arm));
       }
     });
-    // Only the final epoch is judged, so only it keeps per-probe rows (compare.mjs hierarchical CI).
     for (const e of epochs.slice(0, -1)) delete e.probes;
 
     if (inspect) await inspect(hippoRoot, idMap);
@@ -314,9 +249,6 @@ export async function runArmSeed(arm, seed, genOpts = {}, inspect = undefined) {
   };
 }
 
-// --------------------------------------------------------------------------
-// CLI
-// --------------------------------------------------------------------------
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const args = process.argv.slice(2);
@@ -334,8 +266,6 @@ if (isMain) {
     numSessions: Number(getArg('sessions', '20')),
     distractorMultiple: Number(getArg('distractors', '10')),
   };
-  // A5 sweep: --half-life sets the decay base (default 7 = registered E1); --out-dir
-  // isolates sweep output so it never clobbers the registered raw/.
   SWEEP_HALF_LIFE = Number(getArg('half-life', '7'));
   const recencyDays = getArg('recency-days', null);
   if (recencyDays !== null && !(Number.isFinite(Number(recencyDays)) && Number(recencyDays) > 0)) {

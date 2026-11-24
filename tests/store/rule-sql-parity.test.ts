@@ -1,6 +1,3 @@
-// The SQL twins in src/store/sqlite/runtime/rule-sql.ts equal their JS rules over a seeded spread: strength under a
-// loss-aversion ratio (tests/core/memory.test.ts holds the default ratio), and the bare and identity text of a stored
-// content.
 import { rmSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { calculateStrength } from '../../src/entry/memory.js';

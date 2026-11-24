@@ -1,5 +1,3 @@
-// An embed run that finds the index's lock held asks again at a doubling interval, capped at a second, and gives up
-// on the 10 s deadline: 15 asks in the budget, not one every 50 ms.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { join } from 'node:path';

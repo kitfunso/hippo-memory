@@ -1,5 +1,3 @@
-// initStore + a second openHippoDb was two connections per loader; openStore
-// runs init on the one connection the caller keeps. Real SQLite store, no mocks.
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
@@ -24,7 +22,6 @@ beforeEach(() => {
   root = makeRoot('f3-openstore');
 });
 
-/** Counts distinct connection objects (`this`) any `.prepare()` call was made on. */
 function countConnections(run: () => void): number {
   const originalPrepare = DatabaseSync.prototype.prepare;
   const seen = new Set<unknown>();
@@ -64,12 +61,10 @@ describe('loaders use one connection, not two', () => {
 describe('openStore makes the mirror folders once per store', () => {
   it('makes them on the first open only, and again for a store made anew at the same path', () => {
     const mirrorFolders = ['buffer', 'episodic', 'semantic', 'conflicts'];
-    // The runtime remembers the step for the process, as a CLI or server root's does; its first open runs it.
     const runtime = new StoreRuntime();
     const opts = { grant: grantFor({ runtime }) };
     const foldersMadeBy = (opens: number): number => {
       const spy = vi.spyOn(fs, 'mkdirSync');
-      // The store imports fs by name, and a named import sees the spy only after this sync.
       syncBuiltinESMExports();
       try {
         for (let i = 0; i < opens; i++) closeHippoDb(openStore(root, opts));

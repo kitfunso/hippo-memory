@@ -1,5 +1,3 @@
-// The embedding index's session handle on hippo.db, in process and on the store worker: a rebuild staged in steps
-// reaches the live index only at its commit, a close drops it, and the lock keeps another thread's session out.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { embeddingIndexIdentity } from '../../src/base/embeddings/index-identity.js';
@@ -12,7 +10,6 @@ import { writeEntriesTogether } from '../_helpers/root-forms.js';
 
 const OLD = embeddingIndexIdentity('fake-old');
 const NEW = embeddingIndexIdentity('fake-new');
-// Exact in float32, so a vector read back equals the one written.
 const vector = (i: number): number[] => [i, 0.5, 0.25, -1];
 
 const closing: (() => Promise<void>)[] = [];
@@ -35,7 +32,6 @@ interface Seeded {
   readonly ids: readonly [string, string, string];
 }
 
-/** Three memories, the first two with a vector built by OLD. */
 async function seeded(): Promise<Seeded> {
   const root = makeRoot('index-handle');
   const entries = ['alpha', 'beta', 'gamma'].map((t) => createMemory(`index handle ${t}`));
@@ -61,7 +57,6 @@ interface Live {
   readonly state: EmbeddingIndexState;
 }
 
-/** The live index as a reader on this thread sees it. */
 async function live({ root, ids }: Seeded): Promise<Live> {
   const { vectors } = sqliteStore(root);
   const stored = await vectors.stored('vectors', ids);
@@ -122,7 +117,6 @@ describe.each<Kind>(['in process', 'on the store worker'])('the embedding index 
     await index.step(aborted.id, { kind: 'stage', rows: [[c, vector(9)]] });
     await index.step(aborted.id, { kind: 'close' });
     expect(await live(seed)).toEqual(before);
-    // The next rebuild commits only the rows it staged itself.
     const { id } = await index.open();
     await index.step(id, { kind: 'begin' });
     await index.step(id, { kind: 'stage', rows: [[a, vector(5)]] });

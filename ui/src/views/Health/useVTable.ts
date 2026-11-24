@@ -9,20 +9,15 @@ export interface UseVTableOptions {
   rowHeight: number;
   count: number;
   onActivate: (index: number) => void;
-  /** Called when the active row changes (keyboard or click). */
   onFocusRow?: (index: number) => void;
-  /** Visible plus overscan row range changed; the memory table pages from this. */
   onWindow?: (first: number, last: number) => void;
-  /** Changing this value scrolls to the top and clears the active row (sort or filter changed). */
   resetKey?: unknown;
-  /** Sticky header inside the scroller; its height is not row space. */
   headRef?: RefObject<HTMLElement | null>;
 }
 
 /** Windowing and keyboard state of a virtual list, ported from the mockup's VTable. */
 export interface VTableState {
   rootRef: RefObject<HTMLDivElement | null>;
-  /** First and one-past-last row to render. */
   first: number;
   last: number;
   active: number;
@@ -40,7 +35,6 @@ export function useVTable(opts: UseVTableOptions): VTableState {
   const [active, setActiveState] = useState(-1);
   const frame = useRef(0);
 
-  // The root is the scroller, so the sticky header covers the top of its client box.
   const rowsHeight = useCallback(() => {
     const room = (rootRef.current?.clientHeight ?? 0) - (headRef?.current?.offsetHeight ?? 0);
     return room > 0 ? room : FALLBACK_HEIGHT;

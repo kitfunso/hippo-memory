@@ -1,21 +1,3 @@
-/**
- * Defensive filter: `kind='archived'` rows must NOT appear in recall.
- *
- * `kind='archived'` is a transient SAVEPOINT-internal sentinel inside
- * `archiveRawMemory` (src/store/raw-archive.ts:56): UPDATE kind='archived'
- * immediately followed by DELETE, atomic. In normal operation no concurrent
- * reader sees the intermediate state.
- *
- * The filter in loadSearchRows (v1.12.6) is belt-and-suspenders against:
- *   (a) future bugs that drop the SAVEPOINT wrapping,
- *   (b) future bugs that introduce kind='archived' as a persisted state,
- *   (c) external direct-SQL writes that bypass archiveRawMemory.
- *
- * This test synthetically inserts an `kind='archived'` row via direct SQL
- * (the SAVEPOINT-bypass case (c) above) and asserts recall does not return it,
- * covering all 4 candidate-loading paths in loadSearchRows.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { loadSearchEntries, writeEntry } from '../_helpers/root-forms.js';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -73,9 +55,6 @@ describe('loadSearchEntries defensive kind!=archived filter', () => {
   });
 
   function poisonToArchived(id: string): void {
-    // SAVEPOINT-bypass: direct SQL UPDATE that leaves kind='archived' visible
-    // to a concurrent reader. Simulates the worst-case "what if the
-    // archiveRawMemory savepoint were broken" scenario.
     db.prepare(`UPDATE memories SET kind = 'archived' WHERE id = ?`).run(id);
   }
 
@@ -106,7 +85,6 @@ describe('loadSearchEntries defensive kind!=archived filter', () => {
     writeEntry(hippoRoot, makeRawMemory('mem_archived', 'archived content'));
     poisonToArchived('mem_archived');
 
-    // Empty query (whitespace only) hits the no-terms branch (line 713 in store.ts).
     const results = loadSearchEntries(hippoRoot, '   ', 10, 'default');
     const ids = results.map((r) => r.id);
     expect(ids).toContain('mem_visible');
@@ -118,8 +96,6 @@ describe('loadSearchEntries defensive kind!=archived filter', () => {
     writeEntry(hippoRoot, makeRawMemory('mem_archived', 'archived token charlie', 'default'));
     poisonToArchived('mem_archived');
 
-    // tenantId undefined = no tenant filter (legacy callers / background pipelines).
-    // The archived filter must still fire.
     const results = loadSearchEntries(hippoRoot, 'charlie', 10, undefined);
     const ids = results.map((r) => r.id);
     expect(ids).toContain('mem_visible');

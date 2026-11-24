@@ -1,4 +1,3 @@
-// On/off variables share one reader: unknown spellings take the safe side, and serve refuses to boot on them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

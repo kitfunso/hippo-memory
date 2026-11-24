@@ -1,6 +1,3 @@
-// The text rules of a compaction's "Memories for hippo" list: reading it out of a summary, which
-// items become rows, and when one restates a held row. Pure text in, text out: hooks, replay and
-// every store share it.
 export const COMPACTION_ITEM_MAX_CHARS = 500;
 export const COMPACTION_ITEM_ROW_CAP = 10;
 
@@ -103,7 +100,6 @@ export function selectItemRows(items: readonly string[]): CompactionItemRows {
   return { rows, tooLong: items.length - fitting.length, capped: fitting.length - rows.length };
 }
 
-/** The marker redactSecretsStrict writes; an item holding it was a secret before it was stored. */
 const REDACTED = '[REDACTED]';
 
 /** The items that may become rows, as selectItemRows picks them from those with no secret;
@@ -122,7 +118,6 @@ export function writableItemRows(
   return rows;
 }
 
-/** Words whose loss reverses or narrows a statement: "do not", "can't", "only", "unless". */
 const PROTECTED_WORDS = new Set([
   'not',
   'no',
@@ -137,8 +132,6 @@ const PROTECTED_WORDS = new Set([
   'unless',
   'until',
 ]);
-/** Below this share of the held text's words, an item is a fragment of something longer, not a
- * restatement. */
 const RESTATE_MIN_SHARE = 0.5;
 
 /** The words restates compares: NFC, lower case, split on anything that is not a letter, mark,

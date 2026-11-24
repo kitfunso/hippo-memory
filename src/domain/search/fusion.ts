@@ -26,13 +26,10 @@ export interface FusionInput {
   dense: DenseScores;
   bm25Weight: number;
   embeddingWeight: number;
-  /** The stores the graph list walks; without them it ranks nothing. */
   graph?: Pick<GraphRankStreamOptions, 'store' | 'global'>;
   graphStream?: GraphStreamOptions;
 }
 
-// Score desc, then entry identity, so ties cannot leak fresh-ingest order into graph seeds or RRF
-// ranks.
 function rankBy(eligible: number[], scores: number[], entries: MemoryEntry[]): number[] {
   return [...eligible].sort((a, b) => {
     const d = scores[b] - scores[a];
@@ -48,10 +45,7 @@ export async function fuseRanks(input: FusionInput): Promise<Map<number, number>
   const bm25Ranked = rankBy(eligible, bm25Scores, entries);
   const cosineRanked = rankBy(eligible, dense.cosine, entries);
   const graphRanked = await graphRanking(input, eligible.length, bm25Ranked, cosineRanked);
-  // absentRank stays entries.length + 1 rather than rrfFuse's longest-list default.
   const opts = { absentRank: entries.length + 1 };
-  // An all-absent third list would add a constant the later multipliers make non-uniform, so an
-  // empty one is skipped.
   return graphRanked.length > 0
     ? rrfFuse(
         [bm25Ranked, cosineRanked, graphRanked],
@@ -68,8 +62,6 @@ async function graphRanking(
   cosineRanked: number[],
 ): Promise<number[]> {
   const { graph, graphStream: gs } = input;
-  // Without doc vectors the dense ranking is just entry order, so seeds drawn from it would mean
-  // nothing.
   const hasDocVectors = input.dense.hadVec.some(Boolean);
   if (!gs || gs.weight <= 0 || !graph || !hasDocVectors) return [];
   const seedCount = Math.min(gs.seedCount ?? DEFAULT_GRAPH_SEED_COUNT, eligibleCount);

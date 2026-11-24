@@ -1,5 +1,3 @@
-// A folder whose files are the items, as Claude Code, Gemini, Qwen and Copilot keep them: one
-// reader for all four.
 import path from 'node:path';
 import type { AgentFiles } from '../../base/util/agent-files.js';
 import type { Container, MemoryItem } from './types.js';
@@ -8,8 +6,6 @@ import type { Scope } from '../../base/memory/agent-memory-tools.js';
 export interface FolderRules {
   readonly recursive: boolean;
   readonly include: (rel: string) => boolean;
-  /** The stored text and time of a file read in full, or null when the tool would not count it
-   * as a note. */
   readonly item: (
     text: string,
     mtimeMs: number,

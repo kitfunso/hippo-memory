@@ -35,7 +35,6 @@ import { transcriptWorkingState } from './working-state.js';
 import type { StoreGroups } from '../../base/ports/store.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 
-// Diagnostic-only log; a long-lived install must not grow it unbounded.
 const PRE_COMPACT_LOG_MAX_BYTES = 256 * 1024;
 
 /** Log-forgery guard: strip control chars (U+0000-U+001F, DEL, U+0080-U+009F; newlines and NEL
@@ -49,12 +48,10 @@ export function sanitizeLogMessage(message: string): string {
 function appendPreCompactLog(logFile: string, message: string, fields?: LogFields): void {
   try {
     fs.mkdirSync(path.dirname(logFile), PRIVATE_DIR);
-    // One handle, so the cap acts on the file it measured; two hooks writing in the same instant
-    // can overwrite one diagnostic line, which this log accepts.
     const fd = fs.openSync(logFile, fs.constants.O_RDWR | fs.constants.O_CREAT);
     try {
       const size = fs.fstatSync(fd).size;
-      const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES; // a dumb cap, no rotation
+      const startFresh = size > PRE_COMPACT_LOG_MAX_BYTES;
       if (startFresh) fs.ftruncateSync(fd, 0);
       const line = `[hippo] ${new Date().toISOString()} ${sanitizeLogMessage(`${message}${formatFields(fields)}`)}\n`;
       fs.writeSync(fd, line, startFresh ? 0 : size, 'utf8');
@@ -62,20 +59,15 @@ function appendPreCompactLog(logFile: string, message: string, fields?: LogField
       fs.closeSync(fd);
     }
   } catch (err) {
-    // A log write failure must never affect the exit-0 contract, but a log that never fills is
-    // told.
     logger.warn(`pre-compact log not written: ${errorMessage(err)}`, errorFields(err));
   }
 }
 
-/** True iff `filePath` exists and is readable — checks both in one call. */
 function isReadableFile(filePath: string): boolean {
   try {
     fs.accessSync(filePath, fs.constants.R_OK);
     return true;
   } catch (err) {
-    // A missing file is the expected miss; a permission or I/O fault is told, then the caller still
-    // skips the file.
     if (errorCode(err) !== 'ENOENT') {
       logger.warn(`cannot read ${filePath}: ${errorMessage(err)}`, errorFields(err));
     }
@@ -118,8 +110,6 @@ async function snapshotJustSaved(
   );
 }
 
-/** Runs the PreCompact producer: records the compaction, asks the summarizer for memories, saves
- * a working-state snapshot. Never extracts memories itself; SessionEnd capture owns that. */
 async function runPreCompact(
   hippoRoot: string,
   store: CompactionStore,
@@ -147,8 +137,6 @@ async function runPreCompact(
   );
   if (!transcriptPath) return;
 
-  // Nothing derivable skips the write, so a user-authored active snapshot is never clobbered with
-  // junk.
   const derived = transcriptWorkingState(
     transcriptPath,
     (message, opts) => appendPreCompactLog(logFile, message, opts?.fields),
@@ -166,7 +154,6 @@ async function runPreCompact(
   });
 }
 
-/** The compaction payload this entry runs, or null after logging why it skips it. */
 async function acceptPreCompact(
   hippoRoot: string,
   store: CompactionStore,
@@ -197,7 +184,6 @@ async function acceptPreCompact(
   return { input: receipt.input, vscode };
 }
 
-/** The skip line when the hook's other entry runs this compaction, else null. */
 async function otherEntrySkip(
   store: CompactionStore,
   options: PreCompactOptions,
@@ -225,8 +211,6 @@ interface MarkCompactionBoundaryOptions {
   readonly closable: boolean;
 }
 
-/** Starts the compaction record when the host will close one (`closable`), then tells
- * `onBoundary` what was printed; the record id, or null without a record. */
 async function markCompactionBoundary({
   hooks,
   options,
@@ -249,7 +233,6 @@ async function markCompactionBoundary({
     );
     printed = printPreCompactInstruction(logFile);
   }
-  // Its own guard, so a throwing callback can never skip the snapshot work that follows.
   try {
     options.onBoundary?.(printed);
   } catch (err) {
@@ -262,8 +245,6 @@ async function markCompactionBoundary({
   return recordId;
 }
 
-/** Best effort, never throws: a compaction must not fail because its record could not be
- * written. */
 async function startRecord(
   hooks: CompactionHooks,
   tenantId: string,
@@ -282,7 +263,6 @@ async function startRecord(
   }
 }
 
-/** Never throws: the snapshot is saved already, and the record only notes it. */
 async function markSnapshotOnRecord(
   hooks: CompactionHooks,
   { tenantId, recordId, logFile }: { tenantId: string; recordId: string; logFile: string },
@@ -298,16 +278,12 @@ async function markSnapshotOnRecord(
   }
 }
 
-/** The transcript to snapshot, or null after logging why there is none. */
 function resolvePreCompactTranscript(
   payloadTranscriptPath: string | null,
   stdinText: string | undefined,
   logFile: string,
   runtime: HookRuntime,
 ): string | null {
-  // A payload transcript_path is EXCLUSIVE: auto-discovery would snapshot a DIFFERENT session's
-  // transcript under THIS payload's session_id, so it runs only on a manual invocation (no
-  // payload).
   let transcriptPath: string | null;
   if (payloadTranscriptPath !== null) {
     if (isReadableFile(payloadTranscriptPath)) {
@@ -320,8 +296,6 @@ function resolvePreCompactTranscript(
       return null;
     }
   } else if (runtime === 'copilot') {
-    // The scan only knows Claude Code's folders, so a manual Copilot run would snapshot a Claude
-    // session.
     transcriptPath = null;
   } else {
     transcriptPath = resolveLastSessionTranscript(undefined, stdinText, { mayScan: true });
@@ -356,8 +330,6 @@ async function saveDerivedSnapshot(
     );
   }
 
-  // Carried-over fields are not re-capped, as `hippo snapshot save` stays uncapped;
-  // saveActiveTaskSnapshot scrubs every field.
   const merged = mergeWorkingState(derived, existing, sessionId);
   if (merged === null) {
     appendPreCompactLog(
@@ -381,16 +353,12 @@ async function saveDerivedSnapshot(
 }
 
 export interface PreCompactOptions {
-  /** The tenant the CLI root resolved. */
   tenantId: string;
   stdinText?: string;
   stdinTimedOut?: boolean;
   logFile?: string;
   runtime?: HookRuntime;
-  /** HIPPO_CAPTURE_SCRIPTED: a scripted session's user turns are the person's. */
   scriptedIsHuman?: boolean;
-  /** Called once when the hook accepts a compaction, with the text it printed or null when it
-   * printed none. */
   onBoundary?: (printed: string | null) => void;
 }
 
@@ -414,7 +382,6 @@ export async function preCompactHook(
 }
 
 export interface PostCompactOptions {
-  /** The tenant the CLI root resolved. */
   tenantId: string;
   stdinText?: string;
   stdinTimedOut?: boolean;

@@ -6,7 +6,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 sessionPerTest();
 
-// The store's per-scope cap; a literal here so a change to it fails these tests on purpose.
 const WM_MAX_ENTRIES = 20;
 
 let tmpDir: string;
@@ -20,7 +19,6 @@ describe('schema migration', () => {
     const db = openHippoDb(tmpDir);
     try {
       expect(getSchemaVersion(db)).toBe(getCurrentSchemaVersion());
-      // Table should exist — inserting should not throw
       db.prepare(`SELECT COUNT(*) AS cnt FROM working_memory`).get();
     } finally {
       closeHippoDb(db);
@@ -70,7 +68,6 @@ describe('wmPush', () => {
 
 describe('bounded buffer eviction', () => {
   it('evicts entries when exceeding WM_MAX_ENTRIES per scope', async () => {
-    // Push WM_MAX_ENTRIES + 5 entries
     for (let i = 0; i < WM_MAX_ENTRIES + 5; i++) {
       await wmPush(tmpDir, {
         scope: 'evict-test',
@@ -84,8 +81,6 @@ describe('bounded buffer eviction', () => {
   });
 
   it('evicts the lowest-importance entries first', async () => {
-    // Push entries with varying importance
-    // Low importance entries that should be evicted
     for (let i = 0; i < WM_MAX_ENTRIES; i++) {
       await wmPush(tmpDir, {
         scope: 'priority',
@@ -94,7 +89,6 @@ describe('bounded buffer eviction', () => {
       });
     }
 
-    // Push one high-importance entry — should evict the oldest low-importance one
     await wmPush(tmpDir, {
       scope: 'priority',
       content: 'high-priority',
@@ -104,13 +98,11 @@ describe('bounded buffer eviction', () => {
     const items = await wmRead(tmpDir, { scope: 'priority', limit: 100 });
     expect(items).toHaveLength(WM_MAX_ENTRIES);
 
-    // The high-priority entry should remain
     const highItem = items.find((item) => item.content === 'high-priority');
     expect(highItem?.importance).toBe(0.9);
   });
 
   it('evicts the oldest of equal entries, even when all share one created_at', async () => {
-    // A frozen clock gives every push the same created_at, the tie a fast loop hits by chance.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T00:00:00.000Z'));
     try {
@@ -132,12 +124,10 @@ describe('bounded buffer eviction', () => {
   });
 
   it('does not evict across different scopes', async () => {
-    // Fill scope A to the max
     for (let i = 0; i < WM_MAX_ENTRIES; i++) {
       await wmPush(tmpDir, { scope: 'scope-a', content: `a-${i}` });
     }
 
-    // Push to scope B — should not affect scope A
     await wmPush(tmpDir, { scope: 'scope-b', content: 'b-entry' });
 
     const aItems = await wmRead(tmpDir, { scope: 'scope-a', limit: 100 });

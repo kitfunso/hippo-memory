@@ -1,5 +1,3 @@
-// One sleep per store at a time: a sleep takes the store's claim first, and one that finds it held
-// does nothing, so two sleeps never extract the same memories twice.
 import type { Consolidation } from '../../base/ports/store/consolidation.js';
 import type { ConsolidationResult } from '../../domain/consolidate/run.js';
 import type { SleepResult } from './sleep.js';
@@ -58,8 +56,6 @@ export async function oneSleepPerStore<R, F>(
   }
 }
 
-// A failed release must not replace the sleep's own result or error; one retry, since a claim kept by a
-// long-running host would refuse every later sleep until it restarts.
 async function giveBack(consolidation: Consolidation): Promise<void> {
   if (consolidation.releaseSleep === undefined) return;
   for (let attempt = 1; attempt <= 2; attempt++) {

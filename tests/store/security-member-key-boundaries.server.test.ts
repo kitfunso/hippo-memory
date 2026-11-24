@@ -1,16 +1,3 @@
-/**
- * Member-key privilege boundaries.
- *
- * Three escalations a member API key used to have inside its own tenant:
- *   1. mint API keys (including an ADMIN key) and revoke other keys (1.45.0
- *      closed this too; members may still list keys and revoke their own);
- *   2. read any private (`<source>:private:*`) or quarantined scope by naming
- *      it on recall or assemble;
- *   3. act as admin through POST /mcp, whose tools built an admin actor for
- *      every caller.
- * Admins (tenant owners, the local CLI, loopback without a key) keep full
- * access. Real HTTP server on port 0, real SQLite, no mocks.
- */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -203,7 +190,6 @@ describe('member-key boundaries in the api layer (every surface goes through it)
       api.ScopeForbiddenError,
     );
 
-    // The public row is the only one seeded in that scope.
     const publicResults = (await api.retrieve(memberCtx(), { query: 'zanzibar', filter: { scope: PUBLIC_SCOPE } }))
       .results;
     expect(publicResults.map((r) => r.content)).toEqual([PUBLIC_TEXT]);

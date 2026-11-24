@@ -1,6 +1,3 @@
-// hippo.db's Rejections group: reject, unreject and list rejected values, each on one handle of its
-// own. A file apart from rejection.ts: sqlite/runtime/open.ts imports that one, so an open there would be
-// an import cycle.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { heldTexts, identityText } from '../../../base/util/same-text.js';
@@ -46,10 +43,8 @@ import type { EntryCursor } from '../../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-/** Whether a row's text and lead-in hold the rejected value; a merged row's source texts have none. */
 type HoldsValue = (text: string, leadIn?: string | null) => boolean;
 
-/** What one rejection removed and wrote, gathered across the live and dormant passes. */
 interface Removal {
   removedIds: string[];
   removedRawIds: string[];
@@ -57,14 +52,11 @@ interface Removal {
   dormantSuccessorIds: string[];
 }
 
-/** The rows that hold the text, by table and by how they hold it. */
 interface Holders {
   readonly live: { readonly whole: MemoryEntry[]; readonly merged: MemoryEntry[] };
   readonly dormant: { readonly whole: string[]; readonly merged: string[] };
 }
 
-/** How a row holds the rejected text: as its whole text, as one text of a sleep-merged row, or
- * not at all. */
 function holdOf(
   row: { content: string; leadIn?: string | null; source: string | null },
   holdsValue: HoldsValue,
@@ -75,9 +67,6 @@ function holdOf(
     : null;
 }
 
-/** The ids of the tenant's rows in reach that hold the text, live then dormant, read a page at a
- * time with no lock held: the rejected-value row is already committed, so no write can add a
- * holder behind the walk. */
 function listHolderIds(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -114,9 +103,6 @@ function listHolderIds(
   }
 }
 
-/** The found rows read again under the write lock, each still in reach and still holding the
- * text; a row that sleep moved between the walk and the lock is read from the table it now sits
- * in. */
 function heldUnderLock(
   db: DatabaseSyncLike,
   rejection: Rejection,
@@ -149,8 +135,6 @@ function heldUnderLock(
   };
 }
 
-/** One reject's removal pass: the value test, the rows found holding the value under the lock,
- * and what went. */
 interface Sweep {
   readonly rejection: Rejection;
   readonly holdsValue: HoldsValue;
@@ -165,12 +149,9 @@ function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): 
   const { removedIds, removedRawIds, successors } = removal;
   for (const row of live.whole) {
     if (row.kind === 'raw') {
-      // A raw row is append-only: archiving is its one removal path, and its savepoint nests in
-      // this write scope.
       archiveRawMemory(db, row.id, { reason, who: actor });
       removedRawIds.push(row.id);
     } else {
-      // The one reject_value row is the trail for these removals, so no forget row each.
       deleteEntryCore(db, row.id, tenantId, { actor, suppressForgetAudit: true });
     }
     removedIds.push(row.id);
@@ -186,8 +167,6 @@ function removeLiveRows(db: DatabaseSyncLike, files: StoreFiles, sweep: Sweep): 
   }
 }
 
-// Dormant copies go in the same write scope, so `hippo dormant restore` cannot bring the text back.
-// They have no mirror to purge.
 function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
   const { rejection, holdsValue, removal } = sweep;
   const { dormant } = sweep.holders;
@@ -212,8 +191,6 @@ function removeDormantCopies(db: DatabaseSyncLike, sweep: Sweep): void {
   }
 }
 
-// After the commit, on the same handle: a purged raw mirror is stamped so the reaper skips it, and
-// one that stays is logged.
 function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: Removal): void {
   const rawIds = new Set(removal.removedRawIds);
   for (const id of removal.removedIds) {
@@ -224,7 +201,6 @@ function purgeRemovedMirrors(db: DatabaseSyncLike, hippoRoot: string, removal: R
   for (const successor of removal.successors) writeEntryMirrors(hippoRoot, successor);
 }
 
-/** The rows a rejection found unlocked, and the test each must still pass to go. */
 interface FoundHolders {
   readonly rejection: Rejection;
   readonly digest: string;
@@ -232,8 +208,6 @@ interface FoundHolders {
   readonly found: string[];
 }
 
-/** One short write scope: every found row that still holds the text goes, with one reject_value
- * audit row. */
 function removeHolders(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -254,8 +228,6 @@ function removeHolders(
     };
     removeLiveRows(db, files, sweep);
     removeDormantCopies(db, sweep);
-    // Still inside the write scope: a failed audit row is reported and the removal commits without
-    // it.
     const { tenantId, actor, memoryId } = rejection;
     const { removedIds } = removal;
     audit(db, 'reject_value', {
@@ -268,10 +240,6 @@ function removeHolders(
   return removal;
 }
 
-/** Commits the rejected-value row first, so every later write refuses the text; walks the
- * tenant's rows a page at a time with no lock held; then removes each holder in reach (live or
- * dormant, whole or merged) in one short write scope. A failure past the first commit leaves the
- * text refused and its holders kept; rejecting again removes them. */
 function applyRejection(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -281,7 +249,6 @@ function applyRejection(
   const { tenantId, actor, reason, memoryId } = rejection;
   const row = memoryId === undefined ? undefined : entryRejectRow(db, memoryId);
   const content = rejectedText(rejection, row);
-  // An id reject of a lead-in row names that row's identity; a value reject names the content.
   const leadIn = row?.lead_in || null;
   const digest = tombstoneDigest({ content, leadIn });
   const rejectedAt = files.clock().toISOString();
@@ -317,8 +284,6 @@ function applyRejection(
   };
 }
 
-/** Deletes the tenant's one rejected value whose digest starts with `digestPrefix` and writes
- * its unreject_value audit row. No match, or more than one, writes nothing. */
 function liftRejection(
   db: DatabaseSyncLike,
   tenantId: string,

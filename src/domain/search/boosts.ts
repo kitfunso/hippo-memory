@@ -21,18 +21,12 @@ import { clamp } from '../../base/util/stats.js';
 const CHURN_STALE_RANK_MULTIPLIER = 0.5; // SHORTCUT: untuned; measure on real recall before any default.
 
 const DECISION_TAG_BOOST = 1.2;
-// A memory tagged for the active scope outranks a neutral one; one tagged for another scope is
-// demoted.
 const SCOPE_MATCH_BOOST = 1.5;
 const SCOPE_MISMATCH_BOOST = 0.5;
 const EXTRACTION_TAG_BOOST = 1.3;
-// The outcome nudge is 1 + slope * tanh(net / 2), clamped so one outcome streak cannot swamp
-// lexical rank.
 const OUTCOME_NUDGE_SLOPE = 0.15;
 const OUTCOME_NUDGE_MIN = 0.85;
 const OUTCOME_NUDGE_MAX = 1.15;
-// Strength and recency enter the rank as floor + span * signal, so a weak or old memory keeps most
-// of its lexical score.
 export const STRENGTH_RANK_FLOOR = 0.5;
 export const STRENGTH_RANK_SPAN = 0.5;
 const RECENCY_RANK_FLOOR = 0.8;
@@ -47,7 +41,7 @@ export function churnStaleFactor(entry: MemoryEntry): number {
 }
 
 function recencyBoost(entry: MemoryEntry, now: Date, ablation: RankAblation): number {
-  if (ablation.recency) return 1; // EVAL-ONLY ablation (see ablation.ts)
+  if (ablation.recency) return 1;
   const created = new Date(entry.created);
   const ageDays = (now.getTime() - created.getTime()) / DAY_MS;
   return Math.exp(-ageDays / (ablation.recencyDays ?? RECENCY_SCALE_DAYS));
@@ -67,7 +61,7 @@ export function outcomeNudge(
 export function outcomeMultiplier(entry: MemoryEntry, ablated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  if (ablated || (pos === 0 && neg === 0)) return 1.0; // EVAL-ONLY ablation (see ablation.ts)
+  if (ablated || (pos === 0 && neg === 0)) return 1.0;
   return outcomeNudge((pos - neg) / 2, {
     slope: OUTCOME_NUDGE_SLOPE,
     min: OUTCOME_NUDGE_MIN,
@@ -91,8 +85,6 @@ export function resolveSummaryDeboost(perCall?: number, configured?: number): nu
   return isDeboost(configured) ? configured : DEFAULT_SUMMARY_DEBOOST;
 }
 
-/** 1.05 for a summary rebuilt within the window; null, unparseable and future timestamps get
- * 1.0. */
 function summaryFreshnessMultiplier(entry: MemoryEntry, now: Date): number {
   if (!isDagSummary(entry) || !entry.lastRebuiltAt) return 1.0;
   const rebuiltMs = new Date(entry.lastRebuiltAt).getTime();
@@ -167,7 +159,6 @@ export interface BoostContext {
   pathTags: string[];
   scope: string | null;
   temporal: { direction: TemporalDirection; range: TemporalRange };
-  /** The sync BM25 path never applied the outcome nudge. */
   outcome: boolean;
   summary: SummaryScoring;
   strength: StrengthModel;

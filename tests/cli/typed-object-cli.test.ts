@@ -1,5 +1,3 @@
-// The `hippo note|incident|policy|process|brief|skill` verbs, run in process through runCli on a real store. The codex
-// P2 regressions (a create keyword stored as the name, a lenient parseInt on a mutating verb) run once per noun.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
@@ -8,18 +6,15 @@ import { removeDir } from '../_helpers/remove-dir.js';
 
 interface Noun {
   readonly noun: string;
-  /** A create that names its subcommand, which must not be stored as the name. */
   readonly create: readonly string[];
   readonly recorded: RegExp;
   readonly listed: string;
   readonly notListed?: RegExp;
-  /** What `get` prints for the row `create` made. */
   readonly shown: readonly string[];
   readonly states: string;
   readonly live: string;
   readonly keep: readonly string[];
   readonly kept: string;
-  /** Flags of a valid supersede; incidents have no supersede verb. */
   readonly revise?: readonly string[];
 }
 
@@ -109,7 +104,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_TENANT', 'default');
   vi.stubEnv('HIPPO_SESSION_ID', 's-cli-objects');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-  // The CLI looks for the store in `.hippo` under the working directory.
   process.chdir(env.cwd);
 });
 
@@ -121,7 +115,6 @@ afterEach(() => {
 
 const hippo = (...args: string[]): Promise<InProcessResult> => runInProcess(() => runCli(['node', 'hippo', ...args]));
 
-/** Stdout of a verb that must succeed. */
 async function ok(...args: string[]): Promise<string> {
   const res = await hippo(...args);
   expect(res.status, res.stderr).toBe(0);
@@ -153,7 +146,6 @@ describe.each(NOUNS)('hippo $noun CLI', (k) => {
 
   it('rejects a malformed id and does NOT mutate the wrong row', async () => {
     await ok(k.noun, ...k.keep);
-    // parseInt("1abc") is 1, so a lenient parse would act on row 1.
     expect((await hippo(k.noun, 'close', '1abc')).status).toBe(1);
     if (k.revise) expect((await hippo(k.noun, 'supersede', '1abc', ...k.revise)).status).toBe(1);
     expect(await ok(k.noun, 'list', '--status', k.live)).toContain(k.kept);
@@ -177,7 +169,6 @@ describe('typed-object CLI rules one noun has', () => {
   it('many notes per customer + new->supersede version chain', async () => {
     await ok('note', 'new', 'Acme', '--text', 'note one');
     const id = idOf(await ok('note', 'new', 'Acme', '--text', 'note two'));
-    // Both stay active for the same customer; the list row shows customer=, not the body.
     const active = await ok('note', 'list', '--customer', 'Acme', '--status', 'active');
     expect((active.match(/customer="Acme"/g) ?? []).length).toBe(2);
     expect(await ok('note', 'supersede', id, '--text', 'note two v2', '--change', 'corrected')).toMatch(/v2/);
@@ -202,7 +193,6 @@ describe('typed-object CLI rules one noun has', () => {
     const asof = await ok('policy', 'asof', '2026-03-01', '--name', 'Window');
     expect(asof).toContain('Window');
     expect(asof).toContain('v2');
-    // valid_to is exclusive, so its own instant is out of force.
     expect(await ok('policy', 'asof', '2026-06-01', '--name', 'Window')).toContain('No active policies in force');
   });
 
@@ -226,7 +216,6 @@ describe('typed-object CLI rules one noun has', () => {
   });
 
   it('brief refresh writes a v1 brief; --dry-run prints the digest without writing', async () => {
-    // Receipt path-tag matching is covered in the store test; this checks the CLI write and dry-run paths.
     expect(await ok('brief', 'refresh', 'demo-repo', '--dry-run')).toContain('# Project Brief: demo-repo');
     expect(await ok('brief', 'list')).toContain('No project briefs.');
     expect(await ok('brief', 'refresh', 'demo-repo')).toMatch(/Project brief #\d+ recorded \(v1\)/);

@@ -1,7 +1,3 @@
-// GitHub Copilot: what hippo writes in its hooks file, its MCP server key and its instructions,
-// under the Copilot home and each VS Code User folder; surface/hooks-install/copilot.ts reads and
-// writes the files.
-
 import { isDeepStrictEqual } from 'node:util';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
@@ -26,10 +22,6 @@ The installed hooks load pinned memories when a session starts and capture
 the session as you work, so there is nothing to run before you finish.
 `.trim();
 
-/**
- * Every Copilot text a release has written, so install upgrades an old block and uninstall still
- * removes it; add the old text when the text changes.
- */
 const SHIPPED_COPILOT_INSTRUCTIONS: readonly string[] = [
   COPILOT_INSTRUCTIONS,
   `
@@ -65,8 +57,6 @@ export interface VscodePaths {
   readonly userDir: string;
   readonly mcpConfig: string;
   readonly instructions: string;
-  /** Profile folders, which keep their own mcp.json and prompts; hippo installs into the default
-   * profile only. */
   readonly profiles: readonly string[];
 }
 
@@ -103,8 +93,6 @@ export const VSCODE_MCP: McpHost = {
   server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }),
 };
 
-/** Only a server hippo wrote counts as hippo's: another command, other args, or any key or value
- * setup does not write (an env you added) makes it the user's. */
 function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
   if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();
@@ -182,8 +170,6 @@ function isCopilotBlock(inner: string): boolean {
 
 type FoundBlock = NonNullable<ReturnType<typeof hippoBlock>>;
 
-/** Replaces only the text between the markers, in the file's own line ending, or appends a block
- * after the user's text. */
 function withCopilotBlock(text: string, found: FoundBlock | null): string {
   if (found !== null) {
     const { start, end, eol } = found;
@@ -214,8 +200,6 @@ export function planInstructionsBlock(old: string): InstructionsPlan {
   return { status: next === old ? 'present' : 'written', next };
 }
 
-/** `text` without the block and its markers, plus the line break after the end marker, else the
- * one before the start marker. */
 function withoutCopilotBlock(text: string, found: FoundBlock): string {
   const from = found.start - HOOK_MARKERS.start.length;
   const to = found.end + HOOK_MARKERS.end.length;
@@ -267,10 +251,7 @@ export interface VscodeInstallResult {
 
 export interface CopilotInstallResult {
   readonly paths: CopilotPaths;
-  /** True when the hooks file was written; false when it already held hippo's current table. */
   readonly hooks: boolean;
-  /** Null, like `instructions`, when the Copilot CLI is not installed, since only it reads these
-   * two files. */
   readonly mcp: McpMergeStatus | McpFailure | null;
   readonly instructions: InstructionsInstallStatus | null;
   readonly vscode: readonly VscodeInstallResult[];

@@ -1,4 +1,3 @@
-// A server binds its MCP tools once, at boot: a tool call proves no group need again.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,24 +15,20 @@ import type { StoreWith } from '../../src/base/ports/store.js';
 import { CLEARED_ENV } from '../_helpers/recall-golden-seed.js';
 import { seedTwoTenants, TENANT_A, type TwoTenantFixture } from '../_helpers/store-conformance.js';
 
-// The groups the three called tools need.
 const NEEDED = ['dagReads', 'reports'] as const;
 type Needed = StoreWith<(typeof NEEDED)[number]>;
 type Runner = (call: GroupToolCall<(typeof NEEDED)[number]>) => Promise<string>;
-// Each call with the tool body it runs, so the tools' own reads can be counted apart from the host.
 const CALLS: readonly (readonly [string, Record<string, string>, Runner])[] = [
   ['hippo_drill', { summary_id: 'sum_none' }, runDrillTool],
   ['hippo_assemble', { session_id: 'sess-none' }, runAssembleTool],
   ['hippo_status', {}, runStatusTool],
 ];
 
-/** A reply from a tool that ran: a result with content, neither an error nor a refusal. */
 function expectRan(reply: McpResponse): void {
   expect(reply).toMatchObject({ result: { content: [{ type: 'text' }] } });
   expect(reply).not.toMatchObject({ result: { isError: true } });
 }
 
-/** A store that counts every read of a NEEDED group property, whatever function makes it. */
 interface CountingStore<S extends HippoStore> {
   readonly store: S;
   readonly reads: () => number;
@@ -78,7 +73,6 @@ describe('MCP tools on a served store', () => {
     const { store, reads } = counting(portOnlyStore(fixture.dir, [...NEEDED]));
     const alone = counting(portOnlyStore(fixture.dir, [...NEEDED]));
     bindMcpTools(alone.store);
-    // One bind reads each group a tool needs, so the count is live.
     expect(alone.reads()).toBeGreaterThan(0);
 
     handle = await serve({ hippoRoot: fixture.dir, port: 0, store });
@@ -97,7 +91,6 @@ describe('MCP tools on a served store', () => {
     }
     const served = reads() - atBoot;
 
-    // The same tool bodies called directly: their reads are the tools' own and nothing else.
     const own = counting(portOnlyStore(fixture.dir, [...NEEDED]));
     const caller: McpCaller<Needed> = {
       hippoRoot: fixture.dir,

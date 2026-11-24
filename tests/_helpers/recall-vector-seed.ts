@@ -1,5 +1,3 @@
-// The golden seed's extra rows plus a vector for every local row and particles for most, so hybrid and physics recall
-// rank by more than BM25 when the recall order and surface snapshot tests replay it.
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setMeta } from '../../src/db/index.js';
@@ -12,7 +10,6 @@ import { FAKE_NOW, seedPortBranches } from './recall-golden-seed.js';
 import { loadEntriesByIds } from './root-forms.js';
 
 const MODEL = 'hashed-16';
-// Rows with a vector and no particle rank in physics' classic pool, so both physics pools are pinned.
 const NO_PARTICLE = new Set(['mem_p_fill0', 'mem_p_noise']);
 
 /** Vectors for every local row and particles for most, so the vector arm and physics scoring both change the order. */

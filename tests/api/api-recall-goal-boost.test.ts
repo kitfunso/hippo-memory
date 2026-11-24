@@ -1,11 +1,3 @@
-/**
- * v1.7.4 -- api.recall plumbs RecallOptions.sessionId through to the
- * boostByGoals helper on its primary BM25 band, BEFORE projection to
- * RecallResultItem and BEFORE fresh-tail / summary appendix rows are
- * appended. Pinned end-to-end through the api surface (not through CLI/MCP/
- * HTTP -- those have their own integration tests).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import path from 'node:path';
@@ -40,9 +32,6 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   });
 
   it('boosts the goal-tagged memory above an unrelated, query-matching one when sessionId set', async () => {
-    // Both rows mention "auth" so BM25 surfaces both. Without the boost, the
-    // ui-tagged row outranks (or ties) the goal-tagged one. With the boost,
-    // fix-auth wins.
     const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
@@ -51,7 +40,6 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     const ids = result.results.map((r) => r.id);
     expect(ids).toContain(goalMatch.id);
     expect(ids).toContain(unrelated.id);
-    // goalMatch must outrank unrelated post-boost.
     expect(ids.indexOf(goalMatch.id)).toBeLessThan(ids.indexOf(unrelated.id));
   });
 
@@ -74,7 +62,6 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   });
 
   it("goalTag override SUPPRESSES the boost (mirrors the CLI goalTag === '' gate)", async () => {
-    // Sanity: same setup as the first test but with goalTag set.
     const goalMatch = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
     const unrelated = await remember(ctx, { content: 'auth UI polish', tags: ['ui'] });
     await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
@@ -87,7 +74,6 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
     });
     expect(result.results.some((r) => r.id === goalMatch.id)).toBe(true);
     expect(result.results.some((r) => r.id === unrelated.id)).toBe(true);
-    // No goal_recall_log row written (boost suppressed).
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(db, `SELECT COUNT(*) AS c FROM goal_recall_log WHERE goal_id = ?`, goal.id);
@@ -100,7 +86,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
   it('omitting sessionId keeps the old behaviour (no boost, no log)', async () => {
     const goal = await pushGoal(hippoRoot, { sessionId, tenantId, goalName: 'fix-auth' });
     const m = await remember(ctx, { content: 'auth bug fix details', tags: ['fix-auth'] });
-    await retrieve(ctx, { query: 'auth', window: { limit: 10 } }); // no sessionId
+    await retrieve(ctx, { query: 'auth', window: { limit: 10 } });
     const db = openHippoDb(hippoRoot);
     try {
       const count = countRows(
@@ -109,7 +95,7 @@ describe('api.recall + RecallOptions.sessionId goal-stack boost', () => {
         goal.id,
         m.id,
       );
-      expect(count).toBe(0); // no boost, no log row
+      expect(count).toBe(0);
     } finally {
       closeHippoDb(db);
     }

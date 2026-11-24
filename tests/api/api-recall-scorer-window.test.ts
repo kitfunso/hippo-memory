@@ -1,18 +1,3 @@
-/**
- * F3 (v1.7.0): `RecallOptions.scorerWindow` opt-in for the candidate pool
- * the scorer evaluates, separate from `limit` (results returned).
- *
- * Codex mk2-pass P0-1: defaulting `scorerWindow` to `limit` would have
- * shrunk the candidate pool and killed overflow summaries. The default
- * MUST preserve every pre-v1.7.0 caller's behaviour: candidates load
- * up to the store-internal default (200), `limit` slices the BM25-ranked
- * top-N, fresh-tail and summary substitution can extend the result count
- * above `limit`. F3 only adds an OPT-IN to widen the candidate pool.
- *
- * Codex mk2-pass P1-1: F3 does NOT introduce a hard cap. Existing API
- * shape preserved.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -45,12 +30,6 @@ describe('RecallOptions.scorerWindow', () => {
   });
 
   it('scorerWindow can widen the candidate pool above limit (proves widening)', async () => {
-    // Codex diff-pass P2 #4: original assertion `total <= 25 && total > 0`
-    // would pass even if the implementation accidentally loaded only
-    // `limit` candidates. Strengthen: insert 30 raws all matching the
-    // query, request scorerWindow: 25, assert total > limit AND
-    // total === 25 (the FTS path under SQLite returns exactly LIMIT
-    // matching rows when more than LIMIT exist).
     writeEntriesTogether(
       root,
       Array.from({ length: 30 }, (_, i) => makeRaw(`zeta ${i}`)),
@@ -60,9 +39,7 @@ describe('RecallOptions.scorerWindow', () => {
       window: { limit: 5, scorerWindow: 25 },
     });
     expect(result.windowSize).toBe(25);
-    // Wider than limit — proves scorerWindow actually widened the pool.
     expect(result.total).toBeGreaterThan(5);
-    // FTS5 + LIMIT 25 against a 30-row matching population returns 25.
     expect(result.total).toBe(25);
   });
 
@@ -76,9 +53,6 @@ describe('RecallOptions.scorerWindow', () => {
       } catch (err) {
         thrown = err;
       }
-      // Per-iteration code assertion catches a regression where one of the
-      // bad values (e.g. NaN) sneaks through and the throw comes from a
-      // downstream FTS LIMIT instead of our typed validator.
       // SAFETY: recall() with an invalid scorerWindow always throws
       // RecallContractError; this it.each case exists to prove that per bad
       // value below.
@@ -93,37 +67,24 @@ describe('RecallOptions.scorerWindow', () => {
   );
 
   it('limit semantics unchanged: caps base BM25 hits, fresh-tail/summary can expand', async () => {
-    // Pre-v1.7.0 behaviour: limit caps BM25 base, fresh-tail and summary
-    // substitutions extend above. Verify F3 didn't change this.
     for (let i = 0; i < 10; i++) writeEntry(root, makeRaw(`omega ${i}`));
     const result = await retrieve(ctxFor(root), {
       query: 'omega',
       window: { limit: 3, freshTailCount: 5 },
     });
-    // Base ranked: <= limit (3). Fresh-tail can add more.
-    // Ranked items mark isFreshTail on the recent set; a row may be both
-    // a BM25 hit AND fresh-tail. The returned `results` length is
-    // baseRanked + freshRanked-not-already-in-baseRanked + summaryRanked.
-    // Write-clock ties decide how many of the 3 base rows are also among the 5 newest, so the total sits in [5, 8].
     expect(result.results.length).toBeGreaterThanOrEqual(5);
     expect(result.results.length).toBeLessThanOrEqual(8);
-    // Each of the 5 newest raws is marked in the base band or added after it.
     const freshOnes = result.results.filter((r) => r.isFreshTail);
     expect(freshOnes).toHaveLength(5);
   });
 
   it('scorerWindow=1 (smallest legal value) is accepted and honoured', async () => {
-    // Validator at src/api/index.ts accepts `>= 1` integers. A regression flipping
-    // `< 1` to `<= 1` or `< 2` would not be caught by the existing 0-rejection
-    // test alone. Pin the lower bound: scorerWindow=1 must NOT throw and the
-    // candidate pool must shrink to exactly 1.
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`tau ${i}`));
     const result = await retrieve(ctxFor(root), {
       query: 'tau',
       window: { limit: 5, scorerWindow: 1 },
     });
     expect(result.windowSize).toBe(1);
-    // FTS5 LIMIT 1 against a >1-row matching population returns exactly 1.
     expect(result.total).toBe(1);
   });
 });

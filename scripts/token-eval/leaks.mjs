@@ -1,4 +1,3 @@
-// G3 (prereg 164): a lesson's key phrase the agent could read before that lesson's teach voids the (sequence, seed).
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -7,16 +6,13 @@ import { agentGit } from './checks.mjs';
 import { RESTORABLE, isImported, collapse, followStat } from './surfaces.mjs';
 import { ownsPhrase } from './lessons.mjs';
 
-// Bytes as latin1 with ASCII-only case folding, so a non-ASCII phrase matches its exact UTF-8 bytes.
 const fold = (data) => Buffer.from(data).toString('latin1').replace(/[A-Z]+/g, (m) => m.toLowerCase());
 export const holds = (text, phrase) => fold(text).includes(fold(phrase));
 
-// zip (three headers), 7z, xz, zstd, rar; bzip2 is 'BZh' plus a block-size digit.
 const MAGIC = [[0x50, 0x4b, 3, 4], [0x50, 0x4b, 5, 6], [0x50, 0x4b, 7, 8], [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c], [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0], [0x28, 0xb5, 0x2f, 0xfd], [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07]];
 const startsWith = (bytes, magic) => magic.every((v, i) => bytes[i] === v);
 const isBzip2 = (b) => b[0] === 0x42 && b[1] === 0x5a && b[2] === 0x68 && b[3] >= 0x31 && b[3] <= 0x39;
 
-/** A file's folded text; null for an archive the search cannot open, which counts as a hit. */
 function searchable(bytes) {
   if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
     try {
@@ -39,20 +35,17 @@ function readOrNull(file) {
   }
 }
 
-/** Paths in commit `pre` of the workspace holding `phrase`, case-folded by git. */
 function workspaceFiles(work, pre, phrase) {
   return agentGit(work, (rgit) => {
     try {
       return rgit(['grep', '-z', '-l', '-i', '-F', '-e', phrase, pre], work);
     } catch (err) {
-      // git grep exits 1 when nothing matches.
       if (err.status === 1) return '';
       throw err;
     }
   }).split('\0').filter(Boolean).map((p) => p.slice(pre.length + 1));
 }
 
-/** Files under `dir` through every file and dir link, each real dir once, since a link may loop back up. */
 function linkedFiles(dir, rel, seen, out) {
   const real = fs.realpathSync(dir);
   if (seen.has(real)) return out;
@@ -66,7 +59,6 @@ function linkedFiles(dir, rel, seen, out) {
   return out;
 }
 
-/** An entry's files as `{e, abs}`; a link gives what its target holds, as the agent reads through it. */
 function entryFiles(root, e) {
   const abs = path.join(root, e.path);
   if (!e.link) return [{ e, abs }];
@@ -91,7 +83,6 @@ export function* surfaceBytes(root, surfaces, keys) {
 const CODEX_DB = /^codex-home\/(memories_[^/]*\.sqlite)(?:-wal|-shm)?$/i;
 const CODEX_G3_ONLY = /^codex-home\/(?:config\.toml|hooks\.json)$/i;
 
-/** The codexState files G3 reads (plan R10, R25): each memories database with its -wal and -shm as one text, and in G3 the config and hooks. */
 function codexStateTexts(root, surfaces, g3) {
   const texts = new Map();
   for (const { e, bytes } of surfaceBytes(root, surfaces, ['codexState'])) {
@@ -103,7 +94,6 @@ ${fold(bytes)}`);
   return texts;
 }
 
-/** Each lesson's key phrase in the memory surface files and the hippo store entries; an archive hit names no lesson. */
 function surfaceLeaks(lessons, { root, surfaces, stores }, g3 = false) {
   const phrases = lessons.map((l) => ({ id: l.id, folded: fold(l.keyPhrase) }));
   const hits = [];
@@ -160,7 +150,6 @@ export function assertNoPhraseLeaks(spec) {
   for (const s of spec.sequences) {
     const lessons = sequenceLessons(spec, s.id);
     for (const holder of lessons) {
-      // A reversal's teach always follows its root's, so naming the root is no leak.
       for (const l of lessons.filter((x) => x !== holder && x.id !== holder.supersedes)) {
         for (const f of ['rule', 'reason']) {
           if (holds(holder[f], l.keyPhrase)) throw new Error(`lesson ${holder.id}: its ${f} holds lesson ${l.id}'s key phrase "${l.keyPhrase}", so its teach would leak ${l.id}`);

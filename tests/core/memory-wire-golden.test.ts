@@ -1,5 +1,3 @@
-// Pins the bytes of each format that names a memory's fields, for one entry with every field set: MemoryEntry's
-// field names may change, and no stored or printed key may change with them.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,7 +26,6 @@ const savedCwd = process.cwd();
 let base: string;
 let root: string;
 
-/** Writes the entry, then the three summary columns a row write leaves to sleep. */
 function seed(): void {
   const entry = everyFieldEntry();
   writeEntry(root, entry);
@@ -76,7 +73,6 @@ describe('memory wire goldens', () => {
   it('markdown mirror: front matter bytes, and the entry it reads back', () => {
     const file = fs.readFileSync(path.join(root, 'episodic', `${everyFieldEntry().id}.md`), 'utf8');
     expect(file).toMatchSnapshot();
-    // The mirror carries no DAG cache and no search score, so those read back absent.
     const expected: MemoryEntry = {
       ...everyFieldEntry(),
       descendantCount: undefined,
@@ -121,7 +117,6 @@ describe('memory wire goldens', () => {
   it('a conflict: hippo conflicts --json, trace --json open_conflicts and the conflict mirror', async () => {
     const pair = { memoryAId: everyFieldEntry().id, memoryBId: recallableEntry().id };
     replaceDetectedConflicts(root, [{ ...pair, reason: 'deploy target', score: 0.87654321 }], FAKE_NOW);
-    // A row write refreshes the side mirrors, the conflict one among them.
     writeEntry(root, recallableEntry());
     expect(await stdoutOf('conflicts', '--json')).toMatchSnapshot();
     expect(await stdoutOf('trace', everyFieldEntry().id, '--json')).toMatchSnapshot();

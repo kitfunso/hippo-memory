@@ -1,6 +1,3 @@
-// Facts about one top-level declaration for the test-only export gate: the outer names it reads, the outer names it writes, and the I/O globals it touches.
-// A name bound by an enclosing function or class of the use is local, so a parameter that shares a module-level name is not a read of it.
-
 import ts from 'typescript';
 
 const K = ts.SyntaxKind;
@@ -20,7 +17,6 @@ const MUTATORS = new Set([
   'clear',
 ]);
 const OBJECT_WRITERS = new Set(['assign', 'defineProperty', 'defineProperties', 'setPrototypeOf']);
-// These calls hand back a value the receiver still holds, so a write through the result is a write to the receiver.
 const PASS_THROUGH = new Set(['get', 'at', 'find']);
 const PROCESS_STATE = /^(env|cwd|chdir|argv|exit|exitCode|stdout|stderr|stdin|kill|on|once|pid)$/;
 const IO_GLOBALS = new Set(['fetch', 'console', 'globalThis', 'require']);
@@ -28,7 +24,6 @@ const IO_GLOBALS = new Set(['fetch', 'console', 'globalThis', 'require']);
 const isScope = (n) => ts.isFunctionLike(n) || ts.isClassLike(n);
 const hasOwnName = (n) => ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isClassLike(n);
 
-/** Names a function, class or top-level declaration binds itself; nested functions and classes keep theirs. */
 function boundIn(scope) {
   const names = new Set();
   if (hasOwnName(scope) && scope.name) names.add(scope.name.text);
@@ -43,7 +38,6 @@ function boundIn(scope) {
   return names;
 }
 
-/** False for an identifier that names a property, a label or a declaration instead of reading a binding. */
 function isReference(id) {
   const p = id.parent;
   if (p.name === id) return ts.isShorthandPropertyAssignment(p);
@@ -52,7 +46,6 @@ function isReference(id) {
   return !ts.isImportTypeNode(p);
 }
 
-/** True inside a type; `class A extends B` runs B, so that one heritage clause is a value position. */
 function isTypePosition(n) {
   if (!ts.isTypeNode(n)) return false;
   if (!ts.isExpressionWithTypeArguments(n)) return true;
@@ -62,14 +55,12 @@ function isTypePosition(n) {
   );
 }
 
-/** The expressions a node writes to: assignment targets, `++`/`--` operands, `delete` operands and receivers of mutating calls. */
 function writeTargets(n) {
   if (
     ts.isBinaryExpression(n) &&
     n.operatorToken.kind >= K.FirstAssignment &&
     n.operatorToken.kind <= K.LastAssignment
   ) {
-    // Only an assignment target can destructure; `[...a, B].sort()` builds a new array and writes neither name.
     return leaves(n.left);
   }
   if (
@@ -86,7 +77,6 @@ function writeTargets(n) {
   return onObject && OBJECT_WRITERS.has(n.expression.name.text) && n.arguments[0] ? [n.arguments[0]] : [];
 }
 
-/** Splits a destructuring target (`[a, b.c] = ...`, `({ x: d.e } = ...)`) into the single expressions it writes. */
 function leaves(e) {
   if (ts.isArrayLiteralExpression(e)) {
     return e.elements.flatMap((x) => leaves(ts.isSpreadElement(x) ? x.expression : x));
@@ -106,7 +96,6 @@ function leaves(e) {
   return [e];
 }
 
-/** The binding a written expression hangs off (`a.b[0].c` is `a`), with the property read straight off it. */
 function rootOf(expression) {
   let e = expression;
   let prop = null;

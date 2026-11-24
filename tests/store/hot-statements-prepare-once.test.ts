@@ -1,4 +1,3 @@
-// A statement a request runs is prepared once per handle, however many calls read it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';

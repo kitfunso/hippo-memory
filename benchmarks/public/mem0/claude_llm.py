@@ -20,7 +20,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 MODEL = "claude-sonnet-5"
-# Only what the CLI needs to start and find its login: no CLAUDE_*, ANTHROPIC_* or key variables reach it.
 KEEP_ENV = {
     "APPDATA", "COMPUTERNAME", "COMSPEC", "HOME", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "NUMBER_OF_PROCESSORS",
     "OS", "PATH", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROGRAMDATA", "PROGRAMFILES", "PROGRAMFILES(X86)",
@@ -28,11 +27,10 @@ KEEP_ENV = {
 }
 LIMIT_RE = re.compile(r"usage limit|rate limit|hit your limit|limit reached|resets", re.I)
 MAX_FAILURES, MAX_JSON_MISSES = 4, 3
-DEADLINE_S = 11 * 3600  # slot waits, runs and retries included, so a call fails inside the 12 h client timeouts
+DEADLINE_S = 11 * 3600
 
 
 def json_reply(text: str) -> dict | None:
-    """The JSON object in a reply, found the way Mem0 finds it: a whole-reply code fence, else the outer braces."""
     t = text.strip()
     fenced = re.match(r"^```[a-zA-Z0-9]*\n([\s\S]*?)\n```$", t)
     for cand in (fenced.group(1) if fenced else t, t[t.find("{"): t.rfind("}") + 1]):
@@ -46,8 +44,6 @@ def json_reply(text: str) -> dict | None:
 
 
 class ToolUse(RuntimeError):
-    """A reply whose run used a tool: logged as an ask that is never valid (prereg Amendment 6 revision 1 item 7)."""
-
     def __init__(self, rec: dict) -> None:
         super().__init__(f"{rec['tag']}: the reply used a tool: {rec['tools']}")
         self.rec = rec
@@ -65,12 +61,11 @@ class Claude:
         self.lock = threading.Lock()
         self.slots = threading.BoundedSemaphore(slots)
         self.env = {k: v for k, v in os.environ.items() if k.upper() in KEEP_ENV}
-        # Benchmark load goes on the founder's subscription token, never the interactive login (Amendment 6).
         if os.environ.get("BENCH_CLAUDE_OAUTH_TOKEN"):
             self.env["CLAUDE_CODE_OAUTH_TOKEN"] = os.environ["BENCH_CLAUDE_OAUTH_TOKEN"]
-        self.env["DISABLE_AUTOUPDATER"] = "1"  # one CLI version for the whole run
+        self.env["DISABLE_AUTOUPDATER"] = "1"
         ver = subprocess.run([self.exe, "--version"], capture_output=True, env=self.env, timeout=60)
-        self.cli = ver.stdout.decode("utf-8", "replace").strip()  # stamped on every record for the frozen manifest
+        self.cli = ver.stdout.decode("utf-8", "replace").strip()
 
     def _log(self, rec: dict) -> None:
         rec["ts"] = round(time.time(), 3)
@@ -85,7 +80,6 @@ class Claude:
         return path, sha
 
     def _run(self, sys_file: Path, user: str, effort: str, deadline: float) -> tuple[dict, str] | None:
-        """One `claude -p` run, or None if no slot frees up before the deadline."""
         cmd = [self.exe, "-p", "--safe-mode", "--permission-mode", "manual", "--system-prompt-file", str(sys_file),
                "--tools", "", "--model", MODEL, "--effort", effort, "--no-session-persistence", "--output-format", "json"]
         if not self.slots.acquire(timeout=max(0.0, deadline - time.monotonic())):
@@ -144,7 +138,7 @@ class Claude:
                     self._fail(base, f"{failures} failed attempts: {detail}")
                 time.sleep(min(10 * failures, max(0.0, deadline - time.monotonic())))
                 continue
-            if res.get("tools"):  # only codex_judge reports tools; the caller counts the ask and may ask again
+            if res.get("tools"):
                 rec = {**base, "event": "tool-use", "tools": res["tools"], "models": sorted(res.get("modelUsage") or {}),
                        "usage": res.get("usage"), "text": text}
                 self._log(rec)

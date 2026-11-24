@@ -1,4 +1,3 @@
-// hippo.db's Compactions group: a caller's compaction items, each call on a handle of its own.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { Handles, StoreFiles } from '../runtime/open.js';
 import {
@@ -23,8 +22,6 @@ interface WriteCallerItemsOptions {
   readonly log: Log;
 }
 
-/** A caller's items, already scrubbed, under its record: a retry of a finished request answers
- * with the first count, and a `summarised` one is reused. */
 function writeCallerItems(
   db: DatabaseSyncLike,
   { files, tenantId, req, log }: WriteCallerItemsOptions,
@@ -58,7 +55,6 @@ function writeCallerItems(
   });
 }
 
-/** A caller's items saved, with each note the save logged so the caller can show it. */
 function saveCallerItems(
   db: DatabaseSyncLike,
   files: StoreFiles,

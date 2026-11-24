@@ -1,5 +1,3 @@
-// The previous GitHub webhook secret follows Slack's rule: it works until GITHUB_WEBHOOK_SECRET_PREVIOUS_UNTIL, and
-// either connector's previous secret left with no end date gets one warning when the server starts.
 import { createHmac, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -31,7 +29,6 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-/** A fresh server, so each start reads the environment as it stands; the last one stops first. */
 async function start(): Promise<string> {
   await handle?.stop();
   handle = await serve({ hippoRoot: makeRoot('gh-previous'), host: '127.0.0.1', port: 0 });

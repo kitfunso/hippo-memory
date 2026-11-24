@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166): each graded cell's trees and verdicts are saved outside the workspace before its .git is rebuilt.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,7 +21,6 @@ describe('per-cell grading save', () => {
     expect(grade.verdicts).toEqual({ first: 'fail', final: 'pass', staleFollow: null });
     expect(grade.checkers['f1-l1']).toMatch(/^[0-9a-f]{64}$/);
 
-    // A fresh repo holding only the stub's history takes the bundle, so nothing depends on the rebuilt workspace.
     const fresh = tmp('z0-grade-fresh-');
     const g = (...args: string[]) => execFileSync('git', args, { cwd: fresh, encoding: 'utf8' }).trim();
     g('init', '-q');
@@ -32,7 +30,6 @@ describe('per-cell grading save', () => {
     expect(g('rev-parse', 'refs/stub')).toBe(grade.stub);
     expect(g('rev-parse', 'refs/grade/pre', 'refs/grade/first', 'refs/grade/final').split('\n')).toEqual([grade.pre, grade.first, grade.final]);
     expect(grade.first).not.toBe(grade.final);
-    // The teach failed its first check, so the resume ran and the final check graded its own commit.
     expect(grade).toMatchObject({ finalChecked: true, stale: null, commandsStale: null });
     expect(g('rev-parse', 'refs/grade/finalCheck')).toBe(grade.finalCheck);
     expect(g('rev-parse', 'refs/grade/finalCheck^{tree}')).toBe(g('rev-parse', 'refs/grade/final^{tree}'));
@@ -48,7 +45,6 @@ describe('per-cell grading save', () => {
 
     const n1 = JSON.parse(readFileSync(join(dir, 'n1.grade.json'), 'utf8'));
     expect(n1).toMatchObject({ verdicts: { first: null, final: null, staleFollow: null }, finalChecked: false, finalCheck: null, stale: null });
-    // a1 passed its first check, so it was never resumed and its one check is both first and final.
     const a1 = JSON.parse(readFileSync(join(dir, 'a1.grade.json'), 'utf8'));
     expect(a1).toMatchObject({ verdicts: { first: 'pass', final: 'pass' }, finalChecked: false });
     expect(a1.finalCheck).toBe(a1.first);
@@ -60,7 +56,6 @@ describe('per-cell grading save', () => {
   it('holds the stale and final-check commits, so an agent gc in the resume cannot prune them before the save (R21)', async () => {
     const { out } = isolate('grading-gc');
     const r = makeRepo();
-    // Both checkers write into work/dumps, so every check's commit has its own tree; else the final check rebuilds the stale commit and hides a lost hold.
     const dump = { check: { script: 'env-dump.mjs', args: ['exit=1'] } };
     const fam = family('f1', [lesson('f1-l1', 'Write the lesson file', { check: { script: 'env-dump.mjs', args: [] } }), lesson('f1-l2', 'Write the lesson file twice', { supersedes: 'f1-l1', ...dump })]);
     vi.stubEnv('Z0_ENV_DUMP_DIR', 'dumps');

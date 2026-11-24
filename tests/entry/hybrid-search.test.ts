@@ -1,8 +1,3 @@
-/**
- * Tests for hybrid search: BM25 + embedding vector blending.
- * Uses synthetic vectors (no Transformers.js backend needed).
- */
-
 import { afterAll, afterEach, beforeAll, beforeEach, describe, it, expect, vi } from 'vitest';
 import { hybridSearch } from '../../src/entry/folder-search.js';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
@@ -25,16 +20,11 @@ import * as path from 'node:path';
 import { makeRoot } from '../_helpers/make-root.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const MODEL = 'hashed-16';
 const IDENTITY = embeddingIndexIdentity(`openai:${MODEL}`);
 let embeddings: HashedEmbeddings;
 const roots: string[] = [];
 
-/** A real store whose provider is the local hashed-embedding server, holding exactly `vectors`. */
 function vectorRoot(vectors: Record<string, readonly number[]>): string {
   const root = makeRoot('hybrid');
   roots.push(root);
@@ -52,7 +42,6 @@ function vectorRoot(vectors: Record<string, readonly number[]>): string {
   return root;
 }
 
-/** `count` unit vectors orthogonal to `q` and to each other, so a test sets each cosine exactly. */
 function orthogonalTo(q: readonly number[], count: number): number[][] {
   const basis = [[...q]];
   for (let k = 0; basis.length <= count; k++) {
@@ -67,7 +56,6 @@ function orthogonalTo(q: readonly number[], count: number): number[][] {
   return basis.slice(1);
 }
 
-/** The unit vector whose cosine with unit `q` is `cos`, leaning toward the unit `away` orthogonal to it. */
 function withCosine(q: readonly number[], away: readonly number[], cos: number): number[] {
   const sin = Math.sqrt(1 - cos * cos);
   return q.map((x, i) => cos * x + sin * away[i]!);
@@ -82,10 +70,6 @@ afterAll(async () => {
   await embeddings.close();
   for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
 });
-
-// ---------------------------------------------------------------------------
-// Hybrid scoring tests (with synthetic embeddings)
-// ---------------------------------------------------------------------------
 
 describe('hybridSearch over stored vectors', () => {
   beforeEach(() => {
@@ -183,9 +167,7 @@ describe('hybridSearch with embeddings', () => {
       }),
     ];
 
-    // hybridSearch without hippoRoot falls back to BM25
     const results = await hybridSearch('FRED cache failure', entries, { budget: 10000 });
-    // BM25-only drops the Python row, which shares no query term.
     expect(results).toHaveLength(1);
     expect(results[0].entry.content).toMatch(/FRED|cache/i);
   });
@@ -215,7 +197,6 @@ describe('hybridSearch with embeddings', () => {
       embeddingWeight: 0,
     });
 
-    // Same number of results, same order
     expect(hybridResults.length).toBe(bm25Results.length);
     for (let i = 0; i < bm25Results.length; i++) {
       expect(hybridResults[i].entry.id).toBe(bm25Results[i].entry.id);
@@ -233,10 +214,6 @@ describe('hybridSearch with embeddings', () => {
     expect(results.length).toBe(0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// explain: score breakdown
-// ---------------------------------------------------------------------------
 
 describe('hybridSearch explain breakdown', () => {
   it('omits breakdown when explain flag is not set', async () => {
@@ -260,9 +237,6 @@ describe('hybridSearch explain breakdown', () => {
     const b = results[0].breakdown;
     expect(b?.mode).toBe('bm25-only');
     if (!b) return;
-    // In a test env without a Transformers.js backend the embedding path is off
-    // and the mode falls through to bm25-only. The hybrid-no-vec case needs
-    // a mocked embedding pipeline and is verified via live dogfooding.
     expect(b.matchedTerms).toEqual(expect.arrayContaining(['fred', 'cache']));
     expect(b.strengthMultiplier).toBeGreaterThanOrEqual(0.5);
     expect(b.strengthMultiplier).toBeLessThanOrEqual(1);
@@ -296,7 +270,6 @@ describe('hybridSearch explain breakdown', () => {
       expect(b.final).toBeCloseTo(expected, 5);
       expect(r.score).toBeCloseTo(b.final, 5);
       expect(b.sourceBump).toBe(1);
-      // Fresh memories have no outcome signal → boost should be exactly 1.
       expect(b.outcomeBoost).toBe(1);
     }
   });
@@ -319,10 +292,6 @@ describe('hybridSearch explain breakdown', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// SearchResult.cosine field
-// ---------------------------------------------------------------------------
-
 describe('SearchResult cosine field', () => {
   it('search() returns cosine=0 (no embedding path)', () => {
     const entries = [
@@ -343,20 +312,12 @@ describe('SearchResult cosine field', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// searchBoth hybrid support
-// ---------------------------------------------------------------------------
-
 describe('searchBothHybrid', () => {
   it('is exported and callable', async () => {
     const { searchBothHybrid } = await import('../../src/domain/sharing/search-both.js');
     expect(searchBothHybrid).toBeInstanceOf(Function);
   });
 });
-
-// ---------------------------------------------------------------------------
-// outcomeBoost: retrieval-time personalization
-// ---------------------------------------------------------------------------
 
 describe('outcomeBoost', () => {
   it('fresh memory with no outcome signal has boost = 1', async () => {
@@ -410,10 +371,6 @@ describe('outcomeBoost', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// MMR re-ranking
-// ---------------------------------------------------------------------------
-
 describe('mmrRerank', () => {
   function makeResult(id: string, score: number): SearchResult {
     return {
@@ -437,8 +394,6 @@ describe('mmrRerank', () => {
   });
 
   it('de-clusters near-duplicates at lambda=0.5', () => {
-    // a and b are near-duplicates; c is diverse. MMR should prefer c over b
-    // for the second slot even though b has the higher raw score.
     const a = makeResult('a', 1.0);
     const b = makeResult('b', 0.95);
     const c = makeResult('c', 0.7);
@@ -452,7 +407,7 @@ describe('mmrRerank', () => {
     };
     const ranked = mmrRerank([a, b, c], idx, 0.5, false);
     expect(ranked[0].entry.id).toBe('a');
-    expect(ranked[1].entry.id).toBe('c'); // diversity wins over raw rank
+    expect(ranked[1].entry.id).toBe('c');
     expect(ranked[2].entry.id).toBe('b');
   });
 
@@ -476,8 +431,8 @@ describe('mmrRerank', () => {
     const ranked = mmrRerank([a, b, c], idx, 0.5, true);
     expect(ranked[0].breakdown?.preMmrRank).toBe(1);
     expect(ranked[0].breakdown?.postMmrRank).toBe(1);
-    expect(ranked[1].breakdown?.preMmrRank).toBe(3); // c was 3rd by relevance
-    expect(ranked[1].breakdown?.postMmrRank).toBe(2); // now 2nd after MMR
+    expect(ranked[1].breakdown?.preMmrRank).toBe(3);
+    expect(ranked[1].breakdown?.postMmrRank).toBe(2);
   });
 
   it('leaves order unchanged when no embeddings are available for any doc', () => {
@@ -489,11 +444,6 @@ describe('mmrRerank', () => {
     expect(ranked.map((r) => r.entry.id)).toEqual(['a', 'b']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// MMR candidate cap — regression guard on the O(N^2) blowup that was
-// making recall on large stores take 50s+ per query.
-// ---------------------------------------------------------------------------
 
 describe('hybridSearch MMR cap on large candidate sets', () => {
   beforeEach(() => {
@@ -507,7 +457,6 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
     const query = 'topic content about';
     const q = hashedVector(query);
     const [cluster, headAway, tailAway] = orthogonalTo(q, 3);
-    // Every row has the same words, so BM25 ties and each row's stored cosine alone sets its relevance rank.
     const entries = Array.from({ length: 150 }, (_, i) => memory(`topic ${String(i).padStart(3, '0')} about content`));
     const HEAD_OUTLIER = 50;
     const TAIL_OUTLIER = 149;
@@ -528,10 +477,8 @@ describe('hybridSearch MMR cap on large candidate sets', () => {
 
     expect(results).toHaveLength(150);
     expect(results.filter((r) => r.breakdown?.preMmrRank !== undefined)).toHaveLength(100);
-    // The head outlier proves MMR ran: off the cluster, it jumps the near-duplicates ranked above it.
     const head = results.find((r) => r.entry.id === entries[HEAD_OUTLIER]!.id)!.breakdown!;
     expect(head.postMmrRank!).toBeLessThan(head.preMmrRank!);
-    // The tail outlier would jump them too, but past the cap it keeps its last place.
     expect(results.slice(100).map((r) => r.entry.id)).toEqual(entries.slice(100).map((e) => e.id));
   });
 });

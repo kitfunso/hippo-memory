@@ -1,5 +1,3 @@
-// The GitHub connector's tables: event log, dead-letter queue, tenant routing and backfill cursors.
-
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { ConnectorEventRecord } from '../../../base/ports/store.js';
 import {
@@ -96,8 +94,6 @@ export function githubRoute(
   }
   const tenants = repoFullName ? repoTenants(db, repoFullName) : [];
   if (tenants.length === 1) return { tenantId: tenants[0]! };
-  // Nothing in an event without an installation id says which tenant sent it, so a shared name goes
-  // to neither.
   if (tenants.length > 1) {
     log.warn('github webhook: two tenants registered this repository; refusing the route', {
       repo: repoFullName ?? undefined,
@@ -107,8 +103,6 @@ export function githubRoute(
   return { tenantId: null, routes: rowCount(db, 'installations') + rowCount(db, 'repositories') };
 }
 
-/** Up to two of the tenants that registered `repoFullName`, which is enough to tell one owner
- * from a shared name. */
 function repoTenants(db: DatabaseSyncLike, repoFullName: string): string[] {
   const sql = `SELECT DISTINCT tenant_id FROM github_repositories WHERE repo_full_name = ? ORDER BY tenant_id LIMIT 2`;
   // SAFETY: the SELECT names one column, which the schema declares TEXT NOT NULL.

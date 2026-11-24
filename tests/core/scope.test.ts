@@ -16,12 +16,7 @@ describe('envActiveScope', () => {
   });
 
   it('returns null when no env vars set and on default branch', () => {
-    // In CI/test, we are typically on master/main, so envActiveScope should return null
-    // or a feature branch name. We can only guarantee null when all env vars are clear
-    // and we mock the git call. For unit purity, just verify env var priority.
     const result = envActiveScope();
-    // If we're on master/main/develop/dev, result is null.
-    // If on a feature branch, result is the branch name. Both are valid.
     expect(result === null || isString(result)).toBe(true);
   });
 
@@ -55,7 +50,6 @@ describe('envActiveScope', () => {
     vi.stubEnv('HIPPO_SCOPE', '   ');
     vi.stubEnv('GSTACK_SKILL', '');
     const result = envActiveScope();
-    // Should fall through to git branch or null
     expect(result !== '   ' && result !== '').toBe(true);
   });
 });

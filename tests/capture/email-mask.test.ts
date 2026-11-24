@@ -1,4 +1,3 @@
-// No raw email address is stored: the session digest, capture from a transcript and the handoff fields all mask it.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

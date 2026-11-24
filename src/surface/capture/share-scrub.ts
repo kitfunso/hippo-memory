@@ -1,4 +1,3 @@
-// The scrub for transcript text that leaves the machine it was typed on.
 import { maskHomePaths } from '../../base/util/home-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 

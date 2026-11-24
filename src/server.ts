@@ -37,12 +37,10 @@ export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResul
 }
 
 export { serve } from './surface/server/boot.js';
-// A worker process embeds the store's memories: folderIndex builds the target embedAll takes.
 export { embedAll } from './domain/search/embed-memories.js';
 export { folderIndex } from './surface/folder-index.js';
 export { promptHookContext } from './surface/server/prompt-hook-context.js';
 
-// Add-on packages mint and revoke keys through these without importing the whole api surface.
 export {
   BadRequestError,
   ConflictError,
@@ -79,31 +77,20 @@ export {
 export type { Role, RoleFromGroups, RoleGroups, RoleLevel } from './base/scope/role.js';
 export { admitProjectWrite } from './api/project-write-gate.js';
 export type { ProjectWriteCall, ProjectWriteGate } from './api/types.js';
-// ServeOptions takes a HippoStore; the rest of the store contract is on hippo-memory/store-kit.
 export type { HippoStore } from './base/ports/store-index.js';
-// What a caller sets as Context.detached to keep the embeds a call hands off.
 export type { DetachedWork } from './domain/search/detached-work.js';
-// An add-on route replies 4xx with HttpError, renders the prompt hook elsewhere with
-// promptHookContext, and types its body as JsonValue.
 export { HttpError } from './base/errors/http-errors.js';
 export type { CallerProject } from './api/prompt-hook.js';
 export type { JsonValue } from './base/util/json.js';
-// A session-end route stores the turns its caller read from a transcript on the caller's own
-// machine; it narrows its Context with store-kit's hasGroup(ctx.store, 'captures') first.
 export {
   captureSessionTexts,
   type CaptureContext,
   type SessionCaptureRequest,
   type SessionCaptureResult,
 } from './surface/capture/session-texts.js';
-// An add-on's install step mints the first admin key into a store folder it names, which `hippo
-// auth create` cannot reach.
 export type { AuthCreateOptions, AuthCreateResult };
 export { ownerOrSubject } from './api/index.js';
-// A route that writes for a session binds it to the caller's owner first.
 export { bindSessionOwner } from './api/auth/session-owners.js';
-// A hook route for a caller on another machine: each call binds the session, then writes under the
-// caller's owner and project.
 export {
   preCompactForCaller,
   type CallerHookOutput,

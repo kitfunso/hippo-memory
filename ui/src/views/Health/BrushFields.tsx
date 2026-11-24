@@ -4,7 +4,6 @@ import type { Brush } from "./canvas/scatter";
 
 interface BrushFieldsProps {
   brush: Brush | null;
-  /** Changes when the brush moved from the canvas, so the uncontrolled inputs show the new numbers. */
   rev: number;
   maxAgeDays: number;
   onChange: (brush: Brush | null) => void;

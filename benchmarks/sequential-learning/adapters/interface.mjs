@@ -69,7 +69,6 @@ export function createAdapter(adapter) {
       throw new Error(`Adapter.${key} must be a function`);
     }
   }
-  // v1.7.5 -- pushGoal / completeGoal must be supplied as a pair.
   const hasPush = 'pushGoal' in adapter;
   const hasComplete = 'completeGoal' in adapter;
   if (hasPush !== hasComplete) {

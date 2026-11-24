@@ -1,8 +1,3 @@
-// By hand only, after npm run build: node --expose-gc benchmarks/vector-index/bench.mjs. Env: N (vectors, 20000),
-// MODE (store: the store worker's graph against the scan on a real store; graph: the bare graph, with M and EFC;
-// crossover: scan against graph p50 at each size in NS, which sets VECTOR_GRAPH_THRESHOLD; oneshot: a fresh process's
-// read at each size in NS, by scan and from the saved graph file, and a writer's waits during the file's build) and NOISE
-// (spread of each cluster, 2: two points of a cluster sit at cosine about 0.2, against 0 +- 0.05 for the rest).
 import { execFileSync, spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -52,7 +47,6 @@ function unit(v) {
 const NOISE = Number(process.env.NOISE ?? 2);
 const noise = NOISE / Math.sqrt(DIM);
 
-// Random unit vectors around n / 100 random unit centres, and queries drawn around the same centres.
 function dataset(n) {
   const centres = Array.from({ length: Math.max(1, n / 100) }, () => unit(Float32Array.from({ length: DIM }, gauss)));
   const point = (c) => unit(Float32Array.from(centres[c], (x) => x + gauss() * noise));
@@ -98,7 +92,6 @@ async function timed(fn) {
   return { out, took: performance.now() - start };
 }
 
-// No limit, as recall and context ask: the store's default of 50 rows, of which recall@10 scores the first 10.
 const spec = (tenantId) => ({ tenantId, scope: { mode: 'default-deny' }, includeSuperseded: false });
 
 async function builtGraphs(root, db, n, query) {
@@ -138,7 +131,6 @@ async function storeMode() {
         `${ms(pct(graphMs, 0.95))} scan p50/p95 ms=${ms(pct(scanMs, 0.5))}/${ms(pct(scanMs, 0.95))}`,
     );
   }
-  // What the graph holds, measured as what dropping it frees.
   const held = await heapMb();
   graphs.close();
   graphs = undefined;
@@ -147,7 +139,6 @@ async function storeMode() {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
-// Scan and graph p50 at each size: the threshold is the first size where the graph answers faster.
 async function crossoverMode() {
   const sizes = (process.env.NS ?? '1000,5000,10000,20000,50000').split(',').map(Number);
   for (const n of sizes) {
@@ -205,19 +196,15 @@ async function graphMode() {
   }
 }
 
-// One nearest-row read through the store in a fresh process, as a one-shot CLI recall makes it: with no store worker
-// it reads the saved graph file when there is one and scans when there is not.
 async function oneshotRead() {
   const { root, q } = JSON.parse(process.env.ONESHOT);
   const query = JSON.parse(fs.readFileSync(path.join(root, 'queries.json'), 'utf8'))[q];
   const { vectors } = sqliteStore(root);
-  // Opens the store first, so the timing holds the read alone.
   await vectors.stored('vectors', ['none']);
   const { out, took } = await timed(() => vectors.nearestEntries(query, spec(ALL_TENANTS)));
   console.log(JSON.stringify({ took, ids: out.slice(0, K).map((e) => e.id) }));
 }
 
-// Commits with no busy wait until the parent drops a stop file, so any write a build blocks fails as busy.
 async function oneshotWriter() {
   const { root } = JSON.parse(process.env.ONESHOT);
   const db = openHippoDb(root);
@@ -254,7 +241,6 @@ function readInChild(root, q, into) {
   into.ids.push(read.ids);
 }
 
-// Scan and file reads take turns query by query, so a load on the machine falls on both alike.
 function oneshotReads(root) {
   const file = graphFilePath(root, DIM);
   const scan = { took: [], ids: [] };
@@ -269,7 +255,6 @@ function oneshotReads(root) {
   return { scan, file: fromFile };
 }
 
-// Builds and saves the file as a sleep does, while a writer in another process commits as fast as it can.
 async function savedUnderWrites(root) {
   const env = childEnv('oneshot-writer', { root });
   const child = spawn(process.execPath, [fileURLToPath(import.meta.url)], { env });

@@ -1,6 +1,3 @@
-// The Anthropic Messages adapter behind the Llm port: one user prompt in, the reply text or a typed
-// failure out.
-
 import type { Llm, LlmReply, LlmRequest, LlmUsage } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
 
@@ -14,12 +11,9 @@ import { redactSecretsStrict } from '../base/util/secret-detect.js';
 const MESSAGES_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2023-06-01';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
-// The error body names the cause (bad key, no credit, unknown model) in its first line or two.
 const ERROR_SNIPPET_CHARS = 256;
 const UTF8_MAX_BYTES_PER_CHAR = 4;
 
-/** The first text block's text, trimmed; empty when the reply has no such block. A thinking
- * model puts its thinking block first. */
 function firstText(reply: { [key: string]: JsonValue }): string {
   const blocks = Array.isArray(reply.content) ? reply.content : [];
   const first = blocks.find((block) => isJsonObject(block) && isJsonString(block.text));
@@ -27,7 +21,6 @@ function firstText(reply: { [key: string]: JsonValue }): string {
   return isJsonString(text) ? text.trim() : '';
 }
 
-/** The reply's billed tokens, or undefined when its usage block is missing or malformed. */
 function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
   const usage = reply.usage;
   if (!isJsonObject(usage)) return undefined;
@@ -38,7 +31,6 @@ function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
 
 export interface AnthropicConnection {
   readonly apiKey: string;
-  /** Injected for tests; defaults to the real fetch. */
   readonly fetcher?: typeof fetch;
 }
 
@@ -47,12 +39,7 @@ export function anthropicLlm(connection: AnthropicConnection): Llm {
   return { send: (request) => sendMessage(connection, request) };
 }
 
-/**
- * The start of a failed reply's body, on one line with any key-shaped text masked; empty when the
- * body cannot be read.
- */
 async function errorSnippet(res: Response): Promise<string> {
-  // The status is the failure reported; a body that cannot be read only costs its snippet.
   const body = await readCappedText(res, ERROR_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR).catch(
     (err: Error) => {
       log.warn(
@@ -62,12 +49,9 @@ async function errorSnippet(res: Response): Promise<string> {
       return '';
     },
   );
-  // Masked before the cut, so a key that straddles the cut is never left half shown.
   return redactSecretsStrict(body.replace(/\s+/g, ' ').trim()).slice(0, ERROR_SNIPPET_CHARS);
 }
 
-/** The reply's first text block, trimmed; a reply with no text is a failure of kind 'empty'.
- * Never throws. */
 async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Promise<LlmReply> {
   let headers: Headers;
   // fetch's header error quotes the value, so the key; only a fixed text leaves.
@@ -114,7 +98,6 @@ async function sendMessage(connection: AnthropicConnection, req: LlmRequest): Pr
       text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
     return usage === undefined ? reply : { ...reply, usage };
   } catch (err) {
-    // The parse error under this message quotes the reply.
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
 }
@@ -137,7 +120,6 @@ function postMessage(
       }),
       signal: req.signal,
     },
-    // A message call stores nothing on the far side, so an overloaded 529 is replayed as a 429 is.
     {
       timeoutMs,
       totalMs: llmTotalMs(timeoutMs),

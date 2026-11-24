@@ -1,4 +1,3 @@
-// Reads a JSON file from disk; src/base/util/json.ts holds the value type and its guards.
 import * as fs from 'node:fs';
 import { ignoringCodes, PATH_UNREADABLE } from '../base/util/expected-errors.js';
 import { parseJson, tryParseJson, type JsonValue } from '../base/util/json.js';

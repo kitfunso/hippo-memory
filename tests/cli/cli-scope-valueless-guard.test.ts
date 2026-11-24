@@ -1,6 +1,3 @@
-// One global guard in CLI dispatch exits 1 on any `--scope` that is not a non-empty string, on every command.
-// Before it, a value-less `--scope` became the literal scope 'true' at some sites and was dropped at others.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -40,7 +37,6 @@ afterEach(() => {
 });
 
 describe('global --scope value-less guard: exit-1 cases', () => {
-  // The guard fires pre-dispatch, so command-specific argument validity does not matter here.
   it.each([
     { label: 'remember', args: ['remember', 'some memory content', '--scope'] },
     { label: 'recall', args: ['recall', 'some query', '--scope'] },
@@ -58,14 +54,12 @@ describe('global --scope value-less guard: exit-1 cases', () => {
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // '' parses like value-less (falsy, so the boolean branch fires); '   ' is a real string the .trim() branch must catch.
   it.each(['', '   '])('recall: --scope %j exits 1', async (value) => {
     const res = await hippoRun('recall', 'some query', '--scope', value);
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(USAGE_MSG);
   });
 
-  // Pins the GLOBAL semantics: handleStatus never reads --scope, yet the guard still exits 1 before dispatch.
   it('status (a command that ignores --scope today): value-less --scope still exits 1 (pins global-guard semantics)', async () => {
     const res = await hippoRun('status', '--scope');
     expect(res.status).toBe(1);
@@ -78,12 +72,9 @@ describe('valued --scope regression coverage', () => {
     await hippo('wm', 'push', '--scope', 'projX', '--content', 'wm item one');
     expect(await hippo('wm', 'read', '--scope', 'projX')).toContain('wm item one');
 
-    // Current contract, pinned not desired: a bare `wm read` applies no scope filter (wmRead), so scope-X items show.
     expect(await hippo('wm', 'read')).toContain('wm item one');
   });
 
-  // assemble forwards --scope to api.assemble's exact mode (passesScopeFilterForRecall), unlike recall's additive unlock:
-  // only rows whose envelope scope equals it pass, so NULL-scope and other scopes are excluded.
   it('assemble --scope X pins CURRENT exact-narrowing behavior (api.assemble -> passesScopeFilterForRecall)', async () => {
     const hippoDir = join(home, '.hippo');
     const sessionId = 'sess-scope-pin';

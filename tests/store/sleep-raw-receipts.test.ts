@@ -1,17 +1,3 @@
-/**
- * Sleep must never try to delete a raw receipt.
- *
- * kind='raw' rows (Slack / GitHub connector messages, `hippo import --vault`
- * notes) are append-only: a BEFORE DELETE trigger aborts any DELETE, and
- * archiveRawMemory is the only sanctioned removal path. Two sleep phases used
- * to issue a plain DELETE for them, which aborted the whole sleep and every
- * later one:
- *   - the consolidate decay pass, once a receipt faded below the threshold
- *     (about 30 days unrecalled at the default 7-day half-life);
- *   - the quality audit, for any receipt shorter than 10 characters ("lgtm"),
- *     which sleep-never-deletes-raw-or-pinned.test.ts pins through api.sleep.
- * Real SQLite throughout, no mocks.
- */
 import { describe, it, expect } from 'vitest';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
 import { consolidate } from '../../src/index.js';
@@ -24,12 +10,9 @@ import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 
-/** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
-// Replay off keeps the decay assertions deterministic (replay re-strengthens a random sample of survivors).
-// Dormant off: these tests pin the delete path (tests/store/dormant-memories.test.ts covers the dormant default).
 const RAW_CONFIG = { replay: { count: 0 }, dormant: { enabled: false } };
 
 function aged(entry: MemoryEntry, days: number): MemoryEntry {
@@ -72,7 +55,6 @@ describe('sleep keeps raw receipts instead of aborting on the append-only trigge
 
     const ids = loadAllEntries(home, 'default').map((e) => e.id);
     expect(ids).toContain(receipt.id);
-    // The ordinary faded memory is still removed: the batch committed.
     expect(ids).not.toContain(faded.id);
     expect(result.removed).toBe(1);
   });

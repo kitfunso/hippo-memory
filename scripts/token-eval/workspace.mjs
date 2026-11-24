@@ -1,4 +1,3 @@
-// Task workspaces: the stub CLAUDE.md base, checkout without the future, and the instruction-file carry (prereg line 80).
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -6,7 +5,6 @@ import { git, gitSpawn } from './exec.mjs';
 import { HIPPO_ARMS } from './arms.mjs';
 
 export const STUB_CLAUDE_MD = '# Instructions for coding agents working in this repository.\n';
-// X3's stub is committed, never appended, so the carry cannot copy it twice (E6 plan D8).
 export const X3_STUB = `${STUB_CLAUDE_MD}@AGENTS.md\nWhen you receive a correction, add it to AGENTS.md.\n`;
 const STUB_IDENT = {
   GIT_AUTHOR_NAME: 'z0-eval', GIT_AUTHOR_EMAIL: 'z0-eval@localhost', GIT_AUTHOR_DATE: '2000-01-01T00:00:00Z',
@@ -43,7 +41,6 @@ export function isInstructionPath(rel) {
   return NAMES.has(parts[parts.length - 1]);
 }
 
-// Not carried between tasks, yet a reader who saw one could guess the arm.
 const MEMORY_NAMES = ['AGENTS.override.md', 'MEMORY.md'];
 /** The one list of instruction and memory files that G5's reader diff and its command filter both hide. */
 export const READER_HIDDEN = [...NAMES, ...MEMORY_NAMES, '.claude/rules'];
@@ -68,7 +65,6 @@ export function instructionSnapshot(workDir) {
   return snap;
 }
 
-/** Blob entries in a commit's tree as `[mode, path]` (gitlinks dropped). */
 function treeBlobs(workDir, commit) {
   return git(['ls-tree', '-r', '-z', '--full-tree', commit], workDir).split('\0').filter(Boolean)
     .map((line) => line.split('\t'))
@@ -103,7 +99,6 @@ const SLEEP = new Int32Array(new SharedArrayBuffer(4));
 const LOCKED = new Set(['EPERM', 'EBUSY', 'ENOTEMPTY']);
 const GONE = new Set(['ENOENT', 'ENOTDIR']);
 
-/** fn's result, or `absent` when the path vanished after the purge listed it. */
 function unlessGone(fn, absent) {
   // A detached hippo SessionEnd worker can still be closing SQLite, which deletes hippo.db-wal and hippo.db-shm.
   try {
@@ -114,14 +109,12 @@ function unlessGone(fn, absent) {
   }
 }
 
-/** rmSync, retried for about 11 seconds while a file stays locked, then a throw naming the locked path. */
 function rm(p) {
   // A process the agent or the hidden tests left running can hold a file after it is told to stop, and rmSync's own maxRetries did not retry EPERM on Node 24.
   for (let attempt = 1; ; attempt++) {
     try {
       return fs.rmSync(p, { recursive: true, force: true });
     } catch (e) {
-      // A path that vanished is removed; one whose child vanished mid-removal is retried.
       if (GONE.has(e.code) && unlessGone(() => fs.lstatSync(p), null) === null) return;
       if (attempt > 10 || !(LOCKED.has(e.code) || GONE.has(e.code))) throw new Error(`Z0 workspace: cannot remove ${e.path ?? p} (${e.code ?? e.message}); a process left running from the last session may still hold it`, { cause: e });
       Atomics.wait(SLEEP, 0, 0, attempt * 200);
@@ -131,13 +124,11 @@ function rm(p) {
 
 // NTFS and Git for Windows match names in any case, so OBJECTS or .GIT is a repo piece there too.
 const fold = (name) => (win ? name.toLowerCase() : name);
-// Hippo's store never uses these names (src/store/), so in a kept .hippo each marks a repo or a piece of one.
 const GIT_NAMES = new Set(['.git', 'objects', 'refs', 'packed-refs', 'HEAD', 'commondir', 'gitdir'].map(fold));
 const holdsRepo = (entries) => entries.some((e) => ['.git', 'objects', 'commondir', 'gitdir'].includes(fold(e.name)));
 const GIT_MAGIC = ['# v2 git bundle', '# v3 git bundle', 'PACK\0\0\0\x02', 'PACK\0\0\0\x03'].map((s) => Buffer.from(s, 'latin1'));
 const list = (dir) => unlessGone(() => fs.readdirSync(dir, { withFileTypes: true }), []);
 
-/** True for a git bundle or pack file, which clones or unpacks back to the history under any name. */
 function isGitArchive(file) {
   const head = Buffer.alloc(16);
   const fd = unlessGone(() => fs.openSync(file, 'r'), null);
@@ -150,7 +141,6 @@ function isGitArchive(file) {
   }
 }
 
-/** Delete every git repo, bundle, pack and link under a kept dir: below the top a repo's whole dir, at the top only its git entries. */
 function dropRepos(dir, top) {
   let entries = list(dir);
   if (holdsRepo(entries)) {
@@ -167,15 +157,12 @@ function dropRepos(dir, top) {
   }
 }
 
-/** Empty the workspace but for the arm's own store, so nothing an agent wrote survives except what E3's surface check reads. */
 function emptyWorkspace(workDir, arm) {
-  // Emptying a work dir the agent swapped for a link would delete the link target's files, and one it deleted must not abandon the run.
   if (!fs.lstatSync(workDir, { throwIfNoEntry: false })?.isDirectory()) {
     rm(workDir);
     fs.mkdirSync(workDir, { recursive: true });
   }
   const keep = HIPPO_ARMS.has(arm) ? new Set(['.hippo']) : new Set();
-  // Git's own rules (excludes, gitlinks, -ff) are what let agent clones and submodule dirs outlive a clean, so the runner names what stays.
   for (const e of fs.readdirSync(workDir, { withFileTypes: true })) {
     if (keep.has(e.name) && e.isDirectory()) dropRepos(path.join(workDir, e.name), true);
     else rm(path.join(workDir, e.name));
@@ -191,11 +178,9 @@ export const stubRefOf = (sequenceId, t, arm) => `refs/${arm === 'X3' ? 'eval-x3
 export function checkoutBase(cacheDir, workDir, sequenceId, t, arm) {
   const stub = stubBaseCommit(cacheDir, t.baseRef, stubTextOf(arm));
   assertNoInstructionLinks(cacheDir, sequenceId, t, stub);
-  // Sequence order comes from the seed, so an earlier base can hold a later task's fix.
   emptyWorkspace(workDir, arm);
   git(['init', '--quiet'], workDir);
   for (const [k, v] of WORK_CONFIG) git(['config', k, v], workDir);
-  // Keeps a hippo arm's store out of `git status`.
   fs.appendFileSync(path.join(workDir, '.git', 'info', 'exclude'), '\n.hippo/\n');
   const ref = stubRefOf(sequenceId, t, arm);
   git(['update-ref', ref, stub], cacheDir);
@@ -219,7 +204,6 @@ export function instructionDelta(baseline, end) {
 const same = (a, b) => (a === null || b === null ? a === b : a.equals(b));
 
 function writeFile(workDir, rel, bytes) {
-  // writeHiddenTests runs with no checkout after the session, so an agent's link at the path or any parent would send the write outside the workspace.
   const parts = rel.split(/[\\/]/);
   for (let i = 0; i <= parts.length; i++) {
     const p = path.join(workDir, ...parts.slice(0, i));
@@ -230,7 +214,6 @@ function writeFile(workDir, rel, bytes) {
   fs.writeFileSync(file, bytes);
 }
 
-/** Three-way merge of the agent's version onto the new base; a conflict falls back to --union. */
 function mergeFile(rel, after, before, now, tmpRoot) {
   fs.mkdirSync(tmpRoot, { recursive: true });
   const dir = fs.mkdtempSync(path.join(tmpRoot, 'merge-'));
@@ -285,7 +268,6 @@ export function writeHiddenTests(cacheDir, workDir, t) {
 
 /** Added lines of a task's gold diff that are long enough to be a leak signal. */
 export function goldLines(cacheDir, t) {
-  // A git error throws: an empty list would silently turn the leak check off for the task.
   return git(['diff', '--no-ext-diff', '--no-color', '--no-textconv', t.baseRef, t.fixRef], cacheDir).split('\n')
     .filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1).trim()).filter((l) => l.length >= 40);
 }

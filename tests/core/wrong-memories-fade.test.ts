@@ -1,4 +1,3 @@
-// A memory marked wrong more often than right fades, whatever shields it: pinning, error tags, heavy recall.
 import { describe, expect, it } from 'vitest';
 import { applyOutcome, calculateStrength } from '../../src/entry/memory.js';
 import { netWrong } from '../../src/base/memory/strength.js';

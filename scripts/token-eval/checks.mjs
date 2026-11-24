@@ -1,4 +1,3 @@
-// Lesson checkers (prereg 37, 64): exit 0 pass, 1 fail, 3 na; anything else is a broken checker, never a verdict.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -24,14 +23,12 @@ export class WorkspaceGitError extends Error {
 // GIT_CONFIG_PARAMETERS quoting: key and value each single-quoted, so a driver name may hold '=', '.' or a quote.
 const sq = (s) => `'${s.replaceAll("'", "'\\''")}'`;
 
-/** GIT_CONFIG_PARAMETERS entries that switch off every filter driver `config --list -z --name-only` names. */
 function filtersOff(listed) {
   const names = new Set();
   for (const key of listed.split('\0')) {
     const last = key.lastIndexOf('.');
     if (key.startsWith('filter.') && last > 'filter'.length) names.add(key.slice('filter.'.length, last));
   }
-  // Empty commands make git skip the driver; required=false stops it then failing the file.
   const off = (n) => [...['clean', 'smudge', 'process'].map((k) => `${sq(`filter.${n}.${k}`)}=''`), `${sq(`filter.${n}.required`)}='false'`];
   return [...names].flatMap(off).join(' ');
 }
@@ -40,13 +37,11 @@ function filtersOff(listed) {
 export function agentGit(work, fn) {
   // A deleted work dir fails git's spawn (ENOENT) before git runs, yet it is still the agent breaking its repo.
   if (!fs.existsSync(work)) throw new WorkspaceGitError(new Error(`the work dir ${work} is gone`));
-  // GIT_DIR pinned: with .git deleted, git would otherwise walk up to whatever repo holds the workspace.
   const gitDir = { GIT_DIR: path.join(work, '.git'), GIT_WORK_TREE: work };
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-git-'));
   // A sparse checkout the agent turned on would make `add -A` skip tracked edits outside the cone.
   const sparseOff = (args, cwd, extra) => git(['-c', 'core.sparseCheckout=false', '-c', 'index.sparse=false', ...args], cwd, { ...gitDir, ...extra });
   try {
-    // An agent's filter driver would run as the runner on add and checkout-index; listed per call, so after any .git restore.
     const filterParams = filtersOff(sparseOff(['config', '--list', '--name-only', '-z'], work, {}));
     const rgit = (args, cwd, extra = {}) => sparseOff(args, cwd, { ...extra, GIT_CONFIG_PARAMETERS: filterParams });
     return fn(rgit, scratch, filterParams);
@@ -59,7 +54,6 @@ export function agentGit(work, fn) {
 }
 
 export class CheckerError extends Error {
-  // `started` false: the checker never ran, which the regrade keeps as a harness fault, never a flip (R6).
   constructor(message, stderr = '', started = true) {
     super(message);
     this.name = 'CheckerError';
@@ -82,7 +76,6 @@ export function runCheck(lesson, { work, env, preCommit, postCommit, commands, r
   const configParams = [env.GIT_CONFIG_PARAMETERS, filterParams, "'core.fsmonitor=false'"].filter(Boolean).join(' ');
   const r = spawnSync(process.execPath, [lesson.checkPath, ...(lesson.check.args ?? [])], {
     cwd: work, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 26,
-    // A checker's git reads the workspace config alone, never the operator's global hooks or diff drivers.
     env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_PARAMETERS: configParams, CHECK_PRE_COMMIT: preCommit, CHECK_POST_COMMIT: postCommit, CHECK_COMMANDS: commandsFile, ...resumeEnv, CHECK_LESSON_ID: lesson.id },
   });
   const stderr = r.stderr ?? '';
@@ -100,14 +93,12 @@ export function stateCommit(work, parent) {
     rgit(['read-tree', 'HEAD'], work, env);
     rgit(['add', '-A'], work, env);
     const tree = rgit(['write-tree'], work, env).trim();
-    // A neutral message: the agent can see this commit through `git log --all` while the task runs.
     return rgit(['commit-tree', '--no-gpg-sign', tree, '-p', parent, '-m', 'snapshot'], work, env).trim();
   });
 }
 
 // The first check's post commit, held through the resume for the grading save (166); an agent gc there would prune it.
 export const FIRST_REF = 'refs/z0/hold/first';
-// The stale and final checks' commits, held the same way for the regrade (R21).
 export const STALE_REF = 'refs/z0/hold/stale';
 export const FINAL_CHECK_REF = 'refs/z0/hold/finalCheck';
 
@@ -117,7 +108,6 @@ export function holdPre(work, sha, ref = PRE_REF) {
 }
 
 export function dropPre(work) {
-  // After the session, so a hook the agent wrote into .git/hooks must not run here.
   agentGit(work, (rgit) => {
     for (const ref of [PRE_REF, FIRST_REF, STALE_REF, FINAL_CHECK_REF]) rgit(['update-ref', '-d', ref], work);
   });

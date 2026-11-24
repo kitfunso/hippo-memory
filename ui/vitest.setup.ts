@@ -1,4 +1,3 @@
-// jsdom setup: jest-dom matchers plus stubs for the canvas 2d context and ResizeObserver it lacks.
 import '@testing-library/jest-dom/vitest';
 
 type Stub = (...args: number[]) => undefined;

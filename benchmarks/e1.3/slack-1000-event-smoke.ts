@@ -1,19 +1,3 @@
-/**
- * E1.3 1000-event Slack smoke benchmark.
- *
- * ROADMAP success criterion: ingest 1000 synthetic Slack events, replay each
- * one twice, and prove (a) exactly `count` unique memories are written
- * (idempotency holds), (b) zero outbound HTTP calls escape the connector
- * layer, (c) per-call latency stays under 500ms.
- *
- * The no-outbound-HTTP invariant is proven (review patch #5) by replacing
- * `globalThis.fetch` with a function that THROWS on any call. If a future
- * code path inside the connector ever reaches for fetch (e.g. a user
- * resolution shortcut), this smoke fails loud rather than silently lying
- * with a hardcoded 0. The original fetch is restored in `finally` so the
- * spy never poisons later tests.
- */
-
 import { ingestMessage } from '../../src/entry/eval-scripts.js';
 import { loadAllEntries } from '../../src/entry/testing.js';
 import { adminActor } from '../../src/api/index.js';
@@ -25,7 +9,6 @@ export interface SmokeOptions {
   hippoRoot: string;
   count: number;
   replay: number;
-  /** The test's session, so its calls share one handle; the CLI opens per call, as a connector does. */
   session?: RequestStores;
 }
 
@@ -47,8 +30,6 @@ export async function runSlackSmoke(opts: SmokeOptions): Promise<SmokeResult> {
   const start = Date.now();
   let calls = 0;
 
-  // Review patch #5: spy globalThis.fetch with a throwing function. The smoke
-  // fails LOUD if anything in the ingest path ever calls fetch().
   const origFetch = globalThis.fetch;
   let outboundHttp = 0;
   globalThis.fetch = (..._args: unknown[]): Promise<Response> => {
@@ -66,8 +47,6 @@ export async function runSlackSmoke(opts: SmokeOptions): Promise<SmokeResult> {
             type: 'message',
             channel: 'C1',
             user: 'U1',
-            // Use a content body well over the 3-char minimum enforced by
-            // memory.ts so synthetic events survive validation.
             text: `slack synthetic event ${i}`,
             ts: `${1700000000 + i}.000100`,
           },
@@ -91,7 +70,6 @@ export async function runSlackSmoke(opts: SmokeOptions): Promise<SmokeResult> {
   };
 }
 
-// Standalone CLI: 1000 events, replay=2, fail loud on regression.
 // Use pathToFileURL for cross-platform `import.meta.url` matching (Windows
 // emits `file:///C:/...` which `file://${process.argv[1]}` cannot match).
 const { pathToFileURL } = await import('node:url');

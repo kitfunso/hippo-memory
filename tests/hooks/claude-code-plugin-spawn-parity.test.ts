@@ -1,4 +1,3 @@
-// The plugin ships its own copy of hippo's PATH lookup and cmd.exe quoting; both must answer each case the same way.
 import { describe, expect, it } from 'vitest';
 import { splitPathList } from '../../src/base/util/env.js';
 import { cmdShimArgs } from '../../src/host/spawn-argv.js';

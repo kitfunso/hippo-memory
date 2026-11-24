@@ -46,7 +46,6 @@ describe('four-bucket cost accounting', () => {
   });
 
   it('shows why raw tokens overstate savings when input is mostly cache reads', () => {
-    // Cutting 10% of the cached history saves far less than 10% of the input bill.
     const before = { inputTokens: 5_000, cacheWriteTokens: 5_000, cacheReadTokens: 900_000, outputTokens: 0 };
     const after = { ...before, cacheReadTokens: 810_000 };
     const rawCut =
@@ -74,17 +73,14 @@ describe('bootstrap', () => {
     const clear = Array.from({ length: 200 }, () => 1 + (rand() - 0.5));
     const est = pairedBootstrap(clear);
     expect(est.estimate).toBeCloseTo(1, 1);
-    // Every draw lies in [0.5, 1.5), so no resample mean, and no interval end, can fall below 0.5.
     expect(est.low).toBeGreaterThanOrEqual(0.5);
     const noise = Array.from({ length: 200 }, () => rand() - 0.5);
     const nul = pairedBootstrap(noise);
-    // The seeded noise and the default resampler seed fix both ends, one each side of zero.
     expect(nul.low).toBeCloseTo(-0.039276, 6);
     expect(nul.high).toBeCloseTo(0.037303, 6);
   });
 
   it('gives a wider interval when clustering is respected', () => {
-    // Five repos, each with a shared offset: tasks inside a repo move together.
     const byCluster = new Map<string, number[]>();
     const offsets = [-1, -0.5, 0, 0.5, 1.2];
     offsets.forEach((o, i) =>
@@ -204,8 +200,6 @@ describe('two-level bootstrap', () => {
     expect(r.p).toBe(0);
     expect(r.iterations).toBe(10_000);
     expect(r.dropped).toBe(0);
-    // Both drawn repositories drawing family [1] twice gives mean 1, about 625 of the 10,000 resamples: the 2.5% end is
-    // index 250, inside that run.
     expect(r.low).toBe(1);
   });
 
@@ -235,7 +229,6 @@ describe('two-level bootstrap', () => {
     const ratio = (u: readonly Pair[]): number => mean(u.map((x) => x.t)) / mean(u.map((x) => x.c));
     const repos: Repository<Pair>[] = [[[{ c: 0, t: 0 }]], [[{ c: 1, t: 1 }]]];
     const r = twoLevelBootstrap(repos, ratio, { iterations: 500, nullValue: 1 });
-    // Only a resample that draws the 0/0 repository twice is dropped; default seed 1 does that 122 times in 500.
     expect(r.dropped).toBe(122);
     expect(r.iterations + r.dropped).toBe(500);
     const none = twoLevelBootstrap(data, () => Number.NaN, small);
@@ -262,12 +255,10 @@ describe('two-level bootstrap', () => {
       small,
     );
     expect(broken).toBe(0);
-    // The estimate's own call plus the 181 of default seed 1's 300 resamples that drew the family.
     expect(sawFamily).toBe(182);
   });
 
   it('draws repositories first, then every family of each drawn repository', () => {
-    // One family of one unit in A, three in B: two draws give (2,0) from AA, (1,3) from AB or BA, (0,6) from BB.
     const repos: Repository<string>[] = [[['A']], [['B'], ['B'], ['B']]];
     const seen = new Set<string>();
     twoLevelBootstrap(
@@ -278,13 +269,11 @@ describe('two-level bootstrap', () => {
       },
       { iterations: 500 },
     );
-    // The point-estimate call sees every unit: (1,3), already an allowed pair.
     expect([...seen].sort()).toEqual(['0,6', '1,3', '2,0']);
   });
 
   describe('p-value from a scripted statistic', () => {
     const repos: Repository<number>[] = [[[1]], [[2]]];
-    // The estimate call comes after the resamples, so it never shifts the sequence the p-value sees.
     const run = (seq: readonly number[], iterations: number, nullValue = 0) => {
       let call = 0;
       return twoLevelBootstrap(repos, () => seq[call++ % seq.length]!, { iterations, nullValue });
@@ -295,13 +284,11 @@ describe('two-level bootstrap', () => {
     });
 
     it('counts a sample on the null on both sides', () => {
-      // below = 2 of 8 with the tie, only 1 of 8 without it.
       expect(run([-1, 0, 1, 1, 1, 1, 1, 1], 400).p).toBeCloseTo(0.5, 12);
       expect(run([1, 0, -1, -1, -1, -1, -1, -1], 400).p).toBeCloseTo(0.5, 12);
     });
 
     it('divides by the kept samples only', () => {
-      // Per cycle of 8: 6 kept (one below, five above), so p = 2 x 1/6, not 2 x 1/8.
       const r = run([-1, Number.NaN, 1, 1, 1, Number.NaN, 1, 1], 400);
       expect(r.dropped).toBe(100);
       expect(r.p).toBeCloseTo(1 / 3, 12);
@@ -408,7 +395,6 @@ describe('verdict', () => {
     const atOne = twoLevelBootstrap(saving, ratio, { iterations: 300, nullValue: 1 });
     expect(atOne.nullValue).toBe(1);
     expect(verdict(atOne, 0.01, ratioSpec)).toEqual({ verdict: 'win', reachesMinimum: true });
-    // The same data judged around 0 sits on the harmful side of a lower-is-better ratio.
     const atZero = twoLevelBootstrap(saving, ratio, { iterations: 300 });
     expect(atZero.nullValue).toBe(0);
     expect(verdict(atZero, 0.01, ratioSpec)).toEqual({ verdict: 'loss', reachesMinimum: false });

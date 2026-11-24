@@ -1,11 +1,3 @@
-/**
- * D4 v1.12.10 — listPeers tenant-scoping.
- *
- * Pre-D4: listPeers aggregated all entries in the global store regardless
- * of tenant_id. Post-D4: optional tenantId param filters to that tenant
- * before aggregation; ALL_TENANTS is the host-wide view.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { folderStore } from '../_helpers/sharing-stores.js';
 import { listPeers } from '../../src/domain/sharing/share.js';
@@ -57,7 +49,6 @@ describe('listPeers tenant scoping', () => {
 
   beforeEach(() => {
     globalRoot = makeRoot('listpeers-tenant');
-    // Seed entries from 3 projects across 2 tenants.
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a1', project: 'projectA', tenantId: 'acme' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_a2', project: 'projectA', tenantId: 'acme' }));
     writeEntry(globalRoot, makeSharedEntry({ id: 'mem_b1', project: 'projectB', tenantId: 'acme' }));
@@ -79,7 +70,7 @@ describe('listPeers tenant scoping', () => {
     const map = new Map(peers.map((p) => [p.project, p.count]));
     expect(map.get('projectA')).toBe(2);
     expect(map.get('projectB')).toBe(1);
-    expect(map.get('projectC')).toBeUndefined(); // globex projects filtered out
+    expect(map.get('projectC')).toBeUndefined();
     expect(peers).toHaveLength(2);
   });
 

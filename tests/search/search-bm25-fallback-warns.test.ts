@@ -1,4 +1,3 @@
-// When hybrid search drops to BM25 only for a fixable reason, it says so once per process.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

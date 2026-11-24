@@ -88,7 +88,6 @@ export function githubTrustedUserIds(): ReadonlySet<number> {
     .filter(({ entry }) => entry.length > 0)
     .filter(({ entry }) => !USER_ID.test(entry) || !Number.isSafeInteger(Number(entry)));
   if (bad.length > 0) {
-    // No entry is quoted: any of them may be a secret pasted into the wrong variable.
     const named = bad.map(({ index }) => `entry ${index + 1}`).join(', ');
     throw new Error(
       `GITHUB_TRUSTED_USER_IDS has entries that are not numeric GitHub user ids: ${named}; ` +
@@ -98,8 +97,6 @@ export function githubTrustedUserIds(): ReadonlySet<number> {
   return new Set(entries.filter((entry) => entry.length > 0).map(Number));
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous
- * secret. */
 async function readSignedBody(
   request: WebhookRequest,
   secret: string,
@@ -128,8 +125,6 @@ export async function handleGitHubEventsWebhook(
   ports: WebhookPorts,
 ): Promise<void> {
   const { req, res, opts } = request;
-  // Secret and signature header before the body, so a caller with neither cannot make the server
-  // buffer one.
   const secret = envGitHubWebhookSecret();
   if (!secret) return refuseUnconfigured(request);
   const { sigStr, eventName, deliveryId, enterpriseHost } = readGitHubHeaders(req);
@@ -171,7 +166,6 @@ function refuseUnconfigured(request: WebhookRequest): void {
   request.res.end(JSON.stringify({ error: 'not found' }));
 }
 
-/** Each GitHub header, or null unless it came as a single string. */
 interface GitHubHeaders {
   readonly sigStr: string | null;
   readonly eventName: string | null;
@@ -222,7 +216,6 @@ const ALLOWED_EVENTS: ReadonlySet<string> = new Set([
 
 type SignedEnvelope = JsonValue & GitHubWebhookEnvelope;
 
-/** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedDelivery extends WebhookPorts {
   hippoRoot: string;
   res: ServerResponse;
@@ -267,13 +260,9 @@ function routingOf(body: SignedEnvelope): DlqRouting {
 
 let warnedEnterpriseUnset = false;
 
-/** Parks a delivery from a server the set GITHUB_ENTERPRISE_URL does not name, by its header or by
- * the repository URL its signed payload carries; true when it did. With the setting unset, a GHES
- * delivery gets through and one warning per process says its keys carry no host. */
 async function parkedForHost(d: SignedDelivery): Promise<boolean> {
   const sent = headerHost(d.enterpriseHost);
   if (d.site.host === undefined) {
-    // Nothing parks without a host, so no parse here; parseEnvelopeOrPark parses the body once.
     if (sent !== undefined && !warnedEnterpriseUnset) {
       warnedEnterpriseUnset = true;
       log.warn(
@@ -284,13 +273,11 @@ async function parkedForHost(d: SignedDelivery): Promise<boolean> {
     return false;
   }
   const parsed = tryParseJson(d.rawBody);
-  // A payload with no repository URL passes: the header it matched already names the server.
   const payloadSays = payloadHost(parsed);
   const error =
     hostMismatch(sent, d.site) ??
     (payloadSays === undefined ? null : payloadMismatch(sent, payloadSays, d.site));
   if (error === null) return false;
-  // A parked delivery still answers 200, so this line is how an operator sees intake stop.
   log.warn(`github webhook: parked delivery ${d.deliveryId ?? '-'} as host_mismatch: ${error}`);
   const body = parsed !== undefined && isGitHubWebhookEnvelope(parsed) ? parsed : null;
   const routing: DlqRouting =
@@ -301,8 +288,6 @@ async function parkedForHost(d: SignedDelivery): Promise<boolean> {
 }
 
 async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
-  // First of every park, so a delivery from the wrong server never parks as unroutable or
-  // parse_error, which a replay could then store under this server's keys.
   if (d.eventName !== 'ping' && (await parkedForHost(d))) return;
 
   const body = await parseEnvelopeOrPark(d);
@@ -330,7 +315,6 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
   };
   if (await dispatchGitHubEvent({ d, ctx, body, deliveryId: d.deliveryId, routing })) return;
 
-  // Header allow-listed but body shape didn't satisfy the matching guard.
   await parkAndAck(d, {
     ...routing,
     tenantId: resolvedTenant,
@@ -339,7 +323,6 @@ async function routeSignedDelivery(d: SignedDelivery): Promise<void> {
   });
 }
 
-// Fail closed on multi-tenant installs with unknown routing - same policy as Slack.
 function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<string | null> {
   return resolveTenant(
     d.store,
@@ -351,11 +334,7 @@ function resolveGitHubTenant(d: SignedDelivery, routing: DlqRouting): Promise<st
   );
 }
 
-/** Answers ping and parks every unusable body; returns the envelope only when ingest should go
- * on. */
 async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | null> {
-  // Cheap regex extraction of installation_id / repo for DLQ rows that fail to JSON.parse - gives
-  // operators something to triage.
   const installationFromRaw = (() => {
     const m = d.rawBody.match(/"installation"\s*:\s*\{[^}]*"id"\s*:\s*(\d+)/);
     return m ? m[1] : null;
@@ -375,10 +354,8 @@ async function parseEnvelopeOrPark(d: SignedDelivery): Promise<SignedEnvelope | 
     return null;
   };
 
-  // Body was signed but caller omitted the audit header. Park.
   if (d.deliveryId === null) return parkRaw('missing X-GitHub-Delivery header', 'parse_error');
 
-  // Ping fires once at hook creation. Don't ingest, don't DLQ - just pong.
   if (d.eventName === 'ping') {
     sendJson(d.res, 200, { pong: true });
     return null;
@@ -405,7 +382,6 @@ interface DispatchGitHubEventOptions {
   readonly routing: DlqRouting;
 }
 
-/** Ingests, archives or parks by event header; false when no guard matched the body. */
 async function dispatchGitHubEvent({
   d,
   ctx,
@@ -417,8 +393,6 @@ async function dispatchGitHubEvent({
   if (action === null) return false;
 
   if (action.kind === 'manual-review') {
-    // issues.deleted (admin-initiated) is logged, not archived: archiving could lose the memory if
-    // the issue moves between accounts.
     await parkAndAck(d, {
       ...routing,
       tenantId: ctx.tenantId,
@@ -426,8 +400,6 @@ async function dispatchGitHubEvent({
       bucket: 'unhandled',
     });
   } else if (action.kind === 'archive-comment') {
-    // The "deleted:" key namespace keeps this from colliding with the ingest key for the same
-    // artifact; a shared key would make hasSeenKey skip the archive.
     const idempotencyKey = computeGitHubDeletionKey(action.artifactRef, action.updatedAt);
     const r = await handleGitHubCommentDeleted(ctx, {
       artifactRef: action.artifactRef,
@@ -444,7 +416,6 @@ async function dispatchGitHubEvent({
       deliveryId,
       host: d.site.host,
       ownsBareRefs: d.site.ownsBareRefs,
-      // GitHub user ids are unique per server: the list holds only for items from the configured one.
       trustedUserIds: fromSite(d.site, headerHost(d.enterpriseHost), payloadHost(body))
         ? githubTrustedUserIds()
         : NO_TRUSTED_USER_IDS,
@@ -454,14 +425,11 @@ async function dispatchGitHubEvent({
   return true;
 }
 
-/** What a signed delivery asks for once its body has matched its event header. */
 type DeliveryAction =
   | { kind: 'ingest'; event: GitHubIngestEvent }
   | { kind: 'archive-comment'; eventName: string; artifactRef: string; updatedAt: string | null }
   | { kind: 'manual-review' };
 
-// Dispatch by event header. Type guards cross-check the body shape against the header so a payload
-// of one event type cannot satisfy another's guard.
 function deliveryAction(
   eventName: string | null,
   body: SignedEnvelope,
@@ -498,7 +466,6 @@ function deliveryAction(
         { eventName: 'pull_request_review_comment', payload: body },
         host,
       );
-      // Same "deleted:" key namespace as the issue_comment branch above.
       return {
         kind: 'archive-comment',
         eventName,

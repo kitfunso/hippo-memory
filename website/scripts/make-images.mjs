@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Draws public/favicon.svg, favicon-48.png and apple-touch-icon.png from public/logo.svg, and a 1200x630 Open Graph
-// card per built page: home is a screenshot of the built home page, the rest show their <title>. Run after
-// `astro build`, then build again; needs Chrome (or CHROME=<path>). `--social <file.png>` also draws the GitHub preview.
 import { execFile, execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -14,18 +11,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 const pub = join(root, 'public');
 const PAPER = '#f7f4ee', PAPER_2 = '#fdfbf7', INK = '#1f1b16', INK_2 = '#5e554a', ACCENT = '#1d5b43';
-const TILE = '#111417'; // the home page header
+const TILE = '#111417';
 const CHROME = process.env.CHROME
   || { win32: 'C:/Program Files/Google/Chrome/Application/chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }[process.platform]
   || 'google-chrome';
 
-// public/logo.svg is the one source of the mark, so a new icon is that file swapped and this script rerun.
 function readLogo(file) {
   const m = /<svg\b([^>]*)>([\s\S]*)<\/svg>/.exec(readFileSync(file, 'utf8'));
   const box = m && /\bviewBox="([^"]+)"/.exec(m[1]);
   if (!box) throw new Error(`${file}: needs a root <svg> with a viewBox`);
   const [x, y, w, h] = box[1].trim().split(/[\s,]+/).map(Number);
-  // Root attributes such as shape-rendering stay; size and the default namespace belong to the tile.
   const attrs = m[1].replace(/\s(?:xmlns|viewBox|width|height)="[^"]*"/g, '').trim();
   return { x, y, w, h, attrs, body: m[2] };
 }
@@ -56,7 +51,6 @@ const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.txt': 'text/plain',
 };
-// The release bar names a version, so the card leaves it out and does not date.
 const NO_BAR = '<style>.announce{display:none}</style></head>';
 
 /** Serves dist/ on a free local port, since the home page loads its modules and WebGL hero over http. */
@@ -72,7 +66,6 @@ function serveDist() {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
-/** The home page as a visitor sees it, laid out 1440 px wide and scaled down to the card. */
 async function shootHome(url, width, height, out) {
   const scale = width / 1440;
   await promisify(execFile)(CHROME, [
@@ -82,7 +75,6 @@ async function shootHome(url, width, height, out) {
   ]);
 }
 
-// <title> text arrives HTML-escaped from dist, so it goes back into HTML as is. The hero poster sits on white, so it multiplies onto the paper.
 const poster = `data:image/webp;base64,${readFileSync(join(pub, 'hero-cabinet.webp')).toString('base64')}`;
 const card = (title, path, width, height) => {
   const text = title.replace(/\s*\|\s*hippo(-memory)?\s*$/, '');
@@ -131,7 +123,6 @@ try {
   } finally {
     server.close();
   }
-  // check-build.mjs compares these with each page's title, so a card cannot keep an old caption.
   writeFileSync(join(root, 'scripts', 'og-titles.json'), `${JSON.stringify(drawn, null, 2)}\n`);
   console.log(`wrote favicon.svg, favicon-48.png, apple-touch-icon.png and ${built.length} cards in public/og/`);
 } finally {

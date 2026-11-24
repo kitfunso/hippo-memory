@@ -1,8 +1,6 @@
-// How long a spawned CLI asked to wait for the store lock, read from the child itself: a stopwatch around the child also times the runner.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 const PRELOAD = path.resolve(__dirname, 'lock-wait-trace.cjs').split(path.sep).join('/');
 
 interface LockWaitTrace {

@@ -1,5 +1,3 @@
-// codex-run starts whatever launcher the wrapper metadata names, and any process of the user can rewrite that file, so
-// it starts only the backup the installer made.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeEach, expect, it } from 'vitest';
@@ -13,7 +11,6 @@ beforeEach(() => {
 });
 
 it.each([
-  // Node stands in for the hostile launcher, so a started launcher runs the script that leaves the sentinel.
   [
     'names a launcher the installer never wrote',
     () => JSON.stringify({ realCodexPath: process.execPath, logFile: 'x' }),

@@ -1,4 +1,3 @@
-// Real homes are never read: the process's homes and tool variables point at canaries, the injected machine at a clean tree.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -107,7 +106,6 @@ const codexTree = (codexHome: string, label: string): void =>
 const openclawTree = (workspace: string, label: string): void =>
   plain(join(workspace, 'MEMORY.md'), `- CANARY ${label} openclaw memory.\n`);
 
-/** Canaries at every tool's home default and at every variable's folder; returns the variables. */
 function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessEnv {
   const home = join(root, 'home');
   const env = (name: string): string => join(root, 'env', name);

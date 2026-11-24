@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Fails when the built hook block text of an agent has no hash in SHIPPED_HOOK_HASHES: init refreshes a block it
-// wrote earlier only if the hash of that text is listed. Run after build; `--root <dir>` checks a copy of the repo.
 
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';

@@ -1,4 +1,3 @@
-// Sleep's dedup, audit and ambient read the store in keyset pages; a run on small pages must match a run on one page.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -24,8 +23,6 @@ const { apiCtx } = sessionPerTest();
 
 const ctxFor = (root: string): FullContext => apiCtx(root, 'default', { subject: 'paged-test', role: 'admin' });
 
-// Every row shares the fake clock's `created`, so the ids set the page order: a copy in another page of PAGE rows
-// beats the earlier copy (p-03 and p-04, p-02 then p-06 then p-10, acme p-07 and p-13).
 const ROWS: ReadonlyArray<readonly [string, string, { tenantId?: string; pinned?: boolean; retrievals?: number }]> = [
   ['p-00', 'the deploy runs on friday at noon', {}],
   ['p-01', 'billing is owned by alice in finance', {}],
@@ -49,7 +46,6 @@ const ROWS: ReadonlyArray<readonly [string, string, { tenantId?: string; pinned?
   ['p-19', 'metrics are kept for ninety days', {}],
 ];
 
-// Semantic rows, so consolidation merges none: a merged row's random id would order it differently in each run.
 function seeded(): string {
   const root = makeRoot('sleep-paged');
   roots.push(root);
@@ -109,7 +105,6 @@ describe('sleep in keyset pages', () => {
     expect(paged.issues).toEqual(whole.issues);
     expect(paged.result).toEqual(whole.result);
     expect(paged.left).toEqual(whole.left);
-    // A sorted whole-store pass gives these: survivors by rank within each tenant, the beaten pinned p-08 kept.
     expect(paged.pairs.map((p) => [p.kept, p.removed])).toEqual([
       ['p-10', 'p-06'],
       ['p-10', 'p-02'],

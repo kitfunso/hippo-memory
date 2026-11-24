@@ -1,4 +1,3 @@
-// `hippo learn --git` usage, result lines and stored rows, in process on a real store and real git repos.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -50,7 +49,6 @@ function gitRepo(subjects: readonly string[]): string {
   return repo;
 }
 
-/** A store holding one memory a migration subject supersedes and one an incoming lesson repeats. */
 function seededStore(): string {
   const root = makeRoot('learn-git', { config: { embeddings: { enabled: false } } });
   temps.push(root);
@@ -79,7 +77,6 @@ async function learn(
   return { status: r.status, stdout: mask(r.stdout), stderr: mask(r.stderr) };
 }
 
-// These cases build a five-commit repo and run learn on it, about a dozen git processes each.
 const GIT_HEAVY_MS = 51_000;
 
 beforeEach(() => {

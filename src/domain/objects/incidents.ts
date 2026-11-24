@@ -1,8 +1,3 @@
-/** Incident object: a postmortem capsule with lifecycle open -> resolved -> closed (no supersede
- * chain) and optional linked receipts. The `incidents` table is the source of truth; the memory
- * mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. linked_memory_ids must all
- * exist in the SAME tenant or save throws before the insert. */
-
 import { ConflictError, NotFoundError } from '../../base/errors/api-errors.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -33,16 +28,10 @@ export const VALID_INCIDENT_STATES: ReadonlySet<IncidentStatus> = new Set<Incide
 export interface SaveIncidentOptions {
   incidentText: string;
   context?: string;
-  /** Memory ids (linked receipts) that are this incident's evidence. Each must exist in the same tenant;
-   *  cross-tenant/nonexistent ids are rejected. */
   linkedMemoryIds?: string[];
-  /** Extra memory tags merged after ['incident'] (the CLI passes path-context tags; HTTP/SDK
-   * pass none). */
   extraTags?: string[];
 }
 
-// No draft: an incident is opened with linked memories and is never superseded, so it keeps its own
-// save.
 export const INCIDENT: ObjectDescriptor<'incident'> = {
   kind: 'incident',
   label: 'incident',
@@ -60,8 +49,6 @@ interface IncidentOpenOptions {
   readonly now: Date;
 }
 
-/** One open, checked before a store is asked; `baseHalfLifeDays` is the config default a new
- * mirror starts on. */
 function incidentOpen({
   baseHalfLifeDays,
   tenantId,
@@ -90,7 +77,6 @@ function incidentOpen({
 
 function opened(tenantId: string, written: Incident | IncidentOpenRefusal): Incident {
   if (!('refused' in written)) return written;
-  // A linked id of another tenant reads as missing, so an unverifiable receipt is never recorded.
   if (written.refused === 'unlinked') {
     throw new NotFoundError(`linked memory ${written.memoryId} not found for tenant ${tenantId}`);
   }

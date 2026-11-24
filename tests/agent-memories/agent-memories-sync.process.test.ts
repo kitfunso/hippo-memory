@@ -1,4 +1,3 @@
-// The PR 2 list from the agent memory plan's Tests section, run against real stores in scratch folders.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -47,17 +46,14 @@ pinClock();
 
 const DEPLOY = 'Run the schema check before this service deploys.';
 const STAGING = 'The staging database moved to the eu-central region.';
-// AWS's documented example access key: a public placeholder, not a credential.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 const CAP = 1500;
 
-/** About 340 characters, each one different, so twelve of them pass the cap twice over. */
 const paragraph = (i: number): string =>
   `Paragraph ${i} of the long note: ${'the build box keeps its cache warm between runs, '.repeat(6)}end ${i}.`;
 const longBody = (n: number, ...tail: string[]): string =>
   [...Array.from({ length: n }, (_, i) => paragraph(i)), ...tail].join('\n\n');
 
-/** Every live row is under the cap and none was cut short. */
 function expectWholeParts(rows: readonly MemoryEntry[]): void {
   for (const row of rows) {
     expect(row.content.length).toBeLessThanOrEqual(CAP);
@@ -84,7 +80,6 @@ const sync = (): Promise<ImportReport> =>
   });
 const claude = (report: ImportReport) => toolTally(report, 'claude-code');
 
-/** The real stores; `gate` runs once, at the import's first container write, after every read its plan made. */
 function gatedStores(gate: (plan: ContainerApply) => Promise<void>): ImportStores {
   const real = sqliteImportStores({});
   const apply = gateFirstWrite(
@@ -214,7 +209,6 @@ describe('agent memory sync', () => {
     expect(liveTexts(w.local)).toEqual([DEPLOY, STAGING].sort());
   });
 
-  // The legacy match reads its rows before the container's transaction, so only the guarded UPDATE sees the other writer.
   it('a legacy row another writer superseded after the import matched it keeps the successor that writer gave it', async () => {
     note(projectNotes(w), 'staging.md', STAGING);
     const edited = legacyRow('The staging database lives in us-east.', 'staging.md');
@@ -232,9 +226,7 @@ describe('agent memory sync', () => {
       machine: w.machine,
     });
 
-    // A plan read after the other writer's commit names its successor instead, a legacy row of the same file.
     expect(planned).toEqual([edited.id]);
-    // replaced: the plan still held the row, so the import did reach its supersede step with a stale copy.
     expect(claude(report)).toMatchObject({ replaced: 1, imported: 0 });
     expect(readEntry(w.local, edited.id)?.supersededBy).toBe(successorId);
     expect(auditCount(w.local, 'supersede')).toBe(1);

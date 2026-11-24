@@ -12,7 +12,6 @@ interface Diagnostic {
   readonly filename: string;
 }
 
-/** An oxlint rule setting: a severity, or a severity and its options. */
 type RuleSetting = string | readonly [string, ...object[]];
 
 interface RuleTable {
@@ -25,7 +24,6 @@ interface Config {
   overrides?: { rules?: RuleTable }[];
 }
 
-/** `rules` without the anti-slop ones. */
 const withoutAntiSlop = (rules: RuleTable | undefined): RuleTable | undefined =>
   rules && Object.fromEntries(Object.entries(rules).filter(([name]) => !name.startsWith('anti-slop/')));
 
@@ -44,7 +42,6 @@ function configIn(root: string): string {
   return file;
 }
 
-/** Lints `files` under a fresh folder with the repo's rules; `file -> rule codes` for each hit. */
 function lint(files: Record<string, string>): Map<string, string[]> {
   // macOS tmpdir sits behind the /var symlink; oxlint sees the real path, so the test must too.
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-rules-')));
@@ -329,7 +326,6 @@ interface Violation {
   readonly rule: { readonly name: string };
 }
 
-/** Runs the repo's depcruise rules over `files` in a fresh folder; the files each `rule` names. */
 function cruise(files: Record<string, string>, rule: string): string[] {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-deps-')));
   try {
@@ -392,7 +388,6 @@ describe('.dependency-cruiser.cjs grant rule', () => {
   });
 });
 
-/** The files scripts/checks/check-sqlite-loads.mjs names over `files` in a fresh folder. */
 function sqliteLoads(files: Record<string, string>): string[] {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'hippo-boundary-sqlite-')));
   try {

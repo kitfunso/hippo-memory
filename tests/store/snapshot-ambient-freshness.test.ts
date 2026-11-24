@@ -10,10 +10,6 @@ import {
 } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
-// DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T1 tests: the
-// never-expires fix for the active task snapshot ambient-injection surfaces.
-// All real SQLite, no mocks — matches tests/store/snapshot-tenant-isolation.test.ts.
-
 const TENANT = 'default';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -22,8 +18,6 @@ beforeEach(() => {
   tmpDir = makeRoot('snapshot-freshness', { init: false });
 });
 
-/** Direct SQL backdate of a row's `updated_at` — the project convention for
- * age tests (see tests/store/snapshot-tenant-isolation.test.ts sibling files). */
 function backdateSnapshot(hippoRoot: string, id: number, isoTimestamp: string): void {
   const db = openHippoDb(hippoRoot);
   try {
@@ -49,16 +43,10 @@ describe('loadFreshActiveTaskSnapshot', () => {
     });
     backdateSnapshot(tmpDir, saved.id, isoAgo(SEVEN_DAYS_MS));
 
-    // OLD PATH: the primitive every ambient surface called directly before
-    // this fix. No age bound, no session guard — this call reproduces the
-    // exact incident (proves the vulnerability is real on the unchanged
-    // export, not just asserted).
     const oldPathResult = loadActiveTaskSnapshot(tmpDir, TENANT);
     expect(oldPathResult).not.toBeNull();
     expect(oldPathResult!.task).toBe('orphaned /compact task');
 
-    // NEW PATH: the bounded wrapper, read for a DIFFERENT session, must not
-    // surface the stale row.
     const freshResult = loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' });
     expect(freshResult).toBeNull();
   });
@@ -83,7 +71,6 @@ describe('loadFreshActiveTaskSnapshot', () => {
   it('2b. null/empty/absent session ids never count as an owner match; every combo falls through to the age check', () => {
     initTestStore(tmpDir);
 
-    // (a-c) snapshot.session_id = null; caller passes undefined / null / ''.
     const nullOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'null-owner',
       summary: 's',
@@ -96,7 +83,6 @@ describe('loadFreshActiveTaskSnapshot', () => {
     expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: null })).toBeNull();
     expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: '' })).toBeNull();
 
-    // (d) snapshot.session_id = '' (empty string); caller has a real id.
     const emptyOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'empty-owner',
       summary: 's',
@@ -107,7 +93,6 @@ describe('loadFreshActiveTaskSnapshot', () => {
     backdateSnapshot(tmpDir, emptyOwner.id, isoAgo(SEVEN_DAYS_MS));
     expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-real' })).toBeNull();
 
-    // (e-f) snapshot.session_id = a real id; caller passes null / ''.
     const realOwner = saveActiveTaskSnapshot(tmpDir, TENANT, {
       task: 'real-owner',
       summary: 's',
@@ -149,11 +134,9 @@ describe('loadFreshActiveTaskSnapshot', () => {
         source: 'test',
       });
 
-      // Exactly at the bound — cross-session (age check path), still injects.
       backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS).toISOString());
       expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).not.toBeNull();
 
-      // 1ms past the bound — does not.
       backdateSnapshot(tmpDir, saved.id, new Date(fixedNow.getTime() - SNAPSHOT_AMBIENT_MAX_AGE_MS - 1).toISOString());
       expect(loadFreshActiveTaskSnapshot(tmpDir, TENANT, { sessionId: 'session-B' })).toBeNull();
     } finally {
@@ -184,11 +167,8 @@ describe('closeTaskSnapshotsForSession', () => {
     const closedByA = await closeTaskSnapshotsForSession(tmpDir, TENANT, 'session-A');
     expect(closedByA).toBe(1);
 
-    // loadActiveTaskSnapshot only ever returns status='active' rows.
     expect(loadActiveTaskSnapshot(tmpDir, TENANT)).toBeNull();
 
-    // Confirm status + refreshed updated_at directly (the row is no longer
-    // 'active' so the store's own read helpers can't see it any more).
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: the SELECT list above names exactly `status, updated_at`,

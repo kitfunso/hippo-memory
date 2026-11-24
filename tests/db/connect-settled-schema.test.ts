@@ -1,4 +1,3 @@
-// A store this process has proven is not probed again; a newer stamp or floor still refuses. Real SQLite store.
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -15,10 +14,8 @@ import { writeEntry } from '../_helpers/root-forms.js';
 const { DatabaseSync: NodeSqlite } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: { prototype: { prepare: (sql: string) => object } };
 };
-// Only the full probe names its meta key count.
 const FULL_PROBE = /AS meta_keys/;
 
-/** How many times `fn` prepares the schema probe, counted at prepare so a probe that throws on a new file still counts. */
 function probesPrepared(fn: () => void): number {
   const original = NodeSqlite.prototype.prepare;
   let probes = 0;

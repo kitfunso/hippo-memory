@@ -1,4 +1,3 @@
-// hippo.db's LessonWrites group: git learn's batch, with the word and tag reads it checks first.
 import { listTextsHolding } from '../recall/candidates.js';
 import { contentsWithTag } from '../entries/entry-reads.js';
 import { writeEntriesSkippingRejected, writeEntriesTogether } from '../entries/entry-writes.js';
@@ -10,7 +9,6 @@ import { openStore } from '../runtime/handles.js';
 import type { LessonWrites } from '../../../base/ports/store.js';
 import { touchableScopeSql } from '../runtime/rule-sql.js';
 
-/** `entries` in order, each one a rejection refuses left out; returns the ids written. */
 function writeSkippingRejected(
   db: DatabaseSyncLike,
   files: StoreFiles,

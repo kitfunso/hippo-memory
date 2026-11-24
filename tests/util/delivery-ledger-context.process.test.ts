@@ -1,4 +1,3 @@
-// `hippo context` without --pinned-only through the built CLI: its delivery_events row and the recall trace it links.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { blockHash, estimateTokens } from '../../src/base/util/token-text.js';
@@ -22,7 +21,6 @@ import { writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
-// After every seeded `created`, real or fixed, so no memory is dated in the future.
 const FAKE_NOW = '2099-01-01T00:00:00.000Z';
 const QUERY = ['postgres', 'migration', 'rollback'];
 
@@ -44,7 +42,6 @@ function seedFacts(target: Project): void {
   });
 }
 
-// In process unless `spawned`: C1 pins `hippo context` once in a real child, the rest read rows and bytes only.
 async function run(target: Project, args: string[], sessionId: string | null = 'ctx-1', spawned = false) {
   const env: NodeJS.ProcessEnv = { HIPPO_FAKE_NOW: FAKE_NOW };
   if (sessionId !== null) env.CLAUDE_CODE_SESSION_ID = sessionId;
@@ -109,7 +106,6 @@ describe('what one hippo context call records', () => {
     const [e] = eventsN(p, 'ctx-1', 1);
     const [trace] = contextTraces(p);
     expect([e.block_state, e.recall_trace_id, e.query_hash]).toEqual(['sent', trace.id, blockHash('*')]);
-    // The pin and the three facts, all inside the default budget.
     expect(e.candidates).toHaveLength(4);
     expect(new Set(e.candidates.map((c) => c.pool))).toEqual(new Set(['strength']));
   });
@@ -205,7 +201,6 @@ describe('the ledger changes nothing a context call prints', () => {
   let off: Project;
 
   beforeEach(() => {
-    // A byte copy of the seeded store, since a retrieval strengthens what it returns and seeding twice dates rows apart.
     off = project();
     fs.rmSync(off.hippoRoot, { recursive: true, force: true });
     copyTree(p.hippoRoot, off.hippoRoot);
@@ -247,7 +242,6 @@ describe('the ledger changes nothing a context call prints', () => {
       expect(on.stdout).toBe(plain.stdout);
     }
     const rows = resultRows(off);
-    // Two traces, each holding the two postgres facts and the pin, the rows that name a query term.
     expect(rows).toHaveLength(6);
     expect(resultRows(p)).toEqual(rows);
     expect(retrievalCounts(p)).toEqual(retrievalCounts(off));

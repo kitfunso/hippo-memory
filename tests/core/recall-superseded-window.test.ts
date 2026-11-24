@@ -1,5 +1,3 @@
-// Superseded rows must not use up the recall candidate window, and a superseded
-// summary must never stand in for its children in recall overflow or assemble.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';

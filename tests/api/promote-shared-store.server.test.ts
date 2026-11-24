@@ -1,4 +1,3 @@
-// Promote on a shared store copies nothing: a member's project admits the row, the laptop's vetoes still hold, and the CLI follows.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -273,7 +272,6 @@ describe('hippo promote in a shared folder', () => {
 
   beforeAll(async () => {
     tmp2 = makeRoot('promote-cli', { init: false });
-    // A scratch HIPPO_HOME for the CLI's global store, and no key from the developer's shell.
     vi.stubEnv('HIPPO_HOME', path.join(tmp2, 'global'));
     vi.stubEnv('HIPPO_TENANT', 'default');
     vi.stubEnv('HIPPO_API_KEY', undefined);

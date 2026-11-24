@@ -38,8 +38,6 @@ export const SLEEP_DB_WAIT_MS = 5000;
  * is the store kind. */
 export const OTHER_STORE_MARKER = 'other-store';
 
-// An empty or unreadable marker still refuses: falling through would write the hippo.db the marker
-// forbids.
 function markerKind(marker: string): string {
   try {
     return readFileSync(marker, 'utf8').trim() || 'unknown';
@@ -54,7 +52,6 @@ function markerKind(marker: string): string {
 
 /** Lock wait of an unscoped open. */
 export interface OpenOptions {
-  /** Shortens every lock wait of this open, for a hook that must finish inside its own timeout. */
   readonly busyWaitMs?: number | undefined;
 }
 

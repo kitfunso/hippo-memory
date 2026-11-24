@@ -13,8 +13,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// ─── parseFrame unit tests ───
-
 describe('parseFrame', () => {
   it('parses newline-delimited JSON (MCP spec)', () => {
     const buf = Buffer.from('{"jsonrpc":"2.0","id":1,"method":"ping"}\n');
@@ -60,8 +58,6 @@ describe('parseFrame', () => {
   });
 });
 
-// ─── Subprocess integration test (issue #13) ───
-
 describe('hippo mcp stdio', () => {
   let tmpHome: string;
   let tmpHippo: string;
@@ -78,7 +74,6 @@ describe('hippo mcp stdio', () => {
 
   afterEach(async () => {
     if (proc && proc.exitCode === null && proc.signalCode === null) {
-      // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the hook timeout.
       const exited = once(proc, 'exit');
       proc.stdin.end();
       await exited;
@@ -95,7 +90,6 @@ describe('hippo mcp stdio', () => {
       env: { ...process.env, HIPPO_HOME: tmpHippo },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    // A reply that never comes (the issue #13 hang) fails at the test timeout.
     const lines = createInterface({ input: proc.stdout })[Symbol.asyncIterator]();
     const nextReply = async (): Promise<string> => {
       for (;;) {
@@ -116,8 +110,6 @@ describe('hippo mcp stdio', () => {
       },
     });
     proc.stdin.write(initMsg + '\n');
-    // Critically: do NOT close stdin. This is what mcp2cli does and what
-    // issue #13 says hangs forever.
 
     const responseLine = await nextReply();
     const response = JSON.parse(responseLine);
@@ -126,7 +118,6 @@ describe('hippo mcp stdio', () => {
     expect(response.result?.protocolVersion).toBe('2024-11-05');
     expect(response.result?.serverInfo?.name).toBe('hippo-memory');
 
-    // A second message on the same open stdin should also get a response.
     const listMsg = JSON.stringify({
       jsonrpc: '2.0',
       id: 2,
@@ -137,7 +128,6 @@ describe('hippo mcp stdio', () => {
     const listResp = JSON.parse(listLine);
     expect(listResp.id).toBe(2);
     expect(Array.isArray(listResp.result?.tools)).toBe(true);
-    // A tools/list on stdio has no store yet, so it lists every tool.
     expect(listResp.result.tools.map((t: { name: string }) => t.name)).toEqual(TOOLS.map((t) => t.name));
   });
 });

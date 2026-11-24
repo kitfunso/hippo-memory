@@ -1,6 +1,3 @@
-// GET /v1/memories ignored `mode` and never strengthened what it returned,
-// so HTTP callers got a flat BM25 band and their memories decayed as if unread.
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -31,7 +28,6 @@ async function recallIds(qs: string): Promise<string[]> {
 
 beforeEach(async () => {
   home = makeRoot('http-recall-mode');
-  // The better BM25 match has decayed for years; hybrid scoring must see that.
   const old = '2020-01-01T00:00:00.000Z';
   const weak = {
     ...createMemory('alpha alpha beta', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),

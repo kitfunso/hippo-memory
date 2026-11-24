@@ -1,6 +1,3 @@
-// The dashboard's static files: the built app, read once at listener start into one map from URL
-// path to the bytes it sends, and the reply that serves one with its validators. A path the map
-// does not hold is never read from disk.
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import type * as http from 'node:http';
@@ -36,7 +33,6 @@ function isStaticFileExtension(ext: string): ext is StaticFileExtension {
   return Object.hasOwn(MIME_TYPES, ext);
 }
 
-/** One encoding of a file, with the strong validator of exactly these bytes. */
 interface Encoded {
   readonly body: Buffer;
   readonly etag: string;
@@ -47,7 +43,6 @@ export interface StaticAsset {
   readonly type: string;
   readonly cacheControl: string;
   readonly plain: Encoded;
-  /** Null when gzip would not make the file smaller. */
   readonly gzip: Encoded | null;
 }
 
@@ -69,7 +64,6 @@ function assetOf(urlPath: string, body: Buffer, type: string): StaticAsset {
   };
 }
 
-// Real folders only: a link is never followed, so no file outside the root can enter the map.
 function* filesUnder(dir: string): Generator<string> {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);

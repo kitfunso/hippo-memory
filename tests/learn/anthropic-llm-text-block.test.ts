@@ -1,8 +1,6 @@
-// A thinking model puts its thinking block first; the reply is the first block of type text.
 import { describe, expect, it } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 
-/** The usage block as the API sends it, or a malformed one. */
 interface WireUsage {
   readonly input_tokens: number | string;
   readonly output_tokens: number;

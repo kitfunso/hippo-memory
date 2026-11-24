@@ -12,7 +12,6 @@ const BAND_LABEL = ["pinned", "strong", "fading", "at risk"];
 type Data = ScatterPoints | ScatterGrid;
 
 interface Probe {
-  /** Stable name of what is under the pointer; a second touch tap on the same target opens it. */
   target: string | null;
   index: number;
   cell: CellHit | null;
@@ -67,13 +66,10 @@ export interface ScatterCanvasProps {
   data: Data;
   on: readonly boolean[];
   brush: Brush | null;
-  /** Rows the brush selects, drawn on the brush. */
   selected: number;
   openId: string | null;
-  /** Touch brush mode: a drag draws the brush instead of scrolling the page. */
   brushOn: boolean;
   onBrush: (brush: Brush | null) => void;
-  /** A touch brush drag ended. */
   onBrushDone: () => void;
   onOpen: (id: string) => void;
   describedBy: string;

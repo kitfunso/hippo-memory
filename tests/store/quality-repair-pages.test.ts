@@ -1,4 +1,3 @@
-// Quality repair over a tenant larger than one page: the same plan and the same moves as one whole read gave.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -35,7 +34,6 @@ const automatic = (content: string, extra: Partial<MemoryEntry> = {}): MemoryEnt
   ...extra,
 });
 
-/** The parent that sits in dormant storage, and every live row by its place in store order. */
 function seed() {
   const dormantParent = automatic(PART_B);
   const special = new Map<number, (ids: string[]) => MemoryEntry>([

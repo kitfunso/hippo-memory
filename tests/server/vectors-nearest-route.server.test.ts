@@ -1,5 +1,3 @@
-// POST /v1/vectors/nearest refuses a malformed body with a 400 that names the field, and answers the served store's
-// nearest ids for the caller's tenant.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
 import type { JsonValue } from '../../src/base/util/json.js';

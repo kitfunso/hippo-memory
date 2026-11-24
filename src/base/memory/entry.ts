@@ -1,5 +1,3 @@
-// The memory entry: its shape, kinds and tags, how one is created, succeeded and retrieved, and its
-// schema fit.
 import { DEFAULT_TENANT_ID } from '../util/tenant.js';
 import { BadRequestError } from '../errors/api-errors.js';
 import { MAX_LEAD_IN_CHARS } from '../util/limits.js';
@@ -39,42 +37,34 @@ export type TraceOutcome = 'success' | 'failure' | 'partial' | null;
 export const MEMORY_KINDS = ['raw', 'distilled', 'superseded', 'archived'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
 
-// Timestamps are Date.toISOString() output (24 chars, UTC, ms, trailing Z), so byte comparison
-// sorts them chronologically. The row writer stores `created` in that form (isoInstant); only rows
-// written before it may hold another.
-
-// Fields are camelCase in memory; src/base/memory/memory-wire.ts keeps the snake_case keys of every
-// stored and wire format.
 export interface MemoryEntry {
   id: string;
   created: string; // ISO 8601
-  lastRetrieved: string; // ISO 8601
+  lastRetrieved: string;
   retrievalCount: number;
-  strength: number; // 0..1, current computed strength
+  strength: number;
   halfLifeDays: number;
   layer: Layer;
   tags: string[];
   emotionalValence: EmotionalValence;
-  schemaFit: number; // 0..1
+  schemaFit: number;
   source: string;
   outcomeScore: number | null; // null = no feedback yet
-  outcomePositive: number; // cumulative positive outcome count
-  outcomeNegative: number; // cumulative negative outcome count
+  outcomePositive: number;
+  outcomeNegative: number;
   conflictsWith: string[];
   pinned: boolean;
-  confidence: ConfidenceLevel; // epistemic confidence tier
-  content: string; // the actual memory text
-  parents: string[]; // IDs of source memories this was consolidated from (may be empty)
-  starred: boolean; // user-bookmarked
-  traceOutcome: TraceOutcome; // final outcome for trace-layer entries; null otherwise
-  sourceSessionId: string | null; // set by auto-promote and session digests; null for everything else
-  validFrom: string; // ISO 8601 timestamp when this belief became true
-  supersededBy: string | null; // ID of the memory that replaced this one; null = current
+  confidence: ConfidenceLevel;
+  content: string;
+  parents: string[];
+  starred: boolean;
+  traceOutcome: TraceOutcome;
+  sourceSessionId: string | null;
+  validFrom: string;
+  supersededBy: string | null;
   extractedFrom: string | null;
   dagLevel: number; // 0=leaf, 1=extracted_fact, 2=topic_summary, 3=entity_profile (independent of envelope `kind`)
-  dagParentId: string | null; // ID of parent summary node in the DAG; null = root level
-  // Cached DAG metadata for level-2+ summaries so recall can bound scope without re-walking; always
-  // 0 / null on leaves and facts.
+  dagParentId: string | null;
   descendantCount?: number;
   earliestAt?: string | null;
   latestAt?: string | null;
@@ -89,12 +79,11 @@ export interface MemoryEntry {
   rebuildCount?: number;
   /** Reserved: ISO 8601 time the level-3 entity profile was built; only set on dag_level=3 rows. */
   dagLevel3BuiltAt?: string | null;
-  // Provenance envelope
   kind: MemoryKind; // raw | distilled | superseded | archived
   scope: string | null; // e.g. 'team:eng', 'project:foo'; null = global
   owner: string | null; // 'user:<id>' or 'agent:<id>'
   artifactRef: string | null; // URI to source artifact (slack://, gh://, file://)
-  tenantId: string; // 'default' for single-tenant deployments
+  tenantId: string;
   /**
    * Owning project, lowercased; '' = user-global (injectable everywhere), null = none known
    * (legacy or unnamed write), denied by ambient context. Stamped at write time by
@@ -154,15 +143,11 @@ export const HIGH_SCHEMA_FIT = 0.7;
 const HIGH_FIT_HALF_LIFE_FACTOR = 1.5;
 const LOW_SCHEMA_FIT = 0.3;
 const LOW_FIT_HALF_LIFE_FACTOR = 0.5;
-// Schema fit blends tag coverage and content similarity; a content match needs this share of shared
-// tokens.
 const TAG_FIT_WEIGHT = 0.6;
 const CONTENT_FIT_WEIGHT = 0.4;
 const CONTENT_TOKEN_SHARE_MIN = 0.2;
 const CONTENT_ENOUGH_FRACTION = 0.1;
-// An error is worth remembering longer than a neutral note (PLAN.md half-life table).
 const ERROR_TAG_HALF_LIFE_FACTOR = 2;
-// Each retrieval lengthens the half-life by this many days (PLAN.md).
 const RETRIEVAL_HALF_LIFE_GAIN_DAYS = 2;
 
 /** The base half-life scaled by the PLAN.md signals: an error tag, and high or low schema fit. */
@@ -197,10 +182,6 @@ export interface CreateMemoryOptions {
   schemaFit?: number;
   source?: string;
   confidence?: ConfidenceLevel;
-  /**
-   * The store config's `defaultHalfLifeDays`; required so no writer silently gets the compiled
-   * default.
-   */
   baseHalfLifeDays: number;
   traceOutcome?: TraceOutcome;
   sourceSessionId?: string | null;
@@ -349,7 +330,6 @@ export function createSuccessor(
     baseHalfLifeDays: opts.baseHalfLifeDays,
   };
   const next = createMemory(content, fields, now);
-  // A legacy null origin has nothing to carry, so the store stamps it from its own location.
   if (isJsonString(old.originProject)) {
     next.originProject = old.originProject;
   }
@@ -383,18 +363,12 @@ export function schemaFitSourceOf(entries: readonly MemoryEntry[]): SchemaFitSou
 /** What schema fit reads from a set of memories, so a store can answer without loading its rows. */
 export interface SchemaFitSource {
   readonly rows: number;
-  /** How many times each tag appears across the set. */
   readonly tagCounts: ReadonlyMap<string, number>;
-  /** Each memory's text; the walk stops once more matches cannot move the score. */
   readonly contents: Iterable<string>;
 }
 
-// Tokens of this length or shorter are filler for schema fit.
 const FILLER_TOKEN_MAX_LENGTH = 3;
-// Matching half the tags at average weight scores about 0.5, so the raw overlap ratio is doubled.
 const TAG_OVERLAP_SCALE = 2;
-// Floor on the matches that saturate the content score, so a tiny store cannot saturate it on one
-// hit.
 const CONTENT_ENOUGH_MIN_MATCHES = 5;
 
 function significantTokens(text: string): Set<string> {
@@ -412,7 +386,6 @@ export function schemaFitFrom(
   const tagFreq = source.tagCounts;
   if (tags.length === 0 && tagFreq.size === 0) return DEFAULT_SCHEMA_FIT;
 
-  // Tag overlap, weighted so a shared rare tag counts for more than a shared common one.
   let weightedOverlap = 0;
   let totalWeight = 0;
   const maxIdf = Math.log(N + 1) + 1;
@@ -427,7 +400,6 @@ export function schemaFitFrom(
   const newTokens = significantTokens(content);
   if (newTokens.size === 0) return Math.min(1, Math.max(0, tagScore));
 
-  // The content score is capped at 1, which this many matching memories reach.
   const enough = Math.max(CONTENT_ENOUGH_MIN_MATCHES, N * CONTENT_ENOUGH_FRACTION);
   let contentMatches = 0;
   for (const text of source.contents) {
@@ -463,11 +435,9 @@ export function markRetrieved(
   return entries.map((e) => {
     if (isSuperseded(e)) return e;
     const wrong = netWrong(e, model) > 0;
-    // Confidence stays untouched: it is an epistemic tier, not a recency signal.
     const updated: MemoryEntry = {
       ...e,
       retrievalCount: e.retrievalCount + 1,
-      // A wrong memory keeps both, since last_retrieved is the decay anchor.
       lastRetrieved: wrong ? e.lastRetrieved : now.toISOString(),
       halfLifeDays: wrong ? e.halfLifeDays : e.halfLifeDays + RETRIEVAL_HALF_LIFE_GAIN_DAYS,
     };

@@ -61,12 +61,6 @@ export type {
   RejectionSource,
 } from '../base/ports/store/rejections.js';
 
-// The hippo-memory/store-kit subpath: the contract for a second HippoStore (port types, row types,
-// hippo.db's rule helpers), so a store built on it applies hippo.db's rules with the same code.
-
-// An add-on serves from another database by passing serve() its own HippoStore; sqliteStore names
-// hippo.db's, which the composition roots open as their default store, and initStore sets up a
-// hippo.db folder.
 export {
   publishedDefaultStore as sqliteStore,
   publishedInitStore as initStore,
@@ -128,8 +122,6 @@ export {
   type WorkingMemoryFilter,
   type WorkingMemoryPush,
 } from '../base/ports/store-index.js';
-// An add-on store's entry writes apply an outcome, guard tombstones and check reach exactly as
-// hippo.db does.
 /** `entry` after one good or bad outcome, scored at `rules.now` (default: the eval clock), so a
  * second store with its own clock scores as hippo.db does. */
 export function entryAfterOutcome(
@@ -150,11 +142,7 @@ export {
   rowDigests,
   tombstoneDigest,
 } from '../base/records/rejection-digest.js';
-// An add-on's rejections find the texts a sleep-merged row holds with hippo.db's rule, and its row
-// writes keep hippo.db's duplicate hash.
 export { duplicateHash, heldTexts, identityText } from '../base/util/same-text.js';
-// An add-on store stamps (`isoInstant(stamp) ?? stamp`), searches and windows its rows as hippo.db
-// does, so both return the same rows in the same order.
 export { isoInstant, sortableStamp } from '../base/memory/created-stamp.js';
 export { cjkIndexTerms, partitionCjkTerms } from '../base/util/tokenize.js';
 export { interleaveRows } from '../base/util/interleave.js';
@@ -169,7 +157,6 @@ export { RawAppendOnlyError } from '../base/errors/raw-append-only.js';
 /** The tags that keep an unpinned row out of ambient context; a list, so a new tag changes no
  * public type. */
 export const RECALL_ONLY_TAGS: readonly string[] = Object.freeze([...recallOnlyTags]);
-// An add-on's quality repair keeps the rows hippo.db's does.
 export { PROTECTED_ROWS, repairKeeps, type RepairProtection } from '../base/memory/memory-audit.js';
 export { RejectedValueError } from '../base/errors/api-errors.js';
 export {
@@ -186,8 +173,6 @@ export {
   RECALL_DEFAULT_DENY_SCOPES,
 } from '../base/scope/recall-scope.js';
 export type { KeysetPosition } from '../base/util/keyset.js';
-// The types HippoStore's methods take and return, so an add-on store can implement them from this
-// subpath.
 export type { ContinuityBlock } from '../api/recall/types.js';
 export type { MemoryEntry } from '../base/memory/entry.js';
 export type {
@@ -200,7 +185,6 @@ export type {
   WorkingMemoryItem,
 } from '../base/ports/store/sessions.js';
 export type { HandoffOutcome, SessionHandoff } from '../base/session/handoff.js';
-// The types the Sessions, Cards, Goals, Conflicts, Dormant and Reports groups take and return.
 export type { Card, CardComment, CardRun, CardStatus } from '../base/records/card.js';
 export type { CardDetail } from '../base/ports/store/cards.js';
 export type { CompleteGoalOptions, PushGoalOptions } from '../base/ports/store/goals.js';
@@ -232,22 +216,11 @@ export type {
 export type { TokenSummary, TokenUse } from '../base/ports/store/ledger.js';
 export type { AmbientTallies } from '../base/memory/ambient.js';
 export type { PhysicsParticle } from '../base/rank/physics.js';
-// An add-on ranks its own particles by physics with hippo.db's code, by passing its store and root
-// in the options.
 export { physicsSearch } from './folder-search.js';
 export { StoreBusyError } from '../base/ports/store.js';
-// A port method that can read every tenant takes ALL_TENANTS there, so an add-on store tells it
-// from a missed tenant.
 export { ALL_TENANTS, type TenantId } from '../base/util/tenant.js';
-// An add-on store encodes, decodes and ranks vectors and particles with hippo.db's own code, and
-// drops the index by its rule, so an add-on store and hippo.db keep the same bytes and return the
-// same ids in the same order.
 export { bufferToFloat32, float32ToBuffer } from '../base/util/vector-codec.js';
 export { replacesIndex } from '../base/embeddings/index-identity.js';
-// An add-on's ContextReads applies hippo.db's scope, secret, tally and rarest-term rules with the
-// same code. An add-on's ambientCandidates and summaryWithDescendants admit rows by hippo.db's
-// rule. A store that ignores `admit.excludeTags` or `recall.excludeTags` gets only core's after-load
-// filter, so its recent-N or recall pool can come short.
 export {
   ambientRefusal,
   descendantAdmits,
@@ -260,14 +233,8 @@ export { SECRET_TAGS } from '../base/util/secret-detect.js';
 export function tallyAmbientEntries(entries: readonly MemoryEntry[], now?: Date): AmbientTallies {
   return tallyAmbientAt(entries, now ?? evalNow(), evalSwitches().strength);
 }
-// An add-on's graphReads.graphDelta plans the rebuild's ops from its stored rows by hippo.db's
-// rule.
 export { diffGraph, type StoredGraph } from '../store/rules/graph-delta.js';
-// An add-on's graph reads batch ids as hippo.db's do.
 export { GRAPH_ID_BATCH } from '../base/ports/store/graph.js';
 export { ftsTermParts, rarestFtsQuery } from '../base/rank/prompt-recall.js';
-// store copy --db writes the marker into the other store's folder.
-// An add-on that serves a team store checks the flag before it starts.
 export { type HippoConfig } from '../base/config/config.js';
 export { isSharedStore, loadConfig } from '../host/config-file.js';
-// A Context carries its store's config, so an integrator that builds one loads it here.

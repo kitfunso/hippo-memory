@@ -1,12 +1,9 @@
-// A once-only log key may name a table, column, errno, site or config value, never a row: the key set is capped, and a
-// key per row would push every later failure class down to debug.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SRC = fileURLToPath(new URL('../../src', import.meta.url));
-// Each `${...}` a key may hold: a value the code or the config fixes.
 const FIXED_PARTS = new Set([
   'table',
   'column',
@@ -36,7 +33,6 @@ function keyTemplates(): { file: string; parts: string[] }[] {
 describe('once-only log keys', () => {
   it('hold only values the code fixes, never a row id', () => {
     const templates = keyTemplates();
-    // A scan that finds nothing would pass for the wrong reason.
     expect(templates.filter((t) => t.parts.length > 0).length).toBeGreaterThanOrEqual(4);
     const loose = templates.flatMap((t) =>
       t.parts.filter((p) => !FIXED_PARTS.has(p)).map((p) => `${t.file}: \${${p}}`),

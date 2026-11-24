@@ -1,5 +1,3 @@
-// A person's reply is their rule only with a rule or preference word; other replies stay unpinned notes.
-// Real SQLite stores in tmp dirs, no mocks.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -155,7 +153,6 @@ describe('capture keeps what a person says in reply', () => {
 
   it('notes newer than a decision do not push it out of the recent list', async () => {
     await capture([user(REQUEST), done, user("Let's go with SQLite for the cache.")]);
-    // More than the loader's first window, so it must read past the notes.
     for (let i = 0; i < 40; i += 1) {
       const created = new Date(Date.now() + (i + 1) * 1000).toISOString();
       const content = `Do not touch the file number ${i} in that folder.`;
@@ -338,7 +335,6 @@ describe('capture keeps what a person says in reply', () => {
     ).toEqual([[fixed, 'verified']]);
   });
 
-  // A shared store stamps a capture with no project as no project, which no project context shows.
   const sharedCapture = (originProject?: { name: string; legacyName: string; aliases?: string[] }) =>
     runCapture(captureTarget(root), {
       tenantId: 'default',
@@ -350,7 +346,6 @@ describe('capture keeps what a person says in reply', () => {
       originProject,
     });
 
-  // The opening request stores the plain preference, so a later reply is the rule.
   const sharedRequest = (originProject: { name: string; legacyName: string }) =>
     runCapture(captureTarget(root), {
       tenantId: 'default',
@@ -427,7 +422,6 @@ describe('capture keeps what a person says in reply', () => {
     expect(lines.filter((line) => line.includes('pnpm'))).toEqual([expect.stringContaining('[skip]')]);
   });
 
-  // A rule pinned by a release before the from-user tag existed: pinned, but not marked as the person's.
   const seedPinnedCopy = (originProject: string, tags: string[] = []) =>
     writeEntry(root, {
       ...createMemory(PREF.slice(0, -1), { source: 'capture', confidence: 'observed', pinned: true, tags }),

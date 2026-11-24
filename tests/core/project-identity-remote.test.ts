@@ -1,4 +1,3 @@
-// The project id: `.hippo-project.json`, then the origin remote from hand-written git config files, then the folder name.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -25,7 +24,6 @@ function originConfig(url: string): string {
   return `[core]\n\tbare = false\n[remote "origin"]\n\turl = ${url}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n`;
 }
 
-/** A checkout whose `.git/config` names `url` as origin. */
 function repo(url: string | null, ...segments: string[]): string {
   const root = mkdirs(...segments);
   fs.mkdirSync(path.join(root, '.git'), { recursive: true });

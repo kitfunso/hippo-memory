@@ -1,4 +1,3 @@
-// The delivery reader on rows the real ledger writer built: every ledger value, the reuse arms and the fold edge cases.
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

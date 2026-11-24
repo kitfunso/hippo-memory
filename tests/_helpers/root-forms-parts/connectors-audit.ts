@@ -1,5 +1,3 @@
-// Root-keyed connectors and audit forms tests call; production code goes through the port or the handle-first forms.
-
 import type { FailedAuditEvent } from '../../../src/store/sqlite/audit/audit.js';
 import * as auditSql from '../../../src/store/sqlite/audit/audit.js';
 import type { GitHubEventLogEntry } from '../../../src/store/sqlite/connectors/github.js';

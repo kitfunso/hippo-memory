@@ -1,22 +1,3 @@
-/**
- * Runtime tests for POST /v1/sleep (Episode B, Task 4).
- *
- * Thin wrapper over api.sleep. Returns SleepResult JSON. Loopback-only by
- * design (host-wide consolidation; per-request guard rejects non-loopback
- * with 403 even if serve()'s boot host-check is relaxed in the future).
- *
- * Coverage:
- *   - empty body -> 200, SleepResult populated
- *   - dry_run=true -> 200, dryRun:true, skip phases
- *   - populated store runs full pipeline
- *   - no_share=true keeps shared undefined
- *   - non-boolean dry_run -> 400
- *   - host-wide intentional contract (tenant_b Bearer dedupes tenant_a)
- *   - non-loopback origin -> 403 (per-request guard)
- *
- * Real HTTP server (serve port:0), per-test isolated local + global stores.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import childProcess, { ChildProcess } from 'node:child_process';
@@ -117,7 +98,6 @@ describe('POST /v1/sleep', () => {
   it.skipIf(needsHippoDb('sleep'))(
     'shares a high-value memory into the global store, as hippo sleep does',
     async () => {
-      // Pinned with error and gotcha tags, so its transfer score clears the auto-share bar.
       const row = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
       writeEntry(
         home,
@@ -166,11 +146,6 @@ describe('POST /v1/sleep', () => {
   it.skipIf(needsHippoDb('sleep'))(
     'host-wide contract: any Bearer can dedupe across tenants (intentional)',
     async () => {
-      // Pins the documented "host-wide" semantic. The day a per-tenant /v1/sleep
-      // lands, this test must be updated as the breaking-change marker.
-      // Seed near-duplicate memories under two tenants. Run /v1/sleep (default
-      // Bearer). Verify both tenants' rows are visible to dedupe (they share
-      // hippoRoot).
       const tenantA: FullContext = apiCtx(home, 'tenant_a', { subject: 'localhost:cli', role: 'admin' });
       const tenantB: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
       const dupContent = 'highly similar content x'.repeat(20);
@@ -217,11 +192,9 @@ describe('POST /v1/sleep', () => {
     await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
       content: 'a memory for the sleep to write',
     });
-    // The sleep needs the write lock held here, so it cannot finish until the health answer has released it.
     const lock = openHippoDb(home);
     lock.exec('BEGIN IMMEDIATE');
     const order: string[] = [];
-    // Probed once the server has the sleep request, so the probe cannot be answered ahead of it.
     const health = new Promise<Response>((resolve, reject) => {
       handle.server?.once('request', () => fetch(`${handle.url}/health`).then(resolve, reject));
     });
@@ -257,7 +230,6 @@ describe('POST /v1/sleep', () => {
       await remember(apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' }), {
         content: 'a memory for the sleep to write',
       });
-      // Neither admitted sleep can finish while this lock is held, so the first reply back is the refusal.
       const lock = openHippoDb(home);
       lock.exec('BEGIN IMMEDIATE');
       const sleeps = [postSleep(), postSleep(), postSleep()];
@@ -306,7 +278,6 @@ describe("the sleep child's end", () => {
   // SAFETY: the sleep queue reads only tenantId and actor from the context.
   const ctx = { tenantId: 'default', actor: adminActor('test') } as Context;
 
-  // The queue spawns its child one microtask after sleep(), so the first await lets the fake be listened to.
   async function startSleep() {
     const child = Object.assign(new ChildProcess(), { send: vi.fn(), kill: vi.fn() });
     vi.spyOn(childProcess, 'spawn').mockReturnValue(child);

@@ -1,12 +1,3 @@
-/**
- * E2 project_brief first-class object (repo-scoped / auto-refreshes) - HTTP route test.
- * Docs: docs/plans/2026-05-30-e2-project-brief-object.md
- *
- * Covers what only project briefs have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/project-briefs lists + status filter + repo filter
- * 2. POST /v1/project-briefs/refresh writes a brief; dryRun returns {markdown} without writing
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -68,7 +59,7 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
     const padded = await jsonAs<BriefListResponse>(
       await fetch(`${handle.url}/v1/project-briefs?repo=%20r%20`, { headers: authHeaders(apiKey) }),
     );
-    expect(padded.briefs.length).toBe(2); // the filter is trimmed before the lookup
+    expect(padded.briefs.length).toBe(2);
     const active = await jsonAs<BriefListResponse>(
       await fetch(`${handle.url}/v1/project-briefs?repo=r&status=active`, { headers: authHeaders(apiKey) }),
     );
@@ -77,7 +68,6 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
   });
 
   it('POST /v1/project-briefs/refresh writes a brief; dryRun returns markdown without writing', async () => {
-    // dry-run on an empty repo: returns a valid digest, writes nothing
     const dry = await fetch(`${handle.url}/v1/project-briefs/refresh`, {
       method: 'POST',
       headers: authHeaders(apiKey),
@@ -92,7 +82,6 @@ describe('HTTP /v1/project-briefs (repo-scoped first-class object)', () => {
     );
     expect(afterDry.briefs.length).toBe(0);
 
-    // real refresh writes v1
     const res = await fetch(`${handle.url}/v1/project-briefs/refresh`, {
       method: 'POST',
       headers: authHeaders(apiKey),

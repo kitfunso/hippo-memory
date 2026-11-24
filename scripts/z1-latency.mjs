@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Z1 latency bench (docs/evals/2026-09-26-z1-prompt-recall-prereg.md, "Latency (locked)").
-// Run: node scripts/z1-latency.mjs
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

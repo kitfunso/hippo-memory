@@ -1,5 +1,3 @@
-// The order each recall ranker (the SQL band, the MCP wide list, the CLI core) gives over one seeded store, so a
-// change to how any of them picks its search engine shows up as a moved row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -36,14 +34,11 @@ interface Wide {
   band: readonly string[];
 }
 
-// The seeded prediction's claim is a semantic row with a fresh id each run.
 const CLAIM = '<claim>';
 const stable = (id: string): string => (id.startsWith('sem_') ? CLAIM : id);
 const FILLS = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
 
-/** The band's BM25 order for "deploy": the pinned row, the exact match, the summary's children, then the fillers. */
 const BM25 = ['mem_p_pinned', 'mem_p_plain', 'mem_x_child1', 'mem_x_child2', ...FILLS];
-/** The hybrid order for "deploy", where the vector arm lifts the trace and scoped rows above the fillers. */
 const HYBRID = [
   'mem_p_plain',
   'mem_p_trace',
@@ -56,7 +51,6 @@ const HYBRID = [
   'mem_p_fill4',
   'mem_x_raw',
 ];
-/** The physics order for "deploy", which ranks the scoped row first. */
 const PHYSICS = [
   'mem_p_scoped',
   'mem_p_fill0',
@@ -69,7 +63,6 @@ const PHYSICS = [
   'mem_p_fill5',
   'mem_p_fill2',
 ];
-/** The CLI core's order for "deploy", which a global store with no match or a private scope leaves alone. */
 const CORE_ORDER = [
   'mem_p_plain',
   'mem_p_pinned',
@@ -93,7 +86,6 @@ const BAND: readonly BandCase[] = [
   ['hybrid', { query: 'deploy', mode: 'hybrid' }, HYBRID],
   ['physics', { query: 'deploy', mode: 'physics' }, PHYSICS],
   ['scope team-alpha', { query: 'deploy', filter: { scope: 'team-alpha' } }, ['mem_p_scoped']],
-  // The band applies no session goal boost: the order stays BM25's.
   ['session goal boost', { query: 'deploy', boost: { sessionId: SESSION } }, BM25],
   [
     'goal tag beats the session',
@@ -119,7 +111,6 @@ const BAND: readonly BandCase[] = [
   ],
 ];
 
-/** The rows past the band's ten in the wide list for "deploy", in hybrid order. */
 const WIDE_TAIL = [
   'mem_p_fill1',
   'mem_p_fill3',
@@ -149,7 +140,6 @@ const WIDE: ReadonlyArray<readonly [string, RecallOptions, Wide]> = [
   [
     'wide physics with session',
     { query: 'deploy', mode: 'physics', boost: { sessionId: SESSION }, window: { limit: 5 } },
-    // Five rows fit the limit, then the overflow summary.
     { ranked: WIDE_PHYSICS, band: [...WIDE_PHYSICS.slice(0, 5), 'mem_x_summary'] },
   ],
   [

@@ -1,4 +1,3 @@
-// Which memories sleep may never delete, and how an outcome mark changes an entry.
 import { AGENT_MEMORY_TOOLS, toolSourcePrefix } from './agent-memory-tools.js';
 import { CHURN_STALE_TAG, type MemoryEntry } from './entry.js';
 import { isSuperseded } from './liveness.js';

@@ -1,4 +1,3 @@
-// Design 2 and 9: which store each pass writes to, the handover, and what may leave a store.
 import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -72,7 +71,6 @@ const opts = () => ({
   run: TEST_RUN,
 });
 
-/** About 340 characters each, so a dozen pass the content cap. */
 const longNote = (n: number): string =>
   Array.from({ length: n }, (_, i) => `Paragraph ${i}: ${'the build box keeps its cache warm, '.repeat(9)}`).join(
     '\n\n',
@@ -100,7 +98,6 @@ interface GitRuns<T> {
   readonly runs: number;
 }
 
-/** Domain starts git only through Machine.git, so a counting runner sees every git process the pass starts. */
 async function gitRunsDuring<T>(run: (machine: Machine) => Promise<T>): Promise<GitRuns<T>> {
   let runs = 0;
   const git: GitRunner = {
@@ -165,7 +162,6 @@ describe('agent memory sync: routing and sharing', () => {
     expect(claude(compaction.result).imported).toBe(1);
     expect(liveRows(w.local)).toMatchObject([{ content: Q, originProject: 'proj' }]);
     expect(isInitialized(w.global)).toBe(false);
-    // Claude Code's folder names ask git once; this world has no Gemini index or Copilot store to ask it again.
     expect((await gitRunsDuring((machine) => importProjectMemories(w.local, { ...opts(), machine }))).runs).toBe(1);
   });
 

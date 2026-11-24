@@ -1,7 +1,3 @@
-/** `hippo doctor`: a read-only health check (never creates a store, installs a hook or migrates
- * a database). Every non-passing check names the command that fixes it, so an agent can act on
- * the `--json` output. */
-
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -28,7 +24,6 @@ export interface DoctorCheck {
   id: string;
   status: DoctorStatus;
   detail: string;
-  /** Command or step that resolves a warn or fail. */
   fix?: string;
 }
 
@@ -36,7 +31,6 @@ export interface DoctorCheck {
 export interface DoctorReport {
   ok: boolean;
   version: string;
-  /** The store the checks ran against, or null when none exists. */
   store: string | null;
   checks: DoctorCheck[];
 }
@@ -50,14 +44,10 @@ export interface DoctorOptions {
    */
   home?: string;
   version: string;
-  /** The tenant the CLI root resolved. */
   tenantId: string;
   nodeVersion?: string;
   now?: Date;
-  /** Stands in for the fs the spool check reads; a test makes one call fail. */
   spoolFs?: SpoolFs;
-  /** hippo.db's diagnostics under a folder doctor found; the caller's composition root opens the
-   * store. */
   diagnosticsBodies: (hippoRoot: string) => DoctorStore;
 }
 
@@ -79,7 +69,6 @@ function versionAtLeast(actual: string, min: string): boolean {
   return true;
 }
 
-// A missing or corrupt file is the finding doctor reports, so null is the answer.
 function readJson(file: string): JsonValue | null {
   return tryReadJsonFile(file) ?? null;
 }
@@ -137,7 +126,6 @@ interface StoreChoice {
   check: DoctorCheck;
 }
 
-/** The store the checks run against (project first, then global), and the check that says which. */
 function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean): StoreChoice {
   if (local !== null && isInitialized(local)) {
     return {
@@ -184,7 +172,6 @@ function storeCheck(local: string | null, globalRoot: string, hasGlobal: boolean
   };
 }
 
-// Each hook and what it does, so a partial install says what is missing.
 const CLAUDE_CODE_HOOKS: ReadonlyArray<readonly [string, string]> = [
   ['hippo context --pinned-only', 'per-prompt memory'],
   ['hippo session-end', 'session-end capture and sleep'],
@@ -208,7 +195,6 @@ function claudeCodeCheck(home: string): DoctorCheck {
   return claudeHooksCheck(settings === null ? '' : JSON.stringify(settings));
 }
 
-/** Grades the hooks from the settings file's text: the plugin, every hook, none, or some. */
 function claudeHooksCheck(text: string): DoctorCheck {
   const viaPlugin = /hippo-memory@/.test(text);
   const missing = CLAUDE_CODE_HOOKS.filter(([marker]) => !text.includes(marker)).map(

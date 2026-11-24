@@ -1,4 +1,3 @@
-// The browser script of the graph page, kept as a module so tsc emits it with no copy step.
 export const GRAPH_CLIENT_SCRIPT = `(function () {
   var svg = document.getElementById('g');
   var vb = svg.getAttribute('viewBox').split(' ').map(Number);

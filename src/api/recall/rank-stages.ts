@@ -1,4 +1,3 @@
-// The stages after the search: graph expansion, re-rank, goal boost, salience and the filters.
 import { compareEntryIdentity, compareScoresDesc } from '../../base/rank/compare.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
 import { graphExpandRecall, graphOf } from '../../domain/graph/recall.js';
@@ -68,7 +67,6 @@ export async function rankStages(
   if (layer) dropUnless(state, (r) => r.entry.layer === layer);
 }
 
-/** Adds memories reached by walking the entity graph out from the lexical seeds. */
 async function expandGraph(
   ctx: RankRecallCtx,
   opts: SettledOptions,
@@ -78,8 +76,6 @@ async function expandGraph(
   const local = graphOf(ctx.store);
   if (graph.hops <= 0 || local === undefined) return;
   const { requested } = poolScope(opts);
-  // Expansion both adds neighbors and evicts weak base rows, so compare id sets: a net count would
-  // hide both.
   const beforeGraphIds = new Set(state.results.map((r) => r.entry.id));
   state.results = await graphExpandRecall(state.results, {
     hops: graph.hops,
@@ -99,7 +95,6 @@ async function expandGraph(
   }
 }
 
-/** Appends one rerank step to a re-scored row when `why` is on. */
 function traced<R extends SearchResult>(
   opts: RankRecallOptions,
   prev: SearchResult,
@@ -110,8 +105,6 @@ function traced<R extends SearchResult>(
   return next;
 }
 
-/** Re-sort after a score change. Plain and stable on purpose: ties keep the prior rank, not a
- * content order. */
 function byScore(results: SearchResult[]): SearchResult[] {
   return results.sort((a, b) => compareScoresDesc(a.score, b.score));
 }
@@ -121,8 +114,6 @@ interface RescoreStep {
   readonly note?: string;
 }
 
-/** Multiplies each row's score by `multiplier(row)` (undefined leaves the row alone), traces the
- * step and re-sorts. */
 function rescore(
   opts: RankRecallOptions,
   results: SearchResult[],
@@ -141,8 +132,6 @@ function rescore(
 }
 
 function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
-  // Recorded conflicts only: a lexical-overlap gate once wrecked benchmark recall. Down-rank, never
-  // delete.
   const presentIds = new Set(state.results.map((r) => r.entry.id));
   state.results = rescore(opts, state.results, { stage: 'interference' }, (r) =>
     (r.entry.conflictsWith || []).some((peerId) => presentIds.has(peerId))
@@ -152,7 +141,6 @@ function demoteConflictPeers(opts: RankRecallOptions, state: RankState): void {
 }
 
 function applyValueAware(opts: RankRecallOptions, state: RankState): void {
-  // Wider clamp than the always-on outcome boost, so outcome history can decide the order.
   state.results = rescore(opts, state.results, { stage: 'value' }, (r) => {
     const pos = r.entry.outcomePositive ?? 0;
     const neg = r.entry.outcomeNegative ?? 0;
@@ -187,19 +175,13 @@ function reorderResults(opts: RankRecallOptions, state: RankState): void {
   if (opts.rerankUtility) applyUtilityRank(opts, state);
 }
 
-// newestOnTopicFirst acts when the top hits overlap this much; it keeps rows near the best score or
-// covering the query.
 const NEAR_DUPLICATE_OVERLAP_MIN = 0.4;
 const SCORE_FLOOR_FRACTION = 0.5;
 const QUERY_COVERAGE_MIN = 0.6;
 const GOAL_TAG_BOOST = 1.5;
-// The near-duplicate check looks at this many top hits; the re-ordered pool is three times that, at
-// least 9.
 const NEAR_DUPLICATE_WINDOW = 3;
 const NEAR_DUPLICATE_POOL_MIN = 9;
 
-/** When the top hits are near-duplicates (same topic, different facts), surface the newest
- * on-topic row first. */
 function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResult[] {
   const slice = results.slice(0, Math.min(NEAR_DUPLICATE_WINDOW, results.length));
   let pairs = 0;
@@ -217,7 +199,6 @@ function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResul
   );
   const pool = results.slice(0, poolSize);
   const scoreFloor = pool.reduce((m, r) => Math.max(m, r.score), 0) * SCORE_FLOOR_FRACTION;
-  // Query coverage catches the differently phrased update a score floor alone would miss.
   const queryTokens = new Set(tokenizeQuery(query));
   const onTopic: SearchResult[] = [];
   const offTopic: SearchResult[] = [];
@@ -230,7 +211,6 @@ function newestOnTopicFirst(query: string, results: SearchResult[]): SearchResul
     const queryCoverage = queryTokens.size > 0 ? hits / queryTokens.size : 0;
     (r.score >= scoreFloor || queryCoverage >= QUERY_COVERAGE_MIN ? onTopic : offTopic).push(r);
   }
-  // Recency is the primary key; identity only breaks exact-timestamp ties.
   onTopic.sort((a, b) => {
     const ta = new Date(a.entry.created).getTime();
     const tb = new Date(b.entry.created).getTime();
@@ -246,7 +226,6 @@ function applyRecallReranker(
   { config, signal }: RankRecallCtx,
 ): Promise<SearchResult[]> {
   const rerankerOptions = { topK: reranker.topK, clef: config.runtime?.clef, signal };
-  // The reranker's score becomes `score` so later stages that sort by score keep its order.
   return applyReranker({
     query: opts.query,
     ordered: results,
@@ -270,7 +249,6 @@ async function applyGoalBoosts(
   const { goalTag = '', sessionId } = opts.boost ?? {};
   state.goals = null;
   if (goalTag) {
-    // Its own trace stage: `goal` is the explicit flag, `goal-boost` the session stack it replaces.
     state.results = rescore(
       opts,
       state.results,
@@ -280,10 +258,8 @@ async function applyGoalBoosts(
     return;
   }
   if (!sessionId) return;
-  // The helper re-spreads rows, so its steps come back in a map keyed by entry id.
   const goalBoostTrace = opts.why ? new Map<string, RerankStep>() : undefined;
   const session = { sessionId, tenantId: ctx.tenantId };
-  // The log may name global rows; the store drops those when it writes, as it does for api.recall.
   state.goals = await ctx.store.activeGoals(session);
   const boost = boostByGoals(state.results, state.goals, {
     ...session,
@@ -301,7 +277,6 @@ async function applyGoalBoosts(
   }
 }
 
-/** Soft-demotes rarely recalled rows: score *= max(0.5, retrieval_count / T); never drops one. */
 function applySalience(
   opts: RankRecallOptions,
   threshold: number,

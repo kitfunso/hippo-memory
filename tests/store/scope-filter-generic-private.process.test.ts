@@ -1,23 +1,3 @@
-/**
- * v1.2.1 preflight: generalize default-deny scope filter from `slack:private:*`
- * to ANY `*:private:*` source.
- *
- * Codex audit 2026-05-04 found that the v1.2 filter only blocks `slack:private:*`.
- * Once any other connector (GitHub, Jira, Linear, etc.) writes `<source>:private:*`
- * scoped rows, no-scope recall would leak them. v1.2.1 closes this BEFORE v1.3
- * GitHub work begins so rollback is safe.
- *
- * Coverage:
- * - api.recall (the load-bearing filter)
- * - api.recall continuity block (snapshots, handoffs, events)
- * - CLI printRecall continuity (mirror in cli.ts)
- * - MCP hippo_recall + hippo_context filters
- * - HTTP /v1/memories (transitively via api.recall)
- *
- * The synthetic source `acme:private:demo` proves the rule applies generically,
- * not just to slack/github by coincidence of test fixture choice.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -179,8 +159,6 @@ describe('scope filter — generic *:private:* default-deny', () => {
   });
 
   it('regex does NOT match a scope that merely contains "private" mid-string', async () => {
-    // `acme:public:my-private-channel` should NOT trigger default-deny —
-    // the segment is "public" not "private". Guards against a sloppy substring match.
     writeEntry(home, createMemory('not-actually-private memory', { scope: 'acme:public:my-private-channel' }));
 
     const result = await retrieve(ctx(home), { query: 'private memory' });

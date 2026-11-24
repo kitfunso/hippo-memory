@@ -1,6 +1,3 @@
-// First-class object verbs for decisions: record one (optionally superseding an older one's
-// memory), list, get, close.
-
 import type { Decision } from '../../base/records/object-types.js';
 import { memoryGet } from '../../api/memories/memories.js';
 import { decisionIdByMemory } from '../../api/objects/object-kinds.js';
@@ -80,7 +77,6 @@ export async function handleDecide({
   if (subcommand === 'list') return decideList(ctx, flags);
   if (subcommand === 'get') return decideGet(ctx, args);
   if (subcommand === 'close') return decideClose(ctx, args);
-  // Default subcommand: create. args[0] is the decision text.
   await decideCreate(ctx, subcommand, flags);
 }
 
@@ -91,15 +87,11 @@ async function decideCreate(
 ): Promise<void> {
   if (!decisionText) exitWithDecideUsage();
   const context = nonEmptyStringFlag(flags, 'context');
-  // A value-less `--supersedes` asks to supersede but gives no memory id: reject it rather than
-  // silently creating a non-superseding decision.
   if (flagValueless(flags, 'supersedes')) {
     fail('--supersedes requires a memory id, e.g. hippo decide "<text>" --supersedes mem_abc123.');
   }
   const supersedesMemId = stringFlag(flags, 'supersedes') ?? null;
 
-  // The save weakens the old memory in the same write. A decision row backing the memory is
-  // weakened through its supersede link; a plain memory is named so the save weakens it too.
   let supersedesDecisionId: number | undefined;
   let weakensMemoryId: string | undefined;
   if (supersedesMemId) {
@@ -133,7 +125,6 @@ async function recordDecision(
   try {
     return await objectCreate(ctx, 'decision', write, shellFolder());
   } catch (e) {
-    // True only while the save is whole or nothing: a throw after its commit would break this claim.
     if (supersedes) printError(NOT_RECORDED);
     throw e;
   }

@@ -1,5 +1,3 @@
-// The ledgers a caller writes to: the token ledger's store and the delivery ledger's recorder, which
-// context, recall and the session hooks share.
 import type { LedgerTurn } from '../base/ports/store.js';
 import type { TokenSurface, TokenUse } from '../base/ports/store/ledger.js';
 import type { LastSent } from '../base/session/skip-unchanged.js';
@@ -18,7 +16,6 @@ import { errorMessage, log, errorFields } from '../base/util/log.js';
 export interface LedgerReach {
   readonly local?: LedgerHome;
   readonly global?: GlobalInReach;
-  /** Under HIPPO_READ_ONLY=1 the rows are still read, so a skip decision holds, and never booked. */
   readonly readOnly?: true;
 }
 
@@ -88,9 +85,7 @@ export interface DeliveryStart {
   stdinText: string | undefined;
   runtime: HookRuntime;
   eventType?: DeliveryEventType;
-  /** The host's own session id from its environment, used when the payload names none. */
   envSessionId: string | undefined;
-  /** Passed through to the recorder; only tests set it. */
   fault?: DeliveryFault;
 }
 
@@ -102,14 +97,12 @@ export async function startDeliveryRecorder(
 ): Promise<DeliveryRecorder | null> {
   if (readOnlyOf(ctx)) return null;
   try {
-    // The same store the token ledger writes to, so its config governs both.
     const reach = ledgerReachOf(ctx);
     const home = ledgerHome(reach);
     if (home === null || !home.config.deliveryLedger.enabled) return null;
     return createDeliveryRecorder({
       ledger: home.ledger,
       storeHash: (await home.folderFiles.home()).hash,
-      // ledgerHome falls back to the global store only when the primary is not initialized.
       writeStore: home !== reach.local || ctx.reach?.isGlobal === true ? 'global' : 'local',
       tenantId: ctx.tenantId,
       stdinText: start.stdinText,
@@ -132,7 +125,6 @@ export async function startToolFailureRecorder(
   start: Omit<DeliveryStart, 'eventType'>,
 ): Promise<DeliveryRecorder | null> {
   const reach = ledgerReachOf(ctx);
-  // ledgerHome is the call's own store only when it is the local one.
   if (reach.local === undefined) return null;
   return startDeliveryRecorder(ctx, { ...start, eventType: 'tool-failure' });
 }

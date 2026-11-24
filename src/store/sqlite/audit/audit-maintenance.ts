@@ -1,5 +1,3 @@
-// hippo.db's AuditMaintenance group: the quality audit and repair, object-backed ids, automatic
-// deletes and the audit prune.
 import { appendAuditEvents, pruneAuditRows } from './audit.js';
 import { withBackup } from '../../../db/backup.js';
 import { withTrialScope, withWriteScope } from '../../../db/busy.js';
@@ -40,9 +38,6 @@ import { READ_PAGE_ROWS } from '../../../base/util/pages.js';
 import { getMeta, getMetaNumber, pragmaUserVersion, setMeta, META_KEY } from '../../../db/meta.js';
 import { QUALITY_GATE_VERSION } from '../../../base/memory/memory-quality.js';
 
-// Quality repair's issue list: which rows are defects and which of those a protection keeps.
-
-/** The issues among `entries` in their order, each defect kept when `protect` names the row. */
 function repairIssues(
   entries: readonly MemoryEntry[],
   parents: ReadonlyMap<string, MemoryEntry>,
@@ -61,7 +56,6 @@ function repairIssues(
   });
 }
 
-/** The rows a repair judged and the issues it found among them, in store order. */
 interface RepairPlan {
   readonly total: number;
   readonly issues: QualityRepairIssue[];
@@ -115,11 +109,9 @@ interface RepairRun {
   readonly tenantId: string;
   readonly protect: RepairProtection;
   readonly apply?: boolean;
-  /** Meta rows the apply writes with its moves, so the done mark commits with them. */
   readonly doneWrites?: readonly (readonly [key: string, value: string])[];
 }
 
-/** Each parent the rows name, read by id: the live row, else its dormant snapshot. */
 function parentsOf(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -134,7 +126,6 @@ function parentsOf(
   return parents;
 }
 
-/** The issues among `entries` in their order, each defect kept when `protect` names the row. */
 function judge(
   db: DatabaseSyncLike,
   { tenantId, protect }: RepairRun,
@@ -199,7 +190,6 @@ function unsupportedPreview(db: DatabaseSyncLike, tenantId: string): RepairPlan 
   if (!columns.has('id') || !columns.has('content')) return { total: 0, issues: [] };
   const issues: QualityRepairIssue[] = [];
   let total = 0;
-  // Hippo never names a rowid on insert, so every row's rowid is above 0.
   let afterRowid = 0;
   for (;;) {
     const rows = listPreviewRowsPage(db, columns, tenantId, { limit: READ_PAGE_ROWS, afterRowid });
@@ -227,10 +217,6 @@ function plannedResult(db: DatabaseSyncLike, root: string, run: RepairRun): Qual
   };
 }
 
-// No rejection record, as in project repair: the writers refuse these defects themselves, and a
-// record would also refuse a person's copy.
-/** When a repair moves its rows, the backup it took first, and the ratio the store scores
- * strength by. */
 interface RepairMove {
   readonly now: Date;
   readonly backup: string;
@@ -272,8 +258,6 @@ function setAsideIssue(
   return true;
 }
 
-/** The plan's set-aside rows read again and judged as they stand now, by id; a row gone or
- * changed drops out. */
 function rejudgeSetAsides(db: DatabaseSyncLike, run: RepairRun, plan: QualityRepairResult) {
   const ids = plan.issues
     .filter((issue) => issue.disposition === 'set-aside')
@@ -295,9 +279,6 @@ interface ApplyPlanOptions {
   readonly rules: StoreModel;
 }
 
-/** Moves the plan's set-aside rows under the write lock, judging only those again, so the lock
- * never spans the tenant; a writer refuses these defects, so no new one can appear between the
- * plan and the lock. */
 function applyPlan(
   db: DatabaseSyncLike,
   { run, plan, backup, rules }: ApplyPlanOptions,
@@ -324,8 +305,6 @@ function applyPlan(
   });
 }
 
-/** Preview by default; apply backs the database up, then moves certain defects `protect` lets go
- * to dormant storage. `db` is opened without running migrations, read-only for a preview. */
 function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): QualityRepairResult {
   const root = files.hippoRoot;
   const initial = withTrialScope(db, 'quality_repair_plan', () => plannedResult(db, root, run));
@@ -350,14 +329,11 @@ function repairOn(db: DatabaseSyncLike, files: StoreFiles, run: RepairRun): Qual
   return { ...result, warnings };
 }
 
-// The old key stays '1' so a binary from before the gate version keeps skipping the repair.
 const DONE_WRITES = [
   [META_KEY.qualityRepairAuto, '1'],
   [META_KEY.qualityRepairGate, String(QUALITY_GATE_VERSION)],
 ] as const;
 
-/** Applies the repair once per gate version, so stores that predate a quality check are cleaned on
- * upgrade with no command; null once done. `db` is opened writable without running migrations. */
 function repairQualityOnce(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -365,9 +341,7 @@ function repairQualityOnce(
   protect: RepairProtection,
 ): QualityRepairResult | null {
   if (getMetaNumber(db, META_KEY.qualityRepairGate) >= QUALITY_GATE_VERSION) return null;
-  // The apply commits the flag with the moves, so a lock taken between them cannot hide what moved.
   const result = repairOn(db, files, { tenantId, protect, apply: true, doneWrites: DONE_WRITES });
-  // An unsupported schema changed nothing, so the next run tries again once a migration has run.
   if (result.supported && result.backup === null) {
     for (const [key, value] of DONE_WRITES) setMeta(db, key, value);
   }
@@ -393,7 +367,6 @@ export function sqliteAuditMaintenance({ on, files }: Handles): AuditMaintenance
     ...reads,
     objectBackedAmong: skipEmpty(reads.objectBackedAmong, () => new Set<string>()),
     deleteAutomatically: skipEmpty(deleteAutomatically, () => []),
-    // Quality repair opens the store unmigrated, so it opens its own handle from the folder.
     repairQuality: (tenantId, apply, protect) =>
       answered(() =>
         files.opens.grant.withUnmigrated(files.hippoRoot, !apply, (db) =>

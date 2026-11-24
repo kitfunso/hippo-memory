@@ -1,5 +1,3 @@
-// userRulesGet hands the session-start hook every rule the person taught this project, with no budget to cut a long list.
-// Real SQLite stores in tmp dirs; HIPPO_HOME names the global store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -19,7 +17,6 @@ const FIRST_MS = Date.UTC(2026, 0, 1);
 let store: string;
 let globalRoot: string;
 
-/** The row capture writes for a rule the person stated; `n` sets its age, so a higher n is newer. */
 function ruleRow(n: number, over: Partial<MemoryEntry> = {}): MemoryEntry {
   const row = createMemory(`Rule ${n}: keep change note ${n} in its own file`, {
     source: 'capture',
@@ -30,7 +27,6 @@ function ruleRow(n: number, over: Partial<MemoryEntry> = {}): MemoryEntry {
   return { ...row, originProject: 'p', created: new Date(FIRST_MS + n * 60_000).toISOString(), ...over };
 }
 
-/** A pinned row an agent or a person saved by hand, which is no user rule. */
 function noteRow(n: number): MemoryEntry {
   return { ...createMemory(`Note ${n}: deploys go through the staging queue`, { pinned: true }), originProject: 'p' };
 }
@@ -56,7 +52,6 @@ const idsOf = (rows: readonly MemoryEntry[]): string[] => rows.map((e) => e.id);
 describe('userRulesGet', () => {
   it('returns all 60 user rules oldest first while 100 other pins sit beside them', async () => {
     const rules = Array.from({ length: 60 }, (_, n) => ruleRow(n));
-    // Newest first, so the store's own order cannot pass for the sort.
     for (const row of [...rules].reverse()) writeEntry(store, row);
     for (let n = 0; n < 100; n++) writeEntry(store, noteRow(n));
 

@@ -1,4 +1,3 @@
-// The tool-failure listing through linked store paths, the controls, invariance I4 and the command line.
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -108,7 +107,6 @@ describe('store paths through a link', () => {
       expect(ev.map((e) => [e.turn_seq, e.ledger_version, e.store_hash])).toEqual([1, 2, 3].map((n) => [n, V, v4]));
       const onLink = { store: G, global: G };
       expect(list('tf10', onLink).entries.map((e) => e.event_id)).toEqual(ev.map((e) => e.id));
-      // Raw SQL: the test is about the reader's version rule, and no binary writes a version 3 row any more.
       const db = new DatabaseSync(path.join(p.globalRoot, 'hippo.db'));
       try {
         const set = db.prepare('UPDATE delivery_events SET ledger_version = 3, store_hash = ? WHERE id = ?');
@@ -204,7 +202,6 @@ describe('controls', () => {
       ['stored', false],
       ['stored', false],
     ]);
-    // Raw SQL: pruning drops log rows on its own clock, and the reader's handling of the dangling id is what is tested.
     const db = new DatabaseSync(path.join(p.hippoRoot, 'hippo.db'));
     try {
       db.prepare('DELETE FROM failure_log WHERE id = ?').run(num(log[0].id));

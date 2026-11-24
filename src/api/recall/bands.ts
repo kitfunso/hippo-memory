@@ -1,4 +1,3 @@
-// How the result bands are placed: the goal boost, the summary substitution and the fresh tail.
 import { DAG_LEVEL, type MemoryEntry } from '../../base/memory/entry.js';
 import { leadInField } from '../../base/memory/lead-in.js';
 import { boostByGoals } from '../../domain/search/goal-boost.js';
@@ -36,23 +35,18 @@ export interface RankedBands {
 type ScoredEntry = { entry: MemoryEntry; score: number };
 type SummaryDecoration = { entry: MemoryEntry; childIds: string[] };
 
-/** The primary band in window order, goal-boosted when the plan asks, and the explain trace
- * the boost wrote to. */
 interface BoostedBase {
   baseScored: ScoredEntry[];
   goalLog: GoalRecallLogRow[];
   explainTrace: Map<string, RerankStep> | undefined;
 }
 
-// The goal-stack boost touches the primary band only; the fresh-tail and summary bands keep their
-// fixed placement.
 function boostBase(opts: RecallOptions, plan: RecallPlan, reads: RecallReads): BoostedBase {
   const { window, limit } = plan;
   const baseScored: ScoredEntry[] = window.baseSlice.map((entry, idx) => ({
     entry,
     score: Math.max(0, 1 - idx / Math.max(1, limit)),
   }));
-  // Allocated only under explain, so the boost's default-path math stays byte-identical.
   const explainTrace = opts.trace?.explain ? new Map<string, RerankStep>() : undefined;
   if (!plan.goalBoost || !reads.goals) return { baseScored, goalLog: [], explainTrace };
   const boost = boostByGoals(baseScored, reads.goals, { ...plan.goalBoost, trace: explainTrace });
@@ -99,7 +93,6 @@ export function rankBands(opts: RecallOptions, plan: RecallPlan, reads: RecallRe
   };
 }
 
-/** The base rows and summaries whose text no other row holds, and how many base rows went. */
 function withoutHeldCopies(base: ScoredEntry[], summaries: SummaryDecoration[]) {
   const entries = [...base.map((r) => r.entry), ...summaries.map((s) => s.entry)];
   const shownIds = new Set(dropHeldCopies(entries, (e) => e).map((e) => e.id));
@@ -110,9 +103,6 @@ function withoutHeldCopies(base: ScoredEntry[], summaries: SummaryDecoration[]) 
   };
 }
 
-// When the overflow holds 2+ children of one level-2 summary, that summary stands in for them,
-// capped at 30% of `limit`. Each one is tenant-scoped and re-checked against the scope filter;
-// drillDown recovers the children.
 interface SubstituteOverflowOptions {
   readonly overflowByParent: Map<string, MemoryEntry[]>;
   readonly parents: MemoryEntry[];
@@ -132,8 +122,6 @@ function substituteOverflow(
     opts.filter?.project,
   );
   const maxSub = Math.max(1, Math.ceil(limit * SUMMARY_SUB_FRACTION));
-  // Most overflowed children first; compareEntryIdentity only breaks a tie, which used to fall to
-  // scan order.
   eligibleParents.sort((a, b) => {
     const ac = overflowByParent.get(a.id)?.length ?? 0;
     const bc = overflowByParent.get(b.id)?.length ?? 0;
@@ -150,7 +138,6 @@ function substituteOverflow(
  * already in the base band.
  */
 export function overflowGroups(window: CandidateWindow, limit: number): Map<string, MemoryEntry[]> {
-  // The goal boost only re-scores the base band, so its ids are known before the boost runs.
   const baseIds = new Set(window.baseSlice.map((e) => e.id));
   const overflowByParent = new Map<string, MemoryEntry[]>();
   for (const e of window.entries.slice(limit)) {
@@ -179,7 +166,6 @@ function baseItem(
     layer: r.entry.layer,
     strength: r.entry.strength,
   };
-  // Only this band passes through the goal boost, so only it can carry a rerank step.
   if (opts.trace?.explain) {
     item.rerankPipeline = 'api';
     const step = explainTrace?.get(r.entry.id);
@@ -188,10 +174,8 @@ function baseItem(
   return item;
 }
 
-// A summary scores below the strong top-N matches but above the weakest leaves.
 const SUMMARY_ITEM_SCORE = 0.5;
 const FRESH_TAIL_ITEM_SCORE = 1.0;
-// Summaries may take this share of the limit.
 const SUMMARY_SUB_FRACTION = 0.3;
 
 function summaryItem(s: SummaryDecoration, opts: RecallOptions): RecallResultItem {
@@ -209,9 +193,6 @@ function summaryItem(s: SummaryDecoration, opts: RecallOptions): RecallResultIte
   return item;
 }
 
-// The last N raw rows, so "what did I just see" always covers the recent window. A recent row
-// already in the BM25 band is only tagged isFreshTail; new ones are prepended, so every recent row
-// appears exactly once.
 interface FreshTailBandOptions {
   readonly recent: MemoryEntry[];
   readonly baseRanked: RecallResultItem[];

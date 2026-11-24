@@ -1,4 +1,3 @@
-/* Design tokens and page-level rules. Every custom property used under ui/src must be defined here or in its own rule. */
 :root {
   --bg: #f3f5f8;
   --surface: #fff;

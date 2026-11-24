@@ -1,5 +1,3 @@
-// Continuity-tables self-heal (2026-08-15 incident): a store stamped past a
-// table's migration but missing it crashed every prompt; ensureContinuityTables fixes it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { HEALED_TRIGGERS } from '../../src/db/continuity-tables.js';
@@ -278,7 +276,6 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
   });
 
   it('heals task_snapshots on a store below v22, before the migrations that reference it', () => {
-    // v4, v16 and v22 ALTER or read task_snapshots; a store that lost it below v22 died there.
     const db = openHippoDb(root);
     try {
       db.exec('DROP TABLE task_snapshots');
@@ -297,7 +294,6 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
   });
 
   it('migrates a genuine pre-v16 task_snapshots shape and still ends at full parity', () => {
-    // codex round 2: an index on tenant_id or scope created before v16/v23 add them throws.
     const db = openHippoDb(root);
     try {
       db.exec('DROP TABLE task_snapshots');
@@ -336,8 +332,6 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
   });
 
   it('hippo context runs on the incident shape (real CLI verb, real store)', async () => {
-    // CLI resolves hippoRoot as <cwd>/.hippo, unlike the direct-hippoRoot
-    // calls above, so this case needs its own project/.hippo pair.
     const { base: projectDir, root: hippoDir } = makeStore('continuity-heal-cli');
     saveActiveTaskSnapshot(hippoDir, 'default', {
       task: 'Resume the current branch cleanly',
@@ -368,7 +362,6 @@ describe('continuity tables self-heal, missing table after schema stamp', () => 
     } finally {
       closeHippoDb(healed);
     }
-    // The saved task is the one row the context block can only print if the store was readable.
     expect(pinned + auto).toContain('Resume the current branch cleanly');
   });
 });

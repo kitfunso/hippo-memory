@@ -30,7 +30,6 @@ const payload = (): PostCompactPayload => ({
   compactSummary: summaryWith(['The billing service uses pnpm, so npm install is never run there.']),
 });
 
-// Each case holds the lock while the save waits out COMPACTION_DB_WAIT_MS, so it runs for seconds by design.
 describe('saveCompaction reports each failure once', { timeout: 30_000 }, () => {
   it('a busy store spools the summary and says so once, with no error log', async () => {
     const errors = vi.spyOn(logger, 'error').mockImplementation(() => {});

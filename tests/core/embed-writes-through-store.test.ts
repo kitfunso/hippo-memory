@@ -1,5 +1,3 @@
-// embedAll and embedMemory with a store embed through its vectorWrites group, never opening hippo.db in hippoRoot,
-// and through hippo.db's own store they leave the same index, model and particles as the path without a store.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -19,7 +17,6 @@ import { loadAllPhysicsState } from '../../src/db/physics-state.js';
 import { OTHER_STORE_MARKER, type PhysicsParticle } from '../../src/entry/store-kit.js';
 import type { StoreWith } from '../../src/base/ports/store.js';
 
-// The vector groups an add-on store keeps so its embeds go through vectorWrites.
 const VECTOR_GROUPS = ['vectors', 'vectorWrites'] as const;
 import { EMBEDDING_MODEL_META_KEY } from '../../src/db/vector-store.js';
 import { hashedVector, startHashedEmbeddings, type HashedEmbeddings } from '../_helpers/hashed-embedding-server.js';
@@ -36,7 +33,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { sqliteStore } = sessionPerTest();
 
-// Particles weigh a memory by its age, so seeded rows are dated before the fixed clock the embeds run at.
 const SEEDED_AT = '2026-01-15T00:00:00.000Z';
 const FAKE_NOW = '2026-03-01T12:00:00.000Z';
 const HASHED_MODEL = embeddingIndexIdentity('openai:hashed-16');
@@ -67,15 +63,12 @@ interface ConfigFile {
   readonly embeddings: { readonly provider: string; readonly model: string; readonly apiBaseUrl: string };
 }
 
-/** Everything an embed run leaves in hippo.db's vector index: rows with their model and bytes, the model meta row, and particles. */
 interface HippoDbIndex {
   readonly vectors: unknown[];
   readonly model: string;
   readonly particles: [string, PhysicsParticle][];
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
-/** The embed target for `store`, with the provider the folder's config.json names, as a root loads it. */
 function on(hippoRoot: string, store: StoreWith<'vectors' | 'vectorWrites'>): EmbedTarget {
   return {
     groups: { vectors: store.vectors, vectorWrites: store.vectorWrites },
@@ -221,14 +214,12 @@ describe('embedAll with a store', () => {
         createMemory(`turn-taking memory number ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       ),
     );
-    // An index under a third model, so both runs are model changes that replace the index on every page.
     await embedAll(on(root, sqliteStore(root)), undefined, provider('fake-old'));
     let reached: () => void = () => undefined;
     const atSecondPage = new Promise<void>((resolve) => (reached = resolve));
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));
     let calls = 0;
-    // The older run's second page waits until the newer run has been started.
     const held = provider('fake-a', async (texts) => {
       calls += 1;
       if (calls === 2) {
@@ -240,7 +231,6 @@ describe('embedAll with a store', () => {
     const older = embedAll(on(markedFolder(), portOnlySide(root, VECTOR_GROUPS).store), undefined, held);
     await atSecondPage;
     const newerStore = portOnlySide(root, VECTOR_GROUPS).store;
-    // The newer run is behind the older one once it asks the turn queue for its turn; that, not a pause, orders them.
     const queued = new Promise<void>((resolve) => {
       const run = embedTurns.run.bind(embedTurns);
       vi.spyOn(embedTurns, 'run').mockImplementation((key, job) => {
@@ -262,7 +252,6 @@ describe('embedAll with a store', () => {
 
   it('gives a store opened through a link and one opened on the real folder one index key, so they share a turn', async () => {
     const real = makeRoot('embed-link');
-    // Beside the store, so makeRoot's remove of the store never meets it.
     const link = `${real}-link`;
     try {
       symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
@@ -274,14 +263,12 @@ describe('embedAll with a store', () => {
         expect(await sqliteStore(real.toUpperCase()).vectorWrites.indexKey()).toBe(key);
       }
     } finally {
-      // unlink removes the link alone, never the store it points at.
       unlinkSync(link);
     }
   });
 
   it('gives a store opened through a link one index key before its folder is made and after', async () => {
     const parent = makeRoot('embed-unmade');
-    // Beside the folder, so makeRoot's remove of it never meets the link.
     const link = `${parent}-link`;
     try {
       symlinkSync(parent, link, process.platform === 'win32' ? 'junction' : 'dir');
@@ -290,7 +277,6 @@ describe('embedAll with a store', () => {
       expect(await sqliteStore(join(link, 'later')).vectorWrites.indexKey()).toBe(before);
       expect(await sqliteStore(join(parent, 'later')).vectorWrites.indexKey()).toBe(before);
     } finally {
-      // unlink removes the link alone, never the folder it points at.
       unlinkSync(link);
     }
   });

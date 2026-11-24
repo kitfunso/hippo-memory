@@ -1,5 +1,3 @@
-// The `hippo sleep` verb; main() loads it lazily, since most invocations never sleep.
-
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { isGitRepo } from '../../base/ports/git.js';
@@ -44,8 +42,6 @@ export async function handleSleep({
 /** Sleeps one store; with `--log-file` it also tees its output to that file. True when another
  * sleep held the store's claim, so this one consolidated nothing. */
 export async function sleepStore({ hippoRoot, tenantId, flags }: CommandContext): Promise<boolean> {
-  // Tee stdout/stderr to a log file when --log-file is set; the SessionEnd hook uses it so the
-  // SessionStart hook can re-display the output.
   const logFile = stringFlag(flags, 'log-file') ?? null;
   let restoreStdout: (() => void) | null = null;
   if (logFile) {
@@ -78,7 +74,6 @@ function renderSleepResult(result: api.SleepResult): void {
   for (const line of sleepResultLines(result)) console.log(line);
 }
 
-/** Fault-isolated: a failed repair warns and runs again next sleep, and never stops the sleep. */
 async function repairProjectTagsOnce(hippoRoot: string, tenantId: string): Promise<void> {
   try {
     const r = await api.projectNameRepairOnce(cliApiContext(hippoRoot, tenantId));
@@ -108,8 +103,6 @@ async function learnBeforeSleep(
   tenantId: string,
   flags: CliFlags,
 ): Promise<void> {
-  // Phase 1: Auto-learn from git and every coding agent's own memories (CLI-only, uses
-  // process.cwd() / os.homedir()). The CLI runs it here because api.sleep covers Phase 2-6 only.
   const learn = !boolFlag(flags, 'no-learn') && !skipLearnOnSharedStore(hippoRoot);
   if (learn && boolFlag(flags, 'dry-run')) {
     console.log(
@@ -128,7 +121,6 @@ async function learnBeforeSleep(
       if (added > 0) console.log(`Auto-learned ${added} lessons from today's git commits.`);
     }
 
-    // Opt-in code-churn staleness, off by default (config.churnStaleness.enabled).
     if (config.churnStaleness.enabled && isGitRepo(processGit, process.cwd())) {
       for (const { root, result } of await runChurnStaleForRepo(hippoRoot, tenantId, false)) {
         if (result.marked > 0) {
@@ -145,7 +137,6 @@ async function learnBeforeSleep(
   }
 }
 
-/** True when another sleep held the store's claim, so this one consolidated nothing. */
 async function runSleepCommand(
   hippoRoot: string,
   tenantId: string,
@@ -155,8 +146,6 @@ async function runSleepCommand(
 
   await learnBeforeSleep(hippoRoot, tenantId, flags);
 
-  // Finishes compactions a killed or busy post-compact hook left; never throws, and a dry run
-  // writes nothing.
   if (!boolFlag(flags, 'dry-run')) {
     const warn: Log = (message, fields) => log.warn(`compaction replay: ${message}`, fields);
     const finished = await replayCompactions(
@@ -173,7 +162,6 @@ async function runSleepCommand(
     await repairQualityOnce(hippoRoot, tenantId);
   }
 
-  // Phase 2-6: Pure-storage pipeline (consolidate + dedup + audit + share + ambient).
   const ctx = cliApiContext(hippoRoot, tenantId);
   const result = await api.sleepWholeStore(ctx, {
     dryRun: boolFlag(flags, 'dry-run'),
@@ -181,7 +169,6 @@ async function runSleepCommand(
   });
   renderSleepResult(result);
   const refused = sleepWasRefused(result);
-  // A store with no `hippo serve` gets its saved vector graph from its sleeps.
   if (!result.dryRun && !refused) {
     await saveVectorGraphFile(hippoRoot, {
       maxVectors: ctx.config.vectorGraph.maxVectors,

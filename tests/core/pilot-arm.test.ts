@@ -1,4 +1,3 @@
-// CD11 units: config parsing, the arm helpers, the consumer's arm query, ledger readers and doctor.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -47,7 +46,6 @@ afterEach(() => {
 
 const writeConfig = (pilot: JsonValue): void =>
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ pilot }));
-/** Books the arm through the Ledger group on `handle`, so a test can hold the store's lock or fault that connection. */
 async function ensurePilotArm(
   handle: DatabaseSyncLike,
   tenantId: string,
@@ -175,7 +173,6 @@ describe('pilot arm helpers', () => {
     const holder = openHippoDb(root);
     try {
       holder.exec('BEGIN IMMEDIATE');
-      // The reader is the server request's handle, so its write scope waits the session's bound.
       await withSharedStoreHandles(
         async (session) => {
           const reader = grantFor({ session }).open(root);
@@ -244,7 +241,6 @@ describe('pilot arm helpers', () => {
   });
 });
 
-// The enterprise reader (hippo-enterprise src/pilot/store.ts, merged in 3463cd5) selects these columns.
 interface ArmSql {
   session_id: string;
   tenant_id: string;

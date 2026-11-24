@@ -1,5 +1,3 @@
-// Root-keyed forms tests call; production code goes through the port or the handle-first forms. Each concern lives in root-forms-parts/.
-
 export * from './root-forms-parts/entries.js';
 export * from './root-forms-parts/cards.js';
 export * from './root-forms-parts/conflicts.js';

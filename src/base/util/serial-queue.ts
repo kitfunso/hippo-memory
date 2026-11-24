@@ -1,5 +1,3 @@
-// One in-process turn at a time per key, so independent owners never wait on each other.
-
 /** Runs jobs one after another per key; a key with nothing waiting is forgotten. */
 export class SerialQueues<K> {
   private readonly tails = new Map<K, Promise<void>>();

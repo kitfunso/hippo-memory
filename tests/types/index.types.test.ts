@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory` (src/index.ts); a drift fails `npm run typecheck:tests`. */
-
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
@@ -33,7 +31,6 @@ import type { HippoStore } from '../../src/entry/store-kit.js';
 import type { DecayOptions } from '../../src/entry/memory.js';
 type LossAversion = Pick<DecayOptions, 'lossAversionRatio'>;
 
-// Declared, not callback parameters: typeOnly takes a callback with none, so a parameter would be the error.
 declare const plainStore: HippoStore;
 declare const plainCtx: Context;
 

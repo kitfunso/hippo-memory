@@ -1,16 +1,3 @@
-"""E2 policy first-class object (bi-temporal-first) - Python SDK tests.
-
-Docs: docs/plans/2026-05-30-e2-policy-object.md
-
-Covers:
-1. Policy model round-trips wire camelCase <-> Python snake_case
-2. Defaults: status='active', version=1, valid_to=None, optionals None
-3. Back-compat: response missing optional fields parses
-4. ON DELETE SET NULL: memory_id wire null -> None
-5. SDK methods exist on Hippo + HippoSync (6 each)
-6. models.__all__ contains Policy (codex P3 carry-forward from the process episode)
-"""
-
 from __future__ import annotations
 
 from hippo_memory import Hippo, HippoSync, Policy
@@ -93,7 +80,6 @@ def test_policy_orphaned_memory_id_parses():
 
 
 def test_models_all_contains_policy():
-    # codex P3 from the process episode: models.py __all__ must export the symbol.
     assert "Policy" in models.__all__
 
 

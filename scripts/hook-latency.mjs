@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Hook latency at 10,000 memories: the prompt hook (`context`, promptRecall off and on) and the
-// failure hook (`capture-error`, a new failure and a repeat). Run after `npm run build`:
-//   node scripts/hook-latency.mjs [--runs 30] [--memories 10000] [--ledger-compare [--contention]]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -25,7 +22,6 @@ const CONTENTION = process.argv.includes('--contention');
 const { createMemory } = await import(pathToFileURL(path.join(REPO, 'dist', 'entry/memory.js')));
 const { initStore, writeEntry } = await import(pathToFileURL(path.join(REPO, 'dist', 'entry', 'testing.js')));
 
-// Same seed, vocabulary and prompts as scripts/z1-latency.mjs, so the context numbers compare.
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',
   'incident', 'latency', 'budget', 'token', 'schema', 'index', 'cache', 'retry',
@@ -53,7 +49,6 @@ function percentile(sorted, p) {
   return sorted[Math.max(0, idx)];
 }
 
-// failureSignature folds digits and hex runs, so a new failure needs new letters, not a new number.
 function letters(n) {
   let s = '';
   do { s += 'ghijklmnopqrstuvwxyz'[n % 20]; n = Math.floor(n / 20); } while (n > 0);
@@ -106,7 +101,6 @@ const failure = (text) => JSON.stringify({
 const WARMUPS = 3;
 const LEDGER_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
   !['HIPPO_SESSION_ID', 'CLAUDE_CODE_SESSION_ID', 'HIPPO_FAKE_NOW'].includes(k)));
-// Holds the write lock 30 ms at a time, so a ledger write meets a busy store.
 const CONTENDER = `const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 db.exec('PRAGMA busy_timeout = 5000');
@@ -116,7 +110,6 @@ for (;;) { db.exec('BEGIN IMMEDIATE'); pause(30); db.exec('COMMIT'); pause(5); }
 const sha = (text) => crypto.createHash('sha256').update(text).digest('hex');
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-// Copied rather than rebuilt so both ledger arms hold byte-identical memories, ids and timestamps.
 function cloneStore(seed, config) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-ledger-compare-'));
   fs.cpSync(seed.base, base, { recursive: true });
@@ -162,8 +155,6 @@ function turnInput(mode, i) {
   return JSON.stringify({ session_id: session, prompt: `${SHORT_PROMPT} ${letters(i)}`, hook_event_name: 'UserPromptSubmit' });
 }
 
-// Each turn runs both arms on the same payload, off first on even turns and on first on odd ones, so order effects cancel.
-// Warm-ups count for stdout and bytes, not latency.
 function measurePair(pair, mode, estimateTokens) {
   const before = [storeState(pair.off), storeState(pair.on)];
   const contenders = mode === 'contention'

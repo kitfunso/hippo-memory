@@ -1,5 +1,3 @@
-// The `hippo recall` stage flags and how each one is read.
-
 import { envActiveScope, envHippoSessionId } from '../../base/util/env.js';
 import { Layer } from '../../base/memory/entry.js';
 import { DEFAULT_RECALL_BUDGET } from '../../base/rank/search-types.js';
@@ -44,8 +42,6 @@ type RecallStageFlags = Pick<
   'graphHops' | 'reranker' | 'salienceThreshold' | 'outcome' | 'layer'
 >;
 
-/** `--graph-stream` implies rrf fusion as well as the graph stream; the CLI fuses the local
- * store only. */
 function parseGraphStreamFlags(flags: CliFlags): RecallGraphStream {
   const hops = intFlagInRange(flags, 'graph-hops', { min: 1, max: MAX_HOPS, example: '2' });
   hops.fail?.();
@@ -72,7 +68,6 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   try {
     picked = recallRerankerPick({ infra: cliInfra() }, name);
   } catch (err) {
-    // Deferred like the other stage flags, so a bad flag earlier in pipeline order fails first.
     return {
       fail: () => {
         throw err;
@@ -81,14 +76,12 @@ function parseRerankerFlag(flags: CliFlags): ParsedFlag<RecallReranker> {
   }
   if (!picked) return {};
   const { fn } = picked;
-  // slice(0, -1) would quietly drop the last candidate rather than fail.
   const topK = intFlagInRange(flags, 'reranker-top-k', { min: 1 });
   if (topK.fail) return { fail: topK.fail };
   return { value: { fn, topK: topK.value ?? picked.defaultTopK } };
 }
 
 function parseSalienceFlag(flags: CliFlags): ParsedFlag<number> {
-  // A bare --salience-threshold has always read as 1, since Number(true) is 1.
   const raw = flagValueless(flags, 'salience-threshold')
     ? '1'
     : stringFlag(flags, 'salience-threshold');
@@ -121,7 +114,6 @@ function parseChoiceFlag(
   return { value };
 }
 
-/** Parses every flag a ranking stage reads and fails on the first invalid one in pipeline order. */
 function parseStageFlags(flags: CliFlags): RecallStageFlags {
   const graphHops = parseHopsFlags(flags);
   const reranker = parseRerankerFlag(flags);
@@ -169,8 +161,6 @@ export function parseRecallFlags(ctx: api.Context, flags: CliFlags): ParsedRecal
   const showWhy = boolFlag(flags, 'why');
   const includeSuperseded = boolFlag(flags, 'include-superseded');
   const asOf = parseAsOfFlag(flags);
-  // The explicit --scope is the filter input; the detected scope only boosts, so auto-detection
-  // never filters.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const setting = recallStoreSetting(ctx, explicitScope || envActiveScope());
   const config = ctx.config;

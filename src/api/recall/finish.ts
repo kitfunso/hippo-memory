@@ -1,5 +1,3 @@
-// What a recall records: its audit rows, then the write around one recall (history, ring, recalled
-// counter, token ledger row and the client's shown list).
 import { auditQueryFields } from '../../base/records/audit-report.js';
 import type { RequiredStore, RecallWrites } from '../../base/ports/store.js';
 import type { TokenSurface } from '../../base/ports/store/ledger.js';
@@ -61,8 +59,6 @@ export function recallAuditRow(
   return { tenantId: who.tenantId, actor: who.actor, op, targetId, metadata };
 }
 
-// The row stores a hash of the query, never its text, so an archived memory's words cannot persist
-// there.
 export function recallAuditMetadata(query: string, results: number) {
   return { ...auditQueryFields(query), results };
 }
@@ -150,12 +146,8 @@ export function shownRecallRows(
 /** How one surface's recall is recorded. The surfaces differ in these three values and in the
  * list they hand over, nowhere else. */
 export interface RecallRecording {
-  /** Whose session rings the recall reads and feeds. */
   readonly ring: RecallSurface;
-  /** The label of its token ledger row. */
   readonly ledger: TokenSurface;
-  /** 'every': an empty list still reaches the stats write, which then only rewrites stats.json;
-   * 'shown': an empty list skips it; 'none': no stats write, and the ledger row books 0 items. */
   readonly counts: 'every' | 'shown' | 'none';
 }
 
@@ -181,12 +173,10 @@ export function recallLead(
   sessionId: string | undefined,
 ): RecallLead {
   return {
-    // Peeked, never created: a recall that then fails must not LRU-evict a live session.
     recallHistory:
       sessionId && biasHintEnabled(ctx.config, 'anchoring')
         ? peekSessionRing(ctx, how.ring, sessionId)
         : undefined,
-    // Written first in the recall's own write, so a recall that fails leaves no row.
     leadingAudit: sessionId ? [] : anchorSkippedRows(ctx.config, callerOf(ctx), query),
   };
 }
@@ -194,17 +184,11 @@ export function recallLead(
 /** The list a recall showed, as its ranker counted and priced it. */
 export interface ShownList {
   readonly query: string;
-  /** The recall's session, which keys the ring. */
   readonly sessionId: string | undefined;
-  /** The ids shown, best first. */
   readonly ids: readonly string[];
-  /** The memory this recall's anchoring hint named; the next recall's cooldown reads it. */
   readonly anchoredOn: string | undefined;
   readonly tokens: number;
-  /** The session the ledger row names: the recall's own on HTTP, the host agent's on the CLI,
-   * none on MCP. */
   readonly ledgerSessionId: string | null;
-  /** False when the audit rows could not be written and the caller answers anyway. */
   readonly written: boolean;
 }
 
@@ -216,8 +200,6 @@ export async function recordShownRecall(
   how: RecallRecording,
   shown: ShownList,
 ): Promise<void> {
-  // A surface that only peeked has its ring created here, after the write, so a recall that fails
-  // cannot LRU-evict a live session.
   const ring = sessionRing(ctx, how.ring, shown.sessionId);
   if (ring) {
     noteRecall({
@@ -229,10 +211,8 @@ export async function recordShownRecall(
     });
   }
   const items = how.counts === 'none' ? 0 : shown.ids.length;
-  // A recall with no audit row counts nothing, as it strengthens and traces nothing.
   const counted = shown.written && !readOnlyOf(ctx) && (how.counts === 'every' || items > 0);
   if (counted) await store.bumpRecallStats(items);
-  // The ledger books text that was sent, so its row does not wait on the audit write.
   await recordTokens(ctx, how.ledger, {
     items,
     tokens: shown.tokens,

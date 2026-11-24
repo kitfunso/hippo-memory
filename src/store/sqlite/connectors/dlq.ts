@@ -1,6 +1,3 @@
-// The dead-letter statements both connectors share; each connector names its table and columns and
-// maps rows to its own item type.
-
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -11,7 +8,6 @@ export type DlqTable = 'slack_dlq' | 'github_dlq';
 const DLQ_TABLES: readonly string[] = ['slack_dlq', 'github_dlq'];
 const COLUMN_NAME = /^[a-z_]+$/;
 
-// The statements splice identifiers into SQL, so the typed union is backed by a runtime check.
 function assertTable(table: string): void {
   if (!DLQ_TABLES.includes(table)) throw new Error(`Invalid DLQ table: ${table}`);
 }
@@ -22,13 +18,9 @@ function assertColumns(names: readonly string[]): void {
   }
 }
 
-// The driver returns each column by its stored affinity; the connector's rowToItem coerces every
-// field.
 type DlqRawValue = string | number | bigint | null;
 type DlqRawRow = Record<string, DlqRawValue>;
 
-/** Inserts one row, stamping received_at; `columns` pairs each column name with its value, in
- * insert order. */
 function insertDlqRow(
   db: DatabaseSyncLike,
   table: DlqTable,

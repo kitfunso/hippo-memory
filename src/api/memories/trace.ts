@@ -1,5 +1,3 @@
-// A trace: the ordered steps of one agent task and how it ended, stored as one trace-layer memory.
-
 import {
   calculateRewardFactor,
   calculateStrength,
@@ -54,7 +52,6 @@ export function traceStats(entry: MemoryEntry, ctx: Pick<Context, 'infra' | 'con
   const facets = confidenceFacets(entry, now);
   const conf = confidenceLabel(entry, now).text;
 
-  // Projected strength: same decay curve, just push `now` out.
   const projectedAt = (days: number): number =>
     calculateStrength(entry, new Date(now.getTime() + days * DAY_MS), model);
   return {

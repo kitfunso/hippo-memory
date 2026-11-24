@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Per-file count of log calls and hook side-log writes inside a catch block, a `.catch` callback, an 'error' event listener or a function taking
-// the caught error as a parameter that omit errorFields() may fall, never rise, so an operator reading the log sees the error class and stack of every failure.
-// A call that reads one field of errorFields(...) fails anywhere in src, with no baseline: it drops the rest.
-// A catch that only pushes the error's text into a result array, with no log call carrying errorFields(...), fails the same way.
-// Usage: check-caught-error-logs.mjs [--update]. --update rewrites the baseline and refuses to raise a number.
 
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -15,7 +10,6 @@ const BASELINE = '.caught-error-logs-baseline.json';
 const LOGGERS = new Set(['log', 'logger']);
 const LISTENER_METHODS = new Set(['on', 'once', 'addListener', 'prependListener', 'addEventListener']);
 
-// A hook's own log file: its writers (append*Log) and the line writer a function is handed (`log`, `logLine`, `x.log`).
 const SIDE_LOG_NAME = /^(?:log|logLine|append\w*Log)$/;
 
 const isLoggerCall = (n) =>
@@ -34,29 +28,24 @@ const isSideLogCall = (n) =>
 
 const isLogCall = (n) => ts.isCallExpression(n) && (isLoggerCall(n) || isSideLogCall(n));
 
-// A side-log writer handed the caught error itself logs its fields (compactions-record.ts's Log).
 const handsOnError = (call) =>
   isSideLogCall(call) && call.arguments.some((a) => ts.isIdentifier(a) && ERROR_PARAM.test(a.text));
 
 const isErrorFieldsCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorFields';
 
-// errorClassFields keeps the class and errno but not the text or stack, for a line that must not carry caller data.
 const isErrorClassFieldsCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'errorClassFields';
 
-/** True for `errorFields(x).errorClass`, `errorFields(x)['errorClass']` and `const { errorClass } = errorFields(x)`. */
 function readsOneField(call) {
   const p = call.parent;
   if ((ts.isPropertyAccessExpression(p) || ts.isElementAccessExpression(p)) && p.expression === call) return true;
   return ts.isVariableDeclaration(p) && p.initializer === call && ts.isObjectBindingPattern(p.name);
 }
 
-// expectedErrorText (src/base/util/log.ts) names an error the caller classified as expected.
 const isExpectedErrorTextCall = (n) =>
   ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'expectedErrorText';
 
-/** True when some node under `call` passes `match`. */
 function contains(call, match) {
   let found = false;
   const visit = (n) => {
@@ -67,16 +56,13 @@ function contains(call, match) {
   return found;
 }
 
-/** True when the call hands the whole errorFields(...) result on; `errorFields(x).errorClass` drops the stack and cause. */
 const carriesErrorFields = (call) =>
   contains(call, (n) => (isErrorFieldsCall(n) || isErrorClassFieldsCall(n)) && !readsOneField(n));
 
-/** True for a `debug` line carrying expectedErrorText(...): an expected error earns that one line with no stack. */
 const isExpectedDebugLine = (call) => call.expression.name?.text === 'debug' && contains(call, isExpectedErrorTextCall);
 
 const isFunction = (n) => ts.isArrowFunction(n) || ts.isFunctionExpression(n);
 
-/** Every function in the file by name, so `server.once('error', onError)` is read through its `const onError = ...`. */
 function namedFunctions(sf) {
   const byName = new Map();
   const visit = (n) => {
@@ -90,7 +76,6 @@ function namedFunctions(sf) {
   return byName;
 }
 
-/** The listener of `x.on('error', fn)`, `x.once('error', fn)` or `addEventListener('error', fn)`, inline or by name. */
 function errorListenerBodies(node, functions) {
   const callee = node.expression;
   const method = ts.isPropertyAccessExpression(callee) ? callee.name.text : ts.isIdentifier(callee) ? callee.text : '';
@@ -103,15 +88,12 @@ function errorListenerBodies(node, functions) {
 
 const ERROR_PARAM = /^(?:err|error|e|[a-z]\w*(?:Err|Error))$/;
 
-/** The body of a function that takes a caught error as a parameter, such as `reportFailure(step, err)`. */
 function errorParamBody(node) {
   const fn = ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || isFunction(node);
   if (!fn || !node.body) return [];
   return node.parameters.some((p) => ts.isIdentifier(p.name) && ERROR_PARAM.test(p.name.text)) ? [node.body] : [];
 }
 
-/** The bodies a node hands to the failure path: a catch block, a `.catch(...)` callback, an 'error' listener or a
- * function that takes the error as a parameter. */
 function failureBodies(node, functions) {
   if (ts.isCatchClause(node)) return [node.block];
   const withParam = errorParamBody(node);
@@ -167,7 +149,6 @@ export function partialPickLines(text) {
 
 const APPEND_METHODS = new Set(['push', 'unshift', 'append']);
 
-/** True when `root` turns the caught error into text: errorMessage(e), String(e), e.message or a `${e}` span. */
 const usesErrorText = (root, name) =>
   contains(
     root,
@@ -265,7 +246,6 @@ export function findResultOnlyCatches(srcDir) {
     );
 }
 
-/** The committed counts, or none when the file is absent; one read, so no exists-then-read race. */
 function readBaseline() {
   try {
     return JSON.parse(readFileSync(BASELINE, 'utf8'));
@@ -275,7 +255,6 @@ function readBaseline() {
   }
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const counts = Object.fromEntries(Object.entries(countUnfieldedLogs('src')).map(([f, n]) => [`src/${f}`, n]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);

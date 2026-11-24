@@ -1,4 +1,3 @@
-// Embeds memories into the vector index: picks the adapter for a target and runs embedAll and embedMemoryInto on it.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { rankStrength } from './boosts.js';
@@ -81,7 +80,6 @@ export async function embedMemoryInto(
     provider = on.embedderFor(on.embeddings, { model });
     available = provider.isAvailable();
   } catch (err) {
-    // Callers fire and forget, so this must resolve: a bad config warns once instead of rejecting.
     warnEmbedFailureOnce(on.failureNotices, 'config', errorMessage(err), err);
     return 'failed';
   }
@@ -103,11 +101,7 @@ export function embedMemoryDetached(
   );
 }
 
-/** Throws when an unavailable provider is a misconfiguration rather than an intentional no-op. */
 function throwIfProviderKeyMissing(cfg: EmbeddingsConfig, provider: EmbeddingProvider): void {
-  // An enabled API provider is unavailable only when its own read finds no key: a misconfiguration,
-  // surfaced so callers of the exported embedAll() learn nothing was written. Local-not-installed
-  // and enabled=false stay silent no-ops.
   if (provider.kind !== 'local' && cfg.enabled !== false && provider.keyEnv !== undefined) {
     throw new Error(
       `Embedding provider '${provider.kind}' is configured but ${provider.keyEnv} is not set.`,

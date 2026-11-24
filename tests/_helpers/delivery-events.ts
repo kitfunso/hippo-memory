@@ -1,4 +1,3 @@
-// Reads the delivery ledger back for tests: the store only writes it, and the pilot's report reads it with its own SQL.
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 
 /** One stored `delivery_candidates` row. */

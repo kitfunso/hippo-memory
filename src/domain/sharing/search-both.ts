@@ -1,5 +1,3 @@
-// Search across the local and global stores, merged into one ranked, budgeted list.
-
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
@@ -32,8 +30,6 @@ import type { SharingStore } from './text-keys.js';
 
 const FILTERED_SEARCH_WINDOW = 5000;
 
-// The rows are already copied; a failed background embed only delays vectors, so it warns instead
-// of throwing.
 export function logEmbedAllFailure<E>(caller: string, err: E): void {
   log.warn(
     `${caller}: background embed failed (${errorMessage(err)}); run 'hippo embed' to backfill`,
@@ -52,39 +48,17 @@ export interface HybridSearchOptions extends SearchOptions {
   explain?: boolean;
   mmr?: boolean;
   mmrLambda?: number;
-  /** Multiplier applied to local-store scores when merging with global.
-   *  Defaults to 1.2. Use 1.0 to remove the local bias for eval comparisons. */
   localBump?: number;
-  /** Active scope for scope-boost scoring; `runtime.activeScope` when not provided. */
   scope?: string | null;
-  /** The root's environment settings: scope, summary deboost and query-embedding budget, when
-   * the call sets none. */
   runtime?: RuntimeSettings;
-  /** The folder the caller runs in, whose path segments boost a memory in both stores; absent,
-   * no path boost. */
   cwd?: string;
-  /** The strength model and rank switches both stores rank under; absent, production ranking. */
   switches?: EvalSwitches;
-  /** Include superseded memories in results. Default false. */
   includeSuperseded?: boolean;
-  /** Filter to memories current at this ISO date string. */
   asOf?: string;
-  /** Budget cost per result, spent the same way in each store and in the merged list. */
   cost?: ResultCost;
-  /** Propagated to underlying hybridSearch calls.
-   *  Per-call > the root's HIPPO_SUMMARY_DEBOOST > 0.85 default. */
   summaryDeboost?: number;
-  /** Propagated. Default true (1.05 boost if rebuilt within 7d). */
   summaryFreshness?: boolean;
-  /** Optional admission predicate applied to the loaded candidates of BOTH stores before
-   * ranking, cross-store dedupe and budgeting, so an excluded row cannot shadow its admitted
-   * duplicate or saturate the budget. Undefined (recall paths never set it) means no filter. */
   entryFilter?: (entry: MemoryEntry) => boolean;
-  /** Recall scope filter for `searchBothHybrid`: absent is the only unfiltered mode; present
-   * uses `loadRecallSearchEntries` plus a JS post-filter. `{}` = default-deny (legacy and
-   * `<source>:private:*` excluded); `{ requested: 'X' }` = exact; `{ requested: 'X', additive:
-   * true }` = default plus X. An object, not `string | null`, because the sibling `scope` option
-   * already gives null a different meaning. Do not pass `{}` casually from non-recall paths. */
   recallScope?: { requested?: string; additive?: boolean; ownScope?: string };
 }
 
@@ -121,17 +95,12 @@ export async function searchBothHybrid(
   });
 }
 
-// Recall mode: push the scope predicate into SQL like api.recall, so quarantine/private rows
-// never enter the candidates, shadow duplicates or use budget. The JS post-filter in
-// scopeAdmission is the regex-only `<source>:private:*` half plus defense in depth on exact match.
 async function loadStoreEntries(
   query: string,
   store: SharingStore,
   options: BothStoresSearch,
 ): Promise<MemoryEntry[]> {
   const { includeSuperseded, asOf, tenantId, entryFilter, recallScope } = options;
-  // With an admission filter, lift the per-store candidate cap (DEFAULT_SEARCH_CANDIDATE_LIMIT) to
-  // a bounded window: excluded rows could otherwise fill it first.
   const searchWindow = entryFilter ? FILTERED_SEARCH_WINDOW : undefined;
   const { sharing } = store;
   if (!(await store.folderFiles.home()).exists) return [];
@@ -158,7 +127,6 @@ function scopeAdmission(options: BothStoresSearch): (e: MemoryEntry) => boolean 
   return (e: MemoryEntry): boolean => passesScope(e) && (!entryFilter || entryFilter(e));
 }
 
-// The vector arm loads under the same SQL rules as loadStoreEntries, then the same JS admission.
 function recallVectorCandidates(
   options: BothStoresSearch,
   admit: (e: MemoryEntry) => boolean,
@@ -178,7 +146,6 @@ function recallVectorCandidates(
   };
 }
 
-/** The store's own vectors, with the embedding provider its folder's config names. */
 function folderVectorSource(
   { store, config }: ConfiguredFolder<SharingStore>,
   embedderFor: EmbedderFor,
@@ -186,8 +153,6 @@ function folderVectorSource(
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor });
 }
 
-/** Each store prices its rows already tagged, so a price that reads the store origin sees it
- * before the merge. */
 function pricedAs(cost: ResultCost | undefined, isGlobal: boolean): ResultCost | undefined {
   return cost && ((r) => cost({ ...r, isGlobal }));
 }
@@ -197,7 +162,6 @@ function mergeStoreResults(
   globalResults: SearchResult[],
   localBump: number,
 ): Array<SearchResult & { isGlobal: boolean }> {
-  // Tag global results. Local memories get a configurable priority bump.
   const tagged: Array<SearchResult & { isGlobal: boolean }> = [
     ...localResults.map((r) => ({
       ...r,
@@ -210,7 +174,6 @@ function mergeStoreResults(
     ...globalResults.map((r) => ({ ...r, isGlobal: true })),
   ];
 
-  // Remove duplicates by content (local/global IDs differ after promote/share)
   const seen = new Set<string>();
   const deduped = tagged.filter((r) => {
     const key = duplicateKey(identityText(r.entry));
@@ -219,8 +182,6 @@ function mergeStoreResults(
     return true;
   });
 
-  // PLAIN stable score sort on purpose: both inputs are deterministically ordered, and an exact tie
-  // keeps the LOCAL result ahead of the global one (concat order).
   deduped.sort((a, b) => compareScoresDesc(a.score, b.score));
   return deduped;
 }
@@ -267,8 +228,6 @@ export async function rankBothStores({
   );
 }
 
-// One deadline for both stores, so a provider that stalls on the first is not waited on again for
-// the second.
 function sharedRanking(
   options: HybridSearchOptions & RankTime,
   vectorCandidates: HybridVectorCandidates,

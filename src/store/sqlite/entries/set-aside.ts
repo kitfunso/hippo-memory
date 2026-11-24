@@ -1,5 +1,3 @@
-// Takes an imported agent note out of recall on the caller's transaction; the note sync and the
-// project repair both use it.
 import { appendAuditEvents } from '../audit/audit.js';
 import type { StoreModel } from '../runtime/open.js';
 import { SYNC_ACTOR } from '../../../base/memory/agent-memory-tools.js';
@@ -36,14 +34,12 @@ export function setAsideRow(
         metadata,
       },
     ]);
-  // Deleting a row an object links to nulls the link, which no restore repairs.
   if (row.pinned || memoriesBackingAmong(db, [row.id]).has(row.id)) {
     setEntryTagsInTx(db, untagged);
     audit({ why, untagged: true });
     return { kind: 'untagged', entry: untagged };
   }
   const now = handleNow(db);
-  // Sleep's dormant move skips kept rows, so the steps are written out here without its filter.
   insertDormantRow(db, {
     entry: untagged,
     strength: calculateStrength(row, now, rules.strength),

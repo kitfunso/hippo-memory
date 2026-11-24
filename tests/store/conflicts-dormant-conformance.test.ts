@@ -1,5 +1,3 @@
-// Conflicts and Dormant answer: conflict pages and resolutions with
-// their audit rows, and dormant rows listed, restored and forgotten within reach of the caller's own scope.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -22,10 +20,8 @@ import { listMemoryConflicts, replaceDetectedConflicts, writeEntry } from '../_h
 
 const START = Date.parse('2026-03-01T12:00:00.000Z');
 const DETECTED_AT = '2026-01-01T00:00:00.000Z';
-// Apart from the faked clock, so the stamp can only come from the resolution's own time.
 const RESOLVED_AT = '2026-02-02T02:02:02.000Z';
 const ALICE = 'personal:private:alice';
-// A factor and a floor apart from the domain's, so the store is seen to apply the fate as given.
 const WEAKEN = { kind: 'weaken', halfLifeFactor: 0.25, minHalfLifeDays: 3 } as const;
 
 let fixture: TwoTenantFixture;
@@ -73,7 +69,6 @@ function seedDormant(): void {
   const db = openHippoDb(fixture.dir);
   try {
     const dormant = (name: string, content: string, at: string, over: Partial<MemoryEntry> = {}) => {
-      // An origin named, so the row does not take the folder's project.
       const entry = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj', ...over };
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt: at });
       rows[name] = entry;
@@ -100,12 +95,10 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// The store stamps a write's memory rows with its own clock in SQL's datetime form, so that value is named by format.
 function stamped<T>(value: T): T {
   return JSON.parse(JSON.stringify(value).replace(/"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d"/g, '"stamped"'));
 }
 
-/** Each call one second after the one before. */
 async function conforms<G extends 'conflicts' | 'dormant'>(group: G, calls: readonly GroupCall<G, unknown>[]) {
   const timed = calls.map((call, i): GroupCall<G, unknown> => async (methods, store) => {
     vi.setSystemTime(START + i * 1000);
@@ -180,7 +173,6 @@ describe('Conflicts', () => {
       true,
     ]);
     expect(outcomes[13]).toEqual({ value: true });
-    // A tenant's read drops a conflict whose loser is gone; the every-tenant read keeps it with that member null.
     expect(outcomes[14]).toEqual({ value: [conflictIds.weaken] });
     type Member = { kind: string } | null;
     const everyTenant = valueAt<{ rows: { conflict: { id: number }; a: Member; b: Member }[] }>(outcomes, 15);

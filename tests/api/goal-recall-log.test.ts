@@ -1,5 +1,3 @@
-// B3 Task 8: goal_recall_log captures memories CLI recall boosts under an active goal, and stays empty when no
-// active goal matches. Recall runs in process on a per-test store with an isolated HIPPO_HOME.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -13,7 +11,6 @@ import { pushGoal } from '../_helpers/root-forms.js';
 
 const savedCwd = process.cwd();
 
-/** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<void> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
   const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
@@ -30,7 +27,6 @@ describe('goal_recall_log captured from CLI recall', () => {
     vi.stubEnv('HIPPO_HOME', env.globalRoot);
     vi.stubEnv('HIPPO_TENANT', 'default');
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    // The CLI looks for the store in `.hippo` under the working directory.
     process.chdir(env.cwd);
   });
 

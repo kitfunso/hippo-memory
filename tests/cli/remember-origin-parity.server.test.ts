@@ -1,4 +1,3 @@
-// The CLI thin client sends no project, so a routed remember stamps what the direct path stamps on the same store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,7 +17,6 @@ afterEach(() => {
 let tmp: string;
 let handle: ServerHandle | null = null;
 
-/** `<tmp>/proj/.hippo` inside a git checkout, so the folder stamp is `proj`; no embedder, so a write starts no model load. */
 function projectStore(config: Record<string, JsonValue>): string {
   fs.mkdirSync(path.join(tmp, 'proj', '.git'), { recursive: true });
   const store = path.join(tmp, 'proj', '.hippo');
@@ -28,7 +26,6 @@ function projectStore(config: Record<string, JsonValue>): string {
   return store;
 }
 
-/** The real direct path, `hippo remember` with no server up; `force` skips the salience gate, which is not under test. */
 async function directRemember(store: string, text: string): Promise<string> {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   try {
@@ -41,7 +38,6 @@ async function directRemember(store: string, text: string): Promise<string> {
   return row?.id ?? '';
 }
 
-/** `hippo remember` with a server up: the CLI itself decides to route and builds the body, so the test fails if it stops routing. */
 async function thinRemember(store: string, text: string, flags: CliFlags = {}): Promise<string> {
   handle = await serveKeyed({ hippoRoot: store, port: 0 }, serve);
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);

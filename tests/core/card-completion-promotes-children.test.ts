@@ -1,4 +1,3 @@
-// Completing a card promotes exactly its backlog children whose parents are all done, in card_deps order, and touches no other child.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { Card } from '../../src/base/records/card.js';
@@ -16,7 +15,6 @@ interface Preparer {
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement object.
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as { DatabaseSync: { prototype: Preparer } };
 let root: string;
-// One handle per test for the seeding and reads, as one CLI command shares it.
 let session: RequestStores;
 let store: ReturnType<typeof sqliteStore>;
 
@@ -48,12 +46,10 @@ async function card(id: string): Promise<Card> {
 
 interface Family {
   readonly parent: string;
-  /** Children the completion must promote: each is in backlog and every parent of it is done once `parent` is. */
   readonly promotable: Set<string>;
   readonly others: Card[];
 }
 
-/** A parent in review with `children` children: every fourth waits on an open second parent, every fifth already left backlog, the rest are promotable. */
 async function seedFamily(children: number): Promise<Family> {
   const parent = (await store.cards.create(TENANT, { title: 'parent' })).id;
   const doneParent = (await store.cards.create(TENANT, { title: 'done parent' })).id;
@@ -83,7 +79,6 @@ async function seedFamily(children: number): Promise<Family> {
   return { parent, promotable, others: await Promise.all(otherIds.map(card)) };
 }
 
-// Each case writes a family of up to 100 cards and their dependency rows to a real store, one statement at a time.
 describe('completeCard child promotion', () => {
   it.each([1, 10, 100])(
     'promotes the unblocked backlog children of a parent with %i children, in card_deps order',
@@ -135,7 +130,6 @@ describe('completeCard child promotion', () => {
   });
 });
 
-/** Runs `fn` and returns the SQL of every statement it prepared, through a wrapper that calls the real prepare. */
 function recordPrepares<T>(fn: () => T) {
   const prepared: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
@@ -150,14 +144,11 @@ function recordPrepares<T>(fn: () => T) {
   }
 }
 
-// Each measured call runs outside the test's request, so it prepares on a fresh connection as one CLI command does.
 describe('statements one completion prepares and runs', () => {
-  // Writes three families of 1, 10 and 100 cards to a real store.
   it('do not grow with the child count: one read of the children and one update for all it promotes', async () => {
     const runs: { prepared: string[]; run: string[] }[] = [];
     for (const children of [1, 10, 100]) {
       const family = await seedFamily(children);
-      // The completion's statements all run inside the call; only its answer waits on the Promise.
       const log = recordStatements(() => recordPrepares(() => completeCard(root, TENANT, family.parent, 'success')));
       expect((await log.result.result)?.promotedChildren).toHaveLength(family.promotable.size);
       runs.push({ prepared: log.result.prepared, run: log.statements });

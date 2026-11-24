@@ -1,10 +1,8 @@
-// Runs a transfer command with its stderr streamed live and bounded, under a deadline.
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { killTree } from '../../host/kill-tree.js';
 import { spawnArgv } from '../../host/spawn-argv.js';
 
-/** The most stderr `runWatched` returns; the terminal still gets all of it. */
 const STDERR_TAIL_BYTES = 64 * 1024;
 
 /** A transfer command that has not exited in this long is hung on a prompt or a dead remote. */
@@ -50,7 +48,6 @@ function watchChild(
       process.stderr.write(chunk);
     });
 
-    // Rejects first so the caller sees the timeout at once; the tree kill is not awaited.
     const timer = setTimeout(() => {
       reject(new RunWatchedTimeoutError(deadlineMs, tail.toString('utf8')));
       // Node reaped an exited child, so its pid may now name another process.

@@ -1,4 +1,3 @@
-// The PostToolUseFailure hook: stores a failed tool call as an error memory.
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { parseJson } from '../../../base/util/json.js';
 import { isInitialized } from '../../../host/project-identity.js';
@@ -24,7 +23,6 @@ export async function handleCaptureError({
     const payload = (text ?? '').trim();
     if (isInitialized(root) && payload) {
       const failure = parseJson(payload);
-      // Built inside the hook's request, so the recorder and the capture share its one handle.
       await cliHookRequest(async () => {
         const ctx = cliApiContext(root, tenantId);
         const rec = await startToolFailureRecorder(ctx, {
@@ -44,8 +42,6 @@ export async function handleCaptureError({
       });
     }
   } catch (err) {
-    // A malformed payload or store error must never fail the agent's tool call, so it is reported
-    // and dropped.
     log.warn(`failure capture skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }

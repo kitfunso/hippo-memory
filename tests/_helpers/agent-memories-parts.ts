@@ -1,4 +1,3 @@
-// In-memory containers for the part-splitting tests: no disk, no store.
 import { splitContainer } from '../../src/domain/agent-memories/note-parts.js';
 import type { Container, MemoryItem } from '../../src/domain/agent-memories/types.js';
 

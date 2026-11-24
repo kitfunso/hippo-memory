@@ -1,12 +1,3 @@
-/**
- * v1.25.0 (v39 post-ship tail #2) — SleepResult.secretSkipped observability.
- *
- * autoShare's secret veto used to be silent; api.sleep now surfaces the count
- * of shares the veto actually withheld. Real store + real sleep (no mocks),
- * per project convention. Store/HIPPO_HOME isolation pattern per
- * tests/api/api-sleep-phase-faults.test.ts.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
@@ -20,8 +11,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry, apiCtx } = sessionPerTest();
 
-// Same secret shape tests/util/secret-detect.test.ts proves trips detectSecret;
-// pinned + error/gotcha tags push transferScore over the 0.6 auto-share bar.
 const SECRET_ROW = 'service api key sk_vendor_deadbeef123456 for the ingest worker';
 const CLEAN_ROW = 'gotcha: powershell 5.1 has no pipeline chain operators, use if blocks';
 

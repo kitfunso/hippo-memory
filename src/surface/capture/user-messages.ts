@@ -1,5 +1,3 @@
-// The messages a person typed in a session, as capture items: each one whole, so a fact told in
-// chat can be recalled later even when it states no rule.
 import { createHash } from 'node:crypto';
 import { USER_MESSAGE_TAG } from '../../base/memory/entry.js';
 import { ID_SUFFIX_CHARS } from '../../base/util/token-text.js';
@@ -8,7 +6,6 @@ import { proseOnly, withoutBold, type ExtractedItem } from './extract.js';
 import type { SessionTurn } from './transcript.js';
 
 const MAX_USER_MESSAGE_CHARS = 2000;
-/** A reply such as "ok thanks" holds nothing to recall. */
 const MIN_USER_MESSAGE_WORDS = 3;
 
 const CUT_MARK = '…';
@@ -30,7 +27,6 @@ function isWorthKeeping(text: string): boolean {
   return proseOnly(text).split(/\s+/).filter(Boolean).length >= MIN_USER_MESSAGE_WORDS;
 }
 
-/** A long message is mostly a paste, so it keeps only the person's own words, then is cut. */
 function cut(text: string): string {
   if (text.length <= MAX_USER_MESSAGE_CHARS) return text;
   const prose = proseOnly(text)

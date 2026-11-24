@@ -1,4 +1,3 @@
-// tools/jaccard-overlap.test.ts
 import { describe, it, expect } from 'vitest';
 import { tokenize, jaccard, stem } from '../../tools/jaccard-overlap.mjs';
 
@@ -21,7 +20,6 @@ describe('jaccard-overlap', () => {
 
   it('tokenize drops short tokens', () => {
     const tokens = tokenize('a is on');
-    // Stop-words AND length<=2 → all dropped.
     expect(tokens.size).toBe(0);
   });
 
@@ -40,17 +38,15 @@ describe('jaccard-overlap', () => {
   });
 
   it('Porter-stem collapses singular/plural and tense pairs', () => {
-    // "verifies" -> "verify"; "verify" -> "verify". Same stem.
     expect(stem('verifies')).toBe(stem('verify'));
   });
 
   it('tokenize end-to-end produces expected stem set', () => {
     const tokens = tokenize('Persisting instants in UTC across daylight-saving boundaries.');
-    // Drops 'in'/'across' as stop-words, drops short tokens, stems the rest.
     expect(tokens.has('utc')).toBe(true);
     expect(tokens.has('instant')).toBe(true);
     expect(tokens.has('daylight')).toBe(true);
-    expect(tokens.has('saving')).toBe(false); // stripped to 'sav'
+    expect(tokens.has('saving')).toBe(false);
     expect(tokens.has('in')).toBe(false);
     expect(tokens.has('across')).toBe(false);
   });

@@ -1,5 +1,3 @@
-// The server thread's side of the store workers: SQLite's synchronous statements and lock waits run
-// on their threads, so the event loop keeps answering.
 import { fileURLToPath } from 'node:url';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
 import { addAuditWriteFailures } from '../../../base/records/audit-report.js';
@@ -24,8 +22,6 @@ import {
   type WorkerInit,
 } from './worker-ops.js';
 
-// Resolved from the package root, so a server run from TypeScript source starts the same built
-// file.
 const WORKER_ENTRY = fileURLToPath(
   new URL('../../../../dist/store/sqlite/runtime/worker-entry.js', import.meta.url),
 );
@@ -42,59 +38,31 @@ const WRITE_NOT_SAVED =
 const WRITE_UNKNOWN =
   "the store did not confirm the write by the request's deadline; it may or may not be saved";
 
-// Far above any burst a healthy thread clears, small enough that a stuck thread refuses new work in
-// bounded memory.
 const DEFAULT_QUEUE_MAX = 256;
 
-// How long past its deadline a write may still report its own outcome before the caller is told it
-// is unknown.
 const DEFAULT_WRITE_GRACE_MS = 2000;
 
 export interface CallOptions {
   readonly mode: OpRoute;
   readonly requestId: string | undefined;
-  /**
-   * Epoch milliseconds by which the call's request must be answered; absent means the call waits as
-   * long as it takes.
-   */
   readonly deadlineAt?: number | undefined;
-  /** Aborts when the request is abandoned; a call still queued then is dropped and never runs. */
   readonly signal?: AbortSignal | undefined;
 }
 
 /** The strength model and fake clock are the root's, which each thread's store opens with. */
 export interface ExecutorOptions extends StoreRules {
-  /** Lock wait of each thread's connection; defaults to the server's. */
   readonly busyWaitMs?: number;
-  /** Calls that may wait for one thread; the server passes HIPPO_STORE_QUEUE_MAX; defaults to
-   * 256. */
   readonly queueMax?: number;
-  /** How long past its deadline a write may still report its own outcome; defaults to 2000 ms. */
   readonly writeGraceMs?: number;
-  /** Stored vectors a store holds before the pinned reader builds its vector graph; defaults to
-   * VECTOR_GRAPH_THRESHOLD. */
   readonly vectorGraphThreshold?: number;
-  /** Stored vectors past which the pinned reader keeps no graph; the server passes config
-   * vectorGraph.maxVectors. */
   readonly vectorGraphMaxVectors?: number;
-  /** The server's runtime: a store it checkpoints in the background gets each thread's
-   * connection the larger limit. */
   readonly runtime?: StoreRuntime | undefined;
 }
 
 export interface SqliteExecutor {
-  /**
-   * Runs `op` of the synchronous store on a worker thread. A throw there rejects here as an
-   * instance of its own class.
-   */
   call<T>(op: string, args: readonly unknown[], opts: CallOptions): Promise<T>;
-  /** Resolves once every thread has exited: Windows cannot delete a store folder while a thread
-   * holds its files. */
   close(): Promise<void>;
-  /** Threads started and not yet exited. */
   liveThreads(): number;
-  /** Stops the writer thread as a crash would: its running and queued calls reject, and the next
-   * write starts a fresh thread. */
   terminateWriter(): void;
 }
 
@@ -105,22 +73,16 @@ interface Pending {
   readonly deadlineAt: number | undefined;
   readonly signal?: AbortSignal | undefined;
   timer: NodeJS.Timeout | undefined;
-  /** Set once the caller has its answer, so nothing that happens to the job later reaches it. */
   answered: boolean;
 }
 
-/** One thread and the calls waiting for it; at most one job is on the thread at a time. */
 interface Lane {
   readonly mode: OpMode;
-  /** The reader every 'pinned-read' call goes to. */
   readonly pinned: boolean;
   readonly queue: Pending[];
   running: Pending | undefined;
   worker: Worker | undefined;
-  /** The thread while it is being stopped at a deadline; its job stays `running` until it has
-   * exited, so nothing is sent meanwhile. */
   stopping: Worker | undefined;
-  /** The writer's commit flag: the id of the last job that may have committed. */
   commitFlag: Int32Array | undefined;
 }
 
@@ -136,15 +98,12 @@ function laneOf(mode: OpMode, pinned = false): Lane {
   };
 }
 
-// A thread that will not stop leaves a live worker behind, so the rejection is logged rather than
-// dropped.
 function terminateLogged(worker: Worker): void {
   worker
     .terminate()
     .catch(<E>(err: E) => log.warn('the store worker did not terminate cleanly', errorFields(err)));
 }
 
-/** Gives `pending`'s caller its one answer; a second call does nothing. */
 function finish(pending: Pending, answer: () => void): void {
   if (pending.answered) return;
   pending.answered = true;
@@ -163,10 +122,8 @@ function load(lane: Lane): number {
 class WorkerPool implements SqliteExecutor {
   readonly #hippoRoot: string;
   readonly #busyWaitMs: number;
-  // One writer, so writes run in call order and never wait on each other's lock.
   readonly #writer = laneOf('write');
   readonly #readers = [laneOf('read', true), laneOf('read')];
-  // Keyed by thread and not by lane: close() must also wait for a thread its lane already replaced.
   readonly #exits = new Map<Worker, Promise<void>>();
   readonly #queueMax: number;
   readonly #writeGraceMs: number;
@@ -176,8 +133,6 @@ class WorkerPool implements SqliteExecutor {
   readonly #runtime: StoreRuntime | undefined;
   #nextId = 1;
   #closed = false;
-  // 'done' once the writer has run the store's open-time setup, which a reader's connection could
-  // not write.
   #setup: 'none' | 'running' | 'done' = 'none';
 
   constructor(hippoRoot: string, opts: ExecutorOptions) {
@@ -236,11 +191,9 @@ class WorkerPool implements SqliteExecutor {
     if (mode === 'write') return this.#writer;
     const [pinned, other] = this.#readers;
     if (mode === 'pinned-read') return pinned;
-    // A tie goes to the reader with no graph, whose turns no graph build ever takes.
     return load(pinned) < load(other) ? pinned : other;
   }
 
-  // Ahead of the call that started it, and with no deadline: the writer's own lock wait bounds it.
   #ensureSetup(): void {
     if (this.#setup !== 'none') return;
     this.#setup = 'running';
@@ -263,8 +216,6 @@ class WorkerPool implements SqliteExecutor {
     this.#pump(this.#writer);
   }
 
-  // A failed setup fails the reads that waited for it with its own error, as each read's own open
-  // would have, and the next call tries it again.
   #setupEnded(failure: Error | undefined): void {
     this.#setup = failure === undefined ? 'done' : 'none';
     for (const lane of this.#readers) {
@@ -275,7 +226,6 @@ class WorkerPool implements SqliteExecutor {
     }
   }
 
-  // Nothing is queued and nothing ran, so both refusals are the retryable 503 of a busy store.
   #refusal(lane: Lane, deadlineAt: number | undefined): StoreBusyError | undefined {
     if (lane.queue.length >= this.#queueMax) {
       workerCounts.queueRefusals += 1;
@@ -291,7 +241,6 @@ class WorkerPool implements SqliteExecutor {
   #watchDeadline(lane: Lane, pending: Pending): void {
     if (pending.deadlineAt === undefined) return;
     pending.timer = setTimeout(() => this.#expire(lane, pending), pending.deadlineAt - Date.now());
-    // The request that waits on the call keeps the process alive; this timer alone must not.
     pending.timer.unref();
   }
 
@@ -314,23 +263,17 @@ class WorkerPool implements SqliteExecutor {
     else this.#stopWriter(lane, lane.worker, pending);
   }
 
-  // A read changes nothing, so its caller is answered at once; the thread is replaced when it has
-  // exited.
   #stopReader(lane: Lane, worker: Worker, pending: Pending): void {
     finish(pending, () => pending.fail(new DeadlineExceededError(READ_LATE)));
     lane.stopping = worker;
     terminateLogged(worker);
   }
 
-  // Before its commit flag a stopped write is a known rollback; after it the thread is left to
-  // finish, since stopping it could not undo the write.
   #stopWriter(lane: Lane, worker: Worker, pending: Pending): void {
     if (!mayHaveCommitted(lane, pending)) {
       lane.stopping = worker;
       this.terminateWriter();
     }
-    // A statement in flight runs to its end even after the stop, so the caller waits for the
-    // thread's own word only this long.
     pending.timer = setTimeout(
       () => finish(pending, () => pending.fail(new DeadlineExceededError(WRITE_UNKNOWN))),
       this.#writeGraceMs,
@@ -338,14 +281,12 @@ class WorkerPool implements SqliteExecutor {
     pending.timer.unref();
   }
 
-  // The thread has exited, so the write lock is free and what the stopped job did is final.
   #replaceStopped(lane: Lane): void {
     const stopped = lane.running;
     lane.stopping = undefined;
     lane.running = undefined;
     workerCounts.workersReplaced += 1;
     if (stopped !== undefined) {
-      // Read only now: the thread could still set its flag between the deadline and its exit.
       const message = mayHaveCommitted(lane, stopped) ? WRITE_UNKNOWN : WRITE_NOT_SAVED;
       finish(stopped, () => stopped.fail(new DeadlineExceededError(message)));
     }
@@ -358,11 +299,7 @@ class WorkerPool implements SqliteExecutor {
       for (const pending of lane.queue.splice(0)) {
         finish(pending, () => pending.fail(new StoreBusyError(EXECUTOR_CLOSED)));
       }
-      // An idle thread is unreferenced, and the process must not end before the thread has closed
-      // its connection.
       lane.worker?.ref();
-      // Read after the reply of a job still running; the thread then closes its connection and
-      // ends.
       lane.worker?.postMessage('stop');
     }
     await Promise.all(this.#exits.values());
@@ -378,11 +315,8 @@ class WorkerPool implements SqliteExecutor {
 
   #pump(lane: Lane): void {
     if (lane.running !== undefined) return;
-    // Setup comes first: a reader sent a job before it would open a store whose setup it cannot
-    // write.
     if (lane.mode === 'read' && this.#setup !== 'done') return;
     let next = lane.queue.shift();
-    // Its request was abandoned while it waited, so no one is left to read what it would do.
     while (next?.signal?.aborted) {
       workerCounts.jobsExpired += 1;
       const dropped = next;
@@ -390,12 +324,8 @@ class WorkerPool implements SqliteExecutor {
       next = lane.queue.shift();
     }
     if (next === undefined) return;
-    // Started by the first call and never at boot, so a server that only answers /health opens no
-    // thread. Outside that call's request scope, or the thread's listeners would log every later
-    // event under its request id.
     lane.worker ??= requestScopes.exit(() => this.#start(lane));
     lane.running = next;
-    // An idle thread never keeps the process alive; one with a call in flight does.
     lane.worker.ref();
     try {
       lane.worker.postMessage({
@@ -403,7 +333,6 @@ class WorkerPool implements SqliteExecutor {
         walPages: autoCheckpointPages(getHippoDbPath(this.#hippoRoot), this.#runtime),
       } satisfies Job);
     } catch (err) {
-      // Arguments that cannot be copied to the thread fail this call alone.
       this.#idle(lane, lane.worker);
       finish(next, () => next.fail(err instanceof Error ? err : new Error(errorMessage(err))));
       this.#pump(lane);
@@ -416,8 +345,6 @@ class WorkerPool implements SqliteExecutor {
   }
 
   #start(lane: Lane): Worker {
-    // A fresh flag per thread: a job id left by the thread before it could match no later job, but
-    // a shared buffer would outlive its writer.
     const shared = lane.mode === 'write' ? new SharedArrayBuffer(4) : undefined;
     lane.commitFlag = shared && new Int32Array(shared);
     const init: WorkerInit = {
@@ -455,23 +382,18 @@ class WorkerPool implements SqliteExecutor {
 
   #settle(lane: Lane, worker: Worker, reply: Reply): void {
     const done = lane.running;
-    // A reply for a call that was already rejected with its thread has no caller left.
     if (lane.worker !== worker || done === undefined || done.job.id !== reply.id) return;
     addAuditWriteFailures(reply.auditFailures);
     finish(done, () => done.settle(reply));
-    // A thread being stopped answered first; its lane stays taken until it has exited.
     if (lane.stopping === worker) return;
     this.#idle(lane, worker);
     this.#pump(lane);
   }
 
-  // The lane keeps a stopped thread until it has exited, so a new thread never starts while the old
-  // one may still hold the write lock.
   #retire(lane: Lane, worker: Worker, cause?: Error): void {
     if (lane.worker !== worker) return;
     lane.worker = undefined;
     if (lane.stopping === worker) {
-      // Stopped on purpose: the calls still waiting run on the replacement.
       this.#replaceStopped(lane);
       return;
     }
@@ -485,7 +407,6 @@ class WorkerPool implements SqliteExecutor {
         cause === undefined ? undefined : errorFields(cause),
       );
     }
-    // The server answers this class as its retryable 503.
     for (const pending of lost) {
       finish(pending, () => pending.fail(new StoreBusyError(WORKER_GONE, { cause })));
     }

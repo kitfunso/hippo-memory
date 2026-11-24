@@ -1,4 +1,3 @@
-// Every outbound call goes through fetchWithRetry, so a stalled peer or a rate limit must end bounded and predictable.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -26,7 +25,6 @@ interface Reply {
 let server: http.Server | null = null;
 const stalled: http.ServerResponse[] = [];
 
-/** Serves `replies` in order (the last one repeats); a null reply never answers and 'reset' drops the socket unanswered. */
 async function startServer(replies: readonly (Reply | 'reset' | null)[]): Promise<{ url: string; hits: () => number }> {
   let hits = 0;
   server = http.createServer((req, res) => {
@@ -73,10 +71,8 @@ describe('fetchWithRetry against a local server', () => {
       (e: Error) => e,
     );
     expect(err.name).toBe('TimeoutError');
-    // The one attempt ran under the caller's limit, so the wait is that limit and no more.
     expect(deadlines.mock.calls).toEqual([[200]]);
     expect(hits()).toBe(1);
-    // A timed-out write to `hippo serve` may have landed, so the CLI must not replay it locally.
     expect(classifyTransportFailure(err)).toBe('delivery-unknown');
   });
 
@@ -96,7 +92,6 @@ describe('fetchWithRetry against a local server', () => {
     );
     expect(await res.text()).toBe('ok');
     expect(hits()).toBe(3);
-    // The same backoff a 5xx gets.
     expect(sleeps).toEqual([125, 250]);
   });
 
@@ -221,13 +216,10 @@ describe('fetchWithRetry against a local server', () => {
     );
     expect(res.status).toBe(502);
     expect(hits()).toBe(3);
-    // random() = 0 gives the floor of each jitter window: half of 250, then half of 500.
     expect(sleeps).toEqual([125, 250]);
   });
 
   describe('with a total budget', () => {
-    // The clock moves only by the waits, so the budget is measured on them alone. What is left of it is
-    // also each attempt's real timeout, so every budget here leaves the last attempt hundreds of ms.
     function fakeClock() {
       let clock = 0;
       const sleeps: number[] = [];
@@ -249,7 +241,6 @@ describe('fetchWithRetry against a local server', () => {
       const { sleeps, policy } = fakeClock();
       const res = await fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 1800, ...policy });
       expect(res.status).toBe(503);
-      // Waits of 125, 250 and 500 end at 875; the next one, 1000, would end at 1875, past the budget.
       expect(sleeps).toEqual([125, 250, 500]);
       expect(hits()).toBe(4);
     });
@@ -260,7 +251,6 @@ describe('fetchWithRetry against a local server', () => {
       await expect(fetchWithRetry(url, {}, { timeoutMs: 2000, attempts: 10, totalMs: 850, ...policy })).rejects.toThrow(
         /fetch failed|socket/i,
       );
-      // Waits of 125 and 250 end at 375; the next one, 500, would end at 875, past the budget.
       expect(sleeps).toEqual([125, 250]);
       expect(hits()).toBe(3);
     });
@@ -293,18 +283,15 @@ describe('fetchWithRetry against a local server', () => {
         },
       },
     );
-    // The abort lands once the server holds the request, so it ends an attempt in flight rather than one not yet sent.
     await waitFor(() => hits() === 1, { what: 'the request to reach the server' });
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    // The caller gave up, so no second attempt is queued.
     expect(sleeps).toEqual([]);
   });
 });
 
 describe('the wait between attempts under a caller signal', () => {
   const neverWakes = (): Promise<void> => new Promise(() => undefined);
-  /** `fetch`, counting the attempts that were started. */
   function countedFetch() {
     let calls = 0;
     const fetchFn: typeof fetch = (input, init) => {
@@ -319,7 +306,6 @@ describe('the wait between attempts under a caller signal', () => {
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
     const reason = new Error('caller gave up');
-    // The two-second timer is the wait the 503 asked for, so the abort lands while the client is known to be in it.
     const realSetTimeout = globalThis.setTimeout;
     let waitTimer: NodeJS.Timeout | undefined;
     const waiting = new Promise<void>((resolve) => {
@@ -338,7 +324,6 @@ describe('the wait between attempts under a caller signal', () => {
     controller.abort(reason);
     await expect(pending).rejects.toBe(reason);
     expect([calls(), hits()]).toEqual([1, 1]);
-    // A wait the caller left must not keep the process alive for its two seconds.
     expect(cleared).toHaveBeenCalledWith(waitTimer);
   });
 
@@ -347,7 +332,6 @@ describe('the wait between attempts under a caller signal', () => {
     const controller = new AbortController();
     const { fetchFn, calls } = countedFetch();
     const sleeps: number[] = [];
-    // Aborts from inside the wait, once the client has begun it, so the abort cannot land during the attempt instead.
     const sleep = (ms: number): Promise<void> => {
       sleeps.push(ms);
       queueMicrotask(() => controller.abort(new Error('caller gave up')));
@@ -401,7 +385,6 @@ describe('the wait between attempts under a caller signal', () => {
       );
       expect(res.status).toBe(200);
       expect(hits()).toBe(2);
-      // Attempt 1 waits ceiling/2 + random * ceiling/2 = 200 ms at random 1.
       expect(sleeps).toEqual([200]);
       await new Promise<void>((resolve) => server?.close(() => resolve()));
     }

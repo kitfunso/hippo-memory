@@ -1,13 +1,9 @@
-// The rules a session's working state follows once its fields are read: the scrub, the caps, the
-// fit after a mask and the merge with a saved snapshot. Its caller reads the transcript.
 import { maskEmails, redactSecretsStrict } from '../util/secret-detect.js';
 import { truncateCodePointSafe } from '../util/code-point-cut.js';
 
 const PRE_COMPACT_TASK_CAP = 200;
 const PRE_COMPACT_SUMMARY_CAP = 2000;
 const PRE_COMPACT_NEXT_STEP_CAP = 500;
-/** How far past the cut a trim looks for a line start, so a trimmed summary does not open
- * mid-line. */
 const LINE_ALIGN_WINDOW_CHARS = 200;
 const TRIM_MARKER = '[...earlier turns trimmed]\n';
 
@@ -30,7 +26,6 @@ export interface SnapshotFields {
   readonly nextStep: string;
 }
 
-/** A saved snapshot as the merge reads it: its fields and the session that saved it. */
 type SavedSnapshot = SnapshotFields & { readonly sessionId: string | null };
 
 export function snapshotFields(state: WorkingState): SnapshotFields {
@@ -42,8 +37,6 @@ export function snapshotFields(state: WorkingState): SnapshotFields {
 export function fitWorkingState(state: WorkingState): WorkingState {
   return {
     task: truncateCodePointSafe(state.task, WORKING_STATE_CAPS.task),
-    // Only past the cap, since re-trimming a summary that fits would drop its head again; the cut
-    // keeps the newest turns.
     summary:
       state.summary.length > WORKING_STATE_CAPS.summary
         ? truncateKeepNewest(state.summary, PRE_COMPACT_SUMMARY_CAP)
@@ -80,7 +73,7 @@ export function truncateKeepNewest(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   let start = text.length - maxChars;
   const code = text.charCodeAt(start);
-  if (code >= 0xdc00 && code <= 0xdfff) start += 1; // never start on a low surrogate
+  if (code >= 0xdc00 && code <= 0xdfff) start += 1;
   const nl = text.indexOf('\n', start);
   if (nl !== -1 && nl + 1 < text.length && nl - start < LINE_ALIGN_WINDOW_CHARS) start = nl + 1;
   return TRIM_MARKER + text.slice(start);
@@ -99,9 +92,6 @@ export function workingStateOf({
   readonly rawNextStep: string;
 }): WorkingState | null {
   if (!rawTask.trim() && !rawSummary.trim() && !rawNextStep.trim()) return null;
-  // These fields skip the capture content gate and reach a prompt, so the strict scrub runs. The
-  // caps protect the re-injection token budget and never split a surrogate pair; `hippo snapshot
-  // save` stays uncapped.
   const task = maskEmails(redactSecretsStrict(rawTask));
   const summary = maskEmails(redactSecretsStrict(rawSummary));
   const nextStep = maskEmails(redactSecretsStrict(rawNextStep));

@@ -1,5 +1,3 @@
-// The Claude Code transcript contract the delivery reader joins on: which lines are prompts, which hooks fired under them, and which turn row owns which prompt.
-
 const FIRING = ['task-notification', 'cross-session-message', 'agent-message'];
 const QUIET = [
   'command-name',
@@ -10,7 +8,6 @@ const QUIET = [
   'bash-stderr',
 ];
 
-// String(v) === v holds only for a string primitive, which a JSON line's text always is.
 export const isText = (v) => String(v) === v;
 
 function promptBody(content) {

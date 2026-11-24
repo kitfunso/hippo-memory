@@ -1,5 +1,3 @@
-// Sharing local memories to the global store: transfer scoring, share, peers and auto-share.
-
 import { BadRequestError, memoryNotFoundText } from '../../base/errors/api-errors.js';
 import * as path from 'node:path';
 import {
@@ -52,7 +50,6 @@ import type { EntryCursor, HeldText } from '../../base/ports/store/types.js';
 import type { Captures, TextsHoldingOptions } from '../../base/ports/store/capture.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
-/** Tags that indicate project-specific memories (poor transfer candidates) */
 const PROJECT_SPECIFIC_TAGS = new Set([
   'file-path',
   'config',
@@ -66,7 +63,6 @@ const PROJECT_SPECIFIC_TAGS = new Set([
   'endpoint',
 ]);
 
-/** Tags that indicate transferable memories (good transfer candidates) */
 const TRANSFERABLE_TAGS = new Set([
   ERROR_TAG,
   'platform',
@@ -114,11 +110,8 @@ export const NO_MERGE_TAGS: ReadonlySet<string> = new Set([
  * global store. */
 export const AUTO_SHARE_MIN_SCORE = 0.6;
 
-/** Below this transfer score a hand-run share copies a row only when forced. */
 const SHARE_MIN_SCORE = 0.3;
 
-/** transferScore's weights: where a row with no signal sits, then what each signal adds or takes
- * away. */
 const TRANSFER_WEIGHTS = {
   neutral: 0.5,
   perTransferableTag: 0.1,
@@ -128,11 +121,8 @@ const TRANSFER_WEIGHTS = {
   negativeValence: 0.05,
 } as const;
 
-/** Recalls after which a memory counts as reused and earns TRANSFER_WEIGHTS.retrieved. */
 const REUSED_AFTER_RETRIEVALS = 3;
 
-/** Every trait that lifts transferScore above neutral or makes autoShare skip a row before
- * scoring it. */
 const AUTO_SHARE_SIGNALS: EntrySignals = {
   tags: [...TRANSFERABLE_TAGS, ...NEVER_AUTO_SHARE_TAGS],
   sourcePrefix: AGENT_MEMORY_SOURCE_PREFIX,
@@ -151,13 +141,10 @@ export function transferScore(entry: MemoryEntry): number {
   const specificCount = entry.tags.filter((t) => PROJECT_SPECIFIC_TAGS.has(t)).length;
   score -= specificCount * TRANSFER_WEIGHTS.perProjectTag;
 
-  // High-retrieval memories are more likely to be universally useful
   if (entry.retrievalCount >= REUSED_AFTER_RETRIEVALS) score += TRANSFER_WEIGHTS.retrieved;
 
-  // Pinned memories are important to their owner
   if (entry.pinned) score += TRANSFER_WEIGHTS.pinned;
 
-  // Error-tagged memories often encode universal lessons
   if (entry.emotionalValence === 'negative' || entry.emotionalValence === 'critical') {
     score += TRANSFER_WEIGHTS.negativeValence;
   }
@@ -188,21 +175,15 @@ export async function shareMemory(
     actor: ScopeActor & { readonly subject: string };
   },
 ): Promise<ShareOutcome> {
-  // Tenant A cannot share tenant B's memory to global: the read finds no row of another tenant.
   const [entry] = await local.store.entriesByIds([id], options.tenantId);
-  // Before toGlobalEntry, whose personal-row refusal would tell another person the id exists; a
-  // missing id and an unreachable one answer alike.
   assertCopyRight(scopeReaderOf(options.actor), entry, id, memoryNotFoundText(id));
 
-  // Built first because it throws for a row that may not be shared, ahead of the held-text answer.
   const globalEntry = toGlobalEntry(
     await local.store.folderFiles.home(),
     entry,
     options.embed.clock(),
   );
 
-  // The caller's tenant and the default scope filter, not autoShare's whole-store view: a copy
-  // carries its row's tenant, so another tenant's twin is no copy of this row and must stay unnamed.
   const held = await heldGlobalTexts(
     global.store.captures,
     [identityText(entry)],
@@ -216,8 +197,6 @@ export async function shareMemory(
 
   await global.store.entryWrites.writeEntry({ entry: globalEntry, actor: options.actor.subject });
 
-  // Embed here unless the caller opts out: autoShare sets skipEmbed to batch one embedAll(), since
-  // embedMemory rewrites the whole index per call.
   if (!options.skipEmbed) embedSharedCopy(global, globalEntry, options);
 
   return { kind: 'shared', entry: globalEntry };
@@ -239,12 +218,9 @@ function embedSharedCopy(
   embedMemoryDetached(target, entry, options.detached);
 }
 
-/** The global copy of a local row; throws when the row may not be shared. */
 function toGlobalEntry(local: StoreHome, entry: MemoryEntry, now: Date): MemoryEntry {
   assertShareable(entry, entry.id);
 
-  // The label keeps the folder name for a user-global row; a NULL row gets `shared::`, which
-  // originFromSource reads as no project.
   const fallbackName = local.folderName;
   const originName = entry.originProject ?? (local.shared ? null : local.project.name);
   const label = originName === '' ? fallbackName : (originName ?? '');
@@ -257,8 +233,6 @@ function toGlobalEntry(local: StoreHome, entry: MemoryEntry, now: Date): MemoryE
 }
 
 function assertShareable(entry: MemoryEntry, id: string): void {
-  // Secret veto: secrets never reach the global store, even with --force; throw loudly, since a
-  // silent null reads as "low transfer score" and invites retries.
   const secret = detectSecret(entry);
   if (secret.flagged) {
     throw new BadRequestError(
@@ -267,7 +241,6 @@ function assertShareable(entry: MemoryEntry, id: string): void {
     );
   }
 
-  // A quarantined row is unreviewed input, not a lesson; sharing it would spread poison globally.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
       `Refusing to share ${id}: it is quarantined pending review. ` +
@@ -327,15 +300,11 @@ type AutoShareStats = {
   neverAutoShareSkipped?: number;
 };
 
-/** The rules a row must clear before autoShare asks the global store whether it already holds
- * the text. */
 function clearsShareRules(
   entry: MemoryEntry,
   minScore: number,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // shareMemory refuses quarantined and personal rows; filtering here keeps sleep from aborting on
-  // one.
   if (
     isQuarantineScope(entry.scope ?? null) ||
     isPersonalScope(entry.scope ?? null) ||
@@ -343,8 +312,6 @@ function clearsShareRules(
   ) {
     return false;
   }
-  // Before the score: these rows describe one project only, and a git seed's 'error' tag clears the
-  // bar.
   if (
     entry.tags.some((t) => NEVER_AUTO_SHARE_TAGS.has(t)) ||
     entry.source.startsWith(AGENT_MEMORY_SOURCE_PREFIX)
@@ -355,19 +322,13 @@ function clearsShareRules(
   return transferScore(entry) >= minScore;
 }
 
-/** A row that cleared the rules shares unless the global store holds its text or it carries a
- * secret. */
 function isNewAndClean(
   entry: MemoryEntry,
   globalKeys: ReadonlyMap<string, HeldText>,
   stats: AutoShareStats | undefined,
 ): boolean {
-  // Skip if already shared (same text apart from spacing)
   if (globalKeys.has(duplicateKey(identityText(entry)))) return false;
 
-  // Secret veto, checked LAST so the stats counter only counts rows it withheld (a row failing the
-  // score or dedupe gate was never going to share). shareMemory would throw here; filtering keeps
-  // the sleep pipeline fail-safe.
   if (detectSecret(entry).flagged) {
     if (stats) stats.secretSkipped++;
     return false;
@@ -376,8 +337,6 @@ function isNewAndClean(
   return true;
 }
 
-/** The local rows a page at a time: above the neutral score only a row carrying a signal can
- * share or count as a never-auto-share skip, so only those are read. */
 async function* autoSharePages(
   store: Pick<StoreGroups, 'sharing'> & Pick<RequiredStore, 'entriesWhere'>,
   minScore: number,
@@ -395,8 +354,6 @@ async function* autoSharePages(
   } while (after !== null);
 }
 
-/** Each text key `texts` have that a row in the global store holds, with the first such row;
- * `tenantId` and `opts` pick which rows count. */
 async function heldGlobalTexts(
   captures: Captures,
   texts: readonly string[],
@@ -415,8 +372,6 @@ async function heldGlobalTexts(
   return held;
 }
 
-/** The page's rows that share. The global store, the union of every tenant, is asked only for
- * the rows that may hold a page row's text. */
 async function pageCandidates(
   to: Captures,
   page: readonly MemoryEntry[],
@@ -431,8 +386,6 @@ async function pageCandidates(
   return scored.filter((entry) => isNewAndClean(entry, held, stats));
 }
 
-/** Writes one page of candidates in one transaction; returns the copies written and how many a
- * tombstone refused. */
 async function sharePage(
   local: StoreHome,
   to: SharingStore,
@@ -453,8 +406,6 @@ interface ShareCandidatesOptions {
   readonly now: Date;
 }
 
-// A row the GLOBAL store's rejection tombstones refuse is audited and skipped, so it cannot abort
-// the autoShare sleep phase. The caller embeds once via embedAll() afterwards.
 async function shareCandidates({
   local,
   to,
@@ -492,19 +443,15 @@ export async function autoShare(
   options: {
     minScore?: number;
     dryRun?: boolean;
-    /** ALL_TENANTS for sleep, which shares every tenant's rows. */
     tenantId: TenantId;
     stats?: AutoShareStats;
     embed: EmbedRun;
-    /** Keeps the batch embed of the shared rows until the root settles it. */
     detached: DetachedWork;
   },
 ): Promise<MemoryEntry[]> {
   const { minScore = AUTO_SHARE_MIN_SCORE, dryRun = false } = options;
   const to = global.store;
   await to.folderFiles.ensure();
-  // Every page is judged before any is written, so a copy written early cannot hide a later row's
-  // twin.
   const candidates: MemoryEntry[] = [];
   for await (const page of autoSharePages(from.store, minScore, options.tenantId)) {
     candidates.push(...(await pageCandidates(to.captures, page, minScore, options.stats)));

@@ -7,20 +7,13 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
-// A3: `hippo forget` on a raw (append-only) memory must not dead-end with a
-// misleading "Memory not found" — it reports the append-only nature and points
-// at `--archive`, which routes to the sanctioned archiveRaw path.
-
 const savedCwd = process.cwd();
 
-// Column list copied from raw-archive.test.ts — a minimal raw row. tenant_id is
-// omitted; the column defaults to 'default', matching the CLI's default tenant.
 const RAW_COLS =
   'id, created, last_retrieved, retrieval_count, strength, half_life_days, ' +
   'layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, ' +
   'pinned, confidence, content, kind';
 
-// Mirrors the old spawned helper: stdout alone on success, stdout and stderr together on failure.
 async function runCli(cwd: string, ...args: string[]): Promise<{ out: string; status: number }> {
   process.chdir(cwd);
   try {

@@ -1,4 +1,3 @@
-// The compaction hooks on a locked store; the waits come from the spawned hook itself, since a stopwatch around the child also times the runner.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -19,8 +18,6 @@ import {
 import { lockWaitAskedMs, tracingLockWaits } from '../_helpers/lock-waits.js';
 import { hippoRun } from '../_helpers/spawn-hippo.js';
 
-// The instruction Claude Code hands the summarizer; pinned word for word.
-// The lock file stays between replays and is reused, so a listing of spooled records leaves it out.
 const spoolFiles = (dir: string): string[] => fs.readdirSync(dir).filter((n) => n !== 'replay.lock.db');
 
 const INSTRUCTION =
@@ -74,7 +71,6 @@ describe('pre-compact on a locked store', () => {
       const result = hippoRun(['pre-compact', '--log-file', logFile], { cwd: s.proj, env: s.env, input: payload });
       expect(result.status).toBe(0);
       expect(result.stdout).toBe(`${INSTRUCTION}\n`);
-      // One wait for the token-ledger row and one for the record, then none: far inside the 30 s Claude Code gives PreCompact.
       expect(lockWaitAskedMs(waits, result.pid)).toBe(HOOK_DB_WAIT_MS + COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');
@@ -97,7 +93,6 @@ describe('post-compact on a locked store', () => {
       });
       expect(hook.status).toBe(0);
       expect(oneLine(hook.stdout)).toBe('Hippo will finish saving this compaction at the next sleep.');
-      // One wait, then the spool: a small part of the 10 s Claude Code gives PostCompact.
       expect(lockWaitAskedMs(waits, hook.pid)).toBe(COMPACTION_DB_WAIT_MS);
     } finally {
       db.exec('ROLLBACK');

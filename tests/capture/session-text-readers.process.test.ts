@@ -1,4 +1,3 @@
-// The store-free readers on the session-text subpath: the working-state caps a sent state is checked against, and handoff git evidence.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -58,7 +57,6 @@ describe('collectHandoffEvidence', () => {
     const repo = tmp();
     git(repo, 'init', '-q');
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
-    // A wide cap: under the 2 s default a loaded machine turns these reads into nulls.
     const clean = collectHandoffEvidence(repo, 'pass', { timeoutMs: 20_000 });
     expect(clean).toEqual({ gitRef: expect.stringMatching(/^[0-9a-f]{40}$/), dirtyTree: false, testStatus: 'pass' });
     fs.writeFileSync(path.join(repo, 'new.txt'), 'x');
@@ -75,11 +73,9 @@ describe('collectHandoffEvidence', () => {
     const repo = tmp();
     git(repo, 'init', '-q');
     git(repo, 'commit', '-q', '--allow-empty', '-m', 'init');
-    // An fsmonitor hook that sleeps makes `git status` slow, as a huge tree or a cold network drive does.
     const hook = path.join(tmp(), 'slow-fsmonitor.sh');
     fs.writeFileSync(hook, '#!/bin/sh\nsleep 3\n', { mode: 0o755 });
     git(repo, 'config', 'core.fsmonitor', hook.replace(/\\/g, '/'));
-    // The hook outlasts the default, so a tree state can only come from the wider cap; no clock is read.
     expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 20_000 }).dirtyTree).toBe(false);
     expect(collectHandoffEvidence(repo, 'unknown', { timeoutMs: 300 }).dirtyTree).toBeNull();
   });

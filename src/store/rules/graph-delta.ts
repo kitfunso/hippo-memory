@@ -1,6 +1,3 @@
-// The graph rebuild's diff: the ops that turn the stored rows into the derived graph, so a rebuild
-// writes only what changed and an entity keeps the id its relations hang on. hippo.db runs the same
-// rule in SQL (sqlite/graph/graph-delta.ts).
 import type {
   DesiredEntity,
   DesiredGraph,
@@ -52,7 +49,6 @@ function storedKey(row: StoredEntity): string | null {
   return keyText(row.entity_type, row.source_object_type, row.source_object_id);
 }
 
-/** A relation's two endpoint keys and its type. */
 interface RelationKeyOptions {
   readonly from: string;
   readonly to: string;
@@ -84,8 +80,6 @@ function firstByKey<T>(rows: readonly T[], keyOf: (row: T) => string): Map<strin
 
 interface EntityDelta {
   ops: GraphOp[];
-  /** Entity id to key for each stored row that survives the diff; relations are matched through
-   * it. */
   keptKeyById: Map<number, string>;
 }
 
@@ -139,7 +133,6 @@ function diffRelations(
   for (const row of stored) {
     const from = keptKeyById.get(row.from_entity_id);
     const to = keptKeyById.get(row.to_entity_id);
-    // An edge on a deleted entity goes with it through the v38 cascade.
     if (from === undefined || to === undefined) continue;
     const key = relationKey({ from, to, relType: row.rel_type });
     const want = wanted.get(key);

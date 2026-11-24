@@ -1,40 +1,4 @@
 #!/usr/bin/env node
-/**
- * Lifecycle stress eval (first slice) — the HARNESS.
- *
- * Measures, under a FIXED active-context token budget B, whether hippo's
- * lifecycle (the consolidate/sleep merge pass) lets a budget-bounded context
- * answer MORE distinct queried facts than recency or relevance-without-
- * lifecycle, as a single store grows.
- *
- * THIS IS AN HONEST-NULL EVAL. A working probe already showed the headline
- * mechanism does NOT fire (consolidated summaries rank BELOW the strength-
- * weakened 0.3 source episodics: embedding relevance dominates the mass
- * advantage). This harness faithfully measures whatever the numbers are. It
- * does not tune, bias, or manufacture a positive result. The deliverable is
- * the reusable ruler + the honest finding.
- *
- * For each (seed x checkpoint x condition):
- *   - build a HERMETIC isolated store (fresh temp HIPPO_HOME under os.tmpdir(),
- *     empty global, cleaned up after), inject, embed;
- *   - for hippo-full: consolidate() then RE-EMBED (the new semantic summary
- *     needs an embedding to be retrievable), per the probe.
- *
- * Conditions (all read the same injected stream, all answer within budget B):
- *   1. naive-append    recency-fill, newest-first to B (pure fn over the stream)
- *   2. recency-window  keep last-N by 2*B tokens, then physicsSearch in window
- *   3. hippo-no-lifecycle  physicsSearch over all, NO consolidate
- *   4. hippo-full      consolidate + re-embed + physicsSearch over all
- *
- * Scoring is BY FACT VALUE (a condition answers fact F iff any assembled entry
- * content includes F's opaque answer token), never by source memory id.
- *
- * Hermetic: local embeddings only, no network, ANTHROPIC_API_KEY and HIPPO_LLM_BASE_URL never set.
- *
- * Run (tractable smoke):
- *   node scripts/lifecycle-stress/run.mjs --facts 6 --dupes 3 \
- *        --checkpoints 1x,10x --seeds 4 --budget 1500
- */
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -60,12 +24,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 const OUT_DIR = path.join(REPO, 'benchmarks', 'lifecycle-stress');
 
-// Checkpoint label -> memory count.
 const CHECKPOINT_COUNTS = { '1x': 100, '10x': 1000, '100x': 10000 };
-
-// ---------------------------------------------------------------------------
-// Flags
-// ---------------------------------------------------------------------------
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -91,15 +50,6 @@ for (const cp of CHECKPOINTS) {
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s) => Math.ceil((s || '').length / 4);
 
-// ---------------------------------------------------------------------------
-// Deterministic paired bootstrap CI.
-//
-// Reuses physics-ablation.mjs's paired bootstrap shape (resample WITH
-// replacement, take the alpha/2 and 1-alpha/2 percentiles of the resampled
-// means) but seeds it with mulberry32 so the CI is reproducible. The harness
-// bans Math.random everywhere, including here.
-// ---------------------------------------------------------------------------
-
 /** @param {number[]} diffs @returns {{meanDiff:number, low:number, high:number}} */
 function pairedBootstrapCI(diffs, iters = 10000, alpha = 0.05) {
   const n = diffs.length;
@@ -118,21 +68,10 @@ function pairedBootstrapCI(diffs, iters = 10000, alpha = 0.05) {
   return { meanDiff: mean, low, high };
 }
 
-// ---------------------------------------------------------------------------
-// Store build (hermetic, per seed x checkpoint).
-// ---------------------------------------------------------------------------
-
-/** Build + embed an isolated store; return {root, base, entries, createdOrder}. */
 async function buildStore(memories) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-lse-'));
   const root = path.join(base, '.hippo');
   initStore(root);
-  // Disable the replay pass for slice 1 (prereg mandate). Replay reinforces
-  // wall-clock-SEEDED survivors during consolidate() (consolidate.ts:248-251),
-  // which would (a) make the result non-deterministic and (b) lift weakened
-  // originals back over the budget cut, diluting the compression measurement.
-  // config.json merges with defaults (config.ts loadConfig), so this sets only
-  // replay.count; decayBasis and the rest keep their defaults.
   fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }, null, 2));
   const createdOrder = [];
   // One connection for the seed loop: a close per write checkpoints the WAL, which is slow on Windows.
@@ -149,15 +88,7 @@ async function buildStore(memories) {
 }
 
 async function reEmbed(root) {
-  // 1. Embed any new memories (the consolidation summary) into the index.
   for (const e of loadAllEntries(root)) await embedMemory(root, e);
-  // 2. CRITICAL (codex P1): rebuild ALL physics particles from CURRENT strength.
-  //    embedMemory only creates a particle when one is ABSENT (embeddings.ts:414-417),
-  //    so after consolidate() weakens source episodics to strength*0.3 their particle
-  //    MASS stays stale (built at strength 1.0) and physicsSearch would score the
-  //    "weakened" originals at full mass - invalidating the lifecycle comparison.
-  //    resetAllPhysicsState re-derives every particle (initializeParticle ->
-  //    calculateStrength -> computeMass), so scoring reflects the weakening.
   const entries = loadAllEntries(root);
   const index = loadEmbeddingIndex(root);
   const db = openHippoDb(root);
@@ -167,21 +98,6 @@ async function reEmbed(root) {
     closeHippoDb(db);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Value-based scoring (pre-reg axis 1).
-//
-// QA accuracy: fraction of facts where the assembled context contains the
-// fact's CURRENT answer token AND no entry carrying a STALE (superseded) token
-// of the SAME fact out-ranks the first entry carrying the current token. This
-// slice's 4 MAIN conditions inject no supersession, so every label has an empty
-// stale-token set and the out-rank clause is vacuous => presence is the metric.
-// The clause is kept wired so the supersession arm (a follow-up) drops in
-// without re-deriving the metric. The SAME metric scores every condition, so it
-// cannot bias hippo-full vs the baselines.
-//
-// Active-context tokens: sum of estimated tokens of the assembled entries.
-// ---------------------------------------------------------------------------
 
 /**
  * Score an ASSEMBLED, RANK-ORDERED list of entries against the labels.
@@ -208,15 +124,6 @@ function scoreAssembled(assembled, labels) {
   return { answered, tokens };
 }
 
-// ---------------------------------------------------------------------------
-// Conditions. Each returns the assembled rank-ordered entry list at budget B.
-// Per-fact QA queries physicsSearch by the fact topic; the assembled context is
-// the UNION of per-fact top results (dedup by id), which is what a multi-query
-// agent would hold. naive/recency build one budget-B context independent of the
-// fact (they have no query); QA then checks token presence in that context.
-// ---------------------------------------------------------------------------
-
-// naive-append: newest-first fill to B (pure function over the stream).
 function naiveAssemble(entries, createdOrder, B) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const newestFirst = [...createdOrder]
@@ -234,25 +141,8 @@ function naiveAssemble(entries, createdOrder, B) {
   return ctx;
 }
 
-// strength-sorted (no-query ambient context): sort by strength desc, pack to B.
-// The OTHER real getContext assembly mode (no-query strength fallback). Pure
-// function over the entries; consolidation's high-strength summaries float to
-// the top here (unlike the relevance path), so this is where any budget-
-// compression benefit would show IF the summary were actually smaller than its
-// sources. The probe showed it is not (a 3-member summary >= the 3 originals).
 function strengthSortedAssemble(entries, B) {
-  // Stable secondary key (content) so equal-strength ties do NOT fall back to
-  // crypto.randomUUID id order (loadAllEntries created/id order), which would
-  // make the strength-sorted columns non-deterministic across runs. Content is
-  // seed-deterministic and unique per memory, so this makes the assembly a pure
-  // function of the seed.
   const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  // Round strength to 3 decimals before comparing. hippo applies a tiny read-time
-  // age-decay (created is wall-clock), so otherwise-same-tier rows differ in the
-  // ~7th decimal across runs; without rounding the tie order (and token count)
-  // is non-deterministic and the content key never engages. Rounding buckets the
-  // real tiers (1.0 vs 0.3) while the deterministic content key breaks within-tier
-  // ties, making the strength-sorted columns byte-identical across runs.
   const sKey = (e) => Math.round((e.strength || 0) * 1000);
   const sorted = [...entries].sort((a, b) => sKey(b) - sKey(a) || cmp(a.content || '', b.content || ''));
   const ctx = [];
@@ -266,8 +156,6 @@ function strengthSortedAssemble(entries, B) {
   return ctx;
 }
 
-// recency-window: keep the last-N whose cumulative tokens reach 2*B (newest
-// first), then physicsSearch within that window, once per fact, union the tops.
 async function recencyWindowAssemble(entries, createdOrder, B, labels, root) {
   const byId = new Map(entries.map((e) => [e.id, e]));
   const newestFirst = [...createdOrder]
@@ -284,10 +172,8 @@ async function recencyWindowAssemble(entries, createdOrder, B, labels, root) {
   return unionPerFact(window, B, labels, root);
 }
 
-// hippo retrieval: per-fact physicsSearch over `entries`, union the budget-B
-// results (dedup by id), preserving best per-fact rank for the out-rank check.
 async function unionPerFact(entries, B, labels, root) {
-  const seen = new Map(); // id -> {entry, bestRank}
+  const seen = new Map();
   for (const lab of labels) {
     const res = await physicsSearch(lab.topic, entries, {
       hippoRoot: root,
@@ -303,10 +189,6 @@ async function unionPerFact(entries, B, labels, root) {
     }
   }
   // Global fixed-budget repack: pack the per-fact union into a SINGLE budget B
-  // (best-ranked first), so the assembled context honors the fixed-budget premise
-  // (one B-token context, NOT facts x B - the prior union returned ~facts*B). The
-  // continue semantics (skip an over-budget item, keep filling with smaller ones)
-  // match physicsSearch's own budget loop (search.ts:768).
   const ranked = [...seen.values()].sort((a, b) => a.bestRank - b.bestRank);
   const ctx = [];
   let used = 0;
@@ -318,13 +200,6 @@ async function unionPerFact(entries, B, labels, root) {
   }
   return ctx;
 }
-
-// ---------------------------------------------------------------------------
-// Run one (seed x checkpoint): build once, score all four conditions.
-// hippo-full reuses the SAME built store but consolidates + re-embeds it; to
-// keep hippo-no-lifecycle clean we build TWO stores (one consolidated, one not)
-// from the identical injected stream so neither side-effects the other.
-// ---------------------------------------------------------------------------
 
 async function runCell(seed, checkpoint) {
   const scaleMemories = CHECKPOINT_COUNTS[checkpoint];
@@ -340,7 +215,6 @@ async function runCell(seed, checkpoint) {
     labels,
   );
 
-  // Store A: no-lifecycle (also serves naive + recency, which are read-only).
   const A = await buildStore(memories);
   const entriesA = loadAllEntries(A.root);
 
@@ -348,19 +222,15 @@ async function runCell(seed, checkpoint) {
   const recency = scoreAssembled(await recencyWindowAssemble(entriesA, A.createdOrder, BUDGET, labels, A.root), labels);
   const noLife = scoreAssembled(await unionPerFact(entriesA, BUDGET, labels, A.root), labels);
 
-  // Store B: consolidated (hippo-full). Fresh build so A stays untouched.
   const B = await buildStore(memories);
   const cons = await consolidate(B.root, {});
   await reEmbed(B.root);
   const entriesB = loadAllEntries(B.root);
   const full = scoreAssembled(await unionPerFact(entriesB, BUDGET, labels, B.root), labels);
 
-  // Strength-sorted (ambient, no-query) assembly for the same two stores - the
-  // mode where consolidation's compact high-strength summaries could compress.
   const noLifeSS = scoreAssembled(strengthSortedAssemble(entriesA, BUDGET), labels);
   const fullSS = scoreAssembled(strengthSortedAssemble(entriesB, BUDGET), labels);
 
-  // budget-binding diagnostic: fraction of the store fitting B (naive view).
   const totalTokens = memories.reduce((s, m) => s + tok(m.content), 0);
   const fitFraction = Math.min(1, BUDGET / Math.max(1, totalTokens));
 
@@ -395,10 +265,6 @@ async function runCell(seed, checkpoint) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Aggregation + reporting.
-// ---------------------------------------------------------------------------
-
 const CONDITIONS = [
   'naive-append',
   'recency-window',
@@ -419,7 +285,6 @@ function sign(x) {
 }
 
 function aggregate(cells) {
-  // group by checkpoint
   const byCp = new Map();
   for (const c of cells) {
     if (!byCp.has(c.checkpoint)) byCp.set(c.checkpoint, []);
@@ -433,7 +298,6 @@ function aggregate(cells) {
       qa[cond] = mean(rows.map((r) => r.qa[cond]));
       tokens[cond] = mean(rows.map((r) => r.tokens[cond]));
     }
-    // paired per-seed deltas (sorted by seed for stable pairing)
     const sorted = [...rows].sort((a, b) => a.seed - b.seed);
     const dFullVsNoLife = sorted.map((r) => r.qa['hippo-full'] - r.qa['hippo-no-lifecycle']);
     const dFullVsNaive = sorted.map((r) => r.qa['hippo-full'] - r.qa['naive-append']);
@@ -499,10 +363,6 @@ function printMarkdown(agg, meta) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 async function main() {
   if (!isEmbeddingAvailable()) {
     console.error('NO_EMBEDDINGS - local embedding model unavailable; cannot run the physics path.');
@@ -529,7 +389,7 @@ async function main() {
   const t0 = Date.now();
   for (const cp of CHECKPOINTS) {
     for (let s = 0; s < NUM_SEEDS; s++) {
-      const seed = 1000 + s; // recorded, paired across conditions
+      const seed = 1000 + s;
       const cell = await runCell(seed, cp);
       cells.push(cell);
       const elapsed = ((Date.now() - t0) / 1000).toFixed(0);

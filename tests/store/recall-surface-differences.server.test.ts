@@ -1,6 +1,3 @@
-// What one recall returns and writes on each surface (CLI `hippo recall`, MCP hippo_recall, HTTP GET /v1/memories) over
-// one store: each difference in docs/recall-surface-differences.md (D1 to D18) is asserted here and moves only on purpose.
-
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,7 +34,6 @@ import { createCallerState, type CallerState } from '../../src/api/callers.js';
 import { testInfra } from '../_helpers/infra.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
 
-// Each case is one process: its CLI commands and MCP calls share one CallerState, whose rings keep surfaces apart.
 let callers: CallerState;
 
 beforeEach(() => {
@@ -132,7 +128,6 @@ async function viaHttp(handle: ServerHandle, c: RecallCall): Promise<HttpRecalle
   return { output: { status: res.status, body }, hint: body.anchoringHint?.memoryId ?? null };
 }
 
-/** One server for a whole run of calls, as a long-lived HTTP client sees it. */
 async function httpCalls(s: Store, calls: readonly RecallCall[]): Promise<HttpRecalled[]> {
   const handle = await serveKeyed({ hippoRoot: s.root, port: 0 }, serve);
   try {
@@ -163,9 +158,7 @@ async function onFreshStore<T>(kind: 'local' | 'wide', fn: (s: Store) => Promise
 const printedIds = (stdout: string): string[] => [...stdout.matchAll(/^--- (\S+)/gm)].map((m) => m[1]!);
 const FILLS_DOWN = ['mem_p_fill5', 'mem_p_fill4', 'mem_p_fill3', 'mem_p_fill2', 'mem_p_trace', 'mem_p_fill1'];
 const FILLS_UP = ['mem_p_fill0', 'mem_p_fill1', 'mem_p_fill2', 'mem_p_fill3', 'mem_p_fill4', 'mem_p_fill5'];
-/** The engine order CLI and MCP share over the local store; the CLI adds the global row on top. */
 const ENGINE = ['mem_p_plain', 'mem_p_pinned', ...FILLS_DOWN, 'mem_p_fill0', 'mem_p_scoped', 'mem_p_new', 'mem_p_goal'];
-/** HTTP's SQL load order with no mode: ten rows, the default limit. */
 const SQL_ORDER = ['mem_p_pinned', 'mem_p_plain', ...FILLS_UP, 'mem_p_trace', 'mem_p_scoped'];
 const SHOWN_ONCE = Object.fromEntries(ENGINE.filter((id) => id !== 'mem_p_goal').map((id) => [id, 1]));
 const positions = (n: number): number[] => Array.from({ length: n }, (_, i) => 1 - i / n);
@@ -189,7 +182,6 @@ describe('recall surface differences', () => {
     vi.unstubAllEnvs();
   });
 
-  // D1, D3, D5, D7, D9, D10: what one plain recall shows and writes, local and global store.
   it('cli: the engine order plus the global row, budget-fit, counted, audited in both stores', async () => {
     const got = await onFreshStore('local', async (s) => {
       // SAFETY: recallOn answers each cli call with a CliRecalled (viaCli and viaMcp above).
@@ -269,7 +261,6 @@ describe('recall surface differences', () => {
     });
   });
 
-  // D6: the goal-stack boost and the goal_recall_log rows a session recall writes.
   it('a session with an active goal lifts the goal row on CLI and MCP; HTTP order stays the load order', async () => {
     const goalFirst = ['mem_p_goal', ...ENGINE.filter((id) => id !== 'mem_p_goal')];
     const cli = await onFreshStore('local', async (s) => {
@@ -306,7 +297,6 @@ describe('recall surface differences', () => {
     expect(http.written.goalLog).toEqual([]);
   });
 
-  // D11: each surface keeps its own session ring, so hints and their audit rows follow the surface's own history.
   it.each([
     ['cli', 'mem_p_global', ['cli recall 13', 'cli recall_anchor_detected_query_repeat mem_p_global', 'cli recall 13']],
     ['mcp', 'mem_p_goal', ['mcp recall 12', 'mcp recall 12', 'mcp recall_anchor_detected_query_repeat mem_p_goal']],
@@ -337,7 +327,6 @@ describe('recall surface differences', () => {
     },
   );
 
-  // The api writes the hint rows from the hints a presenter detected, so each row's bytes must not depend on who builds it.
   it.each(['cli', 'mcp'] as const)('%s: the hint audit rows, byte for byte', async (surface) => {
     const calls: RecallCall[] = [
       { query: 'deploy' },
@@ -365,7 +354,6 @@ describe('recall surface differences', () => {
     });
   });
 
-  // D7: the audit rows are written first, so a recall the store cannot audit records nothing; only the CLI still answers.
   it('a recall whose audit row the store refuses leaves no hint row, strengthen, trace or count', async () => {
     const refused = <T>(call: (s: Store) => Promise<T>) =>
       onFreshStore('local', async (s) => {
@@ -397,15 +385,12 @@ describe('recall surface differences', () => {
     expect(cli.out.output.status).toBe(0);
     expect(cli.out.output.stdout).toContain('mem_p_goal');
     expect(cli.out.output.stderr).toContain('audit write failed');
-    // The ledger books text that was sent: the CLI printed its block, HTTP sent no memory.
     expect(cli.after.ledger).toHaveLength(cli.before.ledger.length + 1);
     expect(http.out.output.status).toBe(500);
     expect(http.after.ledger).toEqual(http.before.ledger);
     expect(mcp.out).toBe('recall audit refused');
   });
 
-  // D2: candidate windows on a store with 230 matching rows.
-  // A store per surface: a recall rewrites the rows it returns, and that write time breaks the next surface's ties.
   it('candidate window per surface', async () => {
     const cli = await onFreshStore('wide', async (s) => {
       const out = await viaCli(s, { query: 'deploy', cliFlags: { json: true, why: true } });
@@ -440,7 +425,6 @@ describe('recall surface differences', () => {
     ]);
   });
 
-  // D8: MCP's 'recall' audit row counts the rows the budget let it show, as CLI and HTTP count the rows they return.
   it('mcp audit counts the rows shown', async () => {
     const got = await onFreshStore('local', async (s) => {
       const r = await viaMcp(s, { query: 'deploy', budget: 80 });
@@ -452,7 +436,6 @@ describe('recall surface differences', () => {
     });
   });
 
-  // D4: HTTP scores are list positions in every mode; hybrid and physics only reorder.
   it('http scores are positions in bm25, hybrid and physics modes', async () => {
     const got = await onFreshStore('local', async (s) => {
       const out = await httpCalls(
@@ -466,7 +449,6 @@ describe('recall surface differences', () => {
     for (const rows of got) expect(rows.map((r) => r.score)).toEqual(positions(10));
   });
 
-  // D6: under retrieveRanking the boost runs on the ranked list and again on the window band's position scores.
   it('mcp path applies the goal boost twice', async () => {
     const got = await onFreshStore('local', async (s) => {
       let rankedScore = 0;
@@ -494,7 +476,6 @@ describe('recall surface differences', () => {
   });
 });
 
-// D12-D17: the same bad input on MCP and HTTP (RECALL_INPUTS). MCP answers with text, an isError result or a raw throw; HTTP with a status.
 const CONTEXT_INPUTS: readonly [string, Record<string, string | number | boolean>][] = [
   ['budget -1', { budget: -1 }],
   ['budget abc', { budget: 'abc' }],
@@ -520,7 +501,6 @@ const thrownWindow = (got: string): McpOutcome => ({
 });
 const RECALL = 'hippo_recall';
 
-/** What each surface answers to each RECALL_INPUTS case, by name. */
 const RECALL_OUTCOMES = new Map<string, { mcp: McpOutcome; http: HttpOutcome }>(
   Object.entries({
     'empty query': { mcp: badArgs(RECALL, 'query is required'), http: status400('q is required') },
@@ -597,7 +577,6 @@ async function mcpOutcome(root: string, tool: string, args: ToolArgs): Promise<M
   try {
     const { text, isError } = toolReply(await callTool(root, tool, args));
     if (isError) return { isError: text };
-    // Context text follows the git state of the working directory, so only recall checks its first line.
     return { ok: tool === 'hippo_recall' ? text.split('\n')[0]! : true };
   } catch (err) {
     if (!(err instanceof Error)) throw err;
@@ -656,7 +635,6 @@ describe('recall and context validation drift, MCP vs HTTP', () => {
   });
 });
 
-// D18: on a shared store MCP recall keeps to the caller's repo, while GET /v1/memories takes no project.
 describe('shared store recall, MCP vs HTTP', () => {
   it('MCP hippo_recall shows only the named repo; HTTP GET /v1/memories returns both repos', async () => {
     for (const k of CLEARED_ENV) vi.stubEnv(k, '');

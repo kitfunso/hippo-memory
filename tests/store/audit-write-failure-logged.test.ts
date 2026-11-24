@@ -1,4 +1,3 @@
-// An audit row that fails to write must not undo the mutation, and must not vanish silently either.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

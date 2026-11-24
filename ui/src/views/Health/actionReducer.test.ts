@@ -59,7 +59,6 @@ const RESUMED: ActionEvent = { type: "toastResumed" };
 const RESTORED: ActionEvent = { type: "restored" };
 const ABSENT: Job = { owner: 99, request: { kind: "forget", id: "m1" }, projectKey: P };
 
-/** The state after these events, each applied at `now` 0. */
 const fold = (...events: ActionEvent[]): ControllerState =>
   events.reduce((s, e) => reduce(s, e, 0).state, INITIAL_STATE);
 
@@ -75,7 +74,6 @@ function jobOf(s: ControllerState): Job {
   return s.slot.job;
 }
 
-/** The deferred action sent with the drawer on `drawer`; its job is returned for the later settle. */
 function sentJob(first: ActionEvent, drawer: string | null = "m1") {
   const queued = fold(bound(drawer), first);
   return { job: jobOf(queued), state: reduce(queued, commit(), 0).state };

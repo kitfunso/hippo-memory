@@ -1,5 +1,3 @@
-// One log line for a stored JSON column that will not read, so a reader that degrades to an empty
-// value still leaves a trace.
 import { type JsonValue, isJsonObject, tryParseJson } from './json.js';
 import { log } from './log.js';
 

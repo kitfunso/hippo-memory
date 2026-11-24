@@ -1,4 +1,3 @@
-// Scratch projects and CLI runs for the boundary rows of the delivery ledger: compaction and session end.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawn, spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -21,7 +20,6 @@ export const PIN = 'PINNED: always check the rollback plan before deploy';
 export const SNAPSHOT_TASK = 'finish the boundary ledger rows for the compaction hooks';
 
 export interface Project extends Scratch {
-  /** The folder the hooks run in. */
   cwd: string;
 }
 
@@ -49,7 +47,6 @@ export function writeConfig(p: Project, { ledger = true, holdout = false }: Conf
 export function project(config: Config = {}): Project {
   const s = scratch();
   initTestStore(s.hippoRoot);
-  // Copilot and VS Code folders sit inside the scratch home so no run reads the real ones.
   const env = {
     ...s.env,
     COPILOT_HOME: path.join(s.dir, '.copilot'),

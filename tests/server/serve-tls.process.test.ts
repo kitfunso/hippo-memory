@@ -1,4 +1,3 @@
-// `hippo serve` answers HTTPS when given a certificate and key; half a pair or an unreadable file stops it, never a quiet fall back to cleartext.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, sign } from 'node:crypto';
@@ -72,7 +71,6 @@ function selfSignedPair(): TestPair {
   };
 }
 
-/** GET /health over TLS, trusting only the test certificate, so a server holding any other certificate fails the handshake. */
 function healthOverTls(port: number, ca: string): Promise<number> {
   return new Promise<number>((resolve, reject) => {
     const req = httpsRequest({ host: '127.0.0.1', port, path: '/health', ca, agent: false }, (res) => {
@@ -84,7 +82,6 @@ function healthOverTls(port: number, ca: string): Promise<number> {
   });
 }
 
-/** The Strict-Transport-Security header on a GET /health answer, over TLS when `ca` is given. */
 function hstsOf(port: number, ca?: string): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
     const onReply = (res: IncomingMessage): void => {
@@ -182,7 +179,6 @@ describe('hippo serve over TLS', () => {
     );
   });
 
-  /** Starts the real command and resolves with what it printed once its start lines are complete. */
   function startServe(args: string[], env: Record<string, string>): Promise<string> {
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
@@ -194,7 +190,6 @@ describe('hippo serve over TLS', () => {
       children.push(() => child.kill('SIGKILL'));
       let stdout = '';
       let stderr = '';
-      // A start that never prints its lines fails at the test timeout; this keeps what it did print.
       onTestFailed(() => {
         console.error(`stdout=${stdout} stderr=${stderr}`);
       });
@@ -238,7 +233,6 @@ describe('hippo serve over TLS', () => {
       /cannot read the TLS files/,
     ],
   ])('the command exits 1 on %s rather than serve in cleartext', (_case, args, message) => {
-    // The timeout ends a run that served anyway, which then fails the status check.
     const run = spawnSync(process.execPath, [CLI_PATH, 'serve', '--port', '0', ...args], {
       cwd: home,
       env: childEnv({}),

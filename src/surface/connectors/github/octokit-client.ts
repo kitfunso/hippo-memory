@@ -1,8 +1,3 @@
-/** Octokit-shaped HTTP fetcher for the GitHub backfill; tests inject a fake `GitHubFetcher`. Any
- * non-200 that is not a recognised rate-limit pause MUST throw `GitHubFetchError`, since an empty
- * page would be a silent empty backfill.
- */
-
 import { parseRateLimit, type RateLimitInfo } from './ratelimit.js';
 import { fetchWithRetry } from '../../../infra/http-retry.js';
 import type { JsonValue } from '../../../base/util/json.js';
@@ -46,7 +41,6 @@ function headersToRecord(h: Headers): Record<string, string | undefined> {
   return Object.fromEntries(entries);
 }
 
-/** Host and path only: the query string can carry a cursor or filter that is not ours to print. */
 function hostAndPath(url: string): string {
   const { origin, pathname } = new URL(url);
   return origin + pathname;
@@ -59,12 +53,7 @@ const UTF8_MAX_BYTES_PER_CHAR = 4;
 // bytes, plus its fields.
 const GITHUB_MAX_REPLY_BYTES = 32 * 1024 * 1024;
 
-/**
- * The items of a 200 list reply. A body that is not JSON, is over the cap or is not an array
- * throws, so it never reaches ingest as items.
- */
 async function readItems(res: Response, url: string): Promise<JsonValue[]> {
-  // The path only: a `next` link comes from the server, so its query string is not ours to print.
   const path = new URL(url).pathname;
   let body: JsonValue;
   try {
@@ -90,12 +79,10 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
     },
     { timeoutMs: GITHUB_TIMEOUT_MS },
   ).catch((err) => {
-    // A GHES host that never answers must name itself; a bare "fetch failed" leaves the operator guessing.
     throw new Error(`GitHub request to ${hostAndPath(url)} failed: ${errorMessage(err)}`, {
       cause: err,
     });
   });
-  // A redirect to another origin would feed that server's body into this server's refs.
   const finalOrigin = res.url ? tryParseUrl(res.url)?.origin : undefined;
   if (finalOrigin !== undefined && finalOrigin !== new URL(url).origin) {
     throw new Error(`GitHub request to ${hostAndPath(url)} was redirected to ${finalOrigin}`);
@@ -103,9 +90,7 @@ export const realGitHubFetcher: GitHubFetcher = async ({ url, token }) => {
   const headers = headersToRecord(res.headers);
   const rateLimit = parseRateLimit(headers, res.status);
 
-  // Don't silently turn 401/403/404/500 into empty pages.
   if (res.status !== 200 && rateLimit.reason === 'none') {
-    // The status is the error reported; a body that cannot be read only costs its snippet.
     const body = await readCappedText(
       res,
       ERROR_BODY_SNIPPET_CHARS * UTF8_MAX_BYTES_PER_CHAR,

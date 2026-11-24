@@ -1,4 +1,3 @@
-// A broken full-text index never fails a write or a search, but it says so: warn once per kind of failure, then stay quiet.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import { createRequire } from 'node:module';
 import { getHippoDbPath, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -18,7 +17,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 
-/** Swap the FTS5 table for a plain one that refuses `poison` text and every delete, while the store still reports FTS on. */
 function breakFtsIndex(): void {
   const db = new DatabaseSync(getHippoDbPath(root));
   db.exec(`
@@ -53,7 +51,6 @@ describe('FTS failure logging', () => {
     expect(warnings[0]).toMatch(/^\[hippo\] warn: /);
   });
 
-  // One shared handle, because a fresh open re-checks the index, finds it out of step and turns FTS off.
   it('warns once when an FTS delete fails, and the memory row is still deleted', async () => {
     const a = createMemory('first row to forget');
     const b = createMemory('second row to forget');

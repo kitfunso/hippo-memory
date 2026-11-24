@@ -1,5 +1,3 @@
-// The wrapper metadata is a file any process of the user can rewrite, so repair and uninstall must never move a file
-// it names unless the installer could have written that name.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,7 +39,6 @@ function writeMetadata(fields: Record<string, string>): string {
   return metadataPath;
 }
 
-/** Metadata that would have the old uninstall rename `victim` onto `target`. */
 function hostileMetadata() {
   const victim = path.join(env.home, 'notes.txt');
   const target = path.join(env.home, 'elsewhere', 'moved.txt');

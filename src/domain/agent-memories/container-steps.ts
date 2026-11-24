@@ -1,5 +1,3 @@
-// A container plan as the store's steps, the rows each writes built here, and the tally read back
-// from the outcomes.
 import { Layer, createMemory, type MemoryEntry } from '../../base/memory/entry.js';
 import { calculateStrength } from '../../base/memory/strength.js';
 import type { ImportStep, StepOutcome } from '../../base/ports/store/agent-import.js';
@@ -76,8 +74,6 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
     },
     s.now,
   );
-  // The note's own time when it is earlier than now; the loader reads any form but toISOString as
-  // drift.
   const created = Number.isFinite(item.updatedAt)
     ? new Date(Math.min(item.updatedAt, Date.parse(base.created))).toISOString()
     : base.created;
@@ -85,7 +81,6 @@ function newRow(s: StoreSession, w: ContainerWork, item: MemoryItem): MemoryEntr
   return { ...base, created, validFrom: created, ...origin };
 }
 
-/** A note that crossed the cap keeps the recall and outcome counts of the rows it replaces. */
 function withHistory(entry: MemoryEntry, from: readonly MemoryEntry[]): MemoryEntry {
   if (from.length === 0) return entry;
   const sum = (count: (row: MemoryEntry) => number): number =>
@@ -99,7 +94,6 @@ function withHistory(entry: MemoryEntry, from: readonly MemoryEntry[]): MemoryEn
   };
 }
 
-/** The snapshot's row as if just recalled, carrying the tool's tag once. */
 function revived(s: StoreSession, w: ContainerWork, snap: DormantSnapshot): MemoryEntry {
   const { now } = s;
   const tags = Array.isArray(snap.entry.tags)
@@ -135,7 +129,6 @@ function addOutcome(tally: Tally, step: ImportStep, outcome: StepOutcome): void 
   else if (step.kind === 'setAside') tally[outcome === 'untagged' ? 'untagged' : 'setAside']++;
 }
 
-/** A write the gate refused is counted by why; the gate's worth check is off for imported notes. */
 function addWrite(tally: Tally, outcome: StepOutcome, written: 'imported' | 'replaced'): void {
   tally[outcome === 'written' ? written : outcome === 'skipped:rejected' ? 'rejected' : 'secret']++;
 }

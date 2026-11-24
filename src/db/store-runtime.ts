@@ -1,7 +1,3 @@
-// What one process keeps between its store connections: the open steps each store has run, the
-// request sessions still open, idle read handles, and file writes held back. A composition root
-// makes one, hands it to the stores it builds, and disposes it from its own exit hook; an open
-// given no runtime starts fresh.
 import * as path from 'node:path';
 import { errorFields, errorMessage, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -15,13 +11,10 @@ export interface StatsCounts {
   readonly forgotten: number;
 }
 
-/** A request session the runtime closes when the process exits before the session settles. */
 interface OpenSession {
   close(): void;
 }
 
-// Per pool key: a server answers several requests at once, and each closing session hands its
-// handle back.
 const IDLE_PER_KEY = 4;
 
 /** The resolved path of a store's hippo.db, the key every per-store record here uses. */
@@ -31,12 +24,10 @@ export function storeKey(hippoRoot: string): string {
 
 /** What a root states when it makes its runtime. */
 export interface StoreRuntimeOptions {
-  /** Every connection opened under the runtime refuses writes once its schema is settled. */
   readonly readOnly?: boolean;
 }
 
 export class StoreRuntime {
-  /** Mirror and stats writes held back to at most one per interval per root. */
   readonly held = new HeldWrites();
   readonly readOnly: boolean;
   readonly #settled = new Map<string, Set<string>>();
@@ -50,7 +41,6 @@ export class StoreRuntime {
     this.readOnly = opts.readOnly === true;
   }
 
-  /** Whether `step` has run to its end on the store at `key`. */
   hasRun(key: string, step: string): boolean {
     return this.#settled.get(key)?.has(step) ?? false;
   }
@@ -60,7 +50,6 @@ export class StoreRuntime {
     this.#settled.set(key, steps.add(step));
   }
 
-  /** Makes `step`, or every step when none is named, due again on the store at `key`. */
   forget(key: string, step?: string): void {
     if (step === undefined) this.#settled.delete(key);
     else this.#settled.get(key)?.delete(step);
@@ -74,8 +63,6 @@ export class StoreRuntime {
     this.#open.delete(session);
   }
 
-  /** Whether a checkpointer of this runtime checkpoints the store at `key` off its connections'
-   * commits. */
   checkpointsInBackground(key: string): boolean {
     return this.#background.has(key);
   }
@@ -83,8 +70,6 @@ export class StoreRuntime {
   markBackground(key: string, on: boolean): void {
     if (on) this.#background.add(key);
     else this.#background.delete(key);
-    // An idle handle keeps the checkpoint limit it opened with, so the store's idle handles close
-    // for fresh ones.
     for (const [poolKey, idle] of this.#idle) {
       if (!poolKey.startsWith(`${key}\0`)) continue;
       for (const db of idle) closeQuietly(db);
@@ -92,7 +77,6 @@ export class StoreRuntime {
     }
   }
 
-  /** Takes the stats increments a busy store refused, to fold into the next update. */
   takeStats(root: string): StatsCounts | undefined {
     const held = this.#stats.get(root);
     this.#stats.delete(root);
@@ -103,7 +87,6 @@ export class StoreRuntime {
     this.#stats.set(root, counts);
   }
 
-  /** An open idle handle for `poolKey`, or undefined. */
   takeIdle(poolKey: string): DatabaseSyncLike | undefined {
     const idle = this.#idle.get(poolKey);
     for (let db = idle?.pop(); db !== undefined; db = idle?.pop()) {
@@ -112,8 +95,6 @@ export class StoreRuntime {
     return undefined;
   }
 
-  /** Keeps `db` for the next session on `poolKey`; false when the pool is full and the caller
-   * closes it. */
   giveIdle(poolKey: string, db: DatabaseSyncLike): boolean {
     const idle = this.#idle.get(poolKey) ?? [];
     if (idle.length >= IDLE_PER_KEY) return false;
@@ -122,31 +103,24 @@ export class StoreRuntime {
     return true;
   }
 
-  /** Closes every idle handle, so a held connection can be the store's last. */
   closeIdle(): void {
     for (const idle of this.#idle.values()) for (const db of idle) closeQuietly(db);
     this.#idle.clear();
   }
 
-  /** Keeps work nothing waits on, such as a command's embed, until dispose settles it. */
   detach(work: Promise<unknown>): void {
     this.#detached.detach(work);
   }
 
-  /** Waits for the detached work, up to `withinMs` when given, for a root that closes its stores
-   * itself; resolves with how many were still running. */
   settle(withinMs?: number): Promise<number> {
     return this.#detached.settle(withinMs);
   }
 
-  /** Settles the detached work, which may still write through the stores, then runs closeNow. */
   async dispose(): Promise<void> {
     await this.settle();
     this.closeNow();
   }
 
-  /** Runs the held writes, then closes the open sessions and the idle handles, each step even if
-   * the one before throws; it skips detached work, so only a root that cannot wait calls it. */
   closeNow(): void {
     try {
       this.held.flush();

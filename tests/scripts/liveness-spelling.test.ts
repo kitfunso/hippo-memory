@@ -1,5 +1,3 @@
-// No src file but sql-predicates.ts and the frozen migrations spells a `superseded_by` predicate, and no
-// file but liveness.ts reads a memory's link outside the pinned value uses: both fail with file:line.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -25,8 +23,6 @@ interface SrcFile {
   readonly text: string;
 }
 
-/** Every .ts file under src with comment lines blanked, so line numbers stay true and a statement the
- * formatter breaks over lines still matches. */
 function srcFiles(): SrcFile[] {
   const files: SrcFile[] = [];
   for (const name of readdirSync(SRC, { recursive: true, encoding: 'utf8' })) {
@@ -45,7 +41,6 @@ function lineOf(text: string, index: number): number {
   return text.slice(0, index).split('\n').length;
 }
 
-/** `path:line` of every SQL spelling. */
 function spellings(): string[] {
   const found: string[] = [];
   for (const { path, text } of srcFiles()) {
@@ -66,8 +61,6 @@ describe('liveness SQL spelling', () => {
 });
 
 const LINK = String.raw`\b(?:supersededBy|superseded_by)\b`;
-// A member read of either name (a joined alias such as `r.a_superseded_by` too), a destructure that
-// binds the name, and a declaration whose pattern renames it; a type member or object key is no read.
 const LINK_READS: readonly RegExp[] = [
   /\.supersededBy\b/g,
   /\.\w*superseded_by\b/g,
@@ -75,8 +68,6 @@ const LINK_READS: readonly RegExp[] = [
   new RegExp(String.raw`(?:const|let|var)\s*\{[^{}]*${LINK}[^{}]*\}\s*=(?!=|>)`, 'g'),
 ];
 
-/** `src/path:line: text` of every read of a link, by file; a read both a member form and a
- * destructure form match counts once. */
 function linkReads(): Map<string, string[]> {
   const byFile = new Map<string, string[]>();
   for (const { path, text } of srcFiles()) {
@@ -101,8 +92,6 @@ function linkReads(): Map<string, string[]> {
 const TRIGGER = 'frozen trigger text on a record table, never a memory';
 const RECORD = 'a record row (decision, policy, entity), not a memory';
 
-/** Exact counts, so a value use that turns into a truthy test fails; a boolean reading of a memory
- * never goes in here, it is `isSuperseded`. */
 const KEPT_READS = {
   'api/memories/promote.ts': {
     reads: 2,

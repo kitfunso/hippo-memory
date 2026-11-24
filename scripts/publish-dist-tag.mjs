@@ -8,14 +8,12 @@ import { pathToFileURL } from 'node:url';
 const REGISTRY_DIST_TAGS_URL = 'https://registry.npmjs.org/-/package/hippo-memory/dist-tags';
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
-// x.y.z[-pre] only: throws early so a bad version never reaches npm publish.
 function parseVersion(version) {
   const m = VERSION_RE.exec(version);
   if (!m) throw new Error(`invalid version: ${version}`);
   return { major: Number(m[1]), minor: Number(m[2]), patch: Number(m[3]), prerelease: m[4] ?? null };
 }
 
-// Numeric, not string, compare: minor 10 sorts after minor 9 as an integer.
 function compareCore(a, b) {
   return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
 }

@@ -23,16 +23,13 @@ LICENCE = "CC BY-NC 4.0 (amazon-science/PrefEval LICENSE; Hugging Face siyanzhao
 DATA = Path.home() / "hippo-bench" / "datasets" / "prefeval"
 ROWS = DATA / "prefeval_explicit.jsonl"
 FILLER = DATA / "repo" / "benchmark_dataset" / "filtered_inter_turns.json"
-ACKS = Path(os.environ.get("PREFEVAL_ACKS") or DATA / "acks.jsonl")  # a smoke run points this into the smoke folder
+ACKS = Path(os.environ.get("PREFEVAL_ACKS") or DATA / "acks.jsonl")
 DATA_FILES = [DATA / "hf_train.parquet", ROWS, FILLER, ACKS]
-INTER_TURNS = 10  # run_and_eval_explicit.sh uses 2 and benchmark_generation.py:57 defaults to 5; the prereg fixes 10
-MAX_WORDS = 300  # config.yaml:1 max_gen_tokens, written into the question as "words" (explicit_utils.py:401)
-MAX_ACK_TOKENS = 300  # config.yaml:1, also the cap on the reply to the preference (common_utils.py:generate_message)
-
-# config.yaml:3
+INTER_TURNS = 10
+MAX_WORDS = 300
+MAX_ACK_TOKENS = 300
 SYSTEM = "You are a helpful assistant."
 
-# explicit_utils.py:369-385, the RAG baseline's wrapper around the retrieved exchanges, verbatim
 CONTEXT_HEAD = (
     "Before answering my question, please consider the following context from our previous conversations. "
     "These are the 5 most relevant exchanges that we had previously, which may contain information about "
@@ -46,12 +43,9 @@ CONTEXT_TAIL = (
     "my question and there may be no context that is useful. Now, please address my question:\n\n"
 )
 
-# llm_based_evaluation_errortypes.py:164, verbatim (the authors' spelling)
 EVAL_SYSTEM = ("You are a helpful assistant in evaluating an AI assistant's reponse. "
                "You should be fair and strict and follow the user's instruction")
 
-# error_type/check_violation.txt, verbatim (the git blob, LF line ends). The authors fill it by str.replace of {preference},
-# {question} and {end_generation} (llm_based_evaluation_errortypes.py:188-191).
 CHECK_VIOLATION = '''You will analyze a conversation between a user and an assistant, focusing on whether the assistant's response violates the user's stated preference.
 Evaluate the response based on these criteria:
 
@@ -74,7 +68,6 @@ Examine the response meticulously and answer. Answer in this exact XML format:
 <explanation>[1 very short sentence explanation]</explanation>
 <answer>[Yes/No]</answer>'''
 
-# error_type/check_helpful.txt, verbatim, filled the same way (llm_based_evaluation_errortypes.py:188-191).
 CHECK_HELPFUL = '''You will analyze a conversation between a user and an assistant, focusing on whether the assistant provides any substantive response to the user's query.
 Evaluate the response based on these stringent criteria:
 
@@ -105,14 +98,12 @@ Examine the response meticulously and answer. Answer in this exact XML format:
 <explanation>[1 very short sentence explanation]</explanation>
 <answer>[Yes/No]</answer>'''
 
-# The one format change: the judge here answers in one JSON object (codex_judge.PREAMBLE), so both checks go in one call and
-# each check's XML reply format becomes two fields. The authors run the two checks as separate calls.
 JUDGE_SYSTEM = (EVAL_SYSTEM + "\n\nYou are given two independent checks of one assistant response. Do each as its own "
                 "task, and let neither answer change the other. Each check ends with an XML reply format; do not use it. "
                 'Reply with one JSON object instead: {"violate_explanation": "<the first check\'s explanation>", '
                 '"violate": "Yes" or "No", "helpful_explanation": "<the second check\'s explanation>", '
                 '"helpful": "Yes" or "No"}, and write nothing outside that object.')
-FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")  # a whole-reply code fence
+FENCE = re.compile(r"```[a-zA-Z0-9]*\n([\s\S]*?)\n```")
 
 
 def _rows() -> list[dict]:
@@ -121,7 +112,6 @@ def _rows() -> list[dict]:
 
 
 def _ids() -> list[tuple[str, dict]]:
-    """(qid, row) in the dataset's order; the index counts within the topic, as the authors' per-topic files do."""
     seen: dict[str, int] = {}
     out = []
     for r in _rows():
@@ -131,7 +121,6 @@ def _ids() -> list[tuple[str, dict]]:
 
 
 def _filler() -> list[dict]:
-    """The first 2 * INTER_TURNS messages of the filler conversations in file order (common_utils.py:54-62, :11-39)."""
     with FILLER.open(encoding="utf-8") as f:
         msgs = [m for t in json.load(f) for m in t["conversation"]][:2 * INTER_TURNS]
     if len(msgs) != 2 * INTER_TURNS or msgs[-1]["role"] != "assistant":
@@ -150,8 +139,6 @@ def _acks() -> dict[str, str]:
 
 
 def conversations():
-    """Per question: the user states the preference, the assistant replies (acks.jsonl), then the filler turns. The data
-    holds no dates, so no timestamps. A question with no reply yet is skipped, and the harness then names it."""
     acks, filler, missing = _acks(), _filler(), 0
     for qid, r in _ids():
         if qid not in acks:
@@ -165,7 +152,6 @@ def conversations():
 
 
 def questions() -> list[dict]:
-    """One question per row, asked after all 22 turns. gold is the preference, which the judge is given."""
     if not ACKS.exists():
         sys.exit(f"{ACKS} is missing; run `python -I loaders/prefeval.py acks` first (add --limit 5 for a smoke)")
     return [{"qid": qid, "user_id": qid, "question": r["question"], "gold": r["preference"], "category": r["topic"],
@@ -173,10 +159,6 @@ def questions() -> list[dict]:
 
 
 def answer_prompt(q: dict, memories: list[dict]) -> tuple[str, str]:
-    """The RAG baseline's user message (explicit_utils.py:388-401): the wrapper, the retrieved exchanges numbered from 1
-    as "exchange N. user: ..." (baselines_handling.py:86-90; msg_index_*.json holds "user: ..." lines, as the server
-    stores them), the question, and the length request. The authors also send the whole history as messages; the
-    memories stand in for it, as in the other loaders."""
     ctx = "".join(f"exchange {i}. {m['memory']}\n" for i, m in enumerate(memories, 1))
     return SYSTEM, CONTEXT_HEAD + ctx + CONTEXT_TAIL + q["question"] + f" (Please respond within {MAX_WORDS} words.)"
 
@@ -186,10 +168,6 @@ def _yes_no(v: object) -> bool | None:
 
 
 def parse(reply: str) -> bool | None:
-    """True if the response follows the preference. get_preference_following_accuracy_generation_task.py:69-82 reduces to
-    not violated and not unhelpful: its three violation error types cover every acknowledged, hallucinated or unaware
-    case, so acknowledgement and hallucination do not change the score. Violated is "yes" in the check_violation answer
-    (:71), unhelpful is "no" in the check_helpful answer (:72). None if a reply gives no Yes or No for either check."""
     t = reply.strip()
     fence = FENCE.fullmatch(t)
     try:
@@ -212,15 +190,13 @@ def judge(q: dict, answer: str):
 
 
 def _truncate(text: str) -> str:
-    """The authors cap the reply to the preference at max_tokens 300 (config.yaml:1); claude -p has no cap, so the reply
-    is cut after its first 225 words (300 tokens at 0.75 words a token), at a word end."""
     words = list(re.finditer(r"\S+", text))
     cap = round(MAX_ACK_TOKENS * 0.75)
     return text if len(words) <= cap else text[:words[cap - 1].end()]
 
 
 def prepare() -> None:
-    import pandas as pd  # only here: the loader itself reads the jsonl
+    import pandas as pd
     df = pd.read_parquet(DATA / "hf_train.parquet")
     with ROWS.open("w", encoding="utf-8", newline="\n") as f:
         for r in df.to_dict("records"):
@@ -229,9 +205,6 @@ def prepare() -> None:
 
 
 def acks(limit: int, slots: int) -> None:
-    """The assistant's reply to each preference: Claude Sonnet 5 at medium effort, the answerer, with the authors' system
-    prompt and the preference as the only message (benchmark_generation.py:113-118). Appends to ACKS; a question already in
-    it is not asked again. --limit N takes the questions the harness's smoke takes (harness.py setup: every len//N-th)."""
     from concurrent.futures import ThreadPoolExecutor
     here = Path(__file__).resolve()
     sys.path[:0] = [str(here.parents[2]), str(here.parents[2] / "mem0")]

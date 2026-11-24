@@ -1,4 +1,3 @@
-// Allocating vector helpers, the reference the in-place physics step is held to bit for bit.
 import { vecScale } from '../../src/base/rank/physics.js';
 import { norm } from '../../src/base/rank/cosine.js';
 

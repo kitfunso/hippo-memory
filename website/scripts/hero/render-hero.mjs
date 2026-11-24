@@ -1,5 +1,3 @@
-// Renders the cabinet scene's still frame with three.js into public/hero-cabinet.webp, the poster on the share cards.
-// Run from website/: PW=<path to a playwright package> node scripts/hero/render-hero.mjs (ffmpeg with libwebp on PATH).
 import { createServer } from 'node:http';
 import { readFile, mkdtemp, writeFile, rm, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -38,7 +36,6 @@ try {
   await writeFile(join(frames, 'f00000.png'), Buffer.from(url.split(',')[1], 'base64'));
   if (errors.length) throw new Error(`render page errors: ${errors.join('; ')}`);
 
-  // The frame has a transparent background; the poster puts it on white, which the share card multiplies onto the paper colour.
   const onWhite = ['-f', 'lavfi', '-i', `color=white:s=${W}x${H}:r=${FPS}`, '-filter_complex', '[1][0]overlay=shortest=1,format=yuv420p'];
   const webp = join(root, 'public', 'hero-cabinet.webp');
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(frames, 'f00000.png'), ...onWhite, '-frames:v', '1', '-c:v', 'libwebp', '-quality', '82', webp]);

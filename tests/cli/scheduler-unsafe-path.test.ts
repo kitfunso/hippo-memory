@@ -1,4 +1,3 @@
-// The daily-runner path check refuses what would break the quoted command or split a crontab line.
 import { describe, it, expect } from 'vitest';
 import { hasUnsafeRunnerPathChars } from '../../src/surface/cli/scheduler.js';
 

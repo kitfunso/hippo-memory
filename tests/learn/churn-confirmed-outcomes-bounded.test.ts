@@ -1,4 +1,3 @@
-// The churn pass reads good-outcome times from a ts range, not the tenant's whole audit history, and says so in its plan.
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { detectChurnStale } from '../../src/domain/learn/churn-stale.js';
@@ -12,7 +11,6 @@ import { removeDir } from '../_helpers/remove-dir.js';
 import { processGit } from '../../src/infra/git-runner.js';
 
 const OLD_TARGETS = 200;
-/** Rows the confirmed-outcome statement handed to JavaScript in `reads`. */
 const outcomeRows = (reads: readonly { sql: string; rows: number }[]): number =>
   reads
     .filter((r) => r.sql.includes('FROM audit_log') && r.sql.includes('GROUP BY target_id'))
@@ -117,7 +115,6 @@ describe('detectChurnStale', () => {
     );
 
     expect(result.checked).toBe(1);
-    // The candidate was written now, after every seeded outcome, so no outcome row is read for it.
     expect(outcomeRows(reads)).toBe(0);
   });
 });

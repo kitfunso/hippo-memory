@@ -1,4 +1,3 @@
-// Plain JS so both the Astro build (readme.ts) and the Node drift guard in CI parse the README the same way.
 export const REPO = 'https://github.com/kitfunso/hippo-memory';
 
 const MD_ESCAPE = /\\([\\`*_{}[\]()#+\-.!|])/g;
@@ -11,7 +10,6 @@ export const LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 /** Markdown to plain text for JSON-LD: code keeps its text, a link keeps its label, emphasis marks go.
  * @param {string} md */
 export function mdText(md) {
-  // Code spans wait behind U+E000 (private use, so never README text, and not a control character).
   /** @type {string[]} */
   const code = [];
   const text = md
@@ -49,7 +47,6 @@ export function parseComparison(text) {
     }
     return { feature, cells };
   });
-  // Footnotes open with an escaped asterisk and stay markdown, for mdInline.
   const footnotes = body.split('\n').filter((l) => l.startsWith('\\*'));
   if (!footnotes.length) throw new Error('README.md Comparison section has no footnotes');
   return { systems, rows, footnotes };

@@ -259,7 +259,6 @@ export interface OverlayScene {
   plot: Plot;
   dpr: number;
   brush: Brush | null;
-  /** The memory the drawer shows, as [age, strength], or null. */
   open: readonly [number, number] | null;
   hover: readonly [number, number] | null;
   cell: CellHit | null;

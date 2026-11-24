@@ -1,5 +1,3 @@
-// The one module that builds a folder's embedding target for the entries, so eval-scripts, the eval
-// kit's embedMemory and a server's embedAll all get the same target.
 import { folderEmbedTarget, type EmbedTarget } from '../domain/search/embed-memories.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { HippoStore } from '../base/ports/store.js';

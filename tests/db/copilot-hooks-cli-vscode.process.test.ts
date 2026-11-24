@@ -1,4 +1,3 @@
-// The Copilot hook commands on a VS Code chat: the Stop hook per turn, and Claude Code settings that fire on a VS Code chat.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ChildProcess } from 'node:child_process';
@@ -86,7 +85,6 @@ const SECOND_TURN = [
   .map((line) => `${JSON.stringify(line)}\n`)
   .join('');
 
-/** Writes the chat log where VS Code keeps it, `<User>/workspaceStorage/<id>/github.copilot-chat/transcripts/<session id>.jsonl`. */
 function writeVscodeTranscript(text: string, sessionId = VSCODE_SESSION): string {
   const file = path.join(
     s.dir,
@@ -111,7 +109,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
   const stopArgs = (log: string): string[] => ['session-end', '--runtime', 'copilot', '--turn', '--log-file', log];
   const sessionFile = (suffix: string, id = VSCODE_SESSION): string =>
     path.join(s.dir, '.hippo', 'sessions', `${id}${suffix}`);
-  /** Whether a live worker holds the session lock; a free lock the probe takes is released at once. */
   const sessionLockHeld = (): boolean => {
     const take = takeFileLock(sessionFile('.lock.db'));
     if (take.kind === 'taken') take.lock.release();
@@ -125,7 +122,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     return JSON.stringify({ ...JSON.parse(payload), session_id: over.sessionId });
   }
 
-  /** One reply's Stop hook; the log starts afresh each turn, so the old one goes first. */
   async function stop(
     transcript: string,
     run: { cwd?: string; from?: string; waitMs?: number; env?: NodeJS.ProcessEnv } = {},
@@ -142,7 +138,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     return waitForLog(logFile(), TURN_DONE, run.waitMs);
   }
 
-  /** Env that stops the detached worker at the progress cursor save; `mark` gains the worker's pid line there. */
   function cursorSaveFault(mode: 'kill' | 'hold') {
     const mark = path.join(s.dir, 'cursor-save.mark');
     const releaseFile = path.join(s.dir, 'cursor-save.release');
@@ -157,7 +152,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     return {
       env,
       async reached(): Promise<number> {
-        // A poll can see the file created and still empty, which must never parse as pid 0.
         await waitFor(() => marked().includes('\n'), {
           what: 'a worker reaching the progress cursor save',
           timeoutMs: 40_000,
@@ -248,7 +242,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     if (!autoSleep.enabled || autoSleep.threshold > 1) expect(log).not.toContain('consolidating memory...');
   });
 
-  /** How many session-end workers one Stop hook run started; the preload records each spawn before the hook exits. */
   function workersStartedBy(payload: string): number {
     const record = path.join(s.dir, 'spawns.jsonl');
     fs.rmSync(record, { force: true });
@@ -271,12 +264,10 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(fs.existsSync(logFile())).toBe(false);
     expect(fs.existsSync(path.join(s.dir, '.hippo', 'sessions'))).toBe(false);
 
-    // VS Code's Stop on the same line does start a worker, so the zeros above are not a blind recorder.
     expect(workersStartedBy(copilotPayload('Stop', s.proj, transcript))).toBe(1);
     await waitForLog(logFile(), TURN_DONE);
   });
 
-  // A lock holder process, two bounded lock waits in the hook, then a worker that saves once the lock is gone.
   it('on a busy store saves nothing and no progress cursor, then saves once the lock is gone and not again', async () => {
     const transcript = writeVscodeTranscript(copilotEventsJsonl());
     holder = await holdStoreWriteLock(getHippoDbPath(s.hippoRoot), 120_000);
@@ -304,7 +295,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(fs.existsSync(sessionFile('.cursor.json'))).toBe(false);
     expect(fs.existsSync(sessionFile('.lock.db'))).toBe(true);
-    // The temp file shows the kill landed between the write and the rename.
     expect(fs.existsSync(sessionFile(`.cursor.json.${pid}.tmp`))).toBe(true);
 
     expect(await stop(transcript)).toContain('Captured 0 items (2 skipped as duplicates');
@@ -333,7 +323,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
     await waitFor(() => !pidAlive(pid), { what: `worker ${pid} exited`, timeoutMs: 60_000 });
     expect(memoriesWith(FIRST_LESSON)).toBe(1);
     expect(memoriesWith(SECOND_LESSON)).toBe(1);
-    // The second worker has no preload, so two lines with this pid mean the first worker saved the cursor twice.
     expect(fault.saves()).toEqual([pid, pid]);
     expect(readLog(logFile())).toContain('Captured 2 items (0 skipped as duplicates');
     expect(fs.existsSync(sessionFile('.queued'))).toBe(false);
@@ -351,7 +340,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
       stopPayload(writeVscodeTranscript(copilotEventsJsonl())),
     );
     expect(firstStop.status, firstStop.stderr).toBe(0);
-    // The first chat's worker is held at its cursor save before the second chat starts, so the whole second save falls inside that worker's life.
     const pid = await fault.reached();
     const secondPayload = stopPayload(writeVscodeTranscript(SECOND_TURN, second), { sessionId: second });
     const secondStop = await hippo(stopArgs(secondLog), s.dir, s.env, secondPayload);
@@ -424,7 +412,6 @@ describe('hippo session-end --runtime copilot --turn (the VS Code Stop hook)', (
 });
 
 describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => {
-  // With chat.useClaudeHooks on, VS Code runs ~/.claude/settings.json hooks too, so Claude Code's PreCompact line fires in Copilot chats.
   it('with hippo.json installed leaves the chat to the Copilot hook: no record, no summariser text, no snapshot', async () => {
     fs.mkdirSync(path.join(s.copilotHome, 'hooks'), { recursive: true });
     fs.writeFileSync(path.join(s.copilotHome, 'hooks', 'hippo.json'), '{}');
@@ -483,7 +470,6 @@ describe('hippo pre-compact from Claude Code settings on a VS Code chat', () => 
 });
 
 describe('a Claude Code payload run from another folder with no --runtime', () => {
-  // Claude Code runs each hook in its project, so a payload cwd naming a different folder must not move the store.
   let other: string;
   let otherRoot: string;
 

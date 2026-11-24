@@ -1,12 +1,3 @@
-/**
- * E3.3 graph-on-consolidated guard - store-layer tests.
- * Docs: docs/plans/2026-06-01-e3-graph-guard.md
- *
- * The graph must NEVER index the raw layer. These tests pin the DB-level guard
- * (CHECK + BEFORE INSERT/UPDATE triggers) as the unbypassable invariant, plus the
- * src/graph.ts helper API.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -29,8 +20,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { writeEntry } = sessionPerTest();
 
-/** Write a memory and force its kind (default writes are 'distilled'). Setting kind
- *  to 'raw' is allowed (the append-only trigger is BEFORE DELETE, not UPDATE). */
 function addMemory(home: string, tenant: string, kind: 'distilled' | 'superseded' | 'raw'): string {
   const mem = createMemory('graph source memory for guard tests', {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -114,11 +103,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
 
   it('CRITERION 1: a raw-FK entity is rejected via the helper AND via a direct raw SQL INSERT (trigger ABORTs)', () => {
     const raw = addMemory(home, 'default', 'raw');
-    // helper rejects
     expect(() => insertEntityAt(home, 'default', { entityType: 'system', name: 'x', memoryId: raw })).toThrow(
       /raw|consolidated/i,
     );
-    // direct raw SQL INSERT (claiming source_kind='distilled') is rejected by the trigger
     const db = openHippoDb(home);
     try {
       expect(() => {
@@ -137,15 +124,12 @@ describe('graph store (graph-on-consolidated guard)', () => {
     const e = insertEntityAt(home, 'default', { entityType: 'project', name: 'p', memoryId: md });
     const db = openHippoDb(home);
     try {
-      // move memory_id to a raw memory -> ABORT (BEFORE UPDATE trigger)
       expect(() => db.prepare(`UPDATE entities SET memory_id = ? WHERE id = ?`).run(raw, e.id)).toThrow(
         /source_kind must equal the referenced memory kind/,
       );
-      // change source_kind to disagree with the (distilled) memory -> ABORT
       expect(() => db.prepare(`UPDATE entities SET source_kind = 'superseded' WHERE id = ?`).run(e.id)).toThrow(
         /source_kind must equal the referenced memory kind/,
       );
-      // the row is unchanged
       // SAFETY: query selects only memory_id and source_kind for the entity row inserted above.
       const row = db.prepare(`SELECT memory_id, source_kind FROM entities WHERE id = ?`).get(e.id) as {
         memory_id: string;
@@ -202,7 +186,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     ).toThrow(/another tenant/);
     const db = openHippoDb(home);
     try {
-      // raw SQL: relation in tenant-a referencing tenant-b's entity -> trigger ABORTs
       expect(() => {
         db.prepare(`INSERT INTO relations(tenant_id, from_entity_id, to_entity_id, rel_type, memory_id, source_kind, created_at)
           VALUES ('tenant-a', ?, ?, 'depends-on', ?, 'distilled', ?)`).run(ea.id, eb.id, ma, new Date().toISOString());
@@ -222,7 +205,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
         VALUES ('default', 'alien', 'x', ?, 'distilled', ?)`)
           .run(md, 't'),
       ).toThrow(/CHECK|constraint/i);
-      // source_kind='raw' is doubly-invalid (CHECK + trigger); the BEFORE INSERT
       // trigger fires before the CHECK in SQLite, so it raises the trigger message.
       expect(() =>
         db
@@ -269,7 +251,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(q!.kind).toBe('distilled');
     markGraphDirty(home, 'default', raw);
     expect(loadExtractionQueue(home, 'default').map((item) => item.memoryId)).toEqual([md]);
-    // queue UPDATE that re-points to raw / fakes kind ABORTs
     const db = openHippoDb(home);
     try {
       expect(() => db.prepare(`UPDATE graph_extraction_queue SET memory_id = ? WHERE id = ?`).run(raw, q!.id)).toThrow(
@@ -285,7 +266,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     } finally {
       closeHippoDb(db);
     }
-    // status-only update (markProcessed) is allowed (guard fires only on memory_id/kind/tenant change)
     expect(markPendingProcessedUpTo(home, 'default', q!.id)).toBe(1);
     const [done] = loadExtractionQueue(home, 'default', { status: 'processed' });
     expect(done!.status).toBe('processed');
@@ -304,10 +284,9 @@ describe('graph store (graph-on-consolidated guard)', () => {
     expect(countRows(home, 'entities')).toBe(2);
     expect(countRows(home, 'relations')).toBe(1);
     expect(countRows(home, 'graph_extraction_queue')).toBe(1);
-    deleteEntry(home, md); // distilled deletes are allowed (raw is append-only)
+    deleteEntry(home, md);
     expect(countRows(home, 'entities')).toBe(0);
     expect(countRows(home, 'relations')).toBe(0);
-    // the queue row still cascades away (graph_extraction_queue is untouched by v38).
     expect(countRows(home, 'graph_extraction_queue')).toBe(0);
   });
 
@@ -316,15 +295,12 @@ describe('graph store (graph-on-consolidated guard)', () => {
     insertEntityAt(home, 'default', { entityType: 'system', name: 'a', memoryId: md });
     const db = openHippoDb(home);
     try {
-      // P1: reclassify the referenced memory to raw -> ABORT
       expect(() => db.prepare(`UPDATE memories SET kind = 'raw' WHERE id = ?`).run(md)).toThrow(
         /while the graph references it/,
       );
-      // P2: ANY kind change (e.g. distilled->superseded) -> ABORT (avoids stale source_kind)
       expect(() => db.prepare(`UPDATE memories SET kind = 'superseded' WHERE id = ?`).run(md)).toThrow(
         /while the graph references it/,
       );
-      // move the referenced memory cross-tenant -> ABORT
       expect(() => db.prepare(`UPDATE memories SET tenant_id = 'tenant-x' WHERE id = ?`).run(md)).toThrow(
         /while the graph references it/,
       );
@@ -338,7 +314,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     } finally {
       closeHippoDb(db);
     }
-    // an UNreferenced consolidated memory can still change kind freely (guard fires only when referenced)
     const free = addMemory(home, 'default', 'distilled');
     const db2 = openHippoDb(home);
     try {
@@ -357,8 +332,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     insertRelationAt(home, 'default', { fromEntityId: a.id, toEntityId: b.id, relType: 'depends-on', memoryId: md });
     const db = openHippoDb(home);
     try {
-      // moving endpoint 'a' to tenant-b (with a tenant-b memory, so the entity<->memory
-      // check would pass) must ABORT because a relation references it as an endpoint
       expect(() =>
         db
           .prepare(`UPDATE entities SET tenant_id = 'tenant-b', memory_id = ?, source_kind = 'distilled' WHERE id = ?`)
@@ -368,7 +341,6 @@ describe('graph store (graph-on-consolidated guard)', () => {
     } finally {
       closeHippoDb(db);
     }
-    // an entity NOT referenced by any relation can still move tenant (with a matching memory)
     const cmem = addMemory(home, 'default', 'distilled');
     const c = insertEntityAt(home, 'default', { entityType: 'system', name: 'c', memoryId: cmem });
     const db2 = openHippoDb(home);

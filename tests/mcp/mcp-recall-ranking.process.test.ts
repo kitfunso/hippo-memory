@@ -1,6 +1,3 @@
-// Pins which memories MCP hippo_recall returns, and in what order, across its modes and arguments.
-// Ids are random per seed, so rows are named by label.
-
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -56,7 +53,6 @@ function makeHome(config?: StoreConfig): string {
   return home;
 }
 
-/** A row under `label`, recorded on `s` but not yet written. */
 function labelled(s: Seeded, label: string, content: string, opts: Partial<CreateMemoryOptions> = {}): MemoryEntry {
   const entry = createMemory(content, { baseHalfLifeDays: 7, tenantId: TENANT, ...opts });
   s.labelById.set(entry.id, label);
@@ -71,7 +67,6 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
   return entry;
 }
 
-/** Lexical hits of differing strength, a semantic-only row, scoped, private, legacy, pinned and churn-stale rows, and noise. */
 function seed(config?: StoreConfig): Seeded {
   const s: Seeded = { home: makeHome(config), labelById: new Map(), idByLabel: new Map(), contentByLabel: new Map() };
   add(s, 'L1', 'deploy pipeline uses blue green rollout');
@@ -126,7 +121,6 @@ interface Observed {
   cutoff: string | null;
 }
 
-/** Labels of the ranked list in print order, labels of the tail section, and the Cutoff line. */
 function observe(s: Seeded, text: string): Observed {
   const start = text.indexOf('Found ');
   const tailAt = text.indexOf('## Fresh tail / substituted summaries');
@@ -148,7 +142,6 @@ function observe(s: Seeded, text: string): Observed {
   return { ranked, tail, cutoff };
 }
 
-/** Label to retrieval_count for every row retrieved at least once. */
 function retrievalCounts(s: Seeded): Map<string, number> {
   const db = openHippoDb(s.home);
   try {
@@ -165,7 +158,6 @@ function retrievalCounts(s: Seeded): Map<string, number> {
   }
 }
 
-/** Query vector points at S1; lexical hits sit at cosine 0.6; noise is orthogonal. */
 function withEmbeddings(s: Seeded): void {
   const id = resolveEmbeddingProvider(loadConfig(s.home).embeddings).id;
   const index: Record<string, number[]> = {};
@@ -187,7 +179,6 @@ function withEmbeddings(s: Seeded): void {
 const EMBED_CONFIG = { embeddings: { provider: 'openai', model: 'text-embedding-3-small' } };
 
 describe('MCP hippo_recall ranking', () => {
-  // Removed once the test is done, after its session has closed its handles.
   const track = (s: Seeded): Seeded => {
     onTestFinished(() => removeDir(s.home));
     return s;
@@ -329,7 +320,6 @@ describe('MCP hippo_recall ranking', () => {
   });
 });
 
-// Candidates are a wide FTS window plus the nearest vectors, so Cutoff counts only rows that matched the query.
 const EXPECTED = {
   defaultHybrid: {
     ranked: ['SC1', 'L1', 'L2', 'D1', 'P1', 'L4', 'SC2', 'L3', 'C1', 'L5', 'G1'],

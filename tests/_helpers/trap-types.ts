@@ -1,4 +1,3 @@
-// Shapes of the untyped benchmarks/sequential-learning/traps.mjs exports, for tests that read them.
 export interface TrapCategory {
   id: string;
   lesson: string;

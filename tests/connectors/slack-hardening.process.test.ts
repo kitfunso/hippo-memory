@@ -25,7 +25,6 @@ import { writeEntry, loadAllEntries } from '../_helpers/root-forms.js';
 import { envTenant } from '../../src/base/util/env.js';
 import { testInfra } from '../_helpers/infra.js';
 
-// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown,
@@ -62,7 +61,6 @@ describe('Slack hardening + migration v19', () => {
     root = makeRoot('v039-slack');
   });
 
-  // 1. Migration v19 schema additions present.
   it('migration v19: slack_dlq has team_id, bucket, retry_count, signature, slack_timestamp', () => {
     expect(getCurrentSchemaVersion()).toBe(LATEST_SCHEMA_VERSION);
     const db = openHippoDb(root);
@@ -83,7 +81,6 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 2. Unknown team + empty workspaces → fallback.
   it('resolveTenant: empty slack_workspaces → env fallback', async () => {
     const restore = withEnv('HIPPO_TENANT', 'env-tenant-A');
     const db = openHippoDb(root);
@@ -97,7 +94,6 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 3. Unknown team + non-empty workspaces → fail closed (null).
   it('resolveTenant: non-empty workspaces + unknown team → null (fail closed)', async () => {
     const restore = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', undefined);
     const db = openHippoDb(root);
@@ -114,7 +110,6 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 4. Escape hatch SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK=1.
   it('resolveTenant: escape hatch returns env tenant when both flag and workspaces non-empty', async () => {
     const r2 = withEnv('HIPPO_TENANT', 'env-fallback');
     const db = openHippoDb(root);
@@ -133,11 +128,9 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 5. Server slack-events: unroutable goes to DLQ with bucket='unroutable' + team_id.
   it('server slack-events: unknown team writes to slack_dlq with bucket=unroutable + team_id captured', async () => {
     const r1 = withEnv('SLACK_SIGNING_SECRET', SECRET);
     const r2 = withEnv('SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK', undefined);
-    // Seed slack_workspaces so unknown teams fail closed.
     {
       const db = openHippoDb(root);
       try {
@@ -177,9 +170,7 @@ describe('Slack hardening + migration v19', () => {
         },
         body,
       });
-      // Mandatory ACK.
       expect(res.status).toBe(200);
-      // No memory created.
       expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:slack'))).toHaveLength(0);
       const db = openHippoDb(root);
       try {
@@ -203,14 +194,12 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // The fast pre-check answers a replay; a second worker whose pre-check ran too early is caught by the event-log insert inside its own write.
   it('ingest race: duplicate event_id yields exactly one memory + skipped_duplicate via afterWrite throw', async () => {
     const ctx: FullContext = apiCtx(root, 'default', {
       subject: 'connector:slack',
       role: 'admin',
     });
 
-    // First call: ordinary ingest succeeds and writes to slack_event_log.
     const r1 = await ingestMessage(ctx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -226,9 +215,6 @@ describe('Slack hardening + migration v19', () => {
     expect(r1.status).toBe('ingested');
     expect(r1.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
-    // Second call with same eventId: fast-path pre-check returns duplicate
-    // immediately. The plan stop-condition documents this: "the existing
-    // pre-check hasSeenEvent stays as fast-path optimization."
     const r2 = await ingestMessage(ctx, {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -244,7 +230,6 @@ describe('Slack hardening + migration v19', () => {
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
 
-    // The loser's pre-check runs before the winner commits, so it finds nothing and goes on to write.
     const raced: IngestInput = {
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },
@@ -261,7 +246,6 @@ describe('Slack hardening + migration v19', () => {
     const racedOpts = messageToRememberOpts(raced);
     if (!racedOpts) throw new Error('the raced message has text');
     const memBefore = loadAllEntries(root, 'default').length;
-    // The other worker's write commits after the loser's pre-check and before the loser's own write.
     const settled: IngestResult[] = [];
     const winnerCtx = apiCtx(root, 'default', {
       subject: 'connector:slack',
@@ -275,7 +259,6 @@ describe('Slack hardening + migration v19', () => {
       settled.push({ status: w.duplicate ? 'skipped_duplicate' : 'ingested', memoryId: w.id });
     });
     const loser = await ingestMessage(gated.ctx, raced);
-    // A pre-check after the other worker's commit answers 'duplicate' and never reaches the guarded write.
     expect(gated.preChecks).toEqual([false]);
 
     expect(settled.map((w) => w.status)).toEqual(['ingested']);
@@ -283,10 +266,8 @@ describe('Slack hardening + migration v19', () => {
       status: 'skipped_duplicate',
       memoryId: settled[0].memoryId,
     });
-    // One new memory row, the winner's: the loser's write rolled back.
     expect(loadAllEntries(root, 'default').length).toBe(memBefore + 1);
 
-    // slack_event_log still has exactly one row for the raced event_id.
     {
       const db = openHippoDb(root);
       try {
@@ -302,9 +283,7 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 7. Deletion afterArchive atomic: throw inside callback rolls back the archive.
   it('archiveRawMemory: throw inside afterArchive callback rolls back the archive', () => {
-    // Seed a kind=raw memory directly.
     const mem = createMemory('archive-rollback-test', {
       layer: Layer.Buffer,
       tenantId: 'default',
@@ -324,7 +303,6 @@ describe('Slack hardening + migration v19', () => {
         }),
       ).toThrow(/hook says no/);
 
-      // Memory is still present — SAVEPOINT rolled back.
       // SAFETY: SELECT id, kind projects only these two columns.
       const stillThere = db.prepare(`SELECT id, kind FROM memories WHERE id = ?`).get(mem.id) as
         | { id?: string; kind?: string }
@@ -332,7 +310,6 @@ describe('Slack hardening + migration v19', () => {
       expect(stillThere?.id).toBe(mem.id);
       expect(stillThere?.kind).toBe('raw');
 
-      // raw_archive has no row for this id.
       // SAFETY: SELECT COUNT(*) AS c always returns exactly one row with a numeric c column.
       const archCount = db.prepare(`SELECT COUNT(*) AS c FROM raw_archive WHERE memory_id = ?`).get(mem.id) as {
         c: number | bigint;
@@ -343,11 +320,7 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 8. DLQ replay clean path: retry_count=1, ingest succeeds, memory created.
   it('DLQ replay: clean path increments retry_count and ingests the memory', async () => {
-    // Seed a parse_error row whose payload IS a valid event_callback envelope —
-    // simulating "the route handler dropped this for an old reason; routing is
-    // now fixed and we can replay it".
     const body = JSON.stringify({
       type: 'event_callback',
       team_id: 'TREPLAY',
@@ -365,7 +338,6 @@ describe('Slack hardening + migration v19', () => {
     const ts = String(Math.floor(Date.now() / 1000));
     const sigVal = sign(SECRET, ts, body);
 
-    // Pre-register the workspace so resolveTenant succeeds on replay.
     {
       const db = openHippoDb(root);
       try {
@@ -379,7 +351,6 @@ describe('Slack hardening + migration v19', () => {
       }
     }
 
-    // Seed the DLQ row.
     const dlqId = await parkInDlq(slackDlq, sqliteStore(root), {
       tenantId: 'default',
       teamId: 'TREPLAY',
@@ -390,8 +361,6 @@ describe('Slack hardening + migration v19', () => {
       slackTimestamp: ts,
     });
 
-    // Replay using the current secret. Use a wide skew override so the test is
-    // not flaky against the now/skew check inside verifySlackSignature.
     const result = await replaySlackDlqEntry(
       {
         tenantId: 'default',
@@ -407,11 +376,9 @@ describe('Slack hardening + migration v19', () => {
     expect(result.retryCount).toBe(1);
     expect(result.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
-    // Memory exists.
     const created = loadAllEntries(root, 'default').find((e) => e.id === result.memoryId);
     expect(created?.kind).toBe('raw');
 
-    // DLQ row has retried_at + retry_count = 1.
     const db = openHippoDb(root);
     try {
       // SAFETY: SELECT retried_at, retry_count projects only these two columns.
@@ -426,12 +393,8 @@ describe('Slack hardening + migration v19', () => {
     }
   });
 
-  // 9. Web-client emits oldest only on first-page resume.
   it('slackHistoryFetcher: oldest is emitted only when caller passes one', async () => {
     const calls: string[] = [];
-    // A real Response satisfies typeof fetch's return type directly (no cast
-    // needed), and vi.fn<typeof fetch>(...) types the mock's call signature
-    // to match fetch exactly (same pattern as tests/store/dag-rebuild-summaries.test.ts).
     const fakeFetch = vi.fn<typeof fetch>(async (url) => {
       calls.push(String(url));
       return new Response(JSON.stringify({ ok: true, messages: [], response_metadata: {} }), {
@@ -440,13 +403,11 @@ describe('Slack hardening + migration v19', () => {
     });
     const fetcher = slackHistoryFetcher('xoxb-fake', fakeFetch);
 
-    // First page (resume): caller passes oldest.
     await fetcher({
       channelId: 'C1',
       cursor: null,
       oldest: '1700000000.000001',
     });
-    // Second page: caller passes cursor only, no oldest.
     await fetcher({ channelId: 'C1', cursor: 'NEXT_TOKEN' });
 
     expect(calls[0]).toContain('oldest=1700000000.000001');
@@ -454,14 +415,12 @@ describe('Slack hardening + migration v19', () => {
     expect(calls[1]).toContain('cursor=NEXT_TOKEN');
   });
 
-  // 10. Signing-secret rotation: signature with previous secret valid when both env set.
   it('verifySlackSignature: previousSecret is accepted when current fails (rotation window)', () => {
     const now = Math.floor(Date.now() / 1000);
     const ts = String(now);
     const body = '{"hello":"world"}';
     const oldSig = sign(PREVIOUS_SECRET, ts, body);
 
-    // Without previousSecret: fails.
     expect(
       verifySlackSignature({
         rawBody: body,
@@ -472,7 +431,6 @@ describe('Slack hardening + migration v19', () => {
       }),
     ).toBe(false);
 
-    // With previousSecret: passes.
     expect(
       verifySlackSignature({
         rawBody: body,
@@ -484,7 +442,6 @@ describe('Slack hardening + migration v19', () => {
       }),
     ).toBe(true);
 
-    // Garbage signature: still fails even with previousSecret set.
     expect(
       verifySlackSignature({
         rawBody: body,
@@ -497,14 +454,11 @@ describe('Slack hardening + migration v19', () => {
     ).toBe(false);
   });
 
-  // 11. DLQ team_id captured from malformed body via regex.
   it('server slack-events: malformed JSON body → DLQ row has team_id captured via regex', async () => {
     const r1 = withEnv('SLACK_SIGNING_SECRET', SECRET);
     let handle: ServerHandle | null = null;
     try {
       handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
-      // Body is INVALID JSON (trailing comma, unclosed brace) but still
-      // contains "team_id":"TPARTIAL" in plain text.
       const malformed = '{"type":"event_callback","team_id":"TPARTIAL","event":{,';
       const ts = String(Math.floor(Date.now() / 1000));
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {

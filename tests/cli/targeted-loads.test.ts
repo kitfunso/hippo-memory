@@ -1,4 +1,3 @@
-// Perf slice: each changed read keeps its result and pins its load shape through the statements a real store runs.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -32,7 +31,6 @@ beforeEach(() => {
 
 afterEach(() => removeDir(join(root, '..')));
 
-// One transaction and no mirrors: these tests read rows only, and 1003 mirrored writes overran the Windows timeout.
 async function seed(count: number, tenantId = 'default'): Promise<string[]> {
   const ids: string[] = [];
   const db = openHippoDb(root);

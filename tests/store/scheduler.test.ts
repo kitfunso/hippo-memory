@@ -12,7 +12,6 @@ import {
 import { makeRoot } from '../_helpers/make-root.js';
 import { PRIVATE_DIR } from '../../src/host/private-dir.js';
 
-// The registry stores forward-slash paths on every platform.
 const norm = (p: string): string => resolve(p).replace(/\\/g, '/');
 interface RegistryFile {
   version: number;
@@ -71,7 +70,6 @@ describe('scheduler', () => {
   });
 
   it('runDailyMaintenance sweeps registered workspaces and skips missing stores', () => {
-    // runCommand is an argument, so a fake here never spawns a real hippo.
     const runCommand = vi.fn();
     const [repoA, repoB, repoC] = ['repo-a', 'repo-b', 'repo-c'].map((name) => join(root, name));
     mkdirSync(join(repoA, '.hippo'), PRIVATE_DIR);

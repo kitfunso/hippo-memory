@@ -1,5 +1,3 @@
-// AuditMaintenance answers: the object-backed read, the guarded
-// automatic deletes, the audit prune, and quality repair's plan, apply and once-per-store run.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { PROTECTED_ROWS } from '../../src/base/memory/memory-audit.js';
@@ -64,11 +62,9 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-// A repair's folder, schema version and backup file vary per run, so the tests compare the plan with them replaced.
 const planOf = (result: QualityRepairResult | null) =>
   result && { ...result, root: 'folder', schema: 'version', backup: 'kept by the store' };
 
-/** Each call one second after the one before. */
 async function conforms(calls: readonly GroupCall<'auditMaintenance', unknown>[]) {
   const timed = calls.map((call, i): GroupCall<'auditMaintenance', unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);

@@ -1,22 +1,9 @@
-/**
- * J3.2 — MCP hippo_recall planning-fallacy hint text block.
- *
- * Asserts the MCP handler prepends a "## Planning fallacy hint" block to
- * the response text when the query carries a forward-claim phrase AND a
- * class resolves. Reads from apiResult.planningFallacyHint (single source
- * of truth — NOT recomputed, since the value is pipeline-invariant; only
- * one audit row fires per recall).
- *
- * Plan: docs/plans/2026-05-26-j32-auto-injection.md (Task 7, Task 9).
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closePrediction } from '../_helpers/root-forms.js';
-// The stdio MCP host's config reader, so the variables a test sets reach recall as they do in production.
 import { cliConfig } from '../../src/surface/cli/api-context.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -96,7 +83,6 @@ describe('mcp hippo_recall planningFallacyHint text block', () => {
     expect(text).toContain('## Planning fallacy hint');
     expect(text).toContain('migration-effort');
     expect(text).toContain('Class: migration-effort');
-    // detectedPhrase wrapped in JSON.stringify quotes for render safety.
     expect(text.toLowerCase()).toContain('detected:');
   });
 

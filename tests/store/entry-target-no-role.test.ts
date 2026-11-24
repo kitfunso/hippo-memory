@@ -1,5 +1,3 @@
-// An EntryTarget with no role reads as a member key with no grants: a restricted row stays out of reach, and of the
-// unrestricted rows it changes only those its owner wrote.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';

@@ -1,13 +1,3 @@
-"""Score a Terminal-Bench run of run_tbench.py: pass rate per arm and `hippo` minus `none`, paired by task.
-
-  python -I score_tbench.py --out RUN [--exclude task,...] [--json FILE]
-
-Reads RUN/progress.jsonl and order.json. Per (task, arm) the first non-infrastructure trial counts;
-a task missing either arm is listed and left out of the pairing. Interval: `boot` (evidence_recall.py,
-4,000 draws, seed 1) over per-task differences; reading: Amendment 2's rule (`reading` in h2h.py).
-Secondary: a block bootstrap over runs of 10 consecutive tasks in run order, since the hippo store
-carries from task to task, and the pass-rate difference over the first and second half of the order.
-"""
 from __future__ import annotations
 
 import argparse
@@ -23,7 +13,6 @@ from h2h import read_jsonl, reading  # noqa: E402
 
 
 def block_boot(diffs: list[float], block: int = 10, draws: int = 4000) -> tuple[float, float]:
-    """95% interval of the mean from contiguous blocks of `block` tasks in run order."""
     rng = random.Random(1)
     blocks = [diffs[i:i + block] for i in range(0, len(diffs), block)]
     means = []

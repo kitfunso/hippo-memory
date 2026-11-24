@@ -1,4 +1,3 @@
-// The delivery reader through the z10-reconstruct command line and through linked store paths.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -60,12 +59,10 @@ describe('store paths through a link', () => {
   let p: Project;
   afterEach(() => dispose(p));
 
-  /** A junction to `target`, or null when this machine cannot create one. */
   function link(target: string, l: string): string | null {
     return trySymlink(target, l, 'junction') ? l : null;
   }
 
-  // The store port only writes delivery events, so the rows come back through the test reader.
   const rawRows = (root: string, session: string) => {
     const db = openHippoDb(root);
     try {

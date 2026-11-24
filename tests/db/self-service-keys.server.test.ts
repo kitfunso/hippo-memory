@@ -1,4 +1,3 @@
-// authCreateSelf mints a signed-in caller its own expiring member key; the member key list and the body-first admin mint are covered beside it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { connect } from 'node:net';
 import type { IncomingMessage } from 'node:http';
@@ -55,7 +54,6 @@ function mintDirect(role: 'admin' | 'member'): CreateApiKeyResult {
   return withDb((db) => createApiKey(db, { tenantId: TENANT, label: `direct-${role}`, role }));
 }
 
-/** The actor an auth resolver hands core for this token. */
 function actorOf(token: string): Actor {
   const person = PEOPLE.get(token)!;
   return { subject: person.subject, role: person.role, viaAuthResolver: true };
@@ -122,7 +120,6 @@ async function listKeys(token: string): Promise<string[]> {
   return ((await res.json()) as Array<{ keyId: string }>).map((k) => k.keyId).sort();
 }
 
-/** Sends the headers, runs `between`, then sends the body; resolves with the status code once the server answers. */
 function postInTwoParts(path: string, token: string, body: string, between: () => Promise<void>): Promise<number> {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -147,7 +144,6 @@ function postInTwoParts(path: string, token: string, body: string, between: () =
   });
 }
 
-/** Settles once the next request's handler has started reading the body; arm it before the body is sent. */
 function handlerAwaitsBody(): Promise<void> {
   return new Promise((resolve) =>
     handle!.server!.once('request', (req: IncomingMessage) => {

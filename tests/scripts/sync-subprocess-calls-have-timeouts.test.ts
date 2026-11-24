@@ -1,4 +1,3 @@
-// Every synchronous subprocess in src carries a timeout, so a child that never answers (credential prompt, lock, stuck scheduler) cannot hang a command.
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -6,7 +5,6 @@ import * as path from 'node:path';
 const SRC = path.resolve('src');
 const SYNC_CALL = /\b(?:execFileSync|execSync|spawnSync)\(/g;
 
-/** Calls that may run unbounded, as `file: reason`. A call belongs here only when stopping it early would be the bug. */
 const UNBOUNDED: ReadonlyMap<string, string> = new Map();
 
 function sourceFiles(dir: string): string[] {
@@ -17,7 +15,6 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** The text of the call starting at `start`, up to its balanced closing parenthesis. */
 function callText(source: string, start: number): string {
   let depth = 0;
   for (let i = source.indexOf('(', start); i < source.length; i++) {
@@ -27,7 +24,6 @@ function callText(source: string, start: number): string {
   return source.slice(start);
 }
 
-/** `timeout: value` or the shorthand `timeout,` in the call's options. */
 const PASSES_TIMEOUT = /\btimeout\s*[:,}]/;
 
 describe('synchronous subprocess timeouts', () => {
@@ -43,7 +39,6 @@ describe('synchronous subprocess timeouts', () => {
         missing.push(`${name}:${source.slice(0, match.index).split('\n').length}`);
       }
     }
-    // Proves the scan reached src at all; a count floor would break each time a refactor merges two calls.
     expect(calls).toBeGreaterThan(0);
     expect(missing).toEqual([]);
   });
@@ -54,7 +49,6 @@ describe('synchronous subprocess timeouts', () => {
       if (!fs.existsSync(file)) return true;
       const source = fs.readFileSync(file, 'utf8');
       const calls = [...source.matchAll(SYNC_CALL)];
-      // True for a file with no calls left, too.
       return calls.every((m) => PASSES_TIMEOUT.test(callText(source, m.index)));
     });
     expect(stale).toEqual([]);

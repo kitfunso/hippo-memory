@@ -1,5 +1,3 @@
-// sessionEndWork runs from the api with no CLI: real store, host steps passed in, store choice and sleep, capture and
-// cursor policy decided by the api.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { cliApiContext, type CliContext } from '../../src/surface/cli/api-context.js';
 import { heldLog, sessionEndWork, type SessionEndWork } from '../../src/api/session-end.js';
@@ -54,7 +52,6 @@ function work(over: Partial<Work> = {}): Work {
     },
     currentProject: () => PROJECT,
     capture: async (into, turns, origin) => {
-      // The global store's Context is built bare, with no reach of its own.
       steps.push(
         `capture:${into.reach === undefined ? 'global' : 'own'}:${turns?.join(',') ?? 'all'}:${origin ?? '-'}`,
       );
@@ -69,7 +66,6 @@ function work(over: Partial<Work> = {}): Work {
   };
 }
 
-/** The folder's Context as if it had no store of its own, reaching `globalRoot` (or no global store when null). */
 function withoutOwnStore(globalRoot: string | null): CliContext {
   const ctx = cliApiContext(root, TENANT);
   const reach = { ...ctx.reach!, hasLocal: false, global: undefined };
@@ -152,7 +148,6 @@ describe('sessionEndWork', () => {
     expect(steps).toContain('digest:3:abc');
   });
 
-  // The process belongs to the host, which owns the exit listener; a worker running many sessions gains none here.
   it('adds no exit listener, and logs the re-read lines after sleep', async () => {
     saveActiveTaskSnapshot(root, TENANT, { task: 't', summary: 's', nextStep: 'n', sessionId: 's1' });
     const before = process.listenerCount('exit');

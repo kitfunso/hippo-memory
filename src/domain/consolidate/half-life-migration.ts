@@ -1,6 +1,3 @@
-// Moves a store's memories still on an old default half-life base to a new one, once, audit-logged;
-// the plan is src/base/memory/half-life-plan.ts, which the store runs inside the move's own
-// transaction as a sleep begins.
 import type { StoreWith } from '../../base/ports/store.js';
 import type { SleepBegin, SleepStart } from '../../base/ports/store/consolidation.js';
 
@@ -8,16 +5,11 @@ import type { SleepBegin, SleepStart } from '../../base/ports/store/consolidatio
 export interface HalfLifeMigrationResult {
   from: number;
   to: number;
-  /** Memories moved to the new base. */
   rescaled: number;
-  /** Memories of decisions, incidents and other objects moved off the flat 90 days. */
   typed: number;
-  /** Memories left alone because they are not on the old base. */
   kept: number;
   dryRun: boolean;
-  /** New half-life per moved id, so a dry run can preview decay at the new base. */
   halfLives: ReadonlyMap<string, number>;
-  /** The rest of what the sleep's opening read, for the sleep that ran the move. */
   start: SleepStart;
 }
 

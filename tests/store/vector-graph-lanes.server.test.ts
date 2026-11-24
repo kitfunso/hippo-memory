@@ -1,4 +1,3 @@
-// The store worker's two readers answer a nearest-row read alike, though only the first holds the vector graph.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { VectorCandidateSpec } from '../../src/base/ports/store/vectors.js';
@@ -16,7 +15,6 @@ const ROWS = 400;
 
 const ids = (entries: readonly MemoryEntry[]): string[] => entries.map((e) => e.id);
 
-/** Everything written to stderr from now, the store threads' log lines included. */
 function stderrText(): () => string {
   const write = vi.spyOn(process.stderr, 'write');
   return () => write.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -56,7 +54,6 @@ describe('a nearest-row read on a store over the threshold', () => {
       const q = near(vectors[n * 50], n);
       const call = (mode: 'pinned-read' | 'read') =>
         executor.call<MemoryEntry[]>('vectors.nearestEntries', [q, spec(tenant)], { mode, requestId: undefined });
-      // The pinned call holds the first reader, so the plain read goes to the second.
       const [pinned, plain] = await Promise.all([call('pinned-read'), call('read')]);
 
       expect(ids(pinned)).toHaveLength(10);

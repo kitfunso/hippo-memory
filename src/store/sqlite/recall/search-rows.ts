@@ -37,8 +37,6 @@ import { LIKE_WINDOW_ROWS, LIKE_WINDOW_TERMS } from '../../rules/windows.js';
 import { splitLikeTerms } from '../../rules/like-terms.js';
 import { interleaveRows } from '../../../base/util/interleave.js';
 
-/** The recall scope rule for a table column prefix (`m.` or none); `passesScopeFilterForRecall`
- * in recall-scope.ts is its JS twin. */
 function recallScopeClause(
   col: 'm.' | '',
   scopeFilter: RecallScopeFilter | undefined,
@@ -51,23 +49,18 @@ function recallScopeClause(
   if (scopeFilter.mode === 'default-deny') {
     return { sql: ` AND ${admit.sql}`, params: admit.params };
   }
-  // The trailing arm keeps a deliberately requested scope loadable, private or quarantined
-  // included.
   return {
     sql: ` AND (${admit.sql} OR ${col}scope = ?)`,
     params: [...admit.params, scopeFilter.value],
   };
 }
 
-// In SQL, not after the window cut, so other projects' matches cannot crowd the project's own rows
-// out of the LIMIT.
 function withProject(
   scope: SqlFragment,
   col: 'm.' | '',
   origin: OriginFilter | undefined,
 ): SqlFragment {
   if (origin === undefined) return scope;
-  // A string is the shape published callers passed before a project could carry several names.
   const originProjects = [origin].flat();
   return {
     sql: `${scope.sql} AND (${col}origin_project = '' OR ${originInSql(originProjects, `${col}origin_project`)})`,
@@ -75,7 +68,6 @@ function withProject(
   };
 }
 
-// In SQL, not after the window cut, so excluded rows cannot fill the LIMIT that kept rows need.
 function withoutTags(
   scope: SqlFragment,
   col: 'm.' | '',
@@ -92,7 +84,6 @@ function withoutTags(
 
 const FTS_QUERY_SYNTAX_RE = /fts5: syntax error|unterminated string/i;
 
-/** SQL predicate fragments every candidate path appends, built once per load. */
 interface SearchPredicates {
   tenantPredicate: string;
   tenantOnlyPredicate: string;
@@ -110,7 +101,6 @@ interface SearchRowsOptions {
   readonly scopeFilter?: RecallScopeFilter;
   readonly includeSuperseded?: boolean;
   readonly originProjects?: OriginFilter;
-  /** Rows with any of these tags are left out; internal, as the recall port has no such option. */
   readonly excludeTags?: readonly string[];
 }
 
@@ -130,11 +120,9 @@ function listSearchRows(
 
   const terms = Array.from(new Set(tokenize(query)));
   if (terms.length === 0) {
-    // LIMIT here too, so every candidate path honours the caller's cap.
     return listAllCandidates(db, p, limit);
   }
 
-  // The run's trigrams reach the trigram index, which the 2-letter tokens cannot.
   const { words, cjk } = partitionCjkTerms(terms);
   const rows = interleaveRows(
     words.length > 0 ? listWordCandidates(db, words, p, limit) : [],
@@ -145,12 +133,9 @@ function listSearchRows(
   );
   if (rows.length > 0) return rows;
 
-  // LIMIT the full-store fallback too: RecallResult reports the scorer window, so an unbounded
-  // fallback would misstate the candidate-pool size.
   return listAllCandidates(db, p, limit);
 }
 
-/** FTS5 matches for `terms`, else their substring matches. */
 function listWordCandidates(
   db: DatabaseSyncLike,
   terms: string[],
@@ -171,17 +156,12 @@ function searchPredicates(
   originProjects: OriginFilter | undefined,
   excludeTags: readonly string[],
 ): SearchPredicates {
-  // One tenant reads through the composite idx_memories_tenant_created.
   const one = tenantId !== ALL_TENANTS;
   const tenantPredicate = tenantAnd(tenantId, 'm.tenant_id = ?').sql;
   const tenantOnlyPredicate = one ? ` WHERE tenant_id = ?` : '';
   const tenantParams = tenantAnd(tenantId).params;
 
-  // Defensive: kind='archived' is a transient sentinel inside archiveRawMemory's SAVEPOINT, so this
-  // only guards against a dropped SAVEPOINT, a persisted 'archived' state, or direct-SQL writes.
   const archivedClauseAlias = ` AND m.kind != 'archived'`;
-  // Tenant-only path: for every tenant `tenantOnlyPredicate` is '', so the archived clause switches
-  // between ' AND' and ' WHERE' by caller context.
   const archivedClauseTenantOnly = one ? ` AND kind != 'archived'` : ` WHERE kind != 'archived'`;
 
   const aliasScope = withoutTags(
@@ -212,7 +192,6 @@ function searchPredicates(
   };
 }
 
-/** Every admitted row, oldest first; the no-terms path and the last-resort fallback share it. */
 function listAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: number): MemoryRow[] {
   const sql =
     `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories${p.tenantOnlyPredicate}${p.archivedClauseTenantOnly}` +
@@ -220,7 +199,6 @@ function listAllCandidates(db: DatabaseSyncLike, p: SearchPredicates, limit: num
   return cachedStatement(db, sql).all(...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
 }
 
-/** FTS5 bm25 matches; empty when none match or FTS5 cannot run the query. */
 function listFtsCandidates(
   db: DatabaseSyncLike,
   terms: string[],
@@ -229,8 +207,6 @@ function listFtsCandidates(
 ): MemoryRow[] {
   try {
     const ftsQuery = ftsAnyPhrase(terms);
-    // memories_fts has no tenant_id column, so the joined memories row filters by tenant.
-    // idx_memories_tenant_created keeps that join cheap.
     return cachedStatement(
       db,
       `
@@ -243,7 +219,6 @@ function listFtsCandidates(
       `,
     ).all(ftsQuery, ...p.tenantParams, ...p.scopeParams, limit) as MemoryRow[];
   } catch (err) {
-    // A query FTS5 cannot parse is expected input; anything else means the index itself is broken.
     const message = errorMessage(err);
     if (!FTS_QUERY_SYNTAX_RE.test(message)) {
       const failure = `FTS search failed, using the slower LIKE match: ${message}`;
@@ -253,15 +228,12 @@ function listFtsCandidates(
   }
 }
 
-/** Substring matches in content or tags: the trigram index answers each term of 3 or more
- * characters over every admitted row, and LIKE tests the rest over the newest admitted rows. */
 function listLikeCandidates(
   db: DatabaseSyncLike,
   terms: string[],
   p: SearchPredicates,
   limit: number,
 ): MemoryRow[] {
-  // A store without FTS5 has no trigram index at all.
   const { indexed, windowed } = splitLikeTerms(terms, isFtsAvailable(db));
   const arms = [
     ...(indexed.length > 0 ? [trigramArm(indexed, p)] : []),
@@ -280,7 +252,6 @@ function listLikeCandidates(
   }
 }
 
-/** Matches through the trigram index, which leads the join, so only the matching rows are read. */
 function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment {
   return {
     sql:
@@ -291,18 +262,13 @@ function trigramArm(terms: readonly string[], p: SearchPredicates): SqlFragment 
   };
 }
 
-/** LIKE over the newest admitted rows: the bound is what keeps a short term from reading the
- * whole store. */
 function windowArm(terms: readonly string[], p: SearchPredicates, limit: number): SqlFragment {
   // One JSON array, not an OR per term: a long CJK query has 1,000s of terms, past SQLite's
   // expression depth.
   const likes = JSON.stringify(
     terms.slice(0, LIKE_WINDOW_TERMS).map((term) => `%${escapeLike(term)}%`),
   );
-  // idx_memories_tenant_created serves a tenant's newest rows; with no tenant only the table's own
-  // order needs no sort.
   const newestFirst = p.tenantParams.length > 0 ? 'created DESC' : 'rowid DESC';
-  // lead_in takes no LOWER: LIKE folds ASCII case itself, and a null lead-in must not reach a lower().
   return {
     sql:
       `SELECT * FROM (SELECT ${MEMORY_SELECT_COLUMNS}, updated_at ` +
@@ -314,7 +280,6 @@ function windowArm(terms: readonly string[], p: SearchPredicates, limit: number)
   };
 }
 
-/** The arms' rows, each once, most recently updated first. */
 function unionByRecency(
   db: DatabaseSyncLike,
   arms: readonly SqlFragment[],
@@ -416,7 +381,6 @@ export function entriesInOrder(db: DatabaseSyncLike, ids: readonly string[]): Me
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
-// The vocabulary views are temp tables, so they live and die with their connection.
 const vocabReady = new WeakSet<DatabaseSyncLike>();
 
 function ensureRarestVocab(db: DatabaseSyncLike): void {
@@ -439,7 +403,6 @@ export function pickRarestFtsQuery(
   terms: readonly string[],
   maxTerms = RAREST_TERM_COUNT,
 ): string {
-  // The LIKE path has no bm25 ranking to bound, so it keeps the pre-rarest 32-term query.
   if (!isFtsAvailable(db)) return spreadCjkTerms(terms, 32).join(' ');
   ensureRarestVocab(db);
   const { words, cjk } = partitionCjkTerms(terms);
@@ -456,8 +419,6 @@ export function pickRarestFtsQuery(
 function wordDocCounts(db: DatabaseSyncLike, words: readonly string[]): Map<string, number> {
   const vocab = Array.from(new Set(words.flatMap(ftsTermParts)));
   if (vocab.length === 0) return new Map();
-  // One cached shape per term count: an IN list over a virtual table needs one mark per term to
-  // keep its lookups.
   const rows = cachedStatement(
     db,
     `SELECT term, doc FROM temp.z1_rarest_vocab WHERE term IN (${placeholders(vocab.length)})`,
@@ -465,8 +426,6 @@ function wordDocCounts(db: DatabaseSyncLike, words: readonly string[]): Map<stri
   return new Map(rows.map((r) => [r.term, r.doc]));
 }
 
-/** Rows holding each CJK term by the trigram index: a trigram's own count, and for a shorter run
- * the summed counts of the trigrams it opens, a rarity estimate, not an exact row count. */
 function trigramDocCounts(db: DatabaseSyncLike, cjk: readonly string[]): Map<string, number> {
   // SHORTCUT: prefix seeks only, as a suffix count scans the whole vocabulary; a 0 keeps a short run.
   if (cjk.length === 0) return new Map();

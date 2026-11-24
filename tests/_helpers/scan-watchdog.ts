@@ -16,7 +16,6 @@ export function scanWithinWatchdog<T>(scan: (text: string) => T, text: string, d
   try {
     return runInNewContext('scan(text)', { scan, text }, { timeout: deadlineMs });
   } catch (err) {
-    // The watchdog's error comes from the other realm, which an instanceof check cannot see.
     if (types.isNativeError(err) && 'code' in err && err.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
       throw new Error(
         `scanning ${text.length} characters did not finish within ${deadlineMs} ms: a pattern is super-linear`,

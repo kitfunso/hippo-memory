@@ -1,5 +1,3 @@
-// The three arms: one request shape per recall ranker (retrieveWithCliCore, retrieve, retrieveRanking). Each returns the contents it showed, best first.
-
 import { adminActor, retrieve, retrieveRanking, retrieveWithCliCore, type Context } from '../../dist/entry/eval-scripts.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
 import { engineFlags } from '../../dist/surface/cli/flag-values.js';
@@ -14,15 +12,12 @@ import { STAGE_LABEL, stagesNotRun, type Arm, type EvalQuery } from './queries.t
 
 /** Rows every arm shows and records: the HTTP default band, so the three write the same number of rows in a timed call. */
 export const SHOWN_ROWS = 10;
-// The CLI's default head for a registry reranker.
 const RERANKER_TOP_K = 50;
 
-// The CLI core keeps its shown list as the last recall, which a SQLite store always has; the folder rides beside it.
 type SqliteContext = Context & { readonly store: ReturnType<typeof sqliteStore>; readonly hippoRoot: string };
 
 export interface Ranked {
   readonly texts: string[];
-  /** Wall time of the `retrieve()` call alone, its recording included. */
   readonly retrieveMs: number;
 }
 
@@ -42,7 +37,6 @@ export async function rankWith(arm: Arm, q: EvalQuery): Promise<Ranked> {
   return arm === 'B' ? sqlBm25(ctx, q) : showRanked(ctx, q);
 }
 
-/** Arm A: the request `hippo recall` builds, less its rendering. The budget is priced on content tokens, not printed lines. */
 async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const config = loadConfig(ctx.hippoRoot);
   const globalRoot = getGlobalRoot();
@@ -69,7 +63,6 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
         reranker: reranker ? { fn: reranker, topK: RERANKER_TOP_K } : undefined,
         salienceThreshold: q.stages.salienceThreshold,
       },
-      // The CLI searches the global store as a second source whenever one exists beside the local store.
       sources: globalRoot !== ctx.hippoRoot && isInitialized(globalRoot)
         ? { root: globalRoot, store: sqliteStore(globalRoot), config: loadConfig(globalRoot) }
         : undefined,
@@ -83,7 +76,6 @@ async function cliCore(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   return { texts: shown.map((r) => r.entry.content), retrieveMs };
 }
 
-/** Arm B: `retrieve` with no mode and no ranker option, as `GET /v1/memories` calls it. */
 async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
   const [result, retrieveMs] = await timed(() =>
     retrieve(ctx, { query: q.text, window: { limit: SHOWN_ROWS }, boost: session(q) }),
@@ -91,7 +83,6 @@ async function sqlBm25(ctx: Context, q: EvalQuery): Promise<Ranked> {
   return { texts: result.results.map((r) => r.content), retrieveMs };
 }
 
-/** Arm C: the options the MCP recall tool passes, with the ranked list cut to the shown rows in place of its rendering. */
 async function showRanked(ctx: SqliteContext, q: EvalQuery): Promise<Ranked> {
   const mode = loadConfig(ctx.hippoRoot).physics?.enabled !== false ? 'physics' : 'hybrid';
   let shown: SearchResult[] = [];

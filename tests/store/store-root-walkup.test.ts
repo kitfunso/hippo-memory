@@ -1,5 +1,3 @@
-// Ancestor walk-up store discovery (episode 01M1S8SZH6KZA9FPC9KY92XX5Y). Real filesystem in a
-// mkdtemp sandbox; the walk stops at the temp root, so stores above it cannot leak into these cases.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

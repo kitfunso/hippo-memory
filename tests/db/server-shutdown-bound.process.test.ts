@@ -1,4 +1,3 @@
-// A signal or crash shutdown that cannot finish ends the process at its bound; one that can finish still exits 0 on a signal.
 import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -12,10 +11,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The script's shutdownDrainMs plus the 10 s the store's threads get to close.
 const DRAIN_MS = 200;
 const BOUND_MS = DRAIN_MS + 10_000;
-// How long the child gets to reach a state the test waits for.
 const REACH_MS = 20_000;
 
 const homes: string[] = [];
@@ -29,12 +26,10 @@ afterEach(async () => {
     child.kill('SIGKILL');
     await gone;
   }
-  // After the children: a stuck one still holds the write lock.
   for (const db of watchers.splice(0)) closeHippoDb(db);
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-/** A trigger that makes the next saved prediction run a statement for hours, so the store's writer thread cannot be stopped or closed. Returns a connection that watches the write lock. */
 function stickNextPredictionWrite(root: string): DatabaseSyncLike {
   const db = openHippoDb(root);
   watchers.push(db);
@@ -52,14 +47,11 @@ function stickNextPredictionWrite(root: string): DatabaseSyncLike {
 interface Served {
   readonly child: ChildProcessWithoutNullStreams;
   readonly stderr: () => string;
-  /** What the child has written, for the message of a wait that gave up. */
   readonly output: () => string;
-  /** Settles when the script prints `line`; fails with what the child wrote when it ends first. */
   readonly printed: (line: string) => Promise<void>;
   readonly exited: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
 }
 
-/** `hippo serve` as its CLI boots it, in a child that then runs `after`. */
 function serveThen(home: string, after: readonly string[]): Served {
   const script = join(home, 'serve-then.mjs');
   writeFileSync(
@@ -85,11 +77,9 @@ function serveThen(home: string, after: readonly string[]): Served {
     stderr += chunk.toString('utf8');
   });
   const output = (): string => `stdout:\n${stdout}\nstderr:\n${stderr}`;
-  // A wait that only the runner's timeout ends would otherwise leave no evidence of what the child did.
   onTestFailed(() => {
     console.error(output());
   });
-  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((done) =>
     child.once('close', (code, signal) => done({ code, signal })),
   );
@@ -113,8 +103,6 @@ function trackedRoot(): string {
   return home;
 }
 
-// The read first: it ends only after the store's writer thread has started and done its setup, so the write is that thread's only work.
-// The write is never answered, so the script reports it sent and then waits for the test to see its statement running.
 const STUCK_WRITE = [
   'const warm = await fetch(`${handle.url}/v1/predictions`, { headers: auth });',
   'if (warm.status !== 200) throw new Error(`the read answered ${warm.status}: ${await warm.text()}`);',
@@ -124,7 +112,6 @@ const STUCK_WRITE = [
   "await new Promise((go) => process.stdin.once('data', go));",
 ];
 
-/** Settles once another connection holds the store's write lock. The served store is idle but for the stuck write, so from then on its writer thread is inside that write. */
 async function writeLockTaken(watcher: DatabaseSyncLike, served: Served): Promise<void> {
   await waitFor(
     () => {
@@ -144,11 +131,9 @@ ${served.output()}`);
   });
 }
 
-// A kill has no exit code of its own: Windows reports 1, and elsewhere the parent sees the signal.
 const KILLED = process.platform === 'win32' ? { code: 1, signal: null } : { code: null, signal: 'SIGKILL' };
 
 describe('serve() shutdown bound', () => {
-  // Waits out the 10 s store-close bound in a child process before it can see the exit.
   it.each([
     ['SIGTERM', "process.emit('SIGTERM');"],
     ['uncaught exception', "setTimeout(() => { throw new Error('boom-bound'); }, 0);"],
@@ -163,7 +148,6 @@ describe('serve() shutdown bound', () => {
       served.child.stdin.write('go\n');
       const triggeredAt = Date.now();
 
-      // A child that never ends fails at the test timeout, with its output printed.
       expect(await served.exited, served.output()).toEqual(KILLED);
       expect(Date.now() - triggeredAt).toBeGreaterThanOrEqual(BOUND_MS - 1000);
       const boundLines = served

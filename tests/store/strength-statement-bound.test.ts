@@ -1,4 +1,3 @@
-// The strength aggregates bind the clock, so a call at any `now` reuses one cached statement and sums as before.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -26,7 +25,6 @@ function row(content: string, daysBefore: number, extra: Partial<MemoryEntry> = 
   return { ...createMemory(content, { tenantId: TENANT }), created: at, validFrom: at, lastRetrieved: at, ...extra };
 }
 
-/** The sum the old text gave, with the clock written into the SQL as a literal. */
 function literalClockSum(db: DatabaseSyncLike, now: Date): number {
   const { sql, params } = strengthSql(now, PRODUCTION_STRENGTH);
   expect(params).toHaveLength(1);
@@ -55,7 +53,6 @@ beforeEach(() => {
 });
 afterEach(() => closeHippoDb(db));
 
-/** What `fn` returns, and the text of each statement it prepared. */
 function prepares<T>(fn: () => T) {
   const spy = vi.spyOn(DatabaseSync.prototype, 'prepare');
   try {

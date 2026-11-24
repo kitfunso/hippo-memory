@@ -1,5 +1,3 @@
-// The vector groups: recall's vector arm, the stored vectors and particles, their writes and a
-// store's own index.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { PhysicsParticle } from '../../rank/physics.js';
 import type { RecallScopeFilter } from '../../scope/recall-scope.js';
@@ -124,13 +122,8 @@ export const VECTOR_WRITES_EFFECTS = {
   indexKey: 'read',
 } as const satisfies MethodEffects<VectorWrites>;
 
-// A store's own vector index, worked through sessions so the write lock and a rebuild's staged
-// vectors stay on the thread that holds one. Vectors and particles carry no tenant, so each step
-// covers the whole store.
 export interface EmbeddingIndex {
-  /** Opens a session that holds nothing yet. */
   open(): Promise<IndexSession>;
-  /** Runs one step on the open session `session`; `close` ends it. */
   step<K extends IndexStepKind>(session: string, step: IndexStep<K>): Promise<IndexStepAnswers[K]>;
 }
 
@@ -151,45 +144,21 @@ type NoFields = Record<never, never>;
 
 /** What each step takes beside its kind. */
 export interface IndexStepFields {
-  /** Takes the index's write lock until `close`; other processes and threads on the store honour
-   * it, and it answers false while a live holder has it. */
   readonly lock: NoFields;
-  /** Opens a rebuild whose vectors wait apart from the live index. */
   readonly begin: NoFields;
-  /** Stages one page of the rebuild, skipping empty or non-finite vectors; answers how many it
-   * staged. */
   readonly stage: { readonly rows: readonly VectorRow[] };
-  /** In one transaction, replaces every stored vector with the staged ones and records `model`
-   * as what built them, then drops the staging, committed or not. */
   readonly commit: { readonly model: string };
-  /** Drops a rebuild not committed, which leaves the live index as it was, releases the lock
-   * this session took, and ends the session. */
   readonly close: NoFields;
-  /** Whether another model than `providerId` built the stored vectors; an unreadable index
-   * answers false. */
   readonly reindex: { readonly providerId: string };
-  /** Records `providerId`'s index identity as what built the vectors. */
   readonly saveModel: { readonly providerId: string };
-  /** Up to `page.limit` memory ids in id order after `page.afterId`: a re-embed needs each row
-   * once, not time order. */
   readonly ids: { readonly page: IdPageRequest };
-  /** `ids` for the memories with no vector only. */
   readonly pending: { readonly page: IdPageRequest };
-  /** Upserts each row under `model`, one commit per row so a failure keeps those before it;
-   * answers how many. */
   readonly save: { readonly rows: readonly VectorRow[]; readonly model: string };
-  /** Drops the vectors of deleted memories. */
   readonly prune: NoFields;
-  /** A first particle for `entry` at `vector`, unless it has one. */
   readonly seed: { readonly entry: MemoryEntry; readonly vector: number[] };
-  /** Replaces every particle with a fresh one per memory that has a stored vector, reading a
-   * page at a time; answers how many. */
   readonly reset: NoFields;
   readonly summary: NoFields;
-  /** How many memories and vectors the store holds, and how many memories have a vector. */
   readonly coverage: NoFields;
-  /** The particle count and mean speed, and every particle only while at most `fullUpTo` are
-   * stored. */
   readonly particles: { readonly fullUpTo: number };
 }
 
@@ -246,12 +215,10 @@ export interface IdPage {
 export interface VectorCoverage {
   readonly memories: number;
   readonly vectors: number;
-  /** Memories with a vector; the other vectors are orphans of deleted memories. */
   readonly embedded: number;
 }
 
 export interface StoredVectorSummary {
-  /** Stored vectors, orphans of deleted memories included. */
   readonly vectors: number;
   readonly dims: number | undefined;
 }

@@ -35,16 +35,14 @@ log = logging.getLogger("recall_cli_haystack")
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 NODE = shutil.which("node") or "node"
-# Only what node needs to start; every HIPPO_*, XDG_*, API-key and agent variable stays out.
 PASS_ENV = {"PATH", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR", "LANG"}
 REMEMBERED = re.compile(r"^Remembered \[([^\]]+)\]", re.M)
 EMBED_STATUS = re.compile(r"Embedding status: (\d+)/(\d+) memories embedded")
-TOP_KEEP = 10  # evaluate_retrieval.py reads at most the top 10
-DEFAULT_BUDGET = 4000  # src/cli.ts:1109
+TOP_KEEP = 10
+DEFAULT_BUDGET = 4000
 
 
 def hippo(bin_path: str, inst: Path, args: list[str], stdin: str | None = None) -> str:
-    """Run the CLI with cwd, HIPPO_HOME, HOME and USERPROFILE all inside `inst`."""
     home = str(inst / "home")
     env = {k: v for k, v in os.environ.items() if k.upper() in PASS_ENV}
     env.update(HIPPO_HOME=str(inst / "global"), HOME=home, USERPROFILE=home)
@@ -59,7 +57,7 @@ def hippo(bin_path: str, inst: Path, args: list[str], stdin: str | None = None) 
 
 
 def when(stamp: str) -> datetime:
-    day, _weekday, clock = stamp.split(" ")  # "2023/05/20 (Sat) 02:21"
+    day, _weekday, clock = stamp.split(" ")
     return datetime.strptime(f"{day} {clock}", "%Y/%m/%d %H:%M")
 
 
@@ -110,7 +108,6 @@ def embed_one(q: dict[str, Any], work: Path, bin_path: str) -> None:
 
 def recall_one(q: dict[str, Any], query: str, work: Path, bin_path: str, store: str, run: str,
                flags: list[str]) -> dict[str, Any]:
-    # A fresh copy per call: recall strengthens what it returns and writes traces.
     src, inst = work / store / q["question_id"], work / "runs" / run / q["question_id"]
     if inst.exists():
         shutil.rmtree(inst)
@@ -150,7 +147,6 @@ def fan_out(fn: Callable[[Any], Any], items: list[Any], workers: int, label: str
 def cmd_recall(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
     half = len(qs) // 2
     flags = (["--budget", str(args.budget)] if args.budget is not None else []) + (["--why"] if args.why else [])
-    # Shuffle pairs each haystack with the question half the set away: a noise-only query.
     jobs = [(q, qs[(i + half) % len(qs)]["question"] if args.shuffle else q["question"]) for i, q in enumerate(qs)]
     rows = fan_out(lambda job: recall_one(job[0], job[1], args.work, args.hippo, args.store, args.run, flags),
                    jobs, args.workers, f"recall {args.run}")
@@ -166,7 +162,6 @@ def load_rows(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def bootstrap(vectors: dict[str, list[float]]) -> dict[str, Any]:
-    """Percentile bootstrap from src/eval/eval-stats.ts (dist build), B=10000, seed 1."""
     url = (REPO / "dist" / "eval-stats.js").resolve().as_uri()
     script = (
         "const { pairedBootstrap } = await import(process.argv[1]);"
@@ -181,7 +176,6 @@ def bootstrap(vectors: dict[str, list[float]]) -> dict[str, Any]:
 
 
 def chance_r5(q: dict[str, Any]) -> float:
-    """Chance that 5 memories drawn at random from this haystack include an answer session."""
     n = len(q["haystack_session_ids"])
     a = sum(sid in q["answer_session_ids"] for sid in q["haystack_session_ids"])
     return 1 - comb(n - a, 5) / comb(n, 5)
@@ -210,7 +204,7 @@ def run_summary(rows: dict[str, dict[str, Any]], qs: list[dict[str, Any]], hit: 
 
 def cmd_stats(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
     sys.path.insert(0, str(HERE))
-    from evaluate_retrieval import check_session_hit  # the scorer behind the 98.0, unchanged
+    from evaluate_retrieval import check_session_hit
 
     runs = {name: load_rows(args.work / f"{name}.jsonl") for name in args.runs}
     hits = {
@@ -246,7 +240,6 @@ def first_answer_rank(row: dict[str, Any], gold: set[str]) -> int | None:
 
 
 def replay_budget(ranked: list[dict[str, Any]], budget: int) -> list[str]:
-    """The budget loop of src/search.ts:791-800, minResults 1, over a list already in rank order."""
     kept, used = [], 0
     for m in ranked:
         if kept and used + m["tokens"] > budget:
@@ -257,8 +250,7 @@ def replay_budget(ranked: list[dict[str, Any]], budget: int) -> list[str]:
 
 
 def budget_mechanics(default: dict[str, Any], lifted: dict[str, Any], qs: list[dict[str, Any]]) -> dict[str, Any]:
-    """What the default budget kept and cut, measured against the same arm's lifted ranking."""
-    later: list[tuple[int | None, int]] = []  # (rank in the lifted top 10 or None, tokens)
+    later: list[tuple[int | None, int]] = []
     first_tokens, top1_same, replayed, lost, lost_too_big = [], 0, 0, [], 0
     for q in qs:
         d, lf = default[q["question_id"]], lifted[q["question_id"]]
@@ -292,7 +284,6 @@ def budget_mechanics(default: dict[str, Any], lifted: dict[str, Any], qs: list[d
 
 
 def cmd_analyze(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
-    """The committed raw file: stats.json, R@k, the budget cut and a compact per-question table."""
     sys.path.insert(0, str(HERE))
     from evaluate_retrieval import check_session_hit
 
@@ -332,7 +323,6 @@ def cmd_analyze(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
              for q in qs]
     head = json.dumps({"stats": json.loads((args.work / "stats.json").read_text(encoding="utf-8")),
                        "summary": summary, "per_question_columns": cols}, indent=1).rstrip()
-    # One question per line keeps a 500-row table readable in a diff.
     text = head[:-1].rstrip() + ',\n "per_question": [\n  ' + ",\n  ".join(map(json.dumps, table)) + "\n ]\n}\n"
     if json.loads(text)["per_question"] != table:
         raise RuntimeError("per-question table did not round-trip")
@@ -341,7 +331,6 @@ def cmd_analyze(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
 
 
 def same_order(a: Path, b: Path) -> tuple[list[str], float]:
-    """Questions whose top-10 session order differs, and the largest score gap among the rest."""
     ra, rb = load_rows(a), load_rows(b)
     sids = {q: ([m["tags"][0] for m in ra[q]["retrieved_memories"]], [m["tags"][0] for m in rb[q]["retrieved_memories"]])
             for q in ra}
@@ -352,7 +341,6 @@ def same_order(a: Path, b: Path) -> tuple[list[str], float]:
 
 
 def cmd_checks(args: argparse.Namespace, qs: list[dict[str, Any]]) -> None:
-    """Prereg checks 5 and 6 on every run in --work; 7 when the --why runs exist; 8 with --write-time."""
     hay = {q["question_id"]: set(q["haystack_session_ids"]) for q in qs}
     failed: list[str] = []
     for path in sorted(args.work.glob("*.jsonl")):

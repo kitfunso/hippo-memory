@@ -65,16 +65,12 @@ interface Generation {
 
 /** The sparse row cache of the memory table. */
 export interface MemoryPages {
-  /** Rows after the chip; null until the first page of this query lands. */
   total: number | null;
   counts: MemoryPage["counts"] | null;
   decay: DecayOutlook | null;
   rowAt: (index: number) => RowSlot;
-  /** Visible plus overscan row range; fetches the pages it touches. */
   want: (first: number, last: number) => void;
-  /** Fetches a failed page again. */
   retry: (index: number) => void;
-  /** Message of a failed first page when there is nothing to show yet. */
   error: string | null;
 }
 

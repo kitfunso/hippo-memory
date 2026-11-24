@@ -74,7 +74,6 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
     escRef.current?.focus();
   }, []);
 
-  // Window-level so Escape closes the dialog wherever focus is; the shell's own Escape handler only hides the Health tip.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -158,7 +157,6 @@ export function CardDialog({ cardId, refreshKey, onClose }: CardDialogProps) {
   );
 }
 
-// Starts under the board toolbar so its refresh button stays clickable with a card open.
 const panelStyle: React.CSSProperties = {
   position: "absolute", top: BOARD_TOOLBAR_H, right: 0, width: "min(360px, 48vw)", height: `calc(100% - ${BOARD_TOOLBAR_H}px)`,
   background: "var(--surface)",

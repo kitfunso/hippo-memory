@@ -24,21 +24,9 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createAdapter } from './interface.mjs';
 
-// This repo's CLI, not a PATH-resolved global install (which may be an older release).
-// resolve() pins a relative override to the startup cwd; hippoExec later runs with the temp store as cwd.
 const HIPPO_BIN = resolve(
   process.env.HIPPO_BENCH_CLI || join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'bin', 'hippo.js'),
 );
-
-// POST-AUDIT P1-4 (v1.7.8): session id and counters were module-level `let`
-// in v1.7.5..v1.7.7 — two parallel adapter consumers (e.g. future --workers N)
-// would clobber each other's HIPPO_SESSION_ID and corrupt counts. Counters
-// also never reset between init() calls; a second simulate() invocation in
-// the same process inherited the prior run's totals.
-//
-// Hoisted to instance fields on the returned adapter object; reset in init().
-// `hippoExec` now takes `sessionId` as an explicit arg so the env wiring is
-// per-call instead of reading module-level state.
 
 /**
  * Run a hippo CLI command in the temp store directory.
@@ -56,9 +44,6 @@ function hippoExec(storeDir, args, sessionId = null, strict = false) {
   try {
     const env = {
       ...process.env,
-      // v1.7.5 codex P0 isolation -- HIPPO_HOME wins over HOME in
-      // getGlobalRoot, and we blank XDG_DATA_HOME so neither it nor the
-      // user's real ~/.hippo can leak in.
       HIPPO_HOME: storeDir,
       HOME: storeDir,
       USERPROFILE: storeDir,
@@ -75,7 +60,6 @@ function hippoExec(storeDir, args, sessionId = null, strict = false) {
     return result.trim();
   } catch (err) {
     if (strict) throw err;
-    // Some commands (recall with no results) exit non-zero
     if (err.stdout) return err.stdout.trim();
     return null;
   }
@@ -95,12 +79,9 @@ export default createAdapter({
 
   async init() {
     this._storeDir = mkdtempSync(join(tmpdir(), 'hippo-bench-'));
-    // v1.7.8 -- reset per-instance state on each init so a second simulate()
-    // invocation in the same process gets a clean slate.
     this._sessionId = null;
     this._pushedCount = 0;
     this._completedCount = 0;
-    // Strict: a missing or half-failing CLI must abort the run, not report a fake trap-hit rate (codex rounds 3-4).
     try {
       hippoExec(this._storeDir, 'init --no-hooks --no-schedule', null, true);
     } catch (err) {
@@ -125,15 +106,12 @@ export default createAdapter({
     if (!raw) return [];
 
     try {
-      // The JSON output may be preceded by warnings (e.g. ExperimentalWarning).
-      // Find the first '{' to start parsing.
       const jsonStart = raw.indexOf('{');
       if (jsonStart === -1) return [];
       const jsonStr = raw.slice(jsonStart);
 
       const parsed = JSON.parse(jsonStr);
 
-      // hippo recall --json returns { query, budget, results: [...], total }
       const results = parsed.results ?? (Array.isArray(parsed) ? parsed : []);
 
       return results.slice(0, 5).map((r) => ({
@@ -150,14 +128,11 @@ export default createAdapter({
     hippoExec(this._storeDir, `outcome ${good ? '--good' : '--bad'}`, this._sessionId);
   },
 
-  // v1.7.5 -- B3 goal-stack hooks. v1.7.8 -- per-instance state.
   async pushGoal(name) {
     this._sessionId = `bench-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const out = hippoExec(this._storeDir, `goal push ${name}`, this._sessionId);
     if (!out) {
       this._sessionId = null;
-      // v1.7.5 codex P1 -- HARD FAIL. Do not swallow. Eval-strict mode
-      // wants the run to abort if the mechanism cannot fire.
       throw new Error(`hippo goal push failed for name='${name}'`);
     }
     const match = out.match(/g_[0-9a-f]{16}/);
@@ -177,7 +152,6 @@ export default createAdapter({
   },
 
   async cleanup() {
-    // v1.7.5 codex P1 -- always clear cross-task state, even after exceptions.
     this._sessionId = null;
     if (this._storeDir && existsSync(this._storeDir)) {
       rmSync(this._storeDir, { recursive: true, force: true });
@@ -185,7 +159,6 @@ export default createAdapter({
     this._storeDir = null;
   },
 
-  // Expose counters so the runner / tests can assert non-zero in eval mode.
   _stats() {
     return { pushed: this._pushedCount, completed: this._completedCount };
   },

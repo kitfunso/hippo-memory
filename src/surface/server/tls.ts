@@ -1,5 +1,3 @@
-// The serve() listener: node:https when a certificate is given, else node:http, which a
-// non-loopback bind must opt into.
 import { createServer as createHttpServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { errorMessage, log } from '../../base/util/log.js';
@@ -10,8 +8,6 @@ const HSTS = 'max-age=31536000';
 
 export function createListener(tls: ServeOptions['tls'], onRequest: RequestListener): Server {
   if (!tls) return createHttpServer(onRequest);
-  // Only a listener that holds the certificate can promise https; behind a proxy, the proxy sends
-  // this header.
   const withHsts: RequestListener = (req, res) => {
     res.setHeader('Strict-Transport-Security', HSTS);
     onRequest(req, res);

@@ -1,4 +1,3 @@
-// A corrupt legacy embeddings.json found at import must be kept aside and the vectors rebuilt, never dropped silently.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -17,7 +16,6 @@ const KEY_ENV = 'OPENAI_API_KEY';
 let root: string;
 let stderrSpy: MockInstance<typeof process.stderr.write>;
 
-// One vector per input, derived from the text so each memory gets a distinct one.
 function fakeEmbeddings(): ReturnType<typeof vi.fn> {
   return vi.fn(async (_url: string, init: { body: string }) => {
     // SAFETY: the OpenAI provider's buildBody always sends `{ model, input: texts }`.

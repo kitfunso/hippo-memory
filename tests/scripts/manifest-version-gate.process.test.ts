@@ -4,9 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-// The gate excluded package-lock.json wholesale, so a release whose lockfile
-// still named the previous version printed OK (v1.38.9).
-
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-manifest-versions.mjs');
 const SYNC = join(import.meta.dirname, '..', '..', 'scripts', 'sync-version.mjs');
 
@@ -24,7 +21,6 @@ interface LockFixture {
   version?: string;
 }
 
-/** A minimal repo the gate accepts: every manifest it reads, all at `version`. */
 function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
   mkdirSync(join(root, 'extensions', 'openclaw-plugin'), { recursive: true });
@@ -104,8 +100,6 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
   });
 
   it('does not read the dependency entries, which carry their own versions', () => {
-    // node_modules/left-pad sits at 1.3.0 in every fixture above and never drifts
-    // the gate; that is the part of the file the old exclusion was right about.
     const root = makeRepo('2.0.0');
     try {
       expect(runGate(root).status).toBe(0);
@@ -145,8 +139,6 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
     }
   });
 
-  // A lockfile holding literal `null` parses without throwing, so a null
-  // sentinel for "parse failed" would silently skip both checks here.
   it('fails on a lockfile that parses to null or to a non-object', () => {
     for (const raw of ['null', '[]', '"1.0.0"', '{}']) {
       const root = makeRepo('2.0.0', { rawLockfile: raw });
@@ -163,7 +155,6 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
 
 describe('sync-version.mjs', () => {
   it('sets every site `npm version` leaves behind, so the gate passes', () => {
-    // npm version has already moved package.json and both lockfile fields to 2.1.0.
     const root = makeRepo('2.0.0', { lockVersion: '2.1.0', lockRootVersion: '2.1.0' });
     try {
       writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '2.1.0' }));

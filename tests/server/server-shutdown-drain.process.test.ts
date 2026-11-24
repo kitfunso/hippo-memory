@@ -1,5 +1,3 @@
-// stop() stops accepting, lets an in-flight request finish within the drain window, closes a stuck one when it ends,
-// and gives work a request handed off a bounded wait before the stores close.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -27,7 +25,6 @@ function trackedRoot(): string {
   return home;
 }
 
-/** A resolver that vouches once `release()` is called, so the test decides how long a request stays in flight. */
 function gatedResolver() {
   let release = (): void => undefined;
   const vouched = new Promise<Awaited<ReturnType<AuthResolver>>>((resolve) => {
@@ -38,10 +35,8 @@ function gatedResolver() {
 
 const neverResolves: AuthResolver = () => new Promise(() => undefined);
 
-/** The built module's URL as a string literal, for a script the test spawns. */
 const dist = (file: string): string => JSON.stringify(pathToFileURL(resolve('dist', file)).href);
 
-/** The resolver, plus a promise that settles once a request is held inside it: the request is then in flight on the server. */
 function watched(inner: AuthResolver) {
   let mark!: () => void;
   const asked = new Promise<void>((ok) => {
@@ -64,11 +59,8 @@ interface Promoted {
   readonly globalId: string;
 }
 
-/** A server whose global store embeds on `embeddings`, after a promote it answered: the embed of the global copy then
- * runs under `fault`. */
 async function promotedOnServer(embeddings: HashedEmbeddings, fault: EmbeddingFault): Promise<Promoted> {
   const home = trackedRoot();
-  // Only the global store embeds, so the promote's copy is the one embed in flight.
   writeFileSync(join(home, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
   const global = join(home, '.global');
   mkdirSync(global);
@@ -131,7 +123,6 @@ describe('serve() graceful stop', () => {
     await asked;
     const warn = vi.spyOn(log, 'warn');
     await handle.stop();
-    // The line names the window stop() waited, so the short one given above is the one it used.
     expect(warn.mock.calls.map(([line]) => line)).toContain(
       'shutdown: 1 request(s) still running after 200 ms; closing them',
     );
@@ -141,7 +132,6 @@ describe('serve() graceful stop', () => {
   it('exits 1 when a signal-driven shutdown fails', async () => {
     const home = trackedRoot();
     const script = join(home, 'failing-stop.mjs');
-    // Closing the server first makes stop()'s own close fail with ERR_SERVER_NOT_RUNNING.
     writeFileSync(
       script,
       [
@@ -164,7 +154,6 @@ describe('serve() graceful stop', () => {
   it('on an uncaught exception, logs it, answers the request already running, then exits 1', async () => {
     const home = trackedRoot();
     const script = join(home, 'crash-mid-request.mjs');
-    // The auth step schedules the throw and vouches only once the crash handler has run, so the request is in flight.
     writeFileSync(
       script,
       [
@@ -222,12 +211,10 @@ describe.skipIf(needsHippoDb('team'))('serve() stop() and the work a request han
     const { handle } = await promotedOnServer(embeddings, 'stall');
     const warn = vi.spyOn(log, 'warn');
     const flush = vi.spyOn(HeldWrites.prototype, 'flush');
-    // An unbounded settle never resolves, so the test timeout, not a clock read, catches it.
     await handle.stop();
     expect(warn.mock.calls.map(([line]) => line)).toContain(
       `shutdown: 1 handed-off task(s) still running after ${DETACHED_SETTLE_MS} ms; closing the stores`,
     );
-    // The runtime's own flush takes no root; a held write's timer names its root.
     expect(flush).toHaveBeenCalledWith();
   }, 20_000);
 });

@@ -6,7 +6,6 @@ import { archiveRawMemory } from '../../src/store/sqlite/entries/raw-archive.js'
 import { makeRoot } from '../_helpers/make-root.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 
-/** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -16,8 +15,6 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
 
 describe('audit log captures every mutation', () => {
   it('remember + recall both logged via CLI flow', async () => {
-    // HIPPO_HOME is the global root in --global mode (see getGlobalRoot in
-    // src/host/global-store.ts). Same pattern as tests/store/recall-why-envelope.test.ts.
     const home = makeRoot('audit-cli', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
     await runCliOut(['init'], { env, cwd: home });
@@ -58,7 +55,6 @@ describe('audit log captures every mutation', () => {
 
     await runCliOut(['promote', localId!], { env, cwd: home });
 
-    // promote audit lands on the global store (HIPPO_HOME).
     const dbGlobal = openHippoDb(home);
     try {
       const events = listAuditEvents(dbGlobal, { tenantId: 'default', op: 'promote' });
@@ -108,8 +104,6 @@ describe('audit log captures every mutation', () => {
     const home = makeRoot('audit-archive');
     const db = openHippoDb(home);
     try {
-      // Insert a raw row directly with a non-default tenant to confirm M3:
-      // archive_raw audit must use the row's tenant_id, not env.
       db.prepare(
         `INSERT INTO memories (id, created, last_retrieved, retrieval_count, strength, half_life_days, layer, tags_json, emotional_valence, schema_fit, source, conflicts_with_json, pinned, confidence, content, kind, tenant_id) VALUES ('raw1','2026-01-01','2026-01-01',0,1.0,7,'episodic','[]','neutral',0.5,'test','[]',0,'observed','sensitive','raw','tenant_x')`,
       ).run();
@@ -123,7 +117,6 @@ describe('audit log captures every mutation', () => {
       const meta = events[0]!.metadata;
       expect(meta.reason).toBe('GDPR');
 
-      // And nothing leaks into the default tenant.
       const defaultEvents = listAuditEvents(db, { tenantId: 'default', op: 'archive_raw' });
       expect(defaultEvents.length).toBe(0);
     } finally {
@@ -134,8 +127,6 @@ describe('audit log captures every mutation', () => {
   it('forget logs a forget event', async () => {
     const home = makeRoot('audit-forget', { init: false });
     const env = { ...process.env, HIPPO_HOME: home };
-    // Local store flow (forgetMemory is local-store only). Remember + forget
-    // both target the local .hippo dir under cwd=home.
     await runCliOut(['init'], { env, cwd: home });
     await runCliOut(['remember', 'audit-forget-canary-77 distinguishing token'], { env, cwd: home });
     const localRoot = join(home, '.hippo');

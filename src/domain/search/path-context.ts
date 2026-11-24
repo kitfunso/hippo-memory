@@ -1,4 +1,3 @@
-// Keeps the last meaningful segments, the most specific ones.
 const PATH_SEGMENTS_KEPT = 4;
 
 /**
@@ -55,12 +54,9 @@ export function pathOverlapScore(memoryPathTags: string[], currentPathTags: stri
   const memSet = new Set(memoryPathTags);
   const matches = currentPathTags.filter((t) => memSet.has(t)).length;
 
-  // Normalize by the more specific side (the larger tag set), which kills the genericity reward a
-  // memory-count-only normalization gave bare path tags.
   return matches / Math.max(memoryPathTags.length, currentPathTags.length);
 }
 
-/** Weight applied to path overlap score when computing the recall boost multiplier. */
 const PATH_BOOST_WEIGHT = 0.3;
 
 /**

@@ -1,4 +1,3 @@
-// A4 teaching, invalid record shapes, workspace-git faults, session evidence and the family screen, against the z0-record/1 contract.
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -108,10 +107,8 @@ describe('session evidence', () => {
     const checks = checkLog(log).filter((c) => c.lesson === 'f1-l1');
     expect(checks[0].commands).toEqual(['git status && cat lib.js', 'npm run lint']);
     expect(checks[1].commands).toEqual(['git status && cat lib.js', 'echo resumed No:', 'npm run lint']);
-    // CHECK_RESUME_COMMANDS: what each transcript gained since the first check, so the subagent's earlier command stays out. The applies' first checks get none.
     expect(checks.map((c) => c.resume)).toEqual([null, ['echo resumed No:'], null, null]);
     expect(JSON.parse(readFileSync(join(out, 'grading', 'seqF', 'A0', 'seed1', 't1.grade.json'), 'utf8')).commandsResume).toEqual(['echo resumed No:']);
-    // Session 1 makes 3 tool calls, its subagent 1 and the resume 1.
     expect(find(recs, 'A0', 'n1').toolCalls).toBe(3);
     expect(find(recs, 'A0', 't1').toolCalls).toBe(5);
   }, 300_000);
@@ -136,7 +133,6 @@ describe('session evidence', () => {
   it('the hippo field sums the ledger over both turns when the resume has its own session id', async () => {
     const { out } = isolate('hippo-sum');
     const r = makeRepo();
-    // n0 stores a memory first, and both t1 prompts share its words, so prompt recall injects on both turns.
     const s = spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file for add in lib.js')])], [
       task(r, 'n0', 'FIX add in lib.js'), teach(r, 't1', 'f1-l1', 'LESSON_OK NEW_ID_ON_RESUME add in lib.js'),
       plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'look around only'), apply(r, 'a2', 'f1-l1', 'look around only'),
@@ -149,7 +145,6 @@ describe('session evidence', () => {
     const rows = lib.tokensBySession(db, 'default', '1970-01-01T00:00:00.000Z').filter((x: { sessionId: string }) => [t1.sessionId, t1.resumeSessionId].includes(x.sessionId));
     lib.closeHippoDb(db);
     expect(rows).toHaveLength(2);
-    // n0's memory is the store's one row and matches each prompt, so each turn books its recall block and no static one.
     for (const x of rows) expect(x.injections, x.sessionId).toBe(1);
     const total = (k: 'sent' | 'skipped' | 'injections') => rows.reduce((n: number, x: Record<string, number>) => n + x[k], 0);
     expect(t1.hippo).toEqual({ sessionId: t1.sessionId, sent: total('sent'), skipped: total('skipped'), injections: total('injections') });
@@ -191,7 +186,6 @@ describe('family screen', () => {
     const fam: FamilyDef = { ...family('fK', [lesson('fK-l1', 'Write the fK file')]), screen: { id: 'fK-screen', baseRef: r.base, fixRef: r.fix, prompt: 'LESSON_TOLD SEED2_OK', test: 'node test.js', testFiles: ['test.js'] } };
     const s = spec(r, [fam], [teach(r, 'tK', 'fK-l1', 'LESSON_BAD'), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'aK1', 'fK-l1', 'look around only'), apply(r, 'aK2', 'fK-l1', 'look around only')]);
     const withX = { ...s, sequences: [...s.sequences, { id: 'seqX', cluster: 'c', repo: r.repo, fixedOrder: true, set: 'X', tasks: [plain(r, 'x1'), plain(r, 'x2')] }] };
-    // isolate gives the run an empty HOME, so opening the Codex vault would throw for want of a login before the first session.
     const v = await runScreen({ spec: withX, arms: ['X1', 'X2'], outDir: out, claudeBin: CLAUDE, settleMs: 0, warmup: false, log: () => {} });
     expect(v.families.map((f: { familyId: string }) => f.familyId)).toEqual(['fK']);
     const recs: Z0Record[] = readFileSync(join(out, 'screen.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));

@@ -1,5 +1,3 @@
-"""The key a client sends with no `api_key`: HIPPO_API_KEY, else a loopback server's key file, as the CLI does."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,7 +11,6 @@ LOCAL = "http://127.0.0.1:3737"
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A working folder and a global store of the test's own, with no key in the environment."""
     work = tmp_path / "work" / "sub"
     work.mkdir(parents=True)
     monkeypatch.chdir(work)

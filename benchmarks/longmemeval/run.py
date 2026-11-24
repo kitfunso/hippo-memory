@@ -1,8 +1,3 @@
-"""Full LongMemEval benchmark pipeline orchestrator.
-
-Runs: ingest -> retrieve -> generate -> evaluate
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -22,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 
 def verify_hippo_binary(hippo_bin: str) -> None:
-    """Verify the hippo binary is accessible."""
     resolved = shutil.which(hippo_bin)
     if resolved is None:
         raise FileNotFoundError(
@@ -44,23 +38,6 @@ def run_pipeline(
     skip_evaluate: bool = False,
     store_dir: Path | None = None,
 ) -> dict:
-    """Run the full LongMemEval benchmark pipeline.
-
-    Args:
-        data_path: Path to LongMemEval JSON dataset.
-        output_dir: Directory for all output files.
-        hippo_bin: Path to hippo CLI binary.
-        model: Claude model for answer generation.
-        judge_model: Claude model for LLM judge.
-        budget: Token budget for retrieval.
-        skip_ingest: Skip ingestion (reuse existing store_dir).
-        skip_generate: Skip generation (reuse existing generation results).
-        skip_evaluate: Skip evaluation.
-        store_dir: Reuse existing hippo store directory.
-
-    Returns:
-        Dict with pipeline results and timing.
-    """
     output_dir.mkdir(parents=True, exist_ok=True)
     retrieval_path = output_dir / "retrieval.jsonl"
     generation_path = output_dir / "generation.jsonl"
@@ -69,7 +46,6 @@ def run_pipeline(
     timings: dict[str, float] = {}
     pipeline_start = time.time()
 
-    # Step 1: Ingest
     if not skip_ingest:
         logger.info("=" * 60)
         logger.info("STEP 1/4: INGEST")
@@ -87,7 +63,6 @@ def run_pipeline(
             raise ValueError("--store-dir required when using --skip-ingest")
         logger.info("Skipping ingestion, using store: %s", store_dir)
 
-    # Step 2: Retrieve
     logger.info("=" * 60)
     logger.info("STEP 2/4: RETRIEVE")
     logger.info("=" * 60)
@@ -102,7 +77,6 @@ def run_pipeline(
     timings["retrieve"] = time.time() - t0
     logger.info("Retrieval completed in %.1fs", timings["retrieve"])
 
-    # Step 3: Generate
     if not skip_generate:
         logger.info("=" * 60)
         logger.info("STEP 3/4: GENERATE")
@@ -118,7 +92,6 @@ def run_pipeline(
     else:
         logger.info("Skipping generation, using existing: %s", generation_path)
 
-    # Step 4: Evaluate
     if not skip_evaluate:
         logger.info("=" * 60)
         logger.info("STEP 4/4: EVALUATE")
@@ -137,7 +110,6 @@ def run_pipeline(
 
     timings["total"] = time.time() - pipeline_start
 
-    # Save pipeline metadata
     metadata = {
         "data_path": str(data_path),
         "output_dir": str(output_dir),

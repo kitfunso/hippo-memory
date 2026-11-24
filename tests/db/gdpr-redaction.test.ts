@@ -61,18 +61,6 @@ function fetchArchiveAuditRows(db: DatabaseSyncLike, targetId: string): ArchiveA
     .all(targetId) as ArchiveAuditRow[];
 }
 
-/**
- * v0.39 GDPR Path A regression suite.
- *
- * Path A semantics: archiveRawMemory writes a redacted metadata-only payload
- * to raw_archive instead of snapshotting the full row. The compliance audit
- * trail lives in audit_log (op='archive_raw'). True right-to-be-forgotten —
- * after archive, the original content is unrecoverable from the database.
- *
- * Migration v20 backfills existing raw_archive rows to the new shape,
- * preserving tenant_id and kind from the legacy payload when parseable and
- * falling back to 'unknown' when the legacy JSON is malformed.
- */
 describe('GDPR Path A redaction + migration v20', () => {
   let root: string;
 
@@ -108,7 +96,6 @@ describe('GDPR Path A redaction + migration v20', () => {
       expect(payload.kind).toBe('raw');
       expect(payload.reason).toBe('GDPR right-to-be-forgotten');
       expect(payload.archived_at).toEqual(expect.any(String));
-      // Critical: original content fields are NOT present.
       expect(payload.id).toBeUndefined();
       expect(payload.content).toBeUndefined();
       expect(JSON.stringify(payload)).not.toContain('zylph123');
@@ -118,9 +105,6 @@ describe('GDPR Path A redaction + migration v20', () => {
   });
 
   it('3. migration v20 backfill: legacy payload with full content is redacted, tenant_id + kind preserved', () => {
-    // Open at current version, then rewind schema_version meta to 19 so
-    // reopening triggers the v20 migration. Hand-insert a legacy raw_archive
-    // row whose payload_json carries the original content shape.
     const db1 = openHippoDb(root);
     try {
       db1
@@ -139,8 +123,6 @@ describe('GDPR Path A redaction + migration v20', () => {
             kind: 'raw',
           }),
         );
-      // Rewind schema_version so the next openHippoDb() re-runs migration v20
-      // against the row we just seeded.
       db1
         .prepare(
           `INSERT INTO meta(key, value) VALUES('schema_version', '19') ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
@@ -161,7 +143,6 @@ describe('GDPR Path A redaction + migration v20', () => {
       expect(payload.reason).toBe('GDPR purge');
       expect(payload.archived_at).toBe('2026-04-01T00:00:00.000Z');
       expect(payload.migration).toBe('v20_redact');
-      // Original content gone.
       expect(JSON.stringify(payload)).not.toContain('xyzzy');
     } finally {
       closeHippoDb(db2);
@@ -227,13 +208,11 @@ describe('GDPR Path A redaction + migration v20', () => {
     const distinctive = 'gdpr-canary-token-quaxle';
     const { id } = await remember(ctx, { content: distinctive, kind: 'raw' });
 
-    // Pre-condition: recall finds it.
     const before = await retrieve(ctx, { query: distinctive });
     expect(before.results.some((r) => r.id === id)).toBe(true);
 
     await rawArchive(ctx, id, 'right-to-be-forgotten');
 
-    // Post-condition: gone from recall.
     const after = await retrieve(ctx, { query: distinctive });
     expect(after.results.length).toBe(0);
   });

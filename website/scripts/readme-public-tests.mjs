@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// README.md's "Public memory tests" table, built from the data the home page's table reads, so the two cannot drift.
-// `node website/scripts/readme-public-tests.mjs --write` rewrites it; check-readme-sync.mjs fails the build while it is stale.
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

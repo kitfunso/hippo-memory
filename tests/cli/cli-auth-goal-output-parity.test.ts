@@ -1,5 +1,3 @@
-// The published stdout, stderr and exit codes of `hippo auth revoke|grant|ungrant` and `hippo goal`, in process on a
-// real store, and the key, grant, audit, goal and policy rows each run leaves.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAuth } from '../../src/surface/cli/auth.js';
 import { handleGoal } from '../../src/surface/cli/goals.js';
@@ -10,14 +8,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 const { sqliteStore, apiCtx } = sessionPerTest();
 
 type Flags = Record<string, string | boolean | string[]>;
 
-/** The goal_stack columns the goal case reads back. */
 interface GoalRow {
   id: string;
   tenant_id: string;
@@ -44,7 +40,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Replaces each distinct id matching `pattern` with its first-seen order, and every ISO timestamp with <ts>. */
 function masker(pattern: RegExp, label: string): (text: string) => string {
   const ids = new Map<string, string>();
   return (text) =>
@@ -77,7 +72,6 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     mask(acme.keyId);
     mask(spare.keyId);
 
-    // Prove both secrets first, so the revoke and the grant below must show on keys this process already trusts.
     expect((await keys.verify(acme.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
     expect((await keys.verify(spare.plaintext, sqliteStore(root)))?.scopes).toEqual([]);
 
@@ -113,7 +107,6 @@ describe('hippo auth revoke, grant and ungrant (in process)', () => {
     const audit = rows(
       `SELECT tenant_id, actor, op, target_id, metadata_json FROM audit_log WHERE op LIKE 'auth_%' AND op != 'auth_create' ORDER BY id`,
     );
-    // Each grant and ungrant is audited under the key's tenant, a repeat of one too.
     const scoped = (op: string) => ({
       tenant_id: 'acme',
       actor: 'cli',
@@ -216,7 +209,6 @@ describe('hippo goal (in process)', () => {
       outcome_score: null,
       ...more,
     });
-    // The repeat complete keeps the first outcome; the control character is dropped.
     expect(goals).toEqual([
       goal(top, 'ship the release', {
         status: 'completed',

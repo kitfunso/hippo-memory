@@ -1,4 +1,3 @@
-// Every command that imports agent memories, run through the built CLI in a scratch home (plan design 11).
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
@@ -15,7 +14,6 @@ const HIPPO_BIN = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
 const dirs: string[] = [];
 
 afterEach(() => {
-  // A detached import worker that post-compact started may still hold its folder as its cwd.
   for (const dir of dirs.splice(0)) removeDirOfWorker(dir);
 });
 
@@ -75,7 +73,6 @@ function hippoSpawned(
   });
 }
 
-/** In process, as hippoSpawned would run it: stdout back, or a throw on a non-zero exit. The first case keeps the spawn. */
 async function hippo(
   b: Box,
   cwd: string,

@@ -1,4 +1,3 @@
-// `foo::bar.md` is a valid POSIX file name, so "::" alone does not make a part key.
 import { describe, expect, it } from 'vitest';
 import { planContainer, type LiveRow, type PlanItem } from '../../src/domain/agent-memories/plan.js';
 import { fileOfKey, isPartKey } from '../../src/domain/agent-memories/source.js';

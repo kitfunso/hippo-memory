@@ -1,6 +1,3 @@
-// Hand-written for the JSON Schema subset the hippo tool definitions use, so the MCP server needs
-// no validator dependency.
-
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 
@@ -118,10 +115,6 @@ export function validateToolArgs(
   }
   return problems;
 }
-
-// The readers below run after validateToolArgs, so a declared argument already has its schema type;
-// each one caps a string as the HTTP routes do (surface/server/validation.ts), so the same field
-// takes the same length on both.
 
 /** A string argument, or undefined when absent; one over `max` characters is refused with the
  * HTTP route's message. */

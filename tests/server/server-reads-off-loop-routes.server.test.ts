@@ -1,4 +1,3 @@
-// The graph, quarantine and recall routes answer from store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -122,7 +121,6 @@ function copy(): string {
   return made.root;
 }
 
-/** `use` against a server on `root`, on the worker-backed store when `store` is absent; the server has stopped when it resolves, so every row it writes is in. */
 async function onServer<T>(
   root: string,
   store: HippoStore | undefined,
@@ -240,7 +238,6 @@ describe('the worker-backed graph, quarantine and recall routes against the in-p
 });
 
 describe("the server-thread block of a `loop: 'off'` route this file covers", () => {
-  // The last column is false where the route has written before it reaches the swapped method.
   const ROUTES: ReadonlyArray<
     readonly [route: string, swapped: (inProcess: InProcess) => Partial<InProcess>, send: Send, writesNothing: boolean]
   > = [
@@ -310,7 +307,6 @@ describe("the server-thread block of a `loop: 'off'` route this file covers", ()
       vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
       const before = left(root);
       const info = vi.spyOn(log, 'trail');
-      // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 
       const res = await onServer(root, store, (server) => send({ server, seed }));

@@ -1,4 +1,3 @@
-// Per-caller rings of recent recalls: the history the anchoring hint reads.
 import type { CallerState } from '../callers.js';
 import {
   type RecallHistoryEntry,
@@ -51,7 +50,6 @@ export function getOrCreateRing(
 ): RingBuffer {
   const existing = map.get(key);
   if (existing) {
-    // LRU touch: delete + re-insert to move to back of iteration order.
     map.delete(key);
     map.set(key, existing);
     return existing;

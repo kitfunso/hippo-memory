@@ -1,6 +1,3 @@
-// One container's sync: its rows read, every write planned as data, then one store call applies the
-// plan in one transaction; a plan whose rows changed before it landed is read and planned once
-// more.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { duplicateKey, heldTextKeys } from '../../base/util/same-text.js';
@@ -30,7 +27,6 @@ import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface ContainerOutcome {
   readonly tally: Tally;
-  /** Mirrors of set-aside rows the commit could not remove. */
   readonly unpurged: readonly MirrorFailure[];
 }
 
@@ -38,7 +34,6 @@ type Refusal = 'short' | 'secret' | 'rejected';
 
 interface PlannedContainer {
   readonly apply: ContainerApply;
-  /** What the plan counts before any step runs. */
   readonly tally: Tally;
 }
 
@@ -124,8 +119,6 @@ function planTally(refusals: Map<string, Refusal>, w: ContainerWork, plan: Conta
   return tally;
 }
 
-// The rejection lookup reads the capped text, as the write would store it, so a rejected note
-// writes no audit row.
 async function refusalsOf(
   s: StoreSession,
   items: readonly MemoryItem[],
@@ -140,7 +133,6 @@ async function refusalsOf(
     } else asked.push(item);
   }
   if (asked.length === 0) return out;
-  // A new row's id: no stored row holds the empty id, so the tombstone alone decides.
   const checks = asked.map((item) => ({
     tenantId: s.tenantId,
     entryId: '',
@@ -153,7 +145,6 @@ async function refusalsOf(
   return out;
 }
 
-/** Read only when a present key has no live row, which after the first import is rare. */
 async function dormantSnapshots(
   s: StoreSession,
   w: ContainerWork,
@@ -174,8 +165,6 @@ async function dormantSnapshots(
   return [...under, ...view.movedDormant].filter((snap) => !isSuperseded(snap.entry));
 }
 
-/** The plan asks which notes another path already stores only for the rows it would write; those
- * texts are read in one call, and the same items are asked again with the answers. */
 async function planWithDuplicates(
   s: StoreSession,
   w: ContainerWork,
@@ -196,8 +185,6 @@ async function planWithDuplicates(
   return planContainer({ ...input, isDuplicate: (item) => duplicate.has(item.key) });
 }
 
-/** Design 6: only text stored by another path counts; the store is asked only for rows holding
- * the text's words. */
 async function duplicatesAmong(s: StoreSession, texts: readonly string[]): Promise<boolean[]> {
   if (texts.length === 0) return [];
   const origins = s.visible === null ? undefined : ['', ...s.visible];

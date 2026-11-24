@@ -1,6 +1,3 @@
-// POST /v1/outcome over a real server: with ids it applies to them; without, to the ids this client last recalled over
-// REST, so one client's outcome never lands on another's recall.
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -20,7 +17,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** POST /v1/outcome with no ids as `bearer`, or as the local key, so it lands on that caller's last recall. */
 async function postOutcome(url: string, body: { readonly good: boolean }, bearer?: string): Promise<Response> {
   const auth: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   return fetch(`${url}/v1/outcome`, {
@@ -30,7 +26,6 @@ async function postOutcome(url: string, body: { readonly good: boolean }, bearer
   });
 }
 
-/** The ids a REST recall for `q` showed `bearer`, or the local key. */
 async function recalledIds(url: string, q: string, bearer?: string): Promise<string[]> {
   const headers: Record<string, string> = bearer === undefined ? {} : { authorization: `Bearer ${bearer}` };
   const res = await fetch(`${url}/v1/memories?q=${encodeURIComponent(q)}`, { headers });
@@ -141,10 +136,6 @@ describe('POST /v1/outcome', () => {
   });
 
   it('cross-tenant id silently skipped: applied:0, zero audit rows', async () => {
-    // Memory belongs to tenant_b. Caller hits the route with no Bearer, so
-    // ctx.tenantId resolves to 'default' (the unauthenticated localhost
-    // default). default cannot read tenant_b's memory -> readEntry returns
-    // null -> applied stays 0, no audit row written.
     const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'belongs-to-tenant-b' });
 
@@ -169,8 +160,6 @@ describe('POST /v1/outcome', () => {
   });
 
   it('cross-tenant last-recall path: response ids field does NOT leak other-tenant ids', async () => {
-    // v1.11.4 regression: the store's last_retrieval_ids is per folder, not per tenant, so it must never answer a
-    // local-key 'default' caller with a tenant_b id.
     const tenantBCtx: FullContext = apiCtx(home, 'tenant_b', { subject: 'localhost:cli', role: 'admin' });
     const tenantBMem = await remember(tenantBCtx, { content: 'tenant-b-secret-id' });
     const idx = loadLastRecall(home);
@@ -185,14 +174,10 @@ describe('POST /v1/outcome', () => {
     expect(res.status).toBe(200);
     const body = await jsonAs<{ applied: number; ids: string[] }>(res);
     expect(body.applied).toBe(0);
-    // The critical assertion: response ids must NOT contain the
-    // cross-tenant id. Pre-v1.11.4 this was [tenantBMem.id], leaking
-    // tenant_b's memory id to the default caller.
     expect(body.ids).toEqual([]);
     expect(body.ids).not.toContain(tenantBMem.id);
   });
 
-  // v1.11.5: DoS caps + body-cap interaction
   it('1001 ids returns 400 with cap-exceeded message', async () => {
     const ids = Array(1001)
       .fill(0)
@@ -209,11 +194,9 @@ describe('POST /v1/outcome', () => {
 
   it.skipIf(needsHippoDb('db'))('1000 ids at boundary returns 200 (cap-exclusive)', async () => {
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
-    // Seed 3 real memories so applied > 0 confirms route ran.
     const m1 = await remember(ctx, { content: 'boundary-mem-1' });
     const m2 = await remember(ctx, { content: 'boundary-mem-2' });
     const m3 = await remember(ctx, { content: 'boundary-mem-3' });
-    // Pad with fake ids that will silently miss (still within cap).
     const ids = [
       m1.id,
       m2.id,
@@ -230,15 +213,10 @@ describe('POST /v1/outcome', () => {
     });
     expect(res.status).toBe(200);
     const body = await jsonAs<{ applied: number }>(res);
-    expect(body.applied).toBe(3); // only the 3 real ids applied
+    expect(body.applied).toBe(3);
   });
 
   it('1MB+ body returns 413 from body cap before id cap fires', async () => {
-    // Synthesise ~1.2MB of ids — body cap (1MB) at the HTTP layer fires
-    // before our id cap (1000) at the route layer. Locks ordering: body
-    // cap < id cap, attack vectors can't slip through by sending huge
-    // payloads with <=1000 ids. BodyTooLargeError returns HTTP 413
-    // (Payload Too Large), distinct from the route-level 400.
     const giantIds = Array(50000)
       .fill(0)
       .map((_, i) => `mem_giant_${i.toString().padStart(20, '0')}`);

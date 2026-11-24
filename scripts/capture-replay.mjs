@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Replays real session transcripts through capture in a throwaway store and prints what would pin.
-// Run it before any change to a capture route: a benchmark's clean teach text cannot show precision.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

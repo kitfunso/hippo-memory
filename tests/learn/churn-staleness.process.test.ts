@@ -1,4 +1,3 @@
-/** FE2 staleness-from-code-churn: extraction and detection. */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -18,10 +17,6 @@ import { initGitRepo, commit, ANCHOR, BEFORE_ANCHOR, AFTER_ANCHOR } from '../_he
 import { processGit } from '../../src/infra/git-runner.js';
 import { markChurnStaleInReach } from '../../src/api/sleep/churn.js';
 import { DAY_MS } from '../../src/base/util/time.js';
-
-// ---------------------------------------------------------------------------
-// extractChurnRefs (pure syntax, no repo access)
-// ---------------------------------------------------------------------------
 
 describe('extractChurnRefs', () => {
   it('extracts a plain path reference', () => {
@@ -70,10 +65,6 @@ describe('extractChurnRefs', () => {
     expect(extractChurnRefs('a plain sentence with nothing special')).toEqual({ paths: [], symbols: [], scripts: [] });
   });
 });
-
-// ---------------------------------------------------------------------------
-// detectChurnStale: real temp git repo + real store
-// ---------------------------------------------------------------------------
 
 describe('detectChurnStale', () => {
   let repoDir: string;
@@ -455,7 +446,7 @@ describe('detectChurnStale', () => {
     commit(repoDir, AFTER_ANCHOR);
 
     const ctx: FullContext = apiCtx(hippoRoot, 'default', api.adminActor('test'));
-    await api.outcome(ctx, [mem.id], true); // confirmedAt lands after the churn commit, anchor moves past it
+    await api.outcome(ctx, [mem.id], true);
 
     const result = await detectChurnStale(
       sqliteStore(hippoRoot),

@@ -49,7 +49,6 @@ describe('consolidate auto-promote: session -> trace', () => {
     expect(traces).toHaveLength(1);
     expect(traces[0].traceOutcome).toBe('success');
     expect(traces[0].sourceSessionId).toBe(sid);
-    // Provenance lives in source_session_id; parents is NOT polluted.
     expect(traces[0].parents).toEqual([]);
     expect(traces[0].tags).toContain('auto-promoted');
     expect(traces[0].content).toContain('read x.ts');
@@ -118,10 +117,6 @@ describe('consolidate auto-promote: session -> trace', () => {
   it('does NOT fire conflict detection between two trace-layer memories', async () => {
     initTestStore(tmpDir);
 
-    // Two traces whose content would otherwise trip the enabled/disabled
-    // polarity heuristic (distinctive shared tokens + opposing polarity).
-    // Without the trace-vs-trace skip, detectConflicts would flag the pair.
-    // With the skip, traces are treated as variants, not contradictions.
     const sharedTokens = 'refactor auth module rotation strategy overlapping distinctive tokens here';
 
     await appendSessionEvent(tmpDir, 'default', {
@@ -154,7 +149,6 @@ describe('consolidate auto-promote: session -> trace', () => {
     initTestStore(tmpDir);
     const sid = 'test-stale';
 
-    // Poke the DB directly to backdate the session_complete row by 30 days.
     const db = openHippoDb(tmpDir);
     try {
       const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();

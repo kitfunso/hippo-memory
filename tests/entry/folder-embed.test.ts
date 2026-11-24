@@ -1,4 +1,3 @@
-// The eval kit's embedMemory(folder, entry) leaves the same index and outcome as embedMemory on that folder's target.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmbeddingsConfig } from '../../src/base/config/config.js';
 import { createMemory } from '../../src/entry/memory.js';

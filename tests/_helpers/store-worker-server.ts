@@ -1,4 +1,3 @@
-// A real server on a real store, on store workers or in process, for the tests that compare the two.
 import { vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -25,7 +24,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-// Far past any test's own timeout, so a write behind a held lock can only end when the test releases the lock or stops the thread.
 const LONG_WAIT_MS = 60_000;
 
 type Cleanup = () => Promise<void> | void;
@@ -53,7 +51,6 @@ export function newRoot(label = 'sqlite-executor'): string {
   return removeLater(makeRoot(label));
 }
 
-// The worker-backed routes are the object routes, so a port-only store keeps that group.
 const OBJECT_GROUPS: readonly OptionalGroup[] = ['objects'];
 
 /** A server on `root`, sent its local key by any call naming no token: on the default store when `store` is absent, which is the worker-backed one. */
@@ -63,7 +60,6 @@ export async function start(
   extra: Partial<ServeOptions> = {},
 ): Promise<ServerHandle> {
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  // These runs compare route output, so neither limiter may answer first.
   const base = { hippoRoot: root, port: 0, rateLimits: { perCaller: 'off' as const }, keep: OBJECT_GROUPS, ...extra };
   const server = await serveKeyed(store ? { ...base, store } : base);
   cleanups.push(async () => {
@@ -179,7 +175,6 @@ const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
 
 export async function seen(label: string, res: Response, keyIds: readonly string[] = []) {
   const kept = [...res.headers].filter(([name]) => !PER_REQUEST_HEADERS.has(name));
-  // The page cursor encodes a clock reading and a row id.
   const headers = kept.map(([name, value]) => [name, name === 'x-next-cursor' ? '<cursor>' : value]).sort();
   return { label, status: res.status, headers, body: scrub(await res.text(), keyIds) };
 }

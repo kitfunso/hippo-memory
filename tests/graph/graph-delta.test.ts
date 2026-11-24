@@ -1,5 +1,3 @@
-// The graph is derived outside the write lock and only its difference is written, so an unchanged
-// object costs no write and a renamed one keeps its entity id and the edges that point at it.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph, deriveGraph, loadGraphSources } from '../../src/domain/graph/extract.js';
 import { entityKey } from '../../src/store/rules/graph-delta.js';
@@ -48,7 +46,6 @@ interface StoredRelation {
   source_object_id: number | null;
 }
 
-/** The tenant's stored graph by natural key, leaving out ids and timestamps. */
 function storedByKey(home: string, tenant: string) {
   return onStore(home, (db) => {
     // SAFETY: the SELECT names the columns StoredEntity declares.
@@ -106,7 +103,6 @@ function entityIdOf(home: string, type: SourceObjectType, objectId: number): num
   });
 }
 
-/** The object fixtures of tests/graph/graph-cross-object.test.ts, one per case. */
 const CROSS_OBJECT_FIXTURES: Array<[string, (h: string) => Promise<void>]> = [
   [
     'a decision names a policy',
@@ -391,7 +387,6 @@ describe('graph delta', () => {
       decisionText: 'Close this one',
     });
     await extractGraph(sqliteStore(home), T);
-    // Flipped in SQL: closeDecision also drops the graph row itself, which would leave nothing to diff.
     onStore(home, (db) => db.prepare(`UPDATE decisions SET status = 'closed' WHERE id = ?`).run(gone.id));
 
     expect(await deltaOf(home)).toEqual([{ op: 'deleteEntity', id: entityIdOf(home, 'decision', gone.id) }]);

@@ -6,12 +6,9 @@ const MAX_DIFF_TERMS = 10;
 
 const SKIPPED_PATH_TERMS = ['src', 'dist', 'test', 'tests', 'node_modules', 'index'];
 
-// stderr is dropped because git's warnings (line-ending notices, for one) would otherwise become
-// query terms.
 const GIT_READ = { timeoutMs: GIT_PROMPT_TIMEOUT_MS, stderr: 'drop' } as const;
 
 function noQuery(error: Error): string {
-  // Not a git repo, git missing or a timeout: no query, so the caller lists by strength.
   log.debug('auto context: no git-derived query', errorFields(error));
   return '';
 }

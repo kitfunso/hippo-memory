@@ -1,4 +1,3 @@
-// Records every SQL statement a real SQLite store executes, so a test can pin how query counts grow with rows.
 import { vi } from 'vitest';
 import { createRequire } from 'node:module';
 
@@ -31,9 +30,7 @@ export interface StatementRead {
 export interface StatementLog<T> {
   result: T;
   statements: string[];
-  /** Rows the statements handed to JavaScript, the work a caller then hydrates and scores. */
   rowsRead: number;
-  /** Each get, all and iterate in call order, so a test can bound the rows any one statement returns. */
   reads: StatementRead[];
 }
 
@@ -49,7 +46,6 @@ export function recordStatements<T>(fn: () => T): StatementLog<T> {
   const spies = spyOnStatements(statements, tally);
   try {
     const result = fn();
-    // A Promise here would drop every statement run after its first await.
     if (result instanceof Promise) throw new Error('recordStatements got a Promise; use recordStatementsAsync');
     return { result, statements, rowsRead: tally.rows, reads: tally.reads };
   } finally {
@@ -93,7 +89,6 @@ function spyOnStatements(statements: string[], tally: Tally): Array<{ mockRestor
   ];
   for (const method of ['run', 'get', 'all', 'iterate'] as const) {
     const original = StatementSync.prototype[method];
-    // SQL is read at call time: once the store closes, a finalized statement's sourceSQL throws.
     spies.push(
       vi.spyOn(StatementSync.prototype, method).mockImplementation(function (
         this: StatementProto,

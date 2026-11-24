@@ -1,5 +1,3 @@
-// Re-read tokens (what later model calls read again), the compact-resume ledger surface and sub-agent hook payloads.
-// Real SQLite, synthetic transcripts and the built CLI in scratch homes; no mocks.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,7 +21,6 @@ import { recordRereads, writeEntry, appendSessionEvent, saveActiveTaskSnapshot }
 import { initTestStore } from '../_helpers/store-template.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 const SESSION = 'sess-reread';
-// Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a test's calls.
 const BASE = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
 const minute = (m: number): number => BASE + m * 60_000;
 const iso = (at: number): string => new Date(at).toISOString();
@@ -80,7 +77,6 @@ function rereadStamps(root: string): Array<[string, string]> {
   });
 }
 
-/** One transcript line of a model call; a call that spans several lines repeats its message id. */
 function callLine(id: string, at: number, opts: { model?: string; sidechain?: boolean; usage?: boolean } = {}): string {
   return JSON.stringify({
     type: 'assistant',
@@ -106,7 +102,6 @@ function boundaryLine(at: number, sidechain = false): string {
   });
 }
 
-/** Scratch homes and stores for the built CLI, with no provider keys and no global npm bin on PATH. */
 function scratch(root: string) {
   const home = join(root, 'home');
   const proj = join(root, 'proj');
@@ -135,7 +130,6 @@ function scratch(root: string) {
   return { env, proj, globalRoot: join(root, 'global') };
 }
 
-// In process unless `spawned`: the first worker and compact-resume cases pin each verb in a real child.
 async function hippo(
   args: string[],
   cwd: string,
@@ -198,7 +192,6 @@ describe('model calls in a transcript', () => {
     expect(carried(200)).toEqual([300]);
     expect(carried(350)).toEqual([400, 500]);
     expect(carried(600)).toEqual([]);
-    // A call stamped at the send's own millisecond did not carry it, so the window is the next call's.
     expect(
       carryingCalls(
         [
@@ -270,7 +263,6 @@ describe('recordRereads', () => {
     ];
     withDb(root, (db) => {
       book(db, 'hook', 'inject', minute(0) - DAY_MS, 100);
-      // Sent after the compaction and never re-read; the ledger hands it over first, so the day's date must not be last-write.
       book(db, 'hook', 'inject', minute(3.5), 70);
       book(db, 'hook_recall', 'inject', minute(4.5), 40);
     });
@@ -522,7 +514,6 @@ describe('compact-resume books the block it prints', () => {
       source: 'pre-compact',
       sessionId: SESSION,
     });
-    // A blob, not text, where the trail expects a string.
     withDb(store, (db) =>
       db
         .prepare(
@@ -599,7 +590,6 @@ describe("a sub-agent's hooks", () => {
   let store: string;
   const HOOK = ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'];
   const main = (fields: Record<string, string> = {}): string => JSON.stringify({ session_id: SESSION, ...fields });
-  // Inside a sub-agent the payload keeps the parent's session_id and adds agent_id (and agent_type).
   const sub = (fields: Record<string, string> = {}): string =>
     main({ agent_id: 'agent-1', agent_type: 'Explore', ...fields });
   beforeEach(() => {
@@ -632,7 +622,6 @@ describe("a sub-agent's hooks", () => {
     expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id IS NULL`)).toHaveLength(1);
     expect(ledgerRows(store, `surface = 'hook' AND event = 'inject' AND session_id = '${SESSION}'`)).toHaveLength(1);
     expect(ledgerRows(store, `event = 'skip'`)).toEqual([]);
-    // Control: the parent's own repeat still skips.
     expect((await hippo(HOOK, proj, parentEnv, main({ prompt: 'hi' }))).stdout.trim()).toBe('');
   });
 
@@ -653,7 +642,6 @@ describe("a sub-agent's hooks", () => {
     });
     withDb(store, (db) => db.prepare(`UPDATE task_snapshots SET updated_at = ?`).run(iso(Date.now() - 4 * DAY_MS)));
     expect((await hippo(HOOK, proj, env, sub({ prompt: 'hi' }))).stdout).toContain('parent task');
-    // Control: another session's hook still gets the pin but no longer sees the stale snapshot.
     const other = (await hippo(HOOK, proj, env, main({ session_id: 'other', prompt: 'hi' }))).stdout;
     expect(other).toContain('NEVER force-push');
     expect(other).not.toContain('parent task');
@@ -671,7 +659,6 @@ describe("a sub-agent's hooks", () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toBe('');
     expect(ledgerRows(store, `surface = 'compact_resume'`)).toEqual([]);
-    // Control: the parent's own compaction restores it.
     expect((await hippo(['compact-resume'], proj, env, main({ source: 'compact' }))).stdout).toContain('parent task');
   });
 
@@ -680,7 +667,6 @@ describe("a sub-agent's hooks", () => {
     expect((await hippo(['pre-compact'], proj, env, sub({ hook_event_name: 'PreCompact' }))).status).toBe(0);
     expect((await hippo(['compact-resume'], proj, env, sub({ source: 'compact' }))).status).toBe(0);
     expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toEqual({ hash: 'h1', skipsSince: 0 });
-    // Control: the parent's own compaction resets it.
     await hippo(['compact-resume'], proj, env, main({ source: 'compact' }));
     expect(withDb(store, (db) => lastSentState(db, 'default', SESSION, 'hook'))).toBeNull();
   });
@@ -701,7 +687,6 @@ describe('re-read reports', () => {
       book(db, 'recall', 'inject', at, 30, 's2');
       book(db, 'hook', 'reread', at, 200, 's1');
       book(db, 'compact_resume', 'reread', at, 50, 's1');
-      // s3 only compacted, so it has no block to re-read; s4 only skipped, so a block it sent earlier went uncounted.
       book(db, 'hook', 'reset', at, 0, 's3');
       book(db, 'hook', 'skip', at, 100, 's4');
     });
@@ -726,7 +711,6 @@ describe('re-read reports', () => {
     expect(text).toContain('(estimated tokens, characters / 4)');
     expect(text).toMatch(/surface\s+sent\s+tokens\s+skipped\s+saved\s+re-read\n/);
     expect(text).toMatch(/compact_resume\s+1\s+50\s+0\s+0\s+50\n/);
-    // s2 sent through the CLI only, so its re-reads can never be counted and it stays out of the coverage.
     expect(text).toContain('Re-read by later model calls until compaction: 250 tokens, counted for 1 of 2 sessions.');
     expect(text).toContain(
       'Re-reads are counted for hook and compact-resume blocks when a session ends; other surfaces, and open or crashed sessions, show sent only.',

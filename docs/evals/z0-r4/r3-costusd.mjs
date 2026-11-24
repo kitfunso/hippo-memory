@@ -1,5 +1,3 @@
-// Read-only: does round 3's costUsd (Claude Code's total_cost_usd) equal the record's usage at the price file's row?
-// Usage: node docs/evals/z0-r4/r3-costusd.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { inputs, prices, load } = await openRound3(['dist/eval/eval-stats.js']);

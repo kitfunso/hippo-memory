@@ -1,18 +1,13 @@
-// Z6 scoring: turns the rows one run saw into values, a label per scenario, diagnostics and the run verdict; no I/O.
 import { esc, hasWord, norm } from './fixture.mjs';
 
-// oracle-sleep is oracle with the daily runs and interleave notes on; reported only, never part of the verdict.
 const ARMS = ['capture', 'remember', 'oracle', 'oracle-sleep'];
 
 function wilson(k, m) {
   if (!m) return [0, 0];
   const z = 1.96, p = k / m, d = 1 + (z * z) / m;
   const c = (p + (z * z) / (2 * m)) / d, w = (z * Math.sqrt((p * (1 - p)) / m + (z * z) / (4 * m * m))) / d;
-  // a proportion's CI cannot leave [0,1]; clamp off the float noise a k=0 or k=m interval otherwise leaves at the edge.
   return [Math.max(0, c - w), Math.min(1, c + w)];
 }
-
-// --- row value attribution ---
 
 function keysContainedIn(content, statements) {
   const out = new Set();
@@ -25,7 +20,6 @@ function computeValues(orderedRows, statements) {
   for (const row of orderedRows) {
     const isDerived = row.content.startsWith('[Consolidated');
     if (isDerived) {
-      // Linked on the sources found, not on their values, so a derived copy of an echo row stays valueless.
       const sources = earlierLocalNonDerived.filter((r) => norm(row.content).includes(norm(r.content).slice(0, 60)));
       row.values = sources.length ? new Set(sources.flatMap((r) => [...r.values])) : keysContainedIn(row.content, statements);
       row.flags = sources.length ? [] : ['unlinked'];
@@ -37,7 +31,6 @@ function computeValues(orderedRows, statements) {
       const k = row.firstSeen.stmtK;
       if (hasWord(row.content, statements[k - 1].marker)) { row.values = new Set([norm(statements[k - 1].marker)]); row.flags = []; }
       else {
-        // An echo names another statement's value ("we moved out of X") without its own, so it carries none.
         const others = statements.map((_, i) => i + 1).filter((k2) => k2 !== k && hasWord(row.content, statements[k2 - 1].marker));
         row.values = new Set();
         row.flags = others.length ? ['echo'] : [];
@@ -58,7 +51,6 @@ function captured(step, marker, rows) {
 }
 function capturedAny(pairs, rows) { return pairs.some(([step, marker]) => captured(step, marker, rows)); }
 
-// Reason a value was never captured; only the capture arm's outcome counts distinguish the three failure shapes.
 function missingReason(step, arm, captureOutcomes) {
   if (arm !== 'capture') return 'not-stored';
   const rec = captureOutcomes.find((c) => c.k === step);
@@ -68,8 +60,6 @@ function missingReason(step, arm, captureOutcomes) {
   if (outcome.n === 0 && outcome.m === 0 && outcome.r > 0) return 'rejected';
   return 'no-marker';
 }
-// Cause a carrier vanished by final snapshot; detail keeps counts only, never the ids themselves.
-// merge-fade: in this run only a merge cuts a half-life (src/consolidate.ts:912); invalidate, resolve and decide never run.
 function vanishedCause(row, forgetRows, dormant) {
   const forget = forgetRows.find((f) => f.targetId === row.id);
   const cause = forget ? forget.cause : dormant.has(row.id) ? 'dormant' : 'unrecorded';
@@ -81,18 +71,15 @@ function causeCounts(lostRows, forgetRows, dormant) {
   for (const r of lostRows) counts[vanishedCause(r, forgetRows, dormant)]++;
   return counts;
 }
-// Every label records its lost S and C carriers; dedupDeletions alone misses a delete whose survivor was never snapshotted.
 function carriersLost(sRows, cRows, finalIds, forgetRows, dormant) {
   const lost = (list) => causeCounts(list.filter((r) => !finalIds.has(r.id)), forgetRows, dormant);
   return { old: lost(sRows), new: lost(cRows) };
 }
 const addCauses = (list) => list.reduce((acc, c) => { for (const [k, v] of Object.entries(c ?? {})) acc[k] = (acc[k] ?? 0) + v; return acc; }, {});
-// R16: recorded in every arm so an n/s label can be told apart from a question that never reached a stored clause.
 function computeReach(blocks, sIds, cIds) {
   return blocks.some((b) => sIds.has(b.id)) && blocks.some((b) => cIds.has(b.id));
 }
 
-// Follows superseded_by from startRow; true once a hop lands on a row that satisfies ok.
 function chainReaches(startRow, rows, ok) {
   const seen = new Set();
   let cur = startRow;
@@ -122,7 +109,6 @@ function contextShows(row, contextText) {
   return new RegExp('(?:\\): |\\] |\\uFE0F )' + esc(row.content) + '\\*\\*').test(contextText);
 }
 
-// Union label by default; turning surfaces off (e.g. {context:false, auto:false}) gives a per-surface label.
 function labelChange(rows, finalIds, statements, contextText, rankedIds, blocks, surfaces = {}, ctx = {}) {
   const { arm = 'capture', captureOutcomes = [], forgetRows = [], dormant = new Map(), autoText = '' } = ctx;
   const K = statements.length;
@@ -157,7 +143,6 @@ function labelChange(rows, finalIds, statements, contextText, rankedIds, blocks,
   const sShownRec = presentS.some(showsRec), cShownRec = presentC.some(showsRec);
   const sShownAuto = presentS.some(showsAuto), cShownAuto = presentC.some(showsAuto);
   const sShownAny = sShownCtx || sShownRec || sShownAuto, cShownAny = cShownCtx || cShownRec || cShownAuto;
-  // Only superseded_by hides a row (src/api/index.ts:2591, 863); a stale or tagged S still shows, and this counts it.
   const retiredS = presentS.filter(isRetired);
   const shown = { sRetired: retiredS.length, sRetiredShown: retiredS.filter((r) => showsCtx(r) || showsRec(r) || showsAuto(r)).length };
 
@@ -165,7 +150,6 @@ function labelChange(rows, finalIds, statements, contextText, rankedIds, blocks,
     const reasonOk = reasonTest(blocks, presentS.map((r) => r.id), presentC.map((r) => r.id), sMarker, cMarker);
     const linked = retiredS.map((r) => isLinked(r, rows, finalIds, blocks, presentC.map((x) => x.id), cMarker, cKey));
     const unlinkedRetired = linked.filter((v) => !v).length;
-    // A link whose chain ends at a vanished row: the retirement named a successor that sleep later removed.
     const danglingLinks = retiredS.filter((r) => r.superseded_by && !chainReaches(r, rows, (n) => finalIds.has(n.id))).length;
     const pass = reasonOk && unlinkedRetired === 0;
     return { label: pass ? 'd' : 'd0', detail: { reasonOk, unlinkedRetired, danglingLinks, ...shown } };
@@ -190,7 +174,6 @@ function controlValues(statements) {
   });
   return map;
 }
-// pass needs every statement stored (a restatement skipped as a duplicate of its twin counts); a seen failure fails regardless.
 function labelControl(statements, rows, finalIds, conflictRows, ctx = {}) {
   const { arm = 'capture', captureOutcomes = [] } = ctx;
   const values = controlValues(statements);
@@ -202,7 +185,6 @@ function labelControl(statements, rows, finalIds, conflictRows, ctx = {}) {
   for (const [key, pairs] of values) {
     const present = [...rows.values()].filter((r) => r.values.has(key) && finalIds.has(r.id));
     present.forEach((r) => carrierIds.add(r.id));
-    // A restatement retired in favour of its own newer copy keeps the value active, so that alone is no failure.
     const activeSameValue = (n) => finalIds.has(n.id) && n.values.has(key) && !isRetired(n);
     if (present.some((r) => isRetired(r) && !chainReaches(r, rows, activeSameValue))) failRetired = true;
     if (capturedAny(pairs, rows) && !present.length) failLost = true;
@@ -212,7 +194,6 @@ function labelControl(statements, rows, finalIds, conflictRows, ctx = {}) {
   return { label, evaluable, failRetired, failLost, falseConflictRows };
 }
 
-// R15: a filler row the run ever wrote must survive untouched; retired or vanished both count against PASS.
 function fillerCounts(rows, finalIds, fillerNormSet, forgetRows = [], dormant = new Map()) {
   let fillerRetired = 0, fillerActive = 0;
   const fillerLost = emptyCauses();
@@ -229,7 +210,6 @@ function changeDiagnostics(rows, finalIds, sKey, cKey, conflictRows, forgetRows)
   const sIds = new Set([...rows.values()].filter((r) => r.values.has(sKey)).map((r) => r.id));
   const cIds = new Set([...rows.values()].filter((r) => r.values.has(cKey)).map((r) => r.id));
   const conflictSC = conflictRows.filter((c) => (sIds.has(c.memory_a_id) && cIds.has(c.memory_b_id)) || (sIds.has(c.memory_b_id) && cIds.has(c.memory_a_id))).length;
-  // A derived row carries the values of the members whose text it quotes, so these say which text a merge kept.
   const derived = [...rows.values()].filter((r) => finalIds.has(r.id) && r.db === 'local' && r.content.startsWith('[Consolidated'));
   const derivedS = derived.filter((r) => r.values.has(sKey) && !r.values.has(cKey)).length;
   const derivedC = derived.filter((r) => r.values.has(cKey) && !r.values.has(sKey)).length;
@@ -249,8 +229,6 @@ function changeDiagnostics(rows, finalIds, sKey, cKey, conflictRows, forgetRows)
   }
   return { conflictSC, derivedS, derivedC, derivedBoth, echo, dedupDeletions };
 }
-
-// --- verdict ---
 
 function computeVerdict(results, runArgs) {
   if (runArgs.only || (runArgs.arms && !ARMS.every((a) => runArgs.arms.includes(a)))) return { status: 'PARTIAL', reasons: [] };

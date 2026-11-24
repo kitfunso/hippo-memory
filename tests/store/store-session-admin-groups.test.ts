@@ -1,4 +1,3 @@
-// The Sessions, Cards, Goals, Conflicts, Dormant and Reports groups answer alike as sqliteX (sync) and served (async), on a real store.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS, PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
@@ -69,7 +68,6 @@ describe('cards group', () => {
     const card = await sync.create(T, { title: 'wire the port' });
     expect((await served.detail(T, card.id))?.card.title).toBe('wire the port');
     const claimed = await served.claim(T, card.id, 'claude');
-    // The first row in a fresh store's AUTOINCREMENT card_runs table.
     expect(claimed?.runId).toBe(1);
     await served.comment(T, card.id, 'me', 'looks good');
     const detail = await served.detail(T, card.id);

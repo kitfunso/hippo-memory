@@ -1,6 +1,3 @@
-// Sleep's retired-text check asks the store which held texts each tenant rejected once per tenant per page, so a
-// store of many merged rows costs the same few reads as one of a few, and a tenant's rejection still binds only it.
-// A dry run asks too, so it names the rows a real sleep retires.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cpSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -39,18 +36,14 @@ const texts = (i: number): string[] => [
 
 interface Seeded {
   readonly root: string;
-  /** The ids of acme's merged rows, sorted. */
   readonly acmeMerged: string[];
 }
 
 interface SleepAsks extends Seeded {
-  /** The tenant of each batch tombstone read, sorted. */
   readonly asks: string[];
-  /** The ids of the rows the sleep retired a text from, sorted. */
   readonly retired: string[];
 }
 
-// Semantic sources, so the merge pass clusters none of them; every tenant holds the same texts.
 function seeded(perTenant: number): Seeded {
   const root = makeRoot('retire-held-reads');
   const at = { baseHalfLifeDays: 30, layer: Layer.Semantic };
@@ -65,7 +58,6 @@ function seeded(perTenant: number): Seeded {
   const acmeMerged = rows.filter((r) => r.tenantId === 'acme' && r.source === 'consolidation').map((r) => r.id);
   const db = openHippoDb(root);
   try {
-    // acme alone rejects each row's middle text; default and globex hold the same text and keep it.
     for (let i = 0; i < perTenant; i++) {
       const text = texts(i)[1];
       insertRejectedValue(db, {
@@ -121,7 +113,6 @@ describe("sleep's retired-text check", () => {
   });
 });
 
-// The same store twice, one to preview and one to sleep, so each run starts from the same rows.
 function copyOf(root: string): string {
   const copy = makeRoot('retire-held-copy');
   cpSync(root, copy, { recursive: true });
@@ -146,7 +137,6 @@ describe("a dry run's retired-text check", () => {
     expect(named(actual)).toEqual([[acmeMerged[0], true]]);
     expect(named(preview)).toEqual(named(actual));
     expect(rowIds(root).sort()).toEqual(before.sort());
-    // A successor is a new row with a new id, so a preview's names no row.
     expect(rowIds(copy)).toContain(retirements(actual)[0].successorId);
     expect(rowIds(root)).not.toContain(retirements(preview)[0].successorId);
   });
@@ -181,10 +171,7 @@ describe("a dry run's retired-text check", () => {
     const preview = await sleepOn(sqliteStore(root), root, true);
     const actual = await sleepOn(sqliteStore(copy), copy);
 
-    // A real sleep swaps in the rollup's successor, which frees the rejected text's source to merge with its look-alike;
-    // a dry run keeps the old rollup, so its merge count can fall short of the real one.
     expect(retirements(actual).map((r) => r.id)).toEqual([rollup.id]);
-    // Pins the known shortfall: if the dry run ever swaps the successor, update both numbers.
     expect([preview.merged, actual.merged]).toEqual([0, 2]);
   });
 });

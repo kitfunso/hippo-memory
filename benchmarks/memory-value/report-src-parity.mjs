@@ -1,64 +1,4 @@
 #!/usr/bin/env node
-/**
- * G1 gate adapter — LC2-E3 (docs/evals/2026-08-10-lc2-e3-wiring-prereg.md).
- *
- * Proves the COMPILED src scorer (dist/consolidate/memory-value.js, built from
- * src/consolidate/memory-value.ts) reproduces the registered E2 held-out weighted
- * retention through the harness's OWN evaluation (evaluate.mjs), over the
- * real fit-time scratch stores — NOT a re-derivation from features.jsonl.
- *
- * Eval-only. Read-only against the scratch stores. Never commits. Never
- * calls rescueSet (production-only rescue semantics) — this file only
- * exercises scoreEntries, the plain scoring function.
- *
- * ---------------------------------------------------------------------
- * Carrier-dim technique (why this never reimplements evaluate.mjs's
- * selection/tie-break/retention math):
- *
- * evaluate.mjs's evaluateStore() owns the ONLY sort/slice/tie-break/
- * retention code this harness trusts (buildScorers + the (score DESC,
- * sessionIndex ASC, turnIdx ASC, memory_id ASC) comparator + the keepN
- * slice + retention = keptGold/goldCount). This file must reuse that code
- * verbatim, not copy it — but evaluateStore always computes its OWN score
- * from raw feature values; it has no "take these precomputed scores" entry
- * point.
- *
- * Fix: feed the dist-computed score (scoreEntries's output — the src path
- * under test) into evaluateStore as the RAW value of one CONFIG.FEATURES
- * dim (age_days, arbitrary choice), with that dim's weight = 1 and every
- * other dim held at a literal constant (0) across the store so it
- * normalizes to 0 and contributes 0 regardless of weight. evaluateStore's
- * min-max normalization, norm(v) = (v-min)/(max-min), is a strictly
- * increasing affine function of v when max>min: it can never change the
- * DESC rank order of the carrier dim, and two equal raw scores map to the
- * exact same normalized value (same float in, same float out) — so both
- * the top-N cut and every tie are byte-identical to sorting on the raw
- * dist score directly. When max===min (every entry scored identically),
- * evaluateStore's own dead-feature rule (normalize to 0 for everyone)
- * still leaves every entry tied at 0 — the same "everybody ties" outcome
- * raw-score equality would also produce. Either way, evaluateStore's real
- * sort/slice/tie-break/retention code runs unmodified on a value that
- * ranks identically to the dist score. See the prereg's G1 "Dim
- * equivalence" note for the sibling argument (8-dim src scorer == 30-dim
- * harness scorer "by construction").
- * ---------------------------------------------------------------------
- *
- * Guards (read-only, no network):
- *   - scratch root missing, or a heldout question's store dir absent -> exit 2
- *   - CONFIG.PRIMARY_BUDGET != this gate's 0.30 -> exit 2 (protocol drift)
- *   - any other data-integrity failure (bad meta.json, missing provenance,
- *     malformed --slice) -> exit 2, never a raw unnamed crash
- *
- * Usage:
- *   node report-src-parity.mjs             full heldout gate (200 q); prints
- *                                           the verdict JSON, exit 0 on pass
- *                                           / 1 on fail
- *   node report-src-parity.mjs --slice 10  first 10 heldout ids only (registered
- *                                           order) — adapter smoke test, no
- *                                           pass/fail claim against the
- *                                           registered constants; always exit 0
- *                                           unless a guard fires
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -77,20 +17,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(HERE, '..', '..');
 const SPLIT_REGISTERED_PATH = path.join(HERE, 'split-registered.json');
 
-// dist/store.js and dist/consolidate/memory-value.js are loaded lazily via
-// loadDistScorer() below, AFTER the freshness guard passes — never a bare
-// static import (which would run before any guard could fire). Populated
-// once by main() before srcWeightedRetentionForQuestion is ever called.
 let loadAllEntries;
 let scoreEntries;
 
-const BUDGET = 0.3; // G1's keep budget (== CONFIG.PRIMARY_BUDGET, asserted in main())
-const EPS = 5e-5; // matches fit.mjs's own reproduction epsilon (half-ULP-at-4dp)
-const REGISTERED_WEIGHTED = 0.48973684210526314; // fit-report-registered.json heldout.weighted
-const REGISTERED_RECENCY = 0.42026315789473684; // fit-report-registered.json heldout.recency
-
-// Carrier dim for the technique documented above. Any CONFIG.FEATURES member
-// works; age_days is chosen for no reason beyond being first in FIT_DIMS.
+const BUDGET = 0.3;
+const EPS = 5e-5;
+const REGISTERED_WEIGHTED = 0.48973684210526314;
+const REGISTERED_RECENCY = 0.42026315789473684;
 const CARRIER_DIM = 'age_days';
 
 class GateGuardError extends Error {}
@@ -99,14 +32,6 @@ function guard(cond, message) {
   if (!cond) throw new GateGuardError(message);
 }
 
-// ---------------------------------------------------------------------------
-// dist/ freshness guard (round-2 code-review P2-3). This gate validates the
-// COMPILED src scorer (dist/consolidate/memory-value.js), not the TypeScript source
-// directly — importing a stale dist file after an un-built src edit would
-// silently validate the PREVIOUS scoring logic and report a pass that says
-// nothing about the code actually on disk. Checked, and the dist modules
-// dynamically imported, only after this guard passes.
-// ---------------------------------------------------------------------------
 const DIST_MEMORY_VALUE_PATH = path.join(REPO_ROOT, 'dist', 'domain/consolidate/memory-value.js');
 const DIST_STORE_PATH = path.join(REPO_ROOT, 'dist', 'entry', 'testing.js');
 const SRC_WATCH_PATHS = [
@@ -178,24 +103,21 @@ function assertQuestionStoreReady(id) {
 export function srcWeightedRetentionForQuestion(id) {
   assertQuestionStoreReady(id);
   const meta = readJson(metaPathFor(id));
-  // Non-empty-string check without `typeof`: primitive strings box to
-  // String on property access, so this holds for real string values and
-  // short-circuits safely (undefined) for null/undefined/other types.
   guard(meta.tEval?.constructor === String && meta.tEval.length > 0, `question ${id} meta.json has no tEval`);
-  const evalNow = new Date(meta.tEval); // per-question causal clock clamp — see ingest.mjs header; NEVER wall-clock now
+  const evalNow = new Date(meta.tEval);
 
   const gold = readJson(goldPathFor(id));
   const goldById = new Map(gold.memories.map((m) => [m.id, m.isGold]));
   const provenanceById = new Map(gold.memories.map((m) => [m.id, { sessionIndex: m.sessionIndex, turnIdx: m.turnIdx }]));
 
-  const entries = loadAllEntries(hippoRootFor(id)); // same loader extract.mjs uses for feature extraction
-  const scores = scoreEntries(entries, evalNow); // dist src path under test — the thing G1 is proving
+  const entries = loadAllEntries(hippoRootFor(id));
+  const scores = scoreEntries(entries, evalNow);
 
   const rows = entries.map((e) => {
     const prov = provenanceById.get(e.id);
     guard(prov !== undefined, `question ${id}: no gold.json provenance for memory ${e.id}`);
     const features = {};
-    for (const f of CONFIG.FEATURES) features[f] = 0; // constant across the store -> normalizes to 0, weight-inert
+    for (const f of CONFIG.FEATURES) features[f] = 0;
     features[CARRIER_DIM] = scores.get(e.id);
     return {
       memory_id: e.id,
@@ -206,7 +128,7 @@ export function srcWeightedRetentionForQuestion(id) {
     };
   });
 
-  const result = evaluateStore(rows, [BUDGET], { [CARRIER_DIM]: 1 }); // real, unmodified selection/tie-break/retention
+  const result = evaluateStore(rows, [BUDGET], { [CARRIER_DIM]: 1 });
   return result.perScorer.weighted[BUDGET].retention;
 }
 
@@ -249,7 +171,7 @@ async function main() {
     `CONFIG.PRIMARY_BUDGET (${CONFIG.PRIMARY_BUDGET}) no longer matches this gate's hardcoded budget (${BUDGET}) — protocol drift`,
   );
 
-  await loadDistScorer(); // freshness guard + dynamic import (P2-3) — must precede any srcWeightedRetentionForQuestion call
+  await loadDistScorer();
 
   const { sliceN } = parseArgs(process.argv.slice(2));
   const heldoutIds = loadHeldoutIds();
@@ -267,7 +189,7 @@ async function main() {
   const recencyDelta = isFull && recency !== null ? recency - REGISTERED_RECENCY : null;
   const pass = isFull
     ? delta !== null && Math.abs(delta) < EPS && recencyDelta !== null && Math.abs(recencyDelta) < EPS
-    : null; // slice runs never claim pass/fail against the registered constants (different sample size)
+    : null;
 
   const verdict = {
     mode: isFull ? 'full' : `slice(${ids.length})`,

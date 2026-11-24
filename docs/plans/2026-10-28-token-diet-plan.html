@@ -19,7 +19,6 @@
 <main>
 <doc-plan>
 
-<!-- ═════ 1 ═════ -->
 <doc-claim>
   <p>A reader sees one line about another session's state, not its text.</p>
   <doc-mock frame="terminal" title="prompt hook · additionalContext" w="470" caption="In Z0 the full handoff was 2,407 of the 3,708 characters the hook sent."><template><span class="g">## Active Task Snapshot</span>
@@ -157,7 +156,6 @@ function snapshotPointerText(s: TaskSnapshot): string {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 2 ═════ -->
 <doc-claim>
   <p>Claude Code and Codex agents call <code>hippo context</code> only when no hippo block appeared this session.</p>
   <doc-code diff file="src/hooks/hook-blocks.ts" start="68" lang="md" wrap caption="The Codex block (line 92) gets the same first paragraph; it keeps its other sections.">
@@ -238,7 +236,6 @@ CLI only                    0                   0
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 3 ═════ -->
 <doc-claim>
   <p>A <code>hippo</code> command prints no Node SQLite warning.</p>
   <doc-code diff file="bin/hippo.js" start="1" lang="js" wrap>
@@ -273,7 +270,6 @@ it('still prints a non-SQLite ExperimentalWarning raised after the filter') // -
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 4 ═════ -->
 <doc-claim>
   <p>A drive of the built hippo shows both pointers and the full text behind them.</p>
   <doc-mock frame="terminal" title="verify drive · temp HIPPO_HOME" w="470"><template><span class="dim">$</span> hippo snapshot save --task billing --session A …
@@ -293,7 +289,6 @@ it('still prints a non-SQLite ExperimentalWarning raised after the filter') // -
 <span class="g">0</span></template></doc-mock>
 </doc-claim>
 
-<!-- ═════ 5 ═════ -->
 <doc-claim>
   <p>The offline estimate puts the cost ratio at 1.02 to 1.06, under 1.10.</p>
   <doc-mock frame="terminal" title="z0-diet-estimate.mjs · set N, 281 A1/A2 pairs" w="470" caption="Cost = 4 input + 8 cache write + 0.2 cache read + 20 output, USD per MTok. No row counts an agent that follows a pointer; no Z0 task continues another session."><template>ratio of sums now 1.124 <span class="dim">(analyzer H4 1.119)</span>
@@ -311,7 +306,6 @@ chars/token 4    1.038
   </doc-ask>
 </doc-claim>
 
-<!-- ═════ shared ═════ -->
 <doc-claim aux="shared">
   <p>Shared: one option, two cost arguments and three glossary terms.</p>
   <doc-schema id="types" lang="ts" diff title="src/api/context-types.ts">
@@ -344,7 +338,6 @@ chars/token 4    1.038
   <doc-note tone="info"><strong>Implementers</strong> context-render.ts contextCost prices the mode. mcp/format.ts:127 takes the mode and prices the full piece whatever mode it gets. A changelog.d fragment names both new options. CONTEXT.md gets Task snapshot, Session handoff and Continuity pointer.</doc-note>
 </doc-claim>
 
-<!-- ═════ scope ═════ -->
 <doc-claim aux="scope">
   <p>Not changing: send-once, the schema, recall and the other blocks.</p>
   <ul>

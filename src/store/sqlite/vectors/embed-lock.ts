@@ -1,5 +1,3 @@
-// The embedding index's write lock beside hippo.db: a file lock every process on the folder honours,
-// freed by the operating system when its holder dies.
 import * as path from 'node:path';
 import { realpathOfNearest } from '../../../host/real-path.js';
 import { takeFileLock, type FileLock } from '../../../host/file-lock.js';

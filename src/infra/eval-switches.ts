@@ -1,6 +1,3 @@
-// The eval-only switches (HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS) and the HIPPO_FAKE_NOW clock as
-// the environment holds them, read when a root builds its ports; each strength switch becomes a
-// StrengthModel value, never a branch.
 import { type EvalSwitches, type RankAblation } from '../base/memory/eval-switches.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
 import type { Clock, StoreRules } from '../base/ports/infra.js';
@@ -47,7 +44,6 @@ export function isOutcomeFastAblated(): boolean {
   return envAblateOutcome() || envAblateOutcomeFast();
 }
 
-/** The strength switches as the environment holds them. */
 function strengthAblation(): StrengthAblation {
   return {
     decay: envAblateDecay(),
@@ -56,7 +52,6 @@ function strengthAblation(): StrengthAblation {
   };
 }
 
-/** The rank switches as the environment holds them. */
 function rankAblation(): RankAblation {
   return {
     recency: envAblateRecency(),

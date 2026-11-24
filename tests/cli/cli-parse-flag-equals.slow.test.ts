@@ -1,5 +1,3 @@
-/** `--flag=value` (glued) form: the first describe unit-tests parseArgs, the last runs the whole CLI entry in process. */
-
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -108,7 +106,6 @@ describe('parseArgs: --flag=value (glued form)', () => {
 });
 
 describe('per-verb flags: each row of COMMANDS declares what its verb reads', () => {
-  // The walker follows the flags object out of each row's handler and never looks at a declaration.
   let found: ReturnType<typeof collectVerbReads>;
   const rows: Record<string, { readonly flags: VerbFlags }> = COMMANDS;
   const namesOf = (flags: VerbFlags): string[] => [
@@ -117,7 +114,6 @@ describe('per-verb flags: each row of COMMANDS declares what its verb reads', ()
     ...(flags.numbers ?? []),
     ...(flags.lists ?? []),
   ];
-  // The walker builds a TypeScript program over all of src/, which is pure CPU and slowest on a shared runner.
   beforeAll(() => {
     found = collectVerbReads(resolve(__dirname, '..', '..'));
   });

@@ -1,5 +1,3 @@
-// A `--json` list printed a page at a time, so a verb that prints every row never holds them all.
-
 /** Prints what `console.log(JSON.stringify({ [key]: items }, null, 2))` prints for every item
  * `pages` yields, with one page in hand at a time. */
 export async function printJsonList<T>(

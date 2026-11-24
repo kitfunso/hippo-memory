@@ -1,12 +1,3 @@
-"""Real-data decay replay: run all five arms and print the numbers.
-
-Scope decision (recorded in the result doc): every query is scored against
-the GLOBAL store (~/.hippo/hippo.db, 2208 memories). Queries carry
-no reliable per-project store attribution (human_prompts.jsonl's `project`
-field is blank for all 1969 rows; the 82 hippo-recall queries were all
-issued from sessions rooted at the home directory, i.e. the global store
-anyway) so cross-store scoring would be a guess, not a measurement.
-"""
 import json
 import os
 import sys
@@ -21,7 +12,7 @@ from labels import load_bad_map
 from arms import apply_b0, apply_decay_arm, apply_ad, apply_placebo
 from metrics import bootstrap_ci
 
-SCRATCH = os.environ["DECAY_REPLAY_DIR"]  # holds stores/, the query files and judge_pairs.jsonl
+SCRATCH = os.environ["DECAY_REPLAY_DIR"]
 STORE_NAME = os.environ.get("DECAY_REPLAY_STORE", "global")
 STORE_DB = f"{SCRATCH}/stores/{STORE_NAME}.db"
 DAY = 86400.0
@@ -91,9 +82,9 @@ def main():
     print(f"bad memories in {STORE_NAME}: {len(bad_map)}")
 
     arms = ["B0", "D365", "D7", "AD", "PL"]
-    bad_hits = {a: {} for a in arms}     # arm -> bad_id -> [0/1,...]
-    fix_hits = {a: {} for a in arms}     # arm -> bad_id -> [0/1,...] (only where fix exists at t)
-    old_good_sum = {a: 0 for a in arms}  # sum of old-good slot counts across all queries
+    bad_hits = {a: {} for a in arms}
+    fix_hits = {a: {} for a in arms}
+    old_good_sum = {a: 0 for a in arms}
     n_scored_queries = 0
     n_inplay_queries = 0
     inplay_bad_ids = set()
@@ -123,7 +114,6 @@ def main():
         }
         top20_b0 = set(topn(b0_scores, 20))
 
-        # in-play bad memories for this query
         query_inplay = [
             bid for bid, rec in bad_map.items()
             if rec["bad_from"] <= t and bid in bm25 and bid in top20_b0
@@ -141,7 +131,6 @@ def main():
                 for arm in arms:
                     fix_hits[arm].setdefault(bid, []).append(1 if fix_id in top5[arm] else 0)
 
-        # old-good kept: unlabeled memories, age>=30d, in each arm's top5
         for arm in arms:
             n = 0
             for did in top5[arm]:
@@ -173,7 +162,6 @@ def main():
               f"fix@5={fix_pt:.3f} [{fix_lo:.3f},{fix_hi:.3f}]  "
               f"old-good kept={old_good_share:.1f}% of B0")
 
-    # census
     days_to_fix = []
     never_fixed = 0
     pinned_bad = 0

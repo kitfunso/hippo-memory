@@ -1,4 +1,3 @@
-// MCP over HTTP: POST /mcp and the GET /mcp/stream SSE keepalive.
 import {
   envBodyTimeoutMs,
   envMcpSseHeartbeatMs,
@@ -32,12 +31,6 @@ import { MINUTE_MS } from '../../base/util/time.js';
 
 const DEFAULT_SSE_HEARTBEAT_MS = MINUTE_MS;
 const DEFAULT_SSE_MAX_AGE_SEC = 3600;
-
-// MCP-over-HTTP/SSE: POST /mcp answers a JSON-RPC request synchronously; GET /mcp/stream is a
-// keepalive-only SSE stream (`: ping` every DEFAULT_SSE_HEARTBEAT_MS, 60 s) in v1. Both dispatch to
-// handleMcpRequest as stdio does. Auth matches /v1/* (Bearer via `requireAuth`); an SSE stream is
-// checked at open and again before every ping. With serve's oauth set, a POST /mcp 401 names the
-// protected-resource metadata; the stream's 401 stays bare.
 
 // Percent-encoded by the client, so any lowercase Unicode name fits a Latin-1 header.
 const HEADER_PIECE = /^[A-Za-z0-9\-_.!~*'()%]+$/;
@@ -87,9 +80,7 @@ function mcpContextFor(
   const mcpCtx: McpContext = {
     hippoRoot: opts.hippoRoot,
     tenantId: ctx.tenantId,
-    // McpContext.actor stays string; extract subject at the boundary.
     actor: ctx.actor.subject,
-    // The caller's real role: MCP tools must not run a member key as admin.
     role: ctx.actor.role,
     scopes: ctx.actor.scopes,
     viaAuthResolver: ctx.actor.viaAuthResolver,
@@ -116,8 +107,6 @@ export async function handleMcpPost(
   res: ServerResponse,
   opts: ResolvedServeOptions,
 ): Promise<void> {
-  // Same Context the /v1/* routes use, so tool calls inherit the bound hippoRoot and the auth-resolved tenantId/actor;
-  // else executeTool walks from cwd and reads HIPPO_TENANT, dropping a valid Bearer for tenant B to the env's tenant.
   const ctx = await withOAuthChallenge(req, res, opts.oauthChallenge, () =>
     buildContextWithAuth(req, opts),
   );
@@ -147,17 +136,14 @@ export async function handleMcpPost(
   sendJson(res, 200, mcpRes);
 }
 
-// Each open stream holds a socket and a timer, so one key gets a bounded number.
 const DEFAULT_MAX_STREAMS_PER_CLIENT = 8;
 
-/** The bucket a stream counts against: a hash of the bearer token, else the client IP. */
 function streamSlotKey(req: IncomingMessage): string {
   const auth = readAuthHeader(req);
   if (auth.kind === 'bearer') return `key:${blockHash(auth.token)}`;
   return `ip:${clientLimitKey(req)}`;
 }
 
-/** Takes a stream slot or throws 429; the slot is released once, when the response closes. */
 function acquireStreamSlot(
   req: IncomingMessage,
   res: ServerResponse,
@@ -188,7 +174,6 @@ export async function handleMcpStream(
   streamSlots: Map<string, number>,
 ): Promise<void> {
   await requireAuth(req, opts);
-  // An async resolver can outlive the client; 'close' has already fired, so no timer may start.
   if (req.destroyed || res.destroyed || req.socket.destroyed) return;
   acquireStreamSlot(req, res, streamSlots);
   res.writeHead(200, {
@@ -196,13 +181,8 @@ export async function handleMcpStream(
     'cache-control': 'no-cache',
     connection: 'keep-alive',
   });
-  // Initial ping so smoke tests can confirm the stream is live without waiting for the first
-  // keepalive interval.
   res.write(': ping\n\n');
 
-  // SSE hardening: the heartbeat re-validates the bearer (MCP_SSE_HEARTBEAT_MS, default 60000) and
-  // closes with 'auth_revoked' if the key was revoked or rotated; MCP_SSE_MAX_AGE_SEC (default
-  // 3600) ends it as 'max_age_exceeded'.
   keepStreamAlive(req, res, opts);
 }
 
@@ -229,8 +209,6 @@ function keepStreamAlive(
     beat.checking = true;
     checkHeartbeat(req, res, opts, beat);
   }, heartbeatMs);
-  // Don't keep the event loop alive just for this timer; the server's listener already does that,
-  // and tests want the process to exit cleanly.
   if (ping.unref instanceof Function) ping.unref();
   // res 'close' covers an early socket drop that req 'close' can miss.
   res.on('close', () => {
@@ -239,12 +217,10 @@ function keepStreamAlive(
   });
 }
 
-/** One stream's heartbeat state, shared by its timer and the auth check each tick starts. */
 interface StreamBeat {
   closed: boolean;
   checking: boolean;
   readonly closeWith: (reason: string) => void;
-  /** Stops the heartbeat timer. */
   readonly stop: () => void;
 }
 
@@ -283,20 +259,16 @@ function checkHeartbeat(
       if (!writePing(res)) beat.stop();
     })
     .catch((err) => {
-      // Without the reset `checking` stays true and the heartbeat never runs again.
       beat.checking = false;
       log.warn('heartbeat tick failed', errorFields(err));
     });
 }
 
-/** False when the client hung up, so the caller stops pinging a dead socket. */
 function writePing(res: ServerResponse): boolean {
   return writeChunk(res, ': ping\n\n');
 }
 
 function endStreamWithReason(res: ServerResponse, reason: string): void {
-  // A socket that refused the write is already logged; end() on it would only log the same failure
-  // again.
   if (writeChunk(res, `event: closed\ndata: ${JSON.stringify({ reason })}\n\n`)) endReply(res);
   else res.destroy();
 }

@@ -17,7 +17,6 @@ describe('isLoopbackAddress', () => {
   it.each(['127.0.0.1', '127.0.0.2', '::1', '::ffff:127.0.0.1', '::ffff:127.1.2.3'])('accepts %s', (addr) => {
     expect(isLoopbackAddress(addr)).toBe(true);
   });
-  // The expanded '0:0:0:0:0:0:0:1' stays rejected: the helper does not normalize IPv6.
   it.each([
     undefined,
     '',

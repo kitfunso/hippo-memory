@@ -1,9 +1,3 @@
-"""Hand-written BM25 over a single hippo store, stdlib only.
-
-Corpus statistics (N, avgdl, df) are computed "as of t" per query, not once
-globally, because the prereg requires the store to look the way it did at
-query time (memories created after t must not exist yet).
-"""
 import re
 from bisect import bisect_right
 
@@ -19,15 +13,12 @@ def tokenize(text: str) -> list[str]:
 
 
 class BM25Store:
-    """Indexes one store's memories for as-of-t BM25 scoring."""
-
     def __init__(self, docs: list[tuple[str, float, str]]):
-        # docs: (id, created_epoch_days, content)
         self.ids = [d[0] for d in docs]
         self.created = {d[0]: d[1] for d in docs}
         self.doc_len = {}
-        self.tf = {}  # doc_id -> {term: count}
-        postings = {}  # term -> list of (created, doc_id)
+        self.tf = {}
+        postings = {}
         for doc_id, created, content in docs:
             toks = tokenize(content)
             self.doc_len[doc_id] = len(toks)
@@ -37,7 +28,6 @@ class BM25Store:
             self.tf[doc_id] = counts
             for w in counts:
                 postings.setdefault(w, []).append((created, doc_id))
-        # sort each posting list by created so df-as-of-t is a bisect
         for w in postings:
             postings[w].sort(key=lambda x: x[0])
         self.postings = postings
@@ -45,11 +35,9 @@ class BM25Store:
         self.all_created_sorted = all_created
 
     def score(self, query_tokens: list[str], t: float):
-        """Return {doc_id: bm25_score} for docs created<=t sharing >=1 term."""
         n_t = bisect_right(self.all_created_sorted, t)
         if n_t == 0:
             return {}
-        # avgdl over docs created<=t
         total_len = 0
         count = 0
         for d in self.ids:

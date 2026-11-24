@@ -1,4 +1,3 @@
-// The G1 request log (prereg 158): a local proxy that records every request body a Claude Code session sends, then forwards it.
 import * as fs from 'node:fs';
 import * as http from 'node:http';
 import * as https from 'node:https';

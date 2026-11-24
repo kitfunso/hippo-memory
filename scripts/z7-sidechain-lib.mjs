@@ -1,4 +1,3 @@
-// Pure helpers for the Z7 sub-agent lesson eval (prereg docs/evals/2026-10-03-z7-sidechain-gap-prereg.md). No fs, no child_process.
 import crypto from 'node:crypto';
 import { mulberry32 } from './lib/prng.mjs';
 
@@ -17,8 +16,6 @@ const CUT_TEXT = '[middle of the work cut for length]';
 export const CUT_MARK = `\n${CUT_TEXT}\n`;
 const SENT = '\u0001';
 
-// --- primitives ---
-
 export const isStr = (v) => Object.prototype.toString.call(v) === '[object String]';
 const isObj = (v) => v !== null && v instanceof Object;
 const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -26,7 +23,6 @@ export const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex')
 
 export const rngFromString = (str) => mulberry32(parseInt(sha256(str).slice(0, 8), 16));
 
-// Fisher-Yates from the top; the prereg fixes the seed and the stream, so this is the one shuffle.
 export function shuffled(list, rng) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {
@@ -36,7 +32,6 @@ export function shuffled(list, rng) {
   return a;
 }
 
-// Visits each parsed object line and returns how many non-blank lines were not JSON objects.
 export function forEachEntry(text, visit) {
   let bad = 0, pos = 0, i = 0;
   while (pos <= text.length) {
@@ -66,8 +61,6 @@ export const collapse = (s) => s.replace(/\s+/g, ' ').trim();
 export const templateOf = (task) => collapse(task).slice(0, 120);
 export const itemId = (session, file) => `${session}_${file.replace(/^agent-/, '').replace(/\.jsonl$/, '')}`;
 
-// --- saves ---
-
 const REMEMBER = /\bhippo\s+remember\b/i;
 const MEMORY_FILES = new Set(['memory.md', 'claude.md', 'agents.md']);
 export function isMemoryPath(p) {
@@ -77,7 +70,6 @@ export function isMemoryPath(p) {
   return MEMORY_FILES.has(last) || parts.some((s) => s.toLowerCase() === 'memory');
 }
 
-// Text an explicit save carries: a `hippo remember` command, or what a Write or Edit put into a memory path.
 export function toolSaves(block) {
   if (block.type !== 'tool_use' || !isObj(block.input)) return [];
   const { name, input } = block;
@@ -90,7 +82,6 @@ export function toolSaves(block) {
 
 const SECTION_HEAD = /^[ \t>*#-]*(?:\d{1,2}\.\s*)?\**memories for hippo\b/im;
 const SECTION_NEXT = /\n[ \t]{0,3}(?:#{1,4}\s|\d{1,2}\.\s+[A-Z])/;
-// The "Memories for hippo" section of a compaction summary, '' when absent.
 export function memoriesSection(text) {
   const m = SECTION_HEAD.exec(text);
   if (!m) return '';
@@ -98,8 +89,6 @@ export function memoriesSection(text) {
   const next = SECTION_NEXT.exec(rest.slice(m[0].length));
   return (next ? rest.slice(0, m[0].length + next.index) : rest).trim();
 }
-
-// --- sub-agent files ---
 
 function startOfWork(st, e, isFork) {
   if (e.type !== 'user') return;
@@ -153,7 +142,6 @@ function subAssistant(st, e) {
   if (calls.length) st.run = [];
 }
 
-// One sub-agent file: task, work items, reports (a turn's last text-only run), own saves and counts.
 export function readSubAgent(text, meta) {
   const st = { started: false, task: null, items: [], run: [], reports: [], saves: [], errorsTotal: 0, errorItems: 0, assistantChars: 0, ordered: true, orderedConv: true };
   let lastTs = '', lastConv = '';
@@ -172,7 +160,6 @@ export function readSubAgent(text, meta) {
   return { ...st, bad };
 }
 
-// Sub-agent JSONL after the fork boilerplate entry; the input unchanged when there is none.
 export function stripForkPrefix(text) {
   let pos = 0;
   while (pos < text.length) {
@@ -214,8 +201,6 @@ export function renderB(items, max = LIMITS.B) {
   return { B: full.slice(0, head) + CUT_MARK + full.slice(tailStart), ranges: mapped, cutChars: full.length - head - tail };
 }
 
-// --- parent files ---
-
 function isHumanText(e, text) {
   const t = text.trimStart();
   if (!t || e.isMeta === true || e.promptSource === 'system') return false;
@@ -254,7 +239,6 @@ function parentUser(m, e, i, pending) {
   }
 }
 
-// Parent transcript: ordered parent side, assistant text, human-message positions, and the first arrival of each pending report.
 export function readParent(text, pending = []) {
   const m = { stream: [], texts: [], humans: [], agentCalls: new Map(), cwds: {}, lastTs: '' };
   m.bad = forEachEntry(text, (e, i) => {
@@ -269,7 +253,6 @@ export function readParent(text, pending = []) {
 
 export const reportPrefix = (report) => normText(report).slice(0, LIMITS.reachPrefix);
 
-// Parent assistant text after each arrival up to the next human message; 8,000 chars each, 16,000 in all.
 export function buildWindows(m, arrivals) {
   const windows = [];
   let used = 0, cut = 0;
@@ -284,7 +267,6 @@ export function buildWindows(m, arrivals) {
   return { windows, cut };
 }
 
-// The most frequent cwd cut to the folder under home, with -wt-* and -worktree* suffixes removed.
 export function workingProject(cwds, home) {
   const top = Object.entries(cwds).sort((a, b) => b[1] - a[1] || cmp(a[0], b[0]))[0]?.[0];
   if (!top) return '';
@@ -305,10 +287,7 @@ export function renderC(captureItems, windows, saves) {
   ].join('\n');
 }
 
-// Parent side for the recheck: session order, then the capture items and the sub-agent's own saves.
 export const parentSideSegments = (stream, captureItems, ownSaves, extra = []) => [...stream.map((s) => s.text), ...captureItems, ...ownSaves, ...extra];
-
-// --- draw ---
 
 export function drawSplit(items, seedString = SEED_STRING) {
   const rng = rngFromString(seedString);
@@ -335,8 +314,6 @@ export function drawSplit(items, seedString = SEED_STRING) {
   };
 }
 
-// --- recheck: chunks and decoys ---
-
 export function chunkSegments(segments, limit = LIMITS.chunk) {
   const chunks = [];
   let cur = '';
@@ -352,7 +329,6 @@ export function chunkSegments(segments, limit = LIMITS.chunk) {
   return chunks.length ? chunks : [''];
 }
 
-// Inserts the sentence as one line at a seeded line of one seeded chunk.
 export function plantDecoy(chunks, sentence, rng) {
   const k = Math.floor(rng() * chunks.length);
   const lines = chunks[k].split('\n');
@@ -360,7 +336,6 @@ export function plantDecoy(chunks, sentence, rng) {
   return { chunks: chunks.map((c, j) => (j === k ? lines.join('\n') : c)), chunkIdx: k };
 }
 
-// pool: [{id, session, project, lessons:[{kind,text}]}]; prefers another project, then another kind, then another session (flagged).
 export function pickDecoy(pool, subject, rng) {
   const kinds = new Set(subject.kinds);
   const otherProject = (p) => p.project !== subject.project;
@@ -374,7 +349,6 @@ export function pickDecoy(pool, subject, rng) {
   return null;
 }
 
-// Real lessons plus, when given, one decoy at a seeded position: the list the recheck numbers.
 export function recheckList(real, decoy, rng) {
   const list = real.map((l) => ({ ...l }));
   if (!decoy) return { list, decoyIdx: -1 };
@@ -382,8 +356,6 @@ export function recheckList(real, decoy, rng) {
   list.splice(decoyIdx, 0, { src: 'decoy', kind: decoy.kind, text: decoy.text });
   return { list, decoyIdx };
 }
-
-// --- judge replies ---
 
 export function parseJsonReply(stdout) {
   const t = (stdout ?? '').replace(/```(?:json)?/gi, '').trim();
@@ -420,8 +392,6 @@ export function parseRuleLabels(stdout, n) {
   return { ok: true, labels };
 }
 
-// --- evidence ---
-
 export const evidenceHaystack = (B) => normText(B.replaceAll('[report]', SENT).replaceAll('[error]', SENT).replaceAll(CUT_TEXT, SENT));
 
 export function evidenceOk(evidence, normA, normB) {
@@ -441,8 +411,6 @@ export function inReport(evidence, B, ranges) {
   return normText(only).includes(normText(evidence));
 }
 
-// --- statistics and verdict ---
-
 const quantile = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(q * sorted.length)))];
 export function median(xs) {
   if (!xs.length) return 0;
@@ -450,7 +418,6 @@ export function median(xs) {
   return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
 }
 
-// rows: [{cluster, hit}]; resamples whole clusters and takes hits over items.
 export function clusterBootstrap(rows, seed = 'z7-boot', resamples = 2000) {
   const by = new Map();
   for (const r of rows) {
@@ -494,13 +461,11 @@ export function verdict(ci, unionCi, valid) {
 const frac = (k, n) => (n ? k / n : null);
 const test = (v, f) => (v === null ? null : f(v));
 
-// A control call that failed to parse is no negative result: under 90% of the control items parsed by both judges fails G4.
 function controlG4(c) {
   if (c.parsed < Math.ceil(c.total * 0.9)) return false;
   return test(frac(c.hits, c.parsed), (r) => r <= 0.1);
 }
 
-// ctl: {model: {id: {ok, verified}}}; G4 counts only items where both judges parsed.
 export function controlFigures(ctl, ids) {
   const [m1, m2] = MODELS;
   const ok = (m, id) => ctl[m][id]?.ok === true;
@@ -512,7 +477,6 @@ export function controlFigures(ctl, ids) {
   };
 }
 
-// s holds [hits, total] pairs per gate; a gate with nothing to measure is null (untested), never a silent pass.
 export function gateResults(s) {
   const parse = ([k, n]) => test(frac(k, n), (r) => r >= 0.95);
   const cp = s.control?.parse ?? { sonnet: [0, 0], opus: [0, 0] };
@@ -537,7 +501,6 @@ export function agentClass(agentType) {
   return /review/i.test(agentType ?? '') ? 'reviewer' : 'other';
 }
 
-// items: [{id, session, agentType, cut}]; judge: {model: {id: {ok, returned, failed, verified}}}; recheck: {id: {keptKeys, callsTotal, callsOk, decoy, decoyKept}}.
 export function figures(items, judge, recheck) {
   const [m1, m2] = MODELS;
   const keptKeys = (id) => recheck[id]?.keptKeys ?? [];
@@ -584,7 +547,6 @@ export function figures(items, judge, recheck) {
   };
 }
 
-// A BUILD stands only if at least 75% of the audited sample is confirmed; every other verdict is unchanged.
 export function finalizeAudit(preliminary, n, confirmed) {
   const stands = n > 0 && confirmed * 4 >= n * 3;
   return { sampleN: n, confirmed, share: n ? confirmed / n : null, preliminary, final: preliminary === 'BUILD' && !stands ? 'INCONCLUSIVE' : preliminary };
@@ -602,7 +564,6 @@ export function buildDraw(eligible) {
   };
 }
 
-// Returns why a stored draw.json cannot stand against the recomputed draw and the prereg's list pin, or null.
 export function drawMismatch(fresh, stored, pinSha) {
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   if (!same(fresh.dev, stored.dev)) return 'the dev list differs from the recomputed draw';
@@ -620,7 +581,6 @@ export function drawMismatch(fresh, stored, pinSha) {
 export const PIN_DIST = ['capture.js', 'base/util/same-text.js', 'base/util/secret-detect.js'];
 export const PIN_PROMPTS = ['judge-prompt.txt', 'judge-system.txt', 'recheck-prompt.txt', 'rule-arm-prompt.txt'];
 
-// Reads the prereg's "## Pins" section: hashes keyed by file name, the two list pins and the claude version.
 export function parsePins(md) {
   const at = md.indexOf('\n## Pins');
   const rest = at < 0 ? '' : md.slice(at + 1);
@@ -635,10 +595,8 @@ export function parsePins(md) {
   };
 }
 
-// The leading version token must stand alone, so 2.1.2880 and 2.1.288-dev are not 2.1.288.
 export const claudeVersionToken = (out) => /^\s*(\d+(?:\.\d+)*)(?=\s|$)/.exec(String(out))?.[1] ?? null;
 
-// Checks only the keys given in actual; a pin that is missing counts as a mismatch. Returns the mismatched names.
 export function checkPins(pins, actual, promptNames = PIN_PROMPTS) {
   const bad = [];
   for (const [group, names] of [['dist', PIN_DIST], ['prompts', promptNames]]) {

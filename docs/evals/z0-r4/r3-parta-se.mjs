@@ -1,5 +1,3 @@
-// Read-only: round 3 sets R+N, seeds 1-3. Part (a)'s v cells and part (b)'s resolve cells; the seed count each rule gives.
-// Usage: node docs/evals/z0-r4/r3-parta-se.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { api, prices, load, scoredNoDrop } = await openRound3(['scripts/token-eval/z0-size-sim.mjs', 'dist/eval/repository-t.js']);
@@ -8,7 +6,6 @@ const { pooledComponents } = await load('dist/eval/repository-t.js');
 const s = scoredNoDrop().filter((r) => r.seed <= 3);
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
 const CAP = 9;
-// Item 10's fixed m for part (a).
 const M_A = Math.log(1 / 0.9);
 for (const [t, c] of [['A2', 'A1'], ['A0', 'A1'], ['A4', 'A1']]) {
   const u = api.taskUnits(s, t, c, prices, api.inSets('R', 'N'));
@@ -32,7 +29,6 @@ for (const [t, c] of [['A2', 'A1'], ['A0', 'A1'], ['A4', 'A1']]) {
   const se = (n) => Math.sqrt(p.repos.reduce((a, r) => a + fam / r.k + seq / n + noi / (r.k * n), 0) / p.repos.length ** 2);
   out.aSE = [3, 4, 9, 50].map((n) => [n, +se(n).toFixed(4)]); out.bar = +(M_A / 3.08).toFixed(4); out.G = p.repos.length; out.meanK = +(p.repos.reduce((a, r) => a + r.k, 0) / p.repos.length).toFixed(2);
   console.log(JSON.stringify(out));
-  // Part (a)'s miss branch (prereg item 10): the fewest seeds from 3 to the cap whose predicted SE is within 1.1 times the cap's.
   const [limit, hit] = [1.1 * se(CAP), out.a.seeds[0][1]];
   const pick = Array.from({ length: CAP - 2 }, (_, i) => i + 3).find((n) => se(n) <= limit);
   console.log(hit === null

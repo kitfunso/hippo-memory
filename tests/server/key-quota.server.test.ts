@@ -1,4 +1,3 @@
-// serve's keyQuota hook is asked once per admitted request, answers a refusal with 429, and fails open on any fault.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -19,14 +18,12 @@ const ENV_KEYS = [
 ] as const;
 
 const WIDE = { ratePerSec: 1000, burst: 1000 };
-// A slow refill, so a test that takes a while still sees the bucket it drained.
 const SLOW = { ratePerSec: 0.1, burst: 2 };
 const JSON_BODY = { 'content-type': 'application/json' };
 const TOOLS_LIST = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
 const REFUSAL = { retryAfterSec: 7, message: 'quota test' };
 const FAULT_LINE = /^\[hippo\] error: key quota: /;
 const JSON_FAULT_LINE = /"msg":"key quota: /;
-// Built at run time, so unicorn/no-thenable stays quiet about an object that must be a plain thenable.
 const THEN = ['th', 'en'].join('');
 
 interface Thenable {
@@ -79,7 +76,6 @@ interface Reply {
 async function send(path: string, init: RequestInit = {}): Promise<Reply> {
   const res = await fetch(`${url}${path}`, init);
   const contentType = res.headers.get('content-type');
-  // An open stream never ends, so its text is never awaited: cancel it and fail on the status.
   const isStream = contentType?.includes('text/event-stream') === true;
   if (isStream) await res.body?.cancel();
   return {
@@ -92,7 +88,6 @@ async function send(path: string, init: RequestInit = {}): Promise<Reply> {
 }
 
 const bearer = (token: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${token}`, ...extra });
-/** The local key the running server wrote, as the CLI on this machine sends it. */
 const localKey = (): Record<string, string> => bearer(readLocalKey(root)!);
 const recall = (headers: Record<string, string>): Promise<Reply> => send('/v1/memories?q=x', { headers });
 const mcpList = (token: string): Promise<Reply> =>
@@ -112,7 +107,6 @@ interface Spy {
   calls: KeyQuotaCall[];
 }
 
-/** A hook that records each call and answers with what `answer` returns, or throws what it throws. */
 function spy(answer: () => JsonValue | Promise<never> | undefined): Spy {
   const calls: KeyQuotaCall[] = [];
   const quota = (call: KeyQuotaCall): KeyQuotaRefusal | null => {
@@ -123,7 +117,6 @@ function spy(answer: () => JsonValue | Promise<never> | undefined): Spy {
   return { quota, calls };
 }
 
-/** Each test sets its own hour: the fault line is throttled for the whole process, so two tests at one clock would share it. */
 function setClock(iso: string): void {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(iso));

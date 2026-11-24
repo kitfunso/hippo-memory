@@ -1,4 +1,3 @@
-// scripts/checks/check-open-core.mjs: commercial-only additions under the scoped dirs fail, core ones pass.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';

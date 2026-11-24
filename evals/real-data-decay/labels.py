@@ -1,9 +1,3 @@
-"""Bad-memory labels: CORRECTS judge labels + superseded_by chains.
-
-One bad record per older memory: bad_from = earliest correction's newer.created,
-fix_id = that correction's newer id. A memory with several corrections only
-uses the earliest one (it went bad once; later corrections don't un-bad it).
-"""
 import json
 from datetime import datetime, timezone
 

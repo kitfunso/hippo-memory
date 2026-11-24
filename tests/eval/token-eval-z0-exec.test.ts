@@ -1,4 +1,3 @@
-// Z0 runner git helper: a loose object held by antivirus is retried and counted; any other failure throws at once.
 import { describe, it, expect } from 'vitest';
 import { retryObjectLock, objectLockRetries } from '../../scripts/token-eval/exec.mjs';
 

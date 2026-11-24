@@ -1,6 +1,5 @@
 // A lock the operating system holds for a live process: BEGIN IMMEDIATE on a small lock database
 // takes the RESERVED lock (LockFileEx on win32, fcntl on POSIX), which one connection holds and which dies with it.
-// Only an old file is removed, so a file created later differs in ctime and (dev, ino, ctimeNs) names a generation.
 import { createRequire } from 'node:module';
 import { statSync, unlinkSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -30,10 +29,7 @@ export interface FileIdentity {
 export type StatFn = (path: string) => FileIdentity | undefined;
 
 export interface FileLock {
-  /** Frees the lock; the file stays for the next take. Never throws, idempotent. */
   release(): void;
-  /** Frees the lock and removes the file if the held generation's ctime is at or before `cutoffMs`; only
-   * sleep's prune calls it. Never throws. */
   remove(cutoffMs: number): void;
 }
 
@@ -80,7 +76,6 @@ function closeLogged(db: LockConnection, path: string): void {
   }
 }
 
-/** The open error, with the folder's errno named when the folder itself cannot be read. */
 function unusable<E>(path: string, err: E): LockTake {
   try {
     statSync(dirname(path));
@@ -139,7 +134,6 @@ function createViaSqlite(path: string): void {
   new DatabaseSync(path).close();
 }
 
-/** True when the path no longer names `before`; a stat that fails counts as unchanged. */
 function pathMoved(path: string, before: FileIdentity | undefined, stat: StatFn): boolean {
   if (before === undefined) return false;
   try {
@@ -162,7 +156,6 @@ function onePass(path: string, stat: StatFn): Pass {
     }
     opening = true;
     db = new DatabaseSync(path);
-    // A take writes no file but the lock database, so no two generations of the file share a journal.
     db.exec('PRAGMA journal_mode=MEMORY');
     // IMMEDIATE needs only RESERVED, which one connection holds; EXCLUSIVE would also wait on a SHARED lock.
     db.exec('BEGIN IMMEDIATE');
@@ -174,9 +167,7 @@ function onePass(path: string, stat: StatFn): Pass {
   } catch (err) {
     if (db !== undefined) closeLogged(db, path);
     if (primaryCode(err) === SQLITE_BUSY) return { kind: 'held' };
-    // Before the open there is no file to blame: the stat or the create failed, so try another pass.
     if (!opening) return { kind: 'again', created: true, failure: err };
-    // After it, a path that moved failed this open or lock.
     return pathMoved(path, before, stat) ? AGAIN : unusable(path, err);
   }
 }
@@ -194,6 +185,5 @@ export function takeFileLock(path: string, stat: StatFn = statIdentity): LockTak
     if (result.created) creates++;
     else passes++;
   }
-  // Every pass saw the file removed or replaced, or the stat or create kept failing.
   return failure === undefined ? { kind: 'held' } : unusable(path, failure);
 }

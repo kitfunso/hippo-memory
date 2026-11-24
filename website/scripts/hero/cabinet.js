@@ -1,4 +1,3 @@
-// The home hero scene, rendered at build time by render-hero.mjs into the poster and the video. Procedural, no assets.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -8,7 +7,6 @@ import { CYCLE, STILL_T, dayAt } from '../../src/scripts/hero-timeline.js';
 
 const RULE = ['we use pnpm, never npm', 'the lockfile is pnpm-lock.yaml', 'mem_7f6b06db'];
 
-// Async so setup yields to the page between steps and shaders compile off the main path.
 export async function mount(canvas, opts = {}) {
   const still = !!opts.still;
   const breathe = () => new Promise((r) => setTimeout(r, 0));
@@ -65,7 +63,7 @@ export async function mount(canvas, opts = {}) {
   const labels = [['A to F', 'G to L'], ['M to R', 'S to Z'], ['rules', 'errors']];
   const drawers = [];
   const recessMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 1 });
-  const HOST = 4; // the one drawer that opens; the closed ones get no tray, since nothing inside them shows
+  const HOST = 4;
   for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) {
     const g = new THREE.Group();
     const x = -W / 2 + inset + fw / 2 + c * (fw + gap);
@@ -98,14 +96,14 @@ export async function mount(canvas, opts = {}) {
   } }
 
   const heroCard = new THREE.Group(); scene.add(heroCard);
-  const cardMat = new THREE.MeshBasicMaterial({ color: 0xf7f2e8, transparent: true, toneMapped: false }); // unlit so the ink stays legible
+  const cardMat = new THREE.MeshBasicMaterial({ color: 0xf7f2e8, transparent: true, toneMapped: false });
   const back = new THREE.MeshStandardMaterial({ color: 0xf6f0e2, roughness: 0.9, transparent: true });
   cardMat.map = cardTexture(...RULE, opts.mono);
   const cardMesh = shadowy(new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.22, 0.014), [back, back, back, back, cardMat, back]));
   heroCard.add(cardMesh);
 
   const host = drawers[HOST];
-  bake(cab, host.g); // one draw call per material: the static cabinet, then the drawer that moves
+  bake(cab, host.g);
   bake(host.g);
   await breathe();
   const restPos = new THREE.Vector3(), upPos = new THREE.Vector3(-0.75, 3.9, 3.1);
@@ -121,7 +119,6 @@ export async function mount(canvas, opts = {}) {
 
   function pose(t) {
     const k = t % CYCLE;
-    // open: shut 3.2 to 5.4, open again by 6.5; lift: down 1.4 to 3.0, up 6.3 to 7.9; fade in 0 to 0.7, out 11.3 to 12
     const open = 1 - ease((k - 3.0) / 1.0) + ease((k - 5.4) / 1.1);
     host.g.position.z = D / 2 + 0.005 + clamp(open) * 1.25;
     const lift = 1 - easeIO((k - 1.4) / 1.6) + easeIO((k - 6.3) / 1.6);
@@ -130,7 +127,7 @@ export async function mount(canvas, opts = {}) {
     restPos.set(0, -host.fh / 2 + 0.12 + 0.46, -0.08).applyMatrix4(host.g.matrixWorld);
     heroCard.position.lerpVectors(restPos, upPos, clamp(lift));
     heroCard.quaternion.slerpQuaternions(restQ, upQ, clamp(lift));
-    heroCard.scale.setScalar(0.62 + 0.56 * clamp(lift)); // fits the drawer at rest, reads at full size when up
+    heroCard.scale.setScalar(0.62 + 0.56 * clamp(lift));
     heroCard.position.y += Math.sin(t * 1.3) * 0.02 * clamp(lift);
     cardMat.opacity = back.opacity = alpha;
     cardMesh.castShadow = alpha > 0.95;
@@ -165,7 +162,6 @@ export async function mount(canvas, opts = {}) {
   };
 }
 
-// Merges every mesh under root that shares a material into one mesh in root's space; meshes under skip stay as they are.
 function bake(root, skip) {
   root.updateMatrixWorld(true);
   const inv = root.matrixWorld.clone().invert();

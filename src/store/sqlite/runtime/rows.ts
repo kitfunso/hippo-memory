@@ -19,14 +19,10 @@ import {
 import type { SessionEvent, TaskSnapshot } from '../../../base/ports/store/sessions.js';
 import type { MemoryConflict } from '../../../base/ports/store/conflicts.js';
 
-// The memories columns' defaults, once: hippo.db applies them reading a row back.
-
 type Count = number | null | undefined;
 type Flag = boolean | number | null | undefined;
 type Text = string | null | undefined;
 
-/** A memories row in MemoryEntry's names, its JSON lists parsed; each column with a default may
- * be absent or null. */
 interface StoredColumns extends Pick<
   MemoryEntry,
   'id' | 'created' | 'lastRetrieved' | 'layer' | 'content' | 'tenantId'
@@ -120,7 +116,6 @@ function placementFields(c: StoredColumns) {
   } satisfies Partial<MemoryEntry>;
 }
 
-/** The entry a memories row reads back as, each unset column at hippo.db's default. */
 function storedEntry(c: StoredColumns): MemoryEntry {
   return { ...retrievalFields(c), ...placementFields(c) };
 }
@@ -140,8 +135,6 @@ export interface HippoIndex {
   version: number;
   entries: Record<string, IndexEntry>;
   last_retrieval_ids: string[];
-  /** Id of the most recent recall_traces row written by contextGet/printRecall, mirrored from the `last_trace_id` meta
-   *  key like last_retrieval_ids. null when none was written (api.recall never sets it). */
   last_trace_id: string | null;
 }
 
@@ -181,13 +174,10 @@ export interface MemoryRow {
   owner: string | null;
   artifact_ref: string | null;
   tenant_id: string | null;
-  // Memory scope isolation (schema v39).
   origin_project: string | null;
   descendant_count: number | null;
   earliest_at: string | null;
   latest_at: string | null;
-  // In MEMORY_SELECT_COLUMNS so every read path populates these alongside descendant_count /
-  // earliest_at / latest_at.
   summary_dirty: number | null;
   last_rebuilt_at: string | null;
   rebuild_count: number | null;
@@ -293,8 +283,6 @@ export const MEMORY_ROW_COLUMNS = [
   'latest_at',
   'dag_level_3_built_at',
 ] as const;
-// Rebuild-queue columns the DAG summary rebuild writes (consolidation/consolidation.ts); a row write
-// never sets them.
 const MEMORY_COLUMN_NAMES = [
   ...MEMORY_ROW_COLUMNS,
   'summary_dirty',
@@ -302,8 +290,6 @@ const MEMORY_COLUMN_NAMES = [
   'rebuild_count',
 ] as const;
 
-// FTS-join columns for listSearchRows: `m.<col> AS <col>` keeps rowToEntry's unqualified reads
-// working.
 export const MEMORY_SELECT_COLUMNS = MEMORY_COLUMN_NAMES.join(', ');
 export const MEMORY_SEARCH_COLUMNS = MEMORY_COLUMN_NAMES.map((c) => `m.${c} AS ${c}`).join(', ');
 
@@ -363,7 +349,6 @@ function placementColumnsOf(row: MemoryRow) {
   } satisfies Partial<StoredColumns>;
 }
 
-/** The row in MemoryEntry's names, its JSON lists parsed; storedEntry fills each default. */
 function storedColumnsOf(row: MemoryRow): StoredColumns {
   return { ...retrievalColumnsOf(row), ...placementColumnsOf(row) };
 }

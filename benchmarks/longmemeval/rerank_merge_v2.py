@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Merge sub-agent rerank outputs back into a retrieval JSONL.
-
-Reads a baseline retrieval JSONL + a directory of per-batch rerank outputs.
-For each question, reorders `retrieved_memories` to match the sub-agent's
-`ranked_ids`. Memories not in `ranked_ids` are dropped; ids in `ranked_ids`
-but not in `retrieved_memories` are dropped (the sub-agent shouldn't invent
-ids, but be defensive).
-"""
 from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path

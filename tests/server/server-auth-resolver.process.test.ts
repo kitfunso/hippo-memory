@@ -1,5 +1,3 @@
-/** serve({ authResolver }) vouches for external bearer tokens; the core sanitises what it returns. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, realpathSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -87,7 +85,6 @@ function collect(res: Response): () => string {
 
 const HEARTBEAT_MS = 50;
 
-/** Fakes only the heartbeat's interval, so a test fires each tick by hand and counts live intervals; fetch and the polls keep real time. */
 function holdHeartbeat(): void {
   vi.stubEnv('MCP_SSE_HEARTBEAT_MS', String(HEARTBEAT_MS));
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
@@ -97,7 +94,6 @@ const tick = (count = 1): void => {
   vi.advanceTimersByTime(HEARTBEAT_MS * count);
 };
 
-/** Counts its calls and holds the answer to call number `held` until the test releases it. */
 function heldResolver(held: number) {
   let calls = 0;
   let release!: () => void;
@@ -108,14 +104,12 @@ function heldResolver(held: number) {
   return { resolver, calls: () => calls, release };
 }
 
-/** Settles once the server sees the next request's socket close; arm it before that request is sent. */
 function nextRequestClosed(): Promise<void> {
   return new Promise((ok) =>
     handle!.server!.once('request', (_req, res: ServerResponse) => res.once('close', () => ok())),
   );
 }
 
-// Nothing between a resolver answer and the handler's next move waits on I/O or a timer, so one macrotask turn sees it done.
 const settle = (): Promise<void> => new Promise((ok) => setImmediate(ok));
 
 type Loose = Partial<Record<keyof ResolvedBearer, string | Array<string | number | null>>>;
@@ -542,7 +536,6 @@ describe('auth resolver stream', () => {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    // Read until the close frame or the end of the stream; one that never closes hangs to the test timeout.
     while (!buf.includes('auth_revoked')) {
       const r = await reader.read();
       if (r.done) break;
@@ -575,7 +568,6 @@ describe('auth resolver stream', () => {
       expect(res.status).toBe(200);
       const text = collect(res);
       state = 'down';
-      // Two outage checks prove `checking` resets after a 503, so later ticks still run.
       await waitFor(() => downCalls >= 2, { timeoutMs: 3000 });
       expect(downCalls).toBeGreaterThanOrEqual(2);
       expect(text()).not.toContain('event: closed');
@@ -624,7 +616,6 @@ describe('auth resolver stream', () => {
     await settle();
     expect(auth.calls()).toBe(2);
 
-    // The answer lands, so the next tick checks again.
     auth.release();
     await waitFor(() => pings() === 2, { timeoutMs: 3000 });
     expect(pings()).toBe(2);
@@ -723,7 +714,6 @@ describe('package surface', () => {
   it.each(['authCreateSelf', 'AuthCreateSelfOptions', 'AuthCreateSelfResult'])(
     'exports %s on the built server entry',
     (name) => {
-      // The built d.ts text is what a consumer's compiler reads, so text is the contract here.
       const dts = readFileSync(join(root, 'dist', 'server.d.ts'), 'utf-8');
       expect(dts).toMatch(new RegExp(`^export (?:\\{[^}]*\\b|declare function )${name}\\b`, 'm'));
     },

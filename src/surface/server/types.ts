@@ -1,4 +1,3 @@
-// Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Actor, Context, EntryContext } from '../../api/index.js';
 import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
@@ -65,7 +64,6 @@ export interface OAuthChallenge {
  * (in `oauth.authorizationServers`), audience (includes `oauth.resource`) and expiry, as core checks none. */
 export type AuthResolver = (
   token: string,
-  /** Aborted when the deadline passes, so a slow upstream call can stop. */
   signal?: AbortSignal,
 ) => ResolvedBearer | null | Promise<ResolvedBearer | null>;
 
@@ -175,53 +173,30 @@ export interface ServeOptions {
 
 /** Counts this server's /health reports, since it started. */
 export interface ServerCounts {
-  /** Requests answered 504 by the handler deadline. */
   handlerDeadlines: number;
-  /** Background sleeps its writes started. */
   autoSleeps: number;
 }
 
 export type ResolvedServeOptions = ServeOptions & {
   store: HippoStore;
-  /** The store is hippo.db rather than a caller's own: its folder's config.json decides
-   * shared-ness, and an add-on route naming no group runs on it alone. */
   onHippoDb: boolean;
-  /** What a request's store call reaches, probed per request (`shared` is the transport's flag). */
   reachOf: (shared: boolean) => StoreReach;
-  /** A store the server built at boot, as this request calls it: each call to a worker waits on
-   * its deadline. */
   storeFor: <S extends HippoStore>(store: S) => S;
-  /** Fires when this request passes its deadline; unset outside a request and for an exempt
-   * route. */
   signal?: AbortSignal;
-  /** This server's own config reader: each request reads config.json through it. */
   configAt: ConfigReader;
   publicJsonBodies: ReadonlyMap<string, string>;
-  /** The /mcp 401 challenge, frozen at boot from the checked oauth setting. */
   readonly oauthChallenge?: OAuthChallenge;
-  /** The /v1 rows for this store, each row's store need settled at boot. */
   v1Routes: RouteLookup<BoundRoute>;
-  /** The MCP tools this store serves, each tool's store need settled at boot. */
   mcpTools: McpTools<RequiredStore>;
-  /** The add-on routes by path, each with its store need settled at boot. */
   addonRoutes: ReadonlyMap<string, BoundAddonRoute>;
   callerLimiter?: RateLimiter;
   failedAuthLimiter: RateLimiter;
-  /** The local key this server issued at boot, which the CLI and hooks on its machine send. */
   localKey: LocalKey;
-  /** This server's key checks: the tokens it proved and the derivations it runs. */
   keyVerifier: KeyVerifier;
-  /** This server's per-caller state, handed to every request's Context. */
   callers: CallerState;
-  /** `callers` as one request reads them: the auto-sleep count runs on the request's own store,
-   * which `storeFor` maps. */
   callersFor: (storeFor: <S extends HippoStore>(store: S) => S) => CallerState;
-  /** The served store as a ledger home, proved at boot; unset for a store that keeps no ledger. */
   ledgerStore?: StoreWith<'ledger' | 'folderFiles'>;
-  /** This server's outside services: one reranker registry for the server's life, the rest per
-   * Context. */
   infra: () => InfraPorts;
-  /** Keeps the work a request starts and does not wait on; the server's stop settles it. */
   detached: DetachedWork;
   sleeps: SleepQueue;
   counts: ServerCounts;
@@ -260,7 +235,6 @@ export type RouteAuth =
   | 'webhook-signature'
   | 'dashboard-session';
 
-/** The gates a /v1 row's caller passes before its handler runs. */
 type GatedAuth = Exclude<RouteAuth, 'webhook-signature' | 'dashboard-session'>;
 
 /** A pattern row's params by name; a `:name(int)` value holds digits only. */
@@ -284,7 +258,6 @@ export type BoundRoute = { method: string; unported?: true } & (
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
-/** A route that runs on any store, or with a `hippoDbOnly` reason on hippo.db alone. */
 type AnyStoreRoute = {
   method: string;
   auth: GatedAuth;

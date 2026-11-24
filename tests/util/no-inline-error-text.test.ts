@@ -1,4 +1,3 @@
-// Error text for a caught value has one definition, errorMessage() in src/base/util/log.ts; an inline copy drifts from it.
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

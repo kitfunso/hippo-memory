@@ -1,6 +1,3 @@
-/**
- * W2c C1: no more Access-Control-Allow-Origin, a loopback Host allowlist, and a mid-route throw no longer kills the server.
- */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -184,7 +181,6 @@ describe('card routes', () => {
   let showPJson: string;
   let showCJson: string;
 
-  // Seeds a real store and runs four CLI verbs in process, and a runner's disk sets how long that takes.
   beforeAll(async () => {
     home = makeRoot('w2c-routes', { init: false });
     cwd = join(home, 'cwd');
@@ -239,7 +235,6 @@ describe('card routes', () => {
 
   const host = () => `127.0.0.1:${port}`;
 
-  // A dashboard serves the one tenant its CLI root resolved, so each tenant here gets its own server.
   async function onTenant(tenantId: string, use: (at: number, atHost: string) => Promise<void>): Promise<void> {
     const other = await startFor(hippoRoot, tenantId);
     try {
@@ -318,7 +313,6 @@ describe('card routes', () => {
   it('pages a board past 1,000 cards by next_cursor and refuses a cursor it did not mint', async () => {
     const db = openHippoDb(hippoRoot);
     try {
-      // One updated_at for all, so the page edge falls inside a tie and the id breaks it.
       db.prepare(
         `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 1001)
          INSERT INTO cards (id, title, status, created_at, updated_at, tenant_id)

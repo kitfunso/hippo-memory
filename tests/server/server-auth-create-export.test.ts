@@ -7,7 +7,6 @@ import { recordStatements } from '../_helpers/count-statements.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadConfig } from '../../src/host/config-file.js';
 
-// hippo-enterprise's `key create --store` mints through this subpath export.
 describe('hippo-memory/server exports authCreate', () => {
   it('mints a key into the named store for the given tenant and role', async () => {
     const root = makeRoot('server-auth-create', { init: false });

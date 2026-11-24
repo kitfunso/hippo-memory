@@ -9,7 +9,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 describe('api key scrypt parameters', () => {

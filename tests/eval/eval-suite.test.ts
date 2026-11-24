@@ -89,7 +89,6 @@ describe('hippo eval --suite', () => {
 describe('buildSyntheticCorpus', () => {
   it('gives every case a unique id and expected ids that point at corpus entries', () => {
     const { entries, cases } = buildSyntheticCorpus();
-    // 8 direct-recall, 3 extraction, 2 DAG, 4 temporal, 4 noise and 2 multi-hop cases.
     expect(cases).toHaveLength(23);
     expect(new Set(cases.map((c) => c.id)).size).toBe(cases.length);
     expect(cases.filter((c) => c.expectedIds.length === 0)).toEqual([]);

@@ -73,7 +73,6 @@ describe('multihopSearch', () => {
     expect(results[0].entry.content).toContain('Alice');
   });
 
-  // Pass 1 runs at twice the budget, so each return path must fit its list to the caller's budget.
   describe.each([
     { path: 'merged union of both passes', tag: 'speaker:Maya', query: 'deploy failure pipeline' },
     {

@@ -43,7 +43,7 @@ from qa.ledger import (ANSWERER, JUDGE, Item, Ledger, exhausted_lines, require, 
                        unsettled)
 from server_arms import FLAGS, SERVER_ARM as SERVER_ARMS, fallback_logs, health_ok, want_health  # noqa: E402
 
-ARMS = {"hippo365": "hippo", "bm25": "bm25"}  # arm -> the server's --arm
+ARMS = {"hippo365": "hippo", "bm25": "bm25"}
 SERVER = PUBLIC / "hippo-mem0-server.mjs"
 
 
@@ -54,7 +54,7 @@ def sha_bytes(b: bytes) -> str:
 def atomic(path: Path, data: bytes) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_bytes(data)
-    tmp.replace(path)  # whole or absent
+    tmp.replace(path)
 
 
 def server_args(arm: str, port: int, data: Path, read_only: bool = False) -> list[str]:
@@ -63,8 +63,6 @@ def server_args(arm: str, port: int, data: Path, read_only: bool = False) -> lis
 
 
 class Server:
-    """One hippo-mem0-server on a port and data dir, stopped on exit."""
-
     def __init__(self, arm: str, port: int, data: Path, log: Path, read_only: bool = False) -> None:
         self.arm, self.port, self.data, self.log, self.read_only = arm, port, data, log, read_only
         self.conn: http.client.HTTPConnection | None = None
@@ -72,7 +70,7 @@ class Server:
 
     def __enter__(self) -> "Server":
         node = shutil.which("node") or sys.exit("node not found on PATH")
-        with socket.socket() as probe:  # a server already on the port would answer the health check for ours
+        with socket.socket() as probe:
             if probe.connect_ex(("127.0.0.1", self.port)) == 0:
                 sys.exit(f"port {self.port} is already in use; pick another --port-base")
         if self.read_only and not self.data.is_dir():
@@ -111,8 +109,7 @@ class Server:
         self.log_f.close()
 
     def call(self, method: str, path: str, body: dict | None = None) -> dict:
-        """One request, never repeated: a repeated add would store a turn twice. A failed unit is run again whole."""
-        if self.conn is None or time.monotonic() - self.last > 3:  # Node closes an idle connection after 5 s
+        if self.conn is None or time.monotonic() - self.last > 3:
             if self.conn:
                 self.conn.close()
             self.conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=600)
@@ -152,8 +149,6 @@ def write_pred(out: Path, arm: str, q: dict, results: list[dict], topk: int, vis
 
 
 def search_for(srv: Server, q: dict, topk: int, stored: int) -> list[dict]:
-    """A short list is a real result: hippo and BM25 return only memories that share a term with the query. More than
-    top-k, or than the store holds so far, fails; a server error raises in Server.call."""
     res = srv.search(q["user_id"], q["question"], topk)
     if len(res) > min(topk, stored):
         raise RuntimeError(f"{srv.arm} returned {len(res)} memories for {q['qid']}, at most {min(topk, stored)} "
@@ -166,20 +161,16 @@ def add_turns(srv: Server, user: str, turns: list[dict]) -> int:
 
 
 def store_dir(data: Path, user: str) -> Path:
-    """hippo-mem0-server.mjs rootFor: the user's store under a server's data directory."""
     slug = re.sub(r"[^A-Za-z0-9_-]", "_", user)[:40]
     return data / f"{slug}-{hashlib.sha256(user.encode()).hexdigest()[:10]}" / ".hippo"
 
 
 def store_files(root: Path) -> dict:
-    """Size and write time of each file of a store; SQLite's -shm and -journal files hold no rows."""
     return {str(p.relative_to(root)): (s.st_size, s.st_mtime_ns) for p in sorted(root.rglob("*"))
             if p.is_file() and not p.name.endswith(("-shm", "-journal")) and (s := p.stat())}
 
 
 def frozen_store(data: Path, user: str, src: Path, qs: list[dict]) -> dict:
-    """Codex on dated notes 9: a replay searches the store hippo-emb searched only if no file of it is newer than that
-    run's first search there. The files, for the check that the replay wrote nothing."""
     files = store_files(store_dir(data, user))
     first = min(pred_path(src, "hippo-emb", q["qid"]).stat().st_mtime_ns for q in qs)
     if not files or max(m for _, m in files.values()) > first:
@@ -189,8 +180,6 @@ def frozen_store(data: Path, user: str, src: Path, qs: list[dict]) -> dict:
 
 def run_unit(srv: Server, mod, out: Path, user: str, turns: list[dict], qs: list[dict], phase: str,
              gate: Server | None = None, src: Path | None = None) -> dict:
-    """ingest: add every turn; a user with a mid-history question is searched as turns go in (phase "sweep").
-    retrieve: search a user already ingested; with a gate, first replay the hippo-emb search of run src."""
     arm, n = srv.arm, len(turns)
     expected = sum(1 for t in turns if t["content"].strip())
     if phase == "retrieve":
@@ -226,14 +215,13 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
     adir = out / "ingest" / arm
     done_path = adir / "done.jsonl"
     done = {r["user"]: r for r in read_jsonl(done_path)} if done_path.exists() else {}
-    src = a.store_from / "ingest" / "hippo-emb" if a.store_from else adir  # a replay searches that store, read-only
+    src = a.store_from / "ingest" / "hippo-emb" if a.store_from else adir
     ingested = {r["user"]: r for r in read_jsonl(src / "done.jsonl")} if (src / "done.jsonl").exists() else {}
     todo = []
     for user in qs_by_user:
         d = done.get(user)
         if phase == "retrieve" and not ingested.get(user):
             sys.exit(f"{arm}: {user} is not ingested in {src}; run the ingest stage first")
-        # a user's last record wins: "sweep" and "retrieve" mean both phases are done, "ingest" only the first
         have = {"ingest": ("ingest", "sweep", "retrieve"), "retrieve": ("sweep", "retrieve")}[phase]
         if not (d and d["turns"] == len(convs[user]) and d["phase"] in have):
             todo.append(user)
@@ -244,7 +232,6 @@ def run_arm(a: argparse.Namespace, mod, arm: str, port: int, qs_by_user: dict, c
     lock, count = threading.Lock(), [0]
 
     def shard(k: int, users: list[str]) -> None:
-        """One server over its own users; each user is its own store, so shards never share one."""
         def log(name: str) -> Path:
             return adir / (f"{name}-{k}.log" if k else f"{name}.log")
         gate = Server("hippo-emb", port + a.shards + k, src / "data", log("gate"), True) if a.store_from else nullcontext()
@@ -275,7 +262,7 @@ def setup(a: argparse.Namespace):
         qs = mod.questions()
         if len({q["qid"] for q in qs}) != len(qs):
             sys.exit("loader gives duplicate qids")
-        if a.arm:  # an extra arm asks exactly the paired runs' questions, in their order
+        if a.arm:
             by_id = {q["qid"]: q for q in qs}
             qs = [by_id[i] for i in load(a.pairs_with[0] / "questions.json")["qids"]]
         if a.limit:
@@ -313,8 +300,6 @@ def by_user(qs: list[dict]) -> dict:
 
 
 def write_full(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    """The ceiling arm in place of a search: every non-empty turn the question may see, oldest first, in the form the
-    server stores a turn (hippo-mem0-server.mjs `addChunk`). No store and no model call."""
     convs = dict(mod.conversations())
     for q in qs:
         seen = convs[q["user_id"]] if q["ask_after"] is None else convs[q["user_id"]][:q["ask_after"]]
@@ -347,8 +332,6 @@ def stage_ingest_retrieve(a: argparse.Namespace, mod, qs: list[dict]) -> None:
 
 
 def prompts_of(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
-    """Each (arm, qid): memories shown, the retrieval file's SHA-256, system and user prompt. Stops on a file that is not
-    the one the manifest hashed."""
     mf = a.out / "predicted" / "manifest.json"
     if not mf.exists():
         sys.exit("no predicted/manifest.json; run the retrieve stage first")
@@ -365,17 +348,15 @@ def prompts_of(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
 
 
 def answer_items(prompts: dict) -> dict:
-    """Each answer prompt as a log item: its system text is the loader's for that question, checked per item."""
     return {(arm, qid): Item(f"answer {arm} {qid}", p[2], p[3], ANSWERER) for (arm, qid), p in prompts.items()}
 
 
 def stage_answer(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    """Asks each answer that has no valid reply in the log, up to its 3rd ask counted across every run."""
     prompts, ledger = prompts_of(a, mod, qs), Ledger(a.out / "calls-answer.jsonl")
     items = answer_items(prompts)
     got = {k: ledger.choose(item) for k, item in items.items()}
     jobs = [(*k, items[k]) for k, c in got.items() if c.status == "open"]
-    random.Random(4).shuffle(jobs)  # arms interleaved, so a slow or limited stretch hits both alike
+    random.Random(4).shuffle(jobs)
     print(f"{len(jobs)} answers to ask, {sum(c.status == 'valid' for c in got.values())} valid in the log", flush=True)
     print("\n".join(exhausted_lines(got, "answers")), flush=True)
     if not jobs:
@@ -394,8 +375,6 @@ def stage_answer(a: argparse.Namespace, mod, qs: list[dict]) -> None:
 
 
 def all_answers(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
-    """Every answer as its call log settles it, made from the prompt and retrieval file now on disk, or stop while one
-    still has asks left. An exhausted answer holds None and scores wrong."""
     prompts, ledger, answers = prompts_of(a, mod, qs), Ledger(a.out / "calls-answer.jsonl"), {}
     for k, item in answer_items(prompts).items():
         c = ledger.choose(item)
@@ -405,8 +384,6 @@ def all_answers(a: argparse.Namespace, mod, qs: list[dict]) -> dict:
 
 
 def llm_items(mod, qs: list[dict], answers: dict) -> tuple[dict, dict]:
-    """(arm, qid) -> (system, prompt, parse) for the llm-judged answers, and (arm, qid) -> bool for the matched. An
-    exhausted answer is in neither: it scores wrong with nothing to judge."""
     by_id, llm, matched = {q["qid"]: q for q in qs}, {}, {}
     for (arm, qid), r in answers.items():
         if r["answer"] is None:
@@ -420,7 +397,6 @@ def llm_items(mod, qs: list[dict], answers: dict) -> tuple[dict, dict]:
 
 
 def judge_key(a: argparse.Namespace, llm: dict, answers: dict) -> dict:
-    """The blind key, one shuffled pass over both arms, checked to map one to one onto the llm-judged answers now."""
     path = a.out / "judge_key.json"
     if not path.exists():
         items = sorted(llm)
@@ -436,13 +412,11 @@ def judge_key(a: argparse.Namespace, llm: dict, answers: dict) -> dict:
 
 
 def judge_items(key: dict, llm: dict) -> dict:
-    """Each keyed answer's judge prompt as a log item under the judge's manifest."""
     return {jid: Item(f"judge {jid}", *llm[(k["arm"], k["qid"])][:2], JUDGE, llm[(k["arm"], k["qid"])][2])
             for jid, k in key.items()}
 
 
 def stage_judge(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    """Asks each keyed verdict that has no valid reply in the log, up to its 3rd ask counted across every run."""
     answers = all_answers(a, mod, qs)
     llm, matched = llm_items(mod, qs, answers)
     print(f"{len(matched)} answers scored by match, {len(llm)} for the judge", flush=True)
@@ -472,15 +446,11 @@ def stage_judge(a: argparse.Namespace, mod, qs: list[dict]) -> None:
 
 
 def units(qs: list[dict]) -> dict:
-    """Each question's bootstrap unit: the user that owns its store (prereg Amendment 6 revision 1 item 9), or the
-    question itself when one store holds every question, as HotPotQA-24's does (dated notes 1)."""
     one_store = len({q["user_id"] for q in qs}) == 1
     return {q["qid"]: q["qid"] if one_store else q["user_id"] for q in qs}
 
 
 def primary_ids(a: argparse.Namespace, mod, ids: list[str]) -> tuple[list[str], str]:
-    """The questions every primary reads and the line naming what it leaves out: the registered smoke items (dated
-    notes 1). A smoke run is never scored, so it keeps every question under a SMOKE label."""
     if load(a.out / "config.json").get("limit"):
         return ids, "SMOKE run: never scored or reused"
     smoke = smoke_excluded(a.bench, [q["qid"] for q in mod.questions()])
@@ -488,11 +458,9 @@ def primary_ids(a: argparse.Namespace, mod, ids: list[str]) -> tuple[list[str], 
 
 
 def correct_of(a: argparse.Namespace, mod, qs: list[dict]) -> tuple[dict, dict, dict, dict, list[str]]:
-    """Each (arm, qid) as 1 or 0 from the call logs alone, with the answers, the llm and matched items and the listed
-    exhausted ones. Stops while an answer or verdict still has asks left."""
     answers = all_answers(a, mod, qs)
     llm, matched = llm_items(mod, qs, answers)
-    correct = {k: 0.0 for k in answers}  # an exhausted answer or verdict scores wrong
+    correct = {k: 0.0 for k in answers}
     correct.update({k: float(v) for k, v in matched.items()})
     listed = exhausted_lines({k: r["choice"] for k, r in answers.items()}, "answers")
     if llm:
@@ -505,9 +473,6 @@ def correct_of(a: argparse.Namespace, mod, qs: list[dict]) -> tuple[dict, dict, 
 
 
 def pair_lines(a: argparse.Namespace, mod, qs: list[dict], correct: dict, primary: list[str], unit: dict) -> list[str]:
-    """Dated notes 4 and 5: the extra arm against each arm of each paired run, paired by question, re-made from that
-    run's own call logs. All secondary. `full` prints paired arm minus full, as notes 4 registers; a memory arm prints
-    itself minus the paired arm."""
     out = []
     for run in a.pairs_with:
         pair = argparse.Namespace(**{**vars(a), "out": run, "arms": load(run / "config.json")["arms"]})
@@ -525,8 +490,6 @@ def pair_lines(a: argparse.Namespace, mod, qs: list[dict], correct: dict, primar
 
 
 def stage_score(a: argparse.Namespace, mod, qs: list[dict]) -> None:
-    """Accuracy per arm and hippo365 minus bm25 over the store-owning unit, smoke items left out, exhausted ones listed;
-    with --arm, the extra arm's accuracy and its paired lines."""
     answers, correct, llm, matched, listed = correct_of(a, mod, qs)
     cats, ids, unit = {q["qid"]: q["category"] for q in qs}, [q["qid"] for q in qs], units(qs)
     primary, note = primary_ids(a, mod, ids)

@@ -1,4 +1,3 @@
-// Per-row query counts of the maintenance passes: import, invalidate, churn, conflicts, dedupe, learn and the summary DAG.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -204,7 +203,6 @@ describe('deduplicateStore', () => {
 });
 
 describe('learn', () => {
-  /** A repo whose last `lessons` commits each replace the quuxlib client, so each lesson invalidates what mentions it. */
   function repoWith(lessons: number, subject = 'replace quuxlib client with fetch wrapper'): string {
     const repo = freshRoot('qc-learn-repo');
     const stamp = `t <t@example.com> ${Math.floor(Date.now() / 1000)} +0000`;
@@ -213,7 +211,6 @@ describe('learn', () => {
       return `commit refs/heads/main\ncommitter ${stamp}\ndata ${Buffer.byteLength(message)}\n${message}\n`;
     });
     execFileSync('git', ['-c', 'init.defaultBranch=main', 'init'], { cwd: repo, stdio: 'ignore' });
-    // One fast-import writes every commit, where a `git commit` each costs a process spawn.
     execFileSync('git', ['fast-import', '--quiet'], {
       cwd: repo,
       input: commits.join('\n'),
@@ -263,7 +260,6 @@ describe('learn', () => {
     const repo = repoWith(3);
     const unpaged = await learnInto(repo, 10);
     const paged = await learnInto(repo, 10, 4);
-    // 12 rows at 4 per page is three reads, where the default page holds the tenant in one.
     expect(unpaged.tenantReads).toBe(1);
     expect(paged.tenantReads).toBe(3);
     expect(paged.result).toEqual(unpaged.result);
@@ -281,11 +277,9 @@ describe('learn', () => {
 
   it('a later lesson still invalidates a lesson written earlier in the batch', async () => {
     const { root, result } = await learnInto(repoWith(3), 10);
-    // Each lesson names the quuxlib client, so the second and third also weaken the lessons before them.
     expect(result.invalidations.map((i) => i.count)).toEqual([2, 3, 4]);
     const lessons = loadAllEntries(root, 'default').filter((e) => e.source === CLI_LEARN.source);
     const base = lessons.find((e) => !e.tags.includes('invalidated'))?.halfLifeDays ?? 0;
-    // The first lesson is weakened by both later ones and loses its half-life once.
     expect(lessons.map((e) => e.halfLifeDays).sort((a, b) => a - b)).toEqual([
       Math.floor(base / 2),
       Math.floor(base / 2),

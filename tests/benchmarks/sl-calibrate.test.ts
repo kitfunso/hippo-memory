@@ -1,4 +1,3 @@
-// tests/benchmarks/sl-calibrate.test.ts
 import { describe, it, expect } from 'vitest';
 import { selectBStar } from '../../benchmarks/sequential-learning/calibrate.mjs';
 
@@ -14,7 +13,7 @@ describe('calibration B* selection', () => {
       { budget: 1000, lateMean: 0.02, lateCI: 0.01 }, // too low ✗
     ];
     const bStar = selectBStar(candidates);
-    expect(bStar.budget).toBe(600); // largest passing
+    expect(bStar.budget).toBe(600);
     expect(bStar.reason).toMatch(/in band/i);
   });
 
@@ -34,41 +33,31 @@ describe('calibration B* selection', () => {
   });
 
   it('rejects candidate with mean exactly at boundary lower-CI=0', () => {
-    // mean=0.04 with CI=0.04 → lower-CI = 0.0, NOT > 0, so reject.
     const candidates = [{ budget: 400, lateMean: 0.04, lateCI: 0.04 }];
     expect(selectBStar(candidates).budget).toBeNull();
   });
 
-  // Post-review P1-10 — boundary positive case
   it('accepts candidate at lower band boundary with positive lower-CI', () => {
-    // mean=0.04 with CI=0.039 → lower-CI = 0.001 > 0, accept.
     const candidates = [{ budget: 400, lateMean: 0.04, lateCI: 0.039 }];
     expect(selectBStar(candidates).budget).toBe(400);
   });
 
-  // Post-review P1-10 — boundary negative case (mean below band)
   it('rejects candidate just below band even with zero CI', () => {
-    // mean=0.0399 < BAND_LOW=0.04 → reject regardless of CI.
     const candidates = [{ budget: 400, lateMean: 0.0399, lateCI: 0.0 }];
     expect(selectBStar(candidates).budget).toBeNull();
   });
 
-  // POST-AUDIT P1-7 (v1.7.8) — defensive `starved` exclusion path
   it('skips a candidate flagged starved=true even when it would otherwise be selected', () => {
-    // Largest-budget candidate is in band AND has lower-CI > 0, but starved.
-    // selectBStar should skip it and return the next eligible one.
     const candidates = [
       { budget: 800, lateMean: 0.2, lateCI: 0.03, starved: true }, // would qualify; skipped
       { budget: 600, lateMean: 0.1, lateCI: 0.04, starved: false }, // qualifies
       { budget: 400, lateMean: 0.05, lateCI: 0.01, starved: false }, // qualifies but smaller
     ];
     const bStar = selectBStar(candidates);
-    expect(bStar.budget).toBe(600); // 800 starved, fall through to 600
-    expect(bStar.reason).toMatch(/not starved/i); // reason includes the clause when any starved
+    expect(bStar.budget).toBe(600);
+    expect(bStar.reason).toMatch(/not starved/i);
   });
 
-  // POST-AUDIT P1-3 (v1.7.8) — reason string omits "(not starved)" when no
-  // candidate carries the flag (avoids referencing an inert rule).
   it('reason string omits "(not starved)" when no candidate carries the flag', () => {
     const candidates = [
       { budget: 800, lateMean: 0.3, lateCI: 0.02 }, // out of band, no starved flag
@@ -76,21 +65,17 @@ describe('calibration B* selection', () => {
     ];
     const bStar = selectBStar(candidates);
     expect(bStar.budget).toBeNull();
-    expect(bStar.reason).not.toMatch(/not starved/i); // inert clause should not appear
+    expect(bStar.reason).not.toMatch(/not starved/i);
   });
 
-  // Post-review P1-1 — calibration vs hypothesis seed-stream non-collision
   it('calibration and hypothesis mulberry32 streams are pairwise distinct in first 50 draws', () => {
-    // Hypothesis seeds: 1000 + i for i in 0..19
     const hypoSeeds = Array.from({ length: 20 }, (_, i) => Math.imul(0x9e3779b9, (1000 + i) >>> 0) >>> 0);
-    // Calibration seeds (post-review P1-1 — bumped offset 100 → 10000): 1000 + 10000 + i for i in 0..9
     const calibSeeds = Array.from({ length: 10 }, (_, i) => Math.imul(0x9e3779b9, (1000 + 10000 + i) >>> 0) >>> 0);
     const allSeeds = [...hypoSeeds, ...calibSeeds];
     const draws = allSeeds.map((s) => {
       const rng = mulberry32(s);
       return Array.from({ length: 50 }, () => rng());
     });
-    // Pairwise: no two seed streams produce identical first 50 draws.
     for (let i = 0; i < draws.length; i++) {
       for (let j = i + 1; j < draws.length; j++) {
         const same = draws[i].every((v, k) => v === draws[j][k]);

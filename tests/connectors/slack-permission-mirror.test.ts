@@ -32,9 +32,6 @@ describe('slack permission mirroring', () => {
     expect(pubResults.results.some((r) => r.content.includes('public secret'))).toBe(true);
   });
 
-  // Review patch #4: empty/undefined scope must default-deny private rows.
-  // Without this guarantee, a frontend caller forgetting to pass `scope` exposes
-  // every private channel to a public query.
   it('no-scope query default-denies private rows', async () => {
     await ingestMessage(ctx(root), {
       teamId: 'T1',
@@ -48,12 +45,11 @@ describe('slack permission mirroring', () => {
       message: { type: 'message', channel: 'CPRIV', user: 'U1', text: 'private alpha', ts: '2.2' },
       eventId: 'EvPrivA',
     });
-    const r = await retrieve(ctx(root), { query: 'alpha' }); // no scope
+    const r = await retrieve(ctx(root), { query: 'alpha' });
     expect(r.results.some((x) => x.content.includes('private alpha'))).toBe(false);
     expect(r.results.some((x) => x.content.includes('public alpha'))).toBe(true);
   });
 
-  // Review patch #4: mismatched scope (channel does not exist) returns zero.
   it('mismatched scope returns zero results', async () => {
     await ingestMessage(ctx(root), {
       teamId: 'T1',
@@ -65,9 +61,6 @@ describe('slack permission mirroring', () => {
     expect(r.results).toHaveLength(0);
   });
 
-  // Review patch #4: tenant-mismatched scope. Tenant B writes a private row
-  // with scope='slack:private:CSHARED'. Tenant A queries the same scope string
-  // and must get nothing — recall is tenant-scoped before scope-scoped.
   it('tenant-mismatched scope does not leak across tenants', async () => {
     const ctxA = (r: string): FullContext => apiCtx(r, 'tenantA', { subject: 'cli', role: 'admin' });
     const ctxB = (r: string): FullContext => apiCtx(r, 'tenantB', { subject: 'cli', role: 'admin' });

@@ -1,4 +1,3 @@
-// On hippo.db a write whose audit row fails keeps nothing.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { TENANT_A } from '../_helpers/store-conformance.js';
@@ -28,7 +27,6 @@ const { sqliteStore } = sessionPerTest();
 useObjectsConformance();
 
 describe("hippo.db's Objects writes are one transaction each", () => {
-  /** A constraint the audit log really enforces, so the append fails after the rows of the same write are in. */
   function refuseAuditOps(root: string, ops: readonly AuditOp[]): void {
     const db = openHippoDb(root);
     try {

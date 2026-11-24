@@ -40,7 +40,6 @@ afterEach(() => {
 const HOLDER = path.join(import.meta.dirname, '..', '_helpers', 'lock-holder.mjs');
 const LOCK_FILE = 'embeddings.lock.db';
 
-/** A child process that holds the lock file until it is killed. */
 async function holdInChild(lockPath: string): Promise<ChildProcess> {
   const child = spawn(process.execPath, [HOLDER, lockPath], { stdio: ['ignore', 'pipe', 'ignore'] });
   await new Promise<void>((resolve) => child.stdout?.once('data', () => resolve()));
@@ -53,7 +52,6 @@ const kill = (child: ChildProcess): Promise<void> =>
     child.kill('SIGKILL');
   });
 
-// Fake timers drive the waiter's poll loop, so "it waited" is proven by poll count, not by how long a sleep ran.
 async function expectWaitsUntilReleased(release: () => Promise<void>): Promise<void> {
   let released = false;
   const fetchedAfterRelease: boolean[] = [];
@@ -75,7 +73,6 @@ async function expectWaitsUntilReleased(release: () => Promise<void>): Promise<v
   } finally {
     released = true;
     await release();
-    // The polls back off to one a second, so the next one comes within a second of the release.
     await vi.advanceTimersByTimeAsync(1_000);
     vi.useRealTimers();
   }

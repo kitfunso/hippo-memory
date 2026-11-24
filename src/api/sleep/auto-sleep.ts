@@ -1,6 +1,3 @@
-// When a write starts a background sleep and what that sleep runs; api remember and the
-// session-close hook share it.
-
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { logPhaseFailures, type ConsolidationResult } from '../../domain/consolidate/run.js';
@@ -21,8 +18,6 @@ import {
  */
 export type AutoSleepRunner = () => Promise<void | AutoSleepRefused>;
 
-// Long enough that a host skips the minutes another process spends on its sleep, short enough that
-// the next due write after it ends is not left waiting.
 const REFUSED_BACKOFF_MS = 60_000;
 
 export interface AutoSleepDue {
@@ -56,7 +51,6 @@ export async function autoSleepAfterWrite(
   const { tenantId, config } = ctx;
   if (host === undefined || !config.autoSleep.enabled || tenantId !== host.hostTenantId) return;
   if (host.latch.held || ctx.infra.clock().getTime() < (host.latch.notBefore ?? 0)) return;
-  // Held from the count on, so two writes landing together never both start a sleep.
   host.latch.held = true;
   let due = false;
   try {
@@ -70,8 +64,6 @@ export async function autoSleepAfterWrite(
     if (!due) host.latch.held = false;
   }
   if (!due) return;
-  // The root's keeper holds the sleep so its stores outlast it; a context with no keeper waits for
-  // it. A failure is logged here once, with the tenant.
   const sleep = host
     .run()
     .then((outcome) => {

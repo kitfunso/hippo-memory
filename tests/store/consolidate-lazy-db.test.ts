@@ -1,20 +1,3 @@
-/**
- * T3 test: docs/plans/2026-08-15-hardening-at1-followups.md
- *
- * Defect (perf hygiene, not correctness): consolidate.ts opened the shared
- * consolidateDb handle unconditionally on every non-dry-run sleep, even one
- * with zero auto-promote candidates and zero merge clusters. Fix: memoized
- * lazy getter, opened on first real use, closed in the finally only if it
- * was actually opened.
- *
- * Behavioral pin per the plan: no direct "db never opened" assertion (no
- * test-only counter exists to make that cheap, and the plan says not to
- * build observation machinery for a perf-hygiene rider) — instead, confirm
- * a no-op sleep still completes clean, and that a real merge-tombstone
- * scenario (the AT1 guard this handle exists for) still behaves identically
- * under the lazy getter.
- */
-
 import { describe, it, expect, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,8 +78,6 @@ describe('consolidateDb lazy open', () => {
     writeEntry(home, e2);
 
     const result = await consolidate(home, { dryRun: true });
-    // Dry-run previews the merge without writing (the tombstone checks
-    // read under a dry run and write no row).
     expect(result.dryRun).toBe(true);
     expect(loadAllEntries(home, 'default')).toHaveLength(2);
   });

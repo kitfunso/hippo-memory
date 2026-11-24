@@ -1,5 +1,3 @@
-// Verbs that move memories between stores and people: sync, promote, share, peers and export.
-
 import * as fs from 'node:fs';
 import { isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -31,7 +29,6 @@ export async function handleSync({ hippoRoot, tenantId, flags }: CommandContext)
     return;
   }
 
-  // v39: other-project rows are skipped by default; secrets always are.
   const includeCrossProject = boolFlag(flags, 'cross-project');
   const count = await api.syncFromGlobal(cliApiContext(hippoRoot, tenantId), {
     includeCrossProject,
@@ -100,7 +97,6 @@ export async function handleShare({
   }
 }
 
-/** `hippo share --auto`: shares every memory at or above the transfer threshold. */
 async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
   requireInit(hippoRoot);
   const minScore = numberFlag(flags, 'min-score') ?? api.AUTO_SHARE_MIN_SCORE;
@@ -128,8 +124,6 @@ async function shareAuto(hippoRoot: string, tenantId: string, flags: CliFlags): 
 }
 
 export async function handlePeers({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  // Tenant-scoped by default; --all-tenants gives the host-wide view for cross-tenant peer
-  // discovery.
   const allTenants = boolFlag(flags, 'all-tenants');
   const peers = await api.sharePeers(cliApiContext(hippoRoot, tenantId), { allTenants });
   if (peers.length === 0) {

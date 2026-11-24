@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-/** Lane 15 of docs/EXPERIMENT-PROTOCOL.md: the deciding head-to-head. One
- *  shared candidate set per query, three arms (base/cross-encoder/jev) via the
- *  real getReranker(), so the two prior single-harness deltas finally compare.
- *  RERANK_ARM=clef-flash|clef swaps the third arm (CLF4 dev comparison). */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -12,8 +8,6 @@ import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { loadAllEntries } from '../dist/entry/testing.js';
 import { cliReranker as getReranker } from '../dist/surface/cli/api-context.js';
 
-// Literal, not new Date(): a bare Date() drifted 26min between Lane 12/13 runs
-// and moved a rank. Passing `now` below also short-circuits HIPPO_FAKE_NOW.
 const NOW = new Date('2026-09-18T14:31:52.073Z');
 
 const BOOTSTRAP_DRAWS = 2000;
@@ -21,9 +15,9 @@ const CANDIDATE_TOPK = 40;
 const BUDGET = 4000;
 const MIN_RESULTS = 1;
 const ALPHA_LO = 0.00625,
-  ALPHA_HI = 0.99375; // 98.75% CI, alpha 0.0125 (verdict)
+  ALPHA_HI = 0.99375;
 const DIAG_LO = 0.025,
-  DIAG_HI = 0.975; // nominal 95%, diagnostic only
+  DIAG_HI = 0.975;
 const ARM = process.env.RERANK_ARM?.trim() || 'jev';
 if (!['jev', 'clef-flash', 'clef'].includes(ARM)) {
   console.error(`RERANK_ARM must be jev, clef-flash or clef, not ${ARM}.`);
@@ -37,7 +31,6 @@ if (ARM !== 'jev' && !process.env.HIPPO_CLEF_ENDPOINT?.trim() && process.env.RER
 const COST_PER_CALL_USD = ARM === 'jev' ? 0.0004 : 0;
 const COST_CAP_USD = 1.0;
 const JEV_CONCURRENCY = Number(process.env.RERANK_CONCURRENCY) > 0 ? Number(process.env.RERANK_CONCURRENCY) : 8;
-// The Jev path keeps its frozen Lane 15 name; other arms are dated by the day they ran so a rerun never overwrites.
 const OUTPUT_PATH = join(
   'results',
   ARM === 'jev' ? 'rerank-3arm-2026-09-18.json' : `rerank-3arm-${ARM}-${new Date().toISOString().slice(0, 10)}.json`,
@@ -50,7 +43,7 @@ if (ARM === 'jev' && !apiKey) {
   process.exit(1);
 }
 
-let s = 4242; // same seed as crossenc-rerank-ab.mjs
+let s = 4242;
 const rng = () => (s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296;
 const f = (x) => (Number.isFinite(x) ? x.toFixed(4) : ' n/a ');
 const median = (xs) => {
@@ -94,8 +87,6 @@ if (expectedCost > COST_CAP_USD) {
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 const SEARCH_OPTS = { budget: 1000000, hippoRoot, preparedCorpus: corpus, minResults: 50, mmr: true, now: NOW };
 
-/** hippo's real cut (search.ts:777-786), ported so all three arms can share
- *  one hybridSearch call instead of three separately-budgeted ones. */
 function applyBudget(ordered, budget, minResults) {
   const admitted = [];
   let used = 0;
@@ -128,8 +119,6 @@ async function runPool(items, worker, concurrency) {
 const ceReranker = getReranker('cross-encoder');
 const jevReranker = getReranker(ARM);
 
-// crossEncoderReranker fails OPEN (identity order + a console.warn) rather than
-// throwing, so a silent fallback would look like a real result without this spy.
 let fallbackWarning = null;
 const realWarn = console.warn;
 console.warn = (...a) => {
@@ -161,7 +150,6 @@ if (fallbackWarning) {
 }
 console.error(`cross-encoder model load ok: ${modelLoadMs.toFixed(1)}ms (warmup excluded from per-query timings)\n`);
 
-// ---------- Phase 1: one hybridSearch + cross-encoder pass per query ----------
 const rows = [];
 for (let i = 0; i < cases.length; i++) {
   const c = cases[i];
@@ -199,9 +187,6 @@ for (let i = 0; i < cases.length; i++) {
 }
 console.error(`phase 1 done: ${rows.length} candidate sets built, cross-encoder scored\n`);
 
-// ---------- Phase 2: Jev calls, pooled for wall-clock, one call per query ----------
-// Aggregate-only spy: dist/domain/rerankers/jev.ts is frozen for this run (a second
-// agent is building concurrently), so outcomes are read off fetch, not edited in.
 const jevStats = { calls: 0, ok: 0, failed: 0, partial: 0 };
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -264,15 +249,12 @@ for (let i = 0; i < rows.length; i++) {
   const jevTargetInHead = jevHead.find((r) => r.entry.id === row.id);
   row.jevScore = jevTargetInHead ? jevTargetInHead.rerankScore : null;
 
-  // Exact-equality fallback check: on failure jev.ts sets rerankScore = r.score
-  // for every head item, which a real noul probability never coincidentally matches.
   const origScoreById = new Map(row.head.map((r) => [r.entry.id, r.score]));
   row.jevFellBack = jevHead.every((r) => r.rerankScore === origScoreById.get(r.entry.id));
   row.fallbackReason = jevHead[0]?.rerankProvenance?.fallbackReason ?? null;
 }
 console.error('phase 2 done\n');
 
-// ---------- Metrics ----------
 const at = (r, k) => r.filter((x) => x <= k).length / r.length;
 const METRICS = {
   'recall@budget': (r) => r.filter((x) => Number.isFinite(x)).length / r.length,
@@ -295,7 +277,6 @@ console.log(`NOW pinned: ${NOW.toISOString()}`);
 console.log(`usable cases: ${rows.length}`);
 console.log(`median returned-set size (post-budget-cut): ${median(baseCutSizes)}`);
 for (const [name, fn] of Object.entries(METRICS)) console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
-// Sanity check: same NOW pin as Lane 12, so the base arm should reproduce its control numbers exactly.
 console.log('\nReproduction check against Lane 12 control (docs/EXPERIMENT-PROTOCOL.md:1949-1955, same NOW pin):');
 for (const [k, v] of Object.entries(LANE12_CONTROL)) {
   const mine = METRICS[k](baseRanks);
@@ -308,7 +289,6 @@ const idxMatrix = Array.from({ length: BOOTSTRAP_DRAWS }, () =>
 );
 
 function contrast(aRanks, bRanks) {
-  // b - a, paired on the SAME idxMatrix as every other contrast in this report.
   const deltas = Object.fromEntries(Object.keys(METRICS).map((k) => [k, []]));
   for (const draw of idxMatrix) {
     const aSample = draw.map((k) => aRanks[k]);
@@ -355,7 +335,6 @@ function printContrast(name, { aLabel, bLabel, table }) {
 }
 for (const [name, c] of Object.entries(contrasts)) printContrast(name, c);
 
-// ---------- Integrity checks ----------
 function distinctStats(scores) {
   const finite = scores.filter((x) => Number.isFinite(x));
   return {
@@ -369,9 +348,6 @@ const ceAllScores = rows.flatMap((r) => r.ceHead.map((x) => x.rerankScore));
 const jevAllScores = rows.flatMap((r) => r.jevHead.map((x) => x.rerankScore));
 const ceScoreStats = distinctStats(ceAllScores);
 const jevScoreStats = distinctStats(jevAllScores);
-// Target-only view for direct comparison to Lane 12/13's recorded "224 distinct
-// ceScore values" convention (docs/EXPERIMENT-PROTOCOL.md); the all-head-items
-// stat above is the stricter check that would also have caught the Lane 12 bug.
 const ceTargetStats = distinctStats(rows.map((r) => r.ceScore).filter(Number.isFinite));
 const jevTargetStats = distinctStats(rows.map((r) => r.jevScore).filter(Number.isFinite));
 const ceVoid = ceScoreStats.distinct <= 1;
@@ -421,7 +397,6 @@ console.log('\n=================================================================
 console.log(`VERDICT: Amendment 3 gate -- "${ARM} ships only if it beats the cross-encoder"`);
 console.log('======================================================================');
 let verdict;
-// A fallen-back query keeps the base order and its varied scores, so the degenerate check cannot see it.
 if (jevFellBackCount > 0) {
   verdict = `UNDECIDABLE: ${ARM} fell back on ${jevFellBackCount}/${rows.length} queries, reported VOID not flat.`;
 } else if (jevVoid) {
@@ -444,7 +419,6 @@ console.log(
   `\nPrediction check: ${ARM} beats cross-encoder on R@1 by LESS than 0.18 (0.3333-0.1533, the two prior single-harness deltas). Observed delta: ${jevVsCeR1Delta >= 0 ? '+' : ''}${f(jevVsCeR1Delta)}.`,
 );
 
-// ---------- Output ----------
 mkdirSync('results', { recursive: true });
 const outRows = rows.map((r) => ({
   id: r.id,

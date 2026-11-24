@@ -4,7 +4,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// withFakeHome empties PATH; a child process still needs node and cmd.exe.
 const prevPathForChild = process.env.PATH ?? '';
 
 import {
@@ -35,7 +34,6 @@ function setCodexHome(value: string | undefined): void {
   else vi.stubEnv('CODEX_HOME', value);
 }
 
-// The file's afterEach vi.unstubAllEnvs puts HOME, USERPROFILE and PATH back.
 function withFakeHome() {
   const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-codex-wrapper-test-'));
   vi.stubEnv('HOME', fake);
@@ -43,7 +41,6 @@ function withFakeHome() {
   vi.stubEnv('PATH', '');
   return {
     home: fake,
-    // A detached session-end worker keeps the folder as its cwd until it exits, after its last log line.
     cleanup: () =>
       waitFor(
         () => {
@@ -55,10 +52,6 @@ function withFakeHome() {
   };
 }
 
-// The wrapper installer's behaviour is Windows-specific (it produces a
-// `codex.cmd` shim that re-launches `codex.exe` so hippo can intercept the
-// session transcript). Linux/macOS do not need a shim for the same flow,
-// so the assertions diverge by platform. Skip on non-Windows in CI.
 describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
   let env: { cleanup: () => Promise<void>; home: string };
 
@@ -77,7 +70,6 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     fs.writeFileSync(metadataPath, JSON.stringify(metadata), 'utf8');
   }
 
-  // Opts in, then lets a Codex update overwrite the wrapper, as the repair tests need.
   function clobberedLauncher(): string {
     const realBin = path.join(env.home, 'real-bin');
     const realCodex = path.join(realBin, 'codex.cmd');
@@ -172,7 +164,6 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
 
     expect(result.status).toBe('not-found');
     expect(isCodexWrapperInstalled()).toBe(false);
-    // The user's real launcher is untouched: no wrapper content, no backup.
     expect(fs.readFileSync(realCodex, 'utf8')).toContain('real codex');
     expect(fs.existsSync(path.join(realBin, 'codex.hippo-real.cmd'))).toBe(false);
   });
@@ -184,9 +175,7 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     fs.writeFileSync(realCodex, '@echo off\r\necho real codex\r\n', 'utf8');
     vi.stubEnv('PATH', realBin);
 
-    // Explicit opt-in first (what `hippo hook install codex` runs).
     expect(ensureCodexWrapperInstalled().status).toBe('installed');
-    // Simulate a Codex update clobbering the shim with a fresh real launcher.
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
 
     const installedCli = path.join(env.home, 'npm', 'node_modules', 'hippo-memory', 'bin', 'hippo.js');
@@ -227,7 +216,6 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
     expect(ensureCodexWrapperInstalled().status).toBe('installed');
     fs.writeFileSync(realCodex, '@echo off\r\necho updated real codex\r\n', 'utf8');
 
-    // No argument: the running copy is this checkout, as in a checkout's own npm install.
     const result = repairCodexWrapperIfInstalled();
 
     expect(result.status).toBe('source-checkout');
@@ -264,7 +252,6 @@ describe.skipIf(process.platform !== 'win32')('Codex wrapper install', () => {
 
     expect(JSON.parse(fs.readFileSync(argvOut, 'utf8'))).toEqual(forwarded);
 
-    // codex-run leaves a detached session-end worker; let it finish before cleanup removes its folder.
     const workerLog = resolveCodexWrapperPaths().logFile;
     await waitFor(() => fs.existsSync(workerLog) && fs.readFileSync(workerLog, 'utf8').includes('skip:'), {
       what: 'the session-end worker to log its skip',
@@ -376,7 +363,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   const ruleText = (name: string): string =>
     `We decided how to ship the ${name} service. Never deploy the ${name} service on Fridays; the runbook is runbook-${name}.md.`;
 
-  // Writes only under the CODEX_HOME it launches with, so a captured sentinel proves the launch-time home won.
   function writeStandInCodex(dir: string): string {
     fs.mkdirSync(dir, { recursive: true });
     const script = path.join(dir, 'fake-codex.js');
@@ -396,7 +382,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     );
 
     if (process.platform === 'win32') {
-      // An npm .ps1 shim: codex-run starts the script it names with Node, never through PowerShell.
       return writeNpmPs1Shim(dir, 'codex', fs.readFileSync(script, 'utf8'));
     }
     const launcher = path.join(dir, 'codex');
@@ -418,7 +403,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
     );
     const decoy = path.join(sessionsA, 'rollout-2026-10-03T09-00-00-sess-a.jsonl');
     fs.writeFileSync(decoy, rollout(ruleText(DECOY)), 'utf8');
-    // A newer mtime lets a wrapper that still looks in A pick the decoy by recency.
     const future = new Date(Date.now() + 120_000);
     fs.utimesSync(decoy, future, future);
 
@@ -456,7 +440,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
 
     const saved = (): string[] => loadAllEntries(globalRoot, 'default').map((e) => e.content);
     const readLog = (): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');
-    // The detached worker writes until its last log line; cleanup racing those writes fails with ENOTEMPTY.
     const workerDone = (log: string): boolean =>
       log.includes('skip capture') || /digest: (skip|wrote)|digest failed/.test(log);
     await waitFor(() => workerDone(readLog()), {
@@ -471,8 +454,6 @@ describe('codex-run captures from the CODEX_HOME it launches under', () => {
   });
 });
 
-// The launcher slot, its backup and the metadata are built by hand into the states a stopped install
-// or uninstall leaves; PATH holds only the temp launcher folder.
 const LAUNCHER = process.platform === 'win32' ? 'codex.cmd' : 'codex';
 const BACKUP = process.platform === 'win32' ? 'codex.hippo-real.cmd' : 'codex.hippo-real';
 const ORIGINAL_BYTES = 'original codex launcher\n';
@@ -503,7 +484,6 @@ describe('Codex wrapper recovery from a stopped install or uninstall', () => {
   const read = (file: string): string => fs.readFileSync(file, 'utf8');
   const handWrapper = `# ${HIPPO_CODEX_WRAPPER_MARKER}\n`;
 
-  // PATH becomes the first folder, then a second one, so a test can say which folder wins.
   function addLaterFolder(): string {
     const later = path.join(env.home, 'later-bin');
     fs.mkdirSync(later, { recursive: true });
@@ -511,7 +491,6 @@ describe('Codex wrapper recovery from a stopped install or uninstall', () => {
     return later;
   }
 
-  // A full install, then the state a stopped uninstall leaves: the wrapper removed by hand.
   function installThenDropWrapper(): void {
     fs.writeFileSync(slot, ORIGINAL_BYTES);
     installCodexWrapper();
@@ -729,7 +708,6 @@ describe('Codex wrapper recovery from a stopped install or uninstall', () => {
       expect(read(backup)).toBe(ORIGINAL_BYTES);
     });
 
-    // Every leftover backup beside an empty or hippo-wrapped slot is restored, in any PATH folder.
     it('restores a backup beside an empty slot in a later folder and leaves an earlier real launcher alone', () => {
       const later = addLaterFolder();
       fs.writeFileSync(slot, UPDATED_BYTES);

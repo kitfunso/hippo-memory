@@ -1,4 +1,3 @@
-// The domain decides each conflict loser's fate, with every number in it, so a store only applies what it is given.
 import { describe, expect, it } from 'vitest';
 import { BadRequestError } from '../../src/base/errors/api-errors.js';
 import { conflictLoserFate } from '../../src/domain/consolidate/conflicts.js';

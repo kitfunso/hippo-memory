@@ -1,13 +1,3 @@
-/**
- * v0.30 / E1 of DAG live-coupling — schema v28 + dirty-flag plumbing tests.
- *
- * Locks: migration idempotency, backfill cleanliness, markSummaryDirtyInTx +
- * loadDirtySummaries round-trip with tenant isolation, idempotent
- * dirty-marks (no second audit row), no-op on non-summary rows, no-op on
- * unknown id, and the audit-query round-trip that exercises the
- * VALID_AUDIT_OPS lockstep wiring (v1.11.5 CRIT A institutional rule).
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { markSummaryDirtyInTx } from '../../src/store/sqlite/entries/summary-dirty.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -18,12 +8,10 @@ import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllDirtySummaries, writeEntry } from '../_helpers/root-forms.js';
 
-// loadAllDirtySummaries is the production reader; the tenant filter stands in for the per-tenant wrapper.
 async function dirtyFor(root: string, tenantId: string): Promise<MemoryEntry[]> {
   return (await loadAllDirtySummaries(root)).filter((m) => m.tenantId === tenantId);
 }
 
-/** One dirty-mark on its own handle, the way every child-write path calls the production marker. */
 function markDirty(root: string, summaryId: string, tenantId: string, actor: string): void {
   const db = openHippoDb(root);
   try {
@@ -100,9 +88,6 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('markSummaryDirtyInTx + loadDirtySummaries round-trip per tenant (cross-tenant isolation)', async () => {
-    // Seed 2 summaries in different tenants. createMemory defaults
-    // tenantId to 'default'; manually rewrite the second to 'tenant2'
-    // via SQL — keeps the test self-contained without env shenanigans.
     const summaryA = createMemory('summary A', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -170,12 +155,6 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('markSummaryDirtyInTx rejects cross-tenant attack write (locks WHERE tenant_id=? guard against future regression)', async () => {
-    // Write summaryB as tenant2, then attempt to mark it dirty as 'default'
-    // tenant. WHERE id=? AND tenant_id=? guard should match 0 rows; no
-    // audit row emitted; tenant2's loadDirtySummaries still returns empty.
-    // Independent-review-critic MED: without this test, dropping the
-    // tenant_id clause from markSummaryDirtyInTx's UPDATE would pass all
-    // prior 7 cases.
     const summaryB = createMemory('cross-tenant target', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,
@@ -185,9 +164,7 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
     const db = openHippoDb(hippoRoot);
     db.prepare(`UPDATE memories SET tenant_id = ? WHERE id = ?`).run('tenant2', summaryB.id);
     closeHippoDb(db);
-    // Attack: mark dirty using the WRONG tenant.
     markDirty(hippoRoot, summaryB.id, 'default', 'attacker');
-    // Verify: tenant2 still sees no dirty rows, no audit row written.
     expect(await dirtyFor(hippoRoot, 'tenant2')).toEqual([]);
     expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);
     const db2 = openHippoDb(hippoRoot);
@@ -199,10 +176,6 @@ describe('v28 schema migration + dirty-flag plumbing', () => {
   });
 
   it('audit-query round-trip: markSummaryDirtyInTx + queryAuditEvents(op=summary_marked_dirty) returns the row', () => {
-    // Locks the v1.11.5 hardening pass institutional rule: a new AuditOp
-    // is useless without VALID_AUDIT_OPS Set extensions in BOTH cli.ts +
-    // server.ts. This test exercises the queryAuditEvents path that both
-    // downstream sites consume.
     const summary = createMemory('audit round-trip', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,

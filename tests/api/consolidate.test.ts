@@ -22,7 +22,6 @@ const { writeEntry, readEntry } = sessionPerTest();
 
 pinClock();
 
-/** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
@@ -37,9 +36,8 @@ describe('Decay pass', () => {
     initTestStore(tmpDir);
     fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ dormant: { enabled: false } }), 'utf8');
 
-    // Create an entry that's very old (strength will be effectively 0)
     const entry = createMemory7('ancient memory');
-    const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString(); // 10 years
+    const veryOldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000 * 10).toISOString();
     const ancient = { ...entry, lastRetrieved: veryOldDate, pinned: false };
     writeEntry(tmpDir, ancient);
 
@@ -79,7 +77,6 @@ describe('Decay pass', () => {
     expect(result.dryRun).toBe(true);
     expect(result.removed).toBe(1);
 
-    // Entry should still be on disk
     const remaining = loadAllEntries(tmpDir, 'default');
     expect(remaining.find((e) => e.id === ancient.id)?.id).toBe(ancient.id);
   });
@@ -128,8 +125,6 @@ describe('Decay pass', () => {
 
     const loaded = readEntry(tmpDir, staleCandidate.id);
     expect(loaded).not.toBeNull();
-    // Confidence is an epistemic tier, not a cached computation (reverses
-    // the confidence half of P2-1; strength refresh is untouched).
     expect(loaded!.confidence).toBe('observed');
     expect(resolveConfidence(loaded!, now)).toBe('stale');
   });
@@ -139,7 +134,6 @@ describe('Replay pass (integration)', () => {
   it('persists incremented retrieval_count and fresh last_retrieved on rehearsed memories', async () => {
     initTestStore(tmpDir);
 
-    // 8 distinct memories, no text overlap → merge pass won't fire.
     const memories = [
       createMemory7('elephants have long memories according to field study', { layer: Layer.Episodic }),
       createMemory7('production pipeline deploys every friday at noon UTC', { layer: Layer.Episodic }),
@@ -154,19 +148,12 @@ describe('Replay pass (integration)', () => {
 
     const result = await consolidate(tmpDir, { now: FIXED_NOW });
 
-    // Default config replay count is 5
     expect(result.replayed).toBe(5);
 
-    // Load all entries and check: exactly 5 should have retrieval_count > 0
-    // (only replay bumps retrieval_count during consolidate)
     const after = loadAllEntries(tmpDir, 'default');
     const rehearsed = after.filter((e) => e.retrievalCount > 0);
     expect(rehearsed).toHaveLength(5);
 
-    // Each rehearsed entry must have:
-    // - retrieval_count = 1 (started at 0)
-    // - last_retrieved set to the now consolidate was given
-    // - half_life_days bumped by +2 from the default
     const defaultHalfLife = memories[0].halfLifeDays;
     for (const r of rehearsed) {
       expect(r.retrievalCount).toBe(1);
@@ -178,7 +165,6 @@ describe('Replay pass (integration)', () => {
   it('does nothing when config.replay.count is 0', async () => {
     initTestStore(tmpDir);
 
-    // Patch config.json to disable replay
     const configPath = path.join(tmpDir, 'config.json');
     fs.writeFileSync(configPath, JSON.stringify({ replay: { count: 0 } }, null, 2));
 
@@ -199,7 +185,6 @@ describe('Replay pass (integration)', () => {
   it('caps sample size when fewer survivors exist than config count', async () => {
     initTestStore(tmpDir);
 
-    // Default config count is 5; write only 2 entries.
     const memories = [
       createMemory7('first unique memory for cap test scenario', { layer: Layer.Episodic }),
       createMemory7('second unique memory for cap test scenario', { layer: Layer.Episodic }),
@@ -220,7 +205,6 @@ describe('Merge pass', () => {
   it('merges highly similar episodic entries into a semantic memory', async () => {
     initTestStore(tmpDir);
 
-    // Two very similar episodic entries
     const e1 = createMemory7('cache refresh failure data pipeline error', { layer: Layer.Episodic });
     const e2 = createMemory7('cache refresh failure data pipeline problem', { layer: Layer.Episodic });
     writeEntry(tmpDir, e1);
@@ -309,13 +293,8 @@ describe('Merge pass', () => {
     expect(m1!.halfLifeDays).toBe(Math.max(1, Math.floor(e1.halfLifeDays * 0.3)));
     expect(m2!.halfLifeDays).toBe(Math.max(1, Math.floor(e2.halfLifeDays * 0.3)));
 
-    // Stored strength is a cache of the LIVE value, not a fake 0.3: fresh
-    // entries keep ~full strength now (no immediate ranking cliff)...
     expect(m1!.strength).toBeGreaterThan(0.9);
 
-    // ...but the demotion is real where ranking actually reads it: a few
-    // days out, the merged source decays below an unmerged peer written at
-    // the same time with the same default half-life.
     const later = new Date(now.getTime() + 10 * 24 * 60 * 60 * 1000);
     const unmergedPeer = {
       ...createMemory('completely unrelated standalone topic', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
@@ -515,7 +494,6 @@ describe('Physics pass', () => {
     }
   }
 
-  /** Three memories, two of them in conflict, each with a particle whose mass, charge and temperature are out of date. */
   function seedConflictingParticles(physicsEnabled: boolean) {
     initTestStore(tmpDir);
     fs.writeFileSync(
@@ -523,7 +501,6 @@ describe('Physics pass', () => {
       JSON.stringify({ replay: { count: 0 }, physics: { enabled: physicsEnabled } }),
       'utf8',
     );
-    // A 30-day half-life, so a pass that lost the half-lives and fell back to the simulation's own default would show.
     const a = createMemory('The deploy job runs on the staging cluster every night', {
       layer: Layer.Episodic,
       baseHalfLifeDays: 30,
@@ -562,7 +539,6 @@ describe('Physics pass', () => {
     expect(entries.find((e) => e.id === ids.a)?.conflictsWith).toEqual([ids.b]);
     expect(entries.map((e) => e.halfLifeDays)).toEqual([30, 30, 30]);
 
-    // The same steps the pass must take, on the same particles in the same order.
     const expected = seeded.map((p) => ({ ...p, position: [...p.position], velocity: [...p.velocity] }));
     refreshParticleProperties(expected, new Map(entries.map((e) => [e.id, e])), now, PRODUCTION_STRENGTH);
     const stats = simulate(expected, {
@@ -592,7 +568,6 @@ describe('Physics pass', () => {
       expect(got.lastSimulation).not.toBe(STALE.lastSimulation);
     }
 
-    // The stale properties are gone, and the conflicting pair ends further apart than it started.
     const [a, b] = [stored.get(ids.a)!, stored.get(ids.b)!];
     expect(a.mass).toBeLessThan(2);
     expect(a.charge).toBe(0);
@@ -637,7 +612,6 @@ describe('Rebuild hold', () => {
     writeEntry(tmpDir, summary);
     writeEntry(tmpDir, makeChild(summary.id, 'a child fact of the stubborn summary'));
     forceMarkDirty(tmpDir, summary.id);
-    // A reply under 20 chars is a content failure of the summary, not a provider failure.
     const fetcher = makeOkFetcher('too short');
 
     for (let sleep = 1; sleep <= 3; sleep++) {

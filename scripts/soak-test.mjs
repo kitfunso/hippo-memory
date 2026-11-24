@@ -1,30 +1,10 @@
 #!/usr/bin/env node
-/**
- * O1 — Physics engine soak test harness.
- *
- * Runs the hippo physics engine continuously under one of 10 workload profiles
- * and logs energy + velocity trajectories. Used to validate convergence claims
- * in the Frontier AI Discovery feasibility study: "bounded energy across all 10
- * workload profiles."
- *
- * Usage:
- *   node scripts/soak-test.mjs --profile balanced --ticks 100 --out results/soak-balanced.csv
- *   node scripts/soak-test.mjs --profile write-heavy --hours 24 --out results/soak-24h.csv
- *
- * A "tick" is one physics-simulate cycle. At default config, ~5 substeps of
- * Velocity Verlet integration. Real-time cost: milliseconds per tick.
- *
- * Profiles exercise distinct failure modes; if any diverge, the engine has a
- * stability bug we'd need to fix before the grant period.
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { simulate, computeSystemEnergy, vecNormalize } from '../dist/base/rank/physics.js';
 import { mergePhysicsConfig } from '../dist/base/rank/physics-config.js';
-
-// ---- flags ----
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -42,8 +22,6 @@ const OUT = String(flag('--out', `benchmarks/soak/results/soak-${PROFILE}.csv`))
 const STARTING_PARTICLES = Number(flag('--particles', 100));
 const VERBOSE = process.argv.includes('--verbose');
 
-// ---- deterministic RNG ----
-
 class Mulberry32 {
   constructor(seed) {
     this.s = seed >>> 0;
@@ -55,7 +33,6 @@ class Mulberry32 {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
   gauss() {
-    // Box–Muller
     const u = Math.max(this.next(), 1e-12);
     const v = this.next();
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
@@ -77,8 +54,6 @@ function randomNearbyVec(base, scatter, dim) {
   return vecNormalize(v);
 }
 
-// ---- particle factory ----
-
 function makeParticle(id, position, opts = {}) {
   return {
     memoryId: id,
@@ -91,14 +66,7 @@ function makeParticle(id, position, opts = {}) {
   };
 }
 
-// ---- workload profiles ----
-//
-// Each profile returns a function `applyTick(state, tickIdx)` that mutates
-// the particle list + conflicts map to reflect what a given workload does
-// between simulation cycles.
-
 const PROFILES = {
-  /** Balanced: mild churn, some adds, some removes, occasional conflict. */
   balanced(state) {
     state.particles.push(makeParticle(`p${state.nextId++}`, randomUnitVec(DIM)));
     if (rng.next() < 0.3 && state.particles.length > 50) {
@@ -109,18 +77,15 @@ const PROFILES = {
     }
   },
 
-  /** Write-heavy: add 2 new particles per tick, rarely remove. Caps growth via LRU-ish pruning. */
   'write-heavy'(state) {
     for (let k = 0; k < 2; k++) {
       state.particles.push(makeParticle(`p${state.nextId++}`, randomUnitVec(DIM)));
     }
-    // Soft cap at 500 to keep O(N^2) physics bounded in soak test
     while (state.particles.length > 500) {
       state.particles.splice(0, 1);
     }
   },
 
-  /** Read-heavy: no adds, simulate retrieval-strengthening via mass bumps. */
   'read-heavy'(state) {
     for (let k = 0; k < 10; k++) {
       if (state.particles.length === 0) break;
@@ -129,7 +94,6 @@ const PROFILES = {
     }
   },
 
-  /** Burst: periods of silence punctuated by large add bursts. */
   burst(state, tick) {
     if (tick % 20 === 0) {
       for (let k = 0; k < 20; k++) {
@@ -138,7 +102,6 @@ const PROFILES = {
     }
   },
 
-  /** Dedup-heavy: many near-duplicate particles around a small number of centers. */
   'dedup-heavy'(state) {
     if (state.centers.length === 0) {
       for (let k = 0; k < 5; k++) state.centers.push(randomUnitVec(DIM));
@@ -147,7 +110,6 @@ const PROFILES = {
     state.particles.push(makeParticle(`p${state.nextId++}`, randomNearbyVec(center, 0.05, DIM)));
   },
 
-  /** Conflict-heavy: 25% of new additions spawn a conflict with a random peer. */
   'conflict-heavy'(state) {
     const p = makeParticle(`p${state.nextId++}`, randomUnitVec(DIM), { charge: -1 });
     state.particles.push(p);
@@ -157,13 +119,10 @@ const PROFILES = {
     }
   },
 
-  /** Decay-only: no new writes — does the existing population settle? */
   'decay-only'(state) {
-    // No-op; rely on initial population.
     void state;
   },
 
-  /** Reward-modulated: flip a random charge each tick, simulating outcome feedback. */
   'reward-modulated'(state) {
     if (state.particles.length === 0) return;
     const p = state.particles[rng.int(0, state.particles.length)];
@@ -171,15 +130,12 @@ const PROFILES = {
     p.mass *= rng.next() < 0.5 ? 1.05 : 0.95;
   },
 
-  /** Consolidation-heavy: long gaps, then big merges (represented as pruning). */
   'consolidation-heavy'(state, tick) {
-    if (tick % 10 < 8) return; // idle for 8 of every 10 ticks
-    // Prune half the population (simulate merging)
+    if (tick % 10 < 8) return;
     const keep = Math.floor(state.particles.length / 2);
     state.particles = state.particles.slice(0, keep);
   },
 
-  /** Steady-state: constant add+remove to keep N roughly fixed. */
   'steady-state'(state) {
     state.particles.push(makeParticle(`p${state.nextId++}`, randomUnitVec(DIM)));
     if (state.particles.length > STARTING_PARTICLES) {
@@ -205,8 +161,6 @@ function randomPair(state) {
   }
   return [a.memoryId, b.memoryId];
 }
-
-// ---- main loop ----
 
 function initState() {
   const state = {
@@ -291,20 +245,16 @@ function run() {
   );
   const started = Date.now();
 
-  // Record t=0 state before any simulation
   const e0 = computeSystemEnergy(state.particles, config.gMemory);
   rows.push([0, 0, state.particles.length, e0.kinetic, e0.potential, e0.total, 0, 0, 0]);
 
   for (let tick = 1; tick <= TICKS; tick++) {
-    // Apply workload mutation
     PROFILES[PROFILE](state, tick);
 
-    // Keep halfLives entries in sync with particles
     for (const p of state.particles) {
       if (!state.halfLives.has(p.memoryId)) state.halfLives.set(p.memoryId, 7);
     }
 
-    // Advance physics
     const t0 = Date.now();
     const stats = simulate(state.particles, ctx);
     const tickMs = Date.now() - t0;
@@ -318,7 +268,6 @@ function run() {
       );
     }
 
-    // Detect divergence early
     if (!Number.isFinite(energy.total)) {
       console.error(`  DIVERGENCE at tick ${tick}: non-finite energy`);
       break;
@@ -329,7 +278,6 @@ function run() {
     }
   }
 
-  // ---- write CSV ----
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
   fs.writeFileSync(OUT, csv);

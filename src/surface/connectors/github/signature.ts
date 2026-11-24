@@ -2,12 +2,9 @@ import { createHash } from 'node:crypto';
 import { matchesHmacSha256 } from '../hmac.js';
 
 export interface VerifyOptions {
-  /** The body's bytes as received; a string is hashed as its UTF-8 encoding. */
   rawBody: string | Uint8Array;
-  /** Value of X-Hub-Signature-256, e.g. 'sha256=ab12...' */
   signature: string;
   webhookSecret: string;
-  /** Previous secret for rotation parity with Slack. Optional. */
   previousSecret?: string;
 }
 

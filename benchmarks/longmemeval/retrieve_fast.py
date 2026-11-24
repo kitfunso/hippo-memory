@@ -1,8 +1,3 @@
-"""Fast retrieval using SQLite FTS5 directly, bypassing hippo CLI.
-
-Eliminates subprocess overhead: one process, one DB connection, all 500 queries.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -34,12 +29,10 @@ def load_dataset(data_path: Path) -> list[dict[str, Any]]:
 
 
 def tokenize(text: str) -> list[str]:
-    """Simple tokenizer matching hippo's BM25 approach."""
     return [w for w in re.sub(r"[^\w\s]", " ", text.lower()).split() if len(w) > 2]
 
 
 def fts_escape(term: str) -> str:
-    """Escape a term for FTS5 query."""
     return '"' + term.replace('"', '""') + '"'
 
 
@@ -48,12 +41,10 @@ def recall_fts(
     query: str,
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
-    """Retrieve memories using FTS5 full-text search."""
     tokens = tokenize(query)
     if not tokens:
         return []
 
-    # Use OR for broader matching, limit terms to avoid query explosion
     search_terms = tokens[:20]
     fts_query = " OR ".join(fts_escape(t) for t in search_terms)
 
@@ -97,12 +88,10 @@ def recall_like(
     query: str,
     top_k: int = 10,
 ) -> list[dict[str, Any]]:
-    """Fallback: LIKE-based search when FTS fails."""
     tokens = tokenize(query)
     if not tokens:
         return []
 
-    # Score each memory by token overlap
     all_rows = db.execute(
         "SELECT id, content, tags_json, strength FROM memories"
     ).fetchall()

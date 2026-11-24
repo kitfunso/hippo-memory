@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Per-verb flag reads: for each row of the verb table in src/surface/cli/verbs/, the flags its handler and every function it hands the flags object to read.
-// It follows the object, so a flags object built elsewhere does not count toward a verb. Usage: cli-flag-reads.mjs [--json]
 
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -8,19 +6,16 @@ import { fileURLToPath } from 'node:url';
 
 const ARRAY_CALLBACKS = new Set(['map', 'filter', 'some', 'every', 'find', 'forEach', 'flatMap']);
 const VALUE_CALLS = new Set(['String', 'Number', 'parseInt', 'parseFloat', 'Array.isArray']);
-// Object.keys is left out: it lists names, as a validator does, and reads no value.
 const WHOLE_OBJECT_CALLS = new Set(['Object.entries', 'Object.values', 'JSON.stringify', 'Object.assign']);
 const EQUALITY = new Set(['===', '!==', '==', '!=']);
 const KIND_RANK = ['value', 'unknown', 'on-off', 'presence'];
 
-/** One kind for several uses: any value use wins, and an unclassed use hides an on/off one. */
 function mergeKinds(kinds) {
   const seen = kinds.map((kind) => (kind === 'returned' ? 'unknown' : kind)).filter((kind) => kind !== 'write');
   return KIND_RANK.find((kind) => seen.includes(kind)) ?? 'unknown';
 }
 
 function loadEnv(repo) {
-  // Loaded from this script's install, so a fixture tree without node_modules can be walked.
   const ts = createRequire(import.meta.url)('typescript');
   const parsed = ts.getParsedCommandLineOfConfigFile(
     path.join(repo, 'tsconfig.json'),
@@ -105,7 +100,6 @@ function literalKeys(env, expr) {
   return null;
 }
 
-/** The values a key identifier takes as a loop variable or an array-callback parameter over literals. */
 function loopKeys(env, ident) {
   const { ts, checker } = env;
   const decl = checker.getSymbolAtLocation(ident)?.valueDeclaration;
@@ -144,7 +138,6 @@ function functionOf(env, expr) {
   return init && isFunctionLike(ts, init) ? init : null;
 }
 
-/** `TABLE[key](...)` over a const object of functions calls any one of them, so all of them count. */
 function tableHandlers(env, call) {
   const { ts, checker } = env;
   const callee = strip(ts, call.expression);
@@ -195,7 +188,6 @@ function operandKind(ts, binary, operand) {
     if (text === 'undefined') return 'presence';
     return ts.isStringLiteral(other) ? 'value' : 'unknown';
   }
-  // `flag || 'default'` takes the flag's value; `flag || other.setting` only asks whether it is on.
   const literal =
     ts.isStringLiteralLike(other) ||
     ts.isNumericLiteral(other) ||
@@ -208,7 +200,6 @@ function operandKind(ts, binary, operand) {
   return op === '=' && binary.left === operand ? 'write' : 'unknown';
 }
 
-/** How one occurrence of a flag's value is used: on-off, value, presence, write, returned or unknown. */
 function useKind(env, node, depth = 0) {
   const { ts } = env;
   let cur = node;
@@ -238,7 +229,6 @@ function noteUnfollowed(env, node, why) {
   env.unfollowed.push(`${where(env, node)}  ${why}: ${lineText(node)}`);
 }
 
-/** Binds a name as the flags object ('flags') or a context holding it ('ctx'); a `{ flags }` pattern unpacks a context. */
 function bind(env, scope, name, kind) {
   const { ts, checker } = env;
   const target = ts.isIdentifier(name)
@@ -250,10 +240,8 @@ function bind(env, scope, name, kind) {
   if (sym) scope[ts.isIdentifier(name) ? kind : 'flags'].add(sym);
 }
 
-// A member a known object literal lacks: a call through it never runs for that object.
 const ABSENT = Symbol('absent');
 
-/** The object literal a `const` name is declared as, so a config passed by name is followed like one written inline. */
 function constObject(env, ident) {
   const { ts, checker } = env;
   let sym = checker.getSymbolAtLocation(ident);
@@ -265,18 +253,15 @@ function constObject(env, ident) {
   return ts.isObjectLiteralExpression(init) ? init : null;
 }
 
-/** The property `obj.name` picks from a known object literal: ABSENT when the literal surely lacks it, null when unknown. */
 function memberOf(env, scope, access, depth) {
   const { ts } = env;
   const base = valueOf(env, scope, access.expression, depth + 1);
   if (base === ABSENT) return ABSENT;
   if (!base || !ts.isObjectLiteralExpression(base)) return null;
   const prop = base.properties.find((p) => p.name?.getText() === access.name.text);
-  // A spread may carry the member, so only a literal without one surely lacks it.
   return prop ?? (base.properties.some((p) => ts.isSpreadAssignment(p)) ? null : ABSENT);
 }
 
-/** The function or object literal an expression names, through bound names, declarations and factory calls; null when unknown. */
 function valueOf(env, scope, expr, depth = 0) {
   const { ts, checker } = env;
   const e = strip(ts, expr);
@@ -302,7 +287,6 @@ function valueOf(env, scope, expr, depth = 0) {
   return ret ? valueOf(env, null, ret, depth + 1) : null;
 }
 
-/** The callee's parameters bound to the functions and object literals a call passes it. */
 function boundParams(env, scope, decl, callArgs) {
   const { ts, checker } = env;
   const bound = new Map();
@@ -363,7 +347,6 @@ function taintOf(env, scope, expr) {
   return null;
 }
 
-/** Records a read under each literal key; a key that is one of the function's own parameters is left for its callers to name. */
 function addRead(env, scope, keyExpr, node, kind) {
   const { ts, checker } = env;
   const ident = strip(ts, keyExpr);
@@ -378,7 +361,6 @@ function addRead(env, scope, keyExpr, node, kind) {
   for (const key of keys ?? []) scope.reads.push({ key, kind, at: where(env, node), text: lineText(node) });
 }
 
-/** The names a key takes: a literal, a loop over literals, or a member of a known config; none for a member it lacks. */
 function keysOf(env, scope, key) {
   const { ts } = env;
   if (ts.isIdentifier(key)) return loopKeys(env, key) ?? literalKeys(env, key);
@@ -470,7 +452,6 @@ function visitNode(env, scope, node) {
   ts.forEachChild(node, (child) => visitNode(env, scope, child));
 }
 
-/** One function's reads, given which parameters (by index) are the flags object or a context holding it. */
 function analyze(env, fn, taint, bound = new Map()) {
   const boundKey = [...bound]
     .map(([sym, value]) => `${sym.valueDeclaration?.pos}=${value.pos}:${value.getSourceFile().fileName}`)
@@ -486,7 +467,6 @@ function analyze(env, fn, taint, bound = new Map()) {
   return scope;
 }
 
-/** The function a `verb(() => import(module), 'handleX', row)` row names, export handleX of that module; a `factory(descriptor)` export runs what the factory returns. */
 function rowHandler(env, call) {
   const { ts, checker } = env;
   const [load, name] = call.arguments;
@@ -512,7 +492,6 @@ function rowHandler(env, call) {
   return { run: made, bound: boundParams(env, null, factory, init.arguments) };
 }
 
-/** The handler of every `verb(...)` row of the verb table in src/surface/cli/verbs/. */
 function commandRows(env) {
   const { ts, program, repo } = env;
   const verbsDir = path.resolve(repo, 'src', 'surface', 'cli', 'verbs');

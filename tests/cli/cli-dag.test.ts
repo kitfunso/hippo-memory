@@ -7,7 +7,6 @@ import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -23,7 +22,6 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
 describe('hippo dag', () => {
   let hippoRoot: string;
 
-  // A copy of the run's migrated store: `hippo init` on an empty folder runs every migration, which this test is not about.
   beforeEach(() => {
     hippoRoot = makeStore('cli-dag').base;
     vi.stubEnv('HIPPO_HOME', hippoRoot);

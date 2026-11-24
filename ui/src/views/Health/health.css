@@ -1,11 +1,9 @@
-/* Health view styles, ported from the approved mockup B-ledger-2d.html; tokens live in tokens.css. */
 .app {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-/* top bar */
 .top {
   position: relative;
   flex: none;
@@ -223,7 +221,6 @@ select.ctl {
   font: 500 13px var(--sans);
 }
 
-/* layout */
 main {
   position: relative;
   flex: 1 1 auto;
@@ -297,7 +294,6 @@ main > :last-child {
   margin: 0;
 }
 
-/* KPIs */
 .kpis {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -344,7 +340,6 @@ main > :last-child {
   height: 28px;
 }
 
-/* static skeleton blocks: no shimmer, so reduced motion needs no special case */
 .skel {
   background: var(--line);
   border-radius: 4px;
@@ -375,7 +370,6 @@ main > :last-child {
   height: 44px;
 }
 
-/* overview body */
 .ov-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -555,7 +549,6 @@ main > :last-child {
   font-size: 12px;
 }
 
-/* virtual table */
 .vt-wrap {
   position: relative;
   display: flex;
@@ -662,7 +655,6 @@ main > :last-child {
   color: var(--text-3);
   margin-left: 6px;
 }
-/* Covers the whole wrapper so no header height is hard-coded; only its buttons take the pointer. */
 .vt-empty {
   position: absolute;
   inset: 0;
@@ -733,7 +725,6 @@ main > :last-child {
   color: var(--risk);
 }
 
-/* buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -785,7 +776,6 @@ main > :last-child {
   background: #f3f5f8;
 }
 
-/* project view */
 .pv-h1 {
   margin: 0;
   font-size: 20px;
@@ -954,7 +944,6 @@ main > :last-child {
   color: var(--text);
 }
 
-/* drawer */
 .drawer {
   position: fixed;
   top: 64px;
@@ -1079,7 +1068,6 @@ main > :last-child {
   flex-wrap: wrap;
 }
 
-/* overlays */
 .tip {
   position: fixed;
   z-index: 70;
@@ -1168,7 +1156,6 @@ main > :last-child {
   }
 }
 
-/* Phone: header row 1 is brand, view switch, icon Refresh; row 2 is the search; the page scrolls */
 @media (max-width: 760px) {
   .top {
     height: auto;
@@ -1303,7 +1290,6 @@ main > :last-child {
   }
 }
 
-/* project view: scatter card, memory table rows, drawer pairs */
 .sc-wrap canvas.ov.brushing {
   touch-action: none;
 }

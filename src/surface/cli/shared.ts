@@ -1,6 +1,3 @@
-// Store helpers the CLI verbs share: init checks, git learning and the auth root.
-// This module must never import cli.ts.
-
 import { isSharedStore } from '../../host/config-file.js';
 import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/churn.js';
 import { isInitialized } from '../../host/project-identity.js';
@@ -62,9 +59,7 @@ export interface LearnFromRepoOptions {
   readonly tenantId: string;
   readonly repoPath: string;
   readonly days: number;
-  /** Prefixes each printed line, so a multi-repo scan says which repo spoke. */
   readonly label?: string;
-  /** The context to learn on; a test hands in one whose ports it controls. */
   readonly ctx?: CliContext;
 }
 

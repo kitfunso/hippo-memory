@@ -1,4 +1,3 @@
-// Memory surfaces (prereg 104, 114): hashed into the run ledger before each session, copied aside, put back on a retry.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -9,7 +8,6 @@ export const RESTORABLE = ['autoMemory', 'userInstructions', 'codexMemories', 'c
 /** Snapshotted and restored but never read as memory: Codex's own state, which G3 scans by an allowlist (E6 plan R10). */
 export const RESTORE_ONLY = ['codexState'];
 const SNAPSHOT = [...RESTORABLE, ...RESTORE_ONLY];
-// Left out of codexState: the login, the other surfaces, past sessions, and Codex's logs, caches and locks (plan R10).
 const NOT_STATE = /^(?:auth\.json.*|memories|sessions|archived_sessions|history\.jsonl|session_index\.jsonl|log|logs_.*\.sqlite.*|cache|models_cache\.json|tmp|process_manager|cap_sid|.*-locks|agents(?:\.override)?\.md)$/i;
 
 const sha256 = (data) => createHash('sha256').update(data).digest('hex');
@@ -28,7 +26,6 @@ export function followStat(abs) {
   }
 }
 
-/** Each surface's roots now, as `{name, abs, linked}`; a root may be absent, so a restore deletes what the attempt made there. */
 function surfaceRoots(run) {
   const { claudeConfig, codexHome, hippoHome, work } = run.dirs;
   const projects = path.join(claudeConfig, 'projects');
@@ -47,7 +44,6 @@ function surfaceRoots(run) {
   };
 }
 
-/** Files under `abs`, never following a link; a read error is kept on its entry, never thrown. */
 function walk(run, abs, out) {
   let st;
   try {
@@ -134,13 +130,10 @@ export function snapshotSurfaces(ctx, run, when, step) {
 const IMPORTED = 'agent-memory:';
 /** A row hippo imported from a coding agent's own notes (src/agent-memories/tools.ts). */
 export const isImported = (e) => String(e.source ?? '').startsWith(IMPORTED);
-// The tool stays in an imported row's prefix (agent-memory:claude-code); other sources keep their first part.
 const prefixOf = (e) => String(e.source ?? '').split(':').slice(0, isImported(e) ? 2 : 1).join(':');
 export const collapse = (s) => s.replace(/\s+/g, ' ').trim();
-// One context-render.ts contextLine bullet, as scripts/z1-replay.mjs parses it.
 const BULLET = /^- \*\*\[[^\]]+\](?: ⚠️)? (?:Previously observed \(\d{4}-\d{2}-\d{2}\): |Consider checking: )?(?:\[global\] )?([\s\S]*)\*\*(?: \[[^\]]*\])?(?: \(\d+%\))?$/;
 
-/** Store entries whose content a bullet printed; a `[truncated]` bullet matches by prefix (z1-replay.mjs). */
 function bulletEntries(byContent, bullet) {
   const m = BULLET.exec(bullet);
   if (!m) return [];
@@ -150,7 +143,6 @@ function bulletEntries(byContent, bullet) {
   return [...byContent].filter(([k]) => k.startsWith(head)).flatMap(([, es]) => es);
 }
 
-/** The bullet a part opens with: the longest blank-line-bounded prefix that parses, since a memory may hold blank lines itself. */
 function wholeBullet(part) {
   const cuts = [...part.matchAll(/\n\n/g)].map((m) => m.index).reverse();
   for (const end of [part.length, ...cuts]) {
@@ -197,11 +189,9 @@ const sameFiles = (a = [], b = []) => JSON.stringify(a) === JSON.stringify(b);
 export function restoreSurfaces(ctx, run, snap, when, step) {
   let ok = snap.restorable;
   const now = surfaceRoots(run);
-  // A folder linked now leads outside the run, so nothing is deleted or written through it; the hash check then fails.
   const through = new Set(now.autoMemory.filter((r) => r.linked).map((r) => r.abs));
   for (const [key, all] of snap.copied) {
     const roots = all.filter((r) => !through.has(r.abs));
-    // The cut-off attempt can start a memory dir for a project folder, or a Codex state file, the snapshot never saw.
     const extra = key === 'autoMemory' || key === 'codexState' ? now[key].filter((r) => !r.linked && !roots.some((s) => s.abs === r.abs)) : [];
     try {
       for (const r of [...roots, ...extra]) fs.rmSync(r.abs, { recursive: true, force: true, maxRetries: 3 });
@@ -214,7 +204,6 @@ export function restoreSurfaces(ctx, run, snap, when, step) {
       ctx.log(`${cellName(run, step.t)}: ${when} of ${key} failed (${errCode(err)})`);
     }
   }
-  // Only what this restore put back is compared; restoreInstructions restores and owns `instructions`.
   const after = surfaceFiles(run);
   const keys = [...snap.copied.keys()];
   const verified = keys.every((k) => sameFiles(after[k], snap.surfaces[k]));

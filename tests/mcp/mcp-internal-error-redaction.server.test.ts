@@ -1,4 +1,3 @@
-// An MCP tool that throws an untyped error must not hand its internal text to the client; typed API errors keep theirs.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { ServerHandle } from '../../src/server.js';
@@ -57,7 +56,6 @@ describe('POST /mcp error replies', () => {
   it.skipIf(needsHippoDb('db'))(
     'an untyped error inside a tool returns a generic message with the request id, and logs the real text',
     async () => {
-      // A dropped table makes hippo_status hit a real SQLite error whose text names the schema.
       const db = openHippoDb(home);
       try {
         db.exec('DROP TABLE memory_conflicts');
@@ -74,7 +72,6 @@ describe('POST /mcp error replies', () => {
       expect(stderrText()).toMatch(
         /\[hippo\] error: mcp request \(tools\/call [^)]*\) failed: .*memory_conflicts.* requestId=req-redact-1/,
       );
-      // The class and stack say where it was thrown, as the HTTP failure line does.
       expect(stderrText()).toMatch(/mcp request \(.*\) failed: .* errorClass=\w*Error stack=.*\s+at /);
     },
   );

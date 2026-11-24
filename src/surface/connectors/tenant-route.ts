@@ -1,5 +1,3 @@
-// The tenant a webhook lands in, by one rule for every connector: its routing rows, else the host's
-// on an install that registered none.
 import type { ConnectorStore } from './ingest.js';
 import type { RouteQuery } from '../../base/ports/store/connectors.js';
 

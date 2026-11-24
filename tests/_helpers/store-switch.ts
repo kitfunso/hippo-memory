@@ -1,5 +1,3 @@
-// The store the HTTP and MCP end-to-end suites serve: hippo.db by default, a port-only store under
-// HIPPO_TEST_STORE=port-only, which the port-only job in ci.yml sets. Only this file reads the variable.
 import { serve as serveOn, type ServeOptions, type ServerHandle } from '../../src/server.js';
 import type { OptionalGroup } from '../../src/base/ports/store-index.js';
 import { CONNECTOR_GROUPS } from '../../src/surface/connectors/ingest.js';
@@ -8,7 +6,6 @@ import { FOLDER_GROUPS, portOnlyStore } from './port-only-store.js';
 
 export const onPortOnly = process.env.HIPPO_TEST_STORE === 'port-only';
 
-/** Why a test runs on hippo.db only, each under the groups a port-only store leaves out. */
 const NEEDS_HIPPO_DB = {
   db: {
     group: 'folder',

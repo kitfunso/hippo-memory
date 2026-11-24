@@ -9,11 +9,7 @@
 export const RRF_K = 60;
 
 export interface RrfFuseOptions {
-  /** Smoothing constant. Default RRF_K = 60. */
   k?: number;
-  /**
-   * Rank assigned to candidates absent from a list; default `max(rankedLists.map(l => l.length))
-   * + 1`, the convention hybridSearch used (`entries.length + 1`). */
   absentRank?: number;
 }
 
@@ -39,7 +35,7 @@ export function rrfFuse<T>(
   const rankMaps: Array<Map<T, number>> = rankedLists.map((list) => {
     const m = new Map<T, number>();
     for (let i = 0; i < list.length; i++) {
-      m.set(list[i], i + 1); // 1-indexed rank
+      m.set(list[i], i + 1);
     }
     return m;
   });

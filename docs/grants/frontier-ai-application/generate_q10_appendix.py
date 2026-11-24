@@ -1,5 +1,3 @@
-"""Generate Q10 appendix: team summary."""
-
 from pathlib import Path
 
 from fpdf import FPDF
@@ -26,7 +24,6 @@ def generate() -> None:
     pdf.cell(0, 8, "Team Summary", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
-    # Principal Researcher section
     pdf.set_fill_color(0, 51, 102)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 11)
@@ -34,7 +31,6 @@ def generate() -> None:
     pdf.set_text_color(0, 0, 0)
     pdf.ln(3)
 
-    # Info table
     info = [
         ("Organisation", "KITFUNSO LTD (UK registered)"),
         ("Role", "Principal Researcher, sole developer"),
@@ -51,7 +47,6 @@ def generate() -> None:
 
     pdf.ln(3)
 
-    # Relevant experience
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 245)
     pdf.cell(0, 7, "  Relevant Experience", fill=True, new_x="LMARGIN", new_y="NEXT")
@@ -82,7 +77,6 @@ def generate() -> None:
         title_end = exp.index(":")
         pdf.cell(3, 5, "-")
         pdf.set_font("Helvetica", "B", 9)
-        # Write title part
         title = exp[:title_end + 1]
         rest = exp[title_end + 1:]
         pdf.multi_cell(175, 5, title + rest)
@@ -90,7 +84,6 @@ def generate() -> None:
 
     pdf.ln(2)
 
-    # Technical skills
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 245)
     pdf.cell(0, 7, "  Technical Skills Relevant to This Project", fill=True, new_x="LMARGIN", new_y="NEXT")
@@ -136,13 +129,11 @@ def generate() -> None:
 
         y_before = pdf.get_y()
 
-        # Objective cell
         pdf.rect(pdf.get_x(), y_before, col_w[0], row_h)
         pdf.set_xy(pdf.get_x() + 2, y_before + 2)
         pdf.set_font("Helvetica", "B", 8)
         pdf.cell(col_w[0] - 4, 4, obj)
 
-        # Skills cell
         x_skills = pdf.l_margin + col_w[0]
         pdf.rect(x_skills, y_before, col_w[1], row_h)
         pdf.set_font("Helvetica", "", 7.5)
@@ -150,7 +141,6 @@ def generate() -> None:
             pdf.set_xy(x_skills + 2, y_before + j * 4.5 + 1)
             pdf.cell(col_w[1] - 4, 4, line)
 
-        # Evidence cell
         x_ev = pdf.l_margin + col_w[0] + col_w[1]
         pdf.rect(x_ev, y_before, col_w[2], row_h)
         for j, line in enumerate(evidence.split("\n")):
@@ -161,7 +151,6 @@ def generate() -> None:
 
     pdf.ln(4)
 
-    # Resources summary
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 245)
     pdf.cell(0, 7, "  Resources and Equipment", fill=True, new_x="LMARGIN", new_y="NEXT")
@@ -184,7 +173,6 @@ def generate() -> None:
 
     pdf.ln(3)
 
-    # Phase 2 team vision
     pdf.set_fill_color(142, 68, 173)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 9)

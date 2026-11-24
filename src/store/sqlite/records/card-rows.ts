@@ -1,6 +1,3 @@
-// Card rows: the columns, the row mappers, the comment insert, the blank-text check and the
-// unknown-card error that card reads and writes share.
-
 import { type DatabaseSyncLike } from '../../../db/index.js';
 import { Card, CardStatus, CardRun, CardComment } from '../../../base/records/card.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -103,7 +100,6 @@ export function rowToCardComment(row: CardCommentRow): CardComment {
   };
 }
 
-/** A tenant's card and the comment its author leaves on it. */
 interface CardCommentOptions {
   readonly tenantId: string;
   readonly cardId: string;

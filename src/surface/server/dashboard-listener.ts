@@ -1,6 +1,3 @@
-// `hippo dashboard` on the API server's own listener code: request ids, deadlines, body limits,
-// error replies and the drain come from boot.ts and lifecycle.ts; only the route table and its
-// session are the dashboard's.
 import type { Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { adminActor } from '../../api/index.js';
@@ -29,31 +26,22 @@ import { createListener } from './tls.js';
 import type { ServerHandle } from './types.js';
 import { rootInfra } from '../../infra/ports.js';
 
-// The audit log's actor for every dashboard write.
 const DASHBOARD_ACTOR = 'dashboard';
-// Loopback only: the token guards the memories from other local users, never from the network.
 const DASHBOARD_HOST = '127.0.0.1';
 
 export interface DashboardOptions {
   readonly hippoRoot: string;
-  /** The tenant the CLI root resolved; the dashboard reads and writes as it. */
   readonly tenantId: string;
   readonly port: number;
-  /** The per-start secret that keys the session cookies; no URL or file carries it. */
   readonly token: string;
-  /** Dates the strength projections; the eval clock when unset. */
   readonly now?: () => number;
-  /** Ages the snapshot id; the wall clock when unset. */
   readonly cacheClock?: () => number;
-  /** Stop and exit on SIGINT or SIGTERM; only `hippo dashboard` sets it. */
   readonly handleSignals?: boolean;
-  /** The HIPPO_BODY_TIMEOUT_MS value the CLI read; 30 s when unset. */
   readonly bodyDeadlineMs?: number;
 }
 
 /** A running dashboard, which hands out the one-time tickets its URL carries. */
 export interface DashboardHandle extends ServerHandle {
-  /** A fresh ticket: it opens the dashboard once, within ten minutes. */
   readonly ticket: () => string;
 }
 
@@ -68,8 +56,6 @@ export class DashboardListenError extends Error {
   }
 }
 
-/** What every request shares: the reader thread on its own store connection, and a Context on
- * the store's workers. */
 function servingFor(
   opts: DashboardOptions,
   { store, storeFor, host }: ServerRuntime,
@@ -79,7 +65,6 @@ function servingFor(
   const now = opts.now ?? ((): number => clock().getTime());
   const configAt = configReader(envRuntimeSettings);
   const infra = rootInfra(host);
-  // Proved once, so a store without the Board's groups refuses at start, never on a request.
   const dashboardStore = requireGroups(store, DASHBOARD_GROUPS);
   return {
     access: { token: opts.token, port: opts.port, tickets: dashboardTickets() },
@@ -109,8 +94,6 @@ export async function serveDashboard(opts: DashboardOptions): Promise<DashboardH
   const inflight = new Set<ServerResponse>();
   const server = dashboardListener(serving, runtime, inflight);
   setKeepAliveTimeouts(server);
-  // The reader thread closes before the runtime, which closes its held connection last, so that
-  // close is the last.
   const release = async (): Promise<void> => {
     await serving.reader.close();
     await runtime.close(DETACHED_SETTLE_MS);
@@ -144,8 +127,6 @@ function dashboardListener(
   runtime: ServerRuntime,
   inflight: Set<ServerResponse>,
 ): Server {
-  // Its own count: the dashboard serves no /health, so its late handlers never mix into the API
-  // server's.
   const counts = { handlerDeadlines: 0 };
   return createListener(undefined, (req, res) => {
     res.once('finish', runtime.afterResponse);

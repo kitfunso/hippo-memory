@@ -15,7 +15,6 @@ import { loadActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-// The instruction Claude Code hands the summarizer; pinned word for word.
 const INSTRUCTION =
   "In your summary, add a last section titled 'Memories for hippo'. List, one per line starting with '- ', each lesson learned, decision made (with its reason) and correction the user gave in this session that should outlive it. Write each as a standalone sentence that names its subject. Leave out anything an earlier summary already listed under 'Memories for hippo', and anything this session already saved with `hippo remember`. Write '- none' if nothing new remains.";
 
@@ -49,7 +48,6 @@ afterEach(() => removeScratch(s));
 sessionPerTest();
 
 function payloadFor(session: string | null, transcriptPath: string, trigger: string): string {
-  // JSON.stringify leaves out an undefined session_id.
   return JSON.stringify({
     transcript_path: transcriptPath,
     cwd: s.proj,
@@ -59,7 +57,6 @@ function payloadFor(session: string | null, transcriptPath: string, trigger: str
   });
 }
 
-// In process: the cases read rows, the log and fd 1, which run-cli-as routes; only the lock-wait case needs a child pid.
 function preCompact(session: string | null, transcriptPath: string = transcript, trigger = 'auto') {
   return runCliAs(['pre-compact', '--log-file', logFile], {
     cwd: s.proj,
@@ -187,7 +184,6 @@ describe('the pre-compact diagnostic log', () => {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     fs.writeFileSync(logFile, `${'x'.repeat(256 * 1024 + 1)}\n`);
     expect((await preCompact('s1')).status).toBe(0);
-    // Exactly the new line from byte 0: a write left at the old offset would sit behind a run of NUL bytes.
     const lines = logLines();
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(SKIP_LINE);

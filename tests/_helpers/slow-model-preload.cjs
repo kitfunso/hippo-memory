@@ -1,10 +1,8 @@
-// Preloaded into a spawned CLI: answers the Anthropic Messages API itself and holds every call while SLOW_MODEL_DIR/hold exists, so a test decides how long a sleep stays inside the model.
 const fs = require('node:fs');
 const path = require('node:path');
 
 const dir = process.env.SLOW_MODEL_DIR;
 const hold = path.join(dir, 'hold');
-// A test that dies without removing the hold file must not leave its sleeps stuck for good.
 const HOLD_LIMIT_MS = 25_000;
 let calls = 0;
 
@@ -20,7 +18,6 @@ globalThis.fetch = async (url, init) => {
   let text;
   if (extracting) {
     const source = (prompt.split('Input text:\n')[1] || '').trim().replace(/\s+/g, ' ').slice(0, 70);
-    // The wording names the call, so two sleeps never word one fact alike and the dedupe pass cannot merge their copies.
     text = JSON.stringify([
       {
         content: `Alice recorded in call ${n} of process ${process.pid} that ${source}.`,

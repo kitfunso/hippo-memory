@@ -1,4 +1,3 @@
-// The personal-memories plan's lane T walk, written from the plan alone: one shared-store server, callers A, B and an unowned admin.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -38,7 +37,6 @@ afterAll(() => {
 const A_SCOPE = 'personal:private:oid-a';
 const B_SCOPE = 'personal:private:oid-b';
 const ZIRCON = 'zircon-kettle note for alpha';
-// Recall and context drop a later copy of the same text, so the team row adds words to stay visible beside A's.
 const ZIRCON_TEAM = 'zircon-kettle note for alpha, team copy';
 const QUILL = 'the quillonmarsh valve sticks after a cold start';
 const TEAL = 'the tealwickharbour gauge reads high after a cold start';
@@ -114,7 +112,6 @@ function json<T>(r: Reply): T {
   return JSON.parse(r.text) as T;
 }
 
-/** POST /v1/memories that must land; a refusal throws with the body, so a setup failure reads as one. */
 async function post(token: string, body: Record<string, JsonValue>): Promise<string> {
   const r = await http(token, 'POST', '/v1/memories', body);
   if (r.status !== 200) throw new Error(`write refused ${r.status}: ${r.text}`);
@@ -151,7 +148,6 @@ async function contextIds(token: string, query: string): Promise<string[]> {
   return json<{ entries: Array<{ entry: { id: string } }> }>(r).entries.map((x) => x.entry.id);
 }
 
-/** A tools/call reply as text, sent from the alpha repo: the tool's own text, or the JSON-RPC error message a thrown API error becomes. */
 async function tool(token: string, name: string, args: Record<string, JsonValue>, base?: string): Promise<string> {
   const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
   const r = await http(token, 'POST', '/mcp', call, { 'x-hippo-project': 'alpha' }, base);
@@ -160,7 +156,6 @@ async function tool(token: string, name: string, args: Record<string, JsonValue>
   return body.result?.content[0]?.text ?? body.error?.message ?? '';
 }
 
-/** F13: the reply for a real id, masked, equals the reply for an id that never existed, and has `status` when given. */
 async function sameAsMissing(id: string, run: (id: string) => Promise<Reply>, status?: number): Promise<void> {
   const fake = generateId();
   const real = await run(id);
@@ -174,9 +169,8 @@ async function sameAsMissing(id: string, run: (id: string) => Promise<Reply>, st
 
 beforeAll(async () => {
   tmp = makeRoot('personal-walk', { init: false });
-  // File-wide, not per test: the one server reads both at boot and on every request.
   vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
-  vi.stubEnv('HIPPO_V1_RPS', '0'); // every call comes from one address, so the per-address limiter would cut the walk short
+  vi.stubEnv('HIPPO_V1_RPS', '0');
   store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });
   initTestStore(store);
@@ -301,7 +295,6 @@ describe('personal memories walk (plan lane T)', () => {
     expect(await say('A', 'hippo_recall', { query: 'cold start' })).toContain('quillonmarsh');
     expect(await say('A', 'hippo_assemble', { session_id: SESSION })).toContain('umberline');
     expect(await say('A', 'hippo_drill', { summary_id: ids.summary })).toContain(ids.child);
-    // A's personal rows are user-global, so the alpha header still shows them.
     expect(await say('A', 'hippo_context', {})).toContain('quillonmarsh');
     for (const who of OTHERS) {
       const recalled = await say(who, 'hippo_recall', { query: 'cold start' });
@@ -346,7 +339,7 @@ describe('personal memories walk (plan lane T)', () => {
     const cwd = process.cwd();
     const away = path.join(tmp, 'away');
     fs.mkdirSync(away);
-    process.chdir(away); // outside git, so the tool's auto query is empty and it lists by strength
+    process.chdir(away);
     try {
       const context = (who: Who): Promise<string> => tool(soloKeys[who].plaintext, 'hippo_context', {}, soloHandle.url);
       expect(await context('A')).toContain('quillonmarsh');
@@ -538,7 +531,6 @@ describe('personal memories walk (plan lane T)', () => {
       expect(listed, who).not.toContain(`conflict_${aPair}:`);
     }
 
-    // The admin resolves with the CLI on a shared store, which runs this.
     const resolved = await api.conflictResolve(apiCtx(store, 'default', api.adminActor('walk')), teamPair, {
       keepId: t2,
       rejectLoser: true,
@@ -639,7 +631,6 @@ describe('personal memories walk (plan lane T)', () => {
   });
 
   it('local CLI recall --scope personal:private:oid-a returns no personal row', async () => {
-    // Fresh rows, because the line 14 sleep may merge the earlier zircon rows into one consolidated row.
     const team = seedRow('the harrowfen pump note for the cli, team row', null, '');
     const mine = seedRow('the harrowfen pump note for the cli, kept by A', A_SCOPE, '');
     const run = (flags: Record<string, string | boolean>) =>

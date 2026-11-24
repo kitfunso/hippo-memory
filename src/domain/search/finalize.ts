@@ -13,8 +13,6 @@ import {
  * the fact). */
 export function dedupeExtracted(scored: SearchResult[]): SearchResult[] {
   const seenExtractedFrom = new Set<string>();
-  // A dropped source leaves a hole instead of splicing, so each result costs one map step however
-  // many came before.
   const slots: Array<SearchResult | null> = [];
   const slotsOfId = new Map<string, number[]>();
   const keep = (result: SearchResult): void => {
@@ -47,7 +45,6 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   );
   if (summaryIds.size === 0) return results;
   const children = pool.filter((e) => e.dagParentId && summaryIds.has(e.dagParentId));
-  // The first result of an id wins, and a child added below counts for the rows after it.
   const resultById = new Map<string, SearchResult>();
   for (const r of results) if (!resultById.has(r.entry.id)) resultById.set(r.entry.id, r);
   for (const child of children) {
@@ -70,8 +67,6 @@ export function withDagChildren(results: SearchResult[], pool: MemoryEntry[]): S
   return results;
 }
 
-// Skip-and-continue, with the first minResults kept whatever they cost; one loop so every engine
-// spends alike.
 export function fitBudget<T extends SearchResult>(
   ordered: T[],
   budget: number,

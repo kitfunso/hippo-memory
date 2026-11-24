@@ -1,5 +1,3 @@
-// The row orders the adapter keeps, each written once: hippo.db sorts by its ORDER BY text, JS
-// callers with the comparator built from the same keys.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 
 /** Byte order, as hippo.db compares text; JavaScript's own string order differs above the basic
@@ -79,7 +77,6 @@ export type DescendingKeyset<R> =
   | { readonly key: (row: R) => string; readonly textId: (row: R) => string }
   | { readonly key: (row: R) => string; readonly intId: (row: R) => number };
 
-/** How `row`'s id compares with `id`, as the id column compares. */
 const idOrder = <R>(walk: DescendingKeyset<R>, row: R, id: string | number): number =>
   'intId' in walk ? walk.intId(row) - Number(id) : byBytes(walk.textId(row), String(id));
 

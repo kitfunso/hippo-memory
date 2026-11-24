@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 3 of docs/EXPERIMENT-PROTOCOL.md: can Jev recover hippo's `error` tag
- *  from content alone, beating the content-only baselines that already fail?
- *  Usage: node scripts/jev-classify-eval.mjs [--limit N] [--seed N] */
 
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync, mkdirSync } from 'node:fs';

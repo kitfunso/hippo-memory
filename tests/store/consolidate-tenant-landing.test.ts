@@ -1,19 +1,3 @@
-/**
- * T1 tests: docs/plans/2026-08-15-hardening-at1-followups.md
- *
- * Defect: consolidate.ts's merge pass clustered episodic entries purely by
- * textOverlap with no tenant boundary, and both the merge pass and the
- * trace pass called createMemory without a tenantId, so every
- * consolidation-produced row landed in 'default' regardless of its
- * source(s). Fix: partition the merge pass by tenantId before clustering
- * and thread tenantId through both createMemory calls (consolidate.ts) and
- * extract.ts's storeExtractedFacts (same one-line defect, folded in per the
- * plan's executor check).
- *
- * Real DB, per the project convention (rejection-acceptance.test.ts covers
- * the tombstone-interaction cases; this file covers plain landing).
- */
-
 import { describe, it, expect } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,17 +19,8 @@ pinClock();
 describe('merge pass partitions by tenant before clustering', () => {
   it('two tenants with byte-identical overlapping episodic content produce two separate merged rows, each in its own source tenant, never mixed into one', async () => {
     const home = makeRoot('consolidate-tenant-landing');
-    // Disable replay: it independently rehearses survivors and would
-    // confound nothing here, but matches house convention for merge tests.
     writeFileSync(join(home, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 
-    // Deliberately IDENTICAL text pair in both tenants. textOverlap has no
-    // tenant awareness, so before the fix all 4 entries clustered together
-    // (identical text => maximum overlap) into ONE row with
-    // "[Consolidated pattern from 4 related memories]" landing in
-    // 'default'. After the fix, tenant partition happens first: each
-    // tenant's own 2 entries cluster on their own into a
-    // "[Consolidated from 2 related memories]" row in that tenant.
     const shortText = 'rotate the staging tls certificates before expiry';
     const longText = 'rotate the staging tls certificates before expiry and notify the on-call channel';
 
@@ -76,7 +51,6 @@ describe('merge pass partitions by tenant before clustering', () => {
 
     const result = await consolidate(home, { dryRun: false });
 
-    // Two separate 2-entry merges, not one 4-entry merge.
     expect(result.semanticCreated).toBe(2);
     expect(result.merged).toBe(4);
 
@@ -89,15 +63,11 @@ describe('merge pass partitions by tenant before clustering', () => {
     expect(byTenant.has('tenant-b')).toBe(true);
     expect(byTenant.has('default')).toBe(false);
 
-    // Both directions: neither row is the 4-way "pattern from 4" bulleted
-    // form a cross-tenant cluster would have produced.
     for (const row of semanticRows) {
       expect(row.content).toContain('[Consolidated from 2 related memories, newest first]');
       expect(row.content).not.toContain('pattern from 4');
     }
 
-    // Sources demoted (not deleted) under their OWN tenant — cross-check
-    // no source crossed into the other tenant's row.
     const aSources = allAfter.filter((e) => e.tenantId === 'tenant-a' && e.layer === Layer.Episodic);
     const bSources = allAfter.filter((e) => e.tenantId === 'tenant-b' && e.layer === Layer.Episodic);
     expect(aSources).toHaveLength(2);
@@ -130,15 +100,8 @@ describe('trace pass lands in the resolved tenant and stays idempotent there', (
     const allAfterFirst = loadEveryTenantEntries(home);
     const traces = allAfterFirst.filter((e) => e.layer === Layer.Trace);
     expect(traces).toHaveLength(1);
-    // (c): the trace landed under the caller's tenant, not 'default':
-    // before the fix, createMemory omitted tenantId and every trace
-    // stamped 'default' whatever the tenant.
     expect(traces[0]!.tenantId).toBe('tenant-x');
 
-    // (d): idempotency ghost regression pin. traceExistsForSession checks
-    // under consolidationTenant ('tenant-x'). Before the fix the trace
-    // itself lived in 'default', so that check never matched under a
-    // non-default tenant and every sleep regenerated a duplicate trace.
     const secondResult = await consolidate(home, { now: FIXED_NOW, tenantId: 'tenant-x' });
     expect(secondResult.promotedTraces).toBe(0);
 

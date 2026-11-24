@@ -1,4 +1,3 @@
-/** FE2 staleness-from-code-churn: outcome-clearing, rank multiplier and config. */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -19,10 +18,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry, readEntry } from '../_helpers/root-forms.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-// ---------------------------------------------------------------------------
-// api.outcome(): a good outcome clears the churn-stale tag
-// ---------------------------------------------------------------------------
 
 describe('api.outcome clears churn-stale on a good outcome', () => {
   let hippoRoot: string;
@@ -71,10 +66,6 @@ describe('api.outcome clears churn-stale on a good outcome', () => {
     expect(readEntry(hippoRoot, mem.id)!.tags).toEqual(['other']);
   });
 });
-
-// ---------------------------------------------------------------------------
-// search.ts: CHURN_STALE_RANK_MULTIPLIER applied in both scoring paths
-// ---------------------------------------------------------------------------
 
 describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
   const STALE_FACTOR = churnStaleFactor(
@@ -247,10 +238,6 @@ describe('CHURN_STALE_RANK_MULTIPLIER in search scoring', () => {
     expect(result.breakdown!.churnStaleMultiplier).toBe(1.0);
   });
 });
-
-// ---------------------------------------------------------------------------
-// config.ts: churnStaleness validation
-// ---------------------------------------------------------------------------
 
 describe('config.churnStaleness', () => {
   let hippoRoot: string;

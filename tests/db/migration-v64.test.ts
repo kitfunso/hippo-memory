@@ -1,4 +1,3 @@
-// Schema v64 adds the lead_in column and never raises the floor; the first row written with a lead-in does.
 import { describe, expect, it } from 'vitest';
 import {
   closeHippoDb,
@@ -29,7 +28,6 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Takes a current store back to v63: no lead_in, both versions stamped 63, so the next open runs v64. */
 function toV63(db: DatabaseSyncLike): void {
   db.exec('ALTER TABLE memories DROP COLUMN lead_in');
   setMeta(db, 'schema_version', '63');

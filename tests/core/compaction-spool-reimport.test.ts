@@ -23,7 +23,6 @@ const ITEMS = [
   'The billing service uses pnpm, so npm install is never run there.',
   'The search service cache must be flushed after every deploy.',
 ];
-// A real stem is `<13 digit ms>-<8 hex>`; each test gets its own.
 const BUSY_STEM = '1760000000000-0a1b2c3d';
 const DIED_BEFORE_ITEMS_STEM = '1760000000001-1b2c3d4e';
 const DIED_AFTER_ITEMS_STEM = '1760000000002-2c3d4e5f';
@@ -53,7 +52,6 @@ const log = (message: string): void => {
   logs.push(message);
 };
 const spoolDir = (): string => path.join(s.hippoRoot, 'compactions-spool');
-// The lock file stays between replays and is reused, so a listing of spooled records leaves it out.
 const spoolFiles = (): string[] => fs.readdirSync(spoolDir()).filter((n) => n !== 'replay.lock.db');
 const claimStamp = (ms: number): string => String(Math.trunc(ms)).padStart(13, '0');
 
@@ -61,7 +59,6 @@ type Row = CompactionRow & { tenant_id: string; request_id: string | null };
 // SAFETY: compactionRows runs SELECT *, so tenant_id and request_id are there though its row type omits them.
 const rowsOf = (root: string): Row[] => compactionRows(root) as Row[];
 
-// No key is the port call an older binary made.
 function spooled(importKey?: string, at: Date = new Date(Date.now() - 30 * MINUTE)): SpooledSummary {
   const base = {
     tenantId: 'default',
@@ -168,7 +165,6 @@ describe('a store an older binary wrote, whose rows carry no request id', () => 
       cwd: s.proj,
       transcriptPath: null,
     });
-    // The start is stamped now, so the file's time sits just after it, inside REPLAY_AFTER_MS.
     writeWaiting(`${STARTED_STEM}.a0.json`, { at: new Date(Date.now() + 2 * MINUTE) });
     expect(await replayCompactions(compactionFolder(s.hippoRoot), log)).toBe(1);
     expect(rowsOf(s.hippoRoot)).toMatchObject([{ id: startedId, status: 'done', request_id: `spool:${STARTED_STEM}` }]);

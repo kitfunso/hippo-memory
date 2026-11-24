@@ -1,30 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Minimal recursive-self-improvement demo using hippo traces.
- *
- * Runs 50 tasks in 8 categories. Each category has a hidden "trap":
- * the task only succeeds on first attempt if the agent invokes the
- * correct hint (e.g. "USE:wrap-in-transaction" for db-write). On first
- * encounter the agent has no hint in memory, fails, extracts the hint
- * from the trap observation, retries, and records a successful trace.
- * On every subsequent encounter it recalls the prior trace, extracts
- * the hint, and succeeds on first attempt.
- *
- * The pass bar: late success rate (tasks 40-50) must exceed early
- * success rate (tasks 1-10) by at least 20 percentage points, or the
- * demo exits non-zero. This is the evidence that sequence-bound
- * traces actually let an agent self-improve.
- *
- * Self-contained: sets HIPPO_HOME to a fresh tmp dir, cleans up on
- * exit. Deterministic under --seed (default 1337). No network.
- *
- * Usage:
- *   node agent.mjs              # default seed 1337, prints summary
- *   node agent.mjs --seed 42    # override seed
- *   node agent.mjs --gap 0.99   # raise pass bar (to prove the check is real)
- */
-
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
@@ -33,20 +8,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Resolve the hippo CLI entrypoint. We prefer the local checkout's
-// bin/hippo.js (so the demo always runs against the current build),
-// falling back to a globally installed `hippo` on PATH.
 function resolveHippoJs() {
   const local = resolve(__dirname, '..', '..', 'bin', 'hippo.js');
   if (existsSync(local)) return local;
-  return null; // indicates "use PATH-resolved hippo"
+  return null;
 }
 
 const HIPPO_JS = resolveHippoJs();
-
-// -------------------------------------------------------------------------
-// CLI flags
-// -------------------------------------------------------------------------
 
 function parseArgs(argv) {
   const out = { seed: 1337, gap: 0.20 };
@@ -63,10 +31,6 @@ function parseArgs(argv) {
   return out;
 }
 
-// -------------------------------------------------------------------------
-// Deterministic RNG (mulberry32)
-// -------------------------------------------------------------------------
-
 function mulberry32(seed) {
   let t = seed >>> 0;
   return function () {
@@ -78,20 +42,6 @@ function mulberry32(seed) {
   };
 }
 
-// -------------------------------------------------------------------------
-// hippo CLI wrapper
-// -------------------------------------------------------------------------
-
-/**
- * Run a hippo CLI command scoped entirely to `sandbox`.
- *
- * - cwd = sandbox, so hippo's local-store lookup resolves to <sandbox>/.hippo.
- * - HIPPO_HOME = <sandbox>/global, so the "global" store is also inside the
- *   sandbox and the user's real ~/.hippo is never read or written.
- *
- * On non-zero exit we return stdout if any (hippo recall can exit non-zero
- * when there are no results). True failures surface via `strict: true`.
- */
 /**
  * Read a string property off a caught execFileSync error without assuming
  * its shape. Node attaches `.stdout`/`.stderr` as strings when `encoding`
@@ -128,9 +78,6 @@ function hippo(sandbox, args, { strict = false } = {}) {
 }
 
 function hippoInit(sandbox) {
-  // Init a local store inside the sandbox. `cwd` in hippo(...) makes this
-  // resolve to <sandbox>/.hippo, so trace record + recall both operate
-  // on an isolated store.
   hippo(sandbox, ['init', '--no-schedule', '--no-hooks'], { strict: true });
 }
 
@@ -162,10 +109,6 @@ function hippoRecordTrace(sandbox, { task, steps, outcome }) {
   ], { strict: true });
 }
 
-// -------------------------------------------------------------------------
-// Hint extraction — reads "USE:<token>" from recalled trace content.
-// -------------------------------------------------------------------------
-
 const HINT_PATTERN = /USE:([a-z0-9-]+)/i;
 
 function extractHint(results) {
@@ -177,31 +120,10 @@ function extractHint(results) {
   return null;
 }
 
-// -------------------------------------------------------------------------
-// Task execution (mocked)
-// -------------------------------------------------------------------------
-
-/**
- * Execute a single task.
- *
- * Returns { firstAttemptSucceeded, stepsRecorded, outcomeRecorded }.
- *
- * Mechanics:
- *   - If `hint` matches `category.hint`, the task succeeds on first attempt.
- *   - Otherwise it fails on first attempt. The agent then reads the
- *     observation (which contains the hint), retries with it, and succeeds.
- *   - Every task ultimately records a success trace with the hint embedded,
- *     so future recalls can find it. First-attempt failures also record a
- *     failure trace so the store reflects the learning journey.
- *
- * The early-vs-late learning curve therefore tracks
- * "did the agent come prepared?" — not "did it eventually succeed?".
- */
 function executeTask(category, hint, rng) {
   const correctHint = category.hint;
 
   if (hint === correctHint) {
-    // Prepared. Deterministic success on first attempt.
     return {
       firstAttemptSucceeded: true,
       trace: {
@@ -216,9 +138,6 @@ function executeTask(category, hint, rng) {
     };
   }
 
-  // No hint, or wrong hint. First attempt fails; observation reveals the trap.
-  // rng consumed so the run is deterministic even though the outcome is fixed;
-  // this also leaves headroom for future variants (e.g. occasional lucky hits).
   void rng();
 
   return {
@@ -241,10 +160,6 @@ function executeTask(category, hint, rng) {
   };
 }
 
-// -------------------------------------------------------------------------
-// Main loop
-// -------------------------------------------------------------------------
-
 async function main() {
   const args = parseArgs(process.argv);
   const tasksPath = join(__dirname, 'tasks.json');
@@ -258,9 +173,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Fresh isolated sandbox. Both the local .hippo/ (via cwd) and the global
-  // store (via HIPPO_HOME) live under this tmp dir, so the demo never reads
-  // or writes the user's real hippo data.
   const sandbox = mkdtempSync(join(tmpdir(), 'hippo-rsi-demo-'));
   const cleanup = () => {
     if (existsSync(sandbox)) {
@@ -284,14 +196,11 @@ async function main() {
       process.exit(1);
     }
 
-    // Step 1: recall past successful traces for this category.
     const recalled = hippoRecallSuccessfulTraces(sandbox, category.description);
     const hint = extractHint(recalled);
 
-    // Step 2: execute the task.
     const outcome = executeTask(category, hint, rng);
 
-    // Step 3: record trace(s) so the next encounter can learn.
     if (outcome.failureTrace) {
       hippoRecordTrace(sandbox, outcome.failureTrace);
     }
@@ -304,10 +213,6 @@ async function main() {
       firstAttemptSucceeded: outcome.firstAttemptSucceeded,
     });
   }
-
-  // -------------------------------------------------------------------------
-  // Learning curve
-  // -------------------------------------------------------------------------
 
   const rate = (slice) => slice.filter((r) => r.firstAttemptSucceeded).length / slice.length;
   const early = results.slice(0, 10);

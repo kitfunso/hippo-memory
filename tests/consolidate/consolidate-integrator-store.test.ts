@@ -1,4 +1,3 @@
-// consolidate() handed an integrator's store changes that store, never the folder a path form or the environment names.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { consolidate, type SleepStore } from '../../src/index.js';
@@ -22,7 +21,6 @@ function withDb<T>(root: string, fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** One memory whose full-text row is gone, the drift a sleep repairs. */
 function seedDrift(root: string): void {
   writeEntry(
     root,

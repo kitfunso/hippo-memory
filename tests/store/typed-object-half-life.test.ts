@@ -1,5 +1,3 @@
-// Decisions, incidents and the other first-class objects decay on the store's
-// configured default half-life, never faster than an ordinary memory. Real stores, no mocks.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

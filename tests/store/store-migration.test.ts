@@ -48,13 +48,9 @@ describe('schema v3: trace columns', () => {
     expect(loaded!.sourceSessionId).toBeNull();
   });
 
-  // T-crit: the v2 → v3 migration on existing data.
   it('migrates a v2 store with existing memories without data loss', () => {
-    // Manually construct a v2-shaped store (no trace columns), insert a row,
-    // then call initStore which should add the columns and preserve the row.
     const dbPath = path.join(tmpDir, 'hippo.db');
     const db = new DatabaseSync(dbPath);
-    // v2 minimal schema — mirror the production v2 CREATE TABLE exactly.
     db.exec(`
       CREATE TABLE schema_meta (version INTEGER);
       INSERT INTO schema_meta VALUES (2);
@@ -78,7 +74,6 @@ describe('schema v3: trace columns', () => {
     `);
     db.close();
 
-    // Now initStore should migrate to v3.
     initStore(tmpDir);
     const loaded = loadAllEntries(tmpDir, 'default').find((e) => e.id === 'mem_legacy_v2');
     expect(loaded?.content).toContain('pre-migration content body');

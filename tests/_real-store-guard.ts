@@ -1,25 +1,7 @@
-/**
- * Test-isolation guard (vitest `globalSetup` — see vitest.config.ts).
- *
- * vitest.config.ts points HIPPO_HOME at a fresh per-run temp dir, so the whole
- * test run resolves the global hippo store to an isolated location no external
- * process touches. This guard snapshots that isolated global store and every
- * `.hippo` the real resolver could reach from the suite's cwd (cwd's own, then
- * each ancestor up to the home and temp-root bounds), then fails the run if any
- * of them was mutated. On a clean run, teardown() removes the isolated temp dir.
- *
- * Tests must write only to temp dirs: isolate the local store with the spawn
- * `cwd` option and the global store with a per-test `HIPPO_HOME`.
- *
- * The filename has no `.test.` segment, so vitest's `include` glob does not
- * collect it as a test file.
- */
 import { existsSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-// Resolve the global store the way src/host/global-store.ts getGlobalRoot() does:
-// HIPPO_HOME, then XDG_DATA_HOME/hippo, then ~/.hippo.
 function globalStoreRoot(): string {
   const hippoHome = process.env.HIPPO_HOME?.trim();
   if (hippoHome) return hippoHome;
@@ -40,7 +22,6 @@ function samePath(a: string, b: string): boolean {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-// Mirrors src/host/project-identity.ts's walkProjectMarkers: home/tmpdir stop before the marker check, root stops after.
 export function watchedStoreDirs(cwd: string, home: string): string[] {
   const homeReal = realpathOrResolve(home);
   const tmpReal = realpathOrResolve(tmpdir());
@@ -49,24 +30,21 @@ export function watchedStoreDirs(cwd: string, home: string): string[] {
     if (!dirs.some((x) => samePath(x, d))) dirs.push(d);
   };
   let dir = realpathOrResolve(cwd);
-  // getHippoRoot falls back to cwd/.hippo when the walk finds no marker, so it is reachable even at a bound.
   add(join(dir, '.hippo'));
-  // No depth cap: the real walk's cap only ends it sooner, and the filesystem root ends this one, so every dir it could read is watched.
   for (;;) {
     if (samePath(dir, homeReal) || samePath(dir, tmpReal)) break;
-    // Every ancestor's store is listed even when absent: a test can create one mid-run.
     add(join(dir, '.hippo'));
     const parent = dirname(dir);
-    if (samePath(parent, dir)) break; // filesystem root, already added above
+    if (samePath(parent, dir)) break;
     dir = parent;
   }
-  add(globalStoreRoot()); // HIPPO_HOME can collide with an ancestor
+  add(globalStoreRoot());
   return dirs;
 }
 
 export function snapshot(dir: string): string {
   if (!existsSync(dir)) return '<absent>';
-  if (!statSync(dir).isDirectory()) return '<not-a-directory>'; // a file .hippo is not a store (project-identity.ts:148)
+  if (!statSync(dir).isDirectory()) return '<not-a-directory>';
   const files: string[] = [];
   const walk = (d: string, rel: string): void => {
     for (const name of readdirSync(d).sort()) {
@@ -85,22 +63,17 @@ export function snapshot(dir: string): string {
 let baseline: Array<readonly [string, string]> = [];
 
 export function setup(): void {
-  const realHome = process.env.HIPPO_TEST_REAL_HOME || homedir(); // vitest.config.ts fakes HOME
+  const realHome = process.env.HIPPO_TEST_REAL_HOME || homedir();
   baseline = watchedStoreDirs(process.cwd(), realHome).map((dir) => [dir, snapshot(dir)] as const);
 }
 
 export function teardown(): void {
-  // (1) compute the leak verdict and (2) capture the leaked store paths.
   const leaked = baseline.filter(([dir, snap]) => snapshot(dir) !== snap).map(([dir]) => dir);
 
-  // (3) on a clean run, remove the per-run temp dirs vitest.config.ts created.
   // The removal is swallowed on failure: vitest turns a globalSetup teardown
   // throw into process.exitCode = 1, so a stray Windows EBUSY here would itself
   // fail the run — the exact intermittent failure this isolation prevents.
   if (leaked.length === 0) {
-    // Defence-in-depth on a destructive op: only remove a directory that is
-    // under the OS temp dir and carries vitest.config.ts's mkdtemp prefix, so
-    // the rmSync is safe by construction, not merely by the variable's name.
     const realTmp = process.env.HIPPO_TEST_REAL_TMP?.trim() || tmpdir();
     const env = process.env;
     for (const dir of [
@@ -121,7 +94,6 @@ export function teardown(): void {
     return;
   }
 
-  // (4) on a leak, leave the temp dir for inspection and fail the run.
   throw new Error(
     `Test-isolation leak: the test run mutated hippo store(s): ` +
       `${leaked.join(', ')}. Either a test wrote a store without isolating it ` +

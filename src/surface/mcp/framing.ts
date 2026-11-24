@@ -47,8 +47,7 @@ export function parseFrame(buffer: Buffer): FrameResult {
   if (start === buffer.length) return { kind: 'incomplete' };
   const trimmed = buffer.subarray(start);
 
-  // LSP-style Content-Length framing.
-  if (trimmed[0] === 0x43 /* 'C' */ || trimmed[0] === 0x63 /* 'c' */) {
+  if (trimmed[0] === 0x43 || trimmed[0] === 0x63) {
     const headerEnd = trimmed.indexOf(HEADER_DELIM);
     if (headerEnd === -1) return incompleteOrOversize(trimmed);
     const header = trimmed.subarray(0, headerEnd).toString('utf-8');

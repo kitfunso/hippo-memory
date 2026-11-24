@@ -1,10 +1,3 @@
-/**
- * Replay: during `hippo sleep`, sample N survivors weighted by reward, valence, under-rehearsal and
- * age, then apply the `markRetrieved` strengthening. A lightweight deterministic analog of
- * hippocampal replay, so important memories stay strong without being queried; distinct from decay,
- * physics and merge.
- */
-
 import { HOUR_MS } from '../../base/util/time.js';
 import { mulberry32 } from '../../base/util/prng.js';
 import {
@@ -21,7 +14,6 @@ const VALENCE_WEIGHT = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
-// Floor keeps every weight positive for sampleForReplay; the rest scale reward and idle boosts.
 const REWARD_FLOOR = 0.1;
 const REWARD_POSITIVE_GAIN = 0.5;
 const REWARD_NET_GAIN = 0.25;
@@ -35,25 +27,19 @@ const STRENGTH_FLOOR = 0.1;
 export function replayPriority(entry: MemoryEntry, now: Date, outcomeAblated: boolean): number {
   const pos = entry.outcomePositive ?? 0;
   const neg = entry.outcomeNegative ?? 0;
-  // Reward signal: neutral = 1, strongly rewarded > 1, negative-dominated floors at 0.1 (still
-  // eligible, just unlikely). The clamp is required because sampleForReplay needs all weights
-  // positive.
   const rewardSignal = outcomeAblated
-    ? 1.0 // EVAL-ONLY ablation (see ablation.ts): outcome-off also silences replay's reward bias
+    ? 1.0
     : Math.max(REWARD_FLOOR, 1 + pos * REWARD_POSITIVE_GAIN + (pos - neg) * REWARD_NET_GAIN);
 
   const valence = VALENCE_WEIGHT[entry.emotionalValence] ?? 1.0;
 
-  // Under-rehearsed memories benefit most from replay.
   const underRehearsed = 1 / (1 + (entry.retrievalCount ?? 0));
 
-  // Idle-time boost: memories that haven't been touched recently need rehearsal more.
   const lastRetrieved = new Date(entry.lastRetrieved);
   const deltaMs = now.getTime() - lastRetrieved.getTime();
   const ageHours = Number.isFinite(deltaMs) ? Math.max(0, deltaMs / HOUR_MS) : 0;
   const idleBoost = 1 + Math.log1p(ageHours) * IDLE_BOOST_GAIN;
 
-  // Weight by current strength so dead-and-decaying memories don't waste replay slots.
   const rawStrength = Number.isFinite(entry.strength) ? entry.strength : 0;
   const strengthFloor = Math.max(STRENGTH_FLOOR, rawStrength);
 
@@ -83,9 +69,6 @@ export async function sampleForReplay({
   const ids: string[] = [];
   const weights: number[] = [];
   for await (const entry of survivors) {
-    // Deliberately-marked and aged-out memories are both untrusted and rehearsing them defeats
-    // staleness, so derive rather than trust the stored value (it no longer carries the age-out
-    // case).
     if (resolveConfidence(entry, now) === 'stale') continue;
     ids.push(entry.id);
     weights.push(replayPriority(entry, now, outcomeAblated));

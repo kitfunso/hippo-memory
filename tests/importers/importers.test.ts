@@ -1,8 +1,3 @@
-/**
- * Tests for memory importers: chatgpt, claude, cursor, file, markdown.
- * Also covers confidence tiers, dedup, dry-run, --global, and min-length filter.
- */
-
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -22,10 +17,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 let tmpDir: string;
 let tmpFiles: string[] = [];
 
@@ -44,10 +35,6 @@ beforeEach(() => {
   tmpDir = makeRoot('import-test');
   tmpFiles = [];
 });
-
-// ---------------------------------------------------------------------------
-// ChatGPT importer
-// ---------------------------------------------------------------------------
 
 describe('importChatGPT - JSON array of strings', () => {
   it('imports each string as a memory', () => {
@@ -114,10 +101,6 @@ describe('importChatGPT - plain text', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Claude importer
-// ---------------------------------------------------------------------------
-
 describe('importClaude - CLAUDE.md', () => {
   it('imports bullet points from markdown and skips hippo hook block', () => {
     const file = writeTmp(
@@ -141,21 +124,17 @@ describe('importClaude - CLAUDE.md', () => {
     );
 
     const result = importClaude(file, makeOpts());
-    // The heading and four bullets; '## Stack' is under the 10-character floor and the hook block is cut.
     expect(result.imported).toBe(5);
 
     const all = loadAllEntries(tmpDir, 'default');
     const contents = all.map((e) => e.content);
 
-    // Should contain rules
     expect(contents.some((c) => c.includes('Always run tests'))).toBe(true);
     expect(contents.some((c) => c.includes('TypeScript'))).toBe(true);
 
-    // Should NOT contain hippo hook block content
     expect(contents.some((c) => c.includes('hippo context'))).toBe(false);
     expect(contents.some((c) => c.includes('Project Memory (Hippo)'))).toBe(false);
 
-    // Tags correct
     for (const e of all) {
       expect(e.tags).toContain('imported');
       expect(e.tags).toContain('claude');
@@ -163,10 +142,6 @@ describe('importClaude - CLAUDE.md', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// Cursor importer
-// ---------------------------------------------------------------------------
 
 describe('importCursor - .cursorrules', () => {
   it('splits on numbered items and bullet points', () => {
@@ -231,10 +206,6 @@ describe('importCursor - .cursor/rules folder', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Generic file importer
-// ---------------------------------------------------------------------------
-
 describe('importGenericFile - markdown', () => {
   it('splits a markdown file on headings and bullets', () => {
     const file = writeTmp(
@@ -289,10 +260,6 @@ describe('importGenericFile - plain text', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Structured markdown importer
-// ---------------------------------------------------------------------------
-
 describe('importMarkdown - MEMORY.md format', () => {
   it('parses sections and tags entries with slugified heading', () => {
     const file = writeTmp(
@@ -330,10 +297,6 @@ describe('importMarkdown - MEMORY.md format', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Dedup
-// ---------------------------------------------------------------------------
-
 describe('dedup: import same file twice', () => {
   it('second import gets 0 new entries', () => {
     const file = writeTmp(
@@ -348,14 +311,9 @@ describe('dedup: import same file twice', () => {
     expect(r2.imported).toBe(0);
     expect(r2.skipped).toBe(2);
 
-    // Only 2 memories total
     expect(loadAllEntries(tmpDir, 'default')).toHaveLength(2);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Dry-run
-// ---------------------------------------------------------------------------
 
 describe('dry-run: nothing written', () => {
   it('returns entries but does not persist to disk', () => {
@@ -368,21 +326,13 @@ describe('dry-run: nothing written', () => {
     expect(result.imported).toBe(2);
     expect(result.entries).toHaveLength(2);
 
-    // Nothing on disk
     expect(loadAllEntries(tmpDir, 'default')).toHaveLength(0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// --global: writes to global store
-// ---------------------------------------------------------------------------
-
 describe('--global: writes to global store', () => {
   it('persists entries to a custom global root, not local root', () => {
     const globalRoot = makeRoot('global-test');
-    // importChatGPT({ global: true }) resolves its destination via
-    // getGlobalRoot() -> HIPPO_HOME. Without this it writes into the
-    // developer's real ~/.hippo store.
     vi.stubEnv('HIPPO_HOME', globalRoot);
 
     const file = writeTmp(
@@ -400,8 +350,6 @@ describe('--global: writes to global store', () => {
       // Instead, test the non-global result directly in custom dir
     });
 
-    // Since we can't easily override getGlobalRoot() in tests, verify that
-    // global=false writes to local root correctly
     const resultLocal = importChatGPT(file, makeOpts({ global: false }));
     expect(resultLocal.imported).toBe(2);
 
@@ -409,10 +357,6 @@ describe('--global: writes to global store', () => {
     expect(localEntries).toHaveLength(2);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Min length filter
-// ---------------------------------------------------------------------------
 
 describe('min length filter', () => {
   it('skips chunks shorter than 10 characters', () => {
@@ -428,19 +372,13 @@ describe('min length filter', () => {
     );
 
     const result = importGenericFile(file, makeOpts());
-    // Only the 2 long entries should be imported
     expect(result.imported).toBe(2);
-    // Short entries counted as skipped
     expect(result.skipped).toBeGreaterThanOrEqual(3);
 
     const all = loadAllEntries(tmpDir, 'default');
     expect(all).toHaveLength(2);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Confidence tier on imported entries
-// ---------------------------------------------------------------------------
 
 describe('confidence tiers on imported memories', () => {
   it('sets confidence to observed for all imported entries', () => {
@@ -457,10 +395,6 @@ describe('confidence tiers on imported memories', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// Extra tags
-// ---------------------------------------------------------------------------
 
 describe('extraTags option', () => {
   it('adds extra tags to all imported memories', () => {
@@ -479,10 +413,6 @@ describe('extraTags option', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// importEntries counts and ordering
-// ---------------------------------------------------------------------------
 
 describe('importEntries', () => {
   const LONG = 'Deploy the importer only after the schema check passes. '.repeat(30);

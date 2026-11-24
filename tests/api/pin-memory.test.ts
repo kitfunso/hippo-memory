@@ -1,4 +1,3 @@
-// api.memoryPin sets the flag through the store port, audits each call as a pin by the caller, and refuses rows out of reach.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, NotFoundError, memoryPin } from '../../src/api/index.js';
 import { memoryGet } from '../../src/api/memories/memories.js';

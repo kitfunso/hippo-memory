@@ -1,6 +1,3 @@
-// The agents whose own memories hippo imports. A leaf module: the keep rule, merge and share lists
-// are built from it.
-
 export const AGENT_MEMORY_TOOLS = [
   { id: 'claude-code', tag: 'claude-code-memory', label: 'Claude Code' },
   { id: 'codex', tag: 'codex-memory', label: 'Codex' },

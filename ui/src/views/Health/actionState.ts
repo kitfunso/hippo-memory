@@ -11,9 +11,9 @@ export type RowAction = { kind: "forget" } | { kind: "wrong" } | { kind: "keep" 
 
 /** One lane's state; a lane that is absent is idle, so a phase always has its action and a settled one its snapshot. */
 export type RowState<A extends RowAction = RowAction> =
-  | { phase: "pending"; action: A } // inside the undo window, nothing sent
-  | { phase: "sent"; action: A } // POST sent or in flight, overview refresh not done
-  | { phase: "settled"; action: A; snapshotId: number }; // the server has it; held until the drawer catches up
+  | { phase: "pending"; action: A }
+  | { phase: "sent"; action: A }
+  | { phase: "settled"; action: A; snapshotId: number };
 
 /** One action's row on one memory; one owner never holds two entries on one id. */
 export interface OverlayEntry {
@@ -29,7 +29,6 @@ export interface RowOverlay {
   keep?: RowState<{ kind: "keep" }>;
   weaken?: RowState<{ kind: "weaken" }>;
   pin?: RowState<PinAction>;
-  /** Highest snapshot of any settled entry for the id; the drawer releases entries once its detail reaches it. */
   settledAt?: number;
 }
 
@@ -128,7 +127,6 @@ export interface ControllerState {
   slot: Slot | null;
   queue: readonly string[];
   timer: TimerState;
-  /** One counter for job owners and toast ids, so each is unique. */
   seq: number;
   drawerId: string | null;
 }
@@ -218,7 +216,6 @@ function show(state: ControllerState, text: string, slot: Slot, now: number): Co
 
 const clear = (state: ControllerState): ControllerState => ({ ...state, slot: null, toast: null, timer: OFF });
 
-// A closed toast hands the screen to the oldest waiting message.
 function closeToast(state: ControllerState, now: number): ControllerState {
   const cleared = clear(state);
   if (cleared.queue.length === 0) return cleared;
@@ -234,7 +231,6 @@ function notify(state: ControllerState, text: string, now: number): ControllerSt
 const markSent = (e: OverlayEntry): OverlayEntry =>
   e.row.phase === "pending" ? { ...e, row: { phase: "sent", action: e.row.action } } : e;
 
-// `flush` false is for a caller about to show its own toast, so a waiting message is not shown for an instant.
 function closePending(state: ControllerState, flush: boolean, keepalive: boolean, now: number): Reduction {
   const { slot } = state;
   if (slot === null || slot.kind !== "deferred") return noEffects(state);
@@ -243,7 +239,6 @@ function closePending(state: ControllerState, flush: boolean, keepalive: boolean
   return { state: mapOwner(closed, job.owner, markSent), effects: [{ type: "run", job, keepalive }] };
 }
 
-// A pin sends at once, so its row starts sent and its owner comes from the same counter as every other.
 function startPin(state: ControllerState, id: string, pinned: boolean, projectKey: string): Reduction {
   const job: Job = { owner: state.seq + 1, request: { kind: "pin", id, pinned }, projectKey };
   const next = { ...state, seq: job.owner, entries: [...state.entries, ...rowsOf(job, "sent")] };
@@ -288,7 +283,6 @@ function onFailed(state: ControllerState, e: Ev<"failed">, now: number): Reducti
   return noEffects(e.message === null ? dropped : notify(dropped, e.message, now));
 }
 
-// A row on the shown memory waits for the drawer's fresh detail, so Keep and Mark wrong never re-enable on stale data.
 function onSettled(state: ControllerState, e: Ev<"settled">, now: number): Reduction {
   const { job, snapshotId } = e;
   const shown = actionsOf(job.request).some(([id]) => id === state.drawerId);

@@ -1,5 +1,3 @@
-// When the v57 decay-key subset cannot prove its rank, loadContextCandidates ranks the tenant in one scan. It hands back
-// the cap and no more, in the same three statements, whatever the store's size.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
@@ -16,7 +14,6 @@ const COUNT = /^SELECT COUNT\(\*\) AS n FROM \(SELECT 1 FROM memories/;
 const SUBSET = /WITH top AS MATERIALIZED/;
 const SCAN = /ORDER BY pinned DESC,\s+CASE WHEN/;
 
-/** Days since row `i` was last retrieved: two fresh rows, and the rest past two half-lives, so the subset is short. */
 const ageOf = (i: number): number => (i < 2 ? 1 : 100 + (i % 97));
 
 function seed(n: number): string {
@@ -40,7 +37,6 @@ function seed(n: number): string {
   return home;
 }
 
-/** The rank worked out in JavaScript: least decayed first, ties on id, the cap kept, then in created order. */
 function ranked(n: number): string[] {
   const rows = Array.from({ length: n }, (_, i) => ({ i, decay: ageOf(i) / HALF_LIVES[i % 3]! }));
   const best = rows.sort((a, b) => a.decay - b.decay || a.i - b.i).slice(0, CAP);
@@ -48,7 +44,6 @@ function ranked(n: number): string[] {
 }
 
 describe('loadContextCandidates scan fallback', () => {
-  // Seeds up to 10,000 real rows, and a runner's disk sets how long that takes.
   it.each([1000, 10_000])(
     'ranks %i rows in one scan that hands back the cap',
     (n) => {

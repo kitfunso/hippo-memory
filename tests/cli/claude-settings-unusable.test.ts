@@ -1,4 +1,3 @@
-// init, hook install, hook uninstall and setup each warn once when Claude Code's settings.json is not JSON hippo can edit, and leave the file as it was.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -23,7 +22,6 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// A PATH with no codex on it, and no schedule or git call, so the run touches nothing outside the fake home.
 async function hippo(...args: string[]): Promise<string> {
   for (const key of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_SKIP_AUTO_INTEGRATIONS']) vi.stubEnv(key, undefined);
   vi.stubEnv('HOME', path.join(root, 'home'));
@@ -35,7 +33,6 @@ async function hippo(...args: string[]): Promise<string> {
   process.chdir(path.join(root, 'repo'));
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args, '--no-schedule', '--no-learn']));
-    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;
   } finally {

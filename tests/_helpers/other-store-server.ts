@@ -1,4 +1,3 @@
-// Request lines, a stub store and API keys the server-other-store tests share.
 import { randomBytes, scryptSync } from 'node:crypto';
 import { type McpRequest } from '../../src/surface/mcp/server.js';
 import { sqliteStore, type ApiKeyRecord, type HippoStore } from '../../src/entry/store-kit.js';
@@ -8,7 +7,6 @@ import { V1_ROWS } from './v1-route-rows.js';
 /** A V1_ROWS key as a request line, each :param slot filled with 1. */
 export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 
-// The folder groups, none of which the stub holds.
 const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 
 /** The entries that need hippo.db's folder groups or hippo.db itself, which no store but hippo.db's has. */

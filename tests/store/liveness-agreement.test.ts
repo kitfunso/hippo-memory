@@ -1,5 +1,3 @@
-// Over one store, every reader answers "is this memory live?" from the same rule: entriesWhere, the context
-// read, recall search, the dashboard and isLiveMemory.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { supersede } from '../../src/api/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -23,8 +21,6 @@ type Reader = (typeof READERS)[number];
 const ROWS = ['live', 'superseded', 'successor', 'quarantined', 'raw', 'kindSuperseded', 'blank'] as const;
 type Row = (typeof ROWS)[number];
 
-// entriesWhere({ live }) tests the link alone, so it keeps a quarantined row the scope-aware readers drop. A kind
-// 'superseded' row is left open for all but the dashboard and isLiveMemory: recall search keeps it today.
 const EXPECTED = {
   live: { entries: true, context: true, recall: true, dashboard: true, liveness: true },
   superseded: { entries: false, context: false, recall: false, dashboard: false, liveness: false },
@@ -55,8 +51,6 @@ function row(content: string, over: Partial<MemoryEntry> = {}): MemoryEntry {
   return { ...createMemory(`beacon ${content}`, { tenantId: TENANT }), originProject: PROJECT, ...over };
 }
 
-/** Writes one memory per row name through the store's writers, supersedes one through the api, and sets one blank link
- * by raw SQL since no writer makes it. Returns each name's id. */
 async function seed(root: string): Promise<Record<Row, string>> {
   const live = row('current note');
   const old = row('replaced note');
@@ -98,7 +92,6 @@ async function dashboardRead(root: string): Promise<{ ids: string[]; totals: Das
   }
 }
 
-/** The ids each reader returns over the seeded store; recall drops superseded rows as the retrieve path does. */
 async function ask(root: string, ids: Record<Row, string>): Promise<Answers> {
   const entries = await apiCtx(root, TENANT).store.entriesWhere({ tenantId: TENANT, live: true }, { limit: 100 });
   const context = loadContextCandidates(root, TENANT, { cap: 100, now: new Date(NOW) });
@@ -141,7 +134,6 @@ describe('liveness agreement across readers', () => {
   it('tallies the dashboard live rows and counts each row left out once', () => {
     const live = ROWS.filter((name) => wantedOf(name).dashboard);
     expect(answers.totals.projects.map((p) => [p.origin, p.live])).toEqual([[PROJECT, live.length]]);
-    // Superseded: the linked row, the blank-linked row and the kind 'superseded' row.
     expect(answers.totals.excluded).toEqual({ superseded: 3, archived: 0, quarantined: 1 });
   });
 

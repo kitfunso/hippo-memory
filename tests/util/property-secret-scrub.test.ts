@@ -1,4 +1,3 @@
-// Generated secrets of every shape the scrub names, placed among ordinary words: none reaches the output, a second pass changes nothing, and ordinary text passes untouched.
 import { describe, it, expect } from 'vitest';
 import { redactSecretsStrict } from '../../src/base/util/secret-detect.js';
 import { scrubForSharing } from '../../src/surface/capture/share-scrub.js';
@@ -10,7 +9,6 @@ const LOWER = 'abcdefghijklmnopqrstuvwxyz';
 const DIGITS = '0123456789';
 const ALNUM = UPPER + LOWER + DIGITS;
 const BASE32 = `${LOWER}234567`;
-// Joined at runtime, so no key-shaped prefix or key-block marker sits in source.
 const SK = ['s', 'k'].join('');
 const DASHES = '-'.repeat(5);
 const PEM_KINDS = ['', 'RSA ', 'EC ', 'OPENSSH '];
@@ -21,11 +19,9 @@ function pemLine(edge: string, kind: string): string {
 
 interface Secret {
   readonly text: string;
-  /** The generated part: no stretch of it may reach the output. */
   readonly body: string;
 }
 
-/** A body of `min` to `max` characters over `alphabet`, hyphen endings included; `last` narrows the final one for a shape that needs it. */
 function secret(
   wrap: (body: string) => string,
   alphabet: string,
@@ -74,7 +70,6 @@ const KINDS: readonly Gen<Secret>[] = [
   secret((b) => `eyJ${b.slice(0, 12)}.eyJ${b.slice(12, 24)}.${b.slice(24)}`, `${ALNUM}_-`, 36, 60),
 ];
 
-// Ordinary words, with the near misses a careless pattern would take: key nouns, bare prefixes, package and image names holding an @.
 const WORDS = [
   'deploy',
   'the',
@@ -119,7 +114,6 @@ function leaked(out: string, s: Secret): boolean {
 
 const WORD_RUN = arr(pick(WORDS), 0, 5);
 
-/** One to three secrets, each after a run of words and before a space or a line break. */
 const LEAKY_TEXT: Gen<{ text: string; secrets: Secret[] }> = map(
   both(arr(both(WORD_RUN, both(oneOf(KINDS), pick([' ', '\n']))), 1, 3), WORD_RUN),
   ([placed, tail]) => ({
@@ -128,7 +122,6 @@ const LEAKY_TEXT: Gen<{ text: string; secrets: Secret[] }> = map(
   }),
 );
 
-// Markers the scrubs write, and openings of secret shapes with nothing after them.
 const LOOSE_PIECES = [
   '[REDACTED]',
   '[email]',
@@ -161,10 +154,8 @@ const HOME_PATHS = [
   '\\\\srv\\homes\\kit',
 ];
 
-// Two secrets of one kind on a line, as in a pasted list of keys: a scrub that stops at the first leaves the second for the next pass.
 const TWINS = oneOf(KINDS.map((kind) => map(both(kind, kind), ([a, b]) => `${a.text} ${b.text}`)));
 
-/** Words, whole secrets, ordinary config lines and loose pieces of secret shapes, glued with or without a gap. */
 const SOUP: Gen<string> = map(
   arr(
     both(
@@ -177,7 +168,6 @@ const SOUP: Gen<string> = map(
   (parts) => parts.map(([text, gap]) => text + gap).join(''),
 );
 
-/** `head` and then `length` characters over `alphabet`, the last one to three of them hyphens. */
 function hyphenEnded(head: string, alphabet: string, length: number): Gen<string> {
   return map(
     both(str(alphabet, length, length), int(1, 3)),
@@ -185,7 +175,6 @@ function hyphenEnded(head: string, alphabet: string, length: number): Gen<string
   );
 }
 
-// The shapes whose alphabet holds a hyphen and whose pattern once closed on a word boundary.
 const HYPHEN_ENDED: readonly { name: string; key: Gen<string> }[] = [
   { name: 'Google API key', key: hyphenEnded('AIza', `${ALNUM}_-`, 35) },
   { name: 'Slack token', key: hyphenEnded('xoxb-', `${ALNUM}-`, 24) },
@@ -212,7 +201,6 @@ describe('secret scrubbing properties', () => {
     });
   });
 
-  // A home path glued after another, or after a short name, is uncovered only once the text before it is masked, so masking each shape once is not enough.
   it('scrubForSharing changes nothing on a second pass over home paths, nested or not', async () => {
     const paths = map(both(WORD_RUN, arr(pick(HOME_PATHS), 1, 3)), ([words, nested]) =>
       [...words, nested.join('')].join(' '),
@@ -224,7 +212,6 @@ describe('secret scrubbing properties', () => {
   });
 
   it('sentences of ordinary words and ordinary config lines come back unchanged', async () => {
-    // A sentence ends in a full stop, so a word never runs on into the config line under it.
     const sentence = map(arr(pick(WORDS), 1, 8), (words) => `${words.join(' ')}.`);
     const benign = map(arr(oneOf([sentence, sentence, pick(ORDINARY_CONFIG_LINES)]), 1, 8), (lines) =>
       lines.join('\n'),
@@ -245,7 +232,6 @@ describe('secret scrubbing properties', () => {
     );
   });
 
-  // A word boundary does not close a token that ends in a hyphen before a space, so the key or its closing hyphens would stay.
   HYPHEN_ENDED.forEach(({ name, key }, index) => {
     it(`a ${name} that ends in hyphens is scrubbed whole`, async () => {
       await forAll(0x600 + index, 200, both(WORD_RUN, key), ([words, text]) => {

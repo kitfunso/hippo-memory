@@ -1,4 +1,3 @@
-// Session assemble's reads seek what they need: the content read probes the asked ids, the key and count reads the session.
 import { afterEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -26,7 +25,6 @@ function row(i: number, session: string): MemoryEntry {
   };
 }
 
-/** A store with a five-row session `s1` and `others` rows of other sessions in the same tenant. */
 function seeded(others: number): string {
   const root = makeRoot('session-raw-plan');
   roots.push(root);

@@ -1,6 +1,3 @@
-// Only stdio, which passes no MCP context, acts as the local operator; a context that lacks a role fails closed, and tools that read the server's cwd
-// (hippo_learn's git scan, hippo_context's git auto-detect) refuse or skip it for any remote caller but a host admin.
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -20,7 +17,6 @@ import { mcpContext, type McpCallerFields } from '../_helpers/mcp-context.js';
 
 const LESSON = 'fix the retry loop that dropped the last queued webhook delivery';
 
-/** A temp git repo with one lesson-shaped commit; `beforeCommit` runs first, e.g. to switch branch. */
 function initRepo(beforeCommit?: readonly string[]): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-role-repo-'));
   const git = (...args: readonly string[]): void => {
@@ -41,7 +37,6 @@ function contextText(res: McpResponse | null): string {
   return (res?.result as { content?: Array<{ text?: string }> } | undefined)?.content?.[0]?.text ?? '';
 }
 
-/** What an untyped transport (a .mjs script, an older add-on) sends: the compiler cannot stop it omitting the role. */
 function roleless(hippoRoot: string): McpContext {
   // SAFETY: deliberately drops the required role to prove the runtime fails closed for callers the type cannot reach.
   return mcpContext({
@@ -169,7 +164,6 @@ describe('hippo_context reads the server git state only for stdio or a host admi
   let originalCwd: string;
 
   beforeEach(() => {
-    // The server's checkout sits on a feature branch, so the git auto-detect would query for its name.
     repoDir = initRepo(['checkout', '-q', '-b', 'zebra-migration']);
     hippoRoot = makeRoot('role-ctx');
     writeEntry(hippoRoot, createMemory('zebra migration runbook lives in the ops wiki', { tenantId: 'default' }));

@@ -1,5 +1,3 @@
-// autoShare over a store larger than one page: the same picks, skips and writes as one whole read gave; and a hand-run share
-// of a text the global store already holds.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { Layer, type CreateMemoryOptions, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -36,7 +34,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** Rows that differ from a plain filler row, by their place in store order. */
 const SPECIAL: ReadonlyMap<number, Partial<MemoryEntry>> = new Map<number, Partial<MemoryEntry>>([
   [3, { content: text('first error'), tags: ['error'] }],
   [499, { content: text('already global'), tags: ['error'] }],
@@ -47,7 +44,6 @@ const SPECIAL: ReadonlyMap<number, Partial<MemoryEntry>> = new Map<number, Parti
   [1050, { content: text('pinned lesson'), pinned: true }],
 ]);
 
-/** One write transaction and no mirrors: the walk reads rows only. */
 function seedLocal(): string[] {
   const ids: string[] = [];
   const db = openHippoDb(root);
@@ -192,7 +188,6 @@ describe('shareMemory of a text the global store already holds', () => {
 
   const share = (id: string, { force = false, tenantId = 'default' } = {}): Promise<ShareOutcome> =>
     shareMemory(...sharingStores(root), id, {
-      // Alice owns the personal row below, so its refusal reaches her as the 400 it asserts.
       actor: { ...TEST_ACTOR, owner: 'alice' },
       embed: TEST_RUN,
       detached: TEST_DETACHED,
@@ -207,7 +202,6 @@ describe('shareMemory of a text the global store already holds', () => {
     return entry.id;
   }
 
-  /** Every global row of any tenant or scope that holds this text. */
   const globalCopies = (content: string): MemoryEntry[] =>
     loadEveryTenantEntries(getGlobalRoot()).filter((e) => duplicateKey(e.content) === duplicateKey(content));
 
@@ -280,7 +274,6 @@ describe('shareMemory of a text the global store already holds', () => {
     expect(globalCopies(content)).toHaveLength(1);
   });
 
-  // The default scope filter hides a connector-private copy, so its row is not seen as held.
   it('residual: a second share of a connector-private row writes a second global row', async () => {
     const id = localRow(HELD, { scope: 'slack:private:C123' });
 

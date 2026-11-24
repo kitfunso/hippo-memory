@@ -38,7 +38,6 @@ const STORED = [
   row(mergedText('Merged lessons', ['concat is not the same as join', 'other text']), { source: 'consolidation' }),
 ];
 
-// The answer with no bound: every text the tenant's rows hold.
 function wholeScanKeys(root: string): Set<string> {
   const rows = withDb(root, (db) =>
     db.prepare("SELECT content, source FROM memories WHERE tenant_id = 'default'").all(),

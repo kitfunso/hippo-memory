@@ -1,5 +1,3 @@
-// The vector graph file a sleep saves beside hippo.db, read on a real store in process: it answers for the rows it
-// covers, the rows above them are scored exactly, and a file it cannot trust leaves the read to the scan.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
@@ -18,14 +16,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { clusteredVectors, near, seedVectorRows, type VectorRowSeed } from '../_helpers/vector-rows.js';
 import { grantFor } from '../../src/store/sqlite/runtime/grant.js';
 
-// Each case builds a graph of 1,500 nodes, which can pass the unit budget on a busy runner.
 vi.setConfig({ testTimeout: 30_000 });
 
 const DIM = 32;
 const ROWS = 1_500;
 const MODEL = 'test:vectors';
 const SEEDS = [1, 2, 3];
-// recall@10 against the exact scan: HNSW is approximate, and the file walks on int8 vectors before the exact re-rank.
 const RECALL_FLOOR = 0.97;
 const OPTS = { maxVectors: 200_000 };
 
@@ -40,7 +36,6 @@ interface Fixture {
   readonly root: string;
   readonly db: DatabaseSyncLike;
   readonly index: VectorIndex;
-  /** The rowid each read was answered up to, or undefined for a read left to the scan. */
   readonly covered: (number | undefined)[];
 }
 
@@ -48,7 +43,6 @@ function graphFile(root: string): string {
   return join(root, `vector-graph-${DIM}.bin`);
 }
 
-/** Tenants t1, t2 and t3 in turn, every fifth row of t1 in scope team-a. */
 function mixedRows(n: number, seed: number): VectorRowSeed[] {
   return clusteredVectors(n, DIM, seed).map((vector, i) => ({
     id: `m-${seed}-${i}`,
@@ -84,7 +78,6 @@ async function savedStore(rows: readonly VectorRowSeed[]): Promise<Fixture> {
   return onStore(root);
 }
 
-/** A write by another connection, as the writer thread, the CLI or a hook makes one. */
 function elsewhere<T>(root: string, write: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
@@ -102,7 +95,6 @@ async function scanned(f: Fixture, q: readonly number[], s: VectorCandidateSpec)
   return (await listVectorCandidateEntries(f.db, q, s)).map((e) => e.id);
 }
 
-/** recall@10 against the scan over 20 queries near stored rows. */
 async function recall(f: Fixture, rows: readonly VectorRowSeed[], s: VectorCandidateSpec, index = f.index) {
   let hits = 0;
   let wanted = 0;
@@ -176,7 +168,6 @@ describe('a saved graph file', () => {
       // The newest row is forgotten and SQLite hands its rowid to the next row.
       elsewhere(f.root, (db) => db.prepare("DELETE FROM memories WHERE id = 'new-99'").run());
       seedVectorRows(f.root, [{ id: 'reused', tenantId: 't1', vector: q }], MODEL);
-      // A re-embed deletes the row and writes a new one above every other, so no node is updated in place.
       const moved = rows.slice(30, 40).map((r, i): [string, readonly number[]] => [r.id, near(q, 1000 + i)]);
       const before = moved.map(([id]) => rowidOf(f.db, id));
       elsewhere(f.root, (db) => upsertVectors(db, moved, MODEL));
@@ -240,7 +231,6 @@ describe('a read the saved file cannot answer goes to the scan', () => {
   });
 });
 
-/** The header fields a corruption test needs to find one record. */
 interface RecordLayout {
   readonly nodes: number;
   readonly entry: number;
@@ -258,7 +248,6 @@ function layoutOf(bytes: Buffer): RecordLayout {
   };
 }
 
-/** Every positional read of a file opened from now on, as [position, length]. */
 function recordReads(): [number, number][] {
   const reads: [number, number][] = [];
   const read = fs.readSync.bind(fs);

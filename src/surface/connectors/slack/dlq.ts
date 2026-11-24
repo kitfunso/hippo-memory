@@ -38,15 +38,10 @@ export const slackDlq: ConnectorDlq<
 };
 
 export interface ReplayDlqOptions {
-  /** Skip signature verification when the row's signature/timestamp are missing or stale. */
   force?: boolean;
-  /** Current signing secret. If omitted, signature check is skipped (force-only path). */
   signingSecret?: string;
-  /** Now (unix seconds) override for tests. */
   now?: number;
-  /** Skew window override for tests. */
   skewSeconds?: number;
-  /** The SLACK_ALLOW_UNKNOWN_TEAM_FALLBACK escape hatch, as the CLI read it. */
   allowUnknownTeamFallback?: boolean;
 }
 
@@ -75,8 +70,6 @@ export async function replaySlackDlqEntry(
   );
 }
 
-/** A missing signature or timestamp refuses even without a secret; a mismatch needs the current
- * secret to show. */
 function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal | null {
   if (!row.signature || !row.slackTimestamp) {
     return {
@@ -92,7 +85,6 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
     timestamp: row.slackTimestamp,
     signingSecret: opts.signingSecret,
     now: opts.now,
-    // Replays happen long after the fact, so give them a wider skew unless overridden.
     skewSeconds: opts.skewSeconds ?? YEAR_S,
   });
   if (ok) return null;

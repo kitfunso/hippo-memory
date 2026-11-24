@@ -1,5 +1,3 @@
-// Route rules every typed object shares over HTTP, one table row per kind; a rule only one kind has stays in its
-// http-<kind> test. One server serves the whole file, so the request limits are off and every test makes its own rows.
 import { describe, it, expect } from 'vitest';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { type Body, handle, apiKeyB, useObjectsServer, jsonAs, post, get } from '../_helpers/http-objects-server.js';
@@ -40,7 +38,6 @@ const KINDS: readonly Kind[] = [
     listField: 'decisions',
     create: { text: 'use Postgres', context: 'scale' },
     created: { decisionText: 'use Postgres', context: 'scale', status: 'active' },
-    // Decisions answer a supersede with 201 because the route saves a new decision.
     supersede: {
       body: { text: 'use GraphQL' },
       status: 201,
@@ -144,7 +141,6 @@ describe.each(KINDS)('HTTP $root ($kind)', (k) => {
   it('create answers 201 with the row; get finds it by id and answers 404 for a missing id', async () => {
     const row = await created(k);
     expect(row).toMatchObject(k.created);
-    // Each kind has its own AUTOINCREMENT table, and this test writes its first row.
     expect(row.id).toBe(1);
 
     const getRes = await get(`${k.root}/${row.id}`);

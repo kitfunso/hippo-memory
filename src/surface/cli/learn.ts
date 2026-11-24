@@ -1,5 +1,3 @@
-// `hippo watch` and `hippo learn`: take lessons from a watched command and from git history.
-
 import * as path from 'node:path';
 import { isInitialized } from '../../host/project-identity.js';
 import { RejectedValueError } from '../../base/errors/api-errors.js';
@@ -16,13 +14,10 @@ const STDERR_PREVIEW_CHARS = 80;
 
 const WATCH_USAGE = 'Usage: hippo watch -- <command> [args...]';
 
-/** The argv to run, which no shell parses. */
 function watchedCommand(args: readonly string[]): string[] {
   if (args.length === 0) {
     fail(WATCH_USAGE);
   }
-  // A quoted 1.x command line would now run as one program name, so it is refused rather than
-  // guessed at.
   if (args.length === 1 && /\s/.test(args[0]!)) {
     fail(`hippo watch: "${args[0]}" is one argument with spaces. Use \`hippo watch -- cmd args\`.`);
   }
@@ -35,7 +30,6 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
   const { exitCode, stderr } = await runWatched(argv);
 
   if (exitCode === 0) {
-    // Success: no noise
     return;
   }
 
@@ -44,8 +38,6 @@ export async function handleWatch({ hippoRoot, tenantId, args }: CommandContext)
     throw new CliExit(exitCode);
   }
 
-  // A rejection-guard refusal of a failed command's output must not crash the watcher: skip with
-  // the message below and still exit with the wrapped command's real exit code.
   try {
     await rememberFailedCommand(cliApiContext(hippoRoot, tenantId), { command, exitCode, stderr });
 
@@ -89,7 +81,6 @@ export async function handleLearn({ hippoRoot, tenantId, flags }: CommandContext
   }
 }
 
-/** `--repos a,b`: learns each repo under its folder name, then prints the totals. */
 async function learnFromRepos(
   reposFlag: string,
   base: Omit<LearnFromRepoOptions, 'repoPath' | 'label'>,

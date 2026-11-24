@@ -1,5 +1,3 @@
-// The customer note verbs: one account's note, versioned by supersession.
-
 import type { CustomerNote } from '../../base/records/object-types.js';
 import { requiredText, versionedVerbs, type VersionedKind } from './versioned-verbs.js';
 

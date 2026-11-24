@@ -1,5 +1,3 @@
-// The sleep cycle: decay, consolidation, dedupe, graph extraction and the other maintenance passes.
-
 import type { AmbientState } from '../../base/memory/ambient.js';
 import type { SleepContext } from '../types.js';
 import type { SleepEvent } from './events.js';

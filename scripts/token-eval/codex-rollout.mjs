@@ -1,4 +1,3 @@
-// Codex rollouts (CODEX_HOME/sessions/**/rollout-*.jsonl) read into the shapes the Claude parsers give (E6 plan D6, R2, R3, R8, R20, R21).
 // Field names follow Codex 0.153.4; the smoke stage pins them against the version each run records.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -6,7 +5,6 @@ import { isShellRead, errorRepeated, SHELL_TOOLS } from './records.mjs';
 
 /** session_meta sources of Codex's own memory threads; smoke fills it (plan R21), so until then every outside rollout is a stray. */
 export const CODEX_INTERNAL_SOURCES = [];
-// Calls that touch no file; a spawned thread is covered by the rollout set instead.
 const NO_FS_CALLS = new Set(['wait', 'sleep', 'send_message', 'followup_task', 'spawn_agent', 'request_user_input_async', 'initial_instructions']);
 const CELL_CALLS = new Set(['exec', 'js']);
 const ESCAPES = { n: '\n', t: '\t', r: '\r', b: '\b', f: '\f', v: '\v', 0: '\0' };
@@ -57,7 +55,6 @@ export function sessionRollouts(codexHome, before, threadId, internalSources = C
   const roots = threadId
     ? fresh.filter((r) => r.meta.id === threadId || path.basename(r.file).endsWith(`-${threadId}.jsonl`))
     : fresh.filter((r) => !r.meta.parent_thread_id && !internal(r));
-  // A kill before thread.started with two candidate mains is no transcript, never a guess.
   const main = roots.length === 1 ? roots[0] : null;
   const agent = main ? [main] : [];
   const ids = new Set(main ? [main.meta.id] : []);
@@ -96,7 +93,6 @@ export function rolloutUsage(files) {
   return { usage: { inputTokens, cacheWriteTokens, cacheReadTokens, outputTokens: raw.output_tokens }, raw, turns, odd: inputTokens < 0, usageRecords };
 }
 
-/** A JS string literal starting at s[i], decoded; null when none starts there or a template holds `${`. */
 function literalAt(s, i) {
   const q = s[i];
   if (q !== '"' && q !== "'" && q !== '`') return null;
@@ -126,7 +122,6 @@ function skipString(s, i) {
   return s.length;
 }
 
-/** The text between a call's `(` at `from` and its matching `)`, strings skipped. */
 function argSpan(s, from) {
   let depth = 1;
   for (let i = from; i < s.length; i++) {
@@ -138,13 +133,11 @@ function argSpan(s, from) {
   return s.slice(from);
 }
 
-/** `key: <literal>` in a call's arguments: undefined when the key is absent, null when its value is no literal. */
 function keyLiteral(args, key) {
   const m = new RegExp(`(?:^|[{,\\s])["']?${key}["']?\\s*:\\s*`).exec(args);
   return m ? literalAt(args, m.index + m[0].length) : undefined;
 }
 
-/** Each `tools.<name>(` call in a JS cell, with the literals the adapter maps (plan R20). */
 function cellCalls(code) {
   const calls = [];
   for (const m of String(code ?? '').matchAll(/\btools\.(\w+)\s*\(/g)) {
@@ -158,14 +151,12 @@ function cellCalls(code) {
   return calls;
 }
 
-// A relative workdir means a directory under the session cwd, never under this process's.
 const resolveDir = (dir, st) => (!dir || !st.cwd || path.isAbsolute(dir) ? dir : path.resolve(st.cwd, dir));
 // Codex names its shell in the environment_context it sends; a rollout without one (the fake) gets the platform's default shell.
 const shellTool = (st) => (/^(?:powershell|pwsh)/i.test(st.shell ?? (process.platform === 'win32' ? 'powershell' : '')) ? 'PowerShell' : 'Bash');
 
 const joinCmd = (v) => (Array.isArray(v) ? v.join(' ') : v);
 
-/** A function_call's arguments as a cell call; js code goes through cellCalls. */
 function fnCalls(name, argText) {
   const a = parseJson(argText ?? '') ?? {};
   if (name === 'js') return cellCalls(a.code);
@@ -181,7 +172,6 @@ const outputText = (output) => (Array.isArray(output) ? output.map((p) => p.text
 const isHookItem = (p) => p.type === 'message' && p.internal_chat_message_metadata_passthrough?.content_item_kinds?.includes('hooks.additional_context') === true;
 const bump = (counts, name) => { counts[name] = (counts[name] ?? 0) + 1; };
 
-/** One call into the out lists: Bash and Edit shapes for paths, a count by name, an unparsed count when no path can be read. */
 function emitCall(call, st, out) {
   // An empty write_stdin only polls a running command.
   if (call.name === 'write_stdin' && call.chars === '') return;
@@ -234,7 +224,6 @@ export function parseRollouts(files) {
   return out;
 }
 
-// A call's cwd is its workdir, where the Claude parser gives the transcript line's.
 const strip = ({ file, name, input }) => ({ file, name, input, cwd: input.cwd });
 
 /** The Claude parsers' shapes over rollouts, so the read check, CHECK_COMMANDS and the work counts run unchanged. */

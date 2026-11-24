@@ -113,7 +113,6 @@ describe('handleCommentDeleted', () => {
     expect(result.status).toBe('archived');
     expect(result.archivedCount).toBe(1);
     expect(rawRowExists(root, idA)).toBe(false);
-    // Tenant B row survives.
     expect(rawRowExists(root, idB)).toBe(true);
     expect(archiveRowCount(root, idB)).toBe(0);
   });
@@ -149,7 +148,6 @@ describe('handleCommentDeleted', () => {
     expect(result.status).toBe('archive_skipped_not_found');
     expect(result.archivedCount).toBe(0);
 
-    // Replay returns 'duplicate' because key was marked seen.
     const replay = await handleCommentDeleted(ctxFor(root), {
       artifactRef: 'github://acme/repo/issue/999/comment/never',
       idempotencyKey: 'idem-missing',
@@ -183,7 +181,6 @@ describe('handleCommentDeleted', () => {
     expect(second.status).toBe('duplicate');
     expect(second.archivedCount).toBe(0);
 
-    // raw_archive count unchanged.
     expect(archiveRowCount(root, id)).toBe(1);
   });
 
@@ -198,7 +195,6 @@ describe('handleCommentDeleted', () => {
     });
     expect(first.status).toBe('archived');
 
-    // New key, same artifactRef. No raw rows remain -> archive_skipped_not_found.
     const second = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-redel-2',
@@ -208,7 +204,6 @@ describe('handleCommentDeleted', () => {
     expect(second.status).toBe('archive_skipped_not_found');
     expect(second.archivedCount).toBe(0);
 
-    // The new key is now marked seen -> a third attempt with same key is duplicate.
     const third = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-redel-2',
@@ -225,11 +220,9 @@ describe('handleCommentDeleted', () => {
       scope: SCOPE_PRIVATE,
     });
 
-    // Pre-condition: scoped recall finds it (sanity).
     const before = await retrieve(ctxFor(root), { query: distinctive, filter: { scope: SCOPE_PRIVATE } });
     expect(before.results.some((r) => r.content.includes(distinctive))).toBe(true);
 
-    // Archive via deletion.
     const result = await handleCommentDeleted(ctxFor(root), {
       artifactRef: ARTIFACT,
       idempotencyKey: 'idem-private',
@@ -238,11 +231,9 @@ describe('handleCommentDeleted', () => {
     });
     expect(result.status).toBe('archived');
 
-    // Post-condition: no-scope recall returns nothing matching the canary.
     const after = await retrieve(ctxFor(root), { query: distinctive });
     expect(after.results.some((r) => r.content.includes(distinctive))).toBe(false);
 
-    // Also confirm the row is gone from memories entirely.
     const remaining = loadAllEntries(root, 'default').filter((e) => e.content.includes(distinctive));
     expect(remaining).toHaveLength(0);
   });

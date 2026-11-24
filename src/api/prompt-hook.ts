@@ -1,7 +1,3 @@
-// The per-prompt hook's block and ledger rows, rendered here for `hippo context` and for
-// promptHookContext (a remote hook route's call). promptHookContext copies the CLI's contextGet
-// flags (surface/cli/context.ts) bar `continuity` and `ownHandoffOnly`, both opt-in here. Parity:
-// tests/store/prompt-hook-context.process.test.ts.
 import type { Context } from './types.js';
 import type {
   ContextOptions,
@@ -54,8 +50,6 @@ import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
-  /** The reader's project, with every name capture may have stamped its rows with; a user rule
-   * belongs to this project alone. */
   readonly project: ProjectRef;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
@@ -63,16 +57,9 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Where the ledger rows go; a shared store's reach has no global store, see
-   * promptHookContext. */
   readonly reach: LedgerReach;
-  /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule; a string or
-   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have
-   *  shown. */
   readonly printedHash?: string | null;
-  /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
-  /** The instant each confidence label is read at, and the model a printed strength scores by. */
   readonly now: Date;
   readonly strength: StrengthModel;
 }
@@ -95,8 +82,6 @@ function hookReply(envelope: HookEnvelope, additionalContext: string): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName, additionalContext } });
 }
 
-/** A hook render's stdout and the hash of the static block it carries, null when it carries
- * none. */
 interface RenderedContext {
   readonly stdout: string;
   readonly staticHash: string | null;
@@ -149,8 +134,6 @@ function renderStaticBlock(
       ...(result.recentEvents && result.recentEvents.length > 0
         ? [sessionTrailText(result.recentEvents)]
         : []),
-      // No live strength percentage, so an unchanged set of memories renders byte-identically turn
-      // after turn.
       ...(staticItems.length > 0
         ? contextBlockLines(staticItems, t, framing, { now: view.now, showStrength: false })
         : []),
@@ -272,8 +255,6 @@ interface SkipUnchangedStaticOptions {
   readonly staticCount: number;
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already
- * holds. */
 async function skipUnchangedStatic({
   view,
   surface,
@@ -283,21 +264,15 @@ async function skipUnchangedStatic({
 }: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  // Session start is the only injection Copilot gets, so a resumed session needs the whole block
-  // again.
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
     return false;
   }
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
-  // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
-  // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = await ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last, staticHash, injectCfg.refreshTurns)) return false;
-  // With no recall block this turn sends nothing more, so its delivery row says the static block
-  // was reused.
   if (!recallBlock.trim()) rec?.delivered({ state: 'reused', staticHash, staticReused: true });
   await bookLedgerTurn(
     {
@@ -324,8 +299,6 @@ interface InjectedBlock {
   readonly items: number;
 }
 
-/** One connection for both rows; a failed row is logged and the other still lands, because a
- * ledger failure must not break the hook. */
 async function recordAdditionalContextRows(
   view: ContextView,
   surface: TokenSurface,
@@ -353,13 +326,10 @@ async function recordAdditionalContextRows(
   );
 }
 
-// The flags HIPPO_PINNED_INJECT_COMMAND gives the local hook; the CLI parity test fails if the two
-// drift.
 const HOOK_INCLUDE_RECENT = 5;
 const HOOK_BUDGET = DEFAULT_CONTEXT_BUDGET;
 const HOOK_FRAMING = 'observe';
 
-// blockHash's shape (token-ledger.ts).
 const BLOCK_HASH_RE = /^[0-9a-f]{16}$/;
 
 /**
@@ -428,8 +398,6 @@ export async function buildPromptHookContext(
   const { sessionId, payload } = req;
   const { sharedStore } = opts;
   if (sharedStore || sharedStoreOf(ctx)) assertCallerProject(req.project);
-  // The test the local hook runs on its stdin, so a sub-agent books no arm and no session rows here
-  // either.
   const subagent = payload !== undefined && isSubagentPayload(JSON.stringify(payload));
   const ledgerSessionId = subagent ? undefined : sessionId;
   const reach = ledgerReachOf(ctx, sharedStore);
@@ -455,7 +423,6 @@ export async function buildPromptHookContext(
         strength: strengthOf(ctx),
       })
     : NOTHING_RENDERED;
-  // A sub-agent's output is not the session's, so its caller must not record it as printed.
   return { arm, stdout: rendered.stdout, staticHash: subagent ? null : rendered.staticHash };
 }
 
@@ -469,7 +436,6 @@ function hookContextOptions(
     budget: HOOK_BUDGET,
     pinnedOnly: true,
     includeRecent: HOOK_INCLUDE_RECENT,
-    // The project comes from the caller, never from where the store sits or the daemon's cwd.
     currentProject: req.project,
     currentSessionId: req.sessionId,
     prompt: isJsonString(prompt) ? prompt : undefined,

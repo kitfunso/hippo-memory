@@ -1,4 +1,3 @@
-// Under a store other than hippo.db, a route that needs hippo.db's local files answers 501 and no request opens or creates hippo.db.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,7 +37,6 @@ describe('serve() under a store that is not hippo.db', () => {
   const records = new Map([[valid.keyId, valid.record]]);
   const blocked: Error[] = [];
   const lookups = new Map<string, number>();
-  // Stands in for a store method that still opens hippo.db, so a store-ready route reaching it must answer 501.
   const unported = async (): Promise<never> => {
     closeHippoDb(openHippoDb(root));
     throw new Error('the stub store does not serve recall');
@@ -56,7 +54,6 @@ describe('serve() under a store that is not hippo.db', () => {
         }
         return null;
       }
-      // Stands in for any unported path: nothing between this open and the reply catches the error.
       if (keyId === leaky.keyId) closeHippoDb(openHippoDb(root));
       return records.get(keyId) ?? null;
     },
@@ -83,7 +80,6 @@ describe('serve() under a store that is not hippo.db', () => {
     vi.stubEnv('HIPPO_V1_RPS', '0');
     vi.stubEnv('HIPPO_CALLER_RPS', '0');
     root = makeRoot('other-store', { init: false });
-    // As a store-kit adapter marks its folder, so any hippo.db open on it throws.
     writeFileSync(join(root, OTHER_STORE_MARKER), 'stub');
     handle = await serve({
       hippoRoot: root,
@@ -232,7 +228,6 @@ describe('serve() under a store that is not hippo.db', () => {
 
   it('POST /mcp lists every tool but the two that need local files, and a call reaching hippo.db answers store_not_ported', async () => {
     const postMcp = async (body: string): Promise<{ status: number; body: unknown }> => {
-      // Another store is shared, and a shared store refuses hippo_recall from a caller that names no project.
       const headers = { ...bearer(valid), 'content-type': 'application/json', 'x-hippo-project': 'p' };
       const res = await fetch(`${handle.url}/mcp`, { method: 'POST', headers, body });
       return { status: res.status, body: await res.json() };
@@ -324,7 +319,6 @@ describe('serve() under another store reads its folder as shared, though no conf
     entriesByIds: notRead,
     activeGoals: notRead,
     freshRawEntries: notRead,
-    // As continuityWhere: null reads the tenant's newest, and a key missing its owner or project matches nothing.
     continuity: async (_tenantId, _eventLimit, key) => {
       keys.push(key);
       const matches = key === null || (key.owner !== '' && key.project.length > 0);

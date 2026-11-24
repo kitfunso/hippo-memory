@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Z0 round 3 cost split by task kind: reruns the frozen analyzer's cost ratio on teach, first apply, later apply and set N tasks, for seven arm pairs.
- * Free and local, no model call. The analyzer files and every input are sha256-checked against the report round 3 wrote.
- * Exit 0 on a clean read, 1 on bad input, a changed file or a self-check miss. */
 
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
@@ -23,7 +20,6 @@ const FIELDS = ['estimate', 'low', 'high', 'se', 'df', 'p'];
 const ALL_KIND = 'sets R+N';
 const NA = 'n/a';
 
-// taskUnits' keep reads the hippo-arm task only, so checkAgreement vouches for the control side.
 export const KINDS = {
   teach: (r) => r.set === 'R' && r.kind === 'teach',
   'first apply': (r) => r.set === 'R' && r.kind === 'apply' && r.applyIndex === 1,
@@ -31,7 +27,6 @@ export const KINDS = {
   'set N': (r) => r.set === 'N',
 };
 
-// A0 and A4 are two-seed arms, so pairTasks keeps seeds 1-2 for them; A2 and A5 get the same cells through a keep that adds seed <= 2.
 export const PAIRS = [
   ['A2', 'A1', 'all'],
   ['A5', 'A1', 'all'],
@@ -43,7 +38,6 @@ export const PAIRS = [
 ];
 
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
-// A missing or NaN field stays visible as null; a 0 would read as a result.
 const num = (x) => (Number.isFinite(x) ? x : null);
 const isRecord = (v) => v !== undefined && v !== null && v.constructor === Object;
 const pick = (e) => Object.fromEntries(FIELDS.map((k) => [k, e[k]]));
@@ -77,7 +71,6 @@ function listed(hashes, role, exactlyOne) {
   return found;
 }
 
-// The report's grading and drop-list paths point at a deleted worktree, so those two come from the flags.
 export function inputArgs(hashes, files) {
   const own = (role, label) => listed(hashes, role, false).map((h) => checkedFile(label, h.file, h.sha256, RESTORE));
   const [prices] = listed(hashes, 'prices', true);
@@ -98,7 +91,6 @@ export function inputArgs(hashes, files) {
   };
 }
 
-// Exact on purpose: the same code on the same inputs gives the same doubles.
 export function fieldsOff(got, want) {
   return FIELDS.filter((k) => got[k] !== want[k]);
 }
@@ -118,7 +110,6 @@ function compare(name, got, want) {
   return pick(got);
 }
 
-// H3 and H4 pin the call path (filters, prices, harmT) to round 3 before any new cell is read.
 export function selfCheck(api, f, prices, report) {
   const units = (keep) => api.taskUnits(f.scored, 'A2', 'A1', prices, keep);
   const rn = api.inSets('R', 'N');
@@ -173,7 +164,6 @@ export function costByKind(api, f, prices) {
 
 const asEstimate = (r) => ({ estimate: r.ratio, low: r.low, high: r.high, se: r.se, df: r.df, p: r.p });
 
-// Puts rowOf under round 3's numbers: the whole-set row is H3 and the set N row is H4's cost ratio.
 export function checkCells(rows, checks) {
   const cases = [[ALL_KIND, 'H3', checks.H3], ['set N', 'H4 cost ratio', checks.H4.costRatio]];
   for (const [kind, name, want] of cases) {
@@ -187,7 +177,6 @@ export function checkCells(rows, checks) {
 
 function gitLabel(root) {
   const git = (args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  // A label only: the source hashes are the gate, so a folder without git history still reads.
   let sha;
   try {
     sha = git(['rev-parse', '--short', 'HEAD']);
@@ -197,7 +186,6 @@ function gitLabel(root) {
   try {
     return { sha, clean: git(['status', '--porcelain']) === '' };
   } catch {
-    // The sha still names the code, so only the clean flag is lost.
     return { sha, clean: null };
   }
 }
@@ -226,7 +214,6 @@ function readReport(file) {
   return report;
 }
 
-// The one way into a frozen round 3 read: it returns only after every hash matches and H3 and H4 come out exact.
 export async function openFrozenRead(args) {
   const analyzer = path.resolve(args.analyzer);
   if (!fs.existsSync(analyzer) || !fs.statSync(analyzer).isDirectory()) throw new Error(`no folder at --analyzer ${analyzer}; pass the root of a built checkout of 04835462b`);
@@ -256,15 +243,12 @@ export async function readCostByKind(args) {
 }
 
 const fixed = (x, digits) => (Number.isFinite(x) ? x.toFixed(digits) : NA);
-// A value that rounds to zero prints unsigned, so noise never reads as a direction.
 const signed = (x, digits) => {
   if (!Number.isFinite(x)) return NA;
   const text = x.toFixed(digits);
   return Number(text) === 0 ? (0).toFixed(digits) : `${x >= 0 ? '+' : ''}${text}`;
 };
-// A value that rounds to 1.000 but is not 1 gets a fourth digit; within 0.00005 of 1 that is still 1.0000.
 const ratio = (x) => (Number.isFinite(x) && x !== 1 && x.toFixed(3) === '1.000' ? x.toFixed(4) : fixed(x, 3));
-// 0.000 would read as exactly zero, so a p under 0.0005 prints as a bound.
 const pValue = (x) => (Number.isFinite(x) && x < 0.0005 ? '<0.001' : fixed(x, 3));
 const line = (e) => `${ratio(e.estimate)} [${ratio(e.low)}, ${ratio(e.high)}]`;
 const COLUMNS = [['pair', 6], ['seeds', 5], ['kind', 11], ['units', 5], ['ratio', 6], ['low', 6], ['high', 6], ['p', 6], ['$t', 9], ['$c', 9], ['$diff', 9], ['resolve', 7]];

@@ -1,5 +1,3 @@
-// Pins the status and JSON body of every dashboard read and write the SPA makes, on a fixed store and clock, so a
-// change to how the dashboard is served moves no byte. Snapshot ids, card ids and card timestamps are masked.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { quarantineScopeFor } from '../../src/domain/trust/quarantine.js';
@@ -58,8 +56,6 @@ afterAll(async () => {
   store.cleanup();
 });
 
-/** Masks what the store or the wall clock picks: snapshot ids, card ids in first-seen order, and ISO timestamps on the
- * card routes only, since every memory timestamp comes from the fixed clock. */
 function masker(): (path: string, text: string) => string {
   const cards = new Map<string, string>();
   return (path, text) => {
@@ -122,7 +118,6 @@ const WRITES: ReadonlyArray<readonly [string, Json]> = [
 
 const mask = masker();
 
-/** The status and the parsed body, so a failure diffs the field that changed; a body that is not JSON stays text. */
 interface Pinned {
   status: number;
   body: Json | string;
@@ -137,7 +132,6 @@ function pinned(path: string, reply: Reply): Pinned {
   }
 }
 
-// The reads run first, then the writes in order: each write changes what the later reads see.
 describe('dashboard JSON bodies', () => {
   it.each(READS)('GET %s', async (path) => {
     expect(pinned(path, await get(dash.port, path))).toMatchSnapshot();

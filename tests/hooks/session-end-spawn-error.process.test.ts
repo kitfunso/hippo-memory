@@ -1,4 +1,3 @@
-// The session-end worker can fail to start after spawn returns; that failure must be logged, never crash the hook.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -17,10 +16,8 @@ beforeEach(() => {
 });
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
-/** Runs hippo with a Node binary gone from disk (upgraded mid-session): every worker spawn fails with ENOENT, reported as an 'error' event. */
 function runWithMissingNode(args: readonly string[], logLevel: string, input?: string): SpawnSyncReturns<string> {
   const preload = path.join(dir, 'missing-node.mjs');
-  // The Windows Codex shim is started with Node too, so that one start (a script named codex.js) keeps the real Node.
   const lines = [
     "import cp from 'node:child_process';",
     "import { syncBuiltinESMExports } from 'node:module';",
@@ -59,13 +56,10 @@ describe('hippo session-end worker spawn', () => {
   });
 });
 
-/** Installs the wrapper under `dir` over a launcher that runs the real Node, since codex-run starts only what the
- * installer recorded. */
 function installNodeAsCodex(bin: string): void {
   fs.mkdirSync(bin, { recursive: true });
   let launcher: string;
   if (process.platform === 'win32') {
-    // codex-run starts an npm .ps1 shim's script with Node, so the script relays its arguments to the real Node.
     const relay = [
       "const { spawnSync } = require('node:child_process');",
       "process.exit(spawnSync(process.execPath, process.argv.slice(2), { stdio: 'inherit' }).status ?? 1);",
@@ -91,7 +85,6 @@ describe('hippo codex-run worker spawn', () => {
     const logFile = path.join(dir, '.hippo', 'logs', 'codex-sleep.log');
     const fakeCodex = path.join(dir, 'fake-codex.mjs');
     fs.writeFileSync(fakeCodex, 'process.exit(7);\n');
-    // The real Node stands in for Codex, so only the worker spawn (through process.execPath) fails.
     installNodeAsCodex(path.join(dir, 'real-bin'));
 
     const run = runWithMissingNode(['codex-run', '--', fakeCodex], 'debug');
@@ -100,7 +93,6 @@ describe('hippo codex-run worker spawn', () => {
     expect(run.status, run.stderr).toBe(7);
     expect(run.stderr).toContain('the session-end worker did not spawn, running inline');
     expect(run.stderr).toContain('ENOENT');
-    // No Node exists for a detached worker here, so this line can only come from the inline run.
     expect(fs.readFileSync(logFile, 'utf8')).toContain('skip: no hippo store');
   });
 });

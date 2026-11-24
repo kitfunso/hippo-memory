@@ -1,4 +1,3 @@
-// Work-queue card types: a claimable unit of work, N candidates claim one row, first wins.
 import { HOUR_MS } from '../util/time.js';
 /** A work-queue card's lifecycle state; CARD_TRANSITIONS lists the legal moves between them. */
 export type CardStatus =

@@ -1,5 +1,3 @@
-// Claude Code's PostToolUse and PostCompact hooks hand the agent-note import to a detached worker: only a memory note starts
-// one, the hook itself opens no store, and the worker lands the rows and logs them.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -13,7 +11,6 @@ import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { waitFor } from '../_helpers/wait-for.js';
 
-// Records the databases a run opens and the argv of each child it spawns; STUB_SPAWN=1 starts no child at all.
 const PRELOAD_SRC = `
 import cp from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
@@ -55,9 +52,7 @@ let logFile: string;
 
 interface HookRun {
   readonly result: SpawnSyncReturns<string>;
-  /** Databases the process opened. */
   readonly opens: string[];
-  /** Argv of each child it spawned. */
   readonly spawns: string[][];
 }
 

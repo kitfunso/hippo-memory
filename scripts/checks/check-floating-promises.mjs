@@ -74,7 +74,6 @@ export function programFromConfig(configPath) {
   return ts.createProgram(parsed.fileNames, parsed.options);
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const hits = findFloatingPromises(programFromConfig('tsconfig.json'), 'src');
   if (hits.length > 0) {

@@ -1,4 +1,3 @@
-// The dormant-memory shapes the Dormant group takes and returns.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { DormantRevival } from '../../memory/dormant-revival.js';
 import type { MethodEffects } from './effects.js';

@@ -1,9 +1,3 @@
-"""Evaluate generated answers against LongMemEval ground truth.
-
-Uses exact match and an LLM judge (Claude) to score answer correctness.
-Reports per-question-type accuracy and overall accuracy.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -48,19 +42,15 @@ Then optionally provide a brief explanation."""
 
 @dataclass(frozen=True)
 class JudgmentResult:
-    """Result of a single answer evaluation."""
-
     question_id: str
     question_type: str
     is_correct: bool
-    method: str  # "exact_match" or "llm_judge"
+    method: str
     explanation: str = ""
 
 
 @dataclass
 class EvalResults:
-    """Aggregated evaluation results."""
-
     judgments: list[JudgmentResult] = field(default_factory=list)
 
     @property
@@ -76,7 +66,6 @@ class EvalResults:
         return self.correct / self.total if self.total > 0 else 0.0
 
     def per_type_accuracy(self) -> dict[str, dict[str, Any]]:
-        """Compute accuracy grouped by question_type."""
         by_type: dict[str, list[JudgmentResult]] = defaultdict(list)
         for j in self.judgments:
             by_type[j.question_type].append(j)
@@ -113,17 +102,13 @@ class EvalResults:
 
 
 def normalize_answer(text: str) -> str:
-    """Normalize an answer for exact match comparison."""
     text = text.lower().strip()
-    # Remove punctuation
     text = re.sub(r"[^\w\s]", "", text)
-    # Collapse whitespace
     text = re.sub(r"\s+", " ", text)
     return text
 
 
 def exact_match(generated: str, ground_truth: str) -> bool:
-    """Check if generated answer matches ground truth after normalization."""
     return normalize_answer(generated) == normalize_answer(ground_truth)
 
 
@@ -134,18 +119,6 @@ def llm_judge(
     ground_truth: str,
     model: str = JUDGE_MODEL,
 ) -> tuple[bool, str]:
-    """Use Claude as a judge to evaluate answer correctness.
-
-    Args:
-        client: Anthropic API client.
-        question: The original question.
-        generated: The generated answer.
-        ground_truth: The ground truth answer.
-        model: Model to use for judging.
-
-    Returns:
-        Tuple of (is_correct, explanation).
-    """
     user_message = (
         f"Question: {question}\n\n"
         f"Ground truth answer: {ground_truth}\n\n"
@@ -186,17 +159,6 @@ def evaluate_all(
     judge_model: str = JUDGE_MODEL,
     skip_llm_judge: bool = False,
 ) -> EvalResults:
-    """Evaluate all generated answers.
-
-    Args:
-        generation_path: Path to generation JSONL file.
-        output_path: Optional path to save evaluation results JSON.
-        judge_model: Model for LLM judge.
-        skip_llm_judge: If True, only use exact match (no API calls).
-
-    Returns:
-        EvalResults with all judgments.
-    """
     if not generation_path.exists():
         raise FileNotFoundError(f"Generation results not found: {generation_path}")
 
@@ -218,7 +180,6 @@ def evaluate_all(
         generated = entry["generated_answer"]
         question_type = entry.get("question_type", "unknown")
 
-        # Try exact match first
         if exact_match(generated, ground_truth):
             results.judgments.append(
                 JudgmentResult(
@@ -230,7 +191,6 @@ def evaluate_all(
             )
             continue
 
-        # Fall back to LLM judge
         if client is not None:
             is_correct, explanation = llm_judge(
                 client=client,
@@ -249,7 +209,6 @@ def evaluate_all(
                 )
             )
         else:
-            # Exact match failed and no LLM judge
             results.judgments.append(
                 JudgmentResult(
                     question_id=question_id,
@@ -260,10 +219,8 @@ def evaluate_all(
                 )
             )
 
-    # Print results
     _print_results(results)
 
-    # Save results
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
@@ -274,7 +231,6 @@ def evaluate_all(
 
 
 def _print_results(results: EvalResults) -> None:
-    """Print evaluation results to logger."""
     logger.info("=" * 60)
     logger.info("EVALUATION RESULTS")
     logger.info("=" * 60)

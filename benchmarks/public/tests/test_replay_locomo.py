@@ -1,6 +1,3 @@
-"""mem0/replay_locomo.py (prereg Amendment 6 dated notes 9): a replayed arm takes the Mem0 client's order, and no file
-counts unless the hippo-emb replay gives back the saved results, the arm shows hippo-emb's memories at 200, and a
-second search agrees."""
 from __future__ import annotations
 
 import pytest
@@ -17,8 +14,6 @@ def hit(i: int, score: float) -> dict:
 
 
 class Fake:
-    """A server whose n-th search returns the n-th list it was given, then the last one."""
-
     def __init__(self, *lists: list[dict]) -> None:
         self.lists, self.n = lists, 0
 
@@ -41,15 +36,15 @@ def test_the_client_order_is_highest_score_first_and_keeps_ties_in_server_order(
 
 def test_a_replay_keeps_the_arms_order_when_every_gate_passes():
     reg = rl.client_order([hit(1, 0.9), hit(2, 0.5), hit(3, 0.1)])
-    arm = [hit(3, 1.0), hit(1, 0.66), hit(2, 0.33)]  # rank scores: the client sort keeps the arm's order
+    arm = [hit(3, 1.0), hit(1, 0.66), hit(2, 0.33)]
     files, problems, counts = rl.replay(["q"], {"q": saved_rec(reg)}, Fake(reg), Fake(arm))
     assert problems == [] and counts == {"gate1_same": 1, "gate2_same": 1, "gate3_same": 1}
     assert [r["id"] for r in files["q"]["retrieval"]["search_results"]] == ["m3", "m1", "m2"]
 
 
 @pytest.mark.parametrize("base, arm, gate", [
-    ([hit(1, 0.8), hit(2, 0.5), hit(3, 0.1)], None, "gate 1"),  # a moved score: not the store that run searched
-    (None, [[hit(1, 1.0), hit(4, 0.5), hit(3, 0.2)]], "gate 2"),  # another memory at 200
+    ([hit(1, 0.8), hit(2, 0.5), hit(3, 0.1)], None, "gate 1"),
+    (None, [[hit(1, 1.0), hit(4, 0.5), hit(3, 0.2)]], "gate 2"),
     (None, [[hit(3, 1.0), hit(1, 0.6), hit(2, 0.3)], [hit(1, 1.0), hit(3, 0.6), hit(2, 0.3)]], "gate 3"),
 ])
 def test_a_replay_names_the_gate_that_fails(base, arm, gate):

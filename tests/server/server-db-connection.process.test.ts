@@ -1,4 +1,3 @@
-// A running server keeps one store connection open, so a request's own close is never SQLite's last-connection close.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -30,7 +29,6 @@ async function post(handle: ServerHandle, content: string): Promise<number> {
   return res.status;
 }
 
-// Read from SQLite, so the test holds no copy of the limit a connection outside a server gets.
 function inlineCheckpointPages(root: string): number {
   const db = openHippoDb(root);
   try {
@@ -77,12 +75,10 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     dirs.push(root);
     const db = join(root, 'hippo.db');
     const inlineLimit = inlineCheckpointPages(root);
-    // Sized so 16 posts, each also indexed by the trigram table, write over twice the inline limit's pages and under 4,000.
     const filler = 'x'.repeat(inlineLimit * 160);
     const handle = await serveKeyed({ hippoRoot: root, port: 0, rateLimits: { perAddress: 'off' } });
     try {
       const before = readFileSync(db);
-      // Too few responses for a background checkpoint to be due, so a changed hippo.db could only come from a request's own commit.
       for (let n = 0; n < 16; n++) expect(await post(handle, `runbook step ${n} ${filler}`)).toBe(200);
       expect(statSync(`${db}-wal`).size / 4096).toBeGreaterThan(2 * inlineLimit);
       expect(readFileSync(db).equals(before)).toBe(true);
@@ -119,7 +115,6 @@ describe.skipIf(needsHippoDb('lock'))('hippo serve store connection', () => {
     try {
       await new Promise<void>((ok) => holder.stdout.once('data', () => ok()));
       handle = await serveKeyed({ hippoRoot: root, port: 0 });
-      // The lock is still held, so only an open that gave up early can have logged this by now.
       const gaveUp = stderrSpy.mock.calls
         .map((c) => String(c[0]))
         .filter((l) => l.includes('could not hold a store connection'));

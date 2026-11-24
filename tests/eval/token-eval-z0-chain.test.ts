@@ -1,4 +1,3 @@
-// Z0 failure chain (prereg 179-182) and injected-row sources (93) with the fake Claude Code.
 import { describe, it, expect, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -9,7 +8,6 @@ import {
 } from '../fixtures/z0-harness.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-/** Teach t1 with `t1`, two plain tasks, then applies a1 (passes its check) and a2; the arms run in one lockstep. */
 function chainSpec(r: ReturnType<typeof makeRepo>, t1: string) {
   return spec(r, [family('f1', [lesson('f1-l1', 'Write the lesson file')])], [
     teach(r, 't1', 'f1-l1', t1), plain(r, 'n1'), plain(r, 'n2'), apply(r, 'a1', 'f1-l1', 'LESSON_OK'), apply(r, 'a2', 'f1-l1', 'look around only'),

@@ -9,9 +9,6 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 import { waitFor } from '../_helpers/wait-for.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
-// OpenCode's idle hook runs `hippo session-end` with no payload. An empty stdin
-// must not read as a manual run: session-end never scans ~/.claude/projects.
-// Real built CLI and real detached worker, same idiom as session-end-snapshot-close.process.test.ts.
 const MARKER = 'zebrafish-ledger';
 const WORKER_DONE = 'skip: no session_id in SessionEnd payload';
 
@@ -19,7 +16,6 @@ function runHippo(args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: s
   return hippoRun(args, { cwd, env, input });
 }
 
-// The detached worker is a real process: a throw while it holds the WAL lock counts as "not yet", and the bound is generous under load.
 const WORKER_WAIT = { timeoutMs: 25_000, intervalMs: 50, retryOnThrow: true } as const;
 
 describe('session-end with no payload never scans other projects', () => {
@@ -78,7 +74,6 @@ describe('session-end with no payload never scans other projects', () => {
   });
 
   it('logs the OpenCode run to the file its session start reads, with no --log-file', async () => {
-    // The worker's stdio is ignored, so this file is the only place its warnings survive.
     const lastSleepLog = path.join(dir, '.hippo', 'logs', 'last-sleep.log');
     expect(runHippo(['session-end', '--runtime', 'opencode'], dir, env, '').status).toBe(0);
 

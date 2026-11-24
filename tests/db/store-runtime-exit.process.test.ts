@@ -1,5 +1,3 @@
-// process.exit skips every finally, so only the root's exit hook can run held writes and close open handles; a root
-// that ends without one removes its hook.
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';

@@ -1,5 +1,3 @@
-// AuditLog answers, with no audit row written, and GET /v1/audit built on
-// it answers the same over serve().
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,7 +26,6 @@ import { copyTree } from '../_helpers/copy-tree.js';
 const HOST = '__host__';
 const at = (second: number): string => `2020-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
 
-// tenant, op, second, target: ids run from 12 in this order, above the 10 rows seedTwoTenants leaves under ids 1 to 10.
 const LOGGED: readonly (readonly [string, AuditOp, number, string])[] = [
   [TENANT_A, 'recall', 1, 'q1'],
   [TENANT_A, 'recall', 2, 'q2'],
@@ -45,7 +42,6 @@ const LOGGED: readonly (readonly [string, AuditOp, number, string])[] = [
 const BULK_ROWS = 105;
 const BULK_FIRST_ID = 12 + LOGGED.length;
 
-/** Each tenant's ids newest first: the seed rows carry the wall clock, so they sit above every 2020 row. */
 const A_IDS = [9, 7, 5, 4, 3, 1, 18, 17, 16, 15, 13, 12, 22];
 const B_IDS = [10, 8, 6, 2, 19, 14];
 const BULK_IDS = Array.from({ length: BULK_ROWS }, (_, i) => BULK_FIRST_ID + BULK_ROWS - 1 - i);
@@ -56,7 +52,6 @@ let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 let hostAdminToken: string;
 
-/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's values. */
 async function conforms<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, 'auditLog', calls);
   expect(sqlite.audit).toEqual(fixtureAudit);
@@ -73,7 +68,6 @@ const list =
 const ids = (rows: readonly AuditEvent[]): number[] => rows.map((row) => row.id);
 const below = (second: number, id: number): KeysetPosition => ({ key: at(second), id });
 
-/** Every page of `limit` rows, each resumed from the last row of the one before, until a page comes back empty. */
 const pages =
   (limit: number, tenantId = TENANT_A): Call<AuditEvent[][]> =>
   async (g) => {
@@ -223,14 +217,12 @@ const SERVED: readonly (readonly [Asker, string, number])[] = [
   ['adminA', '?limit=0', 400],
 ];
 
-/** Every SERVED request over serve() on a fresh copy of the fixture; a query ending in `cursor=` takes the cursor the reply before it gave. */
 async function runServed(makeStore?: (root: string) => HippoStore): Promise<Reply[]> {
   const home = mkdtempSync(join(tmpdir(), 'hippo-audit-served-'));
   try {
     const root = join(home, 'store');
     copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() reads another store as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });

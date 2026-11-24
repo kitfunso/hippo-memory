@@ -1,4 +1,3 @@
-// An MCP context as a host builds one, for tests that call handleMcpRequest directly.
 import { bindMcpTools } from '../../src/surface/mcp/request.js';
 import type { McpCaller, McpContext } from '../../src/surface/mcp/protocol.js';
 import type { HippoStore } from '../../src/base/ports/store.js';

@@ -16,7 +16,6 @@ afterEach(() => {
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-// Announced public in CHANGELOG 1.26.3; guards the entry surface, which no other test imports through.
 describe('package entry re-exports strengthBucket', () => {
   it('src/index.ts exposes the same function dedupe.ts defines', () => {
     expect(entry.strengthBucket).toBe(strengthTieKey);
@@ -33,7 +32,6 @@ describe('package entry re-exports strengthBucket', () => {
     expect(realpathSync(fileURLToPath(out.url))).toBe(realpathSync(resolve(REPO_ROOT, 'dist', 'index.js')));
     expect(out.type).toBe('function');
     expect(out.one).toBe(100);
-    // The published d.ts text is what consumers compile against, so text is the contract.
     expect(rootDts()).toMatch(/\bstrengthBucket,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
     expect(dts).toMatch(
@@ -42,7 +40,6 @@ describe('package entry re-exports strengthBucket', () => {
   });
 });
 
-// An add-on runs consolidation in its own process; adminActor stays internal because sleep reads only actor.subject.
 describe('package entry re-exports sleep', () => {
   it('src/index.ts exposes sleep and not adminActor', () => {
     expect(entry).toHaveProperty('sleep');
@@ -74,21 +71,17 @@ describe('package entry re-exports sleep', () => {
     const out = runModuleScript<{ type: string; admin: boolean }>(script);
     expect(out.type).toBe('function');
     expect(out.admin).toBe(false);
-    // The published d.ts text is what consumers compile against, so text is the contract.
     expect(rootDts()).toMatch(/\bsleep,[^}]*\} from '\.\/entry\/sleep\.js';$/m);
     const dts = readFileSync(resolve(REPO_ROOT, 'dist', 'entry', 'sleep.d.ts'), 'utf-8');
     expect(dts).toMatch(/^export type \{ SleepOptions, SleepResult \} from '\.\.\/api\/sleep\/sleep\.js';$/m);
-    // The published signature takes a Context whose store sets the sleep groups, so the compiler checks them.
     expect(dts).toMatch(
       /^export declare function sleep\(ctx: SleepContext, opts\?: SleepOptions\): Promise<SleepResult>;$/m,
     );
     const sleepDts = readFileSync(resolve(REPO_ROOT, 'dist', 'api', 'sleep', 'sleep.d.ts'), 'utf-8');
-    // The phase-override seam lives in sleep-run.ts, so the public declaration must not name it.
     expect(sleepDts).not.toMatch(/__phases|SleepPhases/);
   });
 });
 
-/** What an eval or benchmark seeds a store with, reads it back by and scores against: the whole entry. */
 const EVAL_KIT = [
   'ambientSecretAdmit',
   'ambientSecretAdmitWire',
@@ -122,7 +115,6 @@ const EVAL_KIT = [
   'writeIndexMirror',
 ];
 
-// The eval kit lives on its own subpath; a reset seam on /server or the root would ship test hooks to production callers.
 describe('hippo-memory/testing', () => {
   it('resolves through the package exports map to dist/entry/testing.js and holds the eval kit and no reset seam', () => {
     const script = [
@@ -139,7 +131,6 @@ describe('hippo-memory/testing', () => {
   });
 });
 
-/** The module of each runtime re-export in `source`: a bare `export *` or an `export { ... }` naming at least one value. */
 function runtimeReexports(source: string): string[] {
   const modules: string[] = [];
   for (const m of source.matchAll(/^export\s+(type\s+)?(\*(?:\s+as\s+\w+)?|\{([^}]*)\})\s+from\s+'([^']+)'/gm)) {
@@ -151,12 +142,10 @@ function runtimeReexports(source: string): string[] {
   return modules;
 }
 
-/** The published d.ts text of the package root, which names each barrel it re-exports from. */
 function rootDts(): string {
   return readFileSync(resolve(REPO_ROOT, 'dist', 'index.d.ts'), 'utf-8');
 }
 
-/** The modules src/index.ts re-exports values from, through each ./entry/ barrel, as paths from src. */
 function rootReexports(): string[] {
   const src = resolve(REPO_ROOT, 'src');
   const fromSrc = (file: string, module: string): string =>
@@ -169,11 +158,9 @@ function rootReexports(): string[] {
   });
 }
 
-// A root export of a ./store/ or ./db/ function hands add-ons a folder-taking call that skips the tenant, actor and audit checks every api function applies.
 describe('package root', () => {
   it('re-exports no value from a ./store/ or ./db/ module', () => {
     const modules = rootReexports();
-    // src/index.ts and its barrels, not this test, set the list; these two prove the scan reads a multi-line block and a mixed line.
     expect(modules).toEqual(expect.arrayContaining(['./base/records/card.js', './base/memory/entry.js']));
     expect(modules.filter((module) => /^\.\/(store|db)\//.test(module))).toEqual([]);
   });
@@ -189,14 +176,12 @@ describe('package root', () => {
   });
 });
 
-/** One line per initial letter, so a snapshot diff shows the one name that came or went. */
 function byInitial(names: readonly string[]): string {
   const lines = new Map<string, string[]>();
   for (const name of [...names].sort()) lines.set(name[0], [...(lines.get(name[0]) ?? []), name]);
   return [...lines.values()].map((line) => line.join(' ')).join('\n');
 }
 
-// The one list of what the built package publishes at runtime: a name leaving an entry breaks an installed add-on.
 describe('published runtime exports', () => {
   it('lists every name each package entry exports', () => {
     const script = [

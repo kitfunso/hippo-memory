@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166): every saved lesson check and acceptance test runs again on the saved commits, in a scratch checkout outside the run.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -23,7 +22,6 @@ export const realKey = (p) => {
   return win ? r.toLowerCase() : r;
 };
 
-/** A harness fault: an `error` row, retried on the next run, never a flip (reading 5, R6). */
 class HarnessFault extends Error {
   constructor(stage, message) {
     super(message);
@@ -37,7 +35,6 @@ const fault = (stage, message) => {
 export const rowsFile = (out, pass) => path.join(out, 'g5', pass === 'postfix' ? 'regrade.postfix.jsonl' : 'regrade.jsonl');
 const subdirs = (dir) => fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => path.join(dir, e.name));
 
-/** One grade.json, refused when its folder is not its own runName/arm/seed or it predates the held-commit fields (R24). */
 function readGrade(out, file) {
   const grade = JSON.parse(fs.readFileSync(file, 'utf8'));
   const missing = NEW_FIELDS.filter((f) => !(f in grade));
@@ -84,14 +81,12 @@ export function readRows(file) {
   return { rows, history, torn: end < text.length, whole: Buffer.byteLength(text.slice(0, end)) };
 }
 
-/** Scratch dirs laid out like runDirs, so childEnv's bin strip still works; never inside the run root (R14). */
 function scratchPaths(out, g) {
   const root = path.join(out, 'rg', g.runName, g.arm, `seed${g.seed}`);
   const at = (name) => path.join(root, name);
   return { root, seed: g.seed, work: at('work'), claudeConfig: at('claude-config'), codexHome: at('codex-home'), hippoHome: at('hippo-home'), bin: at('bin') };
 }
 
-/** The homes start empty for every cell (R22): checkers, setup and tests have no reason to read them. */
 function scratchDirs(out, g) {
   const dirs = scratchPaths(out, g);
   for (const d of [dirs.claudeConfig, dirs.codexHome, dirs.hippoHome, path.join(dirs.root, 'check')]) fs.rmSync(d, { recursive: true, force: true });
@@ -122,7 +117,6 @@ const checkoutTree = (work, sha) => agentGit(work, (rgit) => {
   rgit(['clean', '-fdq'], work);
 });
 
-/** Each saved tree must rebuild exactly from the scratch checkout, or a verdict on it would grade something else. */
 function verifyTree(work, pre, sha, which) {
   checkoutTree(work, sha);
   const rebuilt = agentGit(work, (rgit) => rgit(['rev-parse', `${stateCommit(work, pre)}^{tree}`], work).trim());
@@ -130,7 +124,6 @@ function verifyTree(work, pre, sha, which) {
   if (rebuilt !== saved) fault('tree', `the ${which} tree ${sha} rebuilds as ${rebuilt}, not ${saved}`);
 }
 
-/** The bundle checked, then fetched, with every saved sha present under its own ref. */
 function fetchBundle(work, entry) {
   const g = entry.grade;
   if (!fs.existsSync(entry.bundle)) fault('bundle', `${entry.bundle} is missing`);
@@ -147,7 +140,6 @@ function fetchBundle(work, entry) {
   }
 }
 
-/** R26's gates, in order: checker identity, stub, bundle, setup, every tree. Only then may a checker run. */
 function gates(ctx, entry, dirs, env) {
   const g = entry.grade;
   const ids = Object.fromEntries(Object.keys(g.checkers).sort().map((id) => [id, ctx.checkerId(id)]));
@@ -181,7 +173,6 @@ function resumeOf(g) {
   return resumed;
 }
 
-/** One checker call on a saved tree with the shas and commands it saw in the run; a crash or timeout is the value 'error'. */
 function checkOn(ctx, entry, dirs, env, { lesson, sha, commands, resumeCommands = null }) {
   checkoutTree(dirs.work, sha);
   try {
@@ -193,13 +184,11 @@ function checkOn(ctx, entry, dirs, env, { lesson, sha, commands, resumeCommands 
   }
 }
 
-/** The pass's verdicts for one call: once, or twice under --post-fix, where the first run is the new verdict. */
 function verdicts(ctx, entry, dirs, env, call) {
   const regraded = checkOn(ctx, entry, dirs, env, call);
   return ctx.pass === 'postfix' ? { regraded, second: checkOn(ctx, entry, dirs, env, call) } : { regraded };
 }
 
-/** A flip is a verdict that moved without a fix: two post-fix runs that differ, or an unchanged checker that differs from the saved verdict. */
 function flipReason(saved, v, unchanged) {
   if (v.regraded === 'error' || v.second === 'error') return 'checker-error';
   const moved = ('second' in v && v.second !== v.regraded) || (unchanged && v.regraded !== saved);
@@ -211,7 +200,6 @@ function checkEntry(lessonId, which, saved, v, checkerId, unchanged) {
   return { lessonId, which, saved, ...v, flip: reason !== null, reason, checkerSha: checkerId };
 }
 
-/** The main lesson's first and final checks, then the stale one after a reversal (as pass-ness, reading 6), each pushed to `acc` as it ends. */
 function lessonChecks(ctx, entry, dirs, env, ids, acc) {
   const g = entry.grade;
   if (g.verdicts.first === null) return;
@@ -220,14 +208,12 @@ function lessonChecks(ctx, entry, dirs, env, ids, acc) {
   const resumeCommands = g.finalChecked ? resumeOf(g) : null;
   const first = verdicts(ctx, entry, dirs, env, { lesson, sha: g.first, commands: g.commandsFirst });
   add(g.lessonId, 'first', first);
-  // Reading 8: the final check is re-run only where the run ran it; otherwise final is first, as in the run.
   add(g.lessonId, 'final', g.finalChecked ? verdicts(ctx, entry, dirs, env, { lesson, sha: g.finalCheck, commands: g.commandsFinal, resumeCommands }) : first);
   if (g.staleLessonId === null) return;
   const raw = verdicts(ctx, entry, dirs, env, { lesson: ctx.lesson(g.staleLessonId), sha: g.stale, commands: g.commandsStale });
   add(g.staleLessonId, 'stale', Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v === 'error' ? 'error' : v === 'pass'])));
 }
 
-/** The hidden tests on the final tree, run once in either pass; a change from the run's result is counted, never dropped (reading 7). */
 function acceptanceOf(ctx, entry, dirs, env) {
   const g = entry.grade;
   checkoutTree(dirs.work, g.final);
@@ -246,7 +232,6 @@ export function regradeCell(ctx, entry, inputs) {
   };
   const dirs = scratchDirs(ctx.out, g);
   const env = armEnv(g.arm, dirs, ctx.baseEnv, { passEnv: ctx.passEnv });
-  // Checks that ended before a later fault stay on the error row, so their flips still count (R7).
   const checks = [];
   try {
     lessonChecks(ctx, entry, dirs, env, gates(ctx, entry, dirs, env), checks);
@@ -258,11 +243,9 @@ export function regradeCell(ctx, entry, inputs) {
   }
 }
 
-/** A post-fix record: new lesson verdicts, then resolved and chain.followed recomputed; acceptancePassed stays the run's (R3). */
 function regradedRecord(r, row) {
   if (r.lessons.length === 0) return r;
   const of = (which) => row.checks.find((c) => c.which === which);
-  // A crashed regrade check drops its lesson anyway, so the record keeps the run's verdict and stays valid.
   const real = (c, saved) => (VERDICTS.includes(c?.regraded) ? c.regraded : saved);
   const l = r.lessons[0];
   const stale = of('stale');
@@ -305,7 +288,6 @@ function taskOf(spec, g) {
 
 const hasKey = (env, name) => Object.keys(env).some((k) => (win ? k.toUpperCase() === name.toUpperCase() : k === name));
 
-/** The run's --pass-env list: one list across every record, and every name set now (values are not compared, reading 16). */
 function passEnvOf(records, baseEnv) {
   const lists = new Set(records.filter((r) => Array.isArray(r.passEnv)).map((r) => JSON.stringify(r.passEnv)));
   if (lists.size > 1) throw new Error(`the records name ${lists.size} different --pass-env lists; regrade each run's out dir on its own`);
@@ -315,11 +297,9 @@ function passEnvOf(records, baseEnv) {
   return passEnv;
 }
 
-/** R27: refuse when the run's arm env had a key this one lacks; keys only this one has are a warning, by name. */
 function envKeyCheck(records, entries, out, baseEnv, passEnv) {
   const extra = new Set();
   for (const g of new Map(entries.map((e) => [`${e.grade.runName}|${e.grade.arm}|${e.grade.seed}`, e.grade])).values()) {
-    // record.sequence is the sequence id, which a renamed run no longer shares with its runName.
     const rec = records.find((r) => r.sequence === g.sequence && r.arm === g.arm && r.seed === g.seed && r.screen !== true && Array.isArray(r.envKeys));
     if (!rec) throw new Error(`no record of ${g.runName}/${g.arm}/seed${g.seed} names its envKeys; pass the runs file the run wrote`);
     const now = armEnv(g.arm, scratchPaths(out, g), baseEnv, { passEnv });
@@ -344,7 +324,6 @@ function regradeContext(opts, entries) {
   return { out, pass, baseEnv, passEnv, extraEnvKeys, lesson, checkerId: (id) => checkerIdentity(lesson(id)), cachedFor: (seq) => path.join(out, 'repo-cache', seq) };
 }
 
-/** A cell whose regrade wrote under the run root stops the whole regrade: the evidence is no longer the run's (R23). */
 function guardedCell(ctx, entry, inputs) {
   // SHORTCUT: guards only this cell's own run root; walk every run root if a checker could reach another cell's.
   const g = entry.grade;
@@ -360,14 +339,12 @@ function guardedCell(ctx, entry, inputs) {
 export function runRegrade(opts) {
   const { out, pass, cells = [], log = () => {} } = opts;
   const all = listGrades(out);
-  // A missing grade.json refuses rather than counting as unreproducible, so deleting one can never drop a lesson.
   const orphans = [...new Set(opts.records.filter(isGraded).map(cellKey))].filter((k) => !all.some((e) => e.key === k));
   if (orphans.length) throw new Error(`no grade.json for ${orphans.length} valid cells in runs.jsonl: ${orphans.slice(0, 5).join(', ')}`);
   const unknown = cells.filter((k) => !all.some((e) => e.key === k));
   if (unknown.length) throw new Error(`--cell ${unknown.join(', ')}: no such cell under ${path.join(out, 'grading')}`);
   const entries = all.filter((e) => cells.length === 0 || cells.includes(e.key)).map((e) => ({ ...e, t: taskOf(opts.spec, e.grade) }));
   const ctx = regradeContext(opts, entries);
-  // Asked before any cell runs or any row is written, so a fix the reader rounds do not allow leaves the out dir as it was.
   if (pass === 'postfix') opts.assertCheckers?.([...new Set(entries.flatMap((e) => Object.keys(e.grade.checkers)))].sort().map((id) => [id, ctx.checkerId(id)]));
   const file = rowsFile(out, pass);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -376,7 +353,6 @@ export function runRegrade(opts) {
     log(`${file}: dropped a torn last line left by a cut-off regrade`);
     fs.truncateSync(file, whole);
   }
-  // An older pass's outputs would read as this pass's, so they go before the first cell; only `grading` and a full post-fix pass write them again.
   fs.rmSync(path.join(out, 'grading.json'), { force: true });
   if (pass === 'postfix') fs.rmSync(regradedFile(opts.runsFile), { force: true });
   const tally = { ran: 0, skipped: 0, errors: 0, regraded: null };

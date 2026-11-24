@@ -1,9 +1,3 @@
-/**
- * Unit tests for auditPrune (v1.12.9).
- *
- * Real-DB per project rule.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { parseOlderThanFlag } from '../../src/surface/cli/audit-prune.js';
@@ -16,7 +10,6 @@ function seedAuditRow(
   db: DatabaseSyncLike,
   opts: { tenantId: string; op: 'remember' | 'recall' | 'outcome'; daysAgo: number },
 ): void {
-  // Insert directly so we can control `ts` precisely (appendAuditEvent uses now()).
   const ts = new Date(Date.now() - opts.daysAgo * 24 * 60 * 60 * 1000).toISOString();
   db.prepare(
     `INSERT INTO audit_log (ts, tenant_id, actor, op, target_id, metadata_json) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -79,10 +72,9 @@ describe('auditPrune', () => {
     expect(countAudit(db, 'acme')).toBe(4);
 
     const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90 });
-    // 2 rows older than 90 days deleted, 2 rows newer preserved, +1 audit_prune row.
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(false);
-    expect(countAudit(db, 'acme')).toBe(2 + 1); // remaining + the audit_prune event
+    expect(countAudit(db, 'acme')).toBe(2 + 1);
   });
 
   it('is per-tenant — does NOT delete rows from other tenants', async () => {
@@ -92,9 +84,9 @@ describe('auditPrune', () => {
 
     const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
     expect(result.count).toBe(1);
-    expect(countAudit(db, 'acme')).toBe(1); // the audit_prune event
-    expect(countAudit(db, 'globex')).toBe(1); // untouched
-    expect(countAudit(db, 'initech')).toBe(1); // untouched
+    expect(countAudit(db, 'acme')).toBe(1);
+    expect(countAudit(db, 'globex')).toBe(1);
+    expect(countAudit(db, 'initech')).toBe(1);
   });
 
   it('dry-run returns count without deleting OR emitting an audit_prune row', async () => {
@@ -104,7 +96,7 @@ describe('auditPrune', () => {
     const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 90, dryRun: true });
     expect(result.count).toBe(2);
     expect(result.dryRun).toBe(true);
-    expect(countAudit(db, 'acme')).toBe(2); // nothing deleted, no audit_prune emitted
+    expect(countAudit(db, 'acme')).toBe(2);
   });
 
   it('emits an audit_prune row with metadata after a real prune', async () => {
@@ -131,7 +123,6 @@ describe('auditPrune', () => {
 
     const result = await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 30 });
     expect(result.count).toBe(0);
-    // audit_prune row still emitted even for zero-count prunes (full audit trail).
     expect(countAudit(db, 'acme')).toBe(2);
   });
 
@@ -154,10 +145,8 @@ describe('auditPrune', () => {
   });
 
   it('the just-emitted audit_prune row is NOT itself pruned by the same call', async () => {
-    // Edge case: ensure the audit_prune row's ts > cutoff so it survives.
     seedAuditRow(db, { tenantId: 'acme', op: 'recall', daysAgo: 100 });
     await auditPrune(apiCtx(root, 'acme', adminActor('cli')), { olderThanDays: 1 });
-    // 1 old row deleted, 1 audit_prune row remaining (its ts is now, way newer than cutoff).
     expect(countAudit(db, 'acme')).toBe(1);
     // SAFETY: literal SELECT of the op column against the known audit_log
     // schema; op is NOT NULL.

@@ -1,4 +1,3 @@
-// Adds hippo's MCP server to VS Code, so Copilot agent mode gets hippo's memory tools with no mcp.json edit.
 const vscode = require('vscode');
 
 // Windows needs npm's .cmd shim, as the mcp.json that `hippo init` writes does.
@@ -14,7 +13,6 @@ function activate(context) {
       provideMcpServerDefinitions: () => {
         const { version } = context.extension.packageJSON;
         const server = new vscode.McpStdioServerDefinition('Hippo Memory', NPX, ['-y', 'hippo-memory', 'mcp'], {}, version);
-        // hippo looks for the project's .hippo store from its working folder upward.
         const folder = vscode.workspace.workspaceFolders?.[0];
         if (folder) server.cwd = folder.uri;
         return [server];

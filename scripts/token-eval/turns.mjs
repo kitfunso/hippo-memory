@@ -1,4 +1,3 @@
-// Claude Code turns for one task: session 1 and the teach or correction resume, each inside the usage-limit loop.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -21,7 +20,6 @@ function lastJson(stdout) {
   try {
     return JSON.parse(stdout.trim().split('\n').filter(Boolean).pop() ?? '');
   } catch {
-    // No JSON line is no result; the record says so instead of guessing one.
     return null;
   }
 }
@@ -37,8 +35,6 @@ export function requestLogs(run, taskId, kind) {
   return fs.existsSync(run.rawDir) ? fs.readdirSync(run.rawDir).filter((f) => own.test(f)).sort().map((f) => path.join(run.rawDir, f)) : [];
 }
 
-/** fn(env) with the attempt's API traffic routed through a request-log proxy; no log file runs it unproxied.
- * A base URL passed with --pass-env stays the upstream, so the log sits in front of the operator's own route. */
 async function withRequestLog(logFile, env, fn) {
   if (!logFile) return fn(env);
   const proxy = await startLogProxy(logFile, env.ANTHROPIC_BASE_URL ? { upstream: env.ANTHROPIC_BASE_URL } : {});
@@ -52,7 +48,6 @@ async function withRequestLog(logFile, env, fn) {
 /** Run a session until it is not at the plan limit, calling `reset` before each rerun (a truthy reset skips it: `stopped`); `command()` or `args()` is called once per attempt.
  * Codex passes its own command, env, limit test and redaction, so both tools share one limit loop; only Claude Code passes `logKind`. */
 export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset, command = () => `${ctx.claude} ${args().join(' ')}`, env = run.env, isLimit = claudeLimit, redact = (text) => text, logKind = null }) {
-  // Every cut-off attempt, its wait and its reset: none of it is the kept attempt's work, so wallMs leaves it out.
   let cutOffMs = 0;
   // SHORTCUT: 15-minute polls up to 8 days, so a weekly limit's reset is waited out; parse the reset time if polling costs too much.
   for (let attempt = 1; ; attempt++) {
@@ -63,7 +58,6 @@ export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset
     // A hung session can print overloaded_error before it hangs; a timeout is a graded result, never a limit wait (prereg 165).
     if (cc.timedOut || !isLimit(cc, result)) return { cc, result, limitRetries: attempt - 1, cutOffMs };
     fs.writeFileSync(path.join(run.rawDir, `${t.id}.${rawName}${attempt}.txt`), redact(`${cc.stdout}\n${cc.stderr}`).slice(-20000));
-    // Prereg: a run that stops partway is abandoned and never analysed, so a limit that outlasts every wait ends the run.
     if (attempt > ctx.limitMaxWaits) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: still at the plan limit after ${ctx.limitMaxWaits} waits`);
     ctx.log(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: plan limit hit, waiting ${Math.round(ctx.limitWaitMs / 60_000)} min (attempt ${attempt})`);
     await sleep(ctx.limitWaitMs);
@@ -77,7 +71,6 @@ export async function untilNotLimited(ctx, run, t, { args, input, rawName, reset
 export async function runSession(ctx, run, t, reset) {
   let sessionId = null;
   const args = () => {
-    // Fresh per attempt: a cut-off attempt's transcript keeps its own id.
     sessionId = randomUUID();
     return [...claudeArgs(ctx, run), '--session-id', sessionId];
   };
@@ -90,7 +83,6 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
   const args = [...claudeArgs(ctx, run), '--resume', sessionId];
   let dir = null;
   try {
-    // Outside the workspace, so nothing the cut-off attempt does to .git (gc, refs, config, hooks, even rm) reaches the saved state.
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-resume-'));
     const snap = workSnapshot(run, sessionId, dir);
     const reset = () => {
@@ -99,7 +91,6 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
     };
     const projects = path.join(run.dirs.claudeConfig, 'projects');
     const main = findTranscript(projects, sessionId);
-    // Where session 1 ends in every file it wrote, subagents included, since a resume can append to any of them.
     const sizesBefore = new Map([...snap.transcripts].map(([f, bytes]) => [f, bytes.length]));
     const before = { bytesBefore: (main && sizesBefore.get(main)) || 0, sizesBefore, filesBefore: new Set(listTranscripts(projects)) };
     return { ...(await untilNotLimited(ctx, run, t, { args: () => args, input: message, rawName: 'resume-limit', reset, logKind: 'resume' })), ...before };
@@ -108,12 +99,10 @@ export async function resumeSession(ctx, run, t, sessionId, message, afterReset 
   }
 }
 
-/** fn(rgit, env): the runner's git on the agent's .git with a throwaway index. */
 const withTempIndex = (work, fn) => agentGit(work, (rgit, scratch) => fn(rgit, { GIT_INDEX_FILE: path.join(scratch, 'index') }));
 
 const transcriptsOf = (run, sessionId) => sessionFiles(path.join(run.dirs.claudeConfig, 'projects'), sessionId);
 
-/** The post-session-1 state in `dir`: a copy of .git holding the work tree as a tree, instruction files, every transcript's bytes. */
 function workSnapshot(run, sessionId, dir) {
   const work = run.dirs.work;
   const tree = withTempIndex(work, (rgit, env) => {
@@ -126,7 +115,6 @@ function workSnapshot(run, sessionId, dir) {
   return { dir, tree, instructions: instructionSnapshot(work), transcripts };
 }
 
-/** Undo a cut-off resume: .git comes back byte for byte, then the work tree from the saved tree. */
 function restoreWork(run, snap, sessionId) {
   const work = run.dirs.work;
   fs.rmSync(path.join(work, '.git'), { recursive: true, force: true, maxRetries: 3 });
@@ -139,7 +127,6 @@ function restoreWork(run, snap, sessionId) {
     rgit(['clean', '-ffdq'], work, env);
   });
   restoreInstructions(work, snap.instructions);
-  // Subagent transcripts too, so a cut-off attempt's subagent commands never reach CHECK_COMMANDS.
   for (const f of transcriptsOf(run, sessionId)) if (!snap.transcripts.has(f)) fs.rmSync(f);
   for (const [f, bytes] of snap.transcripts) fs.writeFileSync(f, bytes);
 }

@@ -1,4 +1,3 @@
-// Invalidation by text: finding the memories a migration, removal or deprecation names, and weakening them.
 import type { StoreWith } from '../../base/ports/store.js';
 import { INVALIDATION_STOPWORDS } from '../../base/util/stopwords.js';
 import { CJK_LETTERS, hasCjk, splitCjkRuns } from '../../base/util/tokenize.js';
@@ -8,7 +7,6 @@ import type { EntryCursor } from '../../base/ports/store/types.js';
 import { READ_PAGE_ROWS } from '../../base/util/pages.js';
 
 const HEADLINE_CHARS = 60;
-// The share of a row's tokens that must match the target's before the row counts as mentioning it.
 const MENTION_TOKEN_MATCH_MIN = 0.5;
 
 export interface InvalidationTarget {
@@ -19,16 +17,14 @@ export interface InvalidationTarget {
 
 export interface InvalidationResult {
   invalidated: number;
-  targets: string[]; // IDs of affected memories
-  skippedPinned: string[]; // matched but pinned — never touched
+  targets: string[];
+  skippedPinned: string[];
   dryRun: boolean;
-  preview: { id: string; headline: string }[]; // what was (or would be) hit
+  preview: { id: string; headline: string }[];
 }
 
 export interface InvalidationOptions {
-  /** Evaluate matches but write nothing. */
   dryRun?: boolean;
-  /** Consider ONLY this memory id (no content/tag matching). */
   onlyId?: string;
 }
 
@@ -52,13 +48,10 @@ function isTrivialRemoval(target: string): boolean {
 interface InvalidationPattern {
   readonly re: RegExp;
   readonly type: InvalidationTarget['type'];
-  /** Group 2 names the replacement. */
   readonly hasTo: boolean;
-  /** A match this refuses ends the search with no target. */
   readonly refuses?: (from: string) => boolean;
 }
 
-// Ordered: the first pattern that matches wins.
 const INVALIDATION_PATTERNS: readonly InvalidationPattern[] = [
   {
     re: /(?:migrat\w+|switch\w*|mov\w+|convert\w*|transition\w*|upgrad\w+)\s+(?:from\s+)?(.+?)\s+to\s+(.+)/i,
@@ -95,8 +88,6 @@ export async function invalidateMatching(
   tenantId: string,
   options?: InvalidationOptions,
 ): Promise<InvalidationResult> {
-  // Only that tenant's memories are weakened; the onlyId read is tenant-scoped, so another tenant's
-  // id is invisible.
   if (options?.onlyId !== undefined) {
     const entries = [await store.learning.readEntry(options.onlyId, tenantId)].filter(
       (entry) => entry !== null,
@@ -130,7 +121,6 @@ export async function invalidateMatching(
     weakened.push(...found.weakened);
     after = page.next ?? undefined;
   } while (after);
-  // One write for every page, so a failed invalidation weakens none of them.
   await store.lessonWrites.writeTogether(weakened);
   return result;
 }
@@ -178,7 +168,6 @@ function referencesPattern(entry: MemoryEntry, fromTokens: string[], exactTag: s
   return tokenMatch >= MENTION_TOKEN_MATCH_MIN || tagMatch;
 }
 
-/** The match pass: returns a weakened copy of each unpinned match and writes nothing. */
 function weakenMatches(
   entries: readonly MemoryEntry[],
   target: InvalidationTarget,
@@ -201,8 +190,6 @@ function weakenMatches(
       if (entry.id !== options.onlyId) continue;
     } else if (!referencesPattern(entry, fromTokens, exactTag)) continue;
 
-    // Pinned check runs AFTER matching so pinned would-be targets are observable in skippedPinned
-    // (pattern mode and onlyId mode alike).
     if (entry.pinned) {
       result.skippedPinned.push(entry.id);
       continue;

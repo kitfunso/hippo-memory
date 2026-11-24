@@ -44,8 +44,6 @@ export async function handleSlackEventsWebhook(
   ports: WebhookPorts,
 ): Promise<void> {
   const { res, opts } = request;
-  // Secret and well-formed headers before the body, so a caller with neither cannot make the server
-  // buffer one.
   const secret = envSlackSigningSecret();
   if (!secret) {
     closeIfBodyUnread(request);
@@ -64,8 +62,6 @@ export async function handleSlackEventsWebhook(
   });
 }
 
-/** Reads the raw body and refuses it unless the signature matches the current or the previous
- * secret. */
 async function readSignedSlackBody(
   request: WebhookRequest,
   secret: string,
@@ -103,8 +99,6 @@ async function readSignedSlackBody(
 // refuses the second copy, and survives a restart.
 const REPLAY_HOLD_MS = DAY_MS;
 
-/** Routes a verified request once: the signature covers the timestamp and the body, so a repeat
- * is the same request. */
 async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
   const events = d.store.connectorEvents;
   const held = await events.claimDelivery({
@@ -131,7 +125,6 @@ async function routeUnlessReplayed(d: SignedSlackRequest): Promise<void> {
   }
 }
 
-/** One signed request and where to answer it; every stage below parks into the DLQ through it. */
 interface SignedSlackRequest extends WebhookPorts {
   hippoRoot: string;
   res: ServerResponse;
@@ -158,8 +151,6 @@ async function parkAndAck(
 }
 
 function teamIdInRawBody(rawBody: string): string | null {
-  // Cheap regex extracts team_id from a (possibly malformed) raw body so the DLQ row carries it for
-  // triage even when JSON.parse fails.
   const m = rawBody.match(/"team_id"\s*:\s*"([^"]+)"/);
   return m ? m[1] : null;
 }
@@ -208,13 +199,11 @@ async function routeSignedSlackPayload(d: SignedSlackRequest): Promise<void> {
   await dispatchSlackEvent(d, ctx, body);
 }
 
-/** The tenant the payload runs as; null once an unroutable envelope is parked. */
 async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<string | null> {
   // Fail closed: resolveTenant returns null for an unknown team on a non-empty slack_workspaces;
   // park it in slack_dlq (bucket='unroutable') and still ACKs 200 so Slack stops retrying; never
   // call ingest.
   if (!isSlackEventEnvelope(body)) {
-    // Non-envelope payload: use env tenant for the DLQ row's bookkeeping.
     return envTenant();
   }
   const resolvedTenant = await resolveTenant(
@@ -239,8 +228,6 @@ const hostFallback = (): RouteFallback => ({
 });
 
 async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | null): Promise<void> {
-  // Attribute the parse failure to the originating workspace via the regex-extracted team_id; a
-  // null or unknown team writes tenantId=null, which lands as '__unroutable__'.
   const parseFailTenant =
     teamIdFromRaw !== null
       ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())

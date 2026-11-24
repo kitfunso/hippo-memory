@@ -4,17 +4,14 @@ import { routeLabel, routeServes, V1_ROUTES } from '../../src/surface/server/rou
 import type { Route } from '../../src/surface/server/types.js';
 
 const METHODS = ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'] as const;
-/** The matcher the lookup takes, over the raw rows: a row's run is not under test, only which row serves. */
 const routeMatches = (route: Route, method: string, path: string): (() => Promise<void>) | null =>
   routeServes(route, method, path) ? async () => {} : null;
 const findV1Route = routeLookup(V1_ROUTES, routeMatches);
 
-/** The dispatch before the literal-path Map: every row in table order, first match wins. */
 function walkAllRows(method: string, path: string) {
   return V1_ROUTES.find((route) => routeMatches(route, method, path) !== null) ?? null;
 }
 
-/** A path the row serves, with each param or numeric id filled in. */
 function samplePath(route: (typeof V1_ROUTES)[number]): string {
   return routeLabel(route).replace(/:[A-Za-z]+/g, '42');
 }
@@ -52,7 +49,6 @@ describe('route lookup', () => {
   });
 });
 
-/** What a lookup or a walk answers for a request: the row it picks, or the error it throws. */
 function outcome(find: () => Route | null): Route | null | string {
   try {
     return find();
@@ -62,7 +58,6 @@ function outcome(find: () => Route | null): Route | null | string {
 }
 
 describe('route lookup by method', () => {
-  /** A lookup over the live table that records every row the matcher is asked about. */
   function recordingLookup() {
     const tested: Route[] = [];
     const find = routeLookup(V1_ROUTES, (route, method, path) => {
@@ -87,7 +82,6 @@ describe('route lookup by method', () => {
     }
   });
 
-  // A miss tests every row of the method, so a POST row in the record would be one tested for a GET.
   it('tests no POST row for a GET that no row serves, and fewer rows than the table holds', () => {
     const { find, tested } = recordingLookup();
     expect(find('GET', '/v1/nope/42')).toBeNull();

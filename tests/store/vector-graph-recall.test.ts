@@ -1,5 +1,3 @@
-// The vector graph a store worker holds, on a real store in process: it only proposes rows, so SQL's admission and the
-// stored vectors decide every answer, and a read it cannot answer scans.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { VectorGraphs } from '../../src/db/vector-graph-index.js';
@@ -18,10 +16,8 @@ const MODEL = 'test:vectors';
 
 interface Fixture {
   readonly root: string;
-  /** The connection reads run on, as a store worker's reader holds one. */
   readonly db: DatabaseSyncLike;
   readonly graphs: VectorGraphs;
-  /** The graphs, counting the reads they answered rather than left to the scan. */
   readonly index: VectorIndex;
   readonly answered: boolean[];
 }
@@ -49,7 +45,6 @@ function fixture(rows: readonly VectorRowSeed[], maxVectors?: number): Fixture {
   return { root, db, graphs, index, answered };
 }
 
-/** A write by another connection, as the writer thread, the CLI or a hook makes one. */
 function elsewhere(root: string, write: (db: DatabaseSyncLike) => void): void {
   const db = openHippoDb(root);
   try {
@@ -80,7 +75,6 @@ async function scanned(f: Fixture, query: readonly number[], s: VectorCandidateS
   return (await listVectorCandidateEntries(f.db, query, s)).map((e) => e.id);
 }
 
-/** The first read starts the build; the graph answers once it has settled. */
 async function built(f: Fixture, query: readonly number[], s: VectorCandidateSpec): Promise<void> {
   await nearest(f, query, s);
   await f.graphs.idle();
@@ -93,7 +87,6 @@ describe('a store over the threshold', () => {
     const q = near(rows[7].vector, 1);
     const scan = await scanned(f, q, spec('t1'));
 
-    // Both start before any turn of the build has run.
     const during = await Promise.all([nearest(f, q, spec('t1')), nearest(f, q, spec('t1'))]);
     await f.graphs.idle();
     const after = await nearest(f, q, spec('t1'));
@@ -137,7 +130,6 @@ describe('a store over the threshold', () => {
 
 describe('a row the scan would not admit', () => {
   const twin = clusteredVectors(1, DIM, 99)[0];
-  // Each holds the query's own vector, so the graph proposes it first; 'other-scope' is refused by the exact read only.
   const banned: VectorRowSeed[] = [
     { id: 'other-tenant', tenantId: 'b', vector: twin },
     { id: 'quarantined', tenantId: 'a', scope: 'quarantine:private:unscoped', vector: twin },
@@ -234,8 +226,6 @@ describe('a write by another connection', () => {
       ),
     );
     const answers: string[][] = [];
-    // Behind by more rows than one read inserts, so it answers for the rows it holds; then stale past a tenth, so the
-    // read scans while the graph rebuilds; then rebuilt.
     for (let step = 0; step < 4; step++) {
       answers.push(await nearest(f, q, spec('t1')));
       await f.graphs.idle();

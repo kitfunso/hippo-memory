@@ -1,4 +1,3 @@
-// A viewer reads what a member with no grants reads: no restricted scope, and no one else's personal scope.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import * as api from '../../src/api/index.js';

@@ -20,8 +20,6 @@ beforeEach(() => {
   root = makeRoot('index-mirror');
 });
 
-// Pins the write-path-cost fix: no hippo path writes index.json.
-// Each write site gets its own test so re-adding a writeIndexMirror to any one turns it red.
 describe('index.json is written by no hippo path', () => {
   it('writeEntry leaves no index.json', () => {
     writeEntry(root, createMemory('writeEntry leaves index.json alone'));

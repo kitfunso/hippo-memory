@@ -16,7 +16,6 @@ function isPlainV1Path(path: string): boolean {
   );
 }
 
-// A plain path never holds a `%`, so matchPath cannot throw here.
 function isCorePath(method: string, path: string): boolean {
   return V1_ROUTES.some((route) => routeServes(route, method, path));
 }

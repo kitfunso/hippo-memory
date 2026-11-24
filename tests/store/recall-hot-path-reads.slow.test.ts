@@ -1,4 +1,3 @@
-// The recall and context hot paths read each candidate once and a fixed number of rows, however large the store's history grows.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import * as fs from 'node:fs';
@@ -50,7 +49,6 @@ function seed(root: string, entries: readonly MemoryEntry[]): void {
   writeEntriesTogether(root, entries);
 }
 
-/** Runs `write` on a short-lived handle, for fixtures the store API has no writer for. */
 function onDb(root: string, write: (db: DatabaseSyncLike) => void): void {
   const db = openHippoDb(root);
   try {
@@ -91,7 +89,6 @@ describe('rankRecall with a global store', () => {
       ...Array.from({ length: 6 }, (_, i) => memory(`global note ${i} on the zephyrine cache warmup`)),
       memory('local note 0 on the zephyrine cache eviction'),
     ]);
-    // Recency reads the clock, so the clock stops before ctx.now is read and both rankings see one instant.
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
     const at = (root: string) => ({ store: sqliteStore(root), config: loadConfig(root) });
     const ctx = {
@@ -170,7 +167,6 @@ describe('updateStats', () => {
   it('reads the same rows on every recall however many sleep runs the table holds', () => {
     const read = [50, 300].map((n) => {
       const root = freshRoot('hp-stats');
-      // No writer leaves more rows than the kept cap, so the surplus goes straight into the table.
       onDb(root, (db) => {
         const insert = db.prepare(
           'INSERT INTO consolidation_runs(timestamp, decayed, merged, removed) VALUES (?, ?, ?, ?)',
@@ -228,7 +224,6 @@ describe('loadAmbientCandidates', () => {
   const at = (s: number): string => new Date(Date.UTC(2026, 0, 1) + s * 1000).toISOString();
   const admit = (e: MemoryEntry): boolean => !e.content.startsWith('refused');
 
-  // Writes up to 260 rows one commit at a time into two stores.
   it('reads past a window of refused rows without reading the rest of the store', () => {
     const read = [130, 260].map((older) => {
       const root = freshRoot('hp-ambient');

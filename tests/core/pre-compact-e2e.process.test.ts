@@ -1,4 +1,3 @@
-// The PreCompact hook producer against a real store.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,10 +68,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
             ],
           },
         },
-        // Meta/sidechain lines are type:'user'/'assistant' but not the human
-        // or this session: a prior compaction's summary (isMeta) and a
-        // sub-agent turn (isSidechain) trail the real turns here and must
-        // NOT win task/next_step derivation.
         {
           type: 'user',
           isMeta: true,
@@ -164,12 +159,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 
   it('positive control: true manual invocation (no stdin at all) DOES pick up a transcript via auto-discovery', async () => {
-    // Proves discovery is reachable in this scratch env, so the negative
-    // (contamination) case below is a real regression guard, not a test
-    // that trivially passes because nothing was ever discoverable.
-    // resolveLastSessionTranscript's auto-discovery root is
-    // <HOME|USERPROFILE>/.claude/projects/<any>/*.jsonl — HOME and
-    // USERPROFILE are both `dir` in this scratch env (see withScratchEnv).
     const discoveredProjectDir = path.join(dir, '.claude', 'projects', 'some-project');
     fs.mkdirSync(discoveredProjectDir, { recursive: true });
     fs.writeFileSync(
@@ -183,12 +172,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       ]),
     );
 
-    // X4 (review round): auto-discovery now only runs on a TRUE manual
-    // invocation — no stdin at all (TTY, or a non-TTY read that yields
-    // empty). A piped JSON payload with no transcript_path field is no
-    // longer "manual" — it fails closed instead (see the dedicated
-    // malformed/missing-transcript_path test below). So this positive
-    // control passes NO input whatsoever, matching a real interactive run.
     const result = await runHippo(['pre-compact'], dir, env);
 
     expect(result.status).toBe(0);
@@ -198,10 +181,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 
   it('fail-closed: non-empty stdin JSON object with no transcript_path field -> exit 0, skip, no auto-discovery fallback', async () => {
-    // Companion to the positive control above: the same payload shape, but
-    // sent as real (non-empty) stdin rather than omitted entirely. A decoy
-    // transcript sits exactly where auto-discovery would look; the fixed
-    // contract must never reach it.
     const decoyProjectDir = path.join(dir, '.claude', 'projects', 'decoy-no-path');
     fs.mkdirSync(decoyProjectDir, { recursive: true });
     fs.writeFileSync(
@@ -262,11 +241,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   });
 
   it('contamination regression: payload transcript_path present but unreadable -> SKIP, never falls back to a decoy found via auto-discovery', async () => {
-    // Plant a decoy exactly where auto-discovery looks. If the producer
-    // ever fell back to discovery when the payload's own path is
-    // unreadable, it would snapshot THIS decoy under the payload's
-    // session_id — cross-session contamination with wrong linkage
-    // (verify-stage finding, 2026-08-03).
     const decoyProjectDir = path.join(dir, '.claude', 'projects', 'decoy-project');
     fs.mkdirSync(decoyProjectDir, { recursive: true });
     fs.writeFileSync(
@@ -328,9 +302,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
   it('caps task/summary/next_step at 200/2000/500 chars; hippo snapshot save stays uncapped', async () => {
     const longTask = 'X'.repeat(400);
     const longAssistantText = 'Y'.repeat(1000);
-    // Big filler chunks so the RAW summary (before the producer's own cap)
-    // exceeds the summary cap — otherwise the cap assertion would
-    // pass trivially without proving truncation actually happened.
     const bigChunks = Array.from({ length: 5 }, (_, i) => `Chunk ${i}: ${'Z'.repeat(500)}`);
 
     const transcriptPath = path.join(dir, 'oversized.jsonl');
@@ -360,18 +331,13 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
     expect(snapshot!.task.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.task);
-    expect(snapshot!.task.length).toBe(WORKING_STATE_CAPS.task); // proves truncation, not coincidence
-    // Summary caps from the RECENT end and carries a fixed trim marker
-    // (CX9), so its budget already counts the marker, and truncation is
-    // proven by the marker rather than an exact length.
+    expect(snapshot!.task.length).toBe(WORKING_STATE_CAPS.task);
     const TRIM_MARKER = '[...earlier turns trimmed]\n';
     expect(snapshot!.summary.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.summary);
     expect(snapshot!.summary.startsWith(TRIM_MARKER)).toBe(true);
     expect(snapshot!.nextStep.length).toBeLessThanOrEqual(WORKING_STATE_CAPS.next_step);
     expect(snapshot!.nextStep.length).toBe(WORKING_STATE_CAPS.next_step);
 
-    // The shared `saveActiveTaskSnapshot` / `hippo snapshot save` CLI path is
-    // untouched — caps are enforced in the pre-compact producer ONLY.
     const uncappedText = 'Q'.repeat(3000);
     const saveResult = await runHippo(
       ['snapshot', 'save', '--task', uncappedText, '--summary', uncappedText, '--next-step', uncappedText],
@@ -395,9 +361,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
       sessionId: 'sess-merge',
     });
 
-    // Every user turn is a tool_result array, not plain text — summariseTranscript's
-    // lastTurnText derives '' for task, but the assistant text still
-    // yields a non-empty summary/next_step, so this must NOT be a full skip.
     const transcriptPath = path.join(dir, 'tool-heavy.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -424,9 +387,7 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
 
     const snapshot = loadActiveTaskSnapshot(hippoRoot, 'default');
     expect(snapshot).not.toBeNull();
-    // Task was never re-derivable from this tail — the existing field survives.
     expect(snapshot!.task).toBe('user-authored task must survive');
-    // Summary/next_step WERE derivable — they get overwritten as normal.
     expect(snapshot!.nextStep).toContain('verify the output');
   });
 
@@ -515,7 +476,6 @@ describe('hippo pre-compact (PreCompact hook producer, real store)', () => {
 
   it('a Bearer JWT an older build left in the snapshot survives neither compaction nor the session-end handoff', async () => {
     const hippoRoot = getHippoRoot(dir);
-    // Raw SQL, because saveActiveTaskSnapshot now scrubs: this is the row a build without the scrub left behind.
     const db = openHippoDb(hippoRoot);
     try {
       const now = new Date().toISOString();

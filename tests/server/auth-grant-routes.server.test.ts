@@ -1,4 +1,3 @@
-// POST and DELETE /v1/auth/keys/:keyId/grants: an admin key changes a member key's read grant over HTTP. Real server and store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

@@ -1,5 +1,3 @@
-// Which rows an ambient load and a summary drill-down admit, as plain data: a store on a worker
-// thread applies the same rule the caller would, since a function cannot cross a thread.
 import { COMPACTION_MEMORY_TAG, isRecallOnly, type MemoryEntry } from '../memory/entry.js';
 import { isWorthSurfacing } from '../memory/memory-quality.js';
 import { classifyOriginProject, projectNames, type ProjectRef } from './project-identity.js';
@@ -70,7 +68,6 @@ export function ambientEnvelopeAdmits(e: MemoryEntry, a: AmbientAdmission): bool
   return classifyOriginProject(e.originProject, a.currentProject) !== 'cross-project';
 }
 
-// The cheap checks go before the envelope, which regex-scans content for secrets.
 export function ambientAdmits(e: MemoryEntry, a: AmbientAdmission): boolean {
   return (
     !isSuperseded(e) &&

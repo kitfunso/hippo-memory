@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Z7b strict sub-agent lesson eval, prereg docs/evals/2026-10-03-z7b-sidechain-strict-prereg.md. Stdout carries counts only, never transcript, lesson or label text.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -37,8 +36,6 @@ function parseArgs(argv) {
   return a;
 }
 
-// --- shared helpers ---
-
 const newCtx = (dir, extra) => ({ ...E.makeCtx(dir, { promptDir: PROMPTS, seedPrefix: 'z7b' }), ...extra });
 const z7bDir = (ar) => path.join(ar.work, 'z7b');
 const readDrawZ7b = (ar) => readJson(z7bDir(ar), 'draw.json');
@@ -57,7 +54,6 @@ function needDev(a, withRound = true) {
   if (withRound && !(a.round >= 1 && a.round <= 3)) throw new Error('--round must be 1, 2 or 3');
 }
 
-// Every dev command goes through here, so none can touch an id on the stored scored list.
 function devSetup(a, withRound = true) {
   needDev(a, withRound);
   const ar = E.openArchive(a.archive);
@@ -70,7 +66,6 @@ function devSetup(a, withRound = true) {
   return { ar, draw, dir: path.join(z7bDir(ar), 'dev'), ids: draw.dev };
 }
 
-// Reads one round's three files; the filter must have run on exactly this recheck file.
 export function loadRound(dir, tag) {
   const recheckFile = `recheck-${tag}.json`;
   const filter = readJson(dir, `filter-${tag}.json`);
@@ -78,7 +73,6 @@ export function loadRound(dir, tag) {
   return { judge: E.loadJudge(dir, tag), recheck: readJson(dir, recheckFile), filter };
 }
 
-// fUnf is the Z7 view (before the filter); fFil also counts filter removals as removed lessons.
 function twoPass(items, round) {
   const rows = E.asRows(items);
   return { fUnf: L.figures(rows, round.judge, round.recheck), fFil: L.figures(rows, round.judge, Z.mergeRemovals(round.recheck, round.filter)) };
@@ -98,8 +92,6 @@ function printGates(g, fUnf) {
 }
 
 const lessonLines = (r, side) => [`## ${r.id}`, `parent side: ${side}`, ...[[SONNET, r.s1], [OPUS, r.s2]].flatMap(([m, ls]) => ls.flatMap((l) => [`- ${m} [${l.kind}] ${l.text}`, `  evidence: ${l.evidence}`])), ''];
-
-// --- draw and build ---
 
 function cmdDraw(a) {
   const ar = E.openArchive(a.archive);
@@ -128,8 +120,6 @@ async function cmdBuild(a) {
   E.printBuild(await E.buildIds(ar, dir, ids, draw, false, false));
 }
 
-// --- dev stages: judge, recheck, filter ---
-
 async function cmdJudge(a) {
   const { dir, ids } = devSetup(a);
   const items = E.loadBuilt(dir, ids);
@@ -149,7 +139,6 @@ async function cmdRecheck(a) {
   out('rechecked_items', Object.keys(res).length);
 }
 
-// One Opus call per item with a recheck-surviving lesson; its removals become extra keys on the judge's own index.
 export async function filterStage(ctx, items, judge, recheck, recheckFile, name) {
   const tpl = E.promptText('filter-prompt.txt', ctx.promptDir);
   const res = {};
@@ -176,8 +165,6 @@ async function cmdFilter(a) {
   out('filtered_items', st.parse[1]);
   out('filter_parse_ok', st.parse[0]);
 }
-
-// --- dev reads: score, calib, calib-record, agree ---
 
 function devRound(a) {
   const { dir, ids } = devSetup(a);
@@ -265,21 +252,17 @@ function cmdAgree(a) {
   for (const [m, v] of Object.entries(fFil.perJudge)) out(`p_${m}_after_filter`, fmt(v / (fFil.n || 1)));
 }
 
-// --- scored run ---
-
 const lockConfig = () => ({
   repo: REPO, prereg: PREREG, scriptFiles: SCRIPT_FILES, promptDir: PROMPTS, distDir: path.join(REPO, 'dist'), claudeVersion: E.claudeVersion,
   lockDir: path.join(os.homedir(), '.hippo-eval-locks'), lockName: Z.LOCK_NAME, pinPrompts: Z.PIN_PROMPTS,
 });
 
-// Both the Z7 dev set and the Z7b draw are recomputed from the verified archive, so a stale or edited file cannot stand.
 function checkDraw(ar, draw, pins) {
   const { z7Fresh, fresh } = z7Draws(ar);
   const why = Z.checkDrawZ7b({ manifestSha: ar.manifestSha, z7Fresh, z7Stored: readJson(ar.work, 'draw.json'), fresh, stored: draw }, pins);
   if (why) throw new Error(`draw refused: ${why}`);
 }
 
-// The last calibration round passed, and the prompts it ran are the prompts the prereg pins.
 function checkCalibration(ar, pins) {
   const last = readMarks(path.join(z7bDir(ar), 'dev')).at(-1);
   if (!last?.pass) throw new Error('the last calibration record is missing or did not pass');
@@ -361,8 +344,6 @@ function finishScored(ctx, items, round, run) {
   out('verdict_preliminary', verdict);
 }
 
-// --- precision audit ---
-
 function cmdAudit(a) {
   const ar = E.openArchive(a.archive);
   const dir = path.join(z7bDir(ar), 'scored');
@@ -385,7 +366,6 @@ function cmdAudit(a) {
   out('audit_sample', s.ids.length);
 }
 
-// Records the final verdict once, from marks that cover exactly the audit sample.
 function cmdAuditFinalize(a) {
   if (!a.marks) throw new Error('--marks <file> is required');
   const dir = path.join(z7bDir(E.openArchive(a.archive)), 'scored');
@@ -408,8 +388,6 @@ function cmdAuditFinalize(a) {
   out('verdict_preliminary', rec.preliminary);
   out('verdict_final', rec.final);
 }
-
-// --- selftest and entry ---
 
 async function selftest() {
   let n = 0;

@@ -1,4 +1,3 @@
-// The instruction block asks for nothing a hook already does, and `hippo init` swaps it in for an old block nobody edited.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,10 +7,8 @@ import { HOOKS, hippoBlock } from '../../src/surface/hooks-install/rules/hook-bl
 import { runInProcess } from '../_helpers/run-in-process.js';
 const START = '<!-- hippo:start -->';
 const END = '<!-- hippo:end -->';
-// Old blocks used an em dash; spelling it as a code point keeps this source free of them.
 const EM_DASH = String.fromCodePoint(0x2014);
 
-// The CLAUDE.md block hippo 1.24.0 to 1.52.6 wrote.
 const OLD_CLAUDE = `
 ## Project Memory (Hippo)
 
@@ -45,7 +42,6 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The AGENTS.md block hippo 0.24.0 to 1.52.6 wrote for Codex.
 const OLD_CODEX = `
 ## Project Memory (Hippo)
 
@@ -72,7 +68,6 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The Claude Code block hippo 2.1.0 wrote, which told the agent to load context at the start of every task.
 const CLAUDE_BEFORE_ONE_CHANNEL = `
 ## Project Memory (Hippo)
 
@@ -95,7 +90,6 @@ The installed hooks store failed tool calls and capture the session when it
 ends, so there is nothing to run before you finish.
 `.trim();
 
-// The AGENTS.md block hippo 2.1.0 wrote for Codex, which told the agent to load context at the start of every task.
 const CODEX_BEFORE_ONE_CHANNEL = `
 ## Project Memory (Hippo)
 
@@ -125,7 +119,6 @@ hippo capture --stdin <<< '<decisions, errors, lessons: 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The previous Claude Code block, which asked for a remember on every failure.
 const CLAUDE_CURRENT = `
 ## Project Memory (Hippo)
 
@@ -146,7 +139,6 @@ The installed hooks store failed tool calls and capture the session when it
 ends, so there is nothing to run before you finish.
 `.trim();
 
-// The AGENTS.md blocks written for these five agents before the plain remember line came back.
 const PREVIOUS_AGENTS_BLOCKS = {
   codex: `
 ## Project Memory (Hippo)
@@ -282,20 +274,17 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   process.chdir(cwd);
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
-    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;
   } finally {
     process.exitCode = undefined;
   }
 }
-// Without --no-schedule init would register a real OS task, without --no-learn it would run git.
 const init = (cwd = proj) => hippo(cwd, 'init', '--no-schedule', '--no-learn');
 const write = (f: string, text: string) => fs.writeFileSync(path.join(proj, f), text);
 const read = (f: string, dir = proj) => fs.readFileSync(path.join(dir, f), 'utf8');
 const inner = (text: string) => text.slice(text.indexOf(START) + START.length, text.indexOf(END)).trim();
 const outside = (text: string) => [text.slice(0, text.indexOf(START) + START.length), text.slice(text.indexOf(END))];
-// Every hippo command in a fenced block or a code span; a command in plain prose is not seen.
 function hippoCommands(text: string): string[] {
   const fenced: string[] = [];
   const prose = text.replace(/```[^\n]*\n([\s\S]*?)```/g, (_m, body: string) => {
@@ -314,7 +303,6 @@ describe('the instruction block', () => {
     const claude = inner(read('CLAUDE.md'));
     expect(claude).toContain('hippo context --auto --budget 1500');
     expect(hippoCommands(claude)).toEqual(['hippo context --auto --budget 1500']);
-    // Plain prose too: "hippo memory" is the noun in "no hippo memory block", so it is skipped; toEqual names any other command.
     const proseCommands = [...claude.matchAll(/\bhippo\s+(?!memory\b)[a-z][\w-]*/g)].map((m) =>
       m[0].replace(/\s+/g, ' '),
     );
@@ -369,7 +357,6 @@ describe('hippo init on a file that already has a hippo block', () => {
     expect(outside(claudeAfter)).toEqual(outside(claudeBefore));
     expect(inner(claudeAfter)).toBe(inner(read('CLAUDE.md', fresh)));
     expect(inner(read('AGENTS.md'))).not.toContain('hippo outcome');
-    // AGENTS.md serves both Codex and OpenClaw here, and still gets one line.
     expect(out.match(/Refreshed/g)).toHaveLength(2);
   });
 
@@ -413,7 +400,6 @@ describe('hippo init on a file that already has a hippo block', () => {
       write('AGENTS.md', before);
       expect(await init()).toContain(`Refreshed the ${agent} hippo block in AGENTS.md`);
 
-      // `hook install codex` swaps the Codex launcher, so the expected Codex block comes from init in a fresh project.
       const fresh = path.join(home, 'fresh');
       fs.mkdirSync(fresh);
       fs.writeFileSync(path.join(fresh, 'AGENTS.md'), '# Agents\n');

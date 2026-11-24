@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// `npm run deploy` publishes this checkout to production, so it must be a clean copy of the newest
-// master: a release branch or a stale checkout drops every site fix merged since it was cut.
 import { execFileSync } from 'node:child_process';
 
 const FIX =

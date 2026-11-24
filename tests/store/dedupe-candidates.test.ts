@@ -1,4 +1,3 @@
-// hippo dedupe reads only the rows that can be a copy, and pairs them as a read of every row does.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { deduplicateStore } from '../../src/domain/consolidate/dedupe.js';
@@ -38,14 +37,12 @@ describe('deduplicateStore over the duplicate candidates', () => {
   beforeEach(() => {
     root = makeStore('dedupe-candidates').root;
     writeEntriesTogether(root, [
-      // Tenant acme first appears with a row that has no copy, so its pairs still come first.
       row('acme unique opener', 0, { tenantId: 'acme' }),
       row('shared  text here', 1),
       row('shared text here', 2, { strength: 0.9 }),
       row(' shared　text here ', 3),
       row('acme copy', 4, { tenantId: 'acme' }),
       row('acme\ncopy', 5, { tenantId: 'acme' }),
-      // Equal with the spacing gone, but not apart from spacing: grouped by SQL, never paired.
       row('ab cd', 6),
       row('abcd', 7),
       row('private copy', 8, { scope: 'slack:private:c1' }),

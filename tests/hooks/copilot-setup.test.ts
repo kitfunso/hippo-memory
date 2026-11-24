@@ -1,5 +1,3 @@
-// hippo setup gives Copilot one hooks file hippo owns, one key in the shared mcp-config.json and an instructions block,
-// plus one key in each VS Code mcp.json and one instructions file; uninstall takes back only those.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -21,7 +19,6 @@ afterEach(() => {
   syncBuiltinESMExports();
   vi.unstubAllEnvs();
 });
-// The committed text installCopilot must write; edit it with the instructions in src/surface/hooks-install/rules/copilot.ts.
 const COPILOT_INSTRUCTIONS = fs
   .readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'copilot', 'instructions.md'),
@@ -61,7 +58,6 @@ const entry = (args: string, timeoutSec: number): HookEntry[] => [
   { type: 'command', bash: `hippo ${args}`, powershell: `hippo.cmd ${args}`, timeoutSec },
 ];
 
-/** The command contract the runtime side implements; no command names a path. */
 const CONTRACT_HOOKS: HooksFile = {
   version: 1,
   hooks: {
@@ -85,7 +81,6 @@ function writeFile(file: string, text: string): void {
 }
 const copilotBlock = (eol = '\n'): string => `${START}${eol}${COPILOT_INSTRUCTIONS.replace(/\n/g, eol)}${eol}${END}`;
 
-/** The text hippo 1.67.0 wrote, byte for byte, as it sits in users' copilot-instructions.md. */
 const COPILOT_INSTRUCTIONS_1_67_0 = `## Project Memory (Hippo)
 
 At the start of each task, call the \`hippo_recall\` tool with a short query that
@@ -118,7 +113,6 @@ describe('installCopilot and uninstallCopilot', () => {
       mcp: path.join(copilotHome, 'mcp-config.json'),
       instructions: path.join(copilotHome, 'copilot-instructions.md'),
     };
-    // The Copilot CLI's folder, there before setup; the VS Code-only tests take it away.
     fs.mkdirSync(copilotHome);
   });
   afterEach(() => {
@@ -131,7 +125,6 @@ describe('installCopilot and uninstallCopilot', () => {
     readonly instructions: string;
   }
 
-  /** Makes a VS Code User folder for the edition, as VS Code does on first run, and returns the files hippo writes there. */
   function vscodeUser(edition = 'Code'): VscodeUserFiles {
     const dir = path.join(vscodeData, edition, 'User');
     fs.mkdirSync(dir, { recursive: true });
@@ -225,13 +218,11 @@ describe('installCopilot and uninstallCopilot', () => {
 
   it('reports an mcp-config.json another program holds open as a failure, and still installs the rest', () => {
     writeFile(files.mcp, '{}\n');
-    // writeFileAtomic resolves an existing file to its real path before it writes.
     const target = fs.realpathSync(files.mcp);
     const busy = (op: string): Error =>
       Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY', syscall: 'open' });
     const rename = fs.renameSync.bind(fs);
     const write = fs.writeFileSync.bind(fs);
-    // EXDEV is not retried, so the write falls back to in place and fails with EBUSY.
     vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
       if (to === target) {
         throw Object.assign(new Error('EXDEV: cross-device link not permitted, rename'), { code: 'EXDEV' });
@@ -297,7 +288,6 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(fs.existsSync(files.hooks)).toBe(false);
     expect(read(userHooks)).toBe(userHooksText);
     expect(readJson(files.mcp)).toEqual({ mcpServers: { playwright: USER_SERVER } });
-    // The blank line install put before the block stays: uninstall takes the block and one line break, and no other byte.
     expect(read(files.instructions)).toBe('# My rules\n\nUse tabs.\n\n');
     expect(uninstallCopilot()).toMatchObject({ hooks: false, mcp: 'absent', instructions: 'absent' });
   });
@@ -523,7 +513,6 @@ function machine(): Machine {
   return m;
 }
 
-// A PATH with no codex on it, because setup renames a codex launcher it finds there. In process, so coverage sees setup.
 async function hippo(m: Machine, ...args: string[]): Promise<string> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {

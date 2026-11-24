@@ -39,16 +39,10 @@ afterEach(() => {
 });
 const { apiCtx, writeEntry } = sessionPerTest();
 
-// The 'consolidate' audit op's metadata is always the flat scalar phase-counter
-// object built at the appendAuditEvent call site for that op in src/api/index.ts --
-// never nested objects or arrays.
 type AuditMetadataValue = string | number | boolean | null;
 
 function tmpHome() {
   const home = makeRoot('api-sleep');
-  // api.sleep's auto-share phase promotes memories to the GLOBAL store
-  // (resolved via HIPPO_HOME). Without per-test override, those writes
-  // leak into the shared baseline HIPPO_HOME and fail the isolation guard.
   vi.stubEnv('HIPPO_HOME', home);
   return {
     home,
@@ -68,7 +62,6 @@ describe('api.sleep', () => {
       expect(result.dryRun).toBe(true);
       expect(result.removed).toBe(0);
       expect((await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 })).entries).toHaveLength(1);
-      // H10: the preview reports what a real sleep would dedupe and audit.
       expect(result.deduped).toBeUndefined();
       expect(result.audit).toEqual({ errorsRemoved: 0, warningCount: 1 });
       expect(result.shared).toBeUndefined();
@@ -90,7 +83,6 @@ describe('api.sleep', () => {
       expect(result.removed).toBe(0);
       expect(result.mergedEpisodic).toBe(0);
       expect(result.newSemantic).toBe(0);
-      // No entries -> dedup pairs empty, audit issues empty
       expect(result.deduped).toBeUndefined();
       expect(result.audit).toBeUndefined();
     } finally {
@@ -125,7 +117,6 @@ describe('api.sleep', () => {
   it('with no keeper on the Context, resolves after the embeds its auto-share started', async () => {
     const { home, restore } = tmpHome();
     try {
-      // A global store of its own, so the auto-share phase has a target.
       vi.stubEnv('HIPPO_HOME', makeRoot('api-sleep-global', { init: false }));
       const base: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
       const ctx = { ...base, config: { ...base.config, autoShareOnSleep: true } };
@@ -148,7 +139,6 @@ describe('api.sleep', () => {
     }
   });
 
-  // v1.11.5: consolidate audit emission
   it('emits exactly one consolidate audit_log row per invocation with phase counters', async () => {
     const { home, restore } = tmpHome();
     try {
@@ -165,7 +155,6 @@ describe('api.sleep', () => {
       expect(rows.length).toBe(1);
       expect(rows[0]?.actor).toBe('cli');
       expect(rows[0]?.op).toBe('consolidate');
-      // Metadata should carry phase counters with the keys we expect.
       // SAFETY: see the AuditMetadataValue comment above -- consolidate metadata is
       // always a flat scalar object.
       const meta = rows[0]?.metadata as Record<string, AuditMetadataValue>;
@@ -191,7 +180,6 @@ describe('api.sleep dry run over a merge', () => {
 - ${OLDER}`;
   const admin = (home: string): FullContext => apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
 
-  /** A store holding the two look-alikes, with the rollup's text rejected or not. */
   function pairStore(rejected: boolean): string {
     const { home, restore } = tmpHome();
     restore();
@@ -215,7 +203,6 @@ describe('api.sleep dry run over a merge', () => {
     return home;
   }
 
-  /** What a sleep could change in a store: rows, audit rows and files. */
   function snapshot(home: string) {
     const db = openHippoDb(home);
     try {
@@ -251,7 +238,6 @@ describe('api.sleep dry run over a merge', () => {
     expect(mergedEvents(preview)).toEqual([]);
     expect([preview.mergedEpisodic, preview.newSemantic]).toEqual([actual.mergedEpisodic, actual.newSemantic]);
     expect(warnings()).toBe(2);
-    // The one new audit row is the sleep summary every dry run writes; the refusal is counted and not stored.
     expect(after).toEqual({ ...before, audit: before.audit + 1, consolidate: before.consolidate + 1 });
     expect(snapshot(real).refusals).toBe(1);
   });

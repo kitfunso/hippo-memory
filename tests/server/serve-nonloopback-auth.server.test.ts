@@ -1,12 +1,3 @@
-// tests/server/serve-nonloopback-auth.server.test.ts
-//
-// Every route but GET /health needs a key on any bind, so a non-loopback bind asks only for TLS or an explicit cleartext
-// allowance; once bound, the Bearer-lockdown rules hold there as on loopback.
-//
-// Store-root convention follows tests/cli/cli-recall-cutoff-counters.test.ts's
-// makeEnv: the store root passed to initStore/serve IS the .hippo directory
-// itself, not its parent.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -54,7 +45,6 @@ describe('serve() non-loopback host guard', () => {
   it('starts a network bind without TLS once HIPPO_ALLOW_CLEARTEXT=1', async () => {
     vi.stubEnv('HIPPO_ALLOW_CLEARTEXT', '1');
     handle = await serve({ hippoRoot, host: '0.0.0.0', port: 0 });
-    // Port 0 lets the OS pick a free port, so only its range is fixed.
     expect(handle.port).toBeGreaterThan(0);
     expect(handle.port).toBeLessThanOrEqual(65535);
   });
@@ -81,7 +71,6 @@ describe('serve() non-loopback host guard', () => {
     });
 
     it('starts and binds the requested non-loopback host', () => {
-      // Port 0 lets the OS pick a free port, so only its range is fixed.
       expect(handle!.port).toBeGreaterThan(0);
       expect(handle!.port).toBeLessThanOrEqual(65535);
     });
@@ -111,13 +100,11 @@ describe('serve() non-loopback host guard', () => {
 
         const authHeaders = { authorization: `Bearer ${plaintext}` };
 
-        // 401 -> 200 with a valid bearer token on the read route.
         const searchRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=x`, {
           headers: authHeaders,
         });
         expect(searchRes.status).toBe(200);
 
-        // POST /v1/memories with the bearer succeeds.
         const postRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories`, {
           method: 'POST',
           headers: { ...authHeaders, 'content-type': 'application/json' },
@@ -126,7 +113,6 @@ describe('serve() non-loopback host guard', () => {
         expect(postRes.status).toBeGreaterThanOrEqual(200);
         expect(postRes.status).toBeLessThan(300);
 
-        // A follow-up authorized search finds the newly created row.
         const followUpRes = await fetch(`http://127.0.0.1:${handle!.port}/v1/memories?q=nonloopback-auth-marker`, {
           headers: authHeaders,
         });
@@ -139,10 +125,6 @@ describe('serve() non-loopback host guard', () => {
   });
 });
 
-// clientIpForRateLimit: proxy-aware rate-limit keying. Behind a
-// TLS-terminating proxy every socket carries the proxy's address, so
-// HIPPO_CLIENT_IP_HEADER names the header the proxy stamps with the real
-// client address. Unset (the default), the socket address keys the bucket.
 function fakeReq(headers: Record<string, string | string[]>, remoteAddress = '10.0.0.9'): IncomingMessage {
   // SAFETY: clientIpForRateLimit reads only headers and socket.remoteAddress (src/server.ts), the two fields set here.
   return { headers, socket: { remoteAddress } } as IncomingMessage;

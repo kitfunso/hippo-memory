@@ -1,15 +1,3 @@
-/**
- * E2 skill first-class object (executable/exportable) - store-layer tests.
- * Docs: docs/plans/2026-05-30-e2-skill-object.md
- *
- * Covers what only skills have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. the skill save creates memory + skills row (+ skill_create audit), v1, trigger null when omitted
- * 2. the skill save with trigger; memory content has name + when + instructions
- * 3. status filters
- * 4. validation: missing name/instructions; name single-line (newline rejected); caps
- * 5. EXPORT: active-only, name-ASC, trigger omitted when null, '##' in instructions verbatim, empty -> ''
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { closeObject, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
@@ -52,7 +40,7 @@ describe('skills store (executable/exportable first-class object)', () => {
       skillName: 'Run tests',
       instructions: 'npm test before commit',
     });
-    expect(s.id).toBe(1); // the first row in a fresh AUTOINCREMENT table
+    expect(s.id).toBe(1);
     expect(s.memoryId).not.toBeNull();
     expect(s.skillName).toBe('Run tests');
     expect(s.instructions).toBe('npm test before commit');
@@ -171,7 +159,6 @@ describe('skills store (executable/exportable first-class object)', () => {
       instructions: 'do alpha',
       trigger: 'on start',
     });
-    // a closed + a superseded skill must NOT appear in the export
     const closed = await cliSave(home, 'default', SKILL, {
       skillName: 'Zulu',
       instructions: 'old',
@@ -186,29 +173,21 @@ describe('skills store (executable/exportable first-class object)', () => {
       instructions: 'v2',
       supersedesSkillId: sup.id,
     });
-    // instructions containing its own markdown heading must render verbatim
     await cliSave(home, 'default', SKILL, {
       skillName: 'Charlie',
       instructions: 'step 1\n## sub-heading\nstep 2',
     });
 
     const md = await skillsMarkdown(objectsAt(home), 'default');
-    // name-ASC order (by relative position of each skill's own H2 header). NOTE:
-    // we cannot just count all '## ' lines because instructions render VERBATIM,
-    // so Charlie's body contains its own '## sub-heading' (the documented v1
-    // stance: skill_name is single-line, instructions are operator content).
     expect(md.indexOf('## Alpha')).toBeGreaterThanOrEqual(0);
     expect(md.indexOf('## Alpha')).toBeLessThan(md.indexOf('## Bravo'));
     expect(md.indexOf('## Bravo')).toBeLessThan(md.indexOf('## Charlie'));
     expect(md.indexOf('## Charlie')).toBeLessThan(md.indexOf('## Yankee'));
     expect(md).not.toContain('Zulu');
-    // Alpha has a When line; Bravo does not
     expect(md).toContain('## Alpha\n\n**When:** on start\n\ndo alpha');
     expect(md).toContain('## Bravo\n\ndo bravo');
     expect(md).not.toContain('## Bravo\n\n**When:**');
-    // Charlie's instructions (incl their own '##') render verbatim
     expect(md).toContain('step 1\n## sub-heading\nstep 2');
-    // Yankee shows the active v2
     expect(md).toContain('## Yankee\n\nv2');
     expect(md).not.toContain('v1');
   });

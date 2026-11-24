@@ -19,9 +19,7 @@ export interface VTableHandle {
 
 /** Per-row presentation state. */
 export interface VRowState {
-  /** The row is the open one: highlighted and exposed as `aria-selected`. */
   selected?: boolean;
-  /** Highlight only (a search hit); the row is not a selection, so no `aria-selected`. */
   hit?: boolean;
   className?: string;
 }
@@ -33,7 +31,6 @@ export interface VTableProps {
   columns: readonly VColumn[];
   count: number;
   rowHeight: number;
-  /** Row contents: one `role="gridcell"` element per column. */
   renderRow: (index: number) => ReactNode;
   rowState?: (index: number) => VRowState;
   onActivate: (index: number) => void;
@@ -43,7 +40,6 @@ export interface VTableProps {
   sortDir?: "asc" | "desc";
   onWindow?: (first: number, last: number) => void;
   resetKey?: unknown;
-  /** Shown over the body when `count` is 0. */
   empty: ReactNode;
   ref?: Ref<VTableHandle>;
 }

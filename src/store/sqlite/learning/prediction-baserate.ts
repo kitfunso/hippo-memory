@@ -1,5 +1,3 @@
-// The class base rate over closed predictions, and the audit row a read of it leaves.
-
 import { median } from '../../../base/util/stats.js';
 import { BadRequestError } from '../../../base/errors/api-errors.js';
 import { type DatabaseSyncLike } from '../../../db/index.js';
@@ -11,7 +9,6 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { isReadOnlyHandle } from '../../../db/connect.js';
 import { plural } from '../../../base/util/format.js';
 
-/** One closed prediction as the baserate reads it: both values set. */
 interface ClosedEstimate {
   readonly estimate: number;
   readonly actual: number;
@@ -28,8 +25,6 @@ function emptyBaserate(classTag: string): PredictionBaserate {
   return { classTag, nClosed: 0, nRatioEligible: 0, summary: '', ...nulls };
 }
 
-/** A class's stats over its closed rows, summed in the order given. Every store computes them
- * here, so no two can disagree on the arithmetic. */
 function predictionBaserateOf(
   classTag: string,
   rows: readonly ClosedEstimate[],
@@ -57,7 +52,6 @@ function predictionBaserateOf(
   };
 }
 
-/** One closed prediction as the baserate reads it: both values set. */
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface BaserateRow {
   estimate_value: number;
@@ -72,14 +66,10 @@ export function computePredictionBaserate(
   tenantId: string,
   classTag: string,
   actor: string = CLI_ACTOR,
-  /** False skips the predict_baserate audit so that channel only records deliberate baserate calls, not every recall
-   *  the planning-fallacy orchestrator inspects. */
   emitAudit: boolean = true,
 ): PredictionBaserate {
   assertTenantId('computePredictionBaserate', tenantId);
   if (!classTag) throw new BadRequestError('computePredictionBaserate: classTag is required');
-  // Ordered by id because the float sums differ with row order, and another store must reach the
-  // same figures.
   const rows = cachedStatement(
     db,
     `
@@ -98,15 +88,12 @@ export function computePredictionBaserate(
     classTag,
     rows.map((r) => ({ estimate: r.estimate_value, actual: r.actual_value })),
   );
-  // An empty class is audited too, since an agent probing one is a signal; the recall path passes
-  // false and audits its own hint, and a read-only store keeps no row of the read.
   if (emitAudit && !isReadOnlyHandle(db)) {
     auditBaserateRead(db, { tenantId, actor, classTag, nClosed: baserate.nClosed });
   }
   return baserate;
 }
 
-/** Who read which class's base rate, and how many closed predictions it held. */
 interface BaserateReadOptions {
   readonly tenantId: string;
   readonly actor: string;

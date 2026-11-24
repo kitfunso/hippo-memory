@@ -9,7 +9,6 @@ import { useVTable } from "./useVTable";
 const CARD_REM = 4.75;
 const FALLBACK_PX = 16;
 
-/** Card height in px: 4.75 rem against the root font size the user has set. */
 function cardHeight(): number {
   const root = parseFloat(getComputedStyle(document.documentElement).fontSize);
   return Math.round(CARD_REM * (root > 0 ? root : FALLBACK_PX));

@@ -1,5 +1,3 @@
-// HIPPO_READ_ONLY=1 on a real store: each read surface answers as it does without the switch and leaves every file
-// byte as it was, every MCP write tool refuses, and session-end starts no worker.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -18,7 +16,6 @@ const SEEDS = [
   ['the deploy failed because the queue was full', '--error'],
 ];
 
-// One valid call per tool the server lists, so a tool answers an error only when it refuses.
 const TOOL_ARGS = {
   hippo_recall: { query: 'queue' },
   hippo_assemble: { session_id: 's1' },
@@ -35,7 +32,6 @@ const TOOL_ARGS = {
   hippo_predict_baserate: { class_tag: 'deploy' },
 } satisfies Record<string, Record<string, JsonValue>>;
 
-// A writer that exits without closing, so its frames stay in hippo.db-wal as a crashed or live writer leaves them.
 const WAL_FRAME = [
   "const { DatabaseSync } = require('node:sqlite');",
   'const db = new DatabaseSync(process.argv[1]);',
@@ -44,7 +40,6 @@ const WAL_FRAME = [
   'process.exit(0);',
 ].join('\n');
 
-// Records each spawn and starts nothing, so the control run's worker never touches the store.
 const STUB_SPAWN = [
   "const fs = require('node:fs');",
   "const cp = require('node:child_process');",
@@ -90,8 +85,6 @@ beforeAll(() => {
 
 const readOnly = (on: boolean): NodeJS.ProcessEnv => ({ ...env, HIPPO_READ_ONLY: on ? '1' : '0' });
 
-/** Every file under the project folder (store, mirrors, home and global folder) by hash; -shm is SQLite's shared
- * lock memory, which every reader maps. */
 function snapshot(): Map<string, string> {
   const out = new Map<string, string>();
   const walk = (dir: string): void => {
@@ -122,7 +115,6 @@ function frames(calls: ReadonlyArray<readonly [string, Record<string, JsonValue>
   return `${[JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'tools/list' }), ...lines].join('\n')}\n`;
 }
 
-/** The server's replies in request order: it answers calls as each one finishes. */
 function replies(stdout: string): Reply[] {
   const lines = stdout.trim().split('\n');
   // SAFETY: hippo mcp writes one JSON-RPC reply per line, each with the id of its request.
@@ -134,7 +126,6 @@ interface Surface {
   readonly name: string;
   readonly args: readonly string[];
   readonly input?: (tag: string) => string;
-  /** What a real answer holds, so two empty outputs never pass as the same. */
   readonly shows: string;
 }
 
@@ -150,7 +141,6 @@ const SURFACES: readonly Surface[] = [
   {
     name: 'the UserPromptSubmit hook',
     args: ['context', '--pinned-only', '--include-recent', '5', '--format', 'additional-context'],
-    // A session of its own per run, since the run without the switch books what it sent and the next one skips it.
     input: (tag) => JSON.stringify({ session_id: `read-only-${tag}`, prompt: 'what about the queue' }),
     shows: 'additionalContext',
   },
@@ -212,7 +202,6 @@ describe('HIPPO_READ_ONLY=1 session-end', () => {
     fs.writeFileSync(stub, `${STUB_SPAWN}\n`);
     const spawnsOf = (on: boolean): string[] => {
       const record = join(tools, `spawns-${on ? 'on' : 'off'}.jsonl`);
-      // Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
       const nodeOptions = `${env.NODE_OPTIONS ?? ''} --require "${stub.split('\\').join('/')}"`;
       const run = hippoRun(['session-end'], {
         cwd: s.base,

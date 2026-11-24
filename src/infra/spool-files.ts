@@ -1,5 +1,3 @@
-// The spool folder's name grammar (stems, claim and tmp patterns) and the busy-retrying fs steps
-// every spool module shares.
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorFields, errorMessage, type LogFields } from '../base/util/log.js';
 import { PRIVATE_DIR } from '../host/private-dir.js';
@@ -19,11 +17,8 @@ const BUSY_WAIT_MS = 50;
 // Antivirus, the indexer or a delete still pending on Windows: the step is left for a later run.
 export const BUSY_CODES: ReadonlySet<string> = new Set(['EPERM', 'EACCES', 'EBUSY']);
 
-// A stem is `<ms13>-<rand8hex>`, so name order is age order; legacy files are
-// `<session>-<ms>.json`.
 export const WAITING = /^([\w-]+)(?:\.a(\d+))?\.json$/;
 const CLAIM = /^([\w-]+)\.a(\d+)\.claim-(\d{13})$/;
-// An old binary's claim carries no claim time, so its mtime stands in.
 const LEGACY_CLAIM = /^([\w-]+)(?:\.a(\d+))?\.json\.claimed$/;
 export const TMP = /^([\w-]+)(?:\.a\d+)?\.json\.tmp$/;
 export const BAD = /^([\w-]+)\.(?:\w+\.)?bad$/;
@@ -48,7 +43,6 @@ export interface SpoolFs {
 
 type Settled = 'done' | 'gone' | 'busy';
 
-/** One fs step's outcome: the value it returned once it ran, else the error code that ended it. */
 type SettledStep<T> =
   | { readonly settled: 'done'; readonly code: ''; readonly value: T }
   | { readonly settled: 'gone' | 'busy'; readonly code: string; readonly value?: undefined };
@@ -64,7 +58,6 @@ export interface Claim {
   name: string;
   stem: string;
   attempt: number;
-  /** null for a legacy claim, which is aged by mtime. */
   claimedAt: number | null;
 }
 

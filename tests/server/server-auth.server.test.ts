@@ -109,7 +109,6 @@ describe('server auth middleware', () => {
     const db = openHippoDb(home);
     try {
       const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
-      // No remember should have landed.
       expect(events.length).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -165,7 +164,6 @@ describe('server auth middleware', () => {
   });
 });
 
-// The server binds loopback; every accepted socket is relabelled with a public peer address before the request handler reads it.
 describe('server auth middleware for a non-loopback peer', () => {
   let home: string;
   let globalHome: string;
@@ -225,14 +223,12 @@ describe('server auth middleware for a non-loopback peer', () => {
   );
 });
 
-/** A request that carries only this Authorization header, or none. */
 function withAuth(value: string | undefined): IncomingMessage {
   const req = new IncomingMessage(new Socket());
   if (value !== undefined) req.headers = { authorization: value };
   return req;
 }
 
-// The parser itself, so a scheme the HTTP cases above do not send still has a pinned answer.
 describe('readAuthHeader', () => {
   it.each([
     ['bearer tok-1', { kind: 'bearer', token: 'tok-1' }],

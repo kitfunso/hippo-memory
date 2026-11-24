@@ -1,10 +1,8 @@
-"""Round 3's costUsd by arm, sequence and folder kind over a set of runs files; stdlib only, imported by path."""
 import collections
 import json
 
 
 def load(files):
-    """Every record with a numeric costUsd as (kind, sequence, arm, tool, cost), and every sequence any record names."""
     rows = []
     seen = set()
     for f in files:
@@ -25,7 +23,6 @@ def load(files):
 
 
 def totals(rows, only=None):
-    """Cost by arm, record count by arm and cost by folder kind, over the sequences in only (all when None)."""
     by_arm = collections.Counter()
     n_arm = collections.Counter()
     by_kind = collections.Counter()

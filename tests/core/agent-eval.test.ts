@@ -1,20 +1,3 @@
-/**
- * Agent Evaluation Benchmark: Sequential Learning Over Time
- *
- * Simulates an agent doing 50 tasks in a codebase with 10 trap categories.
- * Each trap category appears 2-3 times across the sequence. When the agent
- * hits a trap, it stores a memory (hippo remember). On subsequent encounters
- * of the same trap category, it recalls the memory and avoids the trap.
- *
- * Three conditions:
- *   1. No memory (baseline) — agent has no recall, hits every trap
- *   2. Static memory — all memories pre-loaded, no learning
- *   3. Hippo (full mechanics) — starts empty, learns from each trap hit
- *
- * Key metric: trap-hit-rate over the sequence.
- * Hypothesis: hippo condition shows declining hit rate; static is flat.
- */
-
 import { describe, it, expect } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -26,23 +9,18 @@ import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-// ---------------------------------------------------------------------------
-// Trap categories — each has a lesson and 2-3 task instances
-// ---------------------------------------------------------------------------
-
 interface TrapCategory {
   id: string;
   lesson: string;
   tags: string[];
-  /** Query an agent would use when encountering this type of task */
   recallQueries: string[];
 }
 
 interface Task {
   id: number;
   description: string;
-  trapCategory: string | null; // null = clean task (no trap)
-  recallQuery: string; // what the agent would search for before starting
+  trapCategory: string | null;
+  recallQuery: string;
 }
 
 const TRAP_CATEGORIES: TrapCategory[] = [
@@ -109,15 +87,9 @@ const TRAP_CATEGORIES: TrapCategory[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Generate 50 tasks with traps spread across the sequence
-// ---------------------------------------------------------------------------
-
 function generateTasks(): Task[] {
   const tasks: Task[] = [];
 
-  // Each trap category appears at 3 positions: early, mid, late
-  // This tests whether the agent learns from early encounters
   const trapPlacements: Array<{ category: string; positions: number[] }> = [
     { category: 'overwrite_production', positions: [2, 22, 42] },
     { category: 'bare_except', positions: [4, 28, 46] },
@@ -131,7 +103,6 @@ function generateTasks(): Task[] {
     { category: 'unverified_metrics', positions: [20, 50] },
   ];
 
-  // Build a map: position -> trap category
   const trapMap = new Map<number, string>();
   for (const tp of trapPlacements) {
     for (const pos of tp.positions) {
@@ -139,7 +110,6 @@ function generateTasks(): Task[] {
     }
   }
 
-  // Fill task descriptions
   const cleanDescriptions = [
     'Add logging to the data refresh script',
     'Update README with new API endpoint',
@@ -192,32 +162,19 @@ function generateTasks(): Task[] {
   return tasks;
 }
 
-// ---------------------------------------------------------------------------
-// Simulation engine
-// ---------------------------------------------------------------------------
-
 interface SimResult {
   taskId: number;
   trapCategory: string | null;
-  trapHit: boolean; // true = agent hit the trap (failed to avoid it)
-  memoryRecalled: boolean; // true = relevant memory was in top-5 results
+  trapHit: boolean;
+  memoryRecalled: boolean;
 }
 
 const { session } = sessionPerTest();
 
-/**
- * Simulate an agent running tasks with a given memory condition.
- *
- * @param mode 'none' | 'static' | 'hippo'
- *   - none: no memory store, agent hits every trap
- *   - static: all lessons pre-loaded, agent recalls but doesn't learn new ones
- *   - hippo: starts empty, learns from each trap hit, memories strengthen through use
- */
 function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[] {
   const tmpDir = makeRoot(`eval-${mode}`);
   const files = storeFilesOf(tmpDir, { session: session() });
 
-  // For static mode: pre-load all lessons
   if (mode === 'static') {
     for (const cat of TRAP_CATEGORIES) {
       const entry = createMemory(cat.lesson, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tags: cat.tags });
@@ -229,26 +186,21 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
 
   for (const task of tasks) {
     if (!task.trapCategory) {
-      // Clean task, no trap to hit
       results.push({ taskId: task.id, trapCategory: null, trapHit: false, memoryRecalled: false });
       continue;
     }
 
     if (mode === 'none') {
-      // No memory: always hits the trap
       results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: true, memoryRecalled: false });
       continue;
     }
 
-    // Search memory for relevant guidance
     const entries = loadAllEntriesIn(files);
     const searchResults = rankBm25(task.recallQuery, entries, { now: evalNow(), budget: 4000 });
     const topIds = searchResults.slice(0, 5);
 
-    // Check if any top result is relevant to this trap category
     const cat = TRAP_CATEGORIES.find((c) => c.id === task.trapCategory)!;
     const recalled = topIds.some((r) => {
-      // Check if the result's content matches the lesson or tags overlap
       const contentMatch = cat.tags.some((tag) => r.entry.tags.includes(tag));
       const textMatch = cat.lesson
         .split(' ')
@@ -258,18 +210,14 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
     });
 
     if (recalled) {
-      // Agent recalled the right memory, avoids the trap
-      // Strengthen the recalled memories
       if (mode === 'hippo') {
         const toUpdate = markRetrieved(topIds.map((r) => r.entry));
         for (const u of toUpdate) writeEntryIn(files, u);
       }
       results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: false, memoryRecalled: true });
     } else {
-      // Agent missed the trap — hits it
       results.push({ taskId: task.id, trapCategory: task.trapCategory, trapHit: true, memoryRecalled: false });
 
-      // For hippo mode: learn from the mistake
       if (mode === 'hippo') {
         const lesson = createMemory(cat.lesson, {
           baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -284,10 +232,6 @@ function simulate(tasks: Task[], mode: 'none' | 'static' | 'hippo'): SimResult[]
   return results;
 }
 
-// ---------------------------------------------------------------------------
-// Analysis helpers
-// ---------------------------------------------------------------------------
-
 function trapHitRate(results: SimResult[]): number {
   const trapTasks = results.filter((r) => r.trapCategory !== null);
   if (trapTasks.length === 0) return 0;
@@ -295,7 +239,6 @@ function trapHitRate(results: SimResult[]): number {
   return hits / trapTasks.length;
 }
 
-/** Split results into thirds and compute hit rate for each */
 function hitRateByPhase(results: SimResult[]) {
   const trapTasks = results.filter((r) => r.trapCategory !== null);
   const n = trapTasks.length;
@@ -312,10 +255,6 @@ function hitRateByPhase(results: SimResult[]) {
     late: rate(trapTasks.slice(third * 2)),
   };
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 const tasks = generateTasks();
 
@@ -363,8 +302,7 @@ describe('Condition: static memory (pre-loaded)', () => {
   it('catches most traps from the start', () => {
     results = simulate(tasks, 'static');
     const rate = trapHitRate(results);
-    // Static should catch many (lessons pre-loaded) but rate is flat across phases
-    expect(rate).toBeLessThan(0.5); // catches >50% of traps
+    expect(rate).toBeLessThan(0.5);
   });
 
   it('hit rate is roughly flat across phases (no learning)', () => {
@@ -376,8 +314,6 @@ describe('Condition: static memory (pre-loaded)', () => {
     console.log(`  Mid:    ${(phases.mid * 100).toFixed(0)}%`);
     console.log(`  Late:   ${(phases.late * 100).toFixed(0)}%`);
 
-    // Static memory doesn't improve over time — late should not be significantly
-    // better than early (within 20 percentage points)
     const improvement = phases.early - phases.late;
     expect(Math.abs(improvement)).toBeLessThanOrEqual(0.25);
   });
@@ -401,8 +337,6 @@ describe('Condition: hippo (learns from mistakes)', () => {
     console.log(`  Mid:    ${(phases.mid * 100).toFixed(0)}%`);
     console.log(`  Late:   ${(phases.late * 100).toFixed(0)}%`);
 
-    // Core hypothesis: late hit rate < early hit rate
-    // The agent should learn from early mistakes and avoid later ones
     expect(phases.late).toBeLessThan(phases.early);
   });
 

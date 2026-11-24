@@ -1,6 +1,3 @@
-// The graph page and JSON Canvas renderers: presentation of the plain GraphModel the domain
-// computes.
-
 import { createHash } from 'node:crypto';
 import { layoutGraph, LAYOUT_H, LAYOUT_W, type GraphModel } from '../../api/objects/graph.js';
 import { GRAPH_CLIENT_SCRIPT } from './graph-page-client.js';
@@ -54,8 +51,6 @@ const STYLE = [
 const sha256 = (text: string): string =>
   `'sha256-${createHash('sha256').update(text).digest('base64')}'`;
 
-// Entity names come from memories, so the page runs only its own script and style block, each named
-// by hash.
 const POLICY = [
   "default-src 'none'",
   `script-src ${sha256(GRAPH_CLIENT_SCRIPT)}`,

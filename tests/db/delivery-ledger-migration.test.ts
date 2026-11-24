@@ -1,7 +1,3 @@
-/**
- * Schema v50: the per-turn delivery ledger tables (src/store/sqlite/ledger/delivery-ledger.ts writes them).
- */
-
 import { describe, it, expect } from 'vitest';
 import {
   openHippoDb,
@@ -178,7 +174,6 @@ describe('delivery ledger schema v50', () => {
 
   it('a v49 store re-migrates to v50 and min_compatible_binary is unchanged', () => {
     const home = makeRoot('delivery-mig');
-    // A value no migration writes, below the running binary, so any v50 write to it shows.
     const minBefore = '1.30.7';
     let db = openHippoDb(home);
     try {

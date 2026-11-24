@@ -1,7 +1,5 @@
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
-// A prober must never see a 429, so the store read is bounded by remembering its answer instead of
-// rate-limiting the route.
 const READY_WINDOW_MS = 1000;
 
 export type ReadyProbe = () => Promise<boolean>;

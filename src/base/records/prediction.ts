@@ -1,4 +1,3 @@
-// A prediction's closure states, shared by the store, the routes and the CLI flag checks.
 import { createMemory, Layer, type MemoryEntry, type MemoryKind } from '../memory/entry.js';
 
 export type ClosureState = 'open' | 'closed' | 'closed-unknown';

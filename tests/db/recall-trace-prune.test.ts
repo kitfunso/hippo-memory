@@ -1,5 +1,3 @@
-// The delivery ledger's prune also deletes recall traces past its 90 days that no outcome names and that are not the
-// last recall's, with their results; it reads the same rows whatever the table's size.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { recordTraceOutcome, writeRecallTrace } from '../../src/store/sqlite/recall/recall-trace.js';
@@ -9,7 +7,6 @@ import { countMatching, recordStatements } from '../_helpers/count-statements.js
 import { makeRoot } from '../_helpers/make-root.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 
-// The prune counts back from the real clock, so the seeds are stamped from it too.
 const daysAgo = (days: number): string => new Date(Date.now() - days * DAY_MS).toISOString();
 const TRACE_PRUNE = /^\s*DELETE FROM recall_traces/;
 
@@ -64,7 +61,6 @@ afterEach(() => {
   closeHippoDb(db);
 });
 
-/** One trace of two results, stamped `ts`. */
 function trace(ts: string): number {
   const id = writeRecallTrace(db, {
     tenantId: 'default',
@@ -81,7 +77,6 @@ function trace(ts: string): number {
   return id;
 }
 
-/** `n` traces stamped `ts`, each with two results, in two statements so 10,000 seed in well under a second. */
 function traces(n: number, ts: string): void {
   // SAFETY: an aggregate with no GROUP BY always answers one row.
   const { top } = db.prepare(`SELECT COALESCE(MAX(id), 0) AS top FROM recall_traces`).get() as { top: number };
@@ -110,7 +105,6 @@ function count(table: string): number {
   return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 }
 
-/** An old trace with an outcome, an old trace that is the last recall's, and an old one with neither. */
 function oldSet() {
   const outcome = trace(daysAgo(120));
   recordTraceOutcome(db, { traceId: outcome, tenantId: 'default', outcome: 'positive', memoryIds: ['m1'] });
@@ -178,7 +172,6 @@ describe('the recall trace prune', () => {
 });
 
 describe('the delivery event prune', () => {
-  /** `n` events stamped `ts` on one statement, with no turn number so no unique index applies. */
   function events(n: number, ts: string): void {
     db.prepare(
       `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?) ` +
@@ -193,7 +186,6 @@ describe('the delivery event prune', () => {
     events(1000, daysAgo(200));
     const log = recordStatements(() => writeDeliveryEventOnHandle(db, event()));
     expect(countMatching(log.statements, /^\s*DELETE FROM delivery_events/)).toBe(1);
-    // The five oldest go with 995 of the next; five of the 200-day events are left, and the fresh one.
     expect(count('delivery_events')).toBe(6);
     expect(ids(`SELECT COUNT(*) AS id FROM delivery_events WHERE ts < '${daysAgo(250)}'`)).toEqual([0]);
     writeDeliveryEventOnHandle(db, event());

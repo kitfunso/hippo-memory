@@ -1,5 +1,3 @@
-// Admission sent as data admits the rows the callbacks contextGet and drillDown passed before 3.0 admitted, on a store
-// that mixes tenants, scopes, origins, secrets, compaction items and digests, in process and from a store worker.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMPACTION_MEMORY_TAG, DAG_LEVEL, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { isWorthSurfacing } from '../../src/base/memory/memory-quality.js';
@@ -43,7 +41,6 @@ function row(tenantId: string, id: string, content: string, extra: Partial<Memor
   return seeded(content, id, created, { tenantId: tenantId, originProject: 'proj', ...extra });
 }
 
-/** Every scope crossed with every origin, then each edge the old callbacks tested one by one. */
 function ambientRows(tenantId: string, p: string): MemoryEntry[] {
   const rows = SCOPES.flatMap((scope, s) =>
     ORIGINS.map((origin, o) =>
@@ -105,7 +102,6 @@ const under = (parent: string, level: number, extra: Partial<MemoryEntry> = {}):
   ...extra,
 });
 
-/** Summary trees whose children carry every scope and origin, a refused child with rows under it, and a leaf summary. */
 function dagRows(tenantId: string, p: string): MemoryEntry[] {
   return [
     row(tenantId, `${p}_profile`, 'profile over the rollout summaries', { dagLevel: 3 }),
@@ -135,7 +131,6 @@ function dagRows(tenantId: string, p: string): MemoryEntry[] {
   ];
 }
 
-/** contextGet's pinned-only admit and quality floor before 3.0, as api/context/context.ts composed them. */
 function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: MemoryEntry) => boolean {
   const secretAdmit = (e: MemoryEntry): boolean => {
     if (!detectSecret(e).flagged) return true;
@@ -167,7 +162,6 @@ function oldLoaderAdmit(a: AmbientAdmission, refused: AmbientRefusal[]): (e: Mem
   };
 }
 
-/** drillDown's admit before 3.0. */
 function oldDrillAdmit(a: DescendantAdmission, summaryId: string): (row: MemoryEntry) => boolean {
   const readable = (row: MemoryEntry): boolean =>
     passesScopeFilterForRecall(row.scope ?? null, undefined, a.ownScope) &&
@@ -214,7 +208,6 @@ function onDb<T>(run: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** The walk summaryWithDescendants documents, with the old callback as its admit. */
 function oldWalk(tenantId: string, id: string, depth: number, admit: (row: MemoryEntry) => boolean): string[][] | null {
   const mine = rows.filter((r) => r.tenantId === tenantId);
   const summary = mine.find((r) => r.id === id);
@@ -282,7 +275,6 @@ describe('ambient admission as data', () => {
     async (_, admission) => {
       for (const tenantId of [ACME, GLOBEX]) {
         for (const recentNeeded of [0, 3, 200]) {
-          // The old callback records its own refusals, in the order the loader asks it.
           const refused: AmbientRefusal[] = [];
           const oldAdmit = oldLoaderAdmit(admission, refused);
           const old = onDb((db) =>

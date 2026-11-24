@@ -1,16 +1,3 @@
-/**
- * Schema v25 — cached summary metadata (descendant_count, earliest_at,
- * latest_at) on level-2 DAG summary rows.
- *
- * Verifies:
- *   1. Schema v25 is current.
- *   2. Fresh DBs initialize with the three columns.
- *   3. v24 DBs back-fill descendant_count and earliest/latest_at on first
- *      open via the v25 migration.
- *   4. dag.ts populates the columns at write time when buildDag creates a
- *      level-2 summary.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { sqliteDagReads } from '../../src/store/sqlite/graph/dag-reads.js';
 import { openHippoDb, closeHippoDb, getSchemaVersion } from '../../src/db/index.js';
@@ -35,8 +22,6 @@ describe('schema v25 — DAG summary metadata', () => {
     try {
       expect(getSchemaVersion(db)).toBe(LATEST_SCHEMA_VERSION);
       // SAFETY: PRAGMA table_info always returns rows shaped
-      // `{ name: string, ... }`; `name` is optional here only to tolerate a
-      // driver that omits an unexpected column.
       const cols = db.prepare(`PRAGMA table_info(memories)`).all() as Array<{ name?: string }>;
       const names = cols.map((c) => c.name);
       expect(names).toContain('descendant_count');
@@ -126,7 +111,6 @@ describe('schema v25 — DAG summary metadata', () => {
       (await sqliteDagReads(handlesOf(root).on).summaryWithDescendants('default', parent.id, { depth: 1, admit: {} }))
         ?.levels[0] ?? [];
     expect(direct.map((e) => e.id)).toEqual([child1.id, child2.id]);
-    // Grandchild reachable only via child1, not directly under parent.
     expect(direct.find((e) => e.id === grandchild.id)).toBeUndefined();
   });
 });

@@ -14,13 +14,9 @@ import { errorFields, log } from '../../../base/util/log.js';
 export interface ArchiveOptions {
   reason: string;
   who: string;
-  /** Hook run inside the archive SAVEPOINT after the audit row and before RELEASE (the Slack
-   * deletion connector marks the event seen atomically); throwing rolls back the whole archive,
-   * audit row included. */
   afterArchive?: (db: DatabaseSyncLike, archivedMemoryId: string) => void;
 }
 
-/** The `memories` columns an archive reads. */
 interface ArchivedMemoryRow {
   id: string;
   kind: string;
@@ -46,10 +42,8 @@ export function markMirrorCleaned(db: DatabaseSyncLike, memoryId: string, at: st
   }
 }
 
-// Every id list binds as one JSON array, so each statement's text is the same for one row or many.
 const IDS = 'SELECT value FROM json_each(?)';
 
-/** The rows behind `ids`, in their order; throws for the first one that is missing or not raw. */
 function readRawRows(db: DatabaseSyncLike, ids: readonly string[]): ArchivedMemoryRow[] {
   // SAFETY: the four selected columns are the interface's keys, each a memories column.
   const rows = cachedStatement(
@@ -71,8 +65,6 @@ function moveRowsToArchive(
   rows: readonly ArchivedMemoryRow[],
   opts: ArchiveOptions,
 ): string {
-  // GDPR: raw_archive stores ONLY metadata, never the original content; the archive_raw audit row
-  // is the compliance trail, so the content is unrecoverable from here on.
   const archivedAt = handleStamp(db);
   const payloads = rows.map((row) => [
     row.id,
@@ -90,19 +82,14 @@ function moveRowsToArchive(
       `SELECT json_extract(value, '$[0]'), ?, ?, ?, json_extract(value, '$[1]') FROM json_each(?) ORDER BY key`,
   ).run(archivedAt, opts.reason, opts.who, JSON.stringify(payloads));
   const ids = JSON.stringify(rows.map((row) => row.id));
-  // Flip kind to 'archived' so the BEFORE DELETE trigger no longer fires, then delete.
   cachedStatement(db, `UPDATE memories SET kind = 'archived' WHERE id IN (${IDS})`).run(ids);
   cachedStatement(db, `DELETE FROM memories WHERE id IN (${IDS})`).run(ids);
-  // Archived text must be unsearchable at commit, so a failed purge fails (and rolls back) the
-  // whole archive.
   if (isFtsAvailable(db)) {
     cachedStatement(db, `DELETE FROM memories_fts WHERE id IN (${IDS})`).run(ids);
   }
   return archivedAt;
 }
 
-// Emit the archive_raw audit inside the SAVEPOINT so it commits atomically with the row deletion,
-// attributed to each row's own tenant_id, not whatever HIPPO_TENANT the calling shell has set.
 function auditArchive(
   db: DatabaseSyncLike,
   rows: readonly ArchivedMemoryRow[],
@@ -121,13 +108,10 @@ function auditArchive(
       })),
     );
   } catch (error) {
-    // The archive itself has already succeeded; an unwritable audit table must not undo it.
     for (const row of rows) reportAuditWriteFailure('archive_raw', error, row.id);
   }
 }
 
-// Archiving a child under a level-2 summary marks the parent dirty, inside the SAVEPOINT so the
-// dirty-mark commits atomically with the archive.
 function markParentsDirty(
   db: DatabaseSyncLike,
   rows: readonly ArchivedMemoryRow[],
@@ -153,14 +137,10 @@ export function archiveRawMemories(
   opts: ArchiveOptions,
 ): string {
   const rows = readRawRows(db, [...new Set(ids)]);
-  // A SAVEPOINT when already inside a transaction (e.g. batchWriteAndDelete), so a throw here rolls
-  // back only this archive.
   return withWriteScope(db, 'archive_raw', () => {
     const archivedAt = moveRowsToArchive(db, rows, opts);
     auditArchive(db, rows, opts);
     markParentsDirty(db, rows, opts.who);
-    // afterArchive hook: connector idempotency markers (e.g. slack_event_log) must commit
-    // atomically with the archive, so it runs INSIDE the SAVEPOINT; throwing rolls back both.
     for (const row of rows) opts.afterArchive?.(db, row.id);
     return archivedAt;
   });

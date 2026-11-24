@@ -1,4 +1,3 @@
-// A Claude Code style transcript built from the hook's real stdout, plus the fixture drivers the exit tests share.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { SpawnSyncReturns } from 'node:child_process';
@@ -59,7 +58,6 @@ export interface Verdict {
   cand_reason: string | null;
   turns: TurnVerdict[];
   label: Json | null;
-  /** The listing entry of the tool failure that stored this lesson; null for any other memory. */
   origin: number | null;
   notes: string[];
 }
@@ -102,7 +100,6 @@ export function expectVerdict(
   } finally {
     closeHippoDb(db);
   }
-  // A session with no row has no hook hash to read, so the reader's no-row rule stands in.
   const storeHash = hooked ?? blockHash(realpathOrResolve(path.resolve(want.store)));
   expect({
     class: v.class,
@@ -150,25 +147,17 @@ export function listingOf(opts: {
 }
 
 export interface TurnSpec {
-  /** The text on the transcript's user line. */
   prompt: string;
-  /** The hook's stdout; its additionalContext becomes the hippo attachment. */
   stdout?: string;
-  /** Replaces the hippo attachment text; null withholds it. */
   attach?: string | null;
-  /** False leaves the prompt without any attachment, as a hook that did not run. */
   fired?: boolean;
-  /** Adds an image block, so the user content is an array. */
   image?: boolean;
-  /** A compact_boundary line right before the prompt. */
   compactBefore?: boolean;
-  /** Written as a queued_command attachment under tool results, the way a prompt sent mid-task is. */
   queued?: boolean;
 }
 
 export interface TranscriptOptions {
   name?: string;
-  /** The per-file command, shell and notification lines, before the first prompt. Default true. */
   noise?: boolean;
 }
 
@@ -191,7 +180,6 @@ export const additionalContextOf = (stdout: string): string => JSON.parse(stdout
 
 const toolResult = (id: string): string => user([{ type: 'tool_result', tool_use_id: id, content: 'out' }]);
 
-/** A prompt sent while the agent was busy: Claude Code writes it as an attachment after the tool results, never as a user line. */
 const queuedLines = (prompt: string): string[] => [
   line({ type: 'queue-operation', operation: 'enqueue', content: prompt }),
   toolResult('t1'),

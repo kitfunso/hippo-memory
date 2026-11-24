@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-/**
- * Sweep runtime recall parameters through the eval harness and report
- * which combinations win on which metrics. Produces a ranked table plus
- * a Pareto frontier so you can see tradeoffs instead of just one "winner".
- *
- * Sweeps only parameters that are tunable at recall time:
- *   - MMR lambda
- *   - Embedding weight (BM25 vs cosine blend)
- *   - Local bump (local-over-global source priority)
- *
- * Half-life / retrieval-boost / error-multiplier are per-memory and baked
- * into the store, so a fair sweep would need store regeneration -- out of
- * scope for a recall-time tuning script.
- *
- * Usage:
- *   node scripts/sweep-params.mjs [corpus.json] [--out <path>]
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -50,13 +33,8 @@ if (!isInitialized(hippoRoot)) {
   console.error(`No .hippo in ${process.cwd()}`);
   process.exit(1);
 }
-// searchBothHybrid inside runEval loads its own per-query candidate set from
-// FTS5; we don't need to preload entries here.
 const defaults = loadConfig(hippoRoot);
 
-// Parameter grids. Kept modest because each combo runs all cases through
-// searchBothHybrid (local + global DB open per query). Pass --quick for a
-// 2x2x2 smoke sweep.
 const QUICK = process.argv.includes('--quick');
 const LAMBDA_GRID = QUICK ? [0.5, 0.9] : [0.5, 0.7, 0.9, 1.0];
 const EMB_WEIGHT_GRID = QUICK ? [0.5, 0.8] : [0.4, 0.6, 0.8];
@@ -66,7 +44,6 @@ const MMR_TOGGLE = QUICK ? [true] : [true, false];
 const combos = [];
 for (const mmr of MMR_TOGGLE) {
   for (const lambda of LAMBDA_GRID) {
-    // No need to sweep lambda when MMR is off
     if (!mmr && lambda !== 0.7) continue;
     for (const emb of EMB_WEIGHT_GRID) {
       for (const bump of LOCAL_BUMP_GRID) {
@@ -76,7 +53,6 @@ for (const mmr of MMR_TOGGLE) {
   }
 }
 
-// Mark which combo is the current config so we can highlight it in output.
 const defaultCombo = {
   mmr: defaults.mmr.enabled,
   lambda: defaults.mmr.lambda,
@@ -86,7 +62,6 @@ const defaultCombo = {
 
 console.error(`Sweeping ${combos.length} combinations on ${cases.length} cases...`);
 
-// Stream partial results to JSONL so a killed run still leaves useful data.
 const streamPath = OUT_PATH
   ? OUT_PATH.replace(/\.md$/, '.jsonl')
   : path.join(process.cwd(), 'evals', 'sweep-partial.jsonl');
@@ -138,11 +113,8 @@ for (let i = 0; i < combos.length; i++) {
   );
 }
 
-// Sort by NDCG desc, break ties by R@10 desc.
 rows.sort((a, b) => b.ndcg - a.ndcg || b.r10 - a.r10);
 
-// Pareto frontier: row is Pareto-optimal if no other row has (>=) on all
-// four metrics AND (>) on at least one.
 function dominates(x, y) {
   const ge = x.mrr >= y.mrr && x.r5 >= y.r5 && x.r10 >= y.r10 && x.ndcg >= y.ndcg;
   const gt = x.mrr > y.mrr || x.r5 > y.r5 || x.r10 > y.r10 || x.ndcg > y.ndcg;
@@ -150,7 +122,6 @@ function dominates(x, y) {
 }
 const pareto = rows.filter((r) => !rows.some((o) => o !== r && dominates(o, r)));
 
-// --- Output ---
 function pct(n) {
   return (n * 100).toFixed(1) + '%';
 }
@@ -220,7 +191,6 @@ if (OUT_PATH) {
   console.log(output);
 }
 
-// Terse stderr summary so the script is useful even without --out
 console.error('');
 console.error('=== Quick summary ===');
 console.error(line(rows[0], '[best]'));

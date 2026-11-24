@@ -1,5 +1,3 @@
-// With ctx.store, remember, outcome, supersede, rawArchive and forget write through its entryWrites group and never open hippo.db;
-// their routes and the hippo_remember and hippo_outcome tools run under another store only when it has the group.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -40,7 +38,6 @@ function copyOf(): string {
   return root;
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
@@ -107,7 +104,6 @@ describe('the api with ctx.store', () => {
   });
 });
 
-/** The request body fields the entry write routes read. */
 interface RouteBody {
   readonly content?: string;
   readonly kind?: string;
@@ -155,7 +151,6 @@ describe('the entry write routes', () => {
     expect(
       await json<Pick<OutcomeResult, 'applied'>>(send('/v1/outcome', 'POST', token, { ids: [note.id], good: true })),
     ).toEqual({ applied: 1 });
-    // It lands on this client's own last REST recall, which the server holds, and this client has recalled nothing.
     expect(await json<{ applied: number; ids: string[] }>(send('/v1/outcome', 'POST', token, { good: true }))).toEqual({
       applied: 0,
       ids: [],

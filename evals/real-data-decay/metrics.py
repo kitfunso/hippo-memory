@@ -1,15 +1,7 @@
-"""bad@5, fix@5, old-good-kept, and a cluster bootstrap CI over bad memories.
-
-A "cluster" is one bad memory: every query hit that memory produced is
-resampled together, since those hits are not independent draws (they're
-all testing the same correction).
-"""
 import random
 
 
 def bootstrap_ci(cluster_hits: dict[str, list[int]], draws: int = 2000, seed: int = 20260924):
-    """cluster_hits: bad_memory_id -> [0/1, 0/1, ...] one entry per in-play
-    query for that memory. Returns (point_estimate, lo95, hi95)."""
     clusters = [c for c in cluster_hits.values() if c]
     all_hits = [h for c in clusters for h in c]
     if not all_hits:

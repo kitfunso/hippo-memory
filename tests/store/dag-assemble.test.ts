@@ -1,12 +1,3 @@
-/**
- * Phase 2 — `api.assemble`. Bio-aware context engine.
- *
- * Builds a chronologically-ordered context window for a session: fresh-tail
- * raw rows + summary substitutions for older rows + budget-fit. Key
- * differentiator from lossless-claw: eviction picks lowest-strength
- * non-fresh-tail items first instead of oldest-first.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -125,7 +116,6 @@ describe('api.assemble', () => {
     summary.latestAt = '2026-01-04T00:00:00.000Z';
     writeEntry(root, summary);
 
-    // 4 older raws under parent
     for (let i = 0; i < 4; i++) {
       const e = makeRaw(`older detail ${i}`, 'sess-s', {
         dagLevel: 1,
@@ -134,7 +124,6 @@ describe('api.assemble', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    // 2 fresh-tail raws (no parent)
     for (let i = 0; i < 2; i++) {
       const e = makeRaw(`fresh tail row ${i}`, 'sess-s');
       e.created = `2026-01-1${i}T00:00:00.000Z`;
@@ -151,7 +140,6 @@ describe('api.assemble', () => {
   });
 
   it('5. budget-tight eviction picks lowest-strength non-fresh-tail item first', async () => {
-    // 1 strong older row + 1 weak older row + 1 tail row. Tight budget.
     const strongOld = makeRaw('strong older row content here', 'sess-b');
     strongOld.created = '2026-01-01T00:00:00.000Z';
     strongOld.strength = 5.0;
@@ -166,13 +154,11 @@ describe('api.assemble', () => {
 
     [strongOld, weakOld, tail].forEach((e) => writeEntry(root, e));
 
-    // Tight budget that forces 1 eviction.
     const totalChars = strongOld.content.length + weakOld.content.length + tail.content.length;
     const budget = Math.ceil(totalChars / 4) - 5;
 
     const r = await assemble(ctxFor(root), 'sess-b', { freshTailCount: 1, budget });
     expect(r.evicted).toBeGreaterThanOrEqual(1);
-    // The evicted one is the weak older row, NOT strong old or tail.
     const ids = r.items.map((it) => it.id);
     expect(ids).toContain(strongOld.id);
     expect(ids).toContain(tail.id);
@@ -198,8 +184,6 @@ describe('api.assemble', () => {
     const ids = r.items.map((it) => it.id);
     expect(ids).toContain(pub.id);
     expect(ids).not.toContain(priv.id);
-    // v1.6.1 senior-review P1 #2: totalRaw is post-scope. Only the public
-    // row survives the default-deny filter, so totalRaw=1 (not 2).
     expect(r.totalRaw).toBe(1);
   });
 

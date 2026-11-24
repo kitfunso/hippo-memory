@@ -1,5 +1,3 @@
-// What the dashboard reads off one memory at an instant. The store's dashboard SQL calls these same
-// functions, so a count, a sort and a listed row never judge one memory two ways.
 import {
   calculateStrength,
   confidenceFacets,
@@ -12,7 +10,6 @@ import { Layer, type MemoryEntry } from './entry.js';
 import { AT_RISK_BELOW, STRONG_FROM } from './strength-bands.js';
 import { DAY_MS } from '../util/time.js';
 
-/** Band indices, in the order the dashboard's wire names them: pinned, strong, fading, at risk. */
 const BAND_PINNED = 0;
 const BAND_STRONG = 1;
 const BAND_FADING = 2;
@@ -60,8 +57,6 @@ export function daysBetween(thenIso: string, nowMs: number): number {
   return Number.isFinite(days) ? Math.max(0, days) : 0;
 }
 
-/** A pin wins, then 30-day strength under the at-risk cut, then strength now at or over the
- * strong cut. */
 function bandOf(pinned: boolean, strength: number, strength30d: number): number {
   if (pinned) return BAND_PINNED;
   if (strength30d < AT_RISK_BELOW) return BAND_AT_RISK;

@@ -1,4 +1,3 @@
-// errorFields keeps a short preview of a thrown non-Error value; a server process writes its request trail by default.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorFields } from '../../src/base/util/log.js';
 

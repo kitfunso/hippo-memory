@@ -1,12 +1,3 @@
-/**
- * E2 decision first-class object — HTTP route parity test.
- * Docs: docs/plans/2026-05-28-e2-decision-object.md
- *
- * Covers what only decisions have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/decisions lists + status filter
- * 2. a supersede weakens the replaced decision's memory in the same save, or fails whole
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

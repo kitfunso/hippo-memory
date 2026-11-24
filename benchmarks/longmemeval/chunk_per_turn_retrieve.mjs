@@ -1,23 +1,4 @@
 #!/usr/bin/env node
-/**
- * F13: turn-level retrieval with max-pool aggregation to session.
- *
- * Reads:
- *   - data/longmemeval_oracle.json (500 questions)
- *   - benchmarks/longmemeval/data/turn_index_e5.json (turn vectors from chunk_per_turn_embed.mjs)
- *
- * For each question:
- *   1. Embed the query with `query: <text>` via multilingual-e5-large.
- *   2. Compute cosine similarity against every turn vector (vectors are L2-normalized,
- *      so cosine = dot product).
- *   3. Group by `session_id`, take the max score per session.
- *   4. Output the top-K sessions, each tagged with its session_id so the existing
- *      `evaluate_retrieval.py` matches `answer_session_ids` against the `tags` field.
- *
- * Writes a JSONL compatible with benchmarks/longmemeval/evaluate_retrieval.py.
- *
- * Set HIPPO_MODEL_CACHE before running.
- */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, createReadStream } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -38,9 +19,6 @@ env.allowRemoteModels = false;
 
 console.log(`[F13r] loading turn index from ${INDEX}...`);
 
-// Auto-detect JSONL vs legacy single-blob JSON. JSONL is the v1.9.3+ format
-// (one turn per line; first line is metadata). Legacy is one big JSON object.
-// If user passed the .json (legacy) path but a .jsonl sibling exists, prefer it.
 let effectiveIndex = INDEX;
 if (!INDEX.endsWith('.jsonl') && existsSync(INDEX + '.jsonl')) {
   effectiveIndex = INDEX + '.jsonl';
@@ -51,7 +29,7 @@ let MODEL = null;
 let stagedSessionIds = [];
 let stagedTurnIdxs = [];
 let stagedContents = [];
-let stagedVecs = []; // each entry is a Float32Array view of one row
+let stagedVecs = [];
 
 if (effectiveIndex.endsWith('.jsonl')) {
   const rl = createInterface({ input: createReadStream(effectiveIndex), crlfDelay: Infinity });
@@ -72,8 +50,6 @@ if (effectiveIndex.endsWith('.jsonl')) {
     stagedContents.push(t.content);
     stagedVecs.push(new Float32Array(t.vec));
   }
-  // MODEL may not have been set if metadata line is missing (legacy partial migration).
-  // Recover from the embed-script convention: BGE-base or e5-large default.
   if (!MODEL) {
     console.error('[F13r] no _meta line found; refusing to guess model');
     process.exit(2);
@@ -87,7 +63,7 @@ if (effectiveIndex.endsWith('.jsonl')) {
     const off = i * D;
     for (let j = 0; j < D; j++) mat[off + j] = v[j];
   }
-  stagedVecs = null; // release
+  stagedVecs = null;
   var sessionIds = stagedSessionIds;
   var turnIdxs = stagedTurnIdxs;
   var contents = stagedContents;
@@ -137,7 +113,6 @@ for (let qi = 0; qi < data.length; qi++) {
   const qRes = await pipe(queryInput, { pooling: POOLING, normalize: true });
   const qv = new Float32Array(qRes.data);
 
-  // Dot products against all turns. Since both sides L2-normed, dot == cosine.
   const turnScores = new Float32Array(N);
   for (let i = 0; i < N; i++) {
     let s = 0;
@@ -146,9 +121,8 @@ for (let qi = 0; qi < data.length; qi++) {
     turnScores[i] = s;
   }
 
-  // Aggregate to session: max score per session, remember which turn produced it.
-  const sessMaxScore = new Map();   // session_id -> max score
-  const sessBestTurn = new Map();   // session_id -> turn array index (for content)
+  const sessMaxScore = new Map();
+  const sessBestTurn = new Map();
   for (let i = 0; i < N; i++) {
     const sid = sessionIds[i];
     const s = turnScores[i];
@@ -159,10 +133,8 @@ for (let qi = 0; qi < data.length; qi++) {
     }
   }
 
-  // Sort sessions descending, take top-K.
   const sortedSids = [...sessMaxScore.entries()].sort((a, b) => b[1] - a[1]).slice(0, TOP_K);
 
-  // Build retrieved_memories: one entry per session, tagged with session_id.
   const mems = sortedSids.map(([sid, score]) => {
     const turnI = sessBestTurn.get(sid);
     return {

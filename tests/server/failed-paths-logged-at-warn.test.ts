@@ -1,4 +1,3 @@
-// Failed auth, a busy MCP store and a degraded judge reach stderr at the default (warn) threshold.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IncomingMessage } from 'node:http';
 import { Socket } from 'node:net';

@@ -1,5 +1,3 @@
-// The `hippo eval` verb; main() loads it lazily from the command table.
-
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { MemoryEntry } from '../../base/memory/entry.js';
@@ -54,8 +52,6 @@ const MAX_MISSED_SHOWN = 4;
 const QUERY_PREVIEW_CHARS = 60;
 const MAX_DELTAS_SHOWN = 5;
 
-/** Runs `hippo eval`: --bootstrap writes a corpus, --suite runs the built-in feature eval, else
- * it scores a corpus file. */
 async function evaluateCorpus(
   hippoRoot: string,
   tenantId: string,
@@ -66,7 +62,6 @@ async function evaluateCorpus(
   const minMrr = numberFlag(flags, 'min-mrr') ?? null;
   const comparePath = stringFlagOrExit(flags, 'compare') || null;
 
-  // Suite mode doesn't need an initialized store
   if (!boolFlag(flags, 'suite')) requireInit(hippoRoot);
 
   const entries = boolFlag(flags, 'suite')
@@ -136,7 +131,6 @@ async function runCorpusEval(
   });
 }
 
-/** Bootstrap mode: emit a synthetic corpus built from the store's own memories. */
 function writeBootstrapCorpus(entries: MemoryEntry[], flags: CliFlags): void {
   const outPath = stringFlagOrExit(flags, 'out') || null;
   const max = numberFlag(flags, 'max-cases') ?? DEFAULT_BOOTSTRAP_CASES;
@@ -189,7 +183,6 @@ export function parseEvalBaseline(value: JsonValue): EvalBaseline | null {
   };
 }
 
-/** Suite mode: run the built-in feature eval (no corpus file needed, no init needed). */
 async function runEvalSuite(
   hippoRoot: string,
   flags: CliFlags,
@@ -233,8 +226,6 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   try {
     parsed = parseJson(fs.readFileSync(baselinePath, 'utf8'));
   } catch (err) {
-    // No baseline file is a first run and says nothing; a file that is there and cannot be used
-    // warns.
     if (errorCode(err) !== 'ENOENT') {
       printError(`Warning: eval baseline ${baselinePath} is unreadable; running without it.`);
     }
@@ -248,8 +239,6 @@ function loadEvalBaseline(baselinePath: string): EvalBaseline | undefined {
   );
 }
 
-/** Loads the corpus file, exiting with the usage line or the read error when there is none to
- * score. */
 function readCorpus(corpusPath: string | null): EvalCase[] {
   if (!corpusPath) {
     fail(
@@ -301,7 +290,6 @@ function readBaseline(text: string): EvalSummary {
       throw new Error(`cases[${i}] is missing "case.id", "case.query" or "mrr"`);
     }
   });
-  // Parsed again as the full summary: the checks above cover every field compareSummaries reads.
   const summary: EvalSummary = JSON.parse(text);
   return summary;
 }
@@ -364,8 +352,6 @@ function printEvalCompare(summary: EvalSummary, comparePath: string, asJson: boo
   const cmp = compareSummaries(readCompareBaseline(comparePath), summary);
 
   if (asJson) {
-    // The main JSON output already emitted; append comparison to stderr so both can be captured
-    // independently.
     printError(JSON.stringify({ compare: cmp }, null, 2));
     return;
   }

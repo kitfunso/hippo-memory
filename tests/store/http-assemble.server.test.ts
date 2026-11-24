@@ -1,7 +1,3 @@
-/**
- * HTTP `GET /v1/sessions/:id/assemble` — surface check for Phase 2.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -83,7 +79,6 @@ describe('GET /v1/sessions/:id/assemble', () => {
   });
 
   it('summarizeOlder=0 disables substitution', async () => {
-    // 3 raws under one parent + parent summary. Without summarize: 3 items.
     const summary = createMemory('topic alpha rollup http', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Semantic,

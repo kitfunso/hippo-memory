@@ -1,9 +1,3 @@
-/**
- * Token ledger (ROADMAP TE0), cache-stable hook rendering (TE1) and
- * inject-only-on-change for the per-prompt hook (TE2).
- *
- * Real SQLite, the built CLI, a real HTTP server on port 0. No mocks.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -189,7 +183,6 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     writeEntry(hippoDir, createMemory(PIN, { pinned: true, layer: Layer.Episodic }));
   });
 
-  // In process unless `spawned`, with hippoOut's throw on a non-zero exit; the first case pins the hook in a real child.
   async function run(args: string[], stdin = '', spawned = false): Promise<string> {
     const env: NodeJS.ProcessEnv = { ...process.env, HIPPO_HOME: join(tmpDir, 'global') };
     delete env.HIPPO_SESSION_ID;
@@ -213,9 +206,7 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
     expect((await run(HOOK, payload('s1'))).trim()).toBe('');
     expect((await run(HOOK, payload('s1'))).trim()).toBe('');
-    // A different session gets its own copy.
     expect(await run(HOOK, payload('s2'))).toContain('NEVER force-push');
-    // Compaction drops earlier injections: the next prompt sends again.
     await run(['compact-resume'], JSON.stringify({ session_id: 's1', source: 'compact' }));
     expect(await run(HOOK, payload('s1'))).toContain('NEVER force-push');
     expect((await run(HOOK, payload('s1'))).trim()).toBe('');
@@ -224,7 +215,6 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     const hook = summary.surfaces.find((s: { surface: string }) => s.surface === 'hook');
     expect(hook.injected).toBe(3);
     expect(hook.skipped).toBe(3);
-    // Each skipped block holds the pin's text; its confidence label and date, which read the clock, make up the rest.
     expect(hook.tokensAvoided).toBeGreaterThanOrEqual(3 * Math.ceil(PIN.length / 4));
     expect(hook.tokensAvoided).toBe((hook.tokens / 3) * 3);
   });
@@ -265,7 +255,6 @@ describe('per-prompt hook: stable rendering and inject only on change', () => {
     const surfaces = summary.surfaces.map((s: { surface: string }) => s.surface);
     expect(surfaces).toContain('context');
     expect(surfaces).toContain('recall');
-    // Context and recall each print the pin's text inside formatting whose wording the renderer owns.
     expect(summary.totalTokens).toBeGreaterThanOrEqual(2 * Math.ceil(PIN.length / 4));
     expect(await run(['tokens'])).toContain('Memory text handed to agents');
   });
@@ -299,9 +288,7 @@ describe('ledger on the HTTP and MCP surfaces', () => {
       await handle.stop();
     }
     const got = surfaces();
-    // Recall books the bare text of its one result, 49 characters at four per token.
     expect(got.http_recall).toBe(13);
-    // Context prices the printed line around the same text, so it costs more; the label and date read the clock.
     expect(got.http_context).toBeGreaterThan(13);
   });
 
@@ -324,7 +311,6 @@ describe('ledger on the HTTP and MCP surfaces', () => {
         infra: testInfra(),
       }),
     );
-    // The tool's text holds the note itself inside headings whose wording the formatter owns.
     expect(surfaces().mcp_recall).toBeGreaterThanOrEqual(Math.ceil(NOTE.length / 4));
   });
 });

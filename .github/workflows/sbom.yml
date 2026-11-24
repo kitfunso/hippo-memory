@@ -1,9 +1,5 @@
 name: Release SBOM
 
-# Attaches a CycloneDX SBOM (scripts/sbom.mjs) to every GitHub release.
-# workflow_dispatch backfills a tag cut before this workflow existed (e.g.
-# v1.47.0): the first checkout stays on this workflow's own commit for the script.
-
 on:
   release:
     types: [published]

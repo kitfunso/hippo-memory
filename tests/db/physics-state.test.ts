@@ -21,10 +21,6 @@ import {
 } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 let tmpDir: string;
 
 beforeEach(() => {
@@ -103,10 +99,6 @@ function makeParticle(memoryId: string, dim: number = 3): PhysicsParticle {
   };
 }
 
-// ---------------------------------------------------------------------------
-// 1. BLOB serialization round-trip
-// ---------------------------------------------------------------------------
-
 describe('float32 BLOB serialization', () => {
   it('round-trips an empty array', () => {
     const buf = float32ToBuffer([]);
@@ -121,7 +113,6 @@ describe('float32 BLOB serialization', () => {
 
     expect(result).toHaveLength(3);
     for (let i = 0; i < input.length; i++) {
-      // float32 has ~7 decimal digits of precision
       expect(result[i]).toBeCloseTo(input[i]!, 5);
     }
   });
@@ -143,15 +134,10 @@ describe('float32 BLOB serialization', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Physics table creation
-// ---------------------------------------------------------------------------
-
 describe('physics table creation', () => {
   it('creates memory_physics table after openHippoDb', () => {
     const db = openHippoDb(tmpDir);
     try {
-      // Should not throw
       // SAFETY: literal COUNT(*) query against the known memory_physics
       // schema always returns a single { cnt } row.
       const row = db.prepare(`SELECT COUNT(*) AS cnt FROM memory_physics`).get() as { cnt: number };
@@ -176,10 +162,6 @@ describe('physics table creation', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. Save and load round-trip
-// ---------------------------------------------------------------------------
 
 describe('save and load round-trip', () => {
   it('returns identical data within float32 precision', () => {
@@ -249,10 +231,6 @@ describe('save and load round-trip', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Load specific IDs
-// ---------------------------------------------------------------------------
-
 describe('loadPhysicsState with memoryIds filter', () => {
   it('returns only the requested particles', () => {
     const db = openHippoDb(tmpDir);
@@ -290,7 +268,6 @@ describe('loadPhysicsState with memoryIds filter', () => {
       insertMemoryRow(db, 'mem_has');
       savePhysicsState(db, [makeParticle('mem_has')]);
 
-      // physics-search passes an empty pool when every candidate was superseded; that pool names no particle.
       const loaded = loadPhysicsState(db, []);
       expect(loaded.size).toBe(0);
     } finally {
@@ -310,10 +287,6 @@ describe('loadPhysicsState with memoryIds filter', () => {
     }
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Load all
-// ---------------------------------------------------------------------------
 
 describe('loadAllPhysicsState', () => {
   it('returns all saved particles', () => {
@@ -344,10 +317,6 @@ describe('loadAllPhysicsState', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. Upsert (save same memoryId twice)
-// ---------------------------------------------------------------------------
-
 describe('upsert behavior', () => {
   it('updates rather than duplicates when saving same memoryId twice', () => {
     const db = openHippoDb(tmpDir);
@@ -365,7 +334,6 @@ describe('upsert behavior', () => {
       };
       savePhysicsState(db, [particle1]);
 
-      // Save again with different values
       const particle2: PhysicsParticle = {
         memoryId: 'mem_upsert',
         position: [0, 1, 0],
@@ -392,10 +360,6 @@ describe('upsert behavior', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 7. CASCADE delete
-// ---------------------------------------------------------------------------
-
 describe('CASCADE delete', () => {
   it('deletes physics state when parent memory is deleted', () => {
     const db = openHippoDb(tmpDir);
@@ -403,13 +367,10 @@ describe('CASCADE delete', () => {
       insertMemoryRow(db, 'mem_cascade');
       savePhysicsState(db, [makeParticle('mem_cascade')]);
 
-      // Verify it exists
       expect(loadAllPhysicsState(db).size).toBe(1);
 
-      // Delete the parent memory
       db.prepare('DELETE FROM memories WHERE id = ?').run('mem_cascade');
 
-      // Physics row should be gone due to ON DELETE CASCADE
       expect(loadAllPhysicsState(db).size).toBe(0);
     } finally {
       closeHippoDb(db);
@@ -437,10 +398,6 @@ describe('CASCADE delete', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 8. initializeParticle
-// ---------------------------------------------------------------------------
-
 describe('initializeParticle', () => {
   it('creates correct initial state from MemoryEntry + embedding', () => {
     const entry = makeMemoryEntry('mem_init', {
@@ -452,22 +409,16 @@ describe('initializeParticle', () => {
     const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
 
     expect(particle.memoryId).toBe('mem_init');
-    // Position should be a copy of the embedding
     expect(particle.position).toEqual([0.5, -0.5, 0.7071]);
-    // Modifying original should not affect particle
     embedding[0] = 999;
     expect(particle.position[0]).toBe(0.5);
 
-    // Velocity should be zero vector of same dimension
     expect(particle.velocity).toEqual([0, 0, 0]);
 
-    // Mass derived from strength and retrieval_count: a row read at its own creation has strength 1, times 1 + 0.1 * log2(3 + 1).
     expect(particle.mass).toBeCloseTo(1.2, 10);
 
-    // Charge from emotional_valence 'negative' => -0.5
     expect(particle.charge).toBeCloseTo(-0.5, 10);
 
-    // Temperature from age (0 days since created === NOW) => 1/(0*1+1) = 1.0
     expect(particle.temperature).toBeCloseTo(1.0, 5);
 
     expect(particle.lastSimulation).toBe(NOW.toISOString());
@@ -493,14 +444,9 @@ describe('initializeParticle', () => {
     const embedding = [1, 0, 0];
 
     const particle = initializeParticle(entry, embedding, PRODUCTION_STRENGTH, NOW);
-    // temperature = 1 / (ageDays * 1.0 + 1) = 1 / (3 + 1) = 0.25
     expect(particle.temperature).toBeCloseTo(0.25, 5);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 9. resetAllPhysicsState
-// ---------------------------------------------------------------------------
 
 describe('resetAllPhysicsState', () => {
   it('drops existing state and re-initializes from embeddings', () => {
@@ -509,13 +455,11 @@ describe('resetAllPhysicsState', () => {
       insertMemoryRow(db, 'mem_r1');
       insertMemoryRow(db, 'mem_r2');
 
-      // Save some initial state
       const oldParticle = makeParticle('mem_r1');
       oldParticle.mass = 99.9;
       savePhysicsState(db, [oldParticle]);
       expect(loadAllPhysicsState(db).size).toBe(1);
 
-      // Reset
       const entries = [makeMemoryEntry('mem_r1'), makeMemoryEntry('mem_r2')];
       const embeddingIndex = {
         mem_r1: [0.5, 0.5, 0.5],
@@ -528,7 +472,6 @@ describe('resetAllPhysicsState', () => {
       const loaded = loadAllPhysicsState(db);
       expect(loaded.size).toBe(2);
 
-      // Old mass (99.9) should be gone, replaced by freshly computed mass
       const p1 = loaded.get('mem_r1')!;
       expect(p1.mass).not.toBeCloseTo(99.9, 1);
       expect(p1.position[0]).toBeCloseTo(0.5, 5);
@@ -589,10 +532,6 @@ describe('resetAllPhysicsState', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 10. refreshParticleProperties
-// ---------------------------------------------------------------------------
-
 describe('refreshParticleProperties', () => {
   it('updates mass, charge, and temperature from current memory attributes', () => {
     const particle = makeParticle('mem_refresh');
@@ -610,15 +549,11 @@ describe('refreshParticleProperties', () => {
 
     refreshParticleProperties([particle], entries, NOW, PRODUCTION_STRENGTH);
 
-    // Mass should be recomputed (not 999)
     expect(particle.mass).not.toBe(999);
-    // Strength 1 at age zero, with the retrieval gain for five retrievals.
     expect(particle.mass).toBeCloseTo(1 + 0.1 * Math.log2(6), 10);
 
-    // Charge for 'negative' => -0.5
     expect(particle.charge).toBeCloseTo(-0.5, 10);
 
-    // Temperature for age=0 => 1.0
     expect(particle.temperature).toBeCloseTo(1.0, 5);
   });
 
@@ -629,11 +564,9 @@ describe('refreshParticleProperties', () => {
     particle.temperature = 0.99;
 
     const entries = new Map<string, MemoryEntry>();
-    // No entry for 'mem_orphan'
 
     refreshParticleProperties([particle], entries, NOW, PRODUCTION_STRENGTH);
 
-    // Should remain unchanged
     expect(particle.mass).toBe(42);
     expect(particle.charge).toBe(7);
     expect(particle.temperature).toBe(0.99);
@@ -655,11 +588,8 @@ describe('refreshParticleProperties', () => {
 
     refreshParticleProperties([matched, unmatched], entries, NOW, PRODUCTION_STRENGTH);
 
-    // Matched should be updated
     expect(matched.mass).not.toBe(999);
-    expect(matched.charge).toBeCloseTo(0.3, 10); // positive => 0.3
-
-    // Unmatched should be unchanged
+    expect(matched.charge).toBeCloseTo(0.3, 10);
     expect(unmatched.mass).toBe(42);
   });
 
@@ -672,7 +602,6 @@ describe('refreshParticleProperties', () => {
 
     refreshParticleProperties(particles, entries, NOW, PRODUCTION_STRENGTH);
 
-    // Same reference, mutated
     expect(particles[0]).toBe(originalRef);
     expect(particles[0]!.charge).toBeCloseTo(-1.0, 10);
   });

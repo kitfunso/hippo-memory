@@ -1,5 +1,3 @@
-// A deferred write scope reads before it writes, and SQLite skips the busy handler for that upgrade,
-// so a second hippo process failed with `database is locked` instead of waiting for the write lock.
 import { describe, expect, it } from 'vitest';
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -12,7 +10,6 @@ import { makeRoot, makeStore } from '../_helpers/make-root.js';
 
 const WORKERS = 2;
 const ROWS = 60;
-// A zero-wait BEGIN IMMEDIATE on a second handle says whether another writer holds the lock as this one comes to write.
 const WORKER = `
 const [, , memoryUrl, writesUrl, root, dbPath, tag, rows] = process.argv;
 const { DatabaseSync } = await import('node:sqlite');
@@ -30,7 +27,6 @@ for (let i = 0; i < Number(rows); i++) {
 `;
 
 interface Worker {
-  /** The worker's first line: whether it found the write lock held before its first write. */
   readonly found: Promise<string>;
   readonly finished: Promise<{ readonly code: number | null; readonly stderr: string }>;
 }
@@ -85,7 +81,6 @@ describe('two hippo processes writing to one store at once', () => {
     root = makeStore('writers-wait').root;
     writeFileSync(join(root, 'worker.mjs'), WORKER, 'utf8');
 
-    // This handle holds the write lock until every worker has met it, so all of them start writing behind one holder.
     const holder = openHippoDb(root);
     let workers: Worker[];
     try {

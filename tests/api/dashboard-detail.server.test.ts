@@ -1,4 +1,3 @@
-// The api functions the dashboard's reader thread runs: a memory's detail, and the detail after a dashboard write.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, memoryPin } from '../../src/api/index.js';
 import { dashboardDetailAfterWrite, dashboardMemoryDetail } from '../../src/api/dashboard/detail.js';

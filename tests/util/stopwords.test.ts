@@ -1,4 +1,3 @@
-/** Each stopword set keeps the members it had as a literal in its own module before they moved here. */
 import { describe, expect, it } from 'vitest';
 import {
   CONFLICT_STOPWORDS,

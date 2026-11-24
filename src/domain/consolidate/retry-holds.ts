@@ -1,4 +1,3 @@
-// When sleep stops sending work to the model that keeps failing; pure, the store keeps only the numbers.
 import { DAY_MS } from '../../base/util/time.js';
 import { blockHash } from '../../base/util/token-text.js';
 

@@ -12,7 +12,6 @@ afterEach(() => {
 });
 
 describe('sequential-learning hippo adapter init', () => {
-  // An operator's Copilot and VS Code folders in the shell must stay untouched by the adapter's fake-home init.
   it('writes nothing into the operator Copilot or VS Code folders', async () => {
     operator = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-sl-operator-'));
     const copilot = path.join(operator, 'copilot');

@@ -1,4 +1,3 @@
-// The seams a server uses to save another machine's compaction items and failures: the post-compact and capture-error calls.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -94,7 +93,6 @@ describe('saveCompactionItemsForCaller', () => {
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     expect(await postCompact(owned('alice'))).toEqual({ written: 2 });
     expect(rowCounts()).toMatchObject({ compactions: 1, memories: 2 });
-    // A new request id is a new compaction; its items are already held.
     expect(await postCompact(owned('alice'), 'cmp-2')).toEqual({ written: 0 });
     expect(rowCounts()).toMatchObject({ compactions: 2, memories: 2 });
   });
@@ -241,7 +239,6 @@ describe('captureFailureForCaller', () => {
   });
 
   it('cuts the scrubbed text on a code point, never inside a surrogate pair', async () => {
-    // 200 sent; the mask adds one, so the emoji's halves land at 199 and 200 of the scrubbed text.
     const filler = 'Retry the deploy. '.repeat(10).slice(0, 169);
     const text = `Bash: mail to a@b.co failed. ${filler}\u{1F600}`;
     expect(text).toHaveLength(200);

@@ -1,5 +1,3 @@
-"""Rescore LoCoMo result JSONs with deterministic gold evidence recall@K."""
-
 from __future__ import annotations
 
 import argparse

@@ -1,5 +1,3 @@
-/** The feature cases and the corpus assembled from the fixtures. */
-
 import { DAG_LEVEL, EXTRACTED_TAG, Layer, type MemoryEntry } from '../../base/memory/entry.js';
 import {
   authMeetingEntries,
@@ -59,7 +57,6 @@ function addDirectRecall(entries: MemoryEntry[], cases: FeatureTestCase[], now: 
   cases.push(...directRecallCases());
 }
 
-/** Extraction preference: extracted facts should rank above raw source. */
 function extractionPreferenceEntries(now: Date): MemoryEntry[] {
   return [
     ...infrastructureMeetingEntries(now),
@@ -103,7 +100,6 @@ function addExtractionPreference(
   cases.push(...extractionPreferenceCases());
 }
 
-/** Dag drill-down: summary nodes should surface children. */
 function dagChildEntries(now: Date): MemoryEntry[] {
   return [
     mem(
@@ -189,7 +185,6 @@ function addDagDrilldown(entries: MemoryEntry[], cases: FeatureTestCase[], now: 
   cases.push(...dagCases());
 }
 
-/** Temporal: recency/oldest cues should affect ranking. */
 function temporalEntries(now: Date): MemoryEntry[] {
   return [
     mem(now, 'tmp-1', 'The team decided to use TypeScript for the new service', {
@@ -249,7 +244,6 @@ function addTemporal(entries: MemoryEntry[], cases: FeatureTestCase[], now: Date
   cases.push(...temporalCases());
 }
 
-// Noise resistance: relevant memories must be found despite these.
 const NOISE_TOPICS = [
   'breakfast meeting catering ordered sandwiches',
   'office temperature thermostat adjusted',

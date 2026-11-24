@@ -1,5 +1,3 @@
-/** Z0 analyzer on generated records with known effects; numbers in test names follow the plan's test list.
- * The records are synthetic: they test the contract, filters and arithmetic, never hippo. CLI tests: token-eval-z0-analyze-cli.process.test.ts. */
 import { describe, it, expect } from 'vitest';
 import { addUsage, holmAdjust, priceUsage, verdict } from '../../dist/domain/eval/eval-stats.js';
 import { RN_ARMS, parseZ0Records, parsePlan, validateCorpus, validateRecord } from '../../scripts/token-eval/z0-records.mjs';
@@ -14,12 +12,10 @@ const fresh = (): Generated => structuredClone(BASE);
 const parse = (recs: readonly Z0Record[]) => parseZ0Records(jsonl(recs), 'runs.jsonl').records;
 const runOf = <R extends { sequence: string; seed: number }>(rs: readonly R[], sequence: string, seed: number): R[] =>
   rs.filter((r) => r.sequence === sequence && r.seed === seed);
-// A small resample count: the cases assert verdicts and arithmetic, which the seed fixes, and never the precision of the bootstrap.
 const STAT = { iterations: 200, seed: 1 };
 const scoredOf = (g: Generated) => filterRecords(parse(g.records), g.plan).scored;
 const analyze = (g: Generated, extra = {}) =>
   analyzeZ0(parse(g.records), { planCells: g.plan, prices: PRICES, grading: GRADING, unblind: true, refuse: () => null, ...STAT, ...extra });
-/** A report block the module types as a union with 'not run' or null; every block the tests read is present, so a primitive here is a test bug. */
 type Real<T> = [Extract<T, object>] extends [never] ? T : Merged<Extract<T, object>>;
 type KeysOf<U> = U extends unknown ? keyof U : never;
 type ValueAt<U, K extends PropertyKey> = U extends unknown ? (K extends keyof U ? U[K] : never) : never;
@@ -30,14 +26,12 @@ const real = <T>(x: T): Real<T> => {
   return x as Real<T>;
 };
 const blind = (g: Generated) => analyze(g, { unblind: false });
-/** The hypothesis block of a run whose gates pass. An unblinded analyzeZ0 also builds the reported block, most of its cost, which these cases never read. */
 const hypOf = (a: ReturnType<typeof blind>) => {
   expect(a.status).toBe('valid');
   return real(computeHypotheses(a.filtered, PRICES, STAT));
 };
 const hyp = (opts: GenOptions) => hypOf(blind(generate(opts)));
 let h1Win: ReturnType<typeof hyp> | undefined;
-/** The run in which A2 wins H1; two cases read it, so it is built once. */
 const winHyp = () => (h1Win ??= hyp({ knobs: { A2: { fail: 0.1 } } }));
 const gatesOf = (g: Generated) => real(blind(g).gates);
 const te = (estimate: number, p: number, low: number, high: number, nullValue = 0) => ({ estimate, low, high, p, iterations: 2000, dropped: 0, nullValue });
@@ -92,7 +86,6 @@ describe('Z0 records contract', () => {
 
   it('Amendment 2 item 5: wave 1 and wave 2 records load against two plan files and analyze as one corpus', () => {
     const wave1 = fresh();
-    // The seed rule gave A1, A2 and A5 five seeds: wave 2 repeats their seed-3 sessions as seeds 4 and 5.
     const late = [4, 5].flatMap((seed) => wave1.records.filter((r) => ['A1', 'A2', 'A5'].includes(r.arm) && r.seed === 3).map((r) => ({ ...structuredClone(r), seed })));
     const both = { records: [...wave1.records, ...late], plan: [...wave1.plan, ...planOf(late)] };
     const plans = [wave1.plan, planOf(late)].flatMap((cells) => parsePlan(JSON.stringify(cells), 'plan.json'));
@@ -263,7 +256,6 @@ describe('Z0 filters', () => {
     expect(runOf<Z0Record>(f.scored, 'rn-repo1', 1).filter((r: Z0Record) => r.position === 4 || r.position === 11)).toEqual([]);
     const h1 = repeatMistake(f.scored, 'A2', 'A1', 'violation', STAT, inSets('R'));
     expect([h1.units, h1.droppedUnits]).toEqual([71, []]);
-    // Family 3 is taught at 5 and re-taught at 14; its applies sit at 9, 12 and 17.
     const reteach = fresh();
     crash(reteach.records[at(reteach.records, 'A2', 'rn-repo1', 1, 5)]!);
     const r = filterRecords(parse(reteach.records), reteach.plan);
@@ -290,12 +282,10 @@ describe('Z0 hypotheses', () => {
   });
 
   it('5: H1 band cases on fixed unit differences, CI asserted before the verdict', () => {
-    // Consecutive values fill one repository's family-by-seed table (2 seeds); the t test reads the families and seeds inside it.
     const read = (vals: number[], repos: number) => {
       const per = vals.length / repos;
       const units = vals.map((value, i) => ({ repo: `r${Math.floor(i / per)}`, family: `r${Math.floor(i / per)}f${Math.floor((i % per) / 2)}`, seed: 1 + (i % 2), value }));
       const e = repeatT(units, STAT);
-      // The Amendment 1 view keeps the repos - 1 df; the decision test carries the Satterthwaite df.
       expect([e.across!.t.df, e.across!.perRepository.length, e.bootstrap.iterations]).toEqual([repos - 1, repos, STAT.iterations]);
       expect(e.df).toBeGreaterThan(0);
       return { e, v: verdict(e, e.p, SPECS.H1) };
@@ -330,16 +320,12 @@ describe('Z0 hypotheses', () => {
     const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
     expect(h.H3.estimate).toBeCloseTo(sum(t!) / sum(c!), 12);
     expect(Math.abs(sum(t!.map((x, i) => x / c![i]!)) / t!.length - h.H3.estimate)).toBeGreaterThan(0.05);
-    // Amendment 2: H3 sits outside the Holm family, so it gets a fixed-repository t interval (family is the unit) and no verdict.
     expect([Object.keys(h.verdicts), h.H3.nullValue]).toEqual([['H1', 'H2'], 1]);
-    // Every seed repeats the cost sequence, so only the family term is left: df is the pooled family df, 6 repositories x 7.
     expect(h.H3.df).toBeCloseTo(42, 9);
-    // Families hold different mixes of heavy tasks, so the spread is no longer 0 as it was between repositories.
     expect(h.H3.se).toBeGreaterThan(0);
     expect([h.H3.low < h.H3.estimate, h.H3.estimate < h.H3.high, h.H3.p < 0.001]).toEqual([true, true, true]);
     expect(h.H3.bootstrap.estimate).toBeCloseTo(h.H3.estimate, 12);
     expect(h.H3.bootstrap.high - h.H3.bootstrap.low).toBeGreaterThan(0.01);
-    // The stratified twin resamples families inside each repository, so it should land near the t interval.
     expect([h.H3.bootstrap.low, h.H3.bootstrap.high]).toEqual([expect.closeTo(h.H3.low, 1), expect.closeTo(h.H3.high, 1)]);
     expect([h.H3.firstSession.estimate, h.H3.extra.estimate].every(Number.isFinite)).toBe(true);
     expect([h.H3.firstSession.df, h.H3.extra.df].every((d) => d !== undefined && d > 0)).toBe(true);
@@ -350,15 +336,12 @@ describe('Z0 hypotheses', () => {
     expect([cost.H4.gate.costOk, cost.H4.gate.pass, cost.order[0]]).toEqual([false, false, 'H4']);
     const resolve = hyp({ knobs: { A1: { resolve: 1 }, A2: { resolve: 0.9 } } });
     expect([resolve.H4.gate.resolveOk, resolve.H4.gate.pass]).toEqual([false, false]);
-    // Reading 20: H1 or H2 losses lead, then a failed H4, then the rest.
     const both = hyp({ knobs: { A1: { resolve: 1 }, A2: { resolve: 1, fail: 0.9, cost: (s) => (s.set === 'N' ? 1.2 : 0.96) } } });
     const losses = ['H1', 'H2'].filter((h) => both.verdicts[h].final.verdict === 'loss');
     expect([both.H4.gate.pass, losses[0], both.order.indexOf('H4')]).toEqual([false, 'H1', losses.length]);
   });
 
   it('7b: harmT passes the gate on a small clean set N: cost ratio 1 and equal resolves', () => {
-    // 4 repositories x 3 tasks x 2 seeds. The treatment arm costs +0.1, -0.1 and +0 against the control on the three tasks,
-    // so the pooled ratio is 1 with a little spread across families; both arms resolve the same cells.
     const units = ['a', 'b', 'c', 'd'].flatMap((repo) => [0, 1, 2].flatMap((task) => [1, 2].map((seed) => {
       const base = 2 + 0.5 * seed;
       const resolved = (task + seed) % 3 === 0 ? 0 : 1;
@@ -390,14 +373,11 @@ describe('Z0 hypotheses', () => {
   it('8: Holm runs once per coding over H1 and H2, then the codings combine', () => {
     const rm = (p: number) => te(-0.3, p, -0.4, -0.2);
     const v = holmVerdicts({ violation: { H1: rm(0.001), H2: rm(0.03) }, excluded: { H1: rm(0.03), H2: rm(0.001) } });
-    // Per coding: Holm([.001, .03]) gives the larger p max(.002, .03) = .03, a win under both codings.
     expect([v.H2.violation.adjustedP, v.H1.excluded.adjustedP]).toEqual([0.03, 0.03]);
     expect([Object.keys(v), v.H1.final.verdict, v.H2.final.verdict]).toEqual([['H1', 'H2'], 'win', 'win']);
-    // Four-way Holm over (H1v, H1e, H2v, H2e) gives .06; so does Holm on the max-over-codings ps (.03, .03).
     expect(holmAdjust([0.001, 0.03, 0.03, 0.001])[1]).toBeCloseTo(0.06, 12);
     expect(holmAdjust([0.03, 0.03])[1]).toBeCloseTo(0.06, 12);
     expect(verdict(rm(0.03), 0.06, SPECS.H1).verdict).toBe('inconclusive');
-    // A family member not run enters as NaN, so the family stays at 2.
     const alone = holmVerdicts({ violation: { H1: rm(0.02), H2: null }, excluded: { H1: rm(0.02), H2: null } });
     expect([alone.H1.violation.adjustedP, alone.H2.final.verdict]).toEqual([0.04, NOT_RUN]);
     const bad = (p: number) => te(0.2, p, 0.1, 0.3);
@@ -406,17 +386,13 @@ describe('Z0 hypotheses', () => {
   });
 
   it('18, 19: attribution words a winning H1 only, the behaviour sentence when A5 is not planned; H2 reads Codex apply records only', () => {
-    // A5 matches A2 exactly (both never fail): at fail 0.1 each, one realisation gave A2 minus A5 a narrow interval just under 0.
     const behaviour = hyp({ knobs: { A2: { fail: 0 }, A5: { fail: 0 } } });
     expect([behaviour.verdicts.H1.final.verdict, behaviour.attribution.sentence]).toEqual(['win', BEHAVIOUR_SENTENCE]);
     expect(winHyp().attribution.sentence).toBe(LESSONS_SENTENCE);
-    // A2 beats A5 here, yet a tie gets no sentence. A1 and A2 never fail, so the tie is exact: a t interval
-    // over 6 repositories of 0.5-rate draws is too wide to sit inside the band every time.
     const tie = hyp({ knobs: { A1: { fail: 0 }, A2: { fail: 0 }, A5: { fail: 0.9 } } });
     expect([tie.verdicts.H1.final.verdict, tie.attribution.sentence, tie.attribution.reason]).toEqual(['tie', null, 'not applicable, H1 is tie']);
     const loss = hyp({ knobs: { A2: { fail: 0.9 } } });
     expect([loss.verdicts.H1.final.verdict, loss.attribution.sentence, loss.attribution.reason]).toEqual(['loss', null, 'not applicable, H1 is loss']);
-    // Without A5, A2 cannot have beaten it, so a win takes the behaviour sentence (148, "Otherwise").
     const noA5 = ARMS.filter((x) => x !== 'A5');
     const win = analyze(generate({ arms: noA5, knobs: { A2: { fail: 0.1 } } }));
     const winH = real(win.hypotheses);
@@ -436,7 +412,6 @@ describe('Z0 hypotheses', () => {
     const a = analyze(g);
     const h = real(a.hypotheses);
     const rep = real(a.reported);
-    // Per (repo, seed), A2 fails one of two applies in families 0-2 and two of three in family 3: (3/2 + 2/3) / 4.
     expect(h.H1.violation.estimate).toBeCloseTo(13 / 24, 12);
     expect(rep.firstApply.H1.violation.estimate).toBe(0);
     expect([h.H1.violation.units, rep.maintainerOnly.H1.violation.units, rep.sensitivity.H1.violation.units]).toEqual([72, 54, 68]);
@@ -444,13 +419,11 @@ describe('Z0 hypotheses', () => {
     const rates = rep.ratesBySinceTeach['2-4'];
     expect(Object.keys(rates)).toEqual(['A0', 'A1', 'A2', 'A4', 'A5']);
     expect([rates.A0.seeds, rates.A1.seeds, rates.A4.seeds]).toEqual([[1, 2], [1, 2, 3], [1, 2]]);
-    // Same units on both sides and no na, so the rates' difference is the paired estimate.
     expect(rates.A2.violation.estimate - rates.A1.violation.estimate).toBeCloseTo(rep.bySinceTeach['2-4'].violation.estimate, 12);
     const slotOf = rotationSlots(g.records);
     const byPos = new Map<string, number[]>();
     for (const r of g.records) byPos.set(`${r.sequence}#${r.seed}@${r.position}`, [...(byPos.get(`${r.sequence}#${r.seed}@${r.position}`) ?? []), slotOf(r)]);
     for (const s of byPos.values()) expect([...s].sort((a, b) => a - b)).toEqual(s.map((_, i) => i + 1));
-    // The rotation walks each of the five RN arms through slots 1-5 and each of the four X arms through 1-4.
     const cells = (arms: string[], n: number) => arms.flatMap((arm) => Array.from({ length: n }, (_, i) => [arm, i + 1]));
     expect(rep.rotation.map((c) => [c.arm, c.slot])).toEqual([...cells(['A0', 'A1', 'A2', 'A4', 'A5'], 5), ...cells(['X1', 'X2', 'X3', 'X4'], 4)]);
   });
@@ -462,7 +435,6 @@ describe('Z0 gates', () => {
     canary.records[at(canary.records, 'A5', 'rn-repo3', 1, 5)]!.void = 'operator-canary';
     const r = analyze(canary);
     expect([real(r.gates).failed, r.hypotheses]).toEqual([['G1'], null]);
-    // A canary seen only in an apply's resume leaves the cell's void to session 1 but still fails the run (prereg 161).
     const resumeOnly = fresh();
     const hit = { reason: 'operator-canary', class: null, tool: null, path: null, file: 'x.jsonl' };
     Object.assign(resumeOnly.records[at(resumeOnly.records, 'A1', 'rn-repo2', 1, 5)]!, { resumeVoidHits: [hit] });

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Eval checkout for authors and runs (prereg 51, stage 2 plan D3): one commit of a source tree with its rule files removed and forbidden terms scrubbed.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,7 +7,6 @@ import { pathToFileURL } from 'node:url';
 import { retryObjectLock } from './exec.mjs';
 import { FORBID_SETS } from './z0-author.mjs';
 
-// Agent-instruction and contributor files at any depth; the rule sources go to the author as withheld-line copies instead.
 const RULE_NAMES = new Set(['AGENTS.md', 'CLAUDE.md', 'CLAUDE.local.md', 'GEMINI.md', 'CONTRIBUTING.md', '.cursorrules', '.windsurfrules', 'copilot-instructions.md']);
 const RULE_DIRS = new Set(['.cursor', '.claude']);
 const IDENTITY = { GIT_AUTHOR_NAME: 'eval', GIT_AUTHOR_EMAIL: 'eval@example.com', GIT_COMMITTER_NAME: 'eval', GIT_COMMITTER_EMAIL: 'eval@example.com', GIT_AUTHOR_DATE: '2026-01-01T00:00:00Z', GIT_COMMITTER_DATE: '2026-01-01T00:00:00Z' };
@@ -17,14 +15,10 @@ export const WITHHELD = '[line withheld]';
 
 const git = (args, opts = {}) => execFileSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.hooksPath=/dev/null', ...args], { encoding: 'utf8', maxBuffer: 1 << 28, ...opts }).trim();
 const isRulePath = (rel) => { const parts = rel.split('/'); return RULE_NAMES.has(parts.at(-1)) || parts.some((p) => RULE_DIRS.has(p)); };
-// Only rule sources (prereg 51) reach the author; settings and command files are removed but never copied.
 const isRuleSource = (rel) => RULE_NAMES.has(rel.split('/').at(-1)) || /(^|\/)\.(cursor|claude)\/rules\//.test(rel);
-// git's own test: a NUL byte in the first 8000 bytes marks a binary file.
 const isText = (buf) => !buf.subarray(0, 8000).includes(0);
 
-/** 1-based numbers of the rule lines to withhold: each forbidden line, and every line of a tool block whose start marker names a forbidden term. */
 function withheldLines(lines, forbid) {
-  // An installed tool's block (<!-- name:start --> to <!-- name:end -->) teaches its workflow on lines that never say its name.
   const hit = new Set();
   let end = null;
   lines.forEach((line, i) => {
@@ -36,15 +30,12 @@ function withheldLines(lines, forbid) {
   return hit;
 }
 
-/** Each earlier version of the copied rule sources, withheld the same way, so a reversal can come from a real rule change (D4). */
 function writeHistory(source, full, files, rulesOut, forbid) {
   const index = [];
   for (const rel of files) {
     const current = fs.readFileSync(path.join(rulesOut, rel), 'utf8');
-    // Dates and hashes only: commit subjects can name anything.
     for (const entry of git(['-C', source, 'log', '--diff-filter=d', '--format=%H %cs', full, '--', rel]).split('\n').filter(Boolean)) {
       const [commit, date] = entry.split(' ');
-      // Untrimmed, so the copy's lines match lesson-sources' verbatim check.
       const lines = execFileSync('git', ['-C', source, 'show', `${commit}:${rel}`], { encoding: 'utf8', maxBuffer: 1 << 28 }).split('\n');
       const hit = withheldLines(lines, forbid);
       const text = lines.map((l, i) => (hit.has(i + 1) ? WITHHELD : l)).join('\n');

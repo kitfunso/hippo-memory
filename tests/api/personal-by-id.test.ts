@@ -1,4 +1,3 @@
-// A by-id write on another person's personal row answers exactly as a missing id does (D6, F13), the owner still gets through, and no reject sweep reaches another person's row.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { reject, remember, supersede, type Actor, type RejectResult } from '../../src/api/index.js';
@@ -53,7 +52,6 @@ function mcpCtxFor(actor: Actor): McpContext {
   return ctx;
 }
 
-/** The HTTP status and message a refused call maps to, with `id` swapped for a placeholder so two ids compare. */
 async function masked(id: string, call: ByIdCall): Promise<{ status: number; message: string }> {
   try {
     await call();
@@ -64,7 +62,6 @@ async function masked(id: string, call: ByIdCall): Promise<{ status: number; mes
   throw new Error('expected the call to be refused');
 }
 
-/** Asserts `actor` gets for `id` exactly what it gets for an id that was never stored. */
 async function expectMissingIdAnswer(id: string, call: (target: string) => ReturnType<ByIdCall>): Promise<void> {
   const randomId = generateId('mem');
   const forRow = await masked(id, () => call(id));

@@ -1,5 +1,3 @@
-// The port-only job's own check: under HIPPO_TEST_STORE=port-only a suite's serve() writes and reads through the port
-// of a store that is not hippo.db's; on the default run it serves hippo.db's store. Both leave one row in hippo.db.
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

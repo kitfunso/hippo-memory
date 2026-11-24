@@ -1,4 +1,3 @@
-// No grant opens a personal scope: granting one is a 400, a grant row already stored opens nothing, and ungrant still clears it (F8); a padded scope is refused on grant and removable as stored.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';

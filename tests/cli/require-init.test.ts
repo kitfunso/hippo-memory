@@ -1,4 +1,3 @@
-// requireInit stops its verb by throwing CliExit, so a caller or a test can catch it and runCli still sets the exit code.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CliExit } from '../../src/surface/cli/exit.js';
 import { requireInit } from '../../src/surface/cli/shared.js';

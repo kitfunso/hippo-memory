@@ -1,4 +1,3 @@
-// Redaction, per-session fallback, oversized-record and uninitialized-store regressions of pre-compact and compact-resume.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -80,9 +79,6 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
     );
     expect(seed.status).toBe(0);
 
-    // Session B's tail has assistant text but NO plain user turn: derived
-    // task is empty. Pre-fix, the fallback borrowed A's task and saved it
-    // under sess-B, defeating compact-resume's session gate.
     const transcriptPath = path.join(dir, 'cx6.jsonl');
     fs.writeFileSync(
       transcriptPath,
@@ -177,8 +173,6 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
 
     const snapshot = loadActiveTaskSnapshot(getHippoRoot(dir), 'default');
     expect(snapshot).not.toBeNull();
-    // The summary source text exceeds the 2000-char cap by construction, so
-    // head-first truncation would keep OLDEST and drop the assistant tail.
     expect(snapshot!.summary).toContain('FINAL-ASSISTANT-MARKER');
     expect(snapshot!.summary).not.toContain('OLDEST-TURN-MARKER');
     expect(snapshot!.summary).toContain('[...earlier turns trimmed]');
@@ -199,8 +193,6 @@ describe('redaction, per-session fallback and oversized-record regressions', () 
 
   it('CX7: an oversized final JSONL record does not swallow the tail (window grows, earlier turns survive)', async () => {
     const transcriptPath = path.join(dir, 'cx7.jsonl');
-    // Final record ~600KB (> the 256KB window), shaped as a tool_result so
-    // it can never win task derivation itself.
     const giant = {
       type: 'user',
       message: { role: 'user', content: [{ type: 'tool_result', content: 'x'.repeat(600 * 1024) }] },
@@ -241,13 +233,6 @@ describe('uninitialized store gate: neither verb may create a store', () => {
   let env: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    // HOME/USERPROFILE deliberately point at a SEPARATE scratch dir from the
-    // project cwd here (unlike withScratchEnv, which collapses them). The
-    // producer's diagnostic log (~/.hippo/logs/pre-compact.log) legitimately
-    // creates a `.hippo` under HOME regardless of this gate — that's
-    // unrelated, pre-existing, documented behavior. Separating HOME from
-    // `dir` means the ONLY `.hippo` this test can observe under the PROJECT
-    // dir is the store the X3 gate must prevent.
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-precompact-uninit-project-'));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-precompact-uninit-home-'));
     env = { ...process.env, HIPPO_HOME: homeDir, HOME: homeDir, USERPROFILE: homeDir };

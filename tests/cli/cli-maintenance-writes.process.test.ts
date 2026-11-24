@@ -1,5 +1,3 @@
-// What `hippo watch`, `audit --fix`, `sleep`, `refine`, `decide --supersedes`, `projects` and the session-end worker
-// store, audit and print on a real store with no server. The first case of each verb spawns the built CLI.
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,13 +35,11 @@ describe('hippo watch (built CLI, no server)', () => {
   const STDERR = 'connection refused on port 5432\n';
   const LEARNED = `${STDERR}\nHippo learned from failure: "connection refused on port 5432"\n`;
 
-  /** A command that fails the same way in every shell, and one that succeeds. */
   function scripts(s: Store): void {
     writeFileSync(join(s.cwd, 'fail.js'), `process.stderr.write(${JSON.stringify(STDERR)}); process.exit(3);\n`);
     writeFileSync(join(s.cwd, 'ok.js'), "process.stdout.write('done\\n');\n");
   }
 
-  // The process pin for watch: two spawned runs of the built CLI, each running a failing child.
   it('stores a failed command, and a second failure of it beside the first', async () => {
     const s = new Store({ spawned: true });
     scripts(s);
@@ -85,7 +81,6 @@ describe('hippo watch (built CLI, no server)', () => {
     expect(s.counters()['total_remembered']).toBe('0');
   });
 
-  // Spawned: the watched command writes to the stdout it inherits, which only a real process hands down.
   it('a command that succeeds stores nothing', async () => {
     const s = new Store({ spawned: true });
     scripts(s);
@@ -115,7 +110,6 @@ describe('hippo watch (built CLI, no server)', () => {
   });
 });
 
-/** The ids of the rows the audit reports on; an id is empty when its row was not seeded. */
 interface AuditIds {
   warn: string;
   short: string;
@@ -123,7 +117,6 @@ interface AuditIds {
   pinned: string;
 }
 
-/** One clean row and one warning; with `errors`, two rows the audit removes and a pinned one it keeps. */
 function seedForAudit(s: Store, errors: boolean): AuditIds {
   s.seed(CLEAN);
   const warn = s.seed('to fix the retry loop');
@@ -138,7 +131,6 @@ function seedForAudit(s: Store, errors: boolean): AuditIds {
 }
 
 describe('hippo audit --fix (built CLI, no server)', () => {
-  /** The issue lines the audit prints for the five seeded rows. */
   const issues = (ids: AuditIds): string[] => [
     `[WARN] ${ids.warn}: sentence fragment`,
     `[ERR] ${ids.short}: too short (< 10 chars)\n         "too small"`,
@@ -214,7 +206,6 @@ describe('hippo audit --fix (built CLI, no server)', () => {
   });
 });
 
-/** Rows under two project names, two the sleep audit removes, one pinned and one warning, all older than the fixed clock. */
 function seedForSleep(s: Store): void {
   s.env['HIPPO_FAKE_NOW'] = FAKE_NOW;
   s.seedAged(
@@ -307,7 +298,6 @@ describe('hippo refine (verb function, injected fetcher, no model)', () => {
       refineStore(s.root, { llm: anthropicLlm({ apiKey: 'no-key', fetcher }), tenantId: 'default', ...opts }),
     );
 
-  /** A merged row, a merged row already refined, and a plain one; the seeded text of each, by id. */
   function seedForRefine(s: Store) {
     const seeded = [
       `${MERGED}the billing service retries a failed charge, three times in a row`,
@@ -406,7 +396,6 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
     expect(first).toEqual({ status: 0, stdout: recorded(1, oldId), stderr: '' });
     expect(second.stdout).toBe(recorded(2, sqlite!, `${oldId} (decision #1 superseded)`));
     expect(third.stdout).toBe(recorded(3, duckdb!, `${oldId} ${WEAKENED_ONLY}`));
-    // The first supersede halves the old row's half-life and marks it stale; the second halves nothing more.
     expect(s.rows()).toMatchObject([
       {
         content: 'use postgres for the ledger\n\nContext: it handles the join load',
@@ -470,7 +459,6 @@ describe('hippo decide --supersedes (built CLI, no server)', () => {
   const NOT_RECORDED = 'The decision was NOT recorded. Nothing changed, so it is safe to run the command again.\n';
   const REFUSING = ['INSERT', 'UPDATE'].map((event) => `refuse_weaken_${event}`);
 
-  /** Makes the store refuse the write that marks `memoryId` stale, as a rule of the operator's own would. */
   function refuseWeaken(s: Store, memoryId: string): void {
     for (const event of ['INSERT', 'UPDATE']) {
       exec(
@@ -582,11 +570,9 @@ describe('hippo projects (built CLI, no server)', () => {
 
 describe('__session-end-worker re-read count (built CLI, no server)', () => {
   const SESSION = 'sess-maint-parity';
-  // Noon UTC yesterday: re-read rows are per UTC day, so a run near midnight must not split a case's calls.
   const NOON = Math.floor(Date.now() / 86_400_000) * 86_400_000 - 12 * 3_600_000;
   const iso = (at: number): string => new Date(at).toISOString();
 
-  /** One block sent to the session at noon, which each later model call reads again. */
   function book(root: string, surface: TokenSurface, tokens: number): void {
     const db = openHippoDb(root);
     try {
@@ -616,7 +602,6 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     return JSON.stringify({ type: 'assistant', isSidechain: false, timestamp: iso(NOON + n * 10_000), message });
   }
 
-  /** Each inject and reread ledger row of one store as `surface event items tokens`, all under SESSION. */
   function ledger(root: string): string[] {
     const sql =
       "SELECT session_id, surface, event, items, tokens FROM token_ledger WHERE event IN ('inject', 'reread') ORDER BY id";
@@ -626,7 +611,6 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
     });
   }
 
-  /** Ends a session of three model calls, and answers the run, the worker's re-read log lines and both stores' ledgers. */
   async function endSession(s: Store): Promise<{ ran: Ran; rereadLog: string[]; local: string[]; global: string[] }> {
     const transcript = join(s.base, `${SESSION}.jsonl`);
     writeFileSync(transcript, `${[1, 2, 3].map(callLine).join('\n')}\n`);
@@ -651,7 +635,6 @@ describe('__session-end-worker re-read count (built CLI, no server)', () => {
 
   const rereadLine = (tokens: number): string => `re-read ${tokens} tokens over 3 model calls for session ${SESSION}`;
 
-  // The process pin for session end: two spawned runs over a project store and the global store.
   it('books the project store and the global store, and a second pass leaves the same rows', async () => {
     const s = new Store({ global: true, spawned: true });
     book(s.root, 'hook', 100);

@@ -1,5 +1,3 @@
-// The OpenCode plugin hippo installs and the hippo hooks it strips from an old opencode.json;
-// surface/hooks-install does the reads and writes.
 import * as path from 'node:path';
 import { userHome, type Homes } from '../../../base/util/agent-homes.js';
 import { type JsonValue, isJsonString, isJsonObjectLiteral } from '../../../base/util/json.js';
@@ -62,11 +60,6 @@ export function opencodeConfigPathOn(homes: Homes): string {
   return path.join(userHome(homes), '.config', 'opencode', 'opencode.json');
 }
 
-/**
- * True iff a hook entry's command starts with `hippo ` plus a verb hippo itself installs
- * (session-end, last-sleep, sleep, capture, context). Structural, not substring (`echo "remember to
- * hippo sleep"` is not ours), and per hook so user-authored hooks in the same entry survive.
- */
 const HIPPO_OWNED_COMMAND_RE = /^\s*hippo\s+(session-end|last-sleep|sleep|capture|context)(?=\s|$)/;
 
 function hookIsHippoOwned(hook: JsonValue | undefined): boolean {
@@ -95,7 +88,6 @@ export function stripLegacyHooks(settings: JsonValue): boolean {
   return changed;
 }
 
-/** One event's entries with every hippo-owned hook taken out, and whether any was. */
 function stripHippoHooksFromEntries(entries: JsonValue[]) {
   const survivingEntries: JsonValue[] = [];
   let strippedAny = false;
@@ -112,7 +104,7 @@ function stripHippoHooksFromEntries(entries: JsonValue[]) {
     const beforeInner = innerHooks.length;
     const survivingInner = innerHooks.filter((h) => !hookIsHippoOwned(h));
     if (survivingInner.length !== beforeInner) strippedAny = true;
-    if (survivingInner.length === 0) continue; // drop entry, nothing left
+    if (survivingInner.length === 0) continue;
     entry.hooks = survivingInner;
     survivingEntries.push(entry);
   }

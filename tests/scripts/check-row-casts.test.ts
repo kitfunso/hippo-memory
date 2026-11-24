@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import ts from 'typescript';
 import { findRowCasts, selectNames } from '../../scripts/checks/check-row-casts.mjs';
 
-// The check reads property lists and receiver names, so a small lib keeps the compile inside the unit budget.
 const MINIMAL_LIB = [
   'interface Array<T> { length: number; [n: number]: T; map<U>(f: (v: T) => U): U[]; join(sep?: string): string }',
   'interface ReadonlyArray<T> { length: number; readonly [n: number]: T; map<U>(f: (v: T) => U): U[]; join(sep?: string): string }',
@@ -32,7 +31,6 @@ describe('check-row-casts', { timeout: 30_000 }, () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  /** Each cast's line, whether it carries its own note, and why it fails, for one source file compiled on its own. */
   function castsIn(body: string): { line: number; noted: boolean; problem: string | undefined }[] {
     const src = join(dir, 'src');
     mkdirSync(src, { recursive: true });

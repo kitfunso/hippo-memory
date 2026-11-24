@@ -25,15 +25,6 @@ describe('openclaw package metadata', () => {
     expect(manifest.configSchema?.properties?.root?.description).toContain('workspace');
   });
 
-  // v0.32 / J3.2 — fixes drift the v1.13.0 ship missed. extensions/openclaw-
-  // plugin/* nested manifests were stuck at 1.12.11 because the prior test
-  // (above) only asserted ROOT parity. package.json::files includes the entire
-  // extensions/openclaw-plugin/ dir, so nested files DO ship to npm; downstream
-  // consumers reading the nested copy would see a stale version. This block
-  // covers the two known nested manifests as of v1.13.x. If new nested
-  // manifests are added under a different path, extend this test or convert
-  // to a glob-based check across all *.plugin.json / **/package.json with
-  // name='hippo-memory'.
   it('keeps nested extensions/openclaw-plugin manifests aligned with root version', () => {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
     const nestedPkg = JSON.parse(readFileSync(join(repoRoot, 'extensions/openclaw-plugin/package.json'), 'utf8'));
@@ -45,17 +36,12 @@ describe('openclaw package metadata', () => {
     expect(nestedPlugin.version).toBe(pkg.version);
   });
 
-  // MCP serverInfo, HTTP /health and the rollback-compat gate all report this constant.
   it('keeps PACKAGE_VERSION aligned with the package version', () => {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
     expect(PACKAGE_VERSION).toBe(pkg.version);
   });
 
-  // Pins the v1.38.0 packaging failure: build never compiled extensions/, so
-  // no dist/ twin existed and every npm install of the plugin failed.
   it('ships a compiled dist twin for every TypeScript openclaw extension entry', () => {
-    // Runs the real publish gate in a plain Node process: vitest's own import() interops
-    // CommonJS, so an in-test import stays green on the exact emit that breaks Node.
     execFileSync(process.execPath, [join(repoRoot, 'scripts', 'checks', 'check-openclaw-dist.mjs')], {
       cwd: repoRoot,
       stdio: 'pipe',

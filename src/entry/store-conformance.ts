@@ -1,5 +1,3 @@
-// The store-kit suite an add-on runs against its own HippoStore. It takes the test runner's
-// describe, it and expect, so the package imports no test framework.
 import { NotFoundError } from '../base/errors/api-errors.js';
 import type { HippoStore } from '../base/ports/store-index.js';
 

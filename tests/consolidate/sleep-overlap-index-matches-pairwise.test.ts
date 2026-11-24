@@ -13,7 +13,6 @@ const NOW = new Date('2026-10-01T00:00:00.000Z');
 const SIZES = [0, 1, 2, 3, 8, 30, 120, 300];
 const SEEDS_PER_SIZE = 4;
 
-// A small shared vocabulary so random texts collide often, plus the polarity words, stopwords and punctuation the rules key on.
 const TOPIC = [
   'deploy',
   'cache',
@@ -117,7 +116,6 @@ function randomEntries(rnd: () => number, n: number): MemoryEntry[] {
   });
 }
 
-/** The merge pass's partners over each text's token set, as sleep builds them. */
 const mergePartnersOf = (texts: readonly string[]) => mergePartners(texts.map((t) => new Set(tokenize(t))));
 
 const cases = SIZES.flatMap((n) => Array.from({ length: SEEDS_PER_SIZE }, (_, s) => ({ n, seed: n * 101 + s })));
@@ -133,7 +131,6 @@ describe('sleep overlap index matches the pairwise passes', () => {
   });
 
   it.each(cases)('merge partners match for $n memories (seed $seed)', ({ n, seed }) => {
-    // Sleep only offers texts with at least one token to the merge pass.
     const texts = randomTexts(mulberry32(seed), n).filter((t) => tokenize(t).length > 0);
     const partnersOf = mergePartnersOf(texts);
     expect(texts.map((_, i) => partnersOf(i))).toEqual(pairwiseMergePartners(texts));
@@ -141,7 +138,6 @@ describe('sleep overlap index matches the pairwise passes', () => {
 
   it('keeps pairs that sit exactly on each threshold', async () => {
     const shared = ['aa', 'bb', 'cc', 'dd', 'ee', 'ff', 'gg'];
-    // 7 shared of 20 distinct tokens is a Jaccard of exactly 0.35; dropping one shared token falls just under.
     const onMerge = [
       [...shared, 'p1', 'p2', 'p3', 'p4', 'p5', 'p6'].join(' '),
       [...shared, 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7'].join(' '),
@@ -152,7 +148,6 @@ describe('sleep overlap index matches the pairwise passes', () => {
     }
     expect(mergePartnersOf(onMerge)(0)).toEqual([1]);
 
-    // 3 shared of 6 distinct tokens is a Jaccard of exactly 0.5.
     const onConflict = [
       'always alpha beta gamma',
       'never alpha beta gamma zeta',

@@ -1,5 +1,3 @@
-// The importer's duplicate check against a real store: spacing, sleep-merged rows, other scripts, symbols and FTS
-// syntax answer as the whole-store key set did, with the full-text index in sync or not, reading only rows that match.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { closeHippoDb, openHippoDb, setFtsInSync, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -22,7 +20,6 @@ const STORED = [
   '  Prefer   small  pull requests\nwith one topic each  ',
 ];
 
-/** Chunk, and whether the store already holds it word for word, spacing aside. */
 const CHUNKS: ReadonlyArray<readonly [string, boolean]> = [
   ['Always   run the migrations\nbefore seeding the database', true],
   ['Rebuild the search index after a schema change', true],
@@ -98,7 +95,6 @@ describe('import duplicate check', () => {
 
     const { result, statements } = recordStatements(() => run(true));
 
-    // The symbol and emoji chunks name no letter or digit the index is sure to hold, so they take the word scan.
     expect(countMatching(statements, 'memories_fts MATCH')).toBe(inSync ? CHUNKS.length - 1 : 0);
     expect(result.entries.map((e) => e.content)).toEqual([...NEW, REPEAT]);
     expect([result.total, result.imported, result.skipped]).toEqual([CHUNKS.length + 1, NEW.length + 1, 13]);

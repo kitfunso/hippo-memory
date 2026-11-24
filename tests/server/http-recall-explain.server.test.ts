@@ -1,13 +1,3 @@
-/**
- * A7 recall-trace — HTTP /v1/memories explain wire-format.
- *
- * Asserts the A7 fields ride on the GET /v1/memories JSON body under
- * `?explain=1`, and are ABSENT without it (byte-identical default on the
- * wire). Closes plan Test #4 + the code-review med (server pass-through +
- * JSON serialization were previously only inferred from the api unit test).
- * Real SQLite store + real server, no mocks.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';

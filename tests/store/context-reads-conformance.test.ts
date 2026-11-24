@@ -1,4 +1,3 @@
-// ContextReads answers: the same values, the same errors, no audit row.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditRowsOn } from '../_helpers/audit-rows.js';
@@ -31,7 +30,6 @@ type Named = readonly [string, Call];
 let fixture: TwoTenantFixture;
 let fixtureAudit: readonly AuditEvent[];
 
-/** Runs the calls, asserts they wrote no audit row, and returns hippo.db's outcomes by name. */
 async function conformsOn<G extends 'contextReads' | 'sessions'>(
   group: G,
   named: readonly (readonly [string, GroupCall<G, unknown>])[],
@@ -84,11 +82,9 @@ const KEYS: readonly (readonly [string, ContinuityKey | null])[] = [
   ['alice with only a blank name', { owner: OWNER, project: [''] }],
 ];
 
-/** Every memory id an outcome holds anywhere, so a test can say which rows a read never let through. */
 const idsIn = (outcome: Outcome<unknown> | undefined): string[] =>
   JSON.stringify(outcome ?? null).match(/mem_[a-z0-9_]+/g) ?? [];
 
-/** Rows the default deny refuses: another person's personal scope and the legacy quarantine bucket. */
 const DENIED: readonly string[] = ['mem_a_bob', 'mem_a_legacy'];
 
 function recallIds(outcome: Outcome<unknown> | undefined): string[] {
@@ -119,7 +115,6 @@ describe("the context's unfinished handoff, through Sessions.read 'handoff'", ()
   });
 });
 
-/** An ambient load in PROJECT, which refuses other projects' rows unless `cross`; each answer lists its refusals in read order. */
 function ambient(
   tenantId: string,
   recentNeeded: number,
@@ -162,7 +157,6 @@ describe('ContextReads.ambientCandidates', () => {
     });
     expect(out.get('recall no term indexed')).toMatchObject({ value: { result: { recall: [] } } });
     expect(out.get('no names')).toMatchObject({ value: { result: { entries: [{ id: 'mem_a_pin' }] } } });
-    // Pins are read oldest first: the other project's pin, then the private one the default deny refuses.
     expect(out.get('pins only')).toMatchObject({
       value: {
         result: {
@@ -173,7 +167,6 @@ describe('ContextReads.ambientCandidates', () => {
         },
       },
     });
-    // The first tenant's loads never show, or refuse, a second-tenant row.
     for (const [name, outcome] of out) {
       if (name !== 'drifted') {
         expect(
@@ -182,7 +175,6 @@ describe('ContextReads.ambientCandidates', () => {
         ).toEqual([]);
       }
     }
-    // Prompt recall applies the default deny itself: another person's personal row and the legacy bucket stay out, the caller's own comes in.
     for (const name of ['recall', 'recall own scope']) {
       expect(
         recallIds(out.get(name)).filter((id) => DENIED.includes(id)),
@@ -231,7 +223,6 @@ describe('ContextReads.contextCandidates', () => {
   });
 });
 
-/** Tag order follows the store's row order and the strength sum is floating point, so both go into one form first. */
 const comparable = (t: AmbientTallies) => ({
   ...t,
   strengthSum: Number(t.strengthSum.toFixed(6)),
@@ -263,14 +254,12 @@ describe('ContextReads.ambientTallies', () => {
 
     expect(out.get('exact scope')).toMatchObject({ value: { total: 1 } });
     expect(out.get('no tenant')).toMatchObject({ value: { total: 0 } });
-    // Another project's secret-tagged row (mem_a_secret_other, tag Token) is left out unless that project is current.
     expect(tagsOf(out.get('every row'))).not.toContain('token');
     expect(tagsOf(out.get('every row'))).toContain('secret');
     expect(tagsOf(out.get('other current project'))).toContain('token');
   });
 });
 
-/** Digest, vault and tagged rows over both tenants, apart from the contextGet fixture so its windows stay as they are. */
 function seedRowReads(dir: string): void {
   const at = (minute: number): string => new Date(Date.UTC(2026, 2, 1, 0, minute)).toISOString();
   const row = (content: string, minute: number, over: Parameters<typeof createMemory>[1] = {}): MemoryEntry => ({

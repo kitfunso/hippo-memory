@@ -143,9 +143,6 @@ describe('runtime guards', () => {
 
   it('rejects misbinding: passing a session_id where tenantId is expected', () => {
     initTestStore(tmpDir);
-    // A JS caller from a v0.40 codebase that called loadLatestHandoff(root, sessionId)
-    // would now have 'sess-abc' bound to tenantId. The runtime guard catches this
-    // before it silently filters to a non-existent tenant.
     // SAFETY: the cast forces a session-id-shaped string past the tenantId type on
     // purpose, to reproduce the v0.40-caller misbinding the runtime guard defends against.
     expect(() => loadLatestHandoff(tmpDir, 'sess-abc' as never)).toThrow(/looks like a session id/i);

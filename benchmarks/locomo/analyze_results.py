@@ -1,5 +1,3 @@
-"""Analyze LoCoMo result JSONs without running retrieval or judge calls."""
-
 from __future__ import annotations
 
 import argparse

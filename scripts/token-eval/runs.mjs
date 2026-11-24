@@ -1,4 +1,3 @@
-// One (sequence, arm, seed) run: its dirs, env, settings and hippo store, plus the shared context and record writer.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { HIPPO_JS, sh, git } from './exec.mjs';
@@ -10,7 +9,6 @@ import { lessonIndex } from './lessons.mjs';
 import { assertNoPhraseInStub } from './leaks.mjs';
 import { hippoBuild, refuseOffPins, claudePinned, codexPinned } from './pins.mjs';
 
-// Loading or validating a tasks file never needs dist/; only a real run does.
 let hippoLib = null;
 export async function loadHippo() {
   if (hippoLib) return hippoLib;
@@ -26,7 +24,6 @@ export async function loadHippo() {
   return hippoLib;
 }
 
-/** The settings hippo's installer writes for Claude Code, generated under a throwaway HOME. */
 function hippoHookSettings(tmpHome) {
   const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
   process.env.HOME = tmpHome;
@@ -68,7 +65,6 @@ export function hippoSentFor(hippoRoot, sessionIds) {
 
 /** Clone each sequence's repo into the cache, then refuse any task to be run (a screen's screen tasks too) whose stub tree checkoutBase would refuse or that holds a key phrase. */
 export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
-  // Finding a symlinked instruction file here saves abandoning a lockstep run midway.
   for (const s of spec.sequences) {
     const cached = path.join(cacheDir, s.id);
     if (!fs.existsSync(cached)) {
@@ -76,7 +72,6 @@ export function cacheTaskRepos(spec, cacheDir, { screen = false } = {}) {
       git(['clone', '--quiet', s.repo, cached]);
     }
     const screens = screen ? (spec.families ?? []).filter((f) => f.sequence === s.id && f.screen).map((f) => f.screen) : [];
-    // A set X sequence may run in X3, whose stub adds its own CLAUDE.md text (E6 plan R22).
     const texts = s.set === 'X' ? [STUB_CLAUDE_MD, X3_STUB] : [STUB_CLAUDE_MD];
     for (const t of [...s.tasks, ...screens]) {
       for (const text of texts) {
@@ -94,7 +89,6 @@ export async function openContext(opts) {
   const { spec, outDir, claudeBin = 'claude', warmup = true, passEnv = [] } = opts;
   const { claude } = startupTools(claudeBin, process.env);
   fs.mkdirSync(outDir, { recursive: true });
-  // outDir as HOME: hippo's store walk stops at HOME, so it must be an ancestor of every workspace.
   const ctx = {
     outDir, passEnv, claude, records: [], fakeHome: outDir, hookHome: path.join(outDir, 'hook-home'), cacheDir: path.join(outDir, 'repo-cache'),
     model: opts.model ?? null, maxBudgetUsd: opts.maxBudgetUsd ?? null, settleMs: opts.settleMs ?? 5000, permissionMode: opts.permissionMode ?? 'bypassPermissions',
@@ -114,7 +108,6 @@ export async function openContext(opts) {
     const warmArgs = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', ...(ctx.model ? ['--model', ctx.model] : [])];
     sh(`${claude} ${warmArgs.join(' ')}`, warmDir, warmEnv, 10 * 60_000, 'Reply with the single word OK.');
   }
-  // Last, so a refused step above leaves no login copy; runAll closes the vault in its catch and after runSteps, and a screen never opens it.
   if ((opts.arms ?? []).some((a) => armSet(a) === 'X')) Object.assign(ctx, codexContext(opts, process.env, (tools) => refuseOffPins(opts.pins, codexPinned(tools), ctx)));
   return ctx;
 }
@@ -138,13 +131,10 @@ export function startRun(ctx, s, arm, seed, name = s.id) {
 
 /** hippo init on the stub base (A2/A5, first task that runs), through the child env, with LLM extraction off and prompt recall pinned on. */
 export function hippoInit(run, fakeHome) {
-  // Init installs Copilot when it finds the CLI; these keep it off the operator's Copilot and VS Code folders.
   const homes = { HOME: fakeHome, USERPROFILE: fakeHome, COPILOT_HOME: '', VSCODE_PORTABLE: '' };
   const env = { ...childEnv(run.env), ...homes, VSCODE_APPDATA: path.join(fakeHome, 'vscode-data') };
-  // --no-schedule: init would otherwise register a machine-wide Task Scheduler job.
   const r = sh(`"${process.execPath}" "${HIPPO_JS}" init --no-schedule`, run.dirs.work, env);
   if (r.status !== 0) {
-    // A Windows CI run failed here with empty stderr, so the status, signal, spawn error and stdout name the cause.
     const why = `status ${r.status}, signal ${r.signal}, spawn error ${r.errorCode}`;
     throw new Error(`hippo init failed in ${run.dirs.work} (${why}): ${r.stderr.slice(-500)} ${r.stdout.slice(-500)}`);
   }
@@ -153,10 +143,8 @@ export function hippoInit(run, fakeHome) {
   try {
     cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
   } catch (err) {
-    // init may write no config; an existence check first would race the read.
     if (err.code !== 'ENOENT') throw err;
   }
-  // Pinned, so a change to hippo's promptRecall default cannot move what the arms receive.
   fs.writeFileSync(cfgPath, JSON.stringify({ ...cfg, extraction: { enabled: false }, pinnedInject: { ...cfg.pinnedInject, promptRecall: true } }, null, 2));
 }
 

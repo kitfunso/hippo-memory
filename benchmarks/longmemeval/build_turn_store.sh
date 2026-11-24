@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Round-2 lane #5 (docs/evals/2026-09-23-mechanism-audit-round2-prereg.md): a per-turn store, never slept,
-# then physics, hybrid and cosine-only retrieval. Usage: HIPPO_MODEL_CACHE=<dir> bash build_turn_store.sh <run-dir> <data.json>
 set -euo pipefail
 R="$1"; DATA="$2"
 W="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -22,7 +20,6 @@ t0=$(date +%s)
 hip "$R/turn" init --no-hooks --no-schedule --no-learn
 node "$W/benchmarks/longmemeval/ingest_turns.mjs" --data "$DATA" --store-dir "$R/turn"
 hip "$R/turn" embed
-# The in-process ingest skips remember's auto-embed, which is what seeds particles; seed them all here.
 hip "$R/turn" embed --reset-physics
 out=$(hip "$R/turn" embed --status); echo "$out"
 if grep -q "need embedding" <<< "$out"; then echo "ABORT: turn store not fully embedded"; exit 1; fi

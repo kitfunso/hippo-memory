@@ -1,4 +1,3 @@
-// The stdio MCP server answers a frame it cannot parse, survives stray values, answers a call that outlives its deadline, and exits non-zero with a stack on a crash.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -18,9 +17,7 @@ const procs: ChildProcessWithoutNullStreams[] = [];
 
 interface Run {
   proc: ChildProcessWithoutNullStreams;
-  /** The next stdout line; a line that never comes fails at the test timeout. */
   nextLine: () => Promise<string>;
-  /** Every line written to stdout so far, read or not. */
   replies: () => readonly string[];
   stderr: () => string;
   exited: Promise<number | null>;
@@ -54,7 +51,6 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
   proc.stderr.on('data', (chunk: Buffer) => {
     err += chunk.toString('utf8');
   });
-  // 'close' fires after stdio drains; 'exit' can beat the last stderr chunk.
   const exited = new Promise<number | null>((resolve) => proc.once('close', (code) => resolve(code)));
   const nextLine = (): Promise<string> =>
     new Promise((resolve) => {
@@ -68,7 +64,6 @@ function start(args: string[], env: NodeJS.ProcessEnv = {}): Run {
 const toolCall = (id: number | undefined, name: string, args: Record<string, string>): string =>
   `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } })}\n`;
 
-/** An embedding endpoint for the store under `tmpHome`: it answers at once until `hold()`, then keeps every request open until `release()`. */
 async function heldEmbeddings() {
   let holding = false;
   let asked!: () => void;
@@ -104,7 +99,6 @@ async function heldEmbeddings() {
   vi.stubEnv('OPENAI_API_KEY', 'test-key-not-secret');
   return {
     store,
-    /** Settles once a held request has arrived, so the call that sent it is running. */
     queryAsked,
     hold: (): void => {
       holding = true;
@@ -120,7 +114,6 @@ async function heldEmbeddings() {
   };
 }
 
-/** A script that wires the real stdio loop, then fails in the way `failure` names. */
 function crashScript(failure: string): string {
   const file = path.join(tmpHome, `crash-${procs.length}.mjs`);
   fs.writeFileSync(
@@ -129,7 +122,6 @@ function crashScript(failure: string): string {
       `const { startStdioLoop } = await import(${JSON.stringify(pathToFileURL(serverPath).href)});`,
       `const { cliStdioHost } = await import(${JSON.stringify(pathToFileURL(path.resolve('dist/surface/cli/api-context.js')).href)});`,
       'startStdioLoop(cliStdioHost());',
-      // A later turn, so the failure reaches the crash handlers rather than the module's own evaluation.
       `setImmediate(() => { ${failure} });`,
     ].join('\n'),
   );
@@ -147,7 +139,6 @@ beforeEach(() => {
 afterEach(async () => {
   for (const proc of procs.splice(0)) {
     if (proc.exitCode !== null || proc.signalCode !== null) continue;
-    // Closing stdin lets the server exit itself and write its coverage; one that never exits fails at the hook timeout.
     const exited = once(proc, 'exit');
     proc.stdin.end();
     await exited;
@@ -175,11 +166,9 @@ describe('MCP stdio fault handling', () => {
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 2, error: invalid });
     expect(JSON.parse(await run.nextLine())).toEqual({ jsonrpc: '2.0', id: 'abc', error: invalid });
 
-    // No id means a notification, which may not be answered: the next line out is the reply to the frame after it.
     run.proc.stdin.write('{"jsonrpc":"2.0","params":{}}\n');
     run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/list' })}\n`);
     expect(JSON.parse(await run.nextLine()).id).toBe(3);
-    // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
     const droppedLines = (): string[] =>
       run
         .stderr()
@@ -194,7 +183,6 @@ describe('MCP stdio fault handling', () => {
   it('exits 0 without a crash trace when the client closes its end of stdout', async () => {
     const run = start([serverPath]);
     run.proc.stdout.destroy();
-    // Replies written after the pipe closed fail with EPIPE.
     for (let id = 1; id <= 5; id++) {
       run.proc.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}
 `);
@@ -204,19 +192,16 @@ describe('MCP stdio fault handling', () => {
   });
 
   it('sends the reply of a call still running when stdin closes, then exits 0', async () => {
-    // The endpoint answers at once while the store is seeded, then holds the recall's query embedding until the test has closed stdin.
     const embeddings = await heldEmbeddings();
     try {
       const run = start([serverPath]);
       run.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       expect(JSON.parse(await run.nextLine()).id).toBe(1);
-      // Recall embeds its query only when the store holds a vector to compare it with.
       expect(await embedAll(localIndex(embeddings.store))).toBe(1);
       embeddings.hold();
       run.proc.stdin.write(toolCall(9, 'hippo_recall', { query: 'staging queue' }));
       await embeddings.queryAsked;
       run.proc.stdin.end();
-      // The end of stdin is in the pipe once the parent's side has flushed it; the child then reads it on its next loop turn.
       await waitFor(() => run.proc.stdin.writableFinished, { what: 'stdin end flushed' });
       expect(run.proc.exitCode).toBeNull();
       embeddings.release();
@@ -232,9 +217,7 @@ describe('MCP stdio fault handling', () => {
   describe('a call still running at its request deadline', () => {
     const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
 
-    /** A server on a 1500 ms deadline over a store with one embedded memory, where every later embedding request is held. */
     async function startOnShortDeadline(embeddings: Awaited<ReturnType<typeof heldEmbeddings>>): Promise<Run> {
-      // Seeded by a server on the default deadline, so only a held recall can reach the short one.
       const seed = start([serverPath]);
       seed.proc.stdin.write(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       expect(JSON.parse(await seed.nextLine()).id).toBe(1);
@@ -251,7 +234,6 @@ describe('MCP stdio fault handling', () => {
         .split('\n')
         .filter((l) => l.includes('did not answer within 1500 ms'));
 
-    /** Lets the held recall finish, then closes stdin, whose drain waits for it: a late reply would be on stdout before the exit. */
     async function repliesAfterTheLateFinish(
       embeddings: Awaited<ReturnType<typeof heldEmbeddings>>,
       run: Run,
@@ -277,7 +259,6 @@ describe('MCP stdio fault handling', () => {
             data: { requestId: expect.stringMatching(/^[0-9a-f-]{36}$/) },
           },
         });
-        // stderr is a second pipe with no ordering against stdout, so the warning can land after the reply.
         await vi.waitFor(() => expect(timeoutLines(run)).toHaveLength(1), { timeout: 5000 });
         expect(timeoutLines(run)[0]).toMatch(
           /^\[hippo\] warn: mcp: tools\/call hippo_recall did not answer within 1500 ms; .* method=tools\/call/,
@@ -298,7 +279,6 @@ describe('MCP stdio fault handling', () => {
         run.proc.stdin.write(toolCall(undefined, 'hippo_recall', { query: 'staging queue' }));
         await vi.waitFor(() => expect(timeoutLines(run)).toHaveLength(1), { timeout: 15000 });
 
-        // The first line out is the reply to the call sent after the deadline passed.
         run.proc.stdin.write(list(10));
         expect(JSON.parse(await run.nextLine()).id).toBe(10);
         expect(await repliesAfterTheLateFinish(embeddings, run)).toEqual([10]);
@@ -313,7 +293,6 @@ describe('MCP stdio fault handling', () => {
     const list = (id: number): string => `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
     const refusal = { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error: frame exceeds 1MB' } };
 
-    // A declared length over the cap is refused at the header; its body is dropped as it arrives, so the next frame is read as itself.
     const declared = 2 * 1024 * 1024;
     run.proc.stdin.write(`Content-Length: ${declared}\r\n\r\n`);
     expect(JSON.parse(await run.nextLine())).toEqual(refusal);
@@ -321,7 +300,6 @@ describe('MCP stdio fault handling', () => {
     run.proc.stdin.write(list(1));
     expect(JSON.parse(await run.nextLine()).id).toBe(1);
 
-    // A line that never ends is refused once it passes the cap; the frame after its newline still answers.
     run.proc.stdin.write(Buffer.alloc(1024 * 1024 + 64 * 1024, 0x79));
     expect(JSON.parse(await run.nextLine())).toEqual(refusal);
     run.proc.stdin.write(`yyy\n${list(2)}`);

@@ -58,8 +58,6 @@ export function readStdinBounded(waitMs: number = defaultWaitMs()): Promise<Boun
       timer.refresh();
     };
     const timer = setTimeout(() => finish(true), waitMs);
-    // The idle timer refreshes per chunk, so a host that dribbles bytes forever without ending
-    // would never resolve without this ceiling.
     const hardCap = setTimeout(() => finish(true), waitMs * 10);
     stdin.on('data', onData);
     stdin.once('end', done);
@@ -83,13 +81,10 @@ const CAMEL_TO_SNAKE: ReadonlyArray<readonly [string, string]> = [
  */
 function parsedToolArgs(value: JsonValue): JsonValue {
   if (!isJsonString(value)) return value;
-  // Arguments that are not JSON stay the string the model wrote.
   const parsed = tryParseJson(value);
   return parsed === undefined ? value : parsed;
 }
 
-/** The snake_case keys a payload lacks, filled from its camelCase twins; a snake_case key
- * already present wins. */
 function snakeCaseFields(payload: JsonObject): JsonObject {
   const added: JsonObject = {};
   for (const [camel, snake] of CAMEL_TO_SNAKE) {
@@ -99,7 +94,6 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
     added.tool_input = parsedToolArgs(payload.toolArgs);
   }
   const error = payload.error;
-  // An error object gives its message, so readers that expect the documented string still get one.
   if (isJsonObjectLiteral(error) && isJsonString(error.message)) added.error = error.message;
   return added;
 }
@@ -109,8 +103,6 @@ function snakeCaseFields(payload: JsonObject): JsonObject {
  * no change comes back exactly as sent. */
 export function normalizeHookPayload(text: string | undefined): string | undefined {
   if (text === undefined || text.trim() === '') return text;
-  // Not JSON: each reader already treats that as a malformed payload, so it passes through
-  // untouched.
   const payload = tryParseJson(text.trim());
   if (!isJsonObjectLiteral(payload)) return text;
   const added = snakeCaseFields(payload);

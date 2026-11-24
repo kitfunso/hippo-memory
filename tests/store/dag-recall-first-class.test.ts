@@ -1,14 +1,3 @@
-/**
- * v0.30 / E4 of DAG live-coupling — first-class DAG recall (scoring layer) tests.
- *
- * Locks: summaryDeboost precedence (per-call > env > 0.85 default), freshness
- * micro-boost (1.05 when last_rebuilt_at within 7 days), DAG metadata in
- * ScoreBreakdown when explain=true, physicsSearch physics-particle path,
- * physicsSearch hybridSearch-fallback inheritance via options spread,
- * shared.searchBothHybrid pass-through + composition invariant, MMR + reranker
- * interactions.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import * as fs from 'node:fs';
@@ -84,7 +73,6 @@ describe('first-class DAG recall (scoring layer)', () => {
     const sResult = findResult(results, summary.id);
     const fResult = findResult(results, fact.id);
     expect(sResult?.breakdown?.summaryDeboost).toBeCloseTo(0.85);
-    // L1 fact: deboost field not populated (only L2 gets the 4 summary-specific fields)
     expect(fResult?.breakdown?.summaryDeboost).toBeUndefined();
   });
 
@@ -167,7 +155,6 @@ describe('first-class DAG recall (scoring layer)', () => {
     const summary = makeL2Summary('physics-particle deboost summary');
     writeEntry(hippoRoot, summary);
 
-    // Seed physics state so physicsSearch picks the physics-particle path
     const queryVec = [1, 0, 0, 0];
     const particle: PhysicsParticle = {
       memoryId: summary.id,
@@ -214,9 +201,6 @@ describe('first-class DAG recall (scoring layer)', () => {
   });
 
   it('MMR-on with deboost-on: observed rank-shift documented', async () => {
-    // Setup: 1 L2 summary + 3 distinct L1 facts, all matching query.
-    // Without deboost, summary tends to rank highest (dense, all query terms present).
-    // With deboost, summary score is multiplied by 0.85 → MMR's pre-rank input is post-deboost.
     const summary = makeL2Summary('mmr-test alpha beta gamma combined summary content');
     const f1 = makeL1Fact('mmr-test alpha distinct fact one');
     const f2 = makeL1Fact('mmr-test beta distinct fact two');
@@ -224,7 +208,6 @@ describe('first-class DAG recall (scoring layer)', () => {
     [summary, f1, f2, f3].forEach((e) => writeEntry(hippoRoot, e));
     const entries = [summary, f1, f2, f3];
 
-    // Run twice: once with deboost ON (default), once disabled
     const withDeboost = await hybridSearch('mmr-test', entries, { explain: true, mmr: true, mmrLambda: 0.5 });
     const withoutDeboost = await hybridSearch('mmr-test', entries, {
       explain: true,
@@ -235,19 +218,14 @@ describe('first-class DAG recall (scoring layer)', () => {
 
     const sIdxWith = withDeboost.findIndex((r) => r.entry.id === summary.id);
     const sIdxWithout = withoutDeboost.findIndex((r) => r.entry.id === summary.id);
-    // Document observed behavior: deboost SHOULD push summary down OR keep same rank
     expect(sIdxWith).toBeGreaterThanOrEqual(sIdxWithout);
   });
 
   it('reranker receives post-deboost ordering; final order is rerankers prerogative', async () => {
-    // Mock reranker that RECORDS what it received. Asserts reranker input is
-    // post-deboost (the L2 summary in the input has score = pre-deboost * 0.85).
-    // We do NOT assert reranker final order; reranker is free to reorder.
     let recordedInputs: SearchResult[] | null = null;
     const recordingReranker = vi.fn(
       async (_query: string, results: SearchResult[], _opts?: RerankerOptions): Promise<RerankResult[]> => {
-        recordedInputs = JSON.parse(JSON.stringify(results)); // deep snapshot
-        // Reverse order (the "prerogative" branch — we don't assert this)
+        recordedInputs = JSON.parse(JSON.stringify(results));
         return [...results].reverse().map((r, i) => ({
           ...r,
           rerankScore: r.score,
@@ -262,16 +240,13 @@ describe('first-class DAG recall (scoring layer)', () => {
     writeEntry(hippoRoot, summary);
     writeEntry(hippoRoot, fact);
 
-    // Baseline: deboost=1.0 to get pre-deboost summary score
     const baseline = await hybridSearch('reranker-test', [summary, fact], {
       explain: true,
       summaryDeboost: 1.0,
     });
     const summaryBaseScore = findResult(baseline, summary.id)?.score ?? 0;
-    // BM25 times a clock-dependent strength and recency, so only the sign is fixed.
     expect(summaryBaseScore).toBeGreaterThan(0);
 
-    // Run with reranker + default deboost
     await hybridSearch('reranker-test', [summary, fact], {
       explain: true,
       reranker: recordingReranker,
@@ -280,16 +255,13 @@ describe('first-class DAG recall (scoring layer)', () => {
     expect(recordedInputs).not.toBeNull();
     const rerankerSawSummary = recordedInputs!.find((r) => r.entry.id === summary.id);
     expect(rerankerSawSummary?.entry.id).toBe(summary.id);
-    // The summary the reranker SAW had its score multiplied by 0.85
     expect(rerankerSawSummary!.score).toBeCloseTo(summaryBaseScore * 0.85, 5);
   });
 
   it('shared.searchBothHybrid pass-through composition invariant', async () => {
-    // L2 summary in localRoot, last_rebuilt_at=null (avoids freshness factor)
     const summary = makeL2Summary('shared-test summary compose check', { lastRebuiltAt: null });
     writeEntry(hippoRoot, summary);
 
-    // Empty global root (no global path; the function tolerates missing dir)
     const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-e4-global-empty-'));
     try {
       const results = await searchBothHybrid('shared-test', ...sharingStores(hippoRoot, globalRoot), {
@@ -303,10 +275,6 @@ describe('first-class DAG recall (scoring layer)', () => {
       expect(br?.summaryDeboost).toBeCloseTo(0.85);
       expect(br?.summaryFreshnessBoost).toBeCloseTo(1.0);
       expect(br?.sourceBump).toBeCloseTo(1.2);
-      // Composition invariant (AC16): after shared.ts re-wrap, score = composite * sourceBump
-      // and final = composite * sourceBump (same). So final / score should be exactly 1.0.
-      // The deboost (0.85) and freshness (1.0) already baked into composite at hybridSearch
-      // time; sourceBump (1.2) is the only post-hybridSearch multiplier.
       expect(br!.final / sResult!.score).toBeCloseTo(1.0, 5);
     } finally {
       removeDir(globalRoot);
@@ -314,21 +282,12 @@ describe('first-class DAG recall (scoring layer)', () => {
   });
 
   it('physicsSearch hybridSearch-fallback inherits deboost via options spread', async () => {
-    // No physics state seeded for L2 summary → physicsSearch falls back to
-    // hybridSearch via L685/689/693/707 once it detects no particle for the entry.
-    // Actually physicsSearch's fallbacks at L780-789 fire when embedding is
-    // unavailable / model mismatch / empty queryVector. Without hippoRoot or
-    // with queryEmbedding=[], it returns hybridSearch's results.
     const summary = makeL2Summary('fallback-test summary content');
     writeEntry(hippoRoot, summary);
-    // Force fallback path: pass queryEmbedding=[] AND no embedding service
-    // (which the test env doesn't have anyway). physicsSearch should hit the
-    // `if (!isEmbeddingAvailable()) return hybridSearch(...)` branch.
     const results = await physicsSearch('fallback-test', [summary], {
       hippoRoot,
       explain: true,
     });
-    // Fallback to hybridSearch → deboost applied
     const br = findResult(results, summary.id)?.breakdown;
     expect(br?.summaryDeboost).toBeCloseTo(0.85);
   });

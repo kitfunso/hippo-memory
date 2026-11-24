@@ -1,6 +1,3 @@
-// The pinned-only branch of contextGet used to load every row of both stores to
-// return about eleven. These pin what the narrower load must still return.
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -148,8 +145,6 @@ describe('pinned-only context loads a slice, not the corpus', () => {
     expect(ids(result)).toContain(pin.id);
   });
 
-  // The load's "found enough?" test has to use the caller's whole admission
-  // rule, quality floor included, or it stops at a window of junk.
   it('reaches past newest rows that pass admission but fail the quality floor', async () => {
     const JUNK = 'need to check the cache thing';
     expect(isContentWorthStoring(JUNK)).toBe(false);
@@ -335,8 +330,6 @@ describe('loadAmbientCandidates', () => {
     expect(got.map((e) => e.id)).toEqual([pin.id]);
   });
 
-  // Legacy markdown keeps offset timestamps, and SQL orders text:
-  // '...T09:00:00-04:00' bytes below '...T12:00:00.000Z' while being newer.
   it('does not lose a chronologically newer row written with a UTC offset', async () => {
     for (let i = 0; i < 32; i++) {
       writeEntry(local, {
@@ -390,8 +383,6 @@ describe('loadAmbientCandidates', () => {
     expect(admitted).toBeLessThan(105);
   });
 
-  // include_recent is any non-negative finite number at the HTTP edge, and the
-  // Array.slice this replaced truncated it. A SQL LIMIT cannot.
   it('truncates a fractional recent count the way the slice it replaced did', async () => {
     for (let i = 0; i < 40; i++) {
       writeEntry(local, {

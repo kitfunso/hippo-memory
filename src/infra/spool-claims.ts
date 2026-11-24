@@ -1,4 +1,3 @@
-// A claim's lifecycle after it is taken: put back for another try, set aside as `.bad`, or removed.
 import { MINUTE_MS } from '../base/util/time.js';
 import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';

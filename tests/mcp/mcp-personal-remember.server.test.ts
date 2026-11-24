@@ -1,4 +1,3 @@
-// hippo_remember with personal: true over real HTTP MCP and real keys, so a transport that drops the key's owner fails here.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -84,7 +83,6 @@ describe('hippo_remember personal over HTTP MCP', () => {
     },
   );
 
-  // Needs lane A's read sites (the owner's own scope admitted on recall); red on lane B alone.
   it.skipIf(needsHippoDb('team'))(
     "hippo_recall by the same key finds it, and another owner's key finds only the team row",
     async () => {

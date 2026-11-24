@@ -1,5 +1,3 @@
-// Store passes that walk many rows open the store once and read rows in chunked IN lists, so query counts stay flat as rows grow.
-// Row reads by id and the read surfaces: outcome, quarantine, drill-down, strengthening, the dashboard and hippo_status.
 import { describe, it, expect } from 'vitest';
 import { recordStatements, recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
 import { closeHippoDb } from '../../src/db/index.js';
@@ -103,7 +101,6 @@ describe('drillDown', () => {
     for (const n of SIZES) {
       const root = freshRoot('qc-drill-page');
       const summary = memory('summary of the zephyrine cache work', { dagLevel: 2, layer: Layer.Semantic });
-      // Newest first on disk, so the page is the oldest five only if the read sorts by created.
       const children = Array.from({ length: n }, (_, i) =>
         memory(`child ${i} of the zephyrine cache`, {
           dagLevel: 1,
@@ -306,12 +303,10 @@ describe('an id-list read of one tenant', () => {
     const entries = rows(10, 'plan');
     seed(ctxFor(root), entries);
     const ids = entries.map((e) => e.id);
-    // Inside a runtime, as the CLI runs it, the outcome's mirror rewrite stays held until dispose.
     const runtime = new StoreRuntime();
     const ctx = { ...ctxFor(root), store: sqliteStore(root, { runtime }) };
     const { result, statements } = await recordStatementsAsync(async () => {
       await outcome(ctx, ids, true);
-      // Read through the runtime's store: an open without it would run the held rewrite now, inside the recording.
       const listed = await ctx.store.entriesByIds(ids, 'default');
       return { held: listed.some((e) => e.id === ids[0]), listed: listed.length };
     });

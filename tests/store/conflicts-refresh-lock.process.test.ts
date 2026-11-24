@@ -1,5 +1,3 @@
-// Sleep's conflict refresh reads every memory before it takes the write lock, and its row writes never overwrite a value
-// another writer set after that read.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,7 +13,6 @@ interface StatementProto {
   iterate(...params: unknown[]): Iterable<object>;
   readonly sourceSQL: string;
 }
-// The refresh's one read of every stored conflicts_with_json, made before it takes the write lock.
 const STORED_REFS_READ = "WHERE conflicts_with_json != '[]'";
 // SAFETY: node:sqlite's DatabaseSync is the class db.ts wraps as DatabaseSyncLike, and StatementSync is what its prepare returns.
 const { DatabaseSync, StatementSync } = createRequire(import.meta.url)('node:sqlite') as {
@@ -32,7 +29,6 @@ afterEach(() => {
   for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
 });
 
-/** A store of `n` rows, all copies of one written row, so the seeding costs one statement. */
 function bulkStore(n: number): string {
   const root = makeRoot('conflict-lock');
   roots.push(root);
@@ -87,7 +83,6 @@ describe('conflict refresh', () => {
     let locked = false;
     let lockSeen = false;
     let commits = 0;
-    // Statements run plus rows read while the lock is held: a count, so no runner is too slow for it.
     let touchedUnderLock = 0;
     const { exec } = DatabaseSync.prototype;
     const { run, get, all, iterate } = StatementSync.prototype;
@@ -134,7 +129,6 @@ describe('conflict refresh', () => {
 
     expect(commits).toBe(1);
     expect(lockSeen).toBe(true);
-    // Ten pairs need a few dozen; a pass over the memories table inside the lock adds every one of its rows.
     expect(touchedUnderLock).toBeLessThan(STORE_ROWS / 10);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_2"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');
@@ -152,7 +146,6 @@ describe('conflict refresh', () => {
       return rows;
     });
 
-    // pair(1, 2) is re-detected, pair(3, 4) goes stale, pair(5, 6) is new.
     replaceDetectedConflicts(root, [pair(1, 2), pair(5, 6)], NOW);
     vi.restoreAllMocks();
 
@@ -170,7 +163,6 @@ describe('conflict refresh', () => {
     const readAs: string[] = [];
     const { exec } = DatabaseSync.prototype;
     const { all } = StatementSync.prototype;
-    // The other writer commits on its own handle when the refresh opens its write scope, which is after the refresh's reads.
     vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (this: DatabaseSyncLike, sql: string) {
       if (sql === 'BEGIN IMMEDIATE' && !gated) {
         gated = true;
@@ -178,7 +170,6 @@ describe('conflict refresh', () => {
       }
       exec.call(this, sql);
     });
-    // The refresh counts a row its stored-refs read did not return as '[]', so this records mem_bulk_1 the same way.
     vi.spyOn(StatementSync.prototype, 'all').mockImplementation(function (this: StatementProto, ...params: unknown[]) {
       const rows = all.apply(this, params);
       if (this.sourceSQL.includes(STORED_REFS_READ)) {
@@ -191,7 +182,6 @@ describe('conflict refresh', () => {
     replaceDetectedConflicts(root, [pair(1, 2)], NOW);
     vi.restoreAllMocks();
 
-    // A refresh that read after the other writer would hold its value as the stored one and overwrite it.
     expect(readAs).toEqual(['[]']);
     expect(refsOf(root, 'mem_bulk_1')).toBe('["mem_bulk_3"]');
     expect(refsOf(root, 'mem_bulk_2')).toBe('["mem_bulk_1"]');

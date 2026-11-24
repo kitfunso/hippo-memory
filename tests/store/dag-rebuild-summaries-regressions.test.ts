@@ -1,4 +1,3 @@
-// DAG E3 rebuild regressions: born-dirty buildDag, tenant partitioning, race-loser no-op, cap clamp and tombstone counts.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -30,7 +29,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('REGRESSION LOCK: buildDag clean-up. Born-dirty fix: brand-new summaries are NOT re-rebuilt on same sleep cycle.', async () => {
-    // Setup 3 extracted facts (buildDag's minimum cluster size) sharing entity tags
     const factA = createMemory('alice did X', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
@@ -55,7 +53,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
     const fetcher = makeOkFetcher('synthetic-summary-X-from-fetcher-mocked-out');
 
-    // Invoke buildDag with injected fetcher
     const buildResult = await buildDag(sqliteStore(hippoRoot), [factA, factB, factC], {
       now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -63,12 +60,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     });
     expect(buildResult.summariesCreated).toBe(1);
 
-    // The created summary MUST NOT be dirty (the clearSummaryDirtyAfterBuild
-    // call inside buildDag cancels the dirty-marks fired during child linkage)
     const stillDirty = await loadAllDirtySummaries(hippoRoot);
     expect(stillDirty.length).toBe(0);
 
-    // Audit row for summary_marked_clean source='buildDag-clean' should exist
     const db = openHippoDb(hippoRoot);
     try {
       // SAFETY: metadata_json is a NOT NULL TEXT column on audit_log; .all()
@@ -78,7 +72,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         SELECT metadata_json FROM audit_log WHERE op = 'summary_marked_clean'
       `)
         .all() as Array<{ metadata_json: string }>;
-      // One summary was built, and its dirty flag cleared once.
       expect(auditRows).toHaveLength(1);
       const meta = JSON.parse(auditRows[0].metadata_json);
       expect(meta.source).toBe('buildDag-clean');
@@ -86,7 +79,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       closeHippoDb(db);
     }
 
-    // Now run rebuildDirtySummaries — must report attempted=0
     const rebuildResult = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       now: evalNow(),
       llm: anthropicLlm({ apiKey: 'k', fetcher }),
@@ -97,14 +89,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   });
 
   it('T-followup (hardening pass, docs/plans/2026-08-15-hardening-at1-followups.md): buildDag partitions unparented facts by tenant — two tenants sharing a speaker: tag produce two per-tenant summaries, never one cross-tenant summary in default', async () => {
-    // Deliberately the SAME entity tag ('speaker:alice') across both
-    // tenants so that without the tenant partition, clusterFacts's jaccard
-    // match on entityTags would merge all 6 facts into one 6-member cluster
-    // whose LLM-synthesized summary then landed in 'default' regardless of
-    // source (memory.ts:535's implicit default when createMemory isn't
-    // passed a tenantId). Mirrors T1(a)'s cross-tenant shape
-    // (tests/store/consolidate-tenant-landing.test.ts) but for the DAG producer
-    // (dag.ts buildDag) instead of consolidate.ts's merge pass.
     const aFacts = ['alice did X', 'alice said Y', 'alice noted Z'].map((c) =>
       createMemory(c, {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -126,16 +110,12 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     for (const f of [...aFacts, ...bFacts]) writeEntry(hippoRoot, f);
 
     const fetcher = makeOkFetcher('synthetic-tenant-partitioned-summary');
-    // Host-wide input, exactly like consolidate.ts:543's `extractedFacts`
-    // (survivors filtered host-wide, no tenant slicing by the caller) —
-    // buildDag itself must do the tenant separation, not its caller.
     const result = await buildDag(sqliteStore(hippoRoot), [...aFacts, ...bFacts], {
       now: evalNow(),
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       llm: anthropicLlm({ apiKey: 'test-key', fetcher }),
     });
 
-    // Two separate per-tenant clusters, not one 6-member cross-tenant cluster.
     expect(result.candidateClusters).toBe(2);
     expect(result.summariesCreated).toBe(2);
     expect(result.factsLinked).toBe(6);
@@ -152,8 +132,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       expect(tenants).toEqual(['tenant-a', 'tenant-b']);
       expect(tenants).not.toContain('default');
 
-      // Each tenant's 3 members must be re-parented under THAT tenant's own
-      // summary — no member crossed into the other tenant's cluster.
       const summaryByTenant = new Map(summaries.map((s) => [s.tenant_id, s.id]));
       for (const [tenantId, facts] of [
         ['tenant-a', aFacts],
@@ -177,7 +155,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
   it('race-loser no-op: pre-cleared dirty flag → applyRebuildResult returns false, no audit, no rebuild_count bump', async () => {
     const summary = makeSummary('s11-summary-content');
     writeEntry(hippoRoot, summary);
-    // Note: we do NOT force-mark dirty — simulate the race-loser by leaving clean
 
     const result = await applyRebuildResult(hippoRoot, summary, {
       now: evalNow(),
@@ -190,7 +167,7 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       actor: 'test',
     });
     expect(result.changed).toBe(false);
-    expect(result.refused).toBe(false); // race-loser, not a refusal — no tombstone hit
+    expect(result.refused).toBe(false);
 
     const db = openHippoDb(hippoRoot);
     try {
@@ -199,12 +176,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         `SELECT content, rebuild_count, summary_dirty FROM memories WHERE id = ?`,
         summary.id,
       );
-      // Content unchanged
       expect(row.content).toBe('s11-summary-content');
-      // rebuild_count UNCHANGED (null or 0)
       expect(row.rebuild_count ?? 0).toBe(0);
 
-      // No summary_rebuilt audit row for this summary
       // SAFETY: COUNT(*) always returns exactly one row shaped { n: number }.
       const auditRow = db
         .prepare(`
@@ -219,8 +193,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
 
   it('cap hard-ceiling: consolidate() clamps HIPPO_DAG_REBUILD_CAP before it reaches rebuildDirtySummaries', async () => {
     const originalFetch = global.fetch;
-    // The spy reads the cap consolidate() computed, so the 1000 ceiling is
-    // proven without seeding more than 1000 dirty rows.
     const rebuildSpy = vi.spyOn(dagModule, 'rebuildDirtySummaries');
     try {
       const sum = makeSummary('sum-0');
@@ -241,13 +213,11 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
       ];
       for (const [index, [raw, expected]] of table.entries()) {
         vi.stubEnv('HIPPO_DAG_REBUILD_CAP', raw);
-        // A root's config, so the raw value takes the path the CLI and server give it.
         const result = await consolidate(hippoRoot, { config: configReader(envRuntimeSettings)(hippoRoot) });
         expect(rebuildSpy).toHaveBeenCalledTimes(index + 1);
         expect(rebuildSpy.mock.calls[index][1].cap).toBe(expected);
         if (index === 0) {
           const processed = result.summariesRebuilt + result.summariesZeroChildSkipped + result.summariesRebuildFailed;
-          // The one dirty summary seeded above.
           expect(processed).toBe(1);
         }
       }
@@ -267,8 +237,6 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
     const rejectedContent = 'this-exact-content-was-already-rejected-XYZ';
     rejectValue(hippoRoot, summary.tenantId, rejectedContent);
 
-    // Fetcher regenerates content byte-identical to the tombstoned value —
-    // the deterministic-summarization scenario the AT1 P1a fix guards.
     const fetcher = makeOkFetcher(rejectedContent);
     const result = await rebuildDirtySummaries(sqliteStore(hippoRoot), {
       now: evalNow(),
@@ -296,13 +264,9 @@ describe('sleep-cycle rebuildDirtySummaries', () => {
         rebuild_count: number | null;
         descendant_count: number | null;
       };
-      // Content NOT overwritten — the tombstone refused it.
       expect(row.content).toBe('original summary content');
-      // Dirty still clears — no infinite retry loop (the pre-existing
-      // no-infinite-retry choice T4 keeps).
       expect(row.summary_dirty).toBe(0);
       expect(row.rebuild_count ?? 0).toBe(0);
-      // Metadata still applies alongside the refusal.
       expect(row.descendant_count).toBe(1);
 
       // SAFETY: this get() result's shape matches the single aliased `n`

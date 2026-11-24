@@ -1,5 +1,3 @@
-// Every request but the public ones needs a key, from this machine too: a forwarded port (ssh -L, socat) looks local.
-// The CLI here sends the key serve writes to server.key at each start, which only this user can read.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
 import { readFileSync, rmSync, statSync } from 'node:fs';
@@ -15,7 +13,6 @@ import { needsHippoDb, serve } from '../_helpers/store-switch.js';
 
 const PLAIN_REFUSAL = 'auth required';
 
-/** The fields these tests read: a refusal carries `error`, /health the rest. */
 interface ReplyBody {
   readonly error?: string;
   readonly ok?: boolean;
@@ -25,7 +22,6 @@ interface ReplyBody {
 
 interface Reply {
   readonly status: number;
-  /** The `error` field of a JSON reply, or '' when the reply has none. */
   readonly error: string;
   readonly json: ReplyBody;
 }
@@ -53,7 +49,6 @@ function call(path: string, { method = 'GET', headers = {}, body }: Call = {}): 
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port: handle.port, method, path, headers: { ...headers } }, (res) => {
       const status = res.statusCode ?? 0;
-      // An accepted event stream never ends on its own, so its status line is the whole answer.
       if (String(res.headers['content-type']).startsWith('text/event-stream')) {
         res.destroy();
         resolve({ status, error: '', json: {} });
@@ -118,7 +113,6 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-/** Requests that reach the loopback socket without being this machine's own user. */
 const NOT_LOCAL: ReadonlyArray<readonly [string, () => Record<string, string>]> = [
   ['a proxied request', () => ({ 'x-forwarded-for': '203.0.113.7' })],
   ['a rebound Host', () => ({ host: `evil.example:${handle.port}` })],

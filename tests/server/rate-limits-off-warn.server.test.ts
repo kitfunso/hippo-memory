@@ -1,4 +1,3 @@
-// A rate limit switched off by env says so at boot; one left on, or switched off in code, says nothing.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { log } from '../../src/base/util/log.js';
 import { bootLimiters } from '../../src/surface/server/rate-limits.js';

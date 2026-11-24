@@ -1,4 +1,3 @@
-// Scratch store, fixed clock and condemned entries the memory-value wiring tests share; each test file gets its own scratch root.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -19,7 +18,6 @@ export const createMemory7 = (content: string, options: Parameters<typeof create
 
 export const repoRoot = path.dirname(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
-// mkdtemp per process: two worktrees running this suite at once must not share a root.
 const SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-wiring-test-scratch-'));
 
 export let dir: string;
@@ -44,7 +42,6 @@ export function enableMemoryValue(hippoRoot: string, extra: Partial<HippoConfig>
   const configPath = path.join(hippoRoot, 'config.json');
   fs.writeFileSync(
     configPath,
-    // dormant off: these gates were pre-registered on the delete path.
     JSON.stringify(
       { memoryValue: { enabled: true }, physics: { enabled: false }, dormant: { enabled: false }, ...extra },
       null,
@@ -81,21 +78,6 @@ export function condemnedEntry(
     outcomeNegative: 0,
     pinned: false,
   };
-  // T5 fix (AT1 in-suite flake): single-source the stored `strength` to the
-  // same frozen clock basis as every other field above, instead of trusting
-  // createMemory's own computed value. createMemory (memory.ts:539) derives
-  // its initial strength via calculateStrength(entry) with NO explicit
-  // `now`, which defaults to a SECOND, separate evalNow() call -- distinct
-  // from the one that stamped created/last_retrieved a few lines earlier
-  // (memory.ts:494). Any real clock tick between those two reads makes
-  // daysSince a tiny positive epsilon instead of exactly 0, so `base.strength`
-  // can land at 0.999999999... instead of 1.0 (confirmed empirically: ~0.1%
-  // of calls landed non-unity in a 200k-iteration stress repro -- rare in
-  // isolation, likelier under full-suite worker contention, matching the
-  // observed isolation-pass/suite-fail split). Re-deriving here against
-  // `created` itself as `now` makes daysSince exactly 0 by definition
-  // (last_retrieved === created above): strength is exactly 1.0 with zero
-  // dependency on the real clock.
   return { ...overridden, strength: calculateStrength(overridden, new Date(created)) };
 }
 

@@ -1,4 +1,3 @@
-// A personal write lands in the caller's own scope with origin '', and no client, vault or CLI can type a personal scope.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -28,7 +27,6 @@ function ctxFor(actor: Actor): FullContext {
 
 const ownerA: Actor = { subject: 'api_key:hk_a', role: 'member', owner: 'a' };
 
-/** Status and message the HTTP layer would answer with for a refused call. */
 async function refusal(fn: () => void): Promise<{ status: number; message: string }> {
   try {
     await fn();

@@ -1,4 +1,3 @@
-// Copilot hook fixtures, and a scratch home whose COPILOT_HOME sits inside it so no test reads a real ~/.copilot.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { JsonValue } from '../../src/base/util/json.js';
@@ -27,7 +26,6 @@ export interface CopilotScratch extends Scratch {
 export function copilotScratch(): CopilotScratch {
   const s = scratch();
   const copilotHome = path.join(s.dir, '.copilot');
-  // VS Code's folders too, so no hook run can read a real VS Code User folder.
   const vscodeFolders = { APPDATA: path.join(s.dir, 'appdata'), XDG_CONFIG_HOME: path.join(s.dir, 'xdg-config') };
   return { ...s, copilotHome, env: { ...s.env, COPILOT_HOME: copilotHome, ...vscodeFolders } };
 }

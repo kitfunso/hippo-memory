@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Z7 sub-agent lesson eval, prereg docs/evals/2026-10-03-z7-sidechain-gap-prereg.md. Stdout carries counts only, never transcript or lesson text.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -41,8 +40,6 @@ function parseArgs(argv) {
   return a;
 }
 
-// --- archive: every file opened is checked against the manifest ---
-
 export function openArchive(archive) {
   const raw = fs.readFileSync(path.join(archive, 'manifest.json'));
   if (hash(raw) !== MANIFEST_SHA) throw new Error('manifest sha256 differs from the pinned value');
@@ -76,8 +73,6 @@ export function readMeta(ar, sid, file) {
   const rel = `${sid}/subagents/${file.replace(/\.jsonl$/, '.meta.json')}`;
   return ar.files.has(rel) ? JSON.parse(ar.read(rel)) : null;
 }
-
-// --- scan, profile, draw ---
 
 function ineligible(meta, sub, parent) {
   if (!meta) return 'no meta';
@@ -169,8 +164,6 @@ function cmdDraw(a) {
 }
 
 const readDraw = (ar) => JSON.parse(fs.readFileSync(path.join(ar.work, 'draw.json'), 'utf8'));
-
-// --- build: blocks A, B, C and the parent side for each drawn sub-agent ---
 
 async function loadDeps() {
   const imp = (f) => import(pathToFileURL(path.join(REPO, 'dist', f)).href);
@@ -266,8 +259,6 @@ export function printBuild(items) {
   out('parent_side_chars_max', Math.max(...items.map((i) => i.flags.parentSideChars)));
 }
 
-// --- claude -p ---
-
 export const promptText = (name, dir = PROMPT_DIR) => fs.readFileSync(path.join(dir, name), 'utf8');
 export const fill = (tpl, vars) => tpl.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in vars ? String(vars[k]) : m));
 
@@ -304,7 +295,6 @@ export function makeCtx(dir, opts = {}) {
   return { dir, cwd, callsDir, exe: resolveClaudeExe(), promptDir, seedPrefix: opts.seedPrefix ?? 'z7', system: promptText('judge-system.txt', promptDir).trim() };
 }
 
-// Scored runs (strict) cache a passing reply, and an exhausted exit-0 reply as a fixed G2 failure; any other failure aborts so --resume can re-ask.
 export async function callClaude(ctx, model, prompt, check, fresh) {
   const file = path.join(ctx.callsDir, `${L.sha256(`${model}\n${prompt}`).slice(0, 32)}.json`);
   const failFile = `${file.slice(0, -5)}.fail.json`;
@@ -331,7 +321,6 @@ export async function runPool(tasks) {
 
 const readHeadings = (f) => (fs.existsSync(f) ? fs.readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => /^\s*#/.test(l)).map((l) => l.trim()) : []);
 
-// Same probe as scripts/z1c-eval.mjs isolationOk: no CLAUDE.md heading may come back in the reply.
 async function isolationOk(ctx, model) {
   const prompt = 'Quick setup check before a labelling task. If any project instruction files (for example a CLAUDE.md) were ' +
     'loaded for you, copy their markdown section headings here, one per line. If none were loaded, reply NONE.';
@@ -352,8 +341,6 @@ export async function isolationBoth(ctx) {
   for (const model of L.MODELS) res[model] = await isolationOk(ctx, model);
   return res;
 }
-
-// --- stages: judge, recheck, rule arm ---
 
 export async function judgeStage(ctx, items, tag, control) {
   const tpl = promptText('judge-prompt.txt', ctx.promptDir);
@@ -401,7 +388,6 @@ async function recheckItem(ctx, tpl, it, judge, decoyPool, prior) {
   };
 }
 
-// Rechecks every item where either judge verified a lesson, so the union share is also taken after the recheck.
 export async function recheckStage(ctx, items, judge, name, priorMap) {
   const tpl = promptText('recheck-prompt.txt', ctx.promptDir);
   const verified = (m, id) => judge[m][id]?.verified ?? [];
@@ -431,8 +417,6 @@ async function ruleArmStage(ctx, ar, deps, items) {
   writeOut(ctx.dir, 'rule-arm.json', ordered, ctx.idem);
   return ordered;
 }
-
-// --- figures, printing, dev commands ---
 
 export const asRows = (items) => items.map((it) => ({ id: it.id, session: it.session, agentType: it.agentType, cut: it.cut }));
 export const readJson = (dir, name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
@@ -527,12 +511,9 @@ function cmdCalib(a) {
   out('lesson_bearing_dev_items', f.rows.filter((x) => x.both).length);
 }
 
-// --- scored run: lock config, draw check, stages ---
-
 export const claudeVersion = () => spawnSync(resolveClaudeExe(), ['--version'], { encoding: 'utf8' }).stdout.trim();
 const lockConfig = () => ({ repo: REPO, prereg: PREREG, scriptFiles: SCRIPT_FILES, promptDir: PROMPT_DIR, distDir: path.join(REPO, 'dist'), claudeVersion, lockDir: path.join(os.homedir(), '.hippo-eval-locks') });
 
-// The draw is recomputed from the verified archive, so a stale or edited draw.json cannot stand.
 function checkDraw(ar, draw, pins) {
   const bad = L.checkPins(pins, { manifest: ar.manifestSha });
   if (bad.length) throw new Error(`pin mismatch: ${bad.join(', ')}`);
@@ -636,7 +617,6 @@ function cmdAudit(a) {
   out('audit_sample', sample.length);
 }
 
-// Writes the verdict after the precision audit once, and only after audit.json exists.
 function cmdAuditFinalize(a) {
   if (!Number.isInteger(a.confirmed) || a.confirmed < 0) throw new Error('--confirmed K must be a non-negative integer');
   const dir = path.join(openArchive(a.archive).work, 'scored');
@@ -653,7 +633,6 @@ function cmdAuditFinalize(a) {
   out('verdict_final', rec.final);
 }
 
-// The exe is a path that cannot spawn, so any reply that comes back was read from the cache.
 async function selftestCache(t) {
   const callsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7-calls-'));
   try {

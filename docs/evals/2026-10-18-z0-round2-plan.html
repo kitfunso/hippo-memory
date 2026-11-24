@@ -19,7 +19,6 @@
 <main>
 <doc-plan>
 
-<!-- 1 -->
 <doc-claim>
   <p>Hippo changes only after a paired test on development families.</p>
   <doc-flow caption="A dev round loops until the cap in claim 1.4 stops it.">
@@ -93,7 +92,6 @@ const keep = CODINGS.every((c) => g[c].estimate > g[c].se)
   </doc-claim>
 </doc-claim>
 
-<!-- 2 -->
 <doc-claim>
   <p>A new family gets written only if A0 breaks its rule.</p>
   <doc-mock frame="terminal" title="probe" w="470" caption="A dropped candidate uses no family number."><template><span class="dim">></span> s3x-prescreen.ps1 r1-candidates.json
@@ -136,7 +134,6 @@ foreach ($c in (Get-Content $Candidates | ConvertFrom-Json)) {
   </doc-claim>
 </doc-claim>
 
-<!-- 3 -->
 <doc-claim>
   <p>Round 2 scores fresh repositories at the size z0-size gives.</p>
   <doc-code title="sizes-a2x-e0.15-r10.json · the design of the go, excerpt" lang="json" caption="The go fixed this design on 2026-10-16. It does not pass at the spread bounds.">
@@ -194,7 +191,6 @@ batch 2   screened 189, kept 50   <span class="g">unread rules</span>
   </doc-claim>
 </doc-claim>
 
-<!-- 4 -->
 <doc-claim>
   <p>Every arm of a cell runs on the same box state.</p>
   <doc-mock frame="terminal" title="box and hooks, 2026-10-18" w="470" caption="In the pilot, A0, A1 and A4 ended before 03:25; A2 ran after 11:23."><template><span class="dim">></span> bash box-check.sh
@@ -250,7 +246,6 @@ foreach ($s in 1, 2, 3) {
   </doc-claim>
 </doc-claim>
 
-<!-- 5 -->
 <doc-claim>
   <p>A new registration fixes round 2 before any fresh family exists.</p>
   <doc-code title="2026-10-xx-z0-round2-prereg.md · sketch" lang="markdown">

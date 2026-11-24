@@ -1,22 +1,3 @@
-/**
- * E1.3 incident-recall eval (Task 17).
- *
- * ROADMAP success criterion: recall surfaces incident context faster than
- * transcript replay on at least 7 of 10 staged scenarios.
- *
- * Approach (review patch #8): stamp a per-message sentinel
- * `[s:<scenario.id>:<m.ts>]` into the ingested text. Sentinels are unique
- * across the corpus, so checking sentinel substring presence in
- * `RecallResultItem.content` is a deterministic equality test — no false
- * positives from ambient phrase repetition, no need to extend the recall
- * response shape with artifact_ref.
- *
- * Baseline: take the last 10 messages of the raw transcript (the
- * "transcript replay" a human would do by scrolling to the bottom). Answers
- * are buried mid-transcript so the baseline misses them. Recall must beat
- * that on >=7/10 scenarios.
- */
-
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -54,7 +35,6 @@ export interface IncidentRecallEvalResult {
 
 export async function runIncidentRecallEval(opts: {
   hippoRoot: string;
-  /** The test's session, so its calls share one handle per store. */
   session?: RequestStores;
 }): Promise<IncidentRecallEvalResult> {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -100,9 +80,6 @@ export async function runIncidentRecallEval(opts: {
     ).length;
     const recallPrecision = recallHit / sc.answer_ts.length;
 
-    // Baseline: linear transcript scan returning the last 10 messages — what a
-    // human does when they scroll to the bottom of a Slack channel. Direct
-    // ts equality is enough; sentinels are not in the raw transcript.
     const tail = sc.transcript.slice(-10);
     const baselineHit = sc.answer_ts.filter((ts) =>
       tail.some((m) => m.ts === ts),

@@ -1,4 +1,3 @@
-// A held write lock answers a server write with a quick 503 and Retry-After instead of stalling the event loop for seconds.
 import { afterAll, beforeAll, describe, expect, it, vi, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 import { MessageChannel } from 'node:worker_threads';
@@ -58,7 +57,6 @@ describe('server under a held write lock', () => {
       expect(busy.status).toBe(503);
       expect(busy.headers.get('retry-after')).toBe('1');
       expect(await busy.json()).toEqual({ error: expect.stringMatching(/store busy/) });
-      // The write waits on the store's writer thread, so the request opened no connection on this one.
       expect(countMatching(statements, STORE_OPEN)).toBe(0);
       const failureLine = (call: unknown[]): boolean => String(call[0]).startsWith('POST /v1/memories failed');
       expect(warn.mock.calls.filter(failureLine)).toHaveLength(1);
@@ -89,7 +87,6 @@ describe('server under a held write lock', () => {
       walPages: 100,
     };
     holder.exec('BEGIN IMMEDIATE');
-    // The worker's own job loop, run on this thread so its statements can be read; 7 is a wait no default has.
     const { result: reply, statements } = await recordStatementsAsync(() => {
       serveJobs(port1, { rules: {}, hippoRoot: home, mode: 'write', busyWaitMs: 7 });
       port2.postMessage(job);
@@ -100,7 +97,6 @@ describe('server under a held write lock', () => {
     port2.postMessage('stop');
     await closed;
 
-    // The job answers in the port's terms: a store-busy error whose cause is SQLite's own.
     expect(reply).toMatchObject({
       id: 1,
       ok: false,

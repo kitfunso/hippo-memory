@@ -1,23 +1,3 @@
-/**
- * Runtime tests for GET /v1/context (Episode B, Task 3).
- *
- * Thin wrapper over api.contextGet. Returns ContextResult JSON (entries,
- * tokens, activeSnapshot, sessionHandoff, recentEvents). No server-side
- * rendering — clients render markdown / json / additional-context.
- *
- * Coverage:
- *   - default budget returns entries (200)
- *   - budget cap honored
- *   - q filter
- *   - pinned_only flag
- *   - activeSnapshot in response
- *   - budget=0 short-circuit
- *   - budget=-1 -> 400
- *   - tenant scoping: tenant_a Bearer never sees tenant_b
- *
- * Real HTTP server (serve port:0), per-test isolated local + global stores.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -71,7 +51,6 @@ describe('GET /v1/context', () => {
     expect(res.status).toBe(200);
     const body = await jsonAs<{ entries: unknown[]; tokens: number }>(res);
     expect(body.entries).toHaveLength(5);
-    // Each row prices as its printed line `- **[verified] ctx-route-mem-N** (100%)`: 39 chars and a newline.
     expect(body.tokens).toBe(50);
   });
 
@@ -90,11 +69,6 @@ describe('GET /v1/context', () => {
   it.skipIf(needsHippoDb('team'))(
     'v39 origin partition at the HTTP surface: default excludes cross-project rows, cross_project=1 re-includes',
     async () => {
-      // The route derives the partition identity from the SERVED STORE's parent
-      // (server.ts /v1/context: resolveProjectIdentity(dirname(hippoRoot))), so
-      // this test serves a project-shaped store <tmp>/proj-a/.hippo — the
-      // outer describe's bare-tmpdir store resolves to a NON-project session
-      // ('' identity), which admits everything by design (pre-v39 parity).
       const isoTmp = makeRoot('srv-iso', { init: false });
       const projHippo = join(isoTmp, 'proj-a', '.hippo');
       mkdirSync(projHippo, { recursive: true });
@@ -103,7 +77,6 @@ describe('GET /v1/context', () => {
       try {
         const ctx: FullContext = apiCtx(projHippo, 'default', { subject: 'localhost:cli', role: 'admin' });
         await remember(ctx, { content: 'ownrow deploykey local fact' });
-        // Cross-project row in the GLOBAL store (the 2026-07-01 leak shape).
         writeEntry(globalHome, {
           ...createMemory('BRAVO deploykey cross-project fact', { pinned: true }),
           originProject: 'proj-b',
@@ -133,8 +106,6 @@ describe('GET /v1/context', () => {
     async () => {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
       await remember(ctx, { content: 'harmless deploykey row' });
-      // Secret-bearing rows: one cross-project, one with no origin — neither
-      // may ambient-inject regardless of the cross_project override.
       writeEntry(globalHome, {
         ...createMemory('deploykey secret sk_vendor_deadbeef123456 from proj-b', { pinned: true }),
         originProject: 'proj-b',
@@ -177,11 +148,9 @@ describe('GET /v1/context', () => {
   });
 
   it.skipIf(needsHippoDb('team'))('pinned_only filters to pinned entries only', async () => {
-    // Seed: 2 unpinned + 1 pinned. Default-tenant memories.
     const ctx: FullContext = apiCtx(home, 'default', { subject: 'localhost:cli', role: 'admin' });
     await remember(ctx, { content: 'unpinned-1' });
     await remember(ctx, { content: 'unpinned-2' });
-    // Use store-level write for pinned to keep the test simple.
     const { writeEntry } = await import('../_helpers/root-forms.js');
     const { Layer } = await import('../../src/base/memory/entry.js');
     const pinnedEntry = createMemory('pinned-canary', {
@@ -196,7 +165,6 @@ describe('GET /v1/context', () => {
     const body = await jsonAs<{
       entries: Array<{ entry: { id: string; content: string; pinned?: boolean } }>;
     }>(res);
-    // All returned entries should be pinned.
     expect(body.entries.map((e) => e.entry.content)).toEqual(['pinned-canary']);
     for (const e of body.entries) {
       expect(e.entry.pinned).toBe(true);
@@ -230,7 +198,6 @@ describe('GET /v1/context', () => {
     await remember(ctxA, { content: 'belongs-to-default' });
     await remember(ctxB, { content: 'belongs-to-tenant-B' });
 
-    // No Bearer in the request -> ctx.tenantId resolves to 'default'.
     const res = await fetch(`${handle.url}/v1/context?budget=1500`);
     expect(res.status).toBe(200);
     const body = await jsonAs<{
@@ -241,7 +208,6 @@ describe('GET /v1/context', () => {
     expect(contents).not.toContain('belongs-to-tenant-B');
   });
 
-  // v1.11.5: DoS cap on q-param + recall-audit-row HTTP test
   it('q exceeding 1024 chars returns 400', async () => {
     const q = 'a'.repeat(1025);
     const res = await fetch(`${handle.url}/v1/context?q=${q}`);
@@ -264,7 +230,6 @@ describe('GET /v1/context', () => {
     await remember(ctx, { content: 'foo qux' });
     await remember(ctx, { content: 'unrelated content' });
 
-    // Snapshot audit_log count BEFORE the request.
     const db1 = openHippoDb(home);
     const before = listAuditEvents(db1, { tenantId: 'default', op: 'recall' });
     closeHippoDb(db1);
@@ -272,7 +237,6 @@ describe('GET /v1/context', () => {
     const res = await fetch(`${handle.url}/v1/context?q=foo&budget=1000`);
     expect(res.status).toBe(200);
 
-    // Assert EXACTLY one new 'recall' row from THIS request.
     const db2 = openHippoDb(home);
     const after = listAuditEvents(db2, { tenantId: 'default', op: 'recall' });
     closeHippoDb(db2);
@@ -280,9 +244,6 @@ describe('GET /v1/context', () => {
   });
 });
 
-// Episode 01M1VQBCH5CFB8RRKNSRE8RP6M, acceptance criterion 4: contextGet now
-// returns the computed ambientState, and sendJson(res, 200, result) forwards
-// it unchanged, so the route gains the field for free with no route change.
 describe('GET /v1/context - ambientState field', () => {
   let home: string;
   let globalHome: string;
@@ -315,7 +276,6 @@ describe('GET /v1/context - ambientState field', () => {
         ambientState?: { totalMemories: number };
       }>(res);
       expect(body.entries).toHaveLength(1);
-      // `- **[verified] ambient-route-marker-row** (100%)` and a newline: 49 chars.
       expect(body.tokens).toBe(13);
       expect(body.ambientState?.totalMemories).toBe(1);
     },
@@ -332,7 +292,6 @@ describe('GET /v1/context - ambientState field', () => {
       expect(res.status).toBe(200);
       const body = await jsonAs<{ entries: unknown[]; tokens: number; ambientState?: unknown }>(res);
       expect(body.entries).toHaveLength(1);
-      // `- **[verified] ambient-off-marker-row** (100%)` and a newline: 47 chars.
       expect(body.tokens).toBe(12);
       expect(body.ambientState).toBeUndefined();
     },

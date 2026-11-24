@@ -1,7 +1,3 @@
-/** customer_note object: many discrete notes per free-form `customer` column (no entities FK yet), each with its own
- *  supersede chain. The `customer_notes` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE
- *  SET NULL) is for recall. */
-
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
 import type { Objects } from '../../base/ports/store.js';
@@ -36,15 +32,11 @@ export interface SaveCustomerNoteOptions {
 
 export interface ListCustomerNotesOptions {
   status?: NoteStatus;
-  /** Filter to a single customer. */
   customer?: string;
   limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 
-/** Recall-surface content for the memory mirror: customer + note. Named (mirrors buildBriefContent) so the recall
- *  surface is deterministic + unit-testable. */
 function buildNoteContent(customer: string, note: string): string {
   return `${customer}\n\n${note}`;
 }
@@ -56,7 +48,6 @@ export const CUSTOMER_NOTE: SavableDescriptor<'customer_note', SaveCustomerNoteO
   states: VALID_NOTE_STATES,
   closableFrom: ['active'],
   draft(opts, now) {
-    // The customer becomes a `customer:<lc>` recall tag and an identifier, so it must be one line.
     const customer = requireLine(opts.customer, MAX_CUSTOMER_LEN, 'customer');
     const note = requireText(opts.note, MAX_NOTE_LEN, 'note');
     capText(opts.changeSummary, MAX_SHORT_FIELD_LEN, 'changeSummary');

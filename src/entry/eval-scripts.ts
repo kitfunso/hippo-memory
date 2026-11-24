@@ -1,10 +1,6 @@
-// The functions eval and benchmark scripts call by name, with the real embedder, models, HTTP and
-// ports wired in: a frozen script re-points its import line here and keeps every call as written.
 import { hybridSearch as rankHybrid, type HybridRankOptions } from '../domain/search/hybrid.js';
 import { outcomeMultiplier as outcomeNudge } from '../domain/search/boosts.js';
 import { evalNow, evalSwitches, isOutcomeFastAblated } from '../infra/eval-switches.js';
-// Frozen eval scripts set HIPPO_FAKE_NOW per simulated session and read the clock and the
-// recall-boost switch here.
 export { evalNow, isRecallBoostAblated } from '../infra/eval-switches.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { SearchResult } from '../base/rank/search-types.js';
@@ -26,7 +22,6 @@ import { ingestMessage as ingestSlackMessage } from '../surface/connectors/slack
 import { CONNECTOR_GROUPS, type ConnectorContext } from '../surface/connectors/ingest.js';
 import { withEntryInfra } from '../surface/entry-infra.js';
 
-// The target a folderIndex builds carries the embedder, so embedAll needs no wiring of its own.
 export { embedAll } from '../domain/search/embed-memories.js';
 export { folderIndex } from '../surface/folder-index.js';
 
@@ -70,7 +65,6 @@ export function judgeAll(
   return judgeOver(contents, { ...rest, http: httpOver(fetcher) });
 }
 
-/** `fn` with the entry's real ports filled into a Context its script built without them. */
 function filled<A extends unknown[], R>(
   fn: (ctx: Context, ...args: A) => R,
 ): (ctx: EntryContext, ...args: A) => R {
@@ -86,14 +80,11 @@ export function remember(
   ctx: EntryContext,
   opts: RememberOptions | GatedRememberOptions,
 ): Promise<RememberResult | RememberSkipped> {
-  // A plain RememberOptions is a GatedRememberOptions with the gate off.
   return api.remember(withEntryInfra(ctx), { salienceGate: false, ...opts });
 }
 export const retrieve = filled(api.retrieve);
 export const retrieveRanking = filled(api.retrieveRanking);
 export const retrieveWithCliCore = filled(api.retrieveWithCliCore);
-/** A connector ingest on the store its script opened; a store without the connector groups
- * refuses before it writes. */
 function connector<A extends unknown[], R>(
   fn: (ctx: ConnectorContext, ...args: A) => R,
 ): (ctx: EntryContext, ...args: A) => R {

@@ -45,12 +45,9 @@ function replyWithFailure<E>(
     res.setHeader('Retry-After', String(err.retryAfterSec));
   }
   if (mapped.status === 500) {
-    // The id lets an operator find the logged cause without the client seeing internal text.
     sendJson(res, 500, { error: mapped.message, requestId });
     return;
   }
-  // RecallContractError keeps the shared {error} shape and adds `code` so clients branch without
-  // parsing prose.
   if (err instanceof RecallContractError) {
     sendJson(res, 400, { error: err.message, code: err.code });
     return;
@@ -59,8 +56,6 @@ function replyWithFailure<E>(
     sendJson(res, 504, { error: err.message, code: err.code, requestId });
     return;
   }
-  // readBody hit its cap or deadline, so close once the 413 or 408 is out rather than drain what
-  // the client keeps sending.
   if (err instanceof BodyTooLargeError || err instanceof BodyTimeoutError) {
     res.once('finish', () => closeAfterReply(req));
   }
@@ -70,8 +65,6 @@ function replyWithFailure<E>(
 const HANDLER_LATE =
   'the request did not finish by its deadline and was abandoned; a write it started may or may not be saved';
 
-// The caller already has its 504, so this line is the only trace of the failure. The path and the
-// error text can hold caller data, so it carries neither.
 function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): void {
   const fields = {
     requestId,
@@ -82,17 +75,12 @@ function logLateFailure<E>(req: IncomingMessage, err: E, requestId: string): voi
   log.warn('request failed after its deadline reply', { ...fields, ...errorClassFields(err) });
 }
 
-// A handler that ends after the 504 finds the response finished, so sending its own reply throws
-// this: its work ran to the end.
 function isDroppedLateReply<E>(err: E): boolean {
   return errorCode(err) === 'ERR_HTTP_HEADERS_SENT';
 }
 
-/** A GET only reads; every other method this server routes can write. */
 const isRead = (method: string): boolean => method === 'GET';
 
-// A read that ends late changed nothing. A write that ends late ran to its end after its caller was
-// told it may not have been saved.
 function logLateFinish(req: IncomingMessage, requestId: string): void {
   const method = req.method ?? 'GET';
   if (isRead(method)) return;
@@ -112,7 +100,6 @@ function replyOrClose<E>(
   try {
     replyWithFailure(req, res, err, requestId);
   } catch (replyErr) {
-    // A throw here would be an unhandled rejection, which stops the daemon for every caller.
     log.error(
       `serve: failure reply not sent, socket closed: ${errorMessage(replyErr)}`,
       errorFields(replyErr),
@@ -137,7 +124,6 @@ export function answerRequest(
   const requestId = openRequest(req, res, slowWarnMs);
   const deadline = requestDeadlineFor(req);
   const abort = deadline ? new AbortController() : undefined;
-  // Inside the scope, so the failure reply's log line carries the id too.
   runWithRequestId(requestId, () => {
     if (deadline) {
       answerAtDeadline(

@@ -33,12 +33,8 @@ function verifyKey(plaintext: string, stored: string): boolean {
 export interface CreateApiKeyOptions {
   tenantId: string;
   label?: string;
-  /** 'admin' | 'member'. Defaults to 'member', like the API layer. */
   role?: 'admin' | 'member';
-  /** The auth-resolver subject a self-service key belongs to; unset for keys an admin or the CLI
-   * mints. */
   ownerSubject?: string;
-  /** ISO time the key stops working; unset means DEFAULT_KEY_TTL_DAYS from now. */
   expiresAt?: string;
 }
 
@@ -48,8 +44,6 @@ export interface CreateApiKeyResult {
 }
 
 export function insertApiKey(db: DatabaseSyncLike, key: NewApiKey): void {
-  // Migration v26 (role column) has already run; an older binary ignores expires_at and would
-  // honour an expired key, so the store shuts it out before the first one exists.
   if (key.expiresAt !== null) raiseMinBinary(db, EXPIRING_KEYS_MIN_BINARY);
   cachedStatement(
     db,
@@ -88,9 +82,7 @@ interface ValidateResult {
   valid: boolean;
   tenantId?: string;
   keyId?: string;
-  /** 'admin' | 'member'. Present only when valid=true. */
   role?: 'admin' | 'member';
-  /** Scope grants for this key. Present only when valid=true. */
   scopes?: string[];
 }
 
@@ -121,8 +113,6 @@ export function readApiKeyRecord(db: DatabaseSyncLike, keyId: string): ApiKeyRec
   };
 }
 
-/** One full check against the store: shape, row, revocation, expiry, then scrypt. Null for any
- * failure. */
 function verifyApiKey(db: DatabaseSyncLike, plaintext: string, now: number): VerifiedApiKey | null {
   const keyId = mintedKeyId(plaintext);
   if (keyId === null) return null;
@@ -165,7 +155,6 @@ export function ungrantScope(db: DatabaseSyncLike, keyId: string, scope: string)
   );
 }
 
-/** Every restricted scope `keyId` may read. */
 function listScopeGrants(db: DatabaseSyncLike, keyId: string): string[] {
   const rows = cachedStatement(
     db,
@@ -183,7 +172,6 @@ function apiKeyFilter(opts: ListApiKeysOptions, now: string): ApiKeyFilter {
   const where: string[] = ['1 = 1'];
   const params: Array<string | number> = [];
   if (opts.active) {
-    // In SQL so a page holds `limit` usable keys; toISOString stamps compare correctly as strings.
     where.push('revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)');
     params.push(now);
   }
@@ -251,6 +239,5 @@ export function listLiveOwnedKeyIds(
     `SELECT key_id, expires_at FROM api_keys WHERE tenant_id = ? AND owner_subject = ? AND revoked_at IS NULL ` +
       `ORDER BY id`,
   ).all(tenantId, ownerSubject) as Array<{ key_id: string; expires_at: string | null }>;
-  // Expiry is filtered here, not in SQL, so it follows the same Date.parse rule the key check uses.
   return rows.filter((r) => now < keyExpiryMs(r.expires_at)).map((r) => r.key_id);
 }

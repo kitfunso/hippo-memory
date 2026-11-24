@@ -1,4 +1,3 @@
-// How a query picks context rows.
 import { recallScopeFilter } from '../../base/scope/recall-scope.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { auditQueryFields } from '../../base/records/audit-report.js';
@@ -28,7 +27,7 @@ export async function selectBySearch(
   ctx: Context,
   { plan, left, pools, admission }: SelectBySearchOptions,
 ): Promise<ContextResultEntry[]> {
-  const minResults = plan.cost ? 0 : undefined; // a priced block skips an oversize top hit too, so the budget bounds it
+  const minResults = plan.cost ? 0 : undefined;
   const results =
     plan.hasGlobal && !plan.primaryIsGlobal
       ? await searchBothStores(ctx, plan, {
@@ -47,8 +46,6 @@ export async function selectBySearch(
   return results;
 }
 
-// The pools were admitted at load, before ranking, dedupe and budget: a post-filter would let an
-// excluded row fill the budget or shadow its admitted duplicate.
 interface SearchBothStoresOptions {
   readonly left: number;
   readonly minResults: number | undefined;
@@ -84,7 +81,6 @@ async function searchBothStores(
   }));
 }
 
-/** What both context engine calls rank under, built once so a new ranking input reaches each. */
 function engineSettings(ctx: Context, plan: ContextPlan) {
   return {
     scope: plan.activeScope,
@@ -95,8 +91,6 @@ function engineSettings(ctx: Context, plan: ContextPlan) {
   };
 }
 
-// A local pool row is local by construction; sync keeps a global row's id on its local copy, so
-// the global pool is looked up.
 async function globalHitTest(
   ctx: Context,
   plan: ContextPlan,
@@ -121,13 +115,10 @@ function bothVectorSources(ctx: Context, plan: ContextPlan) {
       onHippoDb: ctx.reach?.isHippoDb,
       embedderFor: ctx.infra.embedderFor,
     }),
-    // Its own config.json names the global store's embedding model, read only when the vector arm
-    // runs.
     global: globalVectorSource(ctx),
   };
 }
 
-/** The vector arm under the lexical window's own tenant, scope and current-row rules. */
 function contextVectorSpec(
   ctx: Context,
   plan: ContextPlan,
@@ -185,8 +176,6 @@ async function searchLocalRows(
   }));
 }
 
-// Same 'recall' op api.recall emits; the pinned-only and no-query branches never search, so they
-// never emit.
 async function auditContextRecall(
   ctx: Context,
   plan: ContextPlan,
@@ -204,7 +193,6 @@ async function auditContextRecall(
   }
 }
 
-/** The global store's vectors, embedded by the model its own config.json names. */
 function globalVectorSource(ctx: Context): VectorSource | undefined {
   const { store, config } = globalInReach(ctx);
   return vectorSourceOf({ store, config, onHippoDb: true, embedderFor: ctx.infra.embedderFor });

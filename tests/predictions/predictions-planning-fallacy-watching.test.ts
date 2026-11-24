@@ -1,23 +1,3 @@
-/**
- * v1.13.4 / J3.2 follow-up — PlanningFallacyWatching variant.
- *
- * Closes the silent-no-class-match path identified by the 2026-05-27
- * dogfood diary Trial 2a (docs/dogfood/2026-05-27-track-j-warnings.md):
- * a natural-language query carrying a forward-claim phrase silently
- * emitted no signal when its tokens didn't overlap with any prediction
- * class tag. v1.13.4 surfaces these via a new `PlanningFallacyWatching`
- * type on `RecallResult.planningFallacyWatching`, mutually exclusive
- * with `planningFallacyHint`.
- *
- * Tests:
- *   1. Output.watching set on no_class_match (regex matched, no classes scored >=1)
- *   2. Output.watching set on tiebreak (>=2 classes tied at best score)
- *   3. api.recall populates RecallResult.planningFallacyWatching when output is watching
- *   4. Mutual exclusivity: hint and watching never co-exist
- *
- * Project rule: always use real DB for tests.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -34,8 +14,6 @@ function ctxFor(root: string): FullContext {
   return apiCtx(root, 'default', { subject: 'test:j32-watch', role: 'admin' });
 }
 
-// Seed N closed predictions in a class so the baserate hint can fire on a
-// matching query (used as the negative control: confirms hint path still works).
 async function seedClosedPredictions(root: string, classTag: string, n: number): Promise<void> {
   for (let i = 0; i < n; i++) {
     const p = await savePrediction(root, 'default', {
@@ -59,13 +37,6 @@ describe('PlanningFallacyWatching', () => {
   afterEach(() => removeDir(root));
 
   it('Output.watching set with reason=tiebreak when >=2 classes tied at best overlap', async () => {
-    // Seed predictions in TWO classes that share NO query tokens between
-    // themselves but each share 1 token with the query. Both classes should
-    // tie at score 1, triggering the tiebreak path.
-    // Query tokens (post-stopword removal): ["migration", "feature"]
-    // Class "migration-effort" tokens: ["migration", "effort"] -> overlap {migration} = 1
-    // Class "feature-effort" tokens: ["feature", "effort"] -> overlap {feature} = 1
-    // -> tie at score 1.
     await seedClosedPredictions(root, 'migration-effort', 1);
     await seedClosedPredictions(root, 'feature-effort', 1);
     const out = await retrieve(ctxFor(root), { query: 'the migration feature will take 2 days' });
@@ -87,8 +58,6 @@ describe('PlanningFallacyWatching', () => {
   });
 
   it('api.recall populates RecallResult.planningFallacyWatching when output is watching', async () => {
-    // Seed at least one memory so recall has results (not strictly required
-    // but exercises the populated-results path).
     writeEntry(
       root,
       createMemory('some unrelated memory content', {

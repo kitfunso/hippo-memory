@@ -35,7 +35,6 @@ describe('api.remember', () => {
     const { listAuditEvents } = await import('../../src/store/sqlite/audit/audit.js');
     const db = openHippoDb(home);
     const events = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
-    // Task 4 dedupe: exactly one audit row, with the supplied actor.
     expect(events.length).toBe(1);
     expect(events[0]!.actor).toBe('api_key:hk_test');
     closeHippoDb(db);
@@ -52,7 +51,6 @@ describe("api.remember stamps the caller's project", () => {
     };
   });
 
-  /** A store inside a git checkout named `proj`, so the folder stamp is `proj`. */
   function storeCtx(flagged: boolean): FullContext {
     mkdirSync(join(tmp, 'proj', '.git'), { recursive: true });
     const store = join(tmp, 'proj', '.hippo');

@@ -1,5 +1,3 @@
-// API key management: create, list, revoke, and grant or ungrant restricted scopes.
-
 import { BadRequestError, ForbiddenError, NotFoundError } from '../../base/errors/api-errors.js';
 import { isRestrictedScope } from '../../base/scope/recall-scope.js';
 import { canWrite, VIEWER_REFUSAL } from '../../base/scope/role.js';
@@ -19,7 +17,6 @@ import type {
 
 const API_KEY_SUBJECT = 'api_key:';
 
-/** The key id an API-key actor's subject names, or null for any other actor. */
 function keyIdOfSubject(subject: string): string | null {
   return subject.startsWith(API_KEY_SUBJECT) ? subject.slice(API_KEY_SUBJECT.length) : null;
 }
@@ -51,15 +48,12 @@ export interface AuthCreateResult {
  * could mint a key for tenant B. Admin only (ForbiddenError otherwise), and a key never outranks
  * its minter: a resolver admin is tenant-only, so it mints members. */
 export async function authCreate(ctx: Context, opts: AuthCreateOptions): Promise<AuthCreateResult> {
-  // The key and its auth_create row commit together on every store, so a failed audit write leaves
-  // no key.
   const keyWrites = ctx.store.keyWrites;
   const { plaintext, mint } = adminKeyMint(ctx, opts);
   await keyWrites.changeApiKey('create', mint);
   return createResult(mint, plaintext);
 }
 
-/** What a mint stores, and the plaintext only its caller sees. */
 interface KeyMintPlan<M extends KeyMint> {
   readonly plaintext: string;
   readonly mint: M;
@@ -72,7 +66,6 @@ interface MintedKeyRow<F extends KeyFields> {
   readonly key: NewApiKey & F;
 }
 
-/** A key row in the caller's tenant, made here so only its hash ever reaches a store. */
 function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
   const { keyId, plaintext, keyHash } = mintApiKey();
   return {
@@ -89,10 +82,8 @@ function newKey<F extends KeyFields>(ctx: Context, fields: F): MintedKeyRow<F> {
 
 export { DEFAULT_KEY_TTL_DAYS };
 
-// The ceiling keeps toISOString in range.
 export const MAX_TTL_DAYS = 3650;
 
-/** A 400, not a RangeError, since the caller of the mint chose these. */
 function mintExpiry({ ttlDays, noExpiry }: AuthCreateOptions, now: Date): string | null {
   if (noExpiry && ttlDays !== undefined) {
     throw new BadRequestError('send ttlDays or noExpiry, not both');
@@ -116,8 +107,6 @@ function adminKeyMint(ctx: Context, opts: AuthCreateOptions): KeyMintPlan<KeyMin
   const label = opts.label ?? null;
   const expiresAt = mintExpiry(opts, ctx.infra.clock());
   const { plaintext, key } = newKey(ctx, { label, role, ownerSubject: null, expiresAt });
-  // The plaintext is NEVER logged; the audit row carries what the key can do and for how long,
-  // keyId is non-secret.
   return {
     plaintext,
     mint: { key, actor: ctx.actor.subject, metadata: { label, role, expiresAt } },
@@ -147,8 +136,6 @@ export interface AuthCreateSelfResult extends AuthCreateResult {
   expiresAt: string;
 }
 
-/** A RangeError, not a 4xx, since the operator's config sets these; the ttl ceiling keeps
- * toISOString in range and a departed user's key short-lived. */
 function assertSelfMintOpts({ ttlDays, perSubject }: AuthCreateSelfOptions): void {
   if (!Number.isFinite(ttlDays) || ttlDays <= 0 || ttlDays > MAX_TTL_DAYS) {
     throw new RangeError(
@@ -185,10 +172,7 @@ function selfKeyMint(ctx: Context, opts: AuthCreateSelfOptions): KeyMintPlan<Sel
   const { subject } = ctx.actor;
   const label = opts.label ?? null;
   const expiresAt = new Date(ctx.infra.clock().getTime() + opts.ttlDays * DAY_MS).toISOString();
-  // Not destructured: a binding pattern makes TypeScript infer F as KeyFields and lose
-  // ownerSubject's string type.
   const made = newKey(ctx, { label, role: 'member', ownerSubject: subject, expiresAt });
-  // Same op and actor as an admin mint, so a lookup by audit row finds this key too.
   return {
     plaintext: made.plaintext,
     mint: {
@@ -240,14 +224,10 @@ async function listRows(
     : keyWrites.listApiKeys({ ...opts, tenantId: ctx.tenantId, ...filter });
 }
 
-/** The key id of a member API key caller, whose owner decides what it lists; null for any other
- * caller. */
 function memberKeyIdOf(actor: Actor): string | null {
   return actor.role === 'admin' || actor.viaAuthResolver ? null : keyIdOfSubject(actor.subject);
 }
 
-/** A member sees only the keys its person minted, or just its own key when that has no owner; an
- * admin sees the whole tenant; null means no keys. */
 function memberListFilter(
   actor: Actor,
   owner: string | null | undefined,
@@ -259,8 +239,6 @@ function memberListFilter(
   return owner ? { ownerSubject: owner } : { keyId };
 }
 
-/** Throws unless `ctx` may revoke `keyId`; a member gets one answer for a missing, foreign or
- * unowned key, so it cannot probe key ids. */
 function assertMayRevoke(
   ctx: EntryContext,
   keyId: string,
@@ -274,7 +252,6 @@ function assertMayRevoke(
   ) {
     throw new ForbiddenError('A caller below admin can revoke only the keys it minted');
   }
-  // Cross-tenant access denied: same message as missing key, no info leak.
   if (!row || row.tenantId !== ctx.tenantId) {
     throw new NotFoundError(`Unknown key_id: ${keyId}`);
   }
@@ -374,7 +351,6 @@ async function changeGrant(
       `${scope} is a personal scope: only its owner reads it, and no grant can change that`,
     );
   }
-  // Ungrant takes the text as stored, so a grant written before this rule can still be removed.
   if (op === 'auth_grant' && scope !== scope.trim()) {
     throw new BadRequestError('scope must not start or end with a space');
   }

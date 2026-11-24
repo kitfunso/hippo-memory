@@ -22,17 +22,11 @@ export function isWellFormedSlackRequest(
 }
 
 export interface VerifyOptions {
-  /** The body's bytes as received; a string is hashed as its UTF-8 encoding. */
   rawBody: string | Uint8Array;
   timestamp: string;
   signature: string;
   signingSecret: string;
-  /**
-   * Previous signing secret during rotation (SLACK_SIGNING_SECRET_PREVIOUS); the verifier tries
-   * `signingSecret` first, then this.
-   */
   previousSecret?: string;
-  /** Current unix seconds. Injectable for tests. */
   now?: number;
   /** Max allowed skew in seconds. Default 5 minutes (Slack's recommendation). */
   skewSeconds?: number;

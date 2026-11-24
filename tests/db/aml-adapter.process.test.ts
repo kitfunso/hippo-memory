@@ -1,15 +1,3 @@
-// tests/db/aml-adapter.process.test.ts
-//
-// Exercises deploy/aml/adapter/adapter.mjs against a real hippo store and a
-// real hippo HTTP server, spawned in a child process exactly the way it runs
-// in production (deploy/aml/entrypoint.sh starts hippo, the adapter runs as
-// its own process in front of it). Every request in this suite goes over
-// real HTTP, no mocks.
-//
-// Store-root convention follows tests/server/serve-nonloopback-auth.server.test.ts's
-// makeEnv: the store root passed to initStore/serve IS the .hippo directory
-// itself, not its parent.
-
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -40,7 +28,7 @@ async function waitForAdapterReady(baseUrl: string, timeoutMs = 10_000): Promise
         const res = await fetch(`${baseUrl}/health`);
         return res.status === 200 || res.status === 503;
       } catch {
-        return false; // not listening yet
+        return false;
       }
     },
     { timeoutMs, intervalMs: 50, what: `adapter reachable at ${baseUrl}` },
@@ -53,13 +41,10 @@ interface AdapterHandle {
   stderrChunks: Buffer[];
 }
 
-// Shared by both describe blocks below so a second real server pair costs
-// one call, not a second copy of the spawn wiring.
 function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
   const stderrChunks: Buffer[] = [];
   return new Promise((resolve, reject) => {
     let stdoutBuf = '';
-    // stdout keeps growing with access-log lines, so the regex matches again on every chunk.
     let readyStarted = false;
     const child = spawn(process.execPath, [ADAPTER_PATH], {
       env: {
@@ -69,7 +54,6 @@ function spawnAdapter(hippoPort: number): Promise<AdapterHandle> {
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    // No handle reaches the caller on a failed start, so the helper must reap its own child.
     const fail = (err: Error): void => {
       clearTimeout(startupTimer);
       child.kill();
@@ -114,9 +98,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   beforeAll(async () => {
     hippoRoot = makeStore('aml-adapter').root;
 
-    // Match the production deployment: hippo requires auth on every route
-    // except GET /health. Without this, hippo's loopback no-auth fallback
-    // would silently admit the adapter's unauthenticated forwards.
     hippoHandle = await serve({ hippoRoot, host: '127.0.0.1', port: 0 });
 
     const db = openHippoDb(hippoRoot);
@@ -155,16 +136,12 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
   }
 
-  // 1. Health -----------------------------------------------------------
-
   it('GET /health: 200 with no auth', async () => {
     const res = await fetch(`${baseUrl}/health`);
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ ok: true });
   });
-
-  // 2. Add happy path + persistence --------------------------------------
 
   it('POST /add happy path: 200, ids echoed byte-exactly, row is findable via /search', async () => {
     const request_id = 'req-happy-0001';
@@ -192,8 +169,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     expect(found).toBe(true);
   });
 
-  // 3. Isolation (load-bearing) -------------------------------------------
-
   it('isolates by user_id: user_a search excludes user_b rows and an unscoped row written directly to hippo', async () => {
     const marker = 'aml-isolation-marker-77';
 
@@ -219,7 +194,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     );
     expect(addB.status).toBe(200);
 
-    // Bypasses the adapter entirely: talks straight to hippo with no scope.
     const directRes = await fetch(`http://127.0.0.1:${hippoHandle.port}/v1/memories`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...authHeader(validKey) },
@@ -239,20 +213,8 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     expect(hasA).toBe(true);
     expect(hasB).toBe(false);
 
-    // OBSERVED (verified by running this suite, not inferred): hippo's
-    // GET /v1/memories?scope=X applies an EXACT-match filter once a
-    // non-empty scope is passed (src/api/index.ts recall(), line ~758:
-    // `entries = all.filter((e) => e.scope === opts.scope)`), and a
-    // directly-written row with no `scope` field has scope=null, which
-    // fails that exact match against 'aml/user-a-iso'. So the unscoped row
-    // does NOT leak into a scoped search. Operational consequence: an
-    // eval store that already has legacy unscoped rows in it does NOT need
-    // to start fresh for THIS adapter's isolation to hold, because the
-    // adapter always sends an explicit non-empty scope on both routes.
     expect(hasUnscoped).toBe(false);
   });
-
-  // 4. Search shape ---------------------------------------------------
 
   it('POST /search: data array, items carry id + content, capped at top_k', async () => {
     const user_id = 'user-shape';
@@ -298,8 +260,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     expect(body).toEqual({ data: [] });
   });
 
-  // 5. Auth ------------------------------------------------------------
-
   describe('auth', () => {
     it('no credential -> 401', async () => {
       const res = await postSearch({ query: 'x', user_id: 'user-auth', top_k: 1 });
@@ -327,8 +287,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
       expect(res.status).toBe(401);
     });
   });
-
-  // 6. Validation --------------------------------------------------------
 
   describe('validation', () => {
     it('POST /add missing request_id -> 400', async () => {
@@ -364,8 +322,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
     });
   });
 
-  // 7. Transcript joining --------------------------------------------------
-
   it('joins messages into "<role>: <content>" lines before writing to hippo', async () => {
     const user_id = 'user-transcript';
     const addRes = await postAdd(
@@ -390,9 +346,6 @@ describe('AML protocol adapter (deploy/aml/adapter/adapter.mjs)', () => {
   });
 });
 
-// Second real server pair with the production limiter env, pinning the two
-// release-safety behaviours the first describe never exercises (see
-// docs/plans/2026-09-05-aml-adapter-status-and-ip-header.md).
 describe('rate-limit key forwarding and status pass-through', () => {
   let rlHippoRoot: string;
   let rlHippoHandle: ServerHandle;
@@ -403,9 +356,7 @@ describe('rate-limit key forwarding and status pass-through', () => {
   beforeAll(async () => {
     rlHippoRoot = makeStore('aml-adapter-ratelimit').root;
 
-    // Set before serve(), which checks the proxy pair at boot; one place saves and restores them all.
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'cf-connecting-ip');
-    // The adapter connects from loopback here; deploy/aml lists the compose subnet instead.
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1,::1');
     vi.stubEnv('HIPPO_V1_RPS', '0.5');
     rlHippoHandle = await serve({ hippoRoot: rlHippoRoot, host: '127.0.0.1', port: 0 });
@@ -426,8 +377,6 @@ describe('rate-limit key forwarding and status pass-through', () => {
     await rlHippoHandle?.stop();
   });
 
-  // Clears adapter validation on every call so the request always reaches
-  // hippo; only the extra headers vary between calls.
   function rlSearch(extraHeaders: Record<string, string>) {
     return fetch(`${rlBaseUrl}/search`, {
       method: 'POST',
@@ -461,8 +410,6 @@ describe('rate-limit key forwarding and status pass-through', () => {
     ]);
     expect(forwarded.map((r) => r.status).sort((a, b) => a - b)).toEqual([200, 200, 200]);
 
-    // No cf-connecting-ip: both fall back to the socket-address bucket, which
-    // no earlier request in this describe has touched.
     const notForwarded = await Promise.all([
       rlSearch({ 'x-forwarded-for': '198.51.100.4', 'x-real-ip': '198.51.100.5' }),
       rlSearch({ 'x-forwarded-for': '198.51.100.6', 'x-real-ip': '198.51.100.7' }),

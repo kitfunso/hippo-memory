@@ -1,4 +1,3 @@
-// tests/store/goal-lifecycle.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 
 const activeGoalsOf = (root: string, opts: { sessionId: string; tenantId: string }) =>
@@ -29,7 +28,6 @@ describe('goal lifecycle', () => {
   const statusesOf = async () => (await goalsOf()).map((g) => g.status);
   const goalById = async (id: string) => (await goalsOf()).find((g) => g.id === id);
   const strengthOf = (id: string) => readEntry(root, id, ctx.tenantId)?.strength;
-  // Completing the goal rescales the memories its recall log names, inside the goal's active life.
   const recalledUnder = (goalId: string, strength: number): string => {
     const entry = { ...createMemory('recalled under the goal', { tenantId: ctx.tenantId }), strength };
     writeEntry(root, entry);
@@ -111,7 +109,6 @@ describe('goal lifecycle', () => {
     expect(await statusesOf()).toEqual(['active']);
   });
 
-  // These two rows prove the in-scope status read; the guard under it is proved in status-transition-guard.test.ts.
   it('resumeGoal on an active goal changes nothing, so the depth cap suspends no other goal', async () => {
     await pushGoal(root, { ...ctx, goalName: 'a' });
     await pushGoal(root, { ...ctx, goalName: 'b' });

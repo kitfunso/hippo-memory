@@ -1,5 +1,3 @@
-# Builds the website and runs its guards. ci.yml only checks README drift and never
-# runs `astro build`, so an Astro upgrade once changed the rendered text with no check.
 name: Website
 
 on:
@@ -32,6 +30,5 @@ jobs:
           cache-dependency-path: website/package-lock.json
       - run: npm ci
         working-directory: website
-      # README guard, astro build, then check-build.mjs: glued links, duplicate ids, token drift, text snapshot.
       - run: npm run build
         working-directory: website

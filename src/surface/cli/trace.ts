@@ -1,5 +1,3 @@
-// `hippo trace`: record a decision trace, or show where one memory came from.
-
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import { type MemoryEntry } from '../../base/memory/entry.js';
 import { leadInField } from '../../base/memory/lead-in.js';
@@ -84,7 +82,6 @@ async function printTrace({ hippoRoot, tenantId, id, flags }: PrintTraceOptions)
   requireInit(hippoRoot);
   const asJson = boolFlag(flags, 'json');
 
-  // Look in local store first, then global.
   const ctx = cliApiContext(hippoRoot, tenantId);
   let entry = await memoryGet(ctx, id);
   let sourceLabel: 'local' | 'global' = 'local';
@@ -127,7 +124,6 @@ interface TraceLineageOptions {
 }
 
 async function traceLineage({ hippoRoot, globalRoot, entry, id, tenantId }: TraceLineageOptions) {
-  // Parents (consolidation lineage) — schema v9 field.
   const parents = Array.isArray(entry.parents) ? entry.parents : [];
   const local =
     parents.length === 0 ? [] : await memoryListByIds(cliApiContext(hippoRoot, tenantId), parents);
@@ -198,7 +194,6 @@ function printTraceJson(t: TraceView): void {
   );
 }
 
-/** A text on one line, cut to DETAIL_CONTENT_CHARS. */
 function detailLine(text: string): string {
   const ellipsis = text.length > DETAIL_CONTENT_CHARS ? '...' : '';
   return `${text.replace(/\s+/g, ' ').slice(0, DETAIL_CONTENT_CHARS)}${ellipsis}`;

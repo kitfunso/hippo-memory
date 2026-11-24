@@ -1,4 +1,3 @@
-// /v1/predictions routes.
 import {
   predictionClose,
   predictionList,
@@ -23,9 +22,6 @@ import {
 } from '../validation.js';
 import { isJsonString, isJsonNumber } from '../../../base/util/json.js';
 
-// Routes: /v1/predictions (create, list, show, close), Bearer-authed and tenant-scoped;
-// closure_state is validated against VALID_CLOSURE_STATES. DoS caps: claim MAX_SHORT_FIELD_LEN
-// chars, closureNote 2048.
 async function handleCreatePrediction({ req, res, ctx }: ObjectRequest): Promise<void> {
   const body = await parseJsonBody(req, ctx);
   const claim = requiredString(body, 'claim', { max: MAX_SHORT_FIELD_LEN, untrimmed: true });
@@ -55,10 +51,6 @@ async function handleCreatePrediction({ req, res, ctx }: ObjectRequest): Promise
   sendJson(res, 201, { prediction });
 }
 
-/**
- * Which rows a list reads; a status other than all or open needs a class, as no store reads one
- * closed state across classes.
- */
 function listFilter(classTag: string | undefined, status: string): PredictionFilter {
   if (status === 'all') return { classTag };
   if (status === 'open') return { classTag, closureState: 'open' };
@@ -88,8 +80,6 @@ async function handleListPredictions({ res, ctx, query }: ObjectRequest): Promis
   sendJson(res, 200, { predictions: page.items, next_cursor: page.nextCursor });
 }
 
-// Reference-class / planning-fallacy detector; registered BEFORE /v1/predictions/:id so dispatch
-// order cannot matter ('stats' is not a number, but routing it first is safer).
 async function handlePredictionStats({ res, ctx, query }: ObjectRequest): Promise<void> {
   const classTag = query.get('class');
   if (!classTag || classTag.length === 0) {

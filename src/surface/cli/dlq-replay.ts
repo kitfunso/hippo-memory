@@ -1,5 +1,3 @@
-// The `dlq replay <id> [--force]` verb both connector CLIs share.
-
 import type { ReplayResult } from '../connectors/dlq.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 import { fail } from './exit.js';

@@ -1,6 +1,3 @@
-// The ./testing entry's hippo.db seams, its one door into the adapter: evals seed and read a store
-// folder, and benchmarks a handle they open themselves. The kit is synchronous and the port is not,
-// so each seam runs on a handle.
 import type { AmbientTallies } from '../../base/memory/ambient.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -42,8 +39,6 @@ export function readEntryInFolder(hippoRoot: string, id: string): MemoryEntry | 
   return readEntryIn(storeFilesOf(hippoRoot), id);
 }
 
-// The forms on `files`: an eval that builds them with a session runs its calls on one handle per
-// store.
 const openOn =
   (files: StoreFiles) =>
   (hippoRoot: string): DatabaseSyncLike =>

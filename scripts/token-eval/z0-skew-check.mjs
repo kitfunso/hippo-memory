@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Z0 H4 skew check (Amendment 2): at a true cost ratio of 1.10 the cost gate's "upper 95% bound" (prereg 143) should pass
- * at most 5% of runs. Simulates set N with the sizer's seeded harm simulator and prints each cell's pass shares for the log
- * interval the gate uses and for a symmetric one. Exit 0 when every cell's log interval holds, 1 when one does not. */
 
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,20 +9,16 @@ import { harmT } from './z0-hypotheses.mjs';
 import { SEEDS, cellSeed, harmRun } from './z0-size-sim.mjs';
 
 const LIMIT = 1.1;
-// The gate reads the upper end of a two-sided 95% interval, aiming at 2.5%; the prereg's one-sided 95% bound allows 5%.
 const BAR = 0.05;
 const TASKS = 26;
 const USAGE = 'usage: z0-skew-check.mjs [--runs 20000] [--seed 1]';
 const resolve = { both: 0.6, oneSide: 0.1 };
-// The spreads are assumed, not measured; the harsher and sequence-heavy rows bracket them, and the near-normal row shows the
-// interval holds its level when the t test's assumptions do.
 export const CELLS = [5, 10].flatMap((repos) => [
   { name: 'calibration-like', repos, cal: { ...resolve, family: 0.05, sequence: 0.05, noise: 0.1, controlSd: 0.8 } },
   { name: 'harsher', repos, cal: { ...resolve, family: 0.1, sequence: 0.1, noise: 0.2, controlSd: 1.2 } },
   { name: 'sequence-heavy', repos, cal: { ...resolve, family: 0.02, sequence: 0.2, noise: 0.05, controlSd: 0.8 } },
 ]).concat([{ name: 'near normal', repos: 5, cal: { ...resolve, family: 0, sequence: 0, noise: 0.0001, controlSd: 0 } }]);
 
-// The same interval as the gate's, made symmetric: R (1 + q se) with se on the log scale, to show what skew costs.
 function symmetric(h) {
   const { estimate, se, df } = h.costRatio;
   if (!Number.isFinite(se) || !Number.isFinite(df)) return { costOk: false, pass: false };
@@ -56,7 +49,6 @@ export function runCli(argv) {
     opts[flag.slice(2)] = value;
   }
   const pct = (x) => `${(100 * x).toFixed(2)}%`;
-  // A gate exactly at its level lands above the bar in half the runs, so a cell fails only 2 simulation errors above it.
   const ceiling = BAR + 2 * Math.sqrt((BAR * (1 - BAR)) / opts.runs);
   const lines = [`true cost ratio ${LIMIT}, ${TASKS} set N tasks per repository, ${SEEDS} seeds, ${opts.runs} runs per cell, seed ${opts.seed}; `
     + `bar ${pct(BAR)}, failing above ${pct(ceiling)}`];

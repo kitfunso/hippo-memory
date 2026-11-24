@@ -6,7 +6,6 @@ export interface CorrectionPair {
   correctedAt: string;
   observedAt: string;
   latencyMs: number;
-  /** 'extraction' = new fact derived from a raw receipt; 'manual' = direct supersede call */
   via: 'extraction' | 'manual';
 }
 
@@ -14,7 +13,6 @@ export interface CorrectionLatencyReport {
   count: number;
   manualCount: number;
   extractionCount: number;
-  /** Percentiles computed over `extraction` pairs only — manual pairs have no measurable lag */
   p50Ms: number | null;
   p95Ms: number | null;
   maxMs: number | null;

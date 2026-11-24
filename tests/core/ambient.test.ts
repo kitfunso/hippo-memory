@@ -82,7 +82,6 @@ describe('computeAmbientState', () => {
       mem('OK thing', { emotionalValence: 'neutral' }),
     ];
     const state = computeAmbientState(entries, evalNow(), PRODUCTION_STRENGTH);
-    // Critical counts as negative, so two of three rows: (2 / 3) * 2 - 0.5.
     expect(state.emotionalSkew).toBeCloseTo(5 / 6, 10);
   });
 

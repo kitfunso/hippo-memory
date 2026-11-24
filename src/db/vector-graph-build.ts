@@ -1,6 +1,3 @@
-// Builds and saves a store's vector graph file off the request path, for the sleep run and for the
-// store worker after its own build. A build reads rows a page at a time on a read-only handle, so
-// no writer ever waits on it.
 import { errorFields, log } from '../base/util/log.js';
 import type { DbGrant } from './grant.js';
 import type { DatabaseSyncLike } from './sqlite.js';
@@ -21,7 +18,6 @@ import {
 import { countStoredVectors } from './vector-store.js';
 
 const PAGE_ROWS = 1024;
-// Longest a build or an encode holds the thread before it gives a turn back.
 const SLICE_MS = 10;
 
 /** Gives the thread a turn; false when the work must stop, because its thread is closing or its
@@ -34,8 +30,6 @@ export function nextTurn(): Promise<void> {
   });
 }
 
-/** Calls `step` until it answers true, giving a turn every SLICE_MS; false when `turn` stopped
- * it first. */
 async function sliced(step: () => boolean, turn: Turn): Promise<boolean> {
   let slice = performance.now();
   while (!step()) {
@@ -46,8 +40,6 @@ async function sliced(step: () => boolean, turn: Turn): Promise<boolean> {
   return true;
 }
 
-/** Encodes `rows` in slices and saves them; false when `turn` stopped it or another process held
- * the file open. */
 async function writeGraphFile(hippoRoot: string, rows: GraphRows, turn: Turn): Promise<boolean> {
   const encoder = encodeGraphFile(rows);
   let bytes: Uint8Array | undefined;
@@ -85,7 +77,6 @@ export async function saveGraphIfDrifted(
   }
 }
 
-// One page per statement, so no read holds a snapshot open across the build's turns.
 async function readGraphRows(
   db: DatabaseSyncLike,
   dim: number,
@@ -111,15 +102,12 @@ async function readGraphRows(
   }
 }
 
-/** The rows of a new graph when the store holds between the threshold and `maxVectors` vectors
- * and its file has drifted; undefined when no build is due or `turn` stopped it. */
 async function buildIfDue(
   db: DatabaseSyncLike,
   hippoRoot: string,
   maxVectors: number,
   turn: Turn,
 ): Promise<GraphRows | undefined> {
-  // A model change rewrites every row, so the newest row has the current length.
   // SAFETY: the read names the one column it is cast to.
   const newest = cachedStatement(
     db,
@@ -138,10 +126,7 @@ async function buildIfDue(
 }
 
 export interface GraphFileOptions {
-  /** Stored vectors past which no graph is built: config vectorGraph.maxVectors, which bounds
-   * the build's heap. */
   readonly maxVectors: number;
-  /** Epoch ms by which the build saves or gives up, for a sleep the server stops at a deadline. */
   readonly deadline?: number;
 }
 

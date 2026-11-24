@@ -31,7 +31,7 @@ describe('verifyGitHubSignature', () => {
 
   it('rejects on length mismatch (truncated signature)', () => {
     const body = '{}';
-    const sig = sign(body).slice(0, 20); // truncated
+    const sig = sign(body).slice(0, 20);
     expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });
 
@@ -45,7 +45,6 @@ describe('verifyGitHubSignature', () => {
 
   it('rejects a non-hex signature body', () => {
     const body = '{}';
-    // Same length as a valid signature ('sha256=' + 64 hex chars) but with non-hex chars.
     const sig = `sha256=${'z'.repeat(64)}`;
     expect(verifyGitHubSignature({ rawBody: body, signature: sig, webhookSecret: SECRET })).toBe(false);
   });

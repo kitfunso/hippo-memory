@@ -1,7 +1,3 @@
-// The stored confidence tier and the derived age-out are two facts that
-// `resolveConfidence` fused into one, making a rejected row and an aged-out
-// one indistinguishable at every display site.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
@@ -41,7 +37,6 @@ function seed(root: string, content: string, over: Partial<MemoryEntry> = {}): M
   return e;
 }
 
-/** `hippo <args>` run in this process from `cwd` with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);

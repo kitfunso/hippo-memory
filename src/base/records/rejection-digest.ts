@@ -1,5 +1,3 @@
-// Tombstone keys are a pure hash of the normalized value, so the domain computes them without
-// reaching the store.
 import { createHash } from 'node:crypto';
 import type { MemoryEntry } from '../memory/entry.js';
 import { identityText } from '../util/same-text.js';

@@ -1,4 +1,3 @@
-// The id-list read and the rarest-term read prepare their SQL once per handle, however many requests run on it.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';

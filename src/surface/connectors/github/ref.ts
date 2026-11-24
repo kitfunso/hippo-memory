@@ -11,7 +11,6 @@ export type GitHubItem =
   | { readonly kind: 'review_comment'; readonly number: number; readonly commentId: number };
 
 export interface ParsedGitHubRef {
-  /** undefined for a github.com ref. */
   readonly host: string | undefined;
   readonly repoFullName: string;
   readonly item: GitHubItem;
@@ -44,8 +43,6 @@ export function githubArtifactRef(
   return `github://${githubRepoKey(repoFullName, host)}/${itemPath(item)}`;
 }
 
-// Group 1 is the host, a segment with a dot or colon. The anchored tail also keeps a host ref
-// (5 or 7 segments) and a github.com ref (4 or 6) from ever fitting each other.
 const REF_RE =
   /^github:\/\/(?:([^/]*[.:][^/]*)\/)?([^/]+\/[^/]+)\/(issue|pull)\/(\d+)(?:\/(comment|review_comment)\/(\d+))?$/;
 

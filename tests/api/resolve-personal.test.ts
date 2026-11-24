@@ -1,4 +1,3 @@
-// Conflict resolution never reaches another person's personal row, and a personal value never becomes a tenant-wide tombstone (F1).
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { adminActor, remember, type Actor } from '../../src/api/index.js';
@@ -52,7 +51,6 @@ function replyText(res: McpResponse | null): string {
   return result?.content?.[0]?.text ?? '';
 }
 
-/** Seeds one open conflict per pair, replacing any before, and returns their ids; each pair's first id must be in no other pair. */
 async function seedConflicts(...pairs: ReadonlyArray<readonly [string, string]>): Promise<number[]> {
   replaceDetectedConflicts(
     root,
@@ -74,7 +72,6 @@ interface PersonalPair {
   conflictId: number;
 }
 
-/** A's personal row in an open conflict with B's team row. */
 async function personalPair(): Promise<PersonalPair> {
   const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
   const teamId = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
@@ -89,7 +86,6 @@ describe('resolving conflicts next to personal rows', () => {
   it("rejectLoser on a team row sweeps team duplicates but leaves another person's personal row holding the same text", async () => {
     const personalId = (await remember(ctxFor(actorA), { content: A_TEXT, personal: true })).id;
     const teamCopy = (await remember(ctxFor(actorB), { content: A_TEXT })).id;
-    // B owns the loser, so B may remove it.
     const loser = (await remember(ctxFor(actorB), { content: A_TEXT, owner: 'b' })).id;
     const keeper = (await remember(ctxFor(actorB), { content: 'never run the deploy script with --dry-run' })).id;
     expect(new Set([personalId, teamCopy, loser]).size).toBe(3);

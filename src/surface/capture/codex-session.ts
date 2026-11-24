@@ -1,5 +1,3 @@
-// Finds the transcript of the Codex session a `hippo codex-run` started, in Codex's sessions
-// folder.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { isJsonObjectLiteral, isJsonString, parseJson } from '../../base/util/json.js';
@@ -31,8 +29,6 @@ function collectFiles(dir: string): string[] {
   return out;
 }
 
-/** Each session id in the history lines `delta` holds once, in first-seen order; `historyPath`
- * only names the file in a warning. */
 function codexSessionIds(delta: string, historyPath: string): string[] {
   const seen = new Set<string>();
   const ordered: string[] = [];

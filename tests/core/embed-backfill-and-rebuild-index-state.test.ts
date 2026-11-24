@@ -1,4 +1,3 @@
-// embedAll and embedMemory on hippo.db with no store: the vectors, model identity and particles a backfill and a model-change rebuild leave.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FailureNotices } from '../../src/base/util/failure-notices.js';
 import { writeFileSync } from 'node:fs';
@@ -42,14 +41,11 @@ const TENANTS = ['tenant-a', 'tenant-b'];
 const ROWS = 300;
 const HASHED_ID = 'openai:hashed-16';
 const PAGE = 64;
-// The one read that hands stored vectors to JavaScript; a whole-index read has no id list and returns every vector.
 const VECTOR_READ = 'SELECT memory_id, vector FROM memory_vectors';
 
 let home: string;
 let embeddings: HashedEmbeddings;
-/** 180 rows indexed by `fake-old`, 120 rows with no vector. */
 let partly: string;
-/** Every row indexed by `fake-old`, each with a particle dated SEEDED_AT. */
 let indexedOld: string;
 let n = 0;
 
@@ -60,7 +56,6 @@ interface VectorRow {
   bytes: string;
 }
 
-/** Everything an embed run leaves in hippo.db's vector index; vectors are in the order they were inserted. */
 interface IndexState {
   readonly vectors: VectorRow[];
   readonly model: string;
@@ -69,7 +64,6 @@ interface IndexState {
 
 const fakeVector = (id: string, entry: MemoryEntry): number[] => hashedVector(`${id} ${embeddingInputText(entry)}`);
 const hashedServerVector = (entry: MemoryEntry): number[] => hashedVector(embeddingInputText(entry));
-// The index of the 120 rows written after the first backfill, spread through the store's order and both tenants.
 const isLate = (i: number): boolean => i % 5 < 2;
 
 function fake(id: string, onCall: (texts: string[]) => void = () => undefined): EmbeddingProvider {
@@ -81,7 +75,6 @@ function fake(id: string, onCall: (texts: string[]) => void = () => undefined): 
 }
 
 function row(i: number): MemoryEntry {
-  // Three rows share each minute, so order inside a tie is id order and a read ordered by content would differ.
   const created = new Date(Date.parse(SEEDED_AT) + Math.floor(i / 3) * 60_000).toISOString();
   const options = {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -95,8 +88,6 @@ function row(i: number): MemoryEntry {
   };
 }
 
-/** The rows in one transaction on hippo.db alone: no test here reads a markdown mirror, and each copy below would copy
- *  one file per mirror. */
 function writeRows(root: string, entries: readonly MemoryEntry[]): void {
   const db = openHippoDb(root);
   try {
@@ -144,14 +135,12 @@ function vectorRow(entry: MemoryEntry, model: string, vector: number[]): VectorR
   };
 }
 
-// A backfill and a rebuild need each row once, not time order, so they walk ids on the primary key.
 const byId = (a: MemoryEntry, b: MemoryEntry): number => (a.id < b.id ? -1 : 1);
 
 function particleOf(entry: MemoryEntry, vector: number[], at: string): PhysicsParticle {
   return { ...initializeParticle(entry, vector, PRODUCTION_STRENGTH, new Date(at)), position: vector.map(Math.fround) };
 }
 
-/** The state a rebuild under `providerId` must leave: every row in id order, each with a particle dated FAKE_NOW. */
 function rebuiltState(root: string, providerId: string, vectorOf: (entry: MemoryEntry) => number[]): IndexState {
   const entries = loadEveryTenantEntries(root).sort(byId);
   const model = embeddingIndexIdentity(providerId);
@@ -318,14 +307,12 @@ describe('a model identity change on hippo.db', () => {
   });
 });
 
-/** The most full memory rows one statement of a run can hand back: the rows it returned. */
 function peakFullRowsRead(log: StatementLog<unknown>, fullReads: number): number {
   expect(log.statements.filter((sql) => sql.includes(MEMORY_SELECT_COLUMNS))).toHaveLength(fullReads);
   return peakRowsRead(log.reads, MEMORY_SELECT_COLUMNS);
 }
 
 describe('rows held while embedding hippo.db', () => {
-  // A rebuild reads its 300 rows twice, once to embed and once to reset the particles.
   it.each([
     { name: 'a backfill of 120 rows', template: (): string => partly, id: 'fake-old', embedded: 120, fullReads: 2 },
     {
@@ -360,7 +347,6 @@ describe('rows held while embedding hippo.db', () => {
     expect([log.result, particles.length]).toEqual([180, 180]);
     expect(particles.map((p) => p.memoryId)).toEqual(embedded);
     expect(new Set(particles.map((p) => tenantOf.get(p.memoryId)))).toEqual(new Set(TENANTS));
-    // Only the embedded rows of each 64-id slice are read, so no slice reads a full page of rows here.
     expect(peakFullRowsRead(log, 5)).toBeLessThanOrEqual(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeLessThanOrEqual(PAGE);
     expect(peakRowsRead(log.reads, VECTOR_READ)).toBeGreaterThan(0);

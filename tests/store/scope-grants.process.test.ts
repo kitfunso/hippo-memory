@@ -1,5 +1,3 @@
-/** Scope grants (ROADMAP Part VIII EI2): a member key reads a restricted scope
- *  only after an explicit grant. Real HTTP server, real SQLite, no mocks. */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -36,11 +34,8 @@ const PRIVATE_SCOPE = 'slack:private:C1';
 const OTHER_PRIVATE_SCOPE = 'slack:private:C2';
 const PRIVATE_TEXT = 'kowalski payroll rollout starts thursday in the private channel';
 
-// Seeded memories carry no origin_project; isolation would hide them from
-// hippo_context regardless of scope grants, which is not what this suite tests.
 const ISOLATION_OFF = { config: { contextProjectIsolation: false } };
 
-/** `keys` with `before` run ahead of each scope change; these tests send it no other change. */
 function beforeScopeChange(keys: KeyWrites, before: (change: ScopeGrantChange) => void): KeyWrites {
   function changeApiKey(change: 'create', mint: KeyMint): Promise<void>;
   function changeApiKey(change: 'create_self', mint: SelfKeyMint): Promise<string[]>;
@@ -145,13 +140,9 @@ describe('scope grants over HTTP', () => {
     const recallAllowed = await callTool(member.plaintext, 'hippo_recall', { query: 'kowalski', scope: PRIVATE_SCOPE });
     expect(recallAllowed.text).toContain('payroll');
 
-    // hippo_context ranks by an auto-detected git query, not args.query, so content
-    // relevance is out of scope here; the grant is proven by the absence of the
-    // scope-forbidden error that the denied case above asserts.
     const contextAllowed = await callTool(member.plaintext, 'hippo_context', { scope: PRIVATE_SCOPE, budget: '4000' });
     expect(JSON.parse(contextAllowed.text).error).toBeUndefined();
 
-    // A second restricted scope, never granted, stays denied.
     const otherDenied = await get(
       `/v1/memories?q=kowalski&scope=${encodeURIComponent(OTHER_PRIVATE_SCOPE)}`,
       member.plaintext,

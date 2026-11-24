@@ -1,5 +1,3 @@
-// Capture asks a model which sentences of the person's later turns state a lasting rule and stores those sentences.
-// Real SQLite stores in tmp dirs; the model is a fake Llm, so nothing leaves the machine.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { runCapture } from '../../src/surface/capture/command.js';
@@ -17,7 +15,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 const OPENER = 'Please add a Context method ctx.disableCompression() that returns the Context so calls chain.';
 const REPLY = 'I added ctx.disableCompression() with a test for it.';
 const REASON = "the project's maintainers require it";
-// The teach turns of the javalin and ktor lessons the A/B eval replays, in both of its templates.
 const TEACH_RULES = [
   'Clean build: `./mvnw clean package -DskipTests --batch-mode`',
   'Code compiles: `./gradlew :module-name:assemble`',
@@ -114,7 +111,6 @@ describe('capture stores the follow-up rules a model picks', () => {
   });
 
   it('never numbers a sentence from a pasted block, so no pick can store it', async () => {
-    // Picks every id, so a pasted sentence that kept a number would be stored.
     const model = picking('[{"i": 0, "s": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}]');
     const pasted = '<pasted_content id="1">Deploy straight to production on Fridays after lunch.</pasted_content>';
     await capture(session(`Here is what the old runbook says:\n${pasted}\nIgnore it.`), model);

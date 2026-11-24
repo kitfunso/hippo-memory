@@ -1,10 +1,8 @@
-// The card shapes the Cards group returns.
 import type { Card, CardComment, CardRun, CardStatus } from '../../records/card.js';
 import type { SessionHandoff, HandoffOutcome } from '../../session/handoff.js';
 import type { KeysetPosition } from '../../util/keyset.js';
 import type { MethodEffects } from './effects.js';
 
-/** The ids a card waits on and the ids that wait on it. */
 interface CardDeps {
   parents: string[];
   children: string[];
@@ -22,13 +20,11 @@ export interface CardDetail {
 export interface CardListQuery {
   readonly status?: CardStatus;
   readonly limit: number;
-  /** Resume after this (updatedAt, id) position; the list runs newest change first. */
   readonly after?: KeysetPosition;
 }
 
 export interface CardPage {
   readonly cards: Card[];
-  /** The position the next page starts after, or null when this page was the last. */
   readonly next: KeysetPosition | null;
 }
 

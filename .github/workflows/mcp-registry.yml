@@ -1,5 +1,3 @@
-# Lists the npm release in the official MCP Registry, which GitHub's MCP registry and other directories read.
-# npm-publish.yml calls this after a publish; run it by hand to list a version already on npm.
 name: Publish to the MCP Registry
 
 on:
@@ -29,7 +27,6 @@ jobs:
           done
           echo "hippo-memory@$version is still not on npm after 30 minutes. Re-run this job when npm shows it."
           exit 1
-      # The pinned binary; .github/actions/mcp-publisher holds its version and sha256.
       - uses: ./.github/actions/mcp-publisher
       - run: ./mcp-publisher validate
       - run: ./mcp-publisher login github-oidc

@@ -1,6 +1,3 @@
-// The snapshot id: when a read keeps it, when an outside commit, a dashboard write, the TTL or ?fresh=1 moves it, and how
-// reads count vectors.
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,7 +43,6 @@ afterEach(async () => {
   store.cleanup();
 });
 
-/** The overview one dashboard read serves, stamped by the clock of `on`. */
 async function overview(fresh = false, on: DashboardView = view): Promise<Overview> {
   return buildOverview(on.reads, await on.clock.at('default', fresh));
 }
@@ -160,7 +156,6 @@ describe('live population', () => {
     seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: successor.id });
     seed(store.hippoRoot, 'archived row', { kind: 'archived' });
     seed(store.hippoRoot, 'quarantined row', { scope: quarantineScopeFor(null) });
-    // Quarantine wins over superseded, so this row is counted once, as quarantined.
     seed(store.hippoRoot, 'both', { kind: 'superseded', supersededBy: successor.id, scope: quarantineScopeFor('x') });
 
     const read = await overview();

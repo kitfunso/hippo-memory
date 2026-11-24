@@ -1,9 +1,3 @@
-"""Build the final results report from the incremental jsonl.
-
-Used when the main run is stopped early; aggregates the per-QA rows that were
-already written and produces the canonical results JSON.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -41,7 +35,6 @@ def main() -> None:
             d = json.loads(line)
             rows.append(QAResult(**d))
 
-    # Figure out how many distinct conversations we covered
     covered = {r.conversation_id for r in rows}
 
     agg = aggregate(rows)

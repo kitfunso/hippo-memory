@@ -81,8 +81,6 @@ describe('Batch extraction during consolidation', () => {
     });
     writeEntry(tmpDir, live);
     writeEntry(tmpDir, blank);
-    // The writer stores NULL for a blank link, so SQL makes the blank. The subject is the read, so its strength is
-    // pinned to the decayed value the sleep computes and no strength refresh rewrites the row.
     const db = openHippoDb(tmpDir);
     try {
       const decayed = calculateStrength(blank, FIXED_NOW, PRODUCTION_STRENGTH, {
@@ -106,7 +104,6 @@ describe('Empty extraction marks', () => {
   const FACT_REPLY = JSON.stringify([{ content: FACT, tags: ['speaker:Alice'], valence: 'neutral' }]);
   const GOOD = 'the staging cluster runs on three spot instances in eu-west-2';
 
-  // Pinned, so no decay removes a source between the sleeps of a test.
   const episodic = (content: string, created = FIXED_NOW): MemoryEntry => ({
     ...createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, layer: Layer.Episodic, pinned: true }),
     created: created.toISOString(),
@@ -173,7 +170,6 @@ describe('Empty extraction marks', () => {
 
   it('does not mark a source whose facts all fail the quality check', async () => {
     writeEntry(tmpDir, episodic(SOURCE));
-    // Ends on "to be", a cut-off sentence the quality check rejects.
     const fetcher = makeOkFetcher(
       JSON.stringify([{ content: 'Found local migration files to be', tags: [], valence: 'neutral' }]),
     );

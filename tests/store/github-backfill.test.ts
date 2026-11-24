@@ -1,15 +1,3 @@
-/**
- * Tests for the paginated GitHub backfill (Task 11).
- *
- * Strategy: real DB + real ingestEvent + a fake `GitHubFetcher`. Network is
- * the boundary, so HTTP mocking is fine; everything below the fetcher is
- * exercised end-to-end.
- *
- * Crash-safety case (test 5) is the load-bearing one: stream 2 throws
- * after stream 1 drained. We assert stream 1's HWM is written and stream
- * 2's HWM stays NULL — so a rerun resumes correctly.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -71,13 +59,11 @@ function readCursorRows(root: string): Array<{ repo_full_name: string; issues_hw
 
 const NO_RATE = { sleepSeconds: 0, reason: 'none' as const };
 
-/** Build an empty terminal page (no items, no next link). */
 function emptyPage(): GitHubBackfillPage {
   return { items: [], next: null, rateLimit: NO_RATE };
 }
 
 interface FakePlan {
-  /** map from "stream tag" to ordered pages. Stream is matched by URL prefix. */
   issues?: GitHubBackfillPage[];
   issueComments?: GitHubBackfillPage[];
   prReviewComments?: GitHubBackfillPage[];
@@ -93,12 +79,6 @@ function streamOf(url: string): keyof FakePlan {
   return 'issues';
 }
 
-/**
- * A fake `GitHubFetcher` that returns canned pages keyed by stream. Each
- * stream walks its array of pages in order; if exhausted, returns an
- * empty terminal page. This lets tests express "stream 1 has these 2
- * pages, stream 2 throws, stream 3 is empty" cleanly.
- */
 function makeFakeFetcher(plan: FakePlan, capture?: CallCapture): GitHubFetcher {
   const cursors = {
     issues: 0,
@@ -143,7 +123,6 @@ type GitHubPrReviewCommentItem = {
   pull_request_url: string;
 };
 
-/** Build a stream-1 (issues) item. */
 function issueItem(
   number: number,
   updatedAt: string,
@@ -183,8 +162,6 @@ function prReviewCommentItem(id: number, prNumber: number, updatedAt: string): G
     pull_request_url: `https://api.github.com/repos/${REPO}/pulls/${prNumber}`,
   };
 }
-
-// -- Tests -----------------------------------------------------------------
 
 describe('backfillRepo', () => {
   let root: string;
@@ -277,9 +254,6 @@ describe('backfillRepo', () => {
       token: 't',
     });
 
-    // Second run sees zero new memories — every event already in
-    // github_event_log returns 'duplicate' from ingestEvent and is NOT
-    // counted in `ingested`.
     expect(r2.ingested.issues).toBe(0);
     expect(r2.ingested.issueComments).toBe(0);
     expect(r2.ingested.prReviewComments).toBe(0);
@@ -314,7 +288,6 @@ describe('backfillRepo', () => {
 
     expect(r.ingested.issues).toBe(3);
     const entries = loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'));
-    // Only the 3 non-PR items should have produced memories.
     expect(entries).toHaveLength(3);
     const refs = entries.map((e) => e.artifactRef).sort();
     expect(refs).toEqual([`github://${REPO}/issue/1`, `github://${REPO}/issue/3`, `github://${REPO}/issue/5`]);
@@ -323,7 +296,6 @@ describe('backfillRepo', () => {
   it('4. rate-limit pause: sleeps and retries the same URL', async () => {
     let pageCallCount = 0;
     const fetcher: GitHubFetcher = async ({ url }) => {
-      // Only the issues stream uses rate-limit theatrics; the others go empty.
       if (!url.includes('/issues') || url.includes('/issues/comments')) {
         return emptyPage();
       }
@@ -361,15 +333,11 @@ describe('backfillRepo', () => {
   it('5. crash mid-stream-2 leaves stream-2 HWM unchanged but stream-1 advances', async () => {
     const fetcher: GitHubFetcher = async ({ url }) => {
       if (url.includes('/issues/comments')) {
-        // Mid-stream-2 server error. Throws BEFORE returning. The drain
-        // loop propagates this; stream 2 never reaches the writeOneHwm
-        // call, so its HWM stays NULL while stream 1's is committed.
         throw new GitHubFetchError(500, 'boom', url);
       }
       if (url.includes('/pulls/comments')) {
         return emptyPage();
       }
-      // Issues stream
       return {
         items: [issueItem(1, '2026-05-01T10:00:00Z')],
         next: null,
@@ -386,11 +354,8 @@ describe('backfillRepo', () => {
     ).rejects.toThrow(GitHubFetchError);
 
     const row = readCursorRow(root);
-    // Stream 1 fully drained -> HWM advanced.
     expect(row?.issues_hwm).toBe('2026-05-01T10:00:00Z');
-    // Stream 2 errored -> HWM never written.
     expect(row?.issue_comments_hwm).toBeNull();
-    // Stream 3 never reached.
     expect(row?.pr_review_comments_hwm).toBeNull();
   });
 
@@ -417,7 +382,6 @@ describe('backfillRepo', () => {
   });
 
   it('7. resume: existing HWM appears as ?since= in the issues URL', async () => {
-    // Seed an existing HWM.
     const seed = openHippoDb(root);
     try {
       seed
@@ -457,8 +421,6 @@ describe('backfillRepo', () => {
     expect(r.ingested.prReviewComments).toBe(0);
 
     const row = readCursorRow(root);
-    // No row at all (or all-null). Either is acceptable since nothing was
-    // written; the HWMs stay effectively null.
     if (row) {
       expect(row.issues_hwm).toBeNull();
       expect(row.issue_comments_hwm).toBeNull();

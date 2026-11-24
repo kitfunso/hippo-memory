@@ -1,5 +1,3 @@
-// L1 `recall --graph-stream` range checks the golden matrix misses (docs/plans/2026-06-02-l1-graph-rrf-stream.md).
-// The flag on a real store and the non-integer cases are pinned in tests/cli/cli-recall-golden.process.test.ts.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -7,7 +5,6 @@ import { join } from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes. */
 async function hippo(cwd: string, ...args: string[]) {
   const saved = process.cwd();
   process.chdir(cwd);

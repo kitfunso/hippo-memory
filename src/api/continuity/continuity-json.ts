@@ -1,5 +1,3 @@
-// HTTP replies and the CLI's --json keep snake_case keys, as clients read them; the port's rows are
-// camelCase.
 import type { JsonValue } from '../../base/util/json.js';
 import type { SessionHandoff } from '../../base/session/handoff.js';
 import type { ContinuityBlock } from '../../base/ports/store.js';

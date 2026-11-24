@@ -1,8 +1,3 @@
-// Save, close, load-by-id and list for every typed object: the checks, the mirror memory and the
-// error text, over the `objects` store group. Each flow runs once, over the `objects` group of
-// whatever store the caller holds: the CLI's, a served one, or a test's. The tenant, the fields and
-// the list status are checked first, so a bad request fails before a store is asked.
-
 import { DEFAULT_LIST_LIMIT } from '../../base/util/limits.js';
 import {
   BadRequestError,
@@ -33,7 +28,6 @@ import type {
   SavableDescriptor,
 } from './descriptor.js';
 
-/** An empty status or filter lists every row, as an absent one does. */
 function listQuery<K extends ObjectKind>(
   d: ObjectDescriptor<K>,
   tenantId: string,
@@ -160,7 +154,6 @@ export interface ObjectSaveSite {
   readonly baseHalfLifeDays: number;
   readonly tenantId: string;
   readonly actor: string;
-  /** The instant the object and its mirror are stamped with. */
   readonly now: Date;
 }
 

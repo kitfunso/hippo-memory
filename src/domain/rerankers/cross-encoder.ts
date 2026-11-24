@@ -8,7 +8,6 @@ import { findableText } from '../../base/memory/lead-in.js';
 
 const DEFAULT_CROSS_ENCODER_TOP_K = 50;
 
-/** The head in its input order, scored as it came. */
 function identityOrder(head: readonly SearchResult[]): RerankResult[] {
   return head.map((r, i) => ({
     ...r,
@@ -37,8 +36,6 @@ async function scoreHead(
         succeeded++;
       } catch (err) {
         firstError ??= err instanceof Error ? err : new Error(errorMessage(err));
-        // One bad inference must not sink the whole pass; a pass where every call fails is warned
-        // about by the outage tracker below.
         log.debug(
           `cross-encoder inference failed, keeping the base score: ${errorMessage(err)}`,
           errorFields(err),
@@ -54,8 +51,6 @@ async function scoreHead(
     }),
   );
 
-  // Plain stable sort on purpose: tied scores MUST fall back to the prior relevance order, never an
-  // arbitrary content order.
   scored.sort((a, b) => compareScoresDesc(a.rerankScore, b.rerankScore));
   scored.forEach((r, i) => (r.postRerankRank = i + 1));
   return { results: scored, succeeded, firstError };
@@ -71,13 +66,10 @@ export function createCrossEncoderReranker(loadModel: CrossEncoderLoad): Reranke
     try {
       pipe = await loadModel();
     } catch (err) {
-      // A silent identity fallback otherwise reads as a working reranker.
       outage.failed(errorMessage(err), { fields: errorFields(err), signal: options?.signal });
       return identityOrder(head);
     }
     const { results: scored, succeeded, firstError } = await scoreHead(pipe, query, head);
-    // A loaded model whose every call throws is as dead as one that never loaded; the first error
-    // names why.
     if (head.length > 0 && succeeded === 0) {
       outage.failed(`every inference failed: ${errorMessage(firstError)}`, {
         fields: errorFields(firstError),

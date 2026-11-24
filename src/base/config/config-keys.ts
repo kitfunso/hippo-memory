@@ -1,5 +1,3 @@
-/** How each config.json key is read: its wording when bad and its fallback. */
-
 import { type PhysicsConfig } from '../rank/physics-config.js';
 import {
   basisPoints,
@@ -47,8 +45,6 @@ function enabledBlock(fallback: { enabled: boolean }): Reader<{ enabled: boolean
   }));
 }
 
-// A config file keeps the snake_case physics keys, such as G_query; each reads into its camelCase
-// field.
 function physicsFields(read: FieldReader): PhysicsConfig {
   const P = D.physics;
   return {
@@ -76,8 +72,6 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
     budget: read('budget', count(P.budget)),
     skipUnchanged: read('skipUnchanged', flag(P.skipUnchanged)),
     refreshTurns: read('refreshTurns', count(P.refreshTurns)),
-    // The hook turns prompt recall on only for `true`, so a malformed value reads as off, not as
-    // the default.
     promptRecall: read('promptRecall', flag(false, P.promptRecall)),
     promptRecallMetric: read(
       'promptRecallMetric',
@@ -93,10 +87,7 @@ function pinnedInjectFields(read: FieldReader): HippoConfig['pinnedInject'] {
   };
 }
 
-// Every top-level key loadConfig reads. A bad value warns once, in one wording, and reads as the
-// fallback.
 const CONFIG_TABLE: readonly ConfigEntry[] = [
-  // Every writer starts a memory on this, and a zero or negative half-life scores zero strength.
   configKey('defaultHalfLifeDays', positive(D.defaultHalfLifeDays)),
   configKey('defaultBudget', count(D.defaultBudget)),
   configKey('defaultContextBudget', count(D.defaultContextBudget)),
@@ -112,8 +103,6 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
   ),
   configKey(
     'embeddings',
-    // `provider` is not read here: an unknown one must reach resolveEmbeddingProvider, which
-    // refuses it rather than falling back to local.
     block('an object like {"enabled": "auto"}', D.embeddings, (read) => ({
       enabled: read('enabled', flagOrAuto(D.embeddings.enabled)),
       model: read('model', text(D.embeddings.model)),
@@ -170,7 +159,6 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
     })),
   ),
   configKey('ambient', enabledBlock(D.ambient)),
-  // A malformed value never silently turns a feature on or off: it warns and reads as the default.
   configKey('memoryValue', enabledBlock(D.memoryValue)),
   configKey(
     'dormant',
@@ -180,7 +168,6 @@ const CONFIG_TABLE: readonly ConfigEntry[] = [
     })),
   ),
   configKey('churnStaleness', enabledBlock(D.churnStaleness)),
-  // Absent imports every tool; a malformed list imports none.
   configKey(
     'agentMemories',
     block('an object like {"tools": ["claude-code"]}', D.agentMemories, (read) => ({

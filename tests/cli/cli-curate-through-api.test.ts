@@ -1,4 +1,3 @@
-// `hippo reject` and `hippo invalidate` reach the trust and learn flows through src/api, as HTTP and MCP do.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { adminActor, ForbiddenError, memoryInvalidate, rejectOnHost, remember } from '../../src/api/index.js';

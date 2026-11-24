@@ -1,4 +1,3 @@
-// The /v1 table declares each route's auth need and dispatch enforces it before any handler runs.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -11,7 +10,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 const KNOWN_AUTH: ReadonlySet<string> = new Set(['viewer', 'editor', 'admin', 'host-admin-local', 'webhook-signature']);
 const WEBHOOKS = ['POST /v1/connectors/slack/events', 'POST /v1/connectors/github/events'];
 
-// What a request with no credential gets today, route by route; a new route fails the coverage check until it is listed.
 const NO_CREDENTIAL = {
   'POST /v1/memories': 401,
   'GET /v1/graph': 401,
@@ -79,12 +77,10 @@ const NO_CREDENTIAL = {
   'POST /v1/customer-notes/:id/supersede': 401,
   'POST /v1/customer-notes/:id/close': 401,
   'GET /v1/customer-notes/:id': 401,
-  // With a secret set, a delivery with no signature header is refused by the signature check.
   'POST /v1/connectors/slack/events': 401,
   'POST /v1/connectors/github/events': 401,
 } satisfies Readonly<Record<string, number>>;
 
-// Queries that clear the parsing some routes did before their key check, so the status is the auth outcome on either side of the gate.
 const QUERY: ReadonlyMap<string, string> = new Map(
   Object.entries({
     'GET /v1/memories': '?q=x',

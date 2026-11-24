@@ -1,5 +1,3 @@
-// Pins how recallFrom drops same-text copies across its bands and counts them in the suppression summary.
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -63,7 +61,6 @@ describe('recall held-copy drop', () => {
     expect(contents.filter((c) => c === 'quokka habitat notes')).toHaveLength(1);
     expect(result.results.every((r) => r.isFreshTail === true)).toBe(true);
     expect(result.suppressionSummary?.freshTailAdded).toBe(result.results.length - 1);
-    // ceil(chars / 4) of each row: 20 characters cost 5 and 21 cost 6.
     expect(result.tokens).toBe(11);
   });
 });
@@ -96,7 +93,6 @@ describe('recall of rows that share content and differ in lead-in', () => {
   it('fresh tail keeps every "Yes." row under its own lead-in beside the one the base band shows', async () => {
     const rows = [raw('Yes.', LEAD_A), raw('Yes.', LEAD_B), raw('Yes.', LEAD_C)];
     for (const row of rows) writeEntry(root, row);
-    // Only LEAD_A and LEAD_B hold "canaryline"; limit 1 leaves one of them to the tail with LEAD_C.
     const result = await retrieve(ctxFor(root), { query: 'canaryline', window: { limit: 1, freshTailCount: 5 } });
     expect(result.results.map((r) => r.id).sort()).toEqual(rows.map((r) => r.id).sort());
     expect(new Set(result.results.map((r) => r.leadIn))).toEqual(new Set([LEAD_A, LEAD_B, LEAD_C]));

@@ -1,31 +1,10 @@
 #!/usr/bin/env node
-/**
- * Pre-publish guard: assert every JSON manifest in the repo declares the
- * same `"version"` as the root `package.json`. Manifest version drift
- * shipped 3 versions in 7 days (v1.12.11 publish slip, v1.12.12 bundled
- * fix, v1.13.1 nested manifest drift) before this check existed; each
- * slip cost a follow-up patch ship. This script ends the class.
- *
- * Wired into `prepublishOnly` in package.json. Exits non-zero with a
- * specific error message if any drift exists. Ignores node_modules, and
- * ignores the lockfile's dependency entries, which carry their own versions.
- *
- * Ticket: TODOS.md "Engineering hygiene (release pipeline)" #1.
- */
 
 import { readFileSync, existsSync } from 'node:fs';
 
 const rootPkg = JSON.parse(readFileSync('package.json', 'utf8'));
 const expectedVersion = rootPkg.version;
 
-// Explicit allowlist of manifests that MUST match root package.json version.
-// Independent packages (ui/, extensions/claude-code-plugin/) have their OWN
-// versioning and are excluded; historical eval results in docs/evals/ and
-// results/ are snapshots and excluded.
-//
-// To add a new lockstep manifest, append to this list. To exclude a
-// previously-tracked manifest (e.g. ui/ became its own release cadence),
-// remove from this list.
 const LOCKSTEP_MANIFESTS = [
   'package.json',
   'openclaw.plugin.json',
@@ -86,12 +65,6 @@ for (const path of LOCKSTEP_MANIFESTS) {
   }
 }
 
-// src/base/util/version.ts carries PACKAGE_VERSION as a TS constant (not JSON). Its own
-// header names it the "fifth manifest" bumped manually every release, but it was
-// historically excluded from this guard, so it silently drifted (1.12.10 vs
-// published 1.14.0) across two releases while feeding MCP serverInfo, the HTTP
-// /health endpoint, and the DB rollback-compat gate. Assert it here so the
-// documented manual bump can never be silently skipped again.
 const VERSION_TS = 'src/base/util/version.ts';
 if (!existsSync(VERSION_TS)) {
   drifts.push({ path: VERSION_TS, found: '(missing)', expected: expectedVersion });
@@ -105,18 +78,10 @@ if (!existsSync(VERSION_TS)) {
   }
 }
 
-// The lockfile was excluded wholesale for a property only part of it has. Its
-// `packages["node_modules/..."]` entries do carry independent dependency
-// versions, but `.version` and `.packages[""].version` mirror the root package
-// and npm rewrites both on every `npm version`. Excluding the file let a stale
-// pair sail past this gate on v1.38.9. Check the two lockstep fields only.
 const LOCKFILE = 'package-lock.json';
 if (!existsSync(LOCKFILE)) {
   drifts.push({ path: LOCKFILE, found: '(missing)', expected: expectedVersion });
 } else {
-  // `parsed` rather than a null sentinel: a lockfile holding literal `null`
-  // parses fine, and testing `lock !== null` would skip both checks and let
-  // the gate report OK, the exact failure this block exists to close.
   let lock;
   let parsed = true;
   try {

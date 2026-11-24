@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Builds the Z0 smoke toy repo (prereg stage 1) and its tasks file: one bug per module, one fix commit per task.
-// Usage: node benchmarks/token-eval/smoke/make-toy.mjs <dir>  ->  <dir>/toy-repo, <dir>/tasks.json, <dir>/checks/
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -8,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-// [task id, module, buggy source, fixed source, hidden test body, prompt]
 const BUGS = [
   ['t1', 'slug', "(s) => s.trim().replace(/\\s+/g, '-')", "(s) => s.trim().toLowerCase().replace(/\\s+/g, '-')",
     "eq(m('Hello World'), 'hello-world');", "Slugs keep capital letters: slugify('Hello World') gives 'Hello-World', but our URLs must be all lowercase. Please fix slugify in src/slug.js."],

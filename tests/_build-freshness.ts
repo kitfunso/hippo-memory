@@ -1,4 +1,3 @@
-// vitest globalSetup for the process and server projects only: they spawn the CLI or import workers from dist, so a build older than src would test old code.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
@@ -9,7 +8,6 @@ type Lockfile = { packages?: Record<string, { version?: string }> };
 // SAFETY: npm writes these files, and every field read from them is typed optional and checked before use.
 const readJson = <T>(file: string): T => JSON.parse(readFileSync(file, 'utf8')) as T;
 
-// vitest 3 evaluates vitest.config.ts once per project, which splits the store guard from the workers' home, so a stale install must stop the run.
 /** Direct dependencies whose installed version is not the one package-lock.json pins, as `name installed, locked version` lines. */
 export function staleDependencies(repo: string): string[] {
   const manifest = readJson<Manifest>(join(repo, 'package.json'));

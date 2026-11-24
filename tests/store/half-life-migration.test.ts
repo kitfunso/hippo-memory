@@ -1,11 +1,3 @@
-/**
- * Changing the default half-life moves memories still on the old base, once,
- * with the ids in the audit log. Memories hippo shortened, or that carry
- * their own half-life, keep theirs. A dry run writes nothing. A new store
- * starts on the current default; a store written before the base was
- * recorded reads as the legacy 7-day base and moves at the next sleep.
- * Real stores, no mocks.
- */
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -53,7 +45,6 @@ function store(): string {
   initStore(root);
   return root;
 }
-/** Deletes the store's record of where its half-lives stand, as a hippo that predates `keys` left it. */
 function unrecord(root: string, ...keys: string[]): void {
   const db = openHippoDb(root);
   try {
@@ -62,15 +53,12 @@ function unrecord(root: string, ...keys: string[]): void {
     closeHippoDb(db);
   }
 }
-/** A store as a pre-1.46 hippo left it: memories on the 7-day base and no recorded base. Seeded before the test opens the
- *  store, as the old hippo's process would have. */
 function legacyStore(entries: ReturnType<typeof createMemory>[]): string {
   const root = store();
   for (const e of entries) writeEntry(root, e);
   unrecord(root, META_KEY.halfLifeBase, META_KEY.typedHalfLife);
   return root;
 }
-/** A legacy store of `n` copies of one 7-day memory, made in SQL so the setup stays fast. */
 function bulkLegacyStore(n: number): string {
   const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
   const db = openHippoDb(root);
@@ -90,7 +78,6 @@ function bulkLegacyStore(n: number): string {
 }
 const legacy = (content: string, options: Partial<CreateMemoryOptions> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
-/** The base the store's memories are on, as a dry-run move reads it. */
 async function baseOf(root: string): Promise<number> {
   return (await local(root).consolidation.begin(DEFAULT_HALF_LIFE_DAYS, { dryRun: true, actor: 'test' })).from;
 }
@@ -203,7 +190,6 @@ describe('default half-life migration', () => {
     const root = legacyStore([legacy('the staging deploy needs the VPN to reach the health check')]);
     const result = await consolidate(root);
     expect(detailLines(result).join('\n')).toMatch(/moved 1 memories from the 7-day to the 365-day half-life/);
-    // Sleep's replay pass may lengthen it further (+2 days per replay).
     expect([...byContent(root).values()][0]).toBeGreaterThanOrEqual(365);
   });
 
@@ -215,7 +201,6 @@ describe('default half-life migration', () => {
     expect([...byContent(root).values()][0]).toBeLessThan(20);
   });
 
-  // The migration holds the write lock throughout, so its work must grow with the store, not with its square.
   it('moves every memory in one indexed update and a fixed number of other statements', async () => {
     const total: number[] = [];
     for (const n of [20, 400]) {
@@ -236,11 +221,9 @@ describe('default half-life migration', () => {
     expect(total[1]).toBe(total[0]);
   });
 
-  // Statement counts miss work done in JS: copying the audit record once per memory runs no SQL at all.
   it('allocates about 4 times the heap for 4 times the memories', async () => {
     const allocated = async (n: number): Promise<number> => {
       const root = bulkLegacyStore(n);
-      // The store's body runs to its end inside the call, so the heap count sees the plan and the write in one call.
       const move = sqliteStore(root).consolidation;
       let moved: Promise<unknown> | undefined;
       const bytes = allocatedBytes(() => {
@@ -249,17 +232,13 @@ describe('default half-life migration', () => {
       await moved;
       return bytes;
     };
-    // The first call compiles the migration onto the heap, a fixed cost that would blunt the ratio.
     await allocated(10);
-    // Past about 1,000 keys V8 copies a record more cheaply, so larger stores would hide a per-row copy.
     const ratio = (await allocated(1_000)) / (await allocated(250));
-    // Near 1 the measure saw only fixed overhead; linear work gives 4 and a per-row copy 16 or more, so 8 is their geometric mean.
     expect(ratio).toBeGreaterThan(2);
     expect(ratio).toBeLessThan(8);
   });
 });
 
-/** Rewrites memory `id` as a typed writer pinned it before it took the default: 90 days plus 2 per recall. */
 function pinTo90(root: string, id: string, recalls = 0): void {
   writeEntry(root, {
     ...readEntry(root, id, 'default')!,
@@ -416,7 +395,6 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
     expect(details).toMatch(
       /moved 1 memories of decisions, incidents and other objects from the 90-day to the 730-day half-life/,
     );
-    // Sleep's replay pass may lengthen them further (+2 days per replay).
     expect(halfLifeOf(root, decision)).toBeGreaterThanOrEqual(730);
     expect(halfLifeOf(root, ordinary.id)).toBeGreaterThanOrEqual(730);
   });
@@ -466,7 +444,6 @@ describe('memories of decisions, incidents and other objects pinned to 90 days',
         decisionText: 'use Postgres for all new services',
       })
     ).memoryId!;
-    // A conflict loser: resolveConflict halved 90 + 2 * 38 and left no tag.
     writeEntry(root, {
       ...readEntry(root, decision, 'default')!,
       retrievalCount: 38,

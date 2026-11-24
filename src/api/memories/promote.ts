@@ -1,5 +1,3 @@
-// Promote to the global store, supersede with a successor, and archive raw memories.
-
 import {
   BadRequestError,
   ConflictError,
@@ -36,7 +34,6 @@ export interface PromoteResult {
   ok: true;
   sourceId: string;
   globalId: string;
-  /** Set on a shared store only: the row's origin project, null when it has none. */
   originProject?: string | null;
 }
 
@@ -56,35 +53,26 @@ export async function promote(
   if (sharedStoreOf(ctx)) return promoteInPlace(ctx, id, opts.project);
   const files = ctx.store.folderFiles;
   if (files === undefined) throw new StoreNotPortedError(ctx.store.kind, 'folderFiles');
-  // Another tenant's row and a row out of the caller's reach read alike, so the reply says nothing
-  // of either.
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   assertCopyRight(scopeReaderOf(ctx.actor), entry, id, memoryNotFoundText(id));
-  // A root's reach sets it for a store kept in a folder, so only a context built without a reach
-  // lacks it.
   const target = globalTargetOf(ctx);
   if (target === undefined) {
     throw new Error('promote needs ctx.reach.globalTarget, the global store to copy into');
   }
   assertPromotable(id, entry);
 
-  // The 'promote' row commits with the global copy, so no write follows the commit and a busy store
-  // fails the whole promote.
   const globalEntry = globalCopyOf(await files.home(), entry);
   await target.store.promotion.writeCopy(globalEntry, {
     actor: ctx.actor.subject,
     sourceId: id,
     auditAs: { tenantId: ctx.tenantId, actor: ctx.actor.subject },
   });
-  // A promote may create the global store, which only the write target names before it exists.
   await withDetached(ctx, (detached) =>
     embedMemoryDetached(folderEmbedTarget(target, ctx.infra), globalEntry, detached),
   );
   return { ok: true, sourceId: id, globalId: globalEntry.id };
 }
 
-/** The copy of a local memory, with a new `g_` id so it cannot collide. A project store's NULL
- * row gets its folder back. */
 function globalCopyOf(local: StoreHome, entry: MemoryEntry): MemoryEntry {
   return {
     ...entry,
@@ -99,7 +87,6 @@ async function promoteInPlace(
   id: string,
   project: PromoteOptions['project'],
 ): Promise<PromoteResult> {
-  // A host admin names no project; every other caller must, before any row is read.
   if (!ctx.actor.hostAdmin) {
     if (project === undefined) {
       throw new BadRequestError("a shared store needs the caller's project");
@@ -116,12 +103,9 @@ async function promoteInPlace(
     (entry !== undefined &&
       ref !== undefined &&
       classifyOriginProject(entry.originProject, ref) !== 'cross-project');
-  // An unadmitted row fails like a missing one, so the reply says nothing of other projects.
   const row = admitted ? entry : undefined;
   assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
   assertPromotable(id, row);
-  // A shared store already serves the row to its project, so a copy would only be a duplicate the
-  // next dedupe deletes.
   await ctx.store.appendAuditEvents([
     {
       tenantId: ctx.tenantId,
@@ -135,7 +119,6 @@ async function promoteInPlace(
 }
 
 function assertPromotable(id: string, entry: MemoryEntry): void {
-  // The copy of a superseded row is born superseded and recall drops it.
   if (isSuperseded(entry)) {
     const by = entry.supersededBy;
     throw new ConflictError(
@@ -144,7 +127,6 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
         : `Refusing to promote ${id}: it is superseded by ${by}; promote that one instead.`,
     );
   }
-  // Same quarantine veto as shareMemory; a promoted copy would have no quarantine record to review.
   if (isQuarantineScope(entry.scope)) {
     throw new BadRequestError(
       `Refusing to promote ${id}: it is quarantined pending review. Approve it first via 'hippo quarantine approve ` +
@@ -157,8 +139,6 @@ function assertPromotable(id: string, entry: MemoryEntry): void {
     );
   }
 
-  // Secret producer veto: promote is a producer path to the global store exactly like shareMemory -
-  // same hard rule.
   const promoteSecret = detectSecret(entry);
   if (promoteSecret.flagged) {
     throw new BadRequestError(
@@ -174,7 +154,6 @@ export interface SupersedeResult {
   ok: true;
   oldId: string;
   newId: string;
-  /** Set when the successor was held for review: the old row is superseded, and the new one waits in the queue. */
   quarantined?: { reason: string };
 }
 /** What the successor takes instead of the old row's value. Never set from a request body: the
@@ -193,8 +172,6 @@ export async function supersede(
   return supersedeScreened(ctx, oldId, newContent, overrides);
 }
 
-/** The successor runs the same screen as remember: a member's flagged text in a shared scope is held where the
- * store reviews and holds a supersede (`supersedeHeld`), else tagged. Secret vetting is not done here. */
 async function supersedeScreened(
   ctx: ContextWith<never, ReviewGroup>,
   oldId: string,
@@ -206,7 +183,6 @@ async function supersedeScreened(
   const reviewer = reviewerOf(ctx);
   const tags = withoutCaptureTags(overrides.tags ?? target.tags);
   const verdict = screenWrite(ctx.actor, {
-    // The successor keeps the old row's lead-in, and recall shows it above the new content.
     text: { content: newContent, leadIn: target.leadIn },
     tags,
     scope: target.scope ?? null,
@@ -246,13 +222,9 @@ async function supersedeScreened(
   return { ok: true, oldId, newId: successor.id };
 }
 
-/** The tenant-scoped row to supersede; another tenant's id, or a row out of reach, reads as not
- * found. */
 function assertSupersedable(ctx: Context, oldId: string, old: MemoryEntry | null): MemoryEntry {
   const row = old ?? undefined;
   assertWriteRight(scopeReaderOf(ctx.actor), row, oldId, `Memory not found: ${oldId}`);
-  // The CAS UPDATE closes the race; this check only gives a clearer error in the common
-  // single-writer case.
   if (isSuperseded(row)) {
     const by = row.supersededBy;
     throw new ConflictError(

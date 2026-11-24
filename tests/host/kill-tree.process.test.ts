@@ -1,4 +1,3 @@
-// A timeout or a kill takes the whole tree: the child's own children die with it.
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -36,7 +35,6 @@ afterAll(() => {
   for (const dir of made.splice(0)) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-/** A program that starts a grandchild, writes its own pid and the grandchild's to `pidFile`, and then idles. */
 const PARENT_SCRIPT = (pidFile: string): string => `
   const { spawn } = require('node:child_process');
   const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' });
@@ -74,7 +72,6 @@ describe('killTree', () => {
 
 describe('runWatched past its deadline', () => {
   it('does not kill a pid after its child exited, and still settles', async () => {
-    // The child exits at once; a detached grandchild keeps stderr open past the deadline.
     const script = `const gc = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 8000)'], { detached: true, stdio: ['ignore', 'ignore', 'inherit'] }); process.stderr.write('gc ' + gc.pid); gc.unref();`;
     const killed: number[] = [];
     const outcome = await runWatched([process.execPath, '-e', script], 3000, async (pid) => {

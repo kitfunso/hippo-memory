@@ -1,5 +1,3 @@
-// The ports a published entry fills into a Context its caller built without them, from one source
-// for every entry, so the process builds one reranker registry however many entries it calls.
 import type { InfraPorts } from '../base/ports/infra.js';
 import { FailureNotices } from '../base/util/failure-notices.js';
 import type { EntryInfraPorts } from '../api/types.js';
@@ -10,8 +8,6 @@ import { rootInfra } from '../infra/ports.js';
  * process's life. */
 export const entryHost = createHost();
 
-/** The failures the published entries have warned about, whoever built the rest of a caller's
- * ports. */
 const entryNotices = new FailureNotices();
 
 /** The published entries' infra source, built on first use. */

@@ -1,15 +1,3 @@
-/**
- * v1.7.2 T4 — HTTP /v1/memories accepts `scorer_window` query param.
- *
- * Validation lives in api.recall() (RecallContractError on invalid).
- * Transport calls Number(...) and forwards. RecallContractError → 400 with
- * `{error, code: 'invalid_scorer_window'}`.
- *
- * Cross-transport invariant (codex CRITICAL[2]): HTTP and MCP both Number-coerce
- * non-numeric input so `scorer_window=abc` over either transport produces the
- * same typed rejection.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -57,7 +45,6 @@ describe('HTTP /v1/memories scorer_window', () => {
     expect(body.total).toBe(5);
   });
 
-  // 'abc' is forwarded as NaN and recall() rejects it.
   it.each(['0', 'abc'])('scorer_window=%s returns 400 with code=invalid_scorer_window', async (value) => {
     const res = await fetch(`${handle.url}/v1/memories?q=alpha&scorer_window=${value}`);
     expect(res.status).toBe(400);

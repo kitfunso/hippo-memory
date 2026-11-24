@@ -1,4 +1,3 @@
-// `hippo init` installs Copilot's files when the Copilot CLI is installed, with the installer `hippo setup` uses.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
@@ -40,7 +39,6 @@ afterEach(() => {
   fs.rmSync(home, { recursive: true, force: true });
 });
 
-/** The Copilot CLI's folder as the CLI leaves it: more than the hooks folder. */
 function copilotCli(): void {
   fs.mkdirSync(copilotHome, { recursive: true });
   fs.writeFileSync(path.join(copilotHome, 'config.json'), '{}\n');
@@ -49,7 +47,6 @@ function copilotCli(): void {
 const readJson = (file: string): JsonValue => JSON.parse(fs.readFileSync(file, 'utf8'));
 const hooksFile = (): string => path.join(copilotHome, 'hooks', 'hippo.json');
 
-// Without --no-schedule the run would register a real OS task, without --no-learn it would run git.
 async function runInit(cwd: string, ...args: string[]): Promise<InProcessResult> {
   process.chdir(cwd);
   try {
@@ -69,12 +66,9 @@ async function hippo(cwd: string, ...args: string[]): Promise<InProcessResult> {
 const busy = (op: string): Error =>
   Object.assign(new Error(`EBUSY: resource busy or locked, ${op}`), { code: 'EBUSY', syscall: 'open' });
 
-/** Fails every rename onto, and every in-place write of, a file under the Copilot home; every other path goes through.
- * The rename fails with EXDEV, which renameOnto does not retry, so the write falls back to in place; that write fails with `fail`. */
 function refuseCopilotWrites(fail: (op: string) => Error): void {
   const rename = fs.renameSync.bind(fs);
   const write = fs.writeFileSync.bind(fs);
-  // writeFileAtomic writes its temp file through an fd, and String(fd) never names a Copilot path.
   const underCopilot = (p: fs.PathOrFileDescriptor): boolean => String(p).startsWith(copilotHome + path.sep);
   vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
     if (underCopilot(to)) {
@@ -166,7 +160,6 @@ describe('hippo init and the Copilot CLI', () => {
 
   it('a Copilot file init cannot read gives a warning, and the rest of init still runs', async () => {
     copilotCli();
-    // A folder where the instructions file belongs: reading it fails with EISDIR on every platform.
     fs.mkdirSync(path.join(copilotHome, 'copilot-instructions.md'));
     fs.mkdirSync(path.join(home, 'code', 'alpha', '.git'), { recursive: true });
 
@@ -180,7 +173,6 @@ describe('hippo init and the Copilot CLI', () => {
   it('a Copilot file another program holds open gives a warning, and the rest of init still runs', async () => {
     copilotCli();
     fs.mkdirSync(path.join(home, 'code', 'alpha', '.git'), { recursive: true });
-    // How Windows refuses a file VS Code holds open: the rename and the in-place write both fail.
     refuseCopilotWrites(busy);
 
     const { stdout, stderr } = await hippo(home, 'init', '--scan', home);

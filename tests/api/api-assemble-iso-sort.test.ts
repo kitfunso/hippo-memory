@@ -9,21 +9,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { writeEntry } from '../_helpers/root-forms.js';
 
-/**
- * F4 — byte compare canonical UTC ISO timestamps instead of localeCompare.
- *
- * Canonical UTC ISO (`Date.prototype.toISOString()`) is 24 chars, fixed-width,
- * trailing `Z`. Byte compare is chronological for these strings; localeCompare
- * does locale-aware Unicode collation (~50× slower) with no semantic benefit.
- *
- * Tests cover three layers:
- *   1. Pure equivalence — byte cmp matches localeCompare on a fixed sample
- *      across cross-second / minute / hour / day / month / year + epoch +
- *      max date, plus a randomized 100-sample cross-check vs Date.parse.
- *   2. Assemble integration — call api.assemble against a real store with
- *      raw rows inserted in shuffled creation order; assert items come back
- *      sorted ascending by createdAt under the byte-cmp swap.
- */
 describe('assemble ISO sort: byte compare equivalence', () => {
   it('byte compare matches localeCompare for canonical UTC ISO timestamps', () => {
     const isoSamples = [
@@ -48,7 +33,6 @@ describe('assemble ISO sort: byte compare equivalence', () => {
   });
 
   it('byte compare matches Date-numeric ordering for randomized canonical ISO inputs', () => {
-    // A fresh seed each run widens coverage; HIPPO_TEST_SEED=<seed> replays a failure.
     const seed = Number(process.env.HIPPO_TEST_SEED ?? Date.now() % 2 ** 32);
     const random = seededRandom(seed);
     const samples: string[] = [];
@@ -63,12 +47,6 @@ describe('assemble ISO sort: byte compare equivalence', () => {
   });
 });
 
-/**
- * Assemble integration — confirms the byte-cmp swap actually orders items
- * the way callers expect. Inserts raws with shuffled `created` timestamps,
- * calls api.assemble, asserts the returned items are chronologically
- * ascending by `createdAt`.
- */
 describe('assemble ISO sort: integration', () => {
   let root: string;
   beforeEach(() => {
@@ -77,8 +55,6 @@ describe('assemble ISO sort: integration', () => {
 
   it('returns items chronologically ordered by createdAt after byte-cmp sort', async () => {
     const sess = 'sess-F4';
-    // Insert in shuffled order so any sort failure is caught (insertion
-    // order is NOT chronological; fixture timestamps are).
     const fixtureOrder = [3, 0, 4, 1, 2];
     const expectedTimestamps = [
       '2026-05-06T00:00:00.000Z',
@@ -103,13 +79,10 @@ describe('assemble ISO sort: integration', () => {
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'test:f4-int', role: 'admin' });
     const result = await assemble(ctx, sess, { budget: 10_000 });
 
-    // Strip down to the createdAt strings on returned items, in returned order.
     const got = result.items.map((it) => it.createdAt);
-    // Every returned timestamp must come from our fixture (no extras).
     for (const t of got) {
       expect(expectedTimestamps).toContain(t);
     }
-    // Returned order must be ascending byte-cmp on canonical ISO.
     for (let i = 1; i < got.length; i++) {
       expect(got[i - 1]!.localeCompare(got[i]!)).toBeLessThanOrEqual(0);
     }

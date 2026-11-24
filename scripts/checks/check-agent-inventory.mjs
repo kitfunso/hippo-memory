@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Fails when an agent hippo names in its docs is missing from docs/integrations/agent-inventory.json, or an entry overclaims.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

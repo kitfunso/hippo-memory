@@ -1,5 +1,3 @@
-// The package's sleep and consolidate run on one handle per store, as `hippo sleep` does: a pass that opened its own
-// would make each close SQLite's last, which checkpoints and deletes the WAL.
 import { describe, expect, it, vi } from 'vitest';
 import { consolidate, sleep } from '../../src/index.js';
 import { DatabaseSync, type DatabaseSyncLike } from '../../src/db/sqlite.js';
@@ -9,7 +7,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 
 const { apiCtx } = sessionPerTest();
 
-/** Distinct connections that ran a statement while `run` ran. */
 async function connectionsDuring(run: () => Promise<object>): Promise<number> {
   const seen = new Set<unknown>();
   const prepare = DatabaseSync.prototype.prepare;
@@ -31,7 +28,6 @@ function seeded(label: string, rows: number): string {
   return root;
 }
 
-// Two: the pass's handle, and the one its flush opens while that handle is inside a transaction.
 describe('the package sleep and consolidate open two connections, however many rows the store holds', () => {
   it.each([5, 40])('consolidate(folder) over %i rows', async (rows) => {
     const root = seeded('lib-consolidate', rows);

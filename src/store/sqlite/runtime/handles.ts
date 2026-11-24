@@ -1,6 +1,3 @@
-// Opens hippo.db by its folder. Only the SQLite adapter holds a folder; every layer above takes the
-// store it is given.
-
 import { closeHippoDb, type DatabaseSyncLike } from '../../../db/index.js';
 import { reproveStoreSchema } from '../../../db/connect.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
@@ -36,20 +33,14 @@ export function openStore(
   hippoRoot: string,
   { grant, busyWaitMs }: GrantedOpens,
 ): DatabaseSyncLike {
-  // Open first: a folder marked for another store must refuse before any mirror folder appears.
   const { db, facts, reused } = grant.openWithFacts(hippoRoot, busyWaitMs);
   const session = grant.session;
-  // A store worker's reader: its writer ran the steps below before this thread was sent a job, and
-  // this connection cannot write them.
   if (session?.setupDoneFor === hippoRoot) return db;
-  // A read-only store keeps its folder as it is: no mirror folder, due mirror or first-open row.
   if (grant.runtime?.readOnly === true) return db;
   const at = { hippoRoot, runtime: grant.runtime };
   try {
     ensureMirrorDirectories(at);
     if (!reused) recoverDueMirrors(at, db, facts?.mirrorsDue);
-    // Both steps act only on a store with no memory row. A cached request handle has no probe
-    // facts, so it asks once for both; a store emptied on that handle is still set up again.
     if (facts?.hasMemories ?? holdsMemory(db)) return db;
     const bootstrapped = bootstrapLegacyStore(db, hippoRoot);
     if (bootstrapped) {
@@ -61,7 +52,6 @@ export function openStore(
     try {
       closeHippoDb(db);
     } catch (closeErr) {
-      // The init error is the one thrown; the close failure is only logged.
       log.error(
         `openStore: closing the handle after a failed init failed: ${errorMessage(closeErr)}`,
         errorFields(closeErr),

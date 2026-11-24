@@ -1,5 +1,3 @@
-// The active task snapshot rows and the continuity key that scopes them, for the Sessions group and
-// the handoffs.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { raiseMinBinary } from '../../../db/meta.js';
 import { originInSql } from '../runtime/rule-sql.js';
@@ -19,10 +17,6 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import type { SqlFragment } from '../../../db/sql.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-// The continuity key's match: all or nothing, so a key missing its owner or every project name
-// matches no row, never the tenant's newest.
-
-/** The project names a row's origin must be one of, or null when the key matches no row. */
 function keyProjects(key: ContinuityKey): readonly string[] | null {
   const names = key.project.filter((n) => n !== '');
   return key.owner === '' || names.length === 0 ? null : names;
@@ -34,8 +28,6 @@ export function continuityWhere(key: ContinuityKey): SqlFragment {
   return { sql: `owner_subject = ? AND ${originInSql(names)}`, params: [key.owner, ...names] };
 }
 
-// An unkeyed write acts on the tenant's newest or every active row, which on a shared store belong
-// to other owners.
 export function assertKeyedOnSharedStore(
   fn: string,
   { host, hippoRoot }: StoreFiles,
@@ -106,8 +98,6 @@ export function saveActiveTaskSnapshot(
         `?${owned ? ` AND ${owned.sql}` : ''}`,
     ).run(now, tenantId, ...(owned?.params ?? []));
     const inserted = insertSnapshot(db, { tenantId, snapshot, now, stamp });
-    // An older binary's tenant-wide supersede would close other owners' rows, so the first owner
-    // row shuts it out.
     if (stamp) raiseMinBinary(db, TASK_OWNER_MIN_BINARY);
     return inserted;
   });
@@ -126,7 +116,6 @@ export function saveActiveTaskSnapshot(
   }
 
   const loaded = rowToTaskSnapshot(row);
-  // The mirror is one file per store, so only the local, unkeyed path writes it.
   if (!key) writeActiveTaskMirror(hippoRoot, tenantId, loaded);
   return loaded;
 }

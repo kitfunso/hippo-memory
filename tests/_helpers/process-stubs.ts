@@ -1,4 +1,3 @@
-// Stubs that let an entry point wire its process handlers inside a test worker without ending or muting the worker.
 import type { EventEmitter } from 'node:events';
 import { vi, type MockInstance } from 'vitest';
 

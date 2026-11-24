@@ -1,5 +1,3 @@
-// Opening a current, whole store runs one probe and no DDL; anything stale or missing takes the self-healing slow path.
-// Real SQLite stores throughout; the statement spy wraps node:sqlite and passes every call through.
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
@@ -54,7 +52,6 @@ beforeEach(() => {
   );
 });
 
-/** Every SQL string sent through exec or prepare while `fn` runs. */
 function captureStatements(fn: () => void): string[] {
   const statements: string[] = [];
   const originalPrepare = DatabaseSync.prototype.prepare;
@@ -116,7 +113,6 @@ describe('store open fast path', () => {
     withDb((db) => db.prepare(`DELETE FROM meta WHERE key = 'last_trace_id'`).run());
 
     const created = new Set(openAndClose().flatMap((sql) => [...sql.matchAll(ANY_CREATE)].map((m) => m[1])));
-    // A healed table, index or trigger is created only when it is missing.
     const healed = new Set<string>([...HEALED_TABLES, ...HEALED_INDEXES, ...HEALED_TRIGGERS]);
 
     expect([...created].filter((name) => !REQUIRED_SCHEMA_OBJECTS.includes(name))).toEqual([]);
@@ -228,7 +224,6 @@ describe('one open reads the store once', () => {
     Number((db.prepare('SELECT COUNT(*) AS c FROM memories').get() as { c: number }).c);
 
   it('a current store with a memory opens on its PRAGMAs and the one probe, through openHippoDb and openStore', () => {
-    // The runtime remembers the once-per-store steps the first open ran, as a CLI or server process does.
     const runtime = new StoreRuntime();
     const opts = { grant: grantFor({ runtime }) };
     try {

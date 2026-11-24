@@ -1,4 +1,3 @@
-// Exit fixtures: the built hook writes the ledger rows, and scripts/z10-reconstruct.mjs must name the class each construction implies.
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   PIN,
@@ -74,7 +73,6 @@ const turnOf = (prompt: string, stdout: string, extra: Partial<TurnSpec> = {}): 
 });
 const doc = (session: string, specs: TurnSpec[]): string => writeHostTranscript(p, specs, { name: session });
 
-/** One sent turn on the default project: the pin is emitted and its attachment is under the prompt. */
 async function sentTurn(session: string, spec: Partial<TurnSpec> = {}): Promise<string> {
   const r = await fireIn(p, session, P1);
   return doc(session, [turnOf(P1, r.stdout, spec)]);
@@ -83,7 +81,6 @@ async function sentTurn(session: string, spec: Partial<TurnSpec> = {}): Promise<
 describe('capture: a lesson the store never held at the turn', () => {
   it('a key for text never written, in a session that has rows, is not-written no-row', async () => {
     make();
-    // Spawned once so the prompt hook is pinned in a real child here; every other turn runs in process.
     fire(p, 'x1', P1);
     expect(events('x1')).toHaveLength(1);
     const v = verdictOf({ store: p.hippoRoot, session: 'x1', key: 'a sentence nobody wrote', global: p.globalRoot });
@@ -140,7 +137,6 @@ describe('budgeted evidence: why a lesson never reached the model', () => {
     await fireIn(p, 'x2b', P1);
     const [e] = events('x2b');
     expect(cand('x2b', target.id)).toEqual([]);
-    // The recent five are the pin and the four newest notes; the two older notes and the target load but are never judged.
     expect(Number(e.rejected_unlisted)).toBe(3);
     expect(Number(e.rejected_count) - Number(e.rejected_unlisted)).toBe(0);
     const v = read('x2b', target.id);

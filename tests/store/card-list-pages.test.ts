@@ -1,5 +1,3 @@
-// The card list reads one keyset page per statement: pages join up to the old whole-list read, ties on updated_at
-// break on id across a page edge, and no page hands back more than its limit plus the one-row lookahead.
 import { describe, expect, it } from 'vitest';
 import { keysetPages } from '../../src/api/pages.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -10,7 +8,6 @@ import { makeStore } from '../_helpers/make-root.js';
 const TENANT = 'default';
 const PAGE_READ = /FROM cards WHERE .*LIMIT \?$/;
 
-/** `n` cards, three to an updated_at, so most page edges fall inside a tie; one card of another tenant. */
 function seed(root: string, n: number): string[] {
   const db = openHippoDb(root);
   try {

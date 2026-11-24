@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Builds one CycloneDX SBOM of what the npm tarball ships: root runtime
-// components plus the ui root plus ui runtime components.
 
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -32,7 +30,6 @@ export function mergeRuntimeBoms(rootBom, uiBom, rootName, uiName) {
     components.push(c);
   }
 
-  // The root's own bom-ref survives too: it is the document subject, not a components[] entry.
   const survivors = new Set([rootRef, ...components.map((c) => c['bom-ref'])]);
   const dependencies = [];
   const seenDeps = new Set();
@@ -88,7 +85,6 @@ function main() {
   else process.stdout.write(json);
 }
 
-// CLI main. Guarded so importing this module (e.g. from the test) does NOT run it.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     main();

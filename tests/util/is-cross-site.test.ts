@@ -7,7 +7,6 @@ import { isCrossSite } from '../../src/surface/http/http-util.js';
 const req = (headers: Record<string, string>): IncomingMessage =>
   Object.assign(new IncomingMessage(new Socket()), { headers });
 
-/** isCrossSite for a request that came in on an https listener. */
 function overTls(headers: Record<string, string>): boolean {
   const socket = new TLSSocket(new Socket());
   try {

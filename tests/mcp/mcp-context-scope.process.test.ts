@@ -83,7 +83,6 @@ describe('mcp hippo_context scope filter', () => {
       nextAction: 'parity handoff next action',
     });
 
-    // Outside git, so the auto query is empty and the text does not follow the host checkout.
     const cwd = process.cwd();
     process.chdir(home);
     try {
@@ -102,7 +101,6 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   it("prints another session's snapshot and handoff whole, never as a pointer", async () => {
-    // hippo_recall reads continuity by a different rule, so a pointer here could name a row it cannot return.
     saveActiveTaskSnapshot(home, 'default', {
       task: 'Other session task',
       summary: 'other snapshot summary',
@@ -212,10 +210,6 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   it('v39 origin partition at the MCP surface: cross-project-origin rows do not inject', async () => {
-    // Synced-down / legacy rows in the served store can carry another
-    // project's origin; hippo_context must exclude them (same policy as
-    // api.contextGet). 'proj-b' can never equal the resolved identity of a
-    // fresh tmpdir store, so this is deterministic.
     writeEntry(home, createMemory('own public deploykey fact'));
     writeEntry(home, {
       ...createMemory('BRAVO deploykey fact from another project', { pinned: true }),
@@ -237,8 +231,6 @@ describe('mcp hippo_context scope filter', () => {
   });
 
   it('v39 secret veto at the MCP surface: secret rows never inject outside their owner', async () => {
-    // Secret with a foreign origin AND secret with no origin: both denied
-    // (ambientSecretAdmit admits a flagged row only inside its owning project).
     writeEntry(home, {
       ...createMemory('mcp secret sk_vendor_deadbeef123456 foreign', { pinned: true }),
       originProject: 'proj-b',

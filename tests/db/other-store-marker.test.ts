@@ -1,4 +1,3 @@
-// A hippo root holding the other-store marker refuses every hippo.db open, from the CLI as from a request, and never creates the file.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,7 +25,6 @@ let marker: string;
 
 const dbFiles = (): string[] => readdirSync(root).filter((name) => name.startsWith('hippo.db'));
 
-/** The refusal `open` throws; any other outcome fails the test. */
 function refusal(open: () => DatabaseSyncLike): OtherStoreFolderError {
   try {
     closeHippoDb(open());

@@ -1,4 +1,3 @@
-// Each failure here used to be swallowed; the test forces it and reads the line it now leaves on stderr.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
@@ -42,7 +41,6 @@ afterEach(() => {
   syncBuiltinESMExports();
 });
 
-/** Makes fs.readdirSync throw `code` for the rest of the test, mirrored into the ESM named exports. */
 function failReaddir(code: string): void {
   vi.spyOn(fs, 'readdirSync').mockImplementation(() => {
     throw errno(code);
@@ -50,7 +48,6 @@ function failReaddir(code: string): void {
   syncBuiltinESMExports();
 }
 
-/** Makes fs.statSync throw `code` for `target` only. */
 function failStat(code: string, target: string): void {
   const real = fs.statSync;
   // SAFETY: the stand-in forwards every call it does not fail to the real statSync with the caller's own arguments.
@@ -91,7 +88,6 @@ describe('http retry', () => {
 
 describe('heartbeatVerdict', () => {
   it('logs a non-HttpError at error and still answers unavailable', async () => {
-    // A request with no socket makes the keyless-local check throw a TypeError, not an HttpError.
     // SAFETY: a bare object stands in for the request and the options; only the code path under test reads them.
     const req = { headers: {} } as IncomingMessage;
     // SAFETY: see above.
@@ -162,7 +158,6 @@ describe('capture log append', () => {
     vi.spyOn(fs, 'appendFileSync').mockImplementation(stand);
     syncBuiltinESMExports();
     vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    // The test runner replaces console, so route its lines through the stream the tee wraps.
     vi.spyOn(console, 'log').mockImplementation((line: string) =>
       process.stdout.write(`${line}
 `),

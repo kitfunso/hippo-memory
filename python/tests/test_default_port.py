@@ -1,5 +1,3 @@
-"""The SDK's default URL must use the port `hippo serve` binds by default (it drifted to 3737 once)."""
-
 from __future__ import annotations
 
 import inspect

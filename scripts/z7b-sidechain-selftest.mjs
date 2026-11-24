@@ -1,4 +1,3 @@
-// Offline synthetic cases for z7b-sidechain-lib.mjs; run through the Z7b eval script's selftest command, after Z7's own cases.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -175,7 +174,6 @@ function selftestPromptFiles(t) {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const read = (dir, n) => fs.readFileSync(path.join(here, dir, n), 'utf8');
   t('prompt dir holds exactly the four pinned prompts', fs.readdirSync(path.join(here, 'z7b-sidechain-prompts')).sort().join() === [...Z.PIN_PROMPTS].sort().join());
-  // Amendment 2: from dev round 2 the judge prompt is Z7's too.
   t('judge-system, judge-prompt and recheck-prompt are byte-identical to Z7', ['judge-system.txt', 'judge-prompt.txt', 'recheck-prompt.txt'].every((n) => L.sha256(read('z7b-sidechain-prompts', n)) === L.sha256(read('z7-sidechain-prompts', n))));
   const filt = read('z7b-sidechain-prompts', 'filter-prompt.txt');
   t('filter prompt has the A, B and LESSONS slots and every label', ['{{A}}', '{{B}}', '{{LESSONS}}'].every((v) => filt.includes(v)) && !filt.includes('{{C}}') && Z.FILTER_LABELS.every((l) => filt.includes(`"${l}"`)));
@@ -186,7 +184,6 @@ function pinsBlock(prompts) {
   return ['## Pins', '', `- Snapshot manifest SHA-256 \`${hex('a')}\`; scored item list SHA-256 \`${hex('b')}\`.`, `- Prompts SHA-256: ${named}.`].join('\n');
 }
 
-// The Z7b guard config: its own marker name, its own prompt pins, a frozen check over the Z7b files.
 function selftestGuard(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z7b-guard-'));
   const G = (...args) => { const r = git(dir, args); if (r.status !== 0) throw new Error(r.stderr); return r; };

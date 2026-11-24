@@ -1,4 +1,3 @@
-// A hippo store and a scratch vault folder per test, with the note writer and archive reader the vault import tests share.
 import { beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,8 +8,8 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from './make-root.js';
 import { removeDir } from './remove-dir.js';
 
-export let tmpDir: string; // hippo root (the store)
-export let vaultDir: string; // a scratch vault folder we mutate per-test
+export let tmpDir: string;
+export let vaultDir: string;
 
 export const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'vault-imports');
 

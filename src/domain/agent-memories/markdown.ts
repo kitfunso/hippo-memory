@@ -4,9 +4,9 @@
  */
 
 export interface MarkdownItem {
-  readonly heading: string; // nearest heading text above the item, '' when none
-  readonly headingSlug: string; // slug of heading, 'top' when heading is ''
-  readonly text: string; // the item text
+  readonly heading: string;
+  readonly headingSlug: string;
+  readonly text: string;
 }
 
 interface Block {
@@ -15,10 +15,8 @@ interface Block {
 }
 
 const HEADING = /^#{1,6}\s+/;
-// Column 0 only: an indented marker is a sub-bullet and stays inside its item.
 const BULLET = /^(?:[-*+]|\d+[.)]) /;
 const RULE = /^\s*([-*_])(?:\s*\1){2,}\s*$/;
-// A backtick fence's info string holds no backtick, so inline code at line start is not a fence.
 const FENCE = /^\s*(?:(`{3,})[^`]*|(~{3,}).*)$/;
 const MAX_SLUG_LENGTH = 40;
 
@@ -71,7 +69,6 @@ export function markdownHeading(line: string): string | null {
 }
 
 function headingText(line: string): string {
-  // A closing run of '#' counts only after a space, so `## C#` keeps its name.
   return line
     .replace(HEADING, '')
     .trim()
@@ -79,7 +76,6 @@ function headingText(line: string): string {
     .trim();
 }
 
-// Rules are tested first so `- - -` is a rule, not a bullet.
 function startsBlock(line: string): boolean {
   return RULE.test(line) || HEADING.test(line) || BULLET.test(line);
 }
@@ -95,7 +91,6 @@ export function closesFence(line: string, fence: string): boolean {
   return trimmed.length >= fence.length && trimmed.replaceAll(fence[0], '') === '';
 }
 
-// An unclosed fence runs to the end of the file.
 function skipFence(lines: readonly string[], start: number, fence: string): number {
   for (let i = start + 1; i < lines.length; i++) {
     if (closesFence(lines[i], fence)) return i + 1;
@@ -103,21 +98,17 @@ function skipFence(lines: readonly string[], start: number, fence: string): numb
   return lines.length;
 }
 
-// A line opening a fence carries its whole body with it, so body lines never start a heading or
-// bullet.
 function afterLine(lines: readonly string[], i: number): number {
   const fence = fenceOf(lines[i]);
   return fence === null ? i + 1 : skipFence(lines, i, fence);
 }
 
-// Where a bullet resumes after blank lines: the next line when it is indented, else -1.
 function resumeAfterBlank(lines: readonly string[], i: number): number {
   let next = i;
   while (next < lines.length && isBlank(lines[next])) next++;
   return next < lines.length && isIndented(lines[next]) ? next : -1;
 }
 
-// A bullet spans blank lines between indented lines; a paragraph ends at the first blank line.
 function blockEnd(lines: readonly string[], start: number, isBullet: boolean): number {
   let i = start + 1;
   while (i < lines.length) {

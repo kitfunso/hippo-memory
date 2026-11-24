@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// CI gate: npm audit finds nothing at moderate or worse in the root or ui/. Production dependencies get no
-// exception; a dev-only advisory with no patched release may wait in audit-allowlist.json until it expires.
 
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -10,7 +8,6 @@ const FLOOR = LEVELS.indexOf('moderate');
 const ALLOW = JSON.parse(readFileSync(new URL('./audit-allowlist.json', import.meta.url), 'utf8'));
 const today = new Date().toISOString().slice(0, 10);
 
-/** Map of GHSA id to a report line, for each advisory at moderate or worse in one npm audit run. */
 function advisories(prefix, omitDev) {
   const args = ['audit', '--json', ...(prefix ? ['--prefix', prefix] : []), ...(omitDev ? ['--omit=dev'] : [])];
   let out;
@@ -25,7 +22,6 @@ function advisories(prefix, omitDev) {
   const found = new Map();
   for (const vuln of Object.values(JSON.parse(out).vulnerabilities ?? {})) {
     for (const via of vuln.via) {
-      // An advisory entry has a url; a bare package name only says which dependency passed it on.
       if (!via.url || LEVELS.indexOf(via.severity) < FLOOR) continue;
       const id = via.url.split('/').pop();
       found.set(id, `${id} ${via.severity} in ${via.name}: ${via.title}`);

@@ -1,4 +1,3 @@
-// A path can carry a memory id or other caller data, so a failed request's log line names the route template instead.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
 import { serveKeyed } from '../_helpers/keyed-server.js';

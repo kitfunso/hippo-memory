@@ -1,6 +1,3 @@
-// Rule K of the test-only export gate: an exported function or class is not a test seam when its own module calls it
-// and, followed through its module and its imports, it reaches no I/O, no db-layer module and no module-level binding that any code writes.
-
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import ts from 'typescript';
@@ -86,7 +83,6 @@ function declare(mod, st) {
   const unit = { node: st };
   mod.units.push(unit);
   const kind = KIND_OF.find(([is]) => is(st))?.[1];
-  // A type may share its name with a value (`const X` plus `type X`); the value is the one that can hold state.
   if (kind && st.name && !(kind === 'type' && mod.decls.has(st.name.text))) {
     mod.decls.set(st.name.text, { kind, node: st, unit });
   }
@@ -106,7 +102,6 @@ function resolveSpec(mods, from, spec) {
   return [`${base}.ts`, `${base}/index.ts`].find((p) => mods.has(p)) ?? null;
 }
 
-/** The module and name that really declare `name` as seen from `file`, through named and star re-exports. */
 function resolveExport(mods, file, name, depth = 0) {
   const mod = mods.get(file);
   if (!mod || depth > 12) return null;
@@ -126,7 +121,6 @@ function resolveExport(mods, file, name, depth = 0) {
   return null;
 }
 
-/** Records, on the declaring module, every module-level binding that any src code writes, in its own module or through an import. */
 function markWrites(mods) {
   for (const [file, mod] of mods) {
     for (const w of mod.units.flatMap((u) => factsOf(u).writes)) {
@@ -158,7 +152,6 @@ function isEmptyContainer(d) {
   );
 }
 
-// The `let` keyword alone misses a const object or container that code writes to (a counter object, a cache map).
 const isState = (mod, name, d) =>
   d.kind === 'let' || mod.written.has(name) || (d.kind === 'const' && isEmptyContainer(d));
 
@@ -182,7 +175,6 @@ function importReason(mods, layerOf, file, d, follow) {
   return follow(target, d.imported);
 }
 
-/** Returns `impure(file, name)`: null when the name is pure, else the first impure path found. */
 function purityJudge(mods, layerOf) {
   const memo = new Map();
   const stack = [];
@@ -218,7 +210,6 @@ function purityJudge(mods, layerOf) {
     stack.push(key);
     const reason = judge(file, name);
     stack.pop();
-    // A pure verdict reached by cutting a cycle at a caller still on the stack waits for that caller's own verdict.
     const settled = reason !== null || cut >= stack.length;
     if (settled) memo.set(key, reason);
     cut = Math.min(outer, settled ? Infinity : cut);

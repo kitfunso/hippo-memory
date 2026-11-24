@@ -1,6 +1,3 @@
-/** Z0 analyzer, part 4 of 6: validity gates G1-G5 (prereg 154-166). Each returns `pass` plus the numbers it read.
- * A failed gate makes the run invalid; a half or gate whose arms were not planned is "not run" (reading 11). */
-
 import { CODINGS, NOT_RUN, bothCodings, codexApply, inSets } from './z0-hypotheses.mjs';
 
 export const OPERATOR_CANARY = 'operator-canary';
@@ -8,7 +5,6 @@ const EPS = 1e-9;
 
 /** G1 (reading 3): an operator canary invalidates the run; other voids drop sessions, with per-arm shares printed. */
 export function g1(records, counts) {
-  // Prereg 161: a canary anywhere fails the run, so one an apply's resume saw counts though it never sets that cell's void.
   const seen = (r) => r.void === OPERATOR_CANARY || (r.resumeVoidHits ?? []).some((h) => h.reason === OPERATOR_CANARY);
   const canaries = records.filter(seen).length;
   const perArm = Object.fromEntries(Object.entries(counts).map(([arm, c]) => [arm, { voids: c.voids, share: c.planned === 0 ? 0 : c.voids / c.planned }]));

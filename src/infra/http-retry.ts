@@ -1,35 +1,18 @@
-/** One retry policy for outbound HTTP: a timeout on every attempt, backoff on 429 and 5xx, and
- * on a dropped connection where a replay is safe. */
-
 import { MINUTE_MS } from '../base/util/time.js';
 import { errorCode, errorFields, log } from '../base/util/log.js';
 import { tryParseUrl } from '../base/util/net.js';
 
 export interface RetryPolicy {
-  /** Per-attempt limit; a stalled peer ends as a thrown `TimeoutError`, never a hang. */
   timeoutMs: number;
-  /** Total attempts including the first. */
   attempts?: number;
-  /** Limit on the whole call, waits included: an attempt is cut short at it and no retry starts
-   * whose wait would reach it. */
   totalMs?: number;
   baseDelayMs?: number;
-  /** A Retry-After longer than this hands the response back, so a caller with its own long pause
-   * keeps it. */
   maxDelayMs?: number;
-  /** Which responses to retry; defaults to 429, plus 5xx for a replay-safe call
-   * (`retryTransport`). A write narrows it to answers that prove nothing committed. */
   retryOn?: (res: Response) => boolean;
-  /** The call changes nothing on the far side, so a 5xx, a dropped connection or a timed-out
-   * attempt is replayed. On for GET and HEAD; any other method turns it on only when a replay
-   * cannot commit twice. */
   retryTransport?: boolean;
   fetchFn?: typeof fetch;
-  /** Replaces the timer between attempts. A caller `signal` that aborts still ends the wait at
-   * once. */
   sleep?: (ms: number) => Promise<void>;
   random?: () => number;
-  /** Replaces the clock `totalMs` is measured on. */
   now?: () => number;
 }
 
@@ -88,7 +71,6 @@ function isIdempotent(method: string | undefined): boolean {
   return verb === 'GET' || verb === 'HEAD';
 }
 
-/** Host plus pathname only: a query string can carry a key. */
 function redactedTarget(url: string | URL): string {
   const u = url instanceof URL ? url : tryParseUrl(url);
   return u === undefined ? 'unparseable-url' : `${u.host}${u.pathname}`;
@@ -105,8 +87,6 @@ interface RetryLogEntry {
 
 function logRetry(entry: RetryLogEntry): void {
   const { init, url, reason, attempt, attempts, delayMs } = entry;
-  // Debug: an attempt that may still succeed is not a warning, and the caller reports the final
-  // failure.
   log.debug('http retry', {
     method: (init.method ?? 'GET').toUpperCase(),
     target: redactedTarget(url),
@@ -118,15 +98,12 @@ function logRetry(entry: RetryLogEntry): void {
 
 type Sleep = (ms: number) => Promise<void>;
 
-// `cancel` clears the timer, so a wait the caller left does not keep the process alive.
 const timerSleep = (ms: number, cancel?: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);
     cancel?.addEventListener('abort', () => clearTimeout(timer), { once: true });
   });
 
-/** The wait between attempts. With a caller signal it ends the moment that signal aborts and
- * rejects with its reason, so no further attempt starts. */
 async function backoffWait(
   ms: number,
   sleep: Sleep | undefined,
@@ -142,15 +119,12 @@ async function backoffWait(
     });
   });
   try {
-    // An injected sleep cannot be cancelled, so it is raced and left to run out.
     await Promise.race([sleep ? sleep(ms) : timerSleep(ms, left.signal), aborted]);
   } finally {
     left.abort();
   }
 }
 
-/** 429, and 5xx for a replay-safe call: a 5xx can come after the far side committed, while a 429
- * refused the call unrun. */
 const defaultRetryOn =
   (replaySafe: boolean) =>
   (res: Response): boolean =>
@@ -196,8 +170,6 @@ export async function fetchWithRetry(
     try {
       await res.body?.cancel();
     } catch (err) {
-      // Best-effort: the response is spent either way, so a failed cancel only leaves the socket to
-      // idle out.
       log.debug('http retry: body cancel failed', errorFields(err));
     }
     const reason = `status ${res.status}`;
@@ -217,7 +189,6 @@ function retryRun(url: string | URL, init: RequestInit, policy: RetryPolicy): Re
   const now = policy.now ?? Date.now;
   const deadline = policy.totalMs === undefined ? Infinity : now() + policy.totalMs;
   const fitsBudget = (delayMs: number): boolean => now() + delayMs < deadline;
-  // Jitter over the upper half keeps parallel callers from retrying in lockstep.
   const backoffMs = (attempt: number): number => {
     const ceiling = Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1));
     return ceiling / 2 + random() * (ceiling / 2);
@@ -237,10 +208,8 @@ function retryRun(url: string | URL, init: RequestInit, policy: RetryPolicy): Re
   };
 }
 
-/** The wait before replaying an attempt that threw; rethrows `err` when no replay may follow. */
 function faultDelay<E>(run: RetryRun, attempt: number, err: E): number {
   const { init, url, attempts } = run;
-  // The caller's own abort is a decision, not a fault, so it ends the call.
   if (
     !run.replaySafe ||
     attempt >= attempts ||
@@ -256,7 +225,6 @@ function faultDelay<E>(run: RetryRun, attempt: number, err: E): number {
   return delay;
 }
 
-/** The wait before replaying `res`, or null to hand it back. */
 function responseDelay(run: RetryRun, attempt: number, res: Response): number | null {
   const { retryOn } = run;
   if (!retryOn(res) || attempt >= run.attempts) return null;

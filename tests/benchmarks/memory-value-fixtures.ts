@@ -1,19 +1,3 @@
-/**
- * Shared fixtures for the LC2-E1 memory-value harness test suite
- * (memory-value-harness.process.test.ts + memory-value-determinism.test.ts).
- *
- * Split out (codex confirmation-pass P1-B fix, 2026-08-09) so both test
- * files share one fixture definition instead of drifting copies — the
- * split itself exists so neither Vitest worker's per-file wallclock
- * crosses the ~60s Windows worker-RPC "onTaskUpdate" timeout.
- *
- * NOT matched by vitest.config.ts's test include glob
- * (`tests/**\/*.test.ts`), so this file is never itself run as a suite —
- * it is purely an import target.
- *
- * See memory-value-harness.process.test.ts's header for the hand-computable
- * retention design note (why Q_A/Q_B are shaped the way they are).
- */
 import * as fs from 'node:fs';
 import { vi } from 'vitest';
 
@@ -24,19 +8,12 @@ import { extractQuestion } from '../../benchmarks/memory-value/extract.mjs';
 import { metaPathFor } from '../../benchmarks/memory-value/common.mjs';
 import { readJson } from '../../benchmarks/memory-value/common.mjs';
 
-// HIPPO_MV_SCRATCH_ROOT is included here (not just the ablation vars) so the
-// cross-ingest determinism test can never leak its scratch-root override
-// into another test if it throws before its own finally runs.
 export const RESET_ENV_VARS = ['HIPPO_FAKE_NOW', 'HIPPO_MV_SCRATCH_ROOT'] as const;
 export function clearAblationEnv(): void {
   for (const v of RESET_ENV_VARS) vi.stubEnv(v, undefined);
 }
 
-// ---------------------------------------------------------------------------
-// Fixture: 2 questions, 3 sessions each, ~10 turns each, known gold flags.
-// ---------------------------------------------------------------------------
-
-export const BASE = Date.UTC(2024, 0, 1, 9, 0, 0); // 2024-01-01T09:00:00Z, a Monday
+export const BASE = Date.UTC(2024, 0, 1, 9, 0, 0);
 export const day = (n: number) => new Date(BASE + n * 86_400_000);
 
 export interface Turn {

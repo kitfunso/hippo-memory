@@ -1,6 +1,3 @@
-// Which rows a store read may answer as holding a text: equal once every space is gone, or a
-// sleep-merged row holding it. Every copy heldTextKeys finds passes, so a caller that checks again
-// keeps its answer.
 import { identityText } from '../../base/util/same-text.js';
 
 /** The code points JavaScript's \s matches, which duplicateKey folds; the SQL twin removes the

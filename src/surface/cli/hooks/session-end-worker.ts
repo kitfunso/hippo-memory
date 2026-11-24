@@ -1,5 +1,3 @@
-// The detached session-end worker (`__session-end-worker`): sleep, capture, digest and the handoff,
-// each step logged.
 import { envCaptureScripted } from '../../../base/util/env.js';
 import {
   readSessionScan,
@@ -67,7 +65,6 @@ interface RunSessionEndWorkOptions {
   readonly held: HeldLog;
 }
 
-/** The worker's transcript reads; the root reads HIPPO_CAPTURE_SCRIPTED for them. */
 function transcriptReads(transcriptPath: string | undefined) {
   const read = { scriptedIsHuman: envCaptureScripted() };
   return {
@@ -104,7 +101,6 @@ function runSessionEndWork({
       save: (id, file, turns) => saveTurnPosition(id, file, turns, logLine),
     },
     currentProject: () => ctx.infra.machine.projectIdentity(workingFolder(ctx)),
-    // The run writes to this folder's own store, else to the global one in its reach.
     capture: async (into, turns, originProject, fromStart) => {
       const root = into === ctx ? hippoRoot : ctx.reach?.global?.root;
       if (root === undefined) return false;
@@ -127,8 +123,6 @@ function runSessionEndWork({
   });
 }
 
-/** Sleeps the folder's own store; a failure goes to the session log, and capture runs
- * regardless. */
 async function sleepFolderStore(
   hippoRoot: string,
   tenantId: string,
@@ -138,7 +132,6 @@ async function sleepFolderStore(
   try {
     return await (await import('../sleep.js')).sleepStore({ hippoRoot, tenantId, args: [], flags });
   } catch (err) {
-    // sleepStore writes its own failure line only once its log tee is open.
     reportSessionEndFailure(closeLogFile, 'session-end: sleep', err);
     return false;
   }
@@ -151,13 +144,10 @@ interface EndedCapture {
   readonly turns: readonly SessionTurn[] | undefined;
   readonly originProject: ProjectRef | undefined;
   readonly fromStart: boolean;
-  /** The run's mode, not the flag: a worker also runs the requests other workers queued. */
   readonly mode: WorkerMode;
-  /** True for the folder's own store: the global one never gets what the person typed. */
   readonly saveMessages: boolean;
 }
 
-/** True when capture ran to the end, so a turn close may move its cursor past these turns. */
 async function captureEndedSession(
   store: string,
   {

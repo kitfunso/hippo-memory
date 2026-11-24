@@ -1,5 +1,3 @@
-// hippo.db's GraphReads group: one read snapshot around the CLI's graph walks, and the rows a view
-// or a traversal reads on the handle that snapshot runs on.
 import { DEFAULT_LIST_LIMIT } from '../../../base/util/limits.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
@@ -28,8 +26,6 @@ import { graphDeltaOn } from './graph-delta.js';
 const DEFAULT_GRAPH_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 const DEFAULT_GRAPH_SCAN_LIMIT = 1000;
 
-/** Entities with an exact `name`, bounded by `limit` in SQL with a deterministic order, so
- * graph-view focus finds `--entity NAME` directly without materializing every same-name row. */
 function listEntitiesByName(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -51,7 +47,6 @@ function listEntitiesByName(
   return rows.map(rowToEntity);
 }
 
-/** The tenant's newest `limit` entities. */
 function listEntities(db: DatabaseSyncLike, tenantId: string, limit: number): Entity[] {
   assertTenantId('listEntities', tenantId);
   const rows = cachedStatement(
@@ -61,7 +56,6 @@ function listEntities(db: DatabaseSyncLike, tenantId: string, limit: number): En
   return rows.map(rowToEntity);
 }
 
-/** The tenant's newest `limit` relations. */
 function listRelations(db: DatabaseSyncLike, tenantId: string, limit: number): Relation[] {
   assertTenantId('listRelations', tenantId);
   const rows = cachedStatement(
@@ -71,8 +65,6 @@ function listRelations(db: DatabaseSyncLike, tenantId: string, limit: number): R
   return rows.map(rowToRelation);
 }
 
-/** Load entities by primary id (the BFS-reached rows whose `memory_id` maps back to a recall
- * result). Tenant-scoped, read-only. */
 function readEntitiesByIds(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -118,10 +110,6 @@ function newestFirst(a: RelationRow, b: RelationRow): number {
   return b.id - a.id;
 }
 
-/** All relations touching ANY of `entityIds` in EITHER direction: the per-hop neighbor query for
- * multi-hop traversal, one query for the whole frontier (no N+1). `limit` caps the rows of the
- * whole call, not of each id chunk, and must be a non-negative integer (raw `LIMIT ?` rejects a
- * fraction). */
 function listNeighborRelations(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -139,15 +127,10 @@ function listNeighborRelations(
     for (const r of neighborRowsOf(db, tenantId, slice, limit)) byId.set(r.id, r);
   }
   const merged = Array.from(byId.values());
-  // Each chunk's own LIMIT keeps its newest rows, so the newest `limit` of the union are all in
-  // `merged`.
   if (merged.length > limit) merged.sort(newestFirst).length = limit;
   return merged.map(rowToRelation);
 }
 
-/** Relations with BOTH endpoints in `entityIds` (edges AMONG the set), for the graph-view focus
- * subgraph; `LIMIT` caps only intra-union edges, so no out-of-union row evicts a valid one. The
- * caller bounds `entityIds` (<= view limit), so a single query is safe. */
 function listRelationsAmong(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -174,8 +157,6 @@ function listRelationsAmong(
   return rows.map(rowToRelation);
 }
 
-/** Map consolidated source memory ids to their graph entities: the SEED step of multi-hop
- * recall. Tenant-scoped, read-only; chunks the IN-list under the SQLite variable cap. */
 function listEntitiesByMemoryId(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -185,7 +166,6 @@ function listEntitiesByMemoryId(
   if (memoryIds.length === 0) return [];
   const out: Entity[] = [];
   for (const slice of chunked(memoryIds, GRAPH_ID_BATCH)) {
-    // id ASC so chunk-local scan order never decides ties (id is an autoincrement PK).
     const rows = cachedStatement(
       db,
       `
@@ -199,9 +179,6 @@ function listEntitiesByMemoryId(
   return out;
 }
 
-/** Run `fn` in ONE read transaction (a single WAL snapshot) so every `load*` read via `txDb`
- * sees a consistent view even if a rebuild commits concurrently (it clears and reinserts
- * entities, so separate reads could mix old entity ids with new relation ids). */
 function withGraphReadSnapshot<T>(db: DatabaseSyncLike, fn: (txDb: DatabaseSyncLike) => T): T {
   return withReadSnapshot(db, () => fn(db));
 }
@@ -214,14 +191,11 @@ interface GraphViewSpec {
   readonly canRead?: CanRead;
 }
 
-/** `db` is the handle the caller's snapshot is open on, which every read here must use. */
 interface GraphSource {
   readonly db: DatabaseSyncLike;
   readonly tenantId: string;
 }
 
-/** The items whose source memory `canRead` admits; a row with no memory shows only through its source
- * object, and a missing memory fails closed. */
 function readableOnly<T extends { memoryId: string | null; sourceObjectId?: number }>(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -249,18 +223,13 @@ function wholeGraphRows({ db, tenantId }: GraphSource, limit: number): GraphRows
   return { entities, relations, truncated: entities.length >= limit || relations.length >= limit };
 }
 
-/** The named entities with their 1-hop neighbors and the edges among that union; null when the
- * caller may read none of the named ones. */
 function focusRows(
   { db, tenantId }: GraphSource,
   name: string,
   limit: number,
   canRead: CanRead | undefined,
 ): GraphRows | null {
-  // The name is queried directly, so it is found on a graph larger than `limit`; one name can map
-  // to many entities, so the matches are capped.
   const named = listEntitiesByName(db, tenantId, name, { limit });
-  // A hidden focus must not answer through its neighbors that the name exists.
   const focus = readableOnly(db, tenantId, named, canRead);
   if (focus.length === 0) return null;
   const focusIds = focus.map((e) => e.id);
@@ -269,7 +238,7 @@ function focusRows(
   let neighborsCapped = false;
   for (const r of hop) {
     if (union.size >= limit) {
-      neighborsCapped = true; // node cap filled before all neighbors were added
+      neighborsCapped = true;
       break;
     }
     union.add(r.fromEntityId);
@@ -277,20 +246,16 @@ function focusRows(
   }
   const unionIds = [...union].slice(0, limit);
   const entities = readEntitiesByIds(db, tenantId, unionIds);
-  // Both endpoints in the set: neighbor-to-neighbor edges are included, and the LIMIT never drops
-  // one for an out-of-union row.
   const relations = listRelationsAmong(db, tenantId, unionIds, { limit });
   const truncated =
     named.length >= limit ||
-    hop.length >= limit || // neighbor scan capped -> a 1-hop neighbor may be omitted
-    neighborsCapped || // node cap filled before all neighbors were consumed
+    hop.length >= limit ||
+    neighborsCapped ||
     union.size > unionIds.length ||
     relations.length >= limit;
   return { entities, relations, truncated };
 }
 
-/** What `GraphReads.graphRows` answers, read on `db`: the caller opens the one snapshot that
- * keeps entity ids and relation ids from two different rebuilds apart. */
 function graphViewRows(db: DatabaseSyncLike, tenantId: string, spec: GraphViewSpec): GraphRows {
   const source = { db, tenantId };
   const raw =

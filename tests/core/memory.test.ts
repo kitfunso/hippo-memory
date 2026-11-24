@@ -10,15 +10,13 @@ import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { writeEntriesTogether } from '../_helpers/root-forms.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
-/** These tests pin decay arithmetic to the pre-1.46 7-day base; the default itself is tested in half-life-migration and schema-fit. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
 describe('Strength formula', () => {
   it('returns 1.0 for a pinned memory regardless of age', () => {
     const entry = createMemory7('pinned fact', { pinned: true });
-    const oldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1 year ago
-    // Manually age it
+    const oldDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
     const aged = { ...entry, lastRetrieved: oldDate.toISOString() };
     expect(calculateStrength(aged)).toBe(1.0);
   });
@@ -27,21 +25,16 @@ describe('Strength formula', () => {
     const entry = createMemory7('ephemeral note');
     const now = new Date();
 
-    // Simulate 7 days passing (one full half-life for default)
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const aged = { ...entry, lastRetrieved: sevenDaysAgo.toISOString() };
 
     const s = calculateStrength(aged, now);
-    // At half-life, base decay = 0.5; with retrieval_count=0 and neutral valence:
-    // retrieval_boost = 1 + 0.1*log2(1) = 1
-    // emotional_mult = 1.0
-    // so s ≈ 0.5
     expect(s).toBeCloseTo(0.5, 1);
   });
 
   it('has higher strength when recently retrieved', () => {
     const now = new Date();
-    const oldDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000); // 2 weeks ago
+    const oldDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
     const entry1 = createMemory7('memory A', { layer: Layer.Episodic });
     const e1 = { ...entry1, lastRetrieved: now.toISOString(), retrievalCount: 5 };
@@ -59,7 +52,6 @@ describe('Strength formula', () => {
 
   it('emotional multiplier boosts strength for critical memories', () => {
     const now = new Date();
-    // Age the memories by 10 days so decay < 1, giving emotional multiplier room to show
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
 
     const critical = createMemory7('critical failure', { emotionalValence: 'critical' });
@@ -68,7 +60,6 @@ describe('Strength formula', () => {
     const crit = { ...critical, lastRetrieved: tenDaysAgo };
     const neut = { ...neutral, lastRetrieved: tenDaysAgo };
 
-    // Both have same decay, but critical has 2x emotional multiplier
     expect(calculateStrength(crit, now)).toBeGreaterThan(calculateStrength(neut, now));
   });
 
@@ -112,13 +103,11 @@ describe('applyOutcome', () => {
     const entry = createMemory7('useful memory');
     const aged = { ...entry, lastRetrieved: tenDaysAgo };
 
-    // Apply 5 positive outcomes
     let current = aged;
     for (let i = 0; i < 5; i++) {
       current = applyOutcome(current, true);
     }
 
-    // Strength should be higher than without outcomes
     expect(calculateStrength(current, now)).toBeGreaterThan(calculateStrength(aged, now));
   });
 
@@ -128,7 +117,6 @@ describe('applyOutcome', () => {
     const entry = createMemory7('bad memory');
     const aged = { ...entry, lastRetrieved: tenDaysAgo };
 
-    // Apply 3 negative outcomes
     let current = aged;
     for (let i = 0; i < 3; i++) {
       current = applyOutcome(current, false);
@@ -149,7 +137,6 @@ describe('calculateRewardFactor', () => {
     const updated = { ...entry, outcomePositive: 5, outcomeNegative: 0 };
     const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
     expect(rf).toBeGreaterThan(1.0);
-    // 1 + 0.5 * (5 / 6) ≈ 1.417
     expect(rf).toBeCloseTo(1.417, 2);
   });
 
@@ -158,7 +145,6 @@ describe('calculateRewardFactor', () => {
     const updated = { ...entry, outcomePositive: 0, outcomeNegative: 3 };
     const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
     expect(rf).toBeLessThan(1.0);
-    // 1 + 0.5 * (-3 / 4) = 0.625
     expect(rf).toBeCloseTo(0.625, 2);
   });
 
@@ -166,7 +152,6 @@ describe('calculateRewardFactor', () => {
     const entry = createMemory7('mixed');
     const updated = { ...entry, outcomePositive: 3, outcomeNegative: 3 };
     const rf = calculateRewardFactor(updated, PRODUCTION_STRENGTH);
-    // 1 + 0.5 * (0 / 7) = 1.0
     expect(rf).toBe(1.0);
   });
 
@@ -191,18 +176,15 @@ describe('Decay basis modes', () => {
   it('clock mode: decays by wall-clock time (default)', () => {
     const entry = makeAged();
     const s = calculateStrength(entry, now, { decayBasis: 'clock' });
-    // 7 days / 7 day half-life = 50% decay
     expect(s).toBeCloseTo(0.5, 1);
   });
 
   it('session mode: decays by estimated session count', () => {
     const entry = makeAged();
-    // Agent runs every 3.5 days on average. 7 days / 3.5 = 2 sessions elapsed.
     const s = calculateStrength(entry, now, {
       decayBasis: 'session',
       avgSessionIntervalDays: 3.5,
     });
-    // 2 sessions / 7 half-life = 0.5^(2/7) ≈ 0.820
     expect(s).toBeCloseTo(0.82, 2);
   });
 
@@ -216,19 +198,15 @@ describe('Decay basis modes', () => {
       decayBasis: 'session',
       avgSessionIntervalDays: 7,
     });
-    // Weekly agent: 7 days / 7 = 1 session. Daily: 7 days / 1 = 7 sessions.
-    // Fewer sessions = less decay = higher strength.
     expect(sWeekly).toBeGreaterThan(sDaily);
   });
 
   it('adaptive mode: scales half-life by session interval', () => {
     const entry = makeAged();
-    // Agent runs every 3 days on average
     const sAdaptive = calculateStrength(entry, now, {
       decayBasis: 'adaptive',
       avgSessionIntervalDays: 3,
     });
-    // Effective half-life = 7 * 3 = 21 days. 7 days / 21 = 0.5^(1/3) ≈ 0.794
     expect(sAdaptive).toBeCloseTo(0.794, 2);
   });
 
@@ -239,7 +217,6 @@ describe('Decay basis modes', () => {
       decayBasis: 'adaptive',
       avgSessionIntervalDays: 1,
     });
-    // avgInterval <= 1 day means no scaling, same as clock
     expect(sAdaptive).toBeCloseTo(sClock, 5);
   });
 
@@ -249,7 +226,6 @@ describe('Decay basis modes', () => {
       decayBasis: 'adaptive',
       avgSessionIntervalDays: 7,
     });
-    // Effective half-life = 7 * 7 = 49 days. 7 days / 49 = 0.5^(1/7) ≈ 0.906
     expect(sWeekly).toBeCloseTo(0.906, 2);
   });
 
@@ -298,8 +274,6 @@ describe('MemoryEntry trace fields', () => {
   });
 
   it('rejects invalid trace_outcome values', () => {
-    // A plain `string`-typed literal, not narrowed to the TraceOutcome union,
-    // so the assertion below is a genuine down-cast rather than a no-op.
     const invalidOutcome: string = 'not-a-real-outcome';
     expect(() =>
       createMemory7('invalid', {
@@ -369,7 +343,6 @@ describe('strengthSql parity', () => {
   });
 
   it('scores 200 seeded random rows as calculateStrength does', () => {
-    // A fixed-seed LCG keeps a failing row reproducible.
     let seed = 20261022;
     const next = (): number => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;

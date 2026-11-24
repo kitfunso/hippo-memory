@@ -1,5 +1,3 @@
-// An OpenAI-compatible embeddings endpoint on 127.0.0.1 that hashes letter trigrams into 16 dims, so recall's
-// vector arm runs through the real provider with no network and no fetch stub.
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -20,11 +18,8 @@ export function hashedVector(text: string): number[] {
 
 export interface HashedEmbeddings {
   readonly url: string;
-  /** Embedding requests received so far, failed ones included. */
   requests(): number;
-  /** Answer every later request with `status`; 200 serves vectors again. A failure asks for `retryAfterSec` (0 unless given). */
   setStatus(status: number, retryAfterSec?: number): void;
-  /** 'stall' never answers; 'reset' drops the next request's socket unanswered, then serves again; a number answers after that many ms; null serves at once. */
   setFault(fault: EmbeddingFault): void;
   close(): Promise<void>;
 }
@@ -48,7 +43,6 @@ export async function startHashedEmbeddings(): Promise<HashedEmbeddings> {
         return;
       }
       if (status !== 200) {
-        // Retry-After 0, the default, lets the provider's three attempts run without a wait.
         res
           .writeHead(status, { 'content-type': 'application/json', 'retry-after': retryAfter })
           .end('{"error":"injected"}');

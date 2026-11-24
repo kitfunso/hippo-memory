@@ -1,27 +1,3 @@
-/**
- * LC2-E1 memory-value eval harness — cross-ingest determinism.
- *
- * Split out of memory-value-harness.process.test.ts (codex confirmation-pass P1-B
- * fix, 2026-08-09): that file's per-test-file wallclock was crossing
- * Vitest's ~60s Windows worker-RPC "onTaskUpdate" timeout (62.86s observed,
- * exit 1, despite all 17 tests passing). This file holds the ONE test that
- * runs the full pinned protocol (CONFIG.SIM_ROUNDS = 30, not the reduced
- * TEST_SIM_ROUNDS the other file's generic pipeline tests use) — the
- * property under test here IS "does the pinned protocol reproduce
- * identically," so it must exercise the pinned round count, not a reduced
- * one. Fixture definitions are shared with memory-value-harness.process.test.ts via
- * memory-value-fixtures.ts.
- *
- * Proves the structural fix for codex's two P1 findings (2026-08-09):
- *   - crypto-random memory ids no longer leak into query sampling or the
- *     keep-budget tie-break (provenance-keyed throughout — see
- *     simulate.mjs/evaluate.mjs headers);
- *   - hybridSearch's own content-primary/id-secondary tie-break (real
- *     production behavior, 267/500 real questions have duplicate turn text)
- *     can no longer reach top-K membership — simulate.mjs stable re-sorts
- *     the full result list by (score DESC, sessionIndex ASC, turnIdx ASC)
- *     via the provenance map before ever slicing top-K.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -45,7 +21,6 @@ beforeEach(clearAblationEnv);
 afterEach(clearAblationEnv);
 
 describe('cross-ingest determinism', () => {
-  // Two ingests and two full 30-round simulations against real stores on disk.
   it('two separate scratch-root ingests of the same fixture, FULL 30-round protocol, produce identical retention (every scorer x budget) and identical per-row features joined on provenance key', async () => {
     const rootA = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-a-'));
     const rootB = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-xingest-b-'));
@@ -69,8 +44,6 @@ describe('cross-ingest determinism', () => {
         // a tEval field before this file is read back; readJson has no
         // static type because it comes from an untyped .mjs harness module.
         const meta = readJson(metaPathFor(q.question_id)) as { tEval: string };
-        // No `rounds` override -> defaults to CONFIG.SIM_ROUNDS (30), the
-        // pinned protocol — this is the one test that must run it in full.
         await simulateQuestion(q.question_id, meta.tEval, { seed: CONFIG.GLOBAL_SEED });
         extractQuestion(q.question_id, meta.tEval);
         rowsByQuestion[q.question_id] = readJsonl(featuresPathFor(q.question_id));
@@ -91,8 +64,6 @@ describe('cross-ingest determinism', () => {
         (r.evalResult.summary as { train: Record<string, Record<number, { meanRetention: number } | undefined>> })
           .train;
 
-      // (1) retention identical for EVERY scorer x budget (not just recency) —
-      // this is the property the previous memory_id-primary tie-break broke.
       // SAFETY: evaluateAll (evaluate.mjs) returns { scorers: string[], ... }
       // per its documented contract; the harness module has no .d.ts so
       // evalResult is untyped at the import boundary.
@@ -104,8 +75,6 @@ describe('cross-ingest determinism', () => {
         }
       }
 
-      // (2) per-row features identical when joined on (sessionIndex, turnIdx)
-      //     — NOT on memory_id, which is crypto-random per ingest by design.
       for (const q of QUESTIONS) {
         const rowsA = runA.rowsByQuestion[q.question_id];
         const rowsB = runB.rowsByQuestion[q.question_id];
@@ -121,9 +90,6 @@ describe('cross-ingest determinism', () => {
       }
     } finally {
       vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
-      // Both temp roots are OUTSIDE the default scratch root (scratchRootDir()
-      // reads the env var, which is already cleared above), so a plain
-      // removal is correct here: safeRemoveScratchDir would refuse them.
       removeDir(rootA);
       removeDir(rootB);
     }

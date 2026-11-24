@@ -1,45 +1,10 @@
 #!/usr/bin/env node
 /**
- * Fetch a Transformers.js-compatible embedding model bundle from the
- * Qdrant fastembed Google Cloud Storage bucket and lay it out in the
- * library's local-cache directory structure.
- *
  * Why this script exists: in egress-restricted environments (e.g. Claude
  * Code Cloud sandboxes) `huggingface.co` is not allowlisted, so the default
  * Transformers.js download path fails. Qdrant publishes a curated set
  * of ONNX-converted models on storage.googleapis.com, which is on common
  * allowlists.
- *
- * Supported models (`--model <id>`):
- *
- *   Xenova/all-MiniLM-L6-v2          (384-dim,  mean pooling, FP32 model.onnx, ~80 MB tarball)
- *   Xenova/bge-base-en-v1.5          (768-dim,  CLS pooling,  FP16 model_optimized.onnx, ~195 MB tarball)
- *   Xenova/multilingual-e5-large     (1024-dim, mean pooling, FP32 model.onnx + model.onnx_data external-data, ~1.25 GB tarball)
- *
- * Layout produced (matches Transformers.js local-model expectations):
- *
- *   <dest>/<model-id>/
- *     config.json
- *     tokenizer.json
- *     tokenizer_config.json
- *     special_tokens_map.json
- *     vocab.txt
- *     onnx/
- *       model.onnx       (renamed from whichever ONNX file the tarball ships)
- *
- * Pair with the HIPPO_MODEL_CACHE env var (consumed by src/store/embeddings/index.ts):
- *
- *   HIPPO_MODEL_CACHE=$(pwd)/benchmarks/longmemeval/data/model-cache \
- *     node bin/hippo.js embed
- *
- * src/store/embeddings/index.ts auto-detects whether the bundle is quantized (presence
- * of `onnx/model_quantized.onnx`) or FP32/optimized (presence of
- * `onnx/model.onnx`) and passes the right flag to `pipeline()`. Both
- * Qdrant bundles end up with a single `model.onnx`, so the runtime picks
- * the non-quantized path.
- *
- * Idempotent: skips download + extraction when the target tree already
- * contains a non-empty `onnx/model.onnx`. Run with `--force` to re-fetch.
  */
 import { createHash } from 'node:crypto';
 import {
@@ -59,8 +24,6 @@ import { spawnSync } from 'node:child_process';
 import { argv, exit } from 'node:process';
 
 /**
- * Per-model fetch + extraction config.
- * Add a new model by appending an entry here; no other code change needed.
  * `md5Base64` comes from the GCS object's `x-goog-hash` header (verifiable
  * with `curl -sSI <url> | grep -i md5=`).
  */
@@ -89,9 +52,7 @@ const MODELS = {
 };
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
-// Required files (must be present in the tarball)
 const FILES_REQUIRED = ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json'];
-// Optional files (copied if present; absent files do NOT fail extraction)
 const FILES_OPTIONAL = [
   'vocab.txt', // WordPiece-tokenized models (BERT family); absent for SentencePiece (XLM-R)
 ];
@@ -227,7 +188,6 @@ async function main() {
   const extractDir = join(tmpRoot, 'extract');
   extractTarball(tarPath, extractDir);
 
-  // Stage to a fresh target then move into place atomically.
   const stagingDir = join(tmpRoot, 'staged');
   arrangeXenovaLayout(extractDir, stagingDir, cfg);
 

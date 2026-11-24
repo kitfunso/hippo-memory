@@ -1,5 +1,3 @@
-// hippo.db's FailureLog group: every failed tool call the capture-error hook sees, stored or not,
-// each call on a handle of its own.
 import { otherSessionsRequest } from '../../rules/request-ids.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type {
@@ -18,13 +16,8 @@ import { MAX_HOOK_FIELD_LEN } from '../../../base/util/limits.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
-// The failure log's row and totals: what a failure stores, how long it stays, and how a
-// window's outcomes and repeats add up.
-
-/** The outcomes a repeat is counted among: a failure the hook judged worth a lesson. */
 const RATED_OUTCOMES: readonly FailureOutcome[] = ['stored', 'duplicate', 'store-failed'];
 
-/** A failure_log row as it is stored, without its id. */
 interface FailureRow {
   readonly ts: string;
   readonly tenantId: string;
@@ -39,8 +32,6 @@ interface FailureRow {
   readonly requestId: string | null;
 }
 
-/** The row `event` stores, stamped in toISOString form since the window and prune compare stamps
- * as text. */
 function failureRow(event: FailureEvent, fallbackNow: Date): FailureRow {
   return {
     ts: new Date(event.now ?? fallbackNow.getTime()).toISOString(),
@@ -57,16 +48,12 @@ function failureRow(event: FailureEvent, fallbackNow: Date): FailureRow {
   };
 }
 
-/** The stamp before which a row written at `ts` prunes the log. */
 const retentionCutoff = (ts: string): string =>
   new Date(Date.parse(ts) - FAILURE_LOG_RETENTION_DAYS * DAY_MS).toISOString();
 
-/** A request's stored session matches the caller's only as stored: cut to the column's length. */
 const sameStoredSession = (stored: string | null, sessionId: string): boolean =>
   stored === sessionId.slice(0, MAX_HOOK_FIELD_LEN);
 
-/** The window's totals from its per-outcome counts and the tenant's rated rows in id order, the
- * earlier ones too. */
 function failureTotals(
   sinceIso: string,
   count: (outcome: FailureOutcome) => number,
@@ -91,11 +78,8 @@ function failureTotals(
   };
 }
 
-/** Prune rows past {@link FAILURE_LOG_RETENTION_DAYS}, then append one failure row; returns the
- * new row's id. */
 function recordFailure(db: DatabaseSyncLike, event: FailureEvent): number {
   const row = failureRow(event, handleNow(db));
-  // Prune first: nothing after the insert can throw, so a returned id always means a committed row.
   cachedStatement(db, `DELETE FROM failure_log WHERE ts < ?`).run(retentionCutoff(row.ts));
   const inserted = cachedStatement(
     db,
@@ -135,10 +119,6 @@ export function requestOutcome(
   return row.outcome;
 }
 
-/**
- * A retry that stored what the first try could not rewrites that row, since the request id allows
- * one row per tenant.
- */
 function settleFailureOutcome(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -151,8 +131,6 @@ function settleFailureOutcome(
   ).run(outcome, tenantId, requestId);
 }
 
-/** The tenant's rated failures in id order, the ones before the window too: they decide which
- * session hit first. */
 function ratedFailures(db: DatabaseSyncLike, tenantId: string): RatedFailure[] {
   const rows = cachedStatement(
     db,

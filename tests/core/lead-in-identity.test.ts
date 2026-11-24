@@ -1,4 +1,3 @@
-// identityText: what "the same memory" compares, the content plus its lead-in when one is set.
 import { describe, expect, it } from 'vitest';
 import { LEAD_IN_MARK, duplicateKey, identityText } from '../../src/base/util/same-text.js';
 

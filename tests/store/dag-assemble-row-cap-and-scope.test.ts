@@ -1,11 +1,3 @@
-/**
- * v1.6.1 patch — covers the senior-review P1 holes that v1.6.0 shipped.
- *
- *   #1 loadSessionRawMemories row cap → AssembleResult.truncated
- *   #2 totalRaw is now POST-scope-filter
- *   #3 AssembleOptions.scope parity with recall (authorised access to private)
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -64,7 +56,6 @@ describe('totalRaw is post-scope', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    // No scope passed → default-deny.
     const r = await assemble(ctxFor(root), 'sess-p');
     expect(r.totalRaw).toBe(0);
     expect(r.items).toEqual([]);
@@ -98,10 +89,8 @@ describe('assemble scope opt parity with recall', () => {
       e.created = `2026-01-0${i + 1}T00:00:00.000Z`;
       writeEntry(root, e);
     }
-    // Without scope: blocked.
     const blocked = await assemble(ctxFor(root), 'sess-priv');
     expect(blocked.items).toEqual([]);
-    // With matching scope: unlocked.
     const unlocked = await assemble(ctxFor(root), 'sess-priv', { scope: 'slack:private:CSEC' });
     expect(unlocked.items.length).toBe(3);
     expect(unlocked.totalRaw).toBe(3);

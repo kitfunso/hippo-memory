@@ -1,5 +1,3 @@
-// The agent-memory adapters' disk reads: size, binary and failure checks live here, behind the
-// AgentFiles port.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentFiles, DirListing, TextFile } from '../base/util/agent-files.js';
@@ -24,12 +22,9 @@ function readText(file: string): TextFile {
   }
 }
 
-/** The checks and the read on one descriptor, so the file measured is the file read. */
 function readOpenTextFile(file: string, fd: number): TextFile {
   const stat = fs.fstatSync(fd);
   if (!stat.isFile()) return { ok: false, reason: `${file}: not a file` };
-  // A tool rewriting a file truncates it first; read as holding no notes, every row would be set
-  // aside.
   if (stat.size === 0) return { ok: false, reason: `${file}: empty` };
   if (stat.size > MAX_ITEM_BYTES) {
     return { ok: false, reason: `${file}: over ${MAX_ITEM_BYTES} bytes` };
@@ -68,7 +63,6 @@ function readHead(file: string, bytes: number): string | null {
   try {
     fd = fs.openSync(file, 'r');
   } catch (err) {
-    // A file that is not there has no head; any other failure is the caller's to see.
     if (['ENOENT', 'ENOTDIR'].includes(errorCode(err))) return null;
     throw err;
   }

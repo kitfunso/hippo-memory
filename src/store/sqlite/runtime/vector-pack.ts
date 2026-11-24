@@ -1,6 +1,3 @@
-// Vectors from a store worker as one buffer: it moves to the server thread with no copy, where a
-// Map of typed arrays is copied value by value.
-
 /** Every vector end to end in `buffer` as Float32, `dims[i]` numbers for `ids[i]`. */
 export interface VectorPack {
   readonly ids: readonly string[];

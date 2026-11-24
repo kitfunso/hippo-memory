@@ -1,4 +1,3 @@
-// P7 gate: contextGet with a query ranks recall's FTS candidate window from each store, never the whole store.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -16,7 +15,6 @@ import { recordStatementsAsync, countMatching } from '../_helpers/count-statemen
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 
-// Each store holds several windows of matches (DEFAULT_SEARCH_CANDIDATE_LIMIT is 200), enough for a cap to show.
 const ROWS = 2_000;
 const GLOBAL_ROWS = 300;
 const OWN_ROWS = 10;
@@ -41,14 +39,11 @@ function fill(root: string, count: number, label: string, origin: (i: number) =>
   }
 }
 
-// Every seeded row prices at 10 or 11 tokens and each window holds more than the default budget fits, so the count
-// lands in this band; which rows rank first sets the exact spot.
 function expectBudgetFilled(count: number): void {
   expect(count).toBeGreaterThanOrEqual(Math.floor(DEFAULT_CONTEXT_BUDGET / 11));
   expect(count).toBeLessThanOrEqual(Math.floor(DEFAULT_CONTEXT_BUDGET / 10));
 }
 
-/** Counts every row the loader hands to admission, which is every row the search can rank. */
 function admitCounter() {
   const seen = new Set<string>();
   let calls = 0;
@@ -77,14 +72,11 @@ function admitCounter() {
 
 let local = '';
 let global = '';
-// Built per call: the reach is probed against whatever HIPPO_HOME the test stubbed just before.
 const ctxNow = (): FullContext => apiCtx(local, 'default', adminActor('test'));
 
-// Seeds real stores, and a runner's disk sets how long that takes.
 beforeAll(() => {
   local = makeRoot('ctx-window-local');
   global = makeRoot('ctx-window-global');
-  // Every row matches the query; all but the last OWN_ROWS come from another project.
   fill(local, ROWS, 'local', (i) => (i >= ROWS - OWN_ROWS ? 'proj' : 'other'));
   fill(global, GLOBAL_ROWS, 'global', () => '');
 }, 30_000);
@@ -112,7 +104,6 @@ describe('contextGet with a query reads the FTS candidate window', () => {
     const counter = admitCounter();
     const result = await contextGet(ctxNow(), { q: QUERY, currentProject: '', deliveryObserver: counter.obs });
 
-    // Both stores hold more matches than the window, so each fills it exactly.
     expectBudgetFilled(result.entries.length);
     expect(counter.calls()).toBe(2 * DEFAULT_SEARCH_CANDIDATE_LIMIT);
     for (const r of result.entries) expect(counter.seen.has(r.entry.id)).toBe(true);
@@ -145,14 +136,12 @@ describe('contextGet with a query labels each result local or global', () => {
 
     expectBudgetFilled(result.entries.length);
     expect(countMatching(statements, INDEX_READ)).toBe(0);
-    // Two windows and their neighbours read far fewer rows than the local store alone holds.
     expect(rowsRead).toBeLessThan(ROWS);
   });
 
   it('labels a global hit local when sync left a copy outside the local window, and global when it did not', async () => {
     const small = makeRoot('ctx-window-small-global');
     try {
-      // Long rows rank under the short local matches, so the local window leaves the copy out.
       const padded = (label: string): MemoryEntry =>
         createMemory(`${label} about the deploy step ${'filler '.repeat(60)}`);
       const synced = padded('synced quokka note');

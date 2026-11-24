@@ -1,12 +1,9 @@
-// The rotation window of a webhook's previous signing secret, one rule for every connector: open
-// until the date its UNTIL variable names, closed from then on.
 import { log } from '../../base/util/log.js';
 
 /** The variables that hold a connector's previous secret and the end of its rotation window. */
 export interface PreviousSecretVars {
   readonly secret: string;
   readonly until: string;
-  /** Fixed once-only log keys, one pair per connector variable. */
   readonly closedKey: string;
   readonly openKey: string;
 }
@@ -28,8 +25,6 @@ export const GITHUB_PREVIOUS: PreviousSecretVars = {
 const DATE_OR_ISO =
   /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 
-/** Epoch ms of an ISO date (00:00 UTC) or timestamp, or null; a day that rolls over, as
- * 2026-02-31, is no date. */
 function untilMs(text: string): number | null {
   const ms = Date.parse(text);
   const day = text.slice(0, 10);

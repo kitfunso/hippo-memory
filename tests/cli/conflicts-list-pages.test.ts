@@ -1,5 +1,3 @@
-// `hippo conflicts` prints, a page at a time, the bytes it printed from the whole list in one array, and no read
-// hands back more than one page.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { conflictList, type ConflictPage } from '../../src/api/index.js';
@@ -25,7 +23,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-/** `n` open conflicts in two tenants, all detected at one instant so page edges fall inside a tie. */
 function seedConflicts(n: number): void {
   const rows = Array.from({ length: 2 * n }, (_, i) =>
     createMemory(`deploy rule number ${i}`, {
@@ -43,7 +40,6 @@ function seedConflicts(n: number): void {
   replaceDetectedConflicts(root, pairs, '2026-10-17T00:00:00.000Z');
 }
 
-/** The whole list as the verb read it before: every page gathered into one array. */
 async function wholeList(): Promise<ConflictPage['conflicts']> {
   const all: ConflictPage['conflicts'] = [];
   let after: KeysetPosition | undefined;

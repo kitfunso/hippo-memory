@@ -1,13 +1,3 @@
-/**
- * J3 baserate detector — MCP tool test.
- * Docs: docs/plans/2026-05-26-j3-baserate-detector.md
- *
- * Covers:
- * 1. hippo_predict_baserate tool returns text response for a class with data
- * 2. Empty class returns guidance text (not error)
- * 3. Missing class_tag returns clear usage message
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { handleMcpRequest, type McpContext, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -60,7 +50,6 @@ describe('mcp hippo_predict_baserate', () => {
   });
 
   it('returns formatted text response for a class with closed predictions', async () => {
-    // Seed 3 closed predictions
     const estimateActualPairs: Array<[number, number]> = [
       [2, 4],
       [3, 6],
@@ -92,7 +81,6 @@ describe('mcp hippo_predict_baserate', () => {
     );
     const text = extractText(res);
 
-    // Summary line + stats block
     expect(text).toContain('Last 3 estimates');
     expect(text).toContain('mcp-test');
     expect(text).toMatch(/n_closed:\s+3/);

@@ -1,4 +1,3 @@
-// Z0 lesson families: tasks-file validation, the per-seed order, roles, teach messages and checker verdicts.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +19,6 @@ const tmp = (prefix: string): string => {
 
 interface Task { id: string; kind?: string; familyId?: string; lessonId?: string; prompt: string; keyPhraseAllowed?: boolean; [k: string]: string | boolean | string[] | undefined }
 
-/** A dir holding checks/lesson.mjs, which exits with its first argument. */
 function checkDir(): string {
   const d = tmp('z0-lessons-');
   mkdirSync(join(d, 'checks'));
@@ -35,7 +33,6 @@ interface Lesson { id: string; rule: string; reason: string; keyPhrase: string; 
 const lesson = (id: string, rule: string, keyPhrase: string, extra: { supersedes?: string } = {}): Lesson => ({ id, rule, reason: 'the release script reads them', keyPhrase, check: { script: 'checks/lesson.mjs' }, ...extra });
 const SCREEN = { id: 'screen', baseRef: 'b', fixRef: 'f', prompt: 'screen task', test: 'node test.js', testFiles: [] };
 
-/** Two families on one sequence: f1 with a reversal (l1 then l2), f2 plain; four no-lesson tasks. */
 interface Family { id: string; sequence: string; lessonSource: string; screen?: typeof SCREEN; lessons: Lesson[] }
 interface Spec { families: Family[]; sequences: Array<{ id: string; cluster: string; repo: string; fixedOrder: boolean; tasks: Task[] }>; dev?: boolean }
 function spec(fixedOrder = false): Spec {
@@ -140,7 +137,6 @@ describe('validateFamilies', () => {
 const families = () => spec().families;
 const positions = (order: string[]) => new Map(order.map((id, i) => [id, i]));
 
-/** Every hard rule of prereg 117-119 on one drawn order of spec(). */
 function meetsRules(order: string[]) {
   const at = positions(order);
   const p = (id: string) => at.get(id)!;
@@ -196,7 +192,6 @@ describe('drawOrder', () => {
     expect(() => validateFamilies({ ...spec(), sequences: [{ ...seq(), tasks }] }, checkDir())).not.toThrow();
     expect(promptLeaks(tasks, families())).toEqual([{ taskId: 'a1', lessonId: 'f1-l2' }]);
     expect(() => drawOrder({ ...seq(), tasks }, families(), 1)).toThrow(/seqA.*task a1.*lesson f1-l2/);
-    // Placed ahead of its own teach, the flagged apply is still no leak of its own lesson.
     const own = { ...seq().tasks.find((x) => x.id === 'a1')!, prompt: 'add a changelog.d entry', keyPhraseAllowed: true };
     expect(promptLeaks([own, ...seq().tasks.filter((x) => x.id !== 'a1')], families())).toEqual([]);
   });

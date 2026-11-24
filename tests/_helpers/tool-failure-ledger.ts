@@ -1,4 +1,3 @@
-// Prompts, error texts and readers the tool-failure ledger tests share; toolFailureScratch binds the readers to the current project.
 import { expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -18,8 +17,6 @@ import {
   type RunOptions,
 } from './delivery-boundary.js';
 import { listingOf, verdictOf, writeHostTranscript, type ReadOptions, type TurnSpec } from './host-transcript.js';
-
-// Capture-error runs in process; TF1, TF12 and TF13 spawn it once each, far inside the 30 s process-project timeout.
 
 export const SCRIPT = path.resolve(__dirname, '..', '..', 'scripts', 'z10-reconstruct.mjs');
 export const V = DELIVERY_LEDGER_VERSION;

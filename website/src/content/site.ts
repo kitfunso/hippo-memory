@@ -1,12 +1,8 @@
-// Site copy and claims, edited here and not in components. Sources sit beside each number or in the
-// copy deck of 12 Nov 2026. The retracted "78% -> 14%" magnitude (docs/RETRACTION.md) stays out under any name.
-
 import pkg from '../../../package.json';
 import { REPO, readmeComparison, readmeFaq } from './readme';
 
 export { REPO };
 
-// The sync check keeps these two README-shared lines on the site; they postdate the Sep 28 wording.
 export const enterprise = {
   availability: 'The commercial edition is planned; its private repository is a scaffold, not a released enterprise product.',
 } as const;
@@ -17,7 +13,6 @@ export const site = {
   version: pkg.version, // Build-source version; publication is verified separately.
   positioning: pkg.description,
   title: 'hippo: open-source memory for Claude Code, Codex and Cursor',
-  // The default meta description and the JSON-LD description; package.json's line ships with npm releases.
   description:
     'Open-source memory for coding agents. In our own Claude Code test on 29 repositories, adding hippo to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.',
   tagline: {
@@ -27,7 +22,6 @@ export const site = {
       'Hippo is open-source memory that runs on your machine and gives the rules it captured back to the agent when a new session starts. In our Claude Code test on 29 repositories, adding it to built-in memory cut repeat mistakes from 21 in 100 to 11, at the same cost.',
   },
   installCmd: 'npm install -g hippo-memory',
-  // A floor stays true as the suite grows; check-readme-sync.mjs holds README and llms.txt to it.
   tests: '3,500+',
   links: {
     repo: REPO,
@@ -40,14 +34,12 @@ export const site = {
     aiPsychosisBench: 'https://github.com/kitfunso/AI-PsychosisBench',
     dmrScore: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/dmr-best.txt`,
     storeCalls: `${REPO}/blob/master/benchmarks/public/results/2026-11-12-answer-accuracy/mem0-locomo-ingest-gate.json`,
-    // Pilot requests open a GitHub issue until a booking link exists.
     pilot: `${REPO}/issues/new?title=Pilot%20request&body=Company%2C%20team%20size%2C%20agents%20in%20use%3A`,
     security: `${REPO}/blob/master/SECURITY.md`,
   },
 } as const;
 
 
-// The hero figure's two captions follow the scene; the still shows Tuesday. Wording follows session.body.
 export const heroScene = {
   alt: 'An oak card cabinet with its rules drawer open. An index card above it reads "we use pnpm, never npm".',
   days: [
@@ -56,10 +48,8 @@ export const heroScene = {
   ],
 } as const;
 
-// README.md line 32, "Works with".
 export const worksWith = ['Claude Code', 'Codex', 'Cursor', 'OpenClaw', 'OpenCode', 'Pi', 'any MCP client'] as const;
 
-// Quickstart is the nav's install button, so it is not repeated here.
 export const nav = [
   { label: 'How it works', href: '/how-it-works/' },
   { label: 'Teams', href: '/teams/' },
@@ -68,7 +58,6 @@ export const nav = [
   { label: 'Docs', href: site.links.docs },
 ] as const;
 
-// An illustrated session. The hippo lines copy USER_RULES_HEADING and userRuleLine in src/api/context/context-render.ts.
 export const terminal: ReadonlyArray<{ kind: 'note' | 'cmd' | 'out' | 'hippo'; text: string }> = [
   { kind: 'note', text: 'Monday, billing-service' },
   { kind: 'cmd', text: 'add the refunds endpoint' },
@@ -82,7 +71,6 @@ export const terminal: ReadonlyArray<{ kind: 'note' | 'cmd' | 'out' | 'hippo'; t
   { kind: 'out', text: 'Bash(pnpm install) ✓' },
 ];
 
-// Every figure is in docs/evals/2026-11-08-z0-round3-result.md.
 export const repeatMistakes = {
   unit: 'in 100',
   bars: [
@@ -93,20 +81,17 @@ export const repeatMistakes = {
 } as const;
 
 
-// The home session story: the terminal lines split at each note into Monday and Tuesday.
 export const session = {
   heading: 'Correct it once, on Monday',
   body: 'On Monday you tell Claude Code "we use pnpm, never npm". On Tuesday a SessionStart hook prints the captured rule into the new session, before your first prompt.',
 } as const;
 
-// The home summary of the public tests; rows come from data/public-benchmarks.json, and the first two losses below sit under them.
 export const publicTests = {
   heading: 'On public question-answering tests',
   body: 'These tests ask questions about long conversations, a different job from stopping a repeated mistake, so we show them as supporting evidence. Within each test, every system we ran used the same answer model and the same scorer. Hippo ran with its optional local embedder, and on DMR with its local reranker too.',
   linkLabel: 'Every result we measured',
 } as const;
 
-// Markdown in each text, rendered with mdInline. Commands are shown as typed.
 export const how = {
   heading: 'What hippo does between sessions',
   intro: 'Hippo is a command-line tool, a set of agent hooks and a SQLite file in your project. The hooks do the routine work, and every memory they store is one you can read, correct or replace.',
@@ -140,7 +125,6 @@ export const how = {
   linkLabel: 'How each part works',
 } as const;
 
-// Sources for each section are in the 12 Nov home deck v3.
 export const problem = {
   heading: 'You have explained this before',
   intro: 'You already keep a CLAUDE.md, and the agent keeps notes of its own. A new session can still repeat a mistake you corrected last week, and in our test Claude Code with its built-in memory did so 21 times in 100.',
@@ -207,26 +191,21 @@ export const teams = {
   ctaLabel: 'What teams can run today',
 } as const;
 
-// The README "MCP Server" config block, shown on /cursor/ and /mcp/.
 export const mcpJson = ['{', '  "mcpServers": {', '    "hippo-memory": {', '      "command": "hippo",', '      "args": ["mcp"]', '    }', '  }', '}'];
 
-// Markdown. Sources: README FAQ 11 and the local-first section.
 export const localFirst = {
   heading: 'Stored on your machine, and what can leave it',
   body: 'Memories live in SQLite, in `.hippo/hippo.db` in each project and a global store in `~/.hippo/`, with markdown mirrors you can read, grep and commit. The package has zero runtime dependencies. Recall makes no network call by default. Text leaves your machine only if you turn on an API embedder, a reranker or model-read rule capture, run `hippo refine`, or have `ANTHROPIC_API_KEY` set when `hippo sleep` runs, and one config line switches that last one off.',
 } as const;
 
-// Markdown; `links` keeps the three vs links on the site instead of sending them to GitHub.
 export const compare = {
   heading: 'Who should use something else',
   body: "Hippo is for coding agents on machines you control. [Mem0](/vs/mem0/) fits better when the memory belongs to your app's end users, [Zep](/vs/zep/) when you want a managed knowledge graph built from business data, and [Letta Code](/vs/letta/) when you want an agent that edits its own memory.",
   links: { '/vs/mem0/': '/vs/mem0/', '/vs/zep/': '/vs/zep/', '/vs/letta/': '/vs/letta/' },
 } as const;
 
-// README.md's Comparison table, parsed at build by readme.ts; the vs pages show their rows of it.
 export const comparison = readmeComparison;
 
-// check-readme-sync.mjs holds `notice` to README and llms.txt.
 export const getStarted = {
   heading: 'Try it on the repository you have open',
   body: "`hippo init` creates the project's store, sets up the agents it detects and schedules a daily 6:15am run, and `--no-hooks` and `--no-schedule` skip those parts. `hippo doctor` checks Node, the store and the agent hooks, and each problem it finds names its fix. If hippo misses a rule you expected it to keep, open an issue with an example.",
@@ -237,10 +216,8 @@ export const getStarted = {
     'Read https://hippo-memory.com/llms-full.txt and tell me if hippo-memory fits this repo, what it stores, and what it sends over the network.',
 } as const;
 
-// The README's FAQ word for word, so the site, GitHub and npm answer alike. Answers are markdown.
 export const faq = readmeFaq;
 
-// Fails the build when a picked question is missing, so a renamed README question cannot vanish quietly.
 export function faqPick(questions: readonly string[]) {
   return questions.map((q) => {
     const item = faq.find((f) => f.q === q);

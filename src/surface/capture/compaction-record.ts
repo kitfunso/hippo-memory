@@ -1,5 +1,3 @@
-// What turns a compaction's summary into text the store keeps, and the replay that reads the spool
-// and transcripts for it; the SQL is the adapter's compactions-record.ts.
 import * as fs from 'node:fs';
 import {
   isObjectLike,
@@ -56,7 +54,6 @@ function scrub(text: string): string {
 interface ScrubbedSummary {
   summary: string;
   items: string[];
-  /** False when the summary has no memories section. */
   found: boolean;
 }
 
@@ -153,7 +150,6 @@ interface TranscriptLine {
   message?: { content?: string | Array<{ type?: string; text?: string }> };
 }
 
-// Every field is optional and read through a guard, so an object is all a line needs to be.
 const isTranscriptLine = (value: JsonValue | undefined): value is JsonValue & TranscriptLine =>
   isObjectLike(value);
 
@@ -164,8 +160,6 @@ function lineText(line: TranscriptLine): string {
   return content.map((block) => (isStringValue(block.text) ? block.text : '')).join('\n');
 }
 
-/** The summary Claude Code wrote into a transcript between two moments; null when it is not
- * (yet) there or the window cannot reach back that far. */
 function transcriptSummary(
   transcriptPath: string,
   afterMs: number,
@@ -175,7 +169,6 @@ function transcriptSummary(
   for (const cap of TRANSCRIPT_TAIL_CAPS) {
     const lines: TranscriptLine[] = [];
     for (const raw of readTranscriptTail(transcriptPath, cap).split('\n')) {
-      // The tail can start mid-line; a torn line holds no summary.
       const line = tryParseJson(raw);
       if (isTranscriptLine(line)) lines.push(line);
     }
@@ -198,8 +191,6 @@ export interface ReplayOptions {
   deadline?: number;
 }
 
-/** What every replay step reads: the store's hooks, the folder its spool sits in, and the
- * deadline the run works to. */
 interface Replay {
   readonly hooks: CompactionHooks;
   readonly root: string;
@@ -218,14 +209,12 @@ async function replayStalled(run: Replay): Promise<number> {
   return saved;
 }
 
-/** Records a spooled summary, then writes its items. */
 async function importSpooled(
   run: Replay,
   spooled: SpooledCompaction,
   recorded: () => void,
 ): Promise<StepFailure | null> {
   const record = await run.hooks.recordSpooled(spooled, run.items);
-  // The record holds the items now, so the file is done even if the write below fails.
   recorded();
   const saved = await run.hooks.saveRecordItems(spooled.tenantId, record, run.items);
   writeNotes(run.log, saved.notes);
@@ -247,7 +236,6 @@ async function replaySpool(run: Replay): Promise<number> {
   }
 }
 
-/** Fills one open record from its transcript; true when it saved items. */
 async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<boolean> {
   if (record.transcriptPath === null || !fs.existsSync(record.transcriptPath)) return false;
   const before =
@@ -264,7 +252,6 @@ async function fillFromTranscript(run: Replay, record: OpenCompaction): Promise<
   return filled.saved;
 }
 
-/** A record whose fill throws is logged, and the rest still run until the deadline. */
 async function replayOpen(run: Replay): Promise<number> {
   let saved = 0;
   for (const record of await run.hooks.openRecords(run.tenantId, run.items)) {

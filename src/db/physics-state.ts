@@ -1,8 +1,3 @@
-/**
- * Physics state persistence: particle state (position, velocity, mass, charge, temperature) in
- * SQLite, with BLOB columns for 384-dim vectors.
- */
-
 import type { DatabaseSyncLike } from './sqlite.js';
 import { withWriteScope } from './busy.js';
 import { PRODUCTION_STRENGTH, type StrengthModel } from '../base/memory/strength.js';
@@ -188,7 +183,6 @@ export function resetPhysicsFromSeeds(
 ): number {
   db.exec('DELETE FROM memory_physics');
 
-  // One transaction for every batch, so a failure part way leaves no particles rather than some.
   return withWriteScope(db, 'reset_particles', () => {
     let count = 0;
     let batch: PhysicsParticle[] = [];

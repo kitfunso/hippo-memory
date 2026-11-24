@@ -1,7 +1,3 @@
-/**
- * Tests for multi-agent shared memory: transfer scoring, sharing, peers.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -14,17 +10,10 @@ import { ALL_TENANTS } from '../../src/base/util/tenant.js';
 let localDir: string;
 let globalDir: string;
 
-// Override getGlobalRoot for tests by manipulating the env
-// We'll use shareMemory with force to test the write path
-
 beforeEach(() => {
   localDir = makeRoot('local');
   globalDir = makeRoot('global');
 });
-
-// ---------------------------------------------------------------------------
-// Transfer scoring
-// ---------------------------------------------------------------------------
 
 describe('transferScore', () => {
   it('returns ~0.5 for neutral memory with no special tags', () => {
@@ -75,10 +64,6 @@ describe('transferScore', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// listPeers
-// ---------------------------------------------------------------------------
-
 describe('listPeers', () => {
   it('returns empty when global store is empty', async () => {
     const peers = await listPeers(folderStore(globalDir), ALL_TENANTS);
@@ -124,10 +109,6 @@ describe('listPeers', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// autoShare
-// ---------------------------------------------------------------------------
-
 describe('autoShare', () => {
   it('dry-run returns candidates without writing', () => {
     const good = createMemory('Always use semicolons in PowerShell', {
@@ -140,8 +121,6 @@ describe('autoShare', () => {
     });
     writeEntry(localDir, specific);
 
-    // We can't easily test autoShare with the real global root,
-    // but we can test transferScore filtering
     const localEntries = loadAllEntries(localDir, 'default');
     const candidates = localEntries.filter((e) => transferScore(e) >= 0.6);
 

@@ -1,4 +1,3 @@
-// The paging and pairing helpers 519 tests lean on: a wrong page join or conflict side would pass unnoticed there.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';

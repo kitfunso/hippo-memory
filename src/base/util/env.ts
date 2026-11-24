@@ -1,6 +1,3 @@
-// The one module in src/ that reads process.env; oxlint fails CI on any other read, and
-// dependency-cruiser on an import of this module outside the roots and the adapters.
-// Accessors read at call time, so a test that sets a variable between cases still holds.
 import type { ClefSettings, RuntimeSettings } from '../config/config.js';
 import { DEFAULT_TENANT_ID } from './tenant.js';
 
@@ -10,8 +7,6 @@ function raw(name: string): string | undefined {
 
 type FlagState = 'on' | 'off' | 'unset' | 'unknown';
 
-/** Every on/off variable, with the side an unrecognised spelling takes: the safe one, so a typo
- * never opens a door. */
 const FLAGS = {
   HIPPO_ABLATE_DECAY: false,
   HIPPO_ABLATE_RECALL_BOOST: false,
@@ -38,8 +33,6 @@ const FLAGS = {
 
 type FlagName = keyof typeof FLAGS;
 
-/** `1`, `true`, `on` and `0`, `false`, `off` (any case, trimmed) are the spellings; unset and
- * empty are unset. */
 function flagState(name: string): FlagState {
   const value = raw(name)?.trim().toLowerCase();
   if (!value) return 'unset';
@@ -48,8 +41,6 @@ function flagState(name: string): FlagState {
   return 'unknown';
 }
 
-/** Never throws, since accessors run per request; an unknown spelling takes the flag's safe
- * side. */
 function bool(name: FlagName): () => boolean {
   return () => {
     const state = flagState(name);
@@ -57,7 +48,6 @@ function bool(name: FlagName): () => boolean {
   };
 }
 
-/** True only for an explicit off spelling, for the settings that are on until switched off. */
 function boolOff(name: FlagName): () => boolean {
   return () => flagState(name) === 'off';
 }
@@ -74,15 +64,10 @@ export function validateFlags(): string[] {
   return bad;
 }
 
-// The reader kinds every accessor below is built from; each returns a function so a test's later
-// stubEnv still holds.
-
-/** The value as written, unset when the variable is. */
 function text(name: string): () => string | undefined {
   return () => raw(name);
 }
 
-/** Trimmed, with an empty or whitespace-only value read as unset. */
 function trimmedText(name: string): () => string | undefined {
   return () => raw(name)?.trim() || undefined;
 }
@@ -96,7 +81,6 @@ function wholeNumber(name: string): number | undefined {
   return Number.isInteger(parsed) ? parsed : undefined;
 }
 
-/** A whole number above zero; the caller supplies its own default. */
 function posInt(name: string): () => number | undefined {
   return () => {
     const parsed = wholeNumber(name);
@@ -104,7 +88,6 @@ function posInt(name: string): () => number | undefined {
   };
 }
 
-/** A whole number from zero up, for a setting whose 0 means off. */
 function nonNegInt(name: string): () => number | undefined {
   return () => {
     const parsed = wholeNumber(name);
@@ -125,7 +108,6 @@ export function envByName(name: string): string | undefined {
   return raw(name);
 }
 
-// Eval-only lifecycle switches; src/infra/eval-switches.ts reads them at call time.
 export const envAblateDecay = bool('HIPPO_ABLATE_DECAY');
 export const envAblateRecallBoost = bool('HIPPO_ABLATE_RECALL_BOOST');
 export const envAblateOutcome = bool('HIPPO_ABLATE_OUTCOME');
@@ -193,7 +175,6 @@ export function envClefSettings(): ClefSettings {
   };
 }
 
-// Paths. HIPPO_HOME and XDG_DATA_HOME come back trimmed, possibly empty.
 export function envHippoHome(): string | undefined {
   return raw('HIPPO_HOME')?.trim();
 }
@@ -236,7 +217,6 @@ export function envPathDirs(): string[] {
 export const envSystemRoot = text('SystemRoot');
 export const envModelCache = trimmedText('HIPPO_MODEL_CACHE');
 
-// Session, scope and tenant.
 export const envHippoSessionId = trimmedText('HIPPO_SESSION_ID');
 export const envClaudeCodeSessionId = trimmedText('CLAUDE_CODE_SESSION_ID');
 const hippoScope = trimmedText('HIPPO_SCOPE');
@@ -253,7 +233,6 @@ export function envTenant(): string {
   return raw('HIPPO_TENANT')?.trim() || DEFAULT_TENANT_ID;
 }
 
-// Install and CLI switches.
 export const envSkipAutoIntegrations = bool('HIPPO_SKIP_AUTO_INTEGRATIONS');
 export const envSkipSchedule = bool('HIPPO_SKIP_SCHEDULE');
 export const envSkipEmbedderInstall = bool('HIPPO_SKIP_EMBEDDER_INSTALL');
@@ -273,7 +252,6 @@ export function envLogJson(): boolean {
   return raw('HIPPO_LOG_FORMAT')?.trim().toLowerCase() === 'json';
 }
 
-// Server.
 export const envPort = text('HIPPO_PORT');
 /**
  * How long a client waits for a running server's /health before writing to the store directly;
@@ -316,7 +294,6 @@ export const envMcpSseMaxStreams = posInt('MCP_SSE_MAX_STREAMS');
 export const envMcpSseHeartbeatMs = posInt('MCP_SSE_HEARTBEAT_MS');
 export const envMcpSseMaxAgeSec = posInt('MCP_SSE_MAX_AGE_SEC');
 
-// LLM and reranker credentials and knobs.
 export const envAnthropicApiKey = trimmedText('ANTHROPIC_API_KEY');
 export const envLlmTimeoutMs = posInt('HIPPO_LLM_TIMEOUT_MS');
 export const envLlmBaseUrl = trimmedText('HIPPO_LLM_BASE_URL');
@@ -326,10 +303,6 @@ export const envLlmAllowHttp = bool('HIPPO_LLM_ALLOW_HTTP');
 export const envTypesafeApiKey = trimmedText('TYPESAFE_API_KEY');
 export const envJevTimeoutMs = posInt('HIPPO_JEV_TIMEOUT_MS');
 export const envJevModel = text('HIPPO_JEV_MODEL');
-/**
- * How long a recall waits for an API provider to embed its query before ranking on BM25 alone;
- * domain/search/vector.ts holds the default.
- */
 const envQueryEmbedTimeoutMs = posInt('HIPPO_QUERY_EMBED_TIMEOUT_MS');
 export const envLlmRerankerUrl = trimmedText('HIPPO_LLM_RERANKER_URL');
 export const envLlmRerankerKey = text('HIPPO_LLM_RERANKER_KEY');
@@ -347,7 +320,6 @@ export function envCloudflareApiToken(): string {
   return cloudflareApiToken() ?? '';
 }
 
-// Connectors.
 export const envSlackBotToken = text('SLACK_BOT_TOKEN');
 export const envSlackTeamId = text('SLACK_TEAM_ID');
 export const envSlackSigningSecret = text('SLACK_SIGNING_SECRET');

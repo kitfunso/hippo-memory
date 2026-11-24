@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Starts one DolphinBench stage in WSL. Usage: run-dolphin.sh ingest|dry|smoke|pilot|full|compare|check [label persona tests]
-# The agent's token is read from the Windows User variable CLAUDE_CODE_OAUTH_TOKEN_DISABLED into this process only:
-# never printed, never in a command line, never written back to any scope.
 set -euo pipefail
 stage="${1:?stage: ingest|dry|smoke|pilot|full|compare|check}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

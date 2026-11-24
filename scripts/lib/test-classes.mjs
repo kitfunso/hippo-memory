@@ -1,6 +1,3 @@
-// The vitest project a test file runs in follows from its name; vitest.config.ts and check-test-env.mjs read this.
-// A test that starts a child process, the HTTP server or a worker thread waits on the operating system, so it keeps 30 s.
-
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { isLocalSpec, readFacts } from './ts-facts.mjs';
@@ -73,7 +70,6 @@ function resolveLocal(from, spec) {
   return [base, `${base}.ts`, `${base}/index.ts`].find((p) => existsSync(p) && statSync(p).isFile()) ?? null;
 }
 
-/** The files a source loads at startup (type-only imports are erased) and whether it names child_process itself. */
 function importsOf(file) {
   const cached = localImports.get(file);
   if (cached) return cached;

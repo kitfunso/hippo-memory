@@ -1,6 +1,3 @@
-// Which sentences of a session's final reply carry a lesson, and the digest text built from them.
-// No file or store access: surface/capture/session-digest.ts reads the transcript,
-// api/memories/session-digest.ts writes the row.
 import { USER_SEGMENT } from '../../base/util/home-path.js';
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 
@@ -12,7 +9,6 @@ export const MAX_SENTENCES = 5;
 export const MAX_SENTENCE_CHARS = 300;
 /** At about 20 chars per repo path this keeps the Changed line near 50 tokens. */
 export const MAX_FILES = 10;
-/** 300 tokens at 4 chars each: 20% of the 1500-token default budget of both context surfaces. */
 const MAX_DIGEST_CHARS = 1200;
 
 const ABSOLUTE_PATH = /(?<![\w.~/\\:-])(?:\\\\\?\\)?(?:[A-Za-z]:[\\/]|\/)[^\s`'"<>|*?()[\]{},;]+/g;
@@ -28,7 +24,6 @@ function rewriteRepoPaths(
   });
 }
 
-/** Each opener points back to something named before the sentence; There, I, We and You do not. */
 const OPENERS = new Set([
   'this',
   'that',
@@ -53,7 +48,6 @@ const OPENERS = new Set([
 ]);
 const COUNTED_OPENER = /^(?:all|the|these|those|both)\s+\d/i;
 
-/** Each anchor names a place in the code a later task can search for. */
 const ANCHORS: readonly RegExp[] = [
   /`[^`]+`/,
   /\S[\\/]\S/,
@@ -64,7 +58,6 @@ const ANCHORS: readonly RegExp[] = [
   /(?:^|\s)--[a-z][\w-]*/,
   /(?:^|\s)#\d+\b/,
 ];
-/** Each marker states a cause or a choice, the part of a lesson that transfers. */
 const MARKERS = new RegExp(
   '\\b(?:because|caused by|due to|root cause|the (?:bug|issue|problem) was|fail(?:s|ed) when|so that|otherwise|' +
     'instead of|rather than|switched to|decided|chose|must|never|always|do not)\\b',
@@ -75,7 +68,6 @@ const FENCE = /^\s*(`{3,}|~{3,})/;
 const STRUCTURE_LINE = /^\s*(?:#{1,6}\s|\||>|([-*_])(?:\s*\1){2,}\s*$)/;
 const PROTECTED = /`[^`\n]+`|\b(?:e\.g|i\.e)\./gi;
 
-/** Prose lines of a markdown reply: code, headings, tables, quotes and rules are not sentences. */
 function proseText(text: string): string {
   const kept: string[] = [];
   let fence: string | null = null;
@@ -152,21 +144,15 @@ interface Candidate {
   score: number;
 }
 
-/** Surviving sentences, best first: anchored or reasoned ones rank above the rest, earlier wins
- * a tie. */
 function rankedSentences(
   finalText: string,
   windows: ReadonlySet<string>,
   relativePath: (absolute: string) => string | null,
 ): Candidate[] {
   const kept: Candidate[] = [];
-  // Redact the whole reply before splitting and capping, so a secret is never cut into pieces that
-  // no pattern matches.
   digestSentences(maskEmails(redactSecretsStrict(finalText))).forEach((sentence, index) => {
     if (/[?:]$/.test(sentence) || opensOnReferent(sentence) || echoes(sentence, windows)) return;
     const text = rewriteRepoPaths(sentence, relativePath);
-    // A home-directory path names its user and the store may be shared, so such a sentence is
-    // dropped.
     if (text.length > MAX_SENTENCE_CHARS || USER_SEGMENT.some((re) => re.test(text))) return;
     kept.push({ index, text, score: sentenceScore(text) });
   });
@@ -188,11 +174,8 @@ function changedLine(files: readonly string[]): string {
 
 export interface DigestSources {
   finalText: string;
-  /** Text the session already holds: its own prompts, and what hippo injected into it. */
   echoTexts: readonly string[];
-  /** Repo-relative paths the session changed, first edit first. */
   files: readonly string[];
-  /** Repo-relative form of an absolute path, '' for the root, null outside the repo. */
   relativePath: (absolute: string) => string | null;
 }
 
@@ -210,7 +193,6 @@ export function buildSessionDigest(sources: DigestSources): DigestDraft | null {
     sources.relativePath,
   );
   const changed = changedLine(sources.files);
-  // The cap drops whole sentences, lowest-ranked first, and keeps the Changed line.
   for (let kept = ranked.slice(0, MAX_SENTENCES); ; kept = kept.slice(0, -1)) {
     const lines = [...kept].sort((a, b) => a.index - b.index).map((c) => c.text);
     const content = [...lines, changed].filter(Boolean).join('\n');

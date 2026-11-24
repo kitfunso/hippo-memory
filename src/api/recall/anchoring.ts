@@ -1,4 +1,3 @@
-// The anchoring detector and the bias-hint switch.
 import type { HippoConfig } from '../../base/config/config.js';
 
 /**
@@ -12,14 +11,9 @@ export type AnchoringReason = 'query_repeat' | 'memory_dominance';
 
 export interface AnchoringHint {
   reason: AnchoringReason;
-  /** The memory ID that is anchoring the agent's reasoning. */
   memoryId: string;
-  /** For 'memory_dominance': how many distinct queries in the recent window had this memory as their top-1 result.
-   *  Always >= 3 when emitted. */
   queryCount?: number;
-  /** Human-readable summary surfaced to the agent. */
   summary: string;
-  /** Discriminator for hint origin; reserved for future variants. */
   source: 'j1-recurrence';
 }
 
@@ -39,16 +33,8 @@ export interface RecallHistoryEntry {
 export type RecallHistorySnapshot = readonly RecallHistoryEntry[];
 
 export interface DetectAnchoringOptions {
-  /** memory_dominance threshold: number of distinct queryHashes that must have returned the same topMemoryId. Default
-   *  3. */
   minDominance?: number;
-  /** query_repeat window: how many recent history entries to scan for query repeat.
-   *  Default 5. */
   recentRepeatWindow?: number;
-  /**
-   * Cooldown: suppress when the prior fire (per `anchoredOn`) was for the same topMemoryId within
-   * this many history entries. Default 3.
-   */
   cooldown?: number;
 }
 
@@ -62,33 +48,23 @@ const DEFAULT_COOLDOWN = 3;
  * processes and V8 versions. */
 export function hashQueryText(query: string): number {
   if (!query) return 0;
-  // Tokens are deduped before join so `foo foo bar` and `foo bar` count as one query for
-  // memory_dominance. Unicode classes (\p{L}, \p{N}, \p{M}; need /u) keep non-Latin queries from
-  // collapsing to an empty token set and colliding at hash 0.
   const normalized = query
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s]/gu, ' ')
     .split(/\s+/)
     .filter((t) => t.length > 0);
-  // Drop tokens under 3 chars (filler words) so `a login bug` and `login bug` hash alike; matches
-  // the >=3 filter in src/domain/learn/forward-claim-detector.ts.
   const filtered = normalized.filter((t) => t.length >= 3);
-  // Fall back to all tokens when the filter empties the query (CJK 2-char words, acronyms like
-  // `AI`) so distinct short queries do not all hash to fnv1a32('').
   const tokens = filtered.length > 0 ? filtered : normalized;
   const deduped = Array.from(new Set(tokens)).sort();
   return fnv1a32(deduped.join(' '));
 }
 
 function fnv1a32(text: string): number {
-  // FNV-1a 32-bit. Offset basis 2166136261, prime 16777619.
   let hash = 2166136261;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
-    // 32-bit multiply via Math.imul — handles overflow correctly.
     hash = Math.imul(hash, 16777619);
   }
-  // Coerce to unsigned 32-bit for stable comparison.
   return hash >>> 0;
 }
 
@@ -108,11 +84,8 @@ export function detectAnchoring(
   const recentRepeatWindow = opts.recentRepeatWindow ?? DEFAULT_RECENT_REPEAT_WINDOW;
   const cooldown = opts.cooldown ?? DEFAULT_COOLDOWN;
 
-  // Cooldown gate: was the most-recent hint (across the last `cooldown` entries) for THIS memory?
-  // If yes, suppress regardless of rule.
   if (onCooldown(history, cooldown, currentTopMemoryId)) return null;
 
-  // memory_dominance check FIRST (wins on tie).
   const queryCount = countDistinctQueries(history, currentQueryHash, currentTopMemoryId);
   if (queryCount >= minDominance) {
     return {
@@ -151,8 +124,6 @@ function queryRepeatHint(memoryId: string): AnchoringHint {
   };
 }
 
-// Count distinct queryHashes in history where topMemoryId === the current top (excluding null
-// tops), plus the current query itself.
 function countDistinctQueries(
   history: RecallHistorySnapshot,
   currentQueryHash: number,
@@ -168,8 +139,6 @@ function countDistinctQueries(
   return matchingQueryHashes.size;
 }
 
-// query_repeat check: is currentQueryHash present in the last `recentRepeatWindow` entries AND was
-// that entry's topMemoryId === currentTopMemoryId?
 function isRecentRepeat(
   history: RecallHistorySnapshot,
   recentRepeatWindow: number,

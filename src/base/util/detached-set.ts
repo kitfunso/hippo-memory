@@ -1,11 +1,8 @@
-// Work a caller starts and does not wait on, kept by whoever owns the stores it writes to, so that
-// owner settles it before closing them.
 import { errorFields, errorMessage, log } from './log.js';
 
 export class DetachedSet {
   readonly #work = new Set<Promise<void>>();
 
-  /** Keeps `work` until settle(); a rejection nothing caught is logged here, never dropped. */
   detach(work: Promise<unknown>): void {
     const kept: Promise<void> = work
       .then(
@@ -18,7 +15,6 @@ export class DetachedSet {
     this.#work.add(kept);
   }
 
-  /** Waits for every kept promise, work detached meanwhile included, up to `withinMs`; returns how many still run. */
   async settle(withinMs?: number): Promise<number> {
     const drained = this.#drain();
     if (withinMs === undefined) {

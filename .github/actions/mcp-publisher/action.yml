@@ -1,4 +1,3 @@
-# The one place the mcp-publisher version and its sha256 live: ci.yml validates server.json with it, mcp-registry.yml publishes.
 name: mcp-publisher
 description: Download the pinned mcp-publisher for Linux x64, check its sha256 and leave ./mcp-publisher in the workspace.
 runs:

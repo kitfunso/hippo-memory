@@ -1,5 +1,3 @@
-// How the api reads the outside services: from the Context's ports, which its composition root or
-// published entry set.
 import type { RerankerFn } from '../base/ports/reranker.js';
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { GlobalTargetGroup, StoreWith } from '../base/ports/store.js';

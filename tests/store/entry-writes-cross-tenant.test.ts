@@ -1,4 +1,3 @@
-// Every hippo.db write path refuses an id another tenant holds and leaves that tenant's row as it was.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { ConflictError } from '../../src/base/errors/api-errors.js';

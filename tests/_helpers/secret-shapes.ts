@@ -1,5 +1,3 @@
-// The secret-assignment shapes both the detectSecret and the scrubForSharing tables run, so the two lists cannot drift.
-
 /** Built at runtime, so no secret-shaped literal sits in source: 14 characters with a digit. */
 export const ASSIGNED_SECRET = runtimeJoin('Hunter2', 'Hunter2');
 const V = ASSIGNED_SECRET;

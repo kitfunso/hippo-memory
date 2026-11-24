@@ -23,16 +23,13 @@ export interface HealthValue {
   overview: Panel<Overview>;
   range: Range;
   setRange: (range: Range) => void;
-  /** One `?fresh=1` overview fetch; every other panel follows through the snapshot clock. */
   refresh: () => void;
   refreshing: boolean;
   search: SearchState;
-  /** One-line status shown as a dismissible banner (dead link, failed refresh). */
   notice: string | null;
   setNotice: (text: string | null) => void;
   tip: RefObject<TipHandle | null>;
   treemap: RefObject<TreemapMemory>;
-  /** Set by a treemap cell click, read and cleared by the project view that opens. */
   intent: RefObject<Intent | null>;
 }
 

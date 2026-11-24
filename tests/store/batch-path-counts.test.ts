@@ -1,4 +1,3 @@
-// Sleep, sync down and one-id invalidation read only the rows they need: counted in statements and rows, never timed.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { recordStatementsAsync, countMatching, STORE_OPEN } from '../_helpers/count-statements.js';
@@ -23,7 +22,6 @@ import { evalNow } from '../../src/infra/eval-switches.js';
 import { TEST_DETACHED, TEST_RUN } from '../_helpers/test-run.js';
 
 const FULL_ROW = `SELECT ${MEMORY_SELECT_COLUMNS} FROM memories`;
-/** A full-row read of every row in the store, or of every current distilled row: no id, tenant or parent filter. */
 const WHOLE_STORE_READ =
   /FROM memories\s+(WHERE COALESCE\(kind, 'distilled'\) = 'distilled' AND COALESCE\(superseded_by, ''\) = ''\s+)?ORDER BY created ASC, id ASC$/;
 afterEach(() => {
@@ -43,7 +41,6 @@ describe('sleep after consolidation', () => {
     vi.stubEnv('HIPPO_HOME', home);
     vi.stubEnv('HIPPO_FAKE_NOW', '2026-06-01T12:00:00.000Z');
     const root = makeRoot('batch-sleep');
-    // Every row shares the fake clock's timestamp, so ids in write order keep the merge and survivor picks off random UUIDs.
     let seq = 0;
     const put = (text: string, options: { tags?: string[]; tenantId: string }): void =>
       writeEntry(root, { ...createMemory(text, options), id: `batch-${String(seq++).padStart(2, '0')}` });
@@ -110,7 +107,6 @@ describe('sleep after consolidation', () => {
     const isPageRead = (sql: string): boolean =>
       sql.startsWith(FULL_ROW) && sql.endsWith('created ASC, id ASC LIMIT ?');
     const pageReads = statements.filter(isPageRead);
-    // Each of the three walks reads its one page in one statement over both tenants, each on that tenant's index.
     expect(pageReads).toHaveLength(3);
     expect(pageReads.every((sql) => sql.includes('tenant_id = t.tid'))).toBe(true);
   });

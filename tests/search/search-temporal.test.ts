@@ -18,7 +18,6 @@ describe('temporal-aware search', () => {
       layer: Layer.Semantic,
       tags: ['extracted', 'speaker:John', 'topic:basketball'],
     });
-    // Backdate the old entry
     const oldEntry = { ...old, created: '2024-01-01T00:00:00.000Z', lastRetrieved: '2024-01-01T00:00:00.000Z' };
     writeEntry(hippoRoot, oldEntry);
 
@@ -32,7 +31,6 @@ describe('temporal-aware search', () => {
     const results = rankBm25('John recently scored points', entries, { now: evalNow(), budget: 4000 });
 
     expect(results.length).toBeGreaterThanOrEqual(2);
-    // Recent entry should rank first when "recently" cue is present
     expect(results[0].entry.content).toContain('35');
   });
 
@@ -53,7 +51,6 @@ describe('temporal-aware search', () => {
     const entries = loadAllEntries(hippoRoot, 'default');
     const results = rankBm25('John scored points', entries, { now: evalNow(), budget: 4000 });
 
-    // Without temporal cue, both should appear but temporal boost should not dominate
     expect(results.length).toBeGreaterThanOrEqual(2);
   });
 });

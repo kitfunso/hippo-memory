@@ -1,4 +1,3 @@
-// CD11 end to end through the built CLI: the arm row each hook call books, and the holdout's empty stdout.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -57,7 +56,6 @@ function env(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return { ...BASE_ENV, HIPPO_HOME: path.join(tmp, 'global'), ...extra };
 }
 
-// In process unless `spawned`: the holdout case and the concurrent pair run real children, the rest read rows and bytes.
 async function run(
   args: string[],
   payload: Payload | null,
@@ -102,7 +100,6 @@ const arms = (root = store(proj)): ArmRow[] =>
 const injects = (root = store(proj)): number =>
   ledger<{ n: number }>(root, `SELECT COUNT(*) AS n FROM token_ledger WHERE event = 'inject'`)[0].n;
 
-/** A session id whose hash arm is `arm` at `rate`, so a rate-driven case never depends on luck. */
 function sessionFor(arm: 'hippo' | 'holdout', rate: number): string {
   for (let i = 0; ; i++) if (hashArm(`s-${i}`, rate) === arm) return `s-${i}`;
 }
@@ -236,7 +233,6 @@ describe('the per-prompt hook', () => {
     snapshotFor('other-session');
     expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toBe('');
     snapshotFor('  ');
-    // At rate 10000 any hashed id is holdout, so printing proves the blank id never reached the gate.
     expect((await run(['compact-resume'], { session_id: '  ', source: 'compact' })).stdout).toContain(
       'Restored after compaction',
     );

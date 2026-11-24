@@ -2,10 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathOrResolve } from '../../host/real-path.js';
 
-/**
- * Minimal inline frontmatter split (no YAML dep) on a leading `---\n...\n---\n` block; returns
- * the key-value map plus the body, or an empty `fm` and the original content when no well-formed
- * block is present. */
 interface FrontmatterParseResult {
   fm: Record<string, string>;
   body: string;
@@ -101,8 +97,6 @@ export function collectMarkdownFiles(
       if (ent.isSymbolicLink()) continue;
       const abs = path.join(dir, ent.name);
       if (ent.isDirectory()) {
-        // Skip dot-dirs (config/system, incl. the default `.hippo` store) and the canonicalized
-        // store path (covers a HIPPO_HOME outside `.hippo`).
         if (ent.name.startsWith('.')) continue;
         if (realpathOrResolve(abs) === resolvedHippoRoot) continue;
         walk(abs);

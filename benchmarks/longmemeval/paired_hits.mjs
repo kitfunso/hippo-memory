@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Paired per-question comparison of two retrieve_inprocess.mjs outputs (docs/evals/2026-09-23-mechanism-audit-prereg.md).
-// Usage: node benchmarks/longmemeval/paired_hits.mjs --data <json> --a <jsonl> --b <jsonl> [--fire-only]
-// --fire-only prints only how many top-5 lists differ, so a dry run proves the switch fires without a peek at hit rates.
 import * as fs from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -25,8 +22,6 @@ function load(file) {
   return rows;
 }
 
-// Same rule as evaluate_retrieval.py check_session_hit; a question with no answer sessions is a miss there too.
-// Tags match exactly: a substring rule credited answer_x to its abstention twin answer_x_abs.
 function hit(memories, sids, k) {
   return memories.slice(0, k).some((m) => sids.some((sid) =>
     (m.tags ?? []).includes(sid) || (m.content ?? '').includes(`[Session: ${sid}]`)));

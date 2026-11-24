@@ -1,7 +1,3 @@
-// The store's handle types and the legacy setup a first open runs; src/store/sqlite/runtime/handles.ts
-// opens hippo.db, the source of truth, and Markdown and JSON files are human-readable mirrors of
-// it.
-
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEFAULT_HALF_LIFE_DAYS, type StrengthModel } from '../../../base/memory/strength.js';
@@ -42,7 +38,6 @@ export interface StoreModel {
  * shared flag for the store's life. */
 export interface StoreFiles extends StoreModel, StoreAt {
   readonly host: Host;
-  /** What each open of the store passes: its grant and its lock wait. */
   readonly opens: GrantedOpens;
 }
 
@@ -86,7 +81,6 @@ export function waitingOpener(
 export interface Handles {
   readonly on: OnHandle;
   readonly onAsync: OnHandleAsync;
-  /** A bare handle the caller closes, for work that keeps one across several calls. */
   readonly open: () => DatabaseSyncLike;
   readonly files: StoreFiles;
 }
@@ -111,8 +105,6 @@ export function recordHalfLifeBaseForNewStore(db: DatabaseSyncLike): void {
  * row. */
 export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): boolean {
   if (holdsMemory(db)) return false;
-  // The row check misses an all-rejected bootstrap (memories stays empty), which would re-run the
-  // import on every open and duplicate consolidation_runs; this meta flag settles it.
   if (getMeta(db, META_KEY.legacyBootstrapCompleted, '0') === '1') return false;
 
   const legacyEntries = readLegacyMarkdownEntries(hippoRoot, handleNow(db));
@@ -122,7 +114,6 @@ export function bootstrapLegacyStore(db: DatabaseSyncLike, hippoRoot: string): b
     importLegacyEntries(db, hippoRoot, legacyEntries, 'bootstrapLegacyStore');
     importLegacyIndexAndStats(db, hippoRoot);
 
-    // Stamp completion even when every row was rejected; see the gate above.
     setMeta(db, META_KEY.legacyBootstrapCompleted, '1');
   });
   return true;
@@ -134,13 +125,9 @@ function importLegacyEntries(
   legacyEntries: MemoryEntry[],
   caller: string,
 ): void {
-  // Guard live per row: a stale markdown mirror could resurrect a rejected value. Plain audit()
-  // inline, because nothing rolls back on a per-row skip.
   let rejectedCount = 0;
   const host = createHost();
   for (const entry of legacyEntries) {
-    // v39: legacy markdown carries no origin_project; stamp from the store location so bootstrapped
-    // rows stay visible to ambient context.
     const stamped = stampOriginProjectForImport(host, hippoRoot, entry);
     try {
       upsertEntryRow(db, stamped);
@@ -166,8 +153,6 @@ function importLegacyEntries(
 function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): void {
   const legacyIndex = readLegacyIndexFile(hippoRoot);
   setMeta(db, META_KEY.lastRetrievalIds, JSON.stringify(legacyIndex.last_retrieval_ids ?? []));
-  // Legacy index.json predates last_trace_id, so '' is normal; accept only a clean digit string
-  // rather than trusting a hand-edited or corrupt index.json.
   const legacyTraceId = String(legacyIndex.last_trace_id ?? '');
   setMeta(db, META_KEY.lastTraceId, /^\d+$/.test(legacyTraceId) ? legacyTraceId : '');
 
@@ -190,7 +175,6 @@ function importLegacyIndexAndStats(db: DatabaseSyncLike, hippoRoot: string): voi
       Number(row.removed ?? 0),
     );
   }
-  // Same cap as every later sleep, so stats.json and the table agree from the first open.
   pruneConsolidationRuns(db);
 }
 

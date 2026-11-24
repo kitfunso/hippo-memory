@@ -1,9 +1,3 @@
-"""Generate answers for LongMemEval questions using retrieved context.
-
-Reads retrieval results (JSONL), constructs prompts with retrieved memories
-as context, and calls Claude API to generate answers.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -32,7 +26,6 @@ Be concise and direct. Do not explain your reasoning unless the question asks fo
 
 
 def format_context(memories: list[dict[str, Any]]) -> str:
-    """Format retrieved memories into a context string for the prompt."""
     if not memories:
         return "[No relevant memories found]"
 
@@ -59,18 +52,6 @@ def generate_answer(
     model: str,
     question_date: str = "",
 ) -> str:
-    """Generate an answer using Claude API with retrieved context.
-
-    Args:
-        client: Anthropic API client.
-        question: The question to answer.
-        memories: Retrieved memory entries.
-        model: Model identifier.
-        question_date: Date context for temporal reasoning.
-
-    Returns:
-        Generated answer string.
-    """
     context = format_context(memories)
 
     user_message = f"Retrieved memories:\n{context}\n\n"
@@ -106,22 +87,11 @@ def generate_all(
     output_path: Path,
     model: str = DEFAULT_MODEL,
 ) -> Path:
-    """Generate answers for all retrieved questions.
-
-    Args:
-        retrieval_path: Path to retrieval JSONL file.
-        output_path: Path to write generation JSONL results.
-        model: Claude model to use for generation.
-
-    Returns:
-        Path to the output JSONL file.
-    """
     if not retrieval_path.exists():
         raise FileNotFoundError(f"Retrieval results not found: {retrieval_path}")
 
     client = Anthropic()
 
-    # Count lines for progress bar
     with open(retrieval_path, "r", encoding="utf-8") as f:
         entries = [json.loads(line) for line in f if line.strip()]
 

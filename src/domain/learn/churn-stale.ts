@@ -1,4 +1,3 @@
-// Which memories the churn pass checks and what it writes.
 import type { StoreWith } from '../../base/ports/store.js';
 import type { Learning } from '../../base/ports/store/learning.js';
 import { MINUTE_MS } from '../../base/util/time.js';
@@ -19,11 +18,8 @@ import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface DetectChurnStaleOptions {
   tenantId: string;
-  /** The project id; rows under it or legacyName are checked. */
   projectName: string;
-  /** The folder name older rows carry, and the repo folder a memory's paths may start with. */
   legacyName?: string;
-  /** Evaluate matches but write nothing. */
   dryRun?: boolean;
 }
 
@@ -90,15 +86,12 @@ function collectChurnCandidates(
       skippedPinned.push(entry.id);
       continue;
     }
-    // An unparsable created has no anchor to compare commits against.
     if (Number.isNaN(Date.parse(entry.created))) continue;
     candidates.push({ entry, refs: extractChurnRefs(entry.content) });
   }
   return { candidates, skippedPinned };
 }
 
-/** An outcome row is stamped before it commits, so the recheck starts a little before the first
- * read. */
 const CONFIRM_RECHECK_MARGIN_MS = MINUTE_MS;
 
 interface TagChurnStaleOptions {
@@ -116,9 +109,6 @@ async function tagChurnStale({
   confirmedAt,
   firstReadAt,
 }: TagChurnStaleOptions): Promise<void> {
-  // The git calls above can take seconds; a good outcome landing meanwhile moves the anchor past
-  // the evidence. Only outcomes since the first read can have landed, so that is all the recheck
-  // reads.
   const recheckSince = new Date(firstReadAt - CONFIRM_RECHECK_MARGIN_MS).toISOString();
   const confirmedSince = await learning.confirmedOutcomeTimes(tenantId, recheckSince);
   const unconfirmed = toTag.filter((stale) => {
@@ -133,8 +123,6 @@ async function tagChurnStale({
   );
 }
 
-/** Counts every candidate's evidence into `result` and returns the rows still to tag, writing
- * nothing. */
 function recordChurnEvidence(
   git: ChurnGitView,
   candidates: readonly ChurnCandidate[],
@@ -160,16 +148,12 @@ function recordChurnEvidence(
   return toTag;
 }
 
-/** The good-outcome times the candidates' anchors need, and the anchor of each: its last
- * confirmation, if that is later than its creation. */
 async function readChurnAnchors(
   learning: Learning,
   tenantId: string,
   candidates: readonly ChurnCandidate[],
 ) {
   const firstReadAt = Date.now();
-  // A confirmation older than the oldest candidate cannot move any anchor, so the read starts
-  // there.
   const oldestCreated = candidates.reduce(
     (oldest, c) => Math.min(oldest, Date.parse(c.entry.created)),
     Infinity,
@@ -178,7 +162,6 @@ async function readChurnAnchors(
     tenantId,
     new Date(oldestCreated).toISOString(),
   );
-  // Compared as epoch ms, not strings: imported rows may carry offsets or other ISO forms.
   const anchorOf = (entry: MemoryEntry): string => {
     const confirmed = confirmedAt.get(entry.id);
     const confirmedMs = confirmed ? Date.parse(confirmed) : NaN;
@@ -202,7 +185,6 @@ async function readChurnCandidates(
   } as const;
   const candidates: ChurnCandidate[] = [];
   const skippedPinned: string[] = [];
-  // Page by page, so only the candidates stay held, never every row of the project.
   for await (const page of readPages((after?: EntryCursor) =>
     store.entriesWhere(current, { limit: READ_PAGE_ROWS, after }),
   )) {
@@ -248,8 +230,6 @@ export async function detectChurnStale(
   try {
     const gitProject = opts.legacyName ?? opts.projectName;
     const git = loadChurnGitView({ repo, projectName: gitProject, candidates, anchorOf, needs });
-    // Collected here and written only after every candidate's evidence is computed, so a
-    // GitReadError mid-loop cannot leave an earlier candidate tagged.
     const toTag = recordChurnEvidence(git, candidates, anchorOf, result);
 
     if (!dryRun && toTag.length > 0) {

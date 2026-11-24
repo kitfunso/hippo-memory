@@ -1,5 +1,3 @@
-// B3 Task 6: CLI recall, run in process, boosts memories whose tags match an active goal of the (tenant, session)
-// in HIPPO_SESSION_ID or --session-id, capped at MAX_FINAL_MULTIPLIER (3.0x); an explicit --goal wins over the stack.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { remember } from '../../src/api/index.js';
@@ -17,7 +15,6 @@ interface RecallCliResult {
   raw: string;
 }
 
-/** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function recallCli(
   query: string,
   extraEnv: Record<string, string> = {},
@@ -43,7 +40,6 @@ describe('cli recall + active goal stack', () => {
     vi.stubEnv('HIPPO_HOME', env.globalRoot);
     vi.stubEnv('HIPPO_TENANT', 'default');
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    // The CLI looks for the store in `.hippo` under the working directory.
     process.chdir(env.cwd);
   });
 
@@ -96,9 +92,6 @@ describe('cli recall + active goal stack', () => {
     expect(top.some((c) => c.includes('marker tagged'))).toBe(true);
   });
 
-  // PLAN-ENG-REVIEW INLINE FIX #3: explicit --goal must beat the active goal stack.
-  // Active goal `auth-rewrite` on session, but CLI passes --goal other-tag. Top
-  // results should contain other-tag-tagged memories, NOT auth-rewrite ones.
   it('explicit --goal flag overrides the active goal stack (MVP wins)', async () => {
     const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note alpha untagged content one' });
@@ -120,15 +113,10 @@ describe('cli recall + active goal stack', () => {
       'other-tag',
     ]);
     const top = results.slice(0, 2).map((r) => r.content);
-    // The explicit --goal `other-tag` wins. Top entries should contain
-    // other-tag markers, not auth-rewrite markers.
     expect(top.some((c) => c.includes('other-tag'))).toBe(true);
     expect(top.every((c) => !c.includes('auth-rewrite'))).toBe(true);
   });
 
-  // PLAN-ENG-REVIEW INLINE FIX #4: empty active-goal-list must be a clean no-op.
-  // HIPPO_SESSION_ID is set but the (tenant, session) has zero active goals.
-  // Recall must succeed and produce the same baseline ordering as the no-session case.
   it('empty active-goal list is a no-op (no errors, baseline ranking)', async () => {
     const ctx: FullContext = apiCtx(env.hippoRoot, 'default', { subject: 'cli', role: 'admin' });
     await remember(ctx, { content: 'plan note one for the auth migration' });
@@ -137,7 +125,6 @@ describe('cli recall + active goal stack', () => {
     await remember(ctx, { content: 'marker tagged A: auth migration step', tags: ['auth-rewrite'] });
     await remember(ctx, { content: 'marker tagged B: auth migration step', tags: ['auth-rewrite'] });
 
-    // Push then complete — leaves the (tenant, session) with zero active goals.
     const g = await pushGoal(env.hippoRoot, {
       sessionId: 's-empty',
       tenantId: 'default',
@@ -150,7 +137,6 @@ describe('cli recall + active goal stack', () => {
       (r) => r.content,
     );
 
-    // Same ordering: empty active-goal list must not perturb ranking.
     expect(withEmpty).toEqual(baseline);
   });
 });

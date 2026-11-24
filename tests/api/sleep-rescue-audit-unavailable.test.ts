@@ -1,4 +1,3 @@
-// An audit store that will not open during sleep's rescue audit is a warn line with the error class, not a debug line nobody sees.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,7 +21,6 @@ afterEach(() => {
 
 const NOW = new Date('2026-08-10T12:00:00.000Z');
 
-/** Ancient with a one-day half-life, so decay condemns it and memory-value may rescue it. */
 function condemned(content: string): MemoryEntry {
   const created = new Date(NOW.getTime() - 3650 * 86_400_000).toISOString();
   const entry: MemoryEntry = {
@@ -49,7 +47,6 @@ describe('sleep rescue audit', () => {
       root,
       [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((len) => condemned('w'.repeat(len))),
     );
-    // The sleep-count write lands just before the rescue audit; stamping the store for a newer binary there makes the audit's open refuse.
     const db = openHippoDb(root);
     try {
       for (const event of ['INSERT', 'UPDATE']) {
@@ -61,8 +58,6 @@ describe('sleep rescue audit', () => {
     }
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
-    // A handle per store call, outside the shared one of `hippo sleep` and the package's consolidate, so the audit
-    // opens its own and that open can refuse.
     const result = await runConsolidation(sqliteStore(root), {
       strength: PRODUCTION_STRENGTH,
       now: NOW,

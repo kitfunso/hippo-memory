@@ -1,5 +1,3 @@
-// hippo.db's prediction rows: the statements the Objects group runs for the prediction kind.
-
 import { DEFAULT_LIST_LIMIT } from '../../../base/util/limits.js';
 import { BadRequestError, NotFoundError } from '../../../base/errors/api-errors.js';
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
@@ -21,12 +19,9 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import type { JsonObject } from '../../../base/util/json.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-// What the store says when a prediction is saved or closed: audit metadata and refusal texts.
-
 const present = (value: number | null | undefined): boolean =>
   value !== undefined && value !== null;
 
-/** The predict_create row's metadata: ids and flags, never the claim text. */
 const predictionCreateMetadata = (
   predictionId: number,
   input: {
@@ -41,7 +36,6 @@ const predictionCreateMetadata = (
   target_date: input.targetDate ?? null,
 });
 
-/** The predict_close row's metadata; a null actual counts as none, as the stored column does. */
 const predictionCloseMetadata = (
   predictionId: number,
   close: {
@@ -54,8 +48,6 @@ const predictionCloseMetadata = (
   has_actual: present(close.actualValue),
 });
 
-/** The refusal for a close that matched no open row: `closureState` is the row's state, or null
- * when none exists. */
 function closeMissError(tenantId: string, id: number, closureState: string | null): Error {
   if (closureState === null) {
     return new NotFoundError(`closePrediction: prediction ${id} not found for tenant ${tenantId}`);
@@ -66,12 +58,6 @@ function closeMissError(tenantId: string, id: number, closureState: string | nul
   );
 }
 
-/** First-class prediction: an ex-ante claim closed against an outcome. The `predictions` table
- * is the source of truth; the memory row only mirrors the claim. Every helper requires tenantId;
- * `trg_predictions_tenant_match_*` triggers enforce the prediction's tenant matches the
- * referenced memory's. `savePrediction` writes memory and prediction inside `writeEntry`'s
- * SAVEPOINT (via afterWrite), so a failure in either rolls back both. */
-
 const DEFAULT_PREDICTION_PAGE_SIZE = DEFAULT_LIST_LIMIT;
 
 const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
@@ -81,7 +67,6 @@ const SELECT_COLUMNS = `id, memory_id, tenant_id, class_tag, claim_text,
 interface ListPredictionsOptions {
   closureState?: ClosureState;
   limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 
@@ -135,8 +120,6 @@ export function writePrediction(
   const now = handleStamp(db);
   const { actor } = save;
 
-  // Captured for the return value; populated inside afterWrite hook so the INSERT and the memory
-  // write share a SAVEPOINT.
   let savedRow: PredictionRow | undefined;
 
   writeEntryRow(db, files, { entry: save.mirror, actor }, (writeDb, memoryId) => {
@@ -149,13 +132,11 @@ export function writePrediction(
   });
 
   if (!savedRow) {
-    // Cannot reach here without the afterWrite throwing first; defensive.
     throw new Error('savePrediction: afterWrite did not populate the row');
   }
   return rowToPrediction(savedRow);
 }
 
-/** Inserts, reloads and audits the predictions row inside writeEntry's SAVEPOINT. */
 interface PredictionStamp {
   readonly now: string;
   readonly actor: string;
@@ -216,8 +197,6 @@ function auditPredictionCreate(
   who: { tenantId: string; actor: string; predictionId: number },
   opts: SavePredictionOptions,
 ): void {
-  // GDPR-light audit metadata: prediction_id + class_tag + flags only.
-  // No claim_text in metadata; the predictions table holds it canonically.
   appendAuditEvents(db, [
     {
       tenantId: who.tenantId,
@@ -259,14 +238,11 @@ interface CloseOpenPredictionRowOptions {
   readonly stamp: PredictionStamp;
 }
 
-/** Closes the row, reloads it and audits the close; the caller owns the transaction. */
 function closeOpenPredictionRow(
   db: DatabaseSyncLike,
   { tenantId, id, opts, stamp }: CloseOpenPredictionRowOptions,
 ): PredictionRow {
   const { now, actor } = stamp;
-  // closure_state='open' in the WHERE stops a retried close from overwriting actual_value and
-  // auditing twice; zero changed rows means not found or already closed.
   const updateResult = cachedStatement(
     db,
     `
@@ -303,7 +279,6 @@ function closeOpenPredictionRow(
 }
 
 function throwCloseMiss(db: DatabaseSyncLike, tenantId: string, id: number): never {
-  // Distinguish 'not found' from 'already closed' so callers (CLI, HTTP) surface the right error.
   const existing = cachedStatement(
     db,
     `
@@ -371,8 +346,6 @@ function listPredictionsByClass(
   return rows.map(rowToPrediction);
 }
 
-/** Every prediction in the tenant, open and closed, across all classes: the `status=all` list
- * without a class. */
 function listAllPredictions(
   db: DatabaseSyncLike,
   tenantId: string,

@@ -2,9 +2,7 @@ import { type ReactNode, type Ref, useImperativeHandle, useLayoutEffect, useRef,
 
 /** Imperative handle of the shared tip, so pointer moves update it without re-rendering its owner. */
 export interface TipHandle {
-  /** Shows `content` near viewport point (x, y); `closable` adds a close button (touch tips). */
   show(content: ReactNode, x: number, y: number, opts?: { closable?: boolean; onClose?: () => void }): void;
-  /** Hides the tip and runs the `onClose` it was shown with. */
   hide(): void;
 }
 

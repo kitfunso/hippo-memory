@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Build a realistic eval corpus from the current local+global hippo store.
-// Queries are hand-written to simulate what a user would actually ask; the
-// expected memory IDs are looked up by keyword match against content.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,9 +22,6 @@ function findMatching(entries, { allOf = [], anyOf = [], noneOf = [], maxLen }) 
   return entries
     .filter((e) => {
       const lc = e.content.toLowerCase();
-      // Short-memory filter: canonical rule-style memories are usually concise.
-      // Excluding long session summaries that happen to mention the keyword in
-      // passing dramatically tightens the corpus.
       if (maxLen !== undefined && e.content.length > maxLen) return false;
       for (const t of allOf) if (!lc.includes(t)) return false;
       if (anyOf.length > 0 && !anyOf.some((t) => lc.includes(t))) return false;
@@ -45,9 +39,6 @@ const all = [...localEntries, ...globalEntries];
 
 console.error(`loaded ${localEntries.length} local + ${globalEntries.length} global entries`);
 
-// Each case: hand-written query + selector for expected memories.
-// maxLen caps content length so we keep canonical rule-style memories and
-// exclude long session summaries that mention the keyword in passing.
 const caseSpecs = [
   {
     id: 'prod-files-never-overwrite',

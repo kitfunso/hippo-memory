@@ -1,6 +1,3 @@
-// Post-build guard: glued inline tags, duplicate ids, DESIGN.md colour drift, American spelling, locked visible text,
-// share cards drawn from an old page title.
-// Run by `npm run build`; `--update` rewrites text-snapshot/ instead of comparing against it.
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +11,6 @@ const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', nbsp: ' ', middot: '·
 const TEXT_FIX = 'Site wording is locked: if this change is meant, run "npm --prefix website run snapshot" and commit website/text-snapshot.';
 const CARD_TITLES = join(SITE, 'scripts', 'og-titles.json');
 const CARD_FIX = 'Fix: after "astro build", run "node scripts/make-images.mjs", then "npm run build", and commit public/og and scripts/og-titles.json.';
-// Site prose is British English with -ise endings (DESIGN.md Copy rules); proper names keep their own spelling.
 const US_UK = JSON.parse(readFileSync(join(SITE, 'scripts', 'us-uk.json'), 'utf8'));
 const KEEP = ['MIT License', 'Recursive Summarization'];
 /** @type {string[]} */
@@ -80,7 +76,7 @@ function decode(e, whole) {
 function visibleText(html) {
   return strip(html, ['script', 'style', 'svg', 'noscript'])
     .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\s+/g, ' ') // like a browser: re-wrapping a source line must not change the text
+    .replace(/\s+/g, ' ')
     .replace(/<\/(p|li|h[1-6]|tr|div|section|summary|figcaption|dt|dd|title)>|<br\s*\/?>/gi, '\n')
     .replace(/<(?:"[^"]*"|'[^']*'|[^>"'])*>/g, '')
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, e) => decode(e, whole))

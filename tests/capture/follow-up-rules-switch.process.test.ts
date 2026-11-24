@@ -1,5 +1,3 @@
-// Capture calls the model only for a whole capture with capture.followUpRules on and a key set.
-// Real CLI verbs and stores in this process; fetch is stubbed, so nothing leaves the machine.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -80,7 +78,6 @@ describe('capture.followUpRules', () => {
     expect((await sessionEnd([])).status).toBe(0);
     expect(modelCalls).toBe(1);
     expect(contents()).toEqual([RULE_SENTENCE]);
-    // A harness prices the call from this line in the session-end log.
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain(
       'follow-up rules: model=claude-sonnet-5-5 input_tokens=812 output_tokens=37',
     );
@@ -147,7 +144,6 @@ describe('capture.followUpRules', () => {
     const result = await sessionEnd([], null);
     expect(result.status).toBe(0);
     expect(modelCalls).toBe(0);
-    // A real session-end worker has no stderr to read, so the capture log must say it.
     expect(fs.readFileSync(path.join(dir, 'session-end.log'), 'utf8')).toContain('ANTHROPIC_API_KEY is not set');
     const projectRoot = path.join(cwd, '.hippo');
     initTestStore(projectRoot);

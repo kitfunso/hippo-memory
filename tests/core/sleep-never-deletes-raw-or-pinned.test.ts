@@ -1,5 +1,3 @@
-// C1 + H10: sleep never auto-deletes a raw or pinned row, keeps a change made while it
-// awaits the LLM, and a dry run previews the deletes a real sleep would make.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -25,7 +23,6 @@ import { detailLines } from '../_helpers/sleep-lines.js';
 import { DAY_MS } from '../../src/base/util/time.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-/** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
@@ -76,7 +73,6 @@ describe('consolidate never deletes a raw row', () => {
 
     expect(readEntry(root, raw.id)?.kind).toBe('raw');
     expect(readEntry(root, plain.id)).toBeNull();
-    // A second sleep has nothing left to remove: the plain row is already gone and the raw row is never deleted.
     await expect(consolidate(root, { now: sixtyDaysOn() })).resolves.toMatchObject({ removed: 0 });
     expect(readEntry(root, raw.id)?.kind).toBe('raw');
   });

@@ -44,7 +44,6 @@ afterEach(() => {
 });
 
 const ago = (minutes: number): string => new Date(Date.now() - minutes * MINUTE).toISOString();
-// The lock file stays between replays and is reused, so a listing of spooled records leaves it out.
 const spoolFiles = (dir: string): string[] => fs.readdirSync(dir).filter((n) => n !== 'replay.lock.db');
 
 const log = (message: string): void => {
@@ -351,7 +350,6 @@ describe('replay of records a killed hook left', () => {
     const transcript = path.join(s.proj, 't.jsonl');
     fs.writeFileSync(transcript, transcriptLine(29, true, 'Summary:\n1. Primary Request: fix the login test.') + '\n');
     seed(s.hippoRoot, { id: 'cmp-1', status: 'started', startedMinutesAgo: 30, transcript });
-    // The transcript summary has no memories list, so this log line is the moment between the search and the update.
     const otherProcessFinishes = (message: string): void => {
       log(message);
       if (message.includes('no memories section')) {
@@ -577,7 +575,6 @@ describe('hippo sleep finishes what the hook could not', () => {
   });
 });
 
-// The hook waits out its lock waits on the held global store before it spools, so the case runs for seconds by design.
 describe('the daily runner finishes the global store', { timeout: 30_000 }, () => {
   it('imports what a hook in a folder with no store of its own spooled into the global store', async () => {
     initTestStore(s.globalRoot);

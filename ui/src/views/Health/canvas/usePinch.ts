@@ -8,9 +8,7 @@ interface PinchHost {
   canvas: RefObject<HTMLCanvasElement | null>;
   getCam: () => Camera;
   getSize: () => { W: number; H: number };
-  /** Applies the new camera and schedules a redraw. */
   setCam: (cam: Camera) => void;
-  /** Time of the last pinch frame, for tap suppression. */
   pinchedAt: RefObject<number>;
 }
 

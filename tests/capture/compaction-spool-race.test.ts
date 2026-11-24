@@ -1,4 +1,3 @@
-// Two replayers interleaved by an ordering hook: the second runs inside the first's importer, so the overlap happens on every run.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -37,7 +36,6 @@ describe('two replayers over one spool', () => {
       deadline: Number.POSITIVE_INFINITY,
       importOne: async (spooled, recorded) => {
         imported.push(spooled.payload.sessionId);
-        // The rival starts while the first still holds its claim and the lock.
         nested.push(
           importSpool({
             hippoRoot: root,

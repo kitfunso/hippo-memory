@@ -1,14 +1,3 @@
-# Repository-first CI. Runs on every PR + push to master, and on every release
-# tag: npm-publish.yml calls this workflow and publishes only when all of it passes.
-#
-# The "Provenance gate" step is the v0.40.0 / 2026-05-05 Company Brain
-# scorecard gate: every kind='raw' row must carry owner + artifact_ref. The
-# CI seed script exercises both connectors (Slack + GitHub) end-to-end then
-# runs `hippo provenance --strict`. Drop a connector's owner stamp and this
-# step fails the PR.
-#
-# See docs/plans/2026-04-28-company-brain-measurement.md (gate origin) and
-# docs/plans/2026-05-05-provenance-ci-gate.md (this workflow).
 name: CI
 
 on:
@@ -17,11 +6,9 @@ on:
     branches: [master, 'next/**']
   workflow_call:
 
-# Read-only by default. Workflow does not need contents:write or id-token.
 permissions:
   contents: read
 
-# A new push to a PR cancels the run for the commit it replaced. On master a started run finishes and only the newest waiting run is kept.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -29,9 +16,6 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    # First-run cold npm cache can be slow. 25 minutes gives headroom;
-    # subsequent PRs hit the npm cache. The default install is zero-dep since
-    # 1.33.0 (PR #134); only the micro-eval job below installs Transformers.js.
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,30 +29,22 @@ jobs:
       - run: npm ci
       - name: Dependency security audit
         run: npm run audit:security
-      # Hit counts per rule may fall but never rise; see scripts/checks/check-lint-ratchet.mjs.
       - name: Lint ratchet
         run: node scripts/checks/check-lint-ratchet.mjs
       - name: Format check
         run: npm run fmt:check
-      # Ticket codes, versions, reviewer notes and dates in src/ comments may fall per file but never rise.
       - name: Comment history ratchet
         run: node scripts/checks/check-comment-history.mjs
-      # Hand-spelled caught-error text in src/ may fall per file but never rise; use errorMessage().
       - name: Error text ratchet
         run: node scripts/checks/check-error-text.mjs
-      # A log call in a catch block may fall per file but never rise without errorFields(err), so the log keeps the error class and stack.
       - name: Caught-error log ratchet
         run: node scripts/checks/check-caught-error-logs.mjs
-      # Publish and site-deploy gates that need no build, so a PR learns about them before release day.
       - run: node scripts/checks/check-manifest-versions.mjs
       - run: node scripts/checks/check-graph-writes.mjs
-      # The publish gate refuses a tagged commit with an unfolded fragment, and a PR's merge ref can hold one its fold never saw.
       - name: A version bump folds every changelog fragment
         run: |
           parent="$(git show HEAD^1:package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"
           if [ "$parent" != "$(node -p "require('./package.json').version")" ]; then node scripts/changelog-fragments.mjs check; fi
-      # Layer order and reach from layers.json and runtime cycles between src folders (dependency-cruiser). Size limits
-      # and the name, env, exit and CLI boundary rules are oxlint rules, so the lint ratchet above holds them.
       - name: Import rules
         run: npm run check:deps
       - name: No new src line over 120 characters
@@ -85,10 +61,8 @@ jobs:
         run: node scripts/checks/check-sqlite-loads.mjs
       - name: No test-only exports
         run: node scripts/checks/check-test-only-exports.mjs
-      # One helper makes, inits and removes a test store; a hand-rolled copy leaks its dir when the test throws.
       - name: Tests build temp stores through makeRoot and makeStore
         run: node scripts/checks/check-test-stores.mjs
-      # A stub made once under an afterEach unstub is gone after the first test, and a misnamed test gets the wrong timeout.
       - name: Test env stubs and test file names
         run: node scripts/checks/check-test-env.mjs
       - run: node scripts/checks/check-roadmap.mjs
@@ -97,21 +71,15 @@ jobs:
       - run: node website/scripts/check-readme-sync.mjs
       - run: node scripts/checks/check-readme-npm-window.mjs
       - run: npm run build
-      # A module move breaks a script's dist/ import here, not only in the one shard or eval that runs the script.
       - name: Every dist/ import in scripts, benchmarks, evals and tests resolves
         run: node scripts/checks/check-dist-imports.mjs
-      # A block text with no listed hash reads as a user's edit once the text changes again, so init skips its refresh.
       - name: Every shipped hook block text has its hash listed
         run: node scripts/checks/check-hook-block-hashes.mjs
-      # The committed API report must match the built declarations.
       - run: npm run check:dts
-      # Tests are type-checked so a wrong-shaped call cannot pass.
       - run: npm run typecheck:tests
       - run: node scripts/checks/check-openclaw-dist.mjs
       - name: Perf regression gate
         run: node scripts/checks/check-request-path-timing.mjs
-      # Small N keeps it near 30 s; the 10k-memory ROADMAP gate (benchmarks/a1/p99-recall.ts defaults) stays a manual run.
-      # Gated on the fastest of 5 rounds, so one runner stall does not fail it; docs/ARCHITECTURE.md has the margin's numbers.
       - name: p99 recall at 1k memories
         run: node --experimental-strip-types benchmarks/a1/p99-recall.ts --store-size 1000 --warmup 50 --rounds 5 --queries 200 --gate-ms 40
       - name: Install the packed tarball
@@ -126,12 +94,10 @@ jobs:
           path: provenance-coverage.json
           if-no-files-found: warn
           retention-days: 14
-      # Last and always, so floors still waiting on their release stay visible without hiding the checks above.
       - name: Binary floors name a release that ships their schema
         if: always()
         run: node scripts/checks/check-expiring-keys-floor.mjs
 
-  # The suite is about 9 minutes of test time summed over three shards, which run in parallel.
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -143,13 +109,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          # Node 24.x: local dev runs 24.13.0 so CI tracks the same major.
-          # The node-floor job below runs the suite on the engines floor.
           node-version: '24'
           cache: npm
       - run: npm ci
       - run: npm run build
-      # Floors are zeroed per shard: each sees a third of the suite, and the coverage job applies them to the merge.
       - name: Vitest
         run: npx vitest run --shard=${{ matrix.shard }}/3 --coverage --reporter=default --reporter=blob --coverage.thresholds.lines=0 --coverage.thresholds.branches=0 --coverage.thresholds.functions=0 --coverage.thresholds.statements=0
         env:
@@ -163,7 +126,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # Thresholds are checked on the merged shards; one shard alone sits below the floor.
   coverage:
     needs: test
     runs-on: ubuntu-latest
@@ -191,8 +153,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # Commercial-only features live in a separate package; see CONTRIBUTING.md. Own job so
-  # the full-history checkout it needs for the merge base does not slow the test job.
   open-core:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -206,8 +166,6 @@ jobs:
       - name: Open-core line
         run: node scripts/checks/check-open-core.mjs
 
-  # The MCP Registry's own validator on server.json, so a PR or a release tag learns what the registry's validator would refuse
-  # before npm publishes. It posts server.json to the registry's /v0/validate: no login, no secret, no id-token.
   server-json:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -215,7 +173,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/mcp-publisher
       - name: server.json passes mcp-publisher validate
-        # Three tries absorb a short registry outage; a refusal fails all three, so the job still fails.
         run: |
           for attempt in 1 2 3; do
             ./mcp-publisher validate && exit 0
@@ -224,9 +181,6 @@ jobs:
           done
           exit 1
 
-  # The HTTP server and MCP suites again with serve() on hippo.db's store through the port alone, under a kind that is
-  # not 'sqlite', with only the required groups and the optional ones each suite names, so the port holds for the
-  # smallest store. A test that needs hippo.db's folder skips with its reason (tests/_helpers/store-switch.ts).
   port-only:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -243,11 +197,6 @@ jobs:
         env:
           HIPPO_TEST_STORE: port-only
 
-  # Tier-1 micro-eval (benchmarks/micro). Its ranking fixtures are calibrated
-  # with the local embedding backend present, so this job installs it without
-  # touching package.json and caches the ~175 MB of model weights. Kept apart
-  # from `test` so that job stays zero-dep and its timing unchanged. See
-  # docs/plans/2026-09-05-micro-eval-red-fixtures.md.
   micro-eval:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -258,7 +207,6 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Pinned so the cache key below names the exact weights layout.
       - run: npm install --no-save @huggingface/transformers@4.2.0
       # After the install step: npm would replace the package directory, and
       # the weights live inside it.
@@ -268,27 +216,22 @@ jobs:
           path: node_modules/@huggingface/transformers/.cache
           key: hf-models-4.2.0-${{ hashFiles('src/base/embeddings/local.ts', 'src/domain/rerankers/cross-encoder.ts') }}
       - run: npm run build
-      # The zero-dep `test` job skips these; here the backend is installed.
       - name: Cross-encoder against the real model
         run: npx vitest run tests/rerankers/cross-encoder.slow.test.ts
         env:
           HIPPO_REQUIRE_CROSS_ENCODER: '1'
       - name: Micro-eval
         run: python3 benchmarks/micro/run.py --verbose
-      # The zero-dep `test` job skips these; a missing backend here fails instead.
       - name: Embedding tests against the real backend
         run: npx vitest run tests/store/lifecycle-stress.slow.test.ts tests/api/global-row-embeddings.process.test.ts
         env:
           HIPPO_REQUIRE_EMBEDDINGS: '1'
-      # After the micro-eval, which has fetched the embedding model into this folder by now on a cold cache too.
       - name: Embedding model from a local folder
         run: npx vitest run tests/embeddings/local-cache.process.test.ts
         env:
           HIPPO_REQUIRE_MODEL_CACHE: '1'
           HIPPO_TEST_MODEL_CACHE: ${{ github.workspace }}/node_modules/@huggingface/transformers/.cache
 
-  # The oldest Node that package.json engines accepts. The floor said 22.5 while
-  # hippo needed 22.16 (node:sqlite unflagged, FTS5 bundled), because nothing ran there.
   node-floor:
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -311,8 +254,6 @@ jobs:
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
 
-  # Every other job is Linux, where platform branches, path case rules and the temp-inside-home layout never run.
-  # One slow job sets the wall time of the whole run, so the Windows and macOS suites split in three.
   suite:
     name: suite (${{ matrix.os }}, ${{ matrix.shard }})
     strategy:
@@ -339,11 +280,9 @@ jobs:
         run: npx vitest run --shard=${{ matrix.shard }}
         env:
           HIPPO_REQUIRE_SYMLINKS: '1'
-          # On Windows a store write-and-close cycle costs 69 ms in runner.temp (D:) against 175 ms in the default TEMP (C:).
           TEMP: ${{ runner.os == 'Windows' && runner.temp || '' }}
           TMP: ${{ runner.os == 'Windows' && runner.temp || '' }}
 
-  # The dashboard is its own package with its own tests; the root suite never runs them.
   ui:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -358,7 +297,6 @@ jobs:
       - run: npm --prefix ui test
       - run: npm --prefix ui run build
 
-  # The Python SDK tests talk to a real `hippo serve`, so the CLI is built first.
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 20

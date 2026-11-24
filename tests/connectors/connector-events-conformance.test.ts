@@ -1,5 +1,3 @@
-// ConnectorEvents answers: the answers, entries, event log rows, dead letters
-// and audit rows, over two tenants that hold rows under the same artifact refs.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -133,7 +131,6 @@ function seed(dir: string): Seeded {
   return rows;
 }
 
-/** One workspace, one installation, and a repository two tenants registered, acme first. */
 async function registerRoutes(root: string): Promise<void> {
   await sqliteStore(root).connectorEvents.registerSlackWorkspace('T_ACME', TENANT_A);
   const db = openHippoDb(root);
@@ -243,7 +240,6 @@ const readBack =
     }));
 const values = (side: Side): unknown[] => side.outcomes.map((o) => ('value' in o ? o.value : o));
 
-/** The audit rows a run added, without the ids and times both sides already matched on. */
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
   side.audit.slice(baseline.audit.length).map(({ id: _id, ts, ...row }) => {
     expect(ts).toBe(NOW);
@@ -251,7 +247,6 @@ const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
   });
 const isSeeded = (row: LoggedEvent): boolean =>
   baseline.events.some((b) => b.connector === row.connector && b.eventKey === row.eventKey);
-/** The log rows a run added; the seeded rows must still read as they were seeded. */
 function newEvents(side: Side): LoggedEvent[] {
   expect(side.events.filter(isSeeded)).toEqual(baseline.events);
   return side.events.filter((row) => !isSeeded(row));
@@ -505,7 +500,6 @@ describe('ConnectorEvents.route', () => {
       routes(1),
       { tenantId: TENANT_A },
       routes(1),
-      // Two tenants registered acme/shared, and nothing in an event without an installation id says which one sent it.
       routes(4),
       { tenantId: TENANT_B },
       routes(4),

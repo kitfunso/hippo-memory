@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 1+2 of docs/EXPERIMENT-PROTOCOL.md: score real stored memories with Jev
- *  and test the durability probability against hippo's own labels AND against
- *  the free baselines. Usage: node scripts/jev-score-store.mjs [--limit N] */
 
 import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -30,7 +27,6 @@ const seed = Number(arg('seed', '20260918'));
 const db = new DatabaseSync(dbPath);
 
 let rngState = seed;
-/** Deterministic draw so the pre-registered sample is reproducible. */
 function rng() {
   rngState = (rngState * 1664525 + 1013904223) % 4294967296;
   return rngState / 4294967296;
@@ -74,7 +70,6 @@ if (scored.length < 50) {
 
 const fmt = (x) => (Number.isFinite(x) ? x.toFixed(3) : '  n/a');
 
-/** Probability a random useful memory outscores a random useless one. */
 function auc(items, score, label) {
   const pos = [];
   const neg = [];
@@ -113,7 +108,6 @@ for (const [sName, score] of Object.entries(SCORERS)) {
   console.log(sName.padEnd(24) + cells.join(''));
 }
 
-/** Paired bootstrap: resample rows, recompute the Jev-minus-baseline delta. */
 function pairedDelta(label, baselineName) {
   const baseline = SCORERS[baselineName];
   const jev = SCORERS['Jev durable'];

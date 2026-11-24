@@ -1,5 +1,3 @@
-// FailureLog and lessonWrites.contentsWithTag answer, over two tenants
-// that log the same request id.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { FailureEvent, FailureOutcome } from '../../src/entry/store-kit.js';

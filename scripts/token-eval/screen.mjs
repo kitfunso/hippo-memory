@@ -1,4 +1,3 @@
-// Z0 family screen (prereg 66-68): A0 runs each family's teach and screen tasks, A4 the screen task with the rule written in.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { openContext } from './runs.mjs';
@@ -9,7 +8,6 @@ export const SCREEN_ARMS = ['A0', 'A4'];
 const A0_OF = 4;
 const A4_OF = 2;
 
-/** Each screened family with its root lesson (the one nothing supersedes), sequence and root teach task. */
 function screenFamilies(spec) {
   return (spec.families ?? []).filter((f) => f.screen).map((family) => {
     const root = family.lessons.find((l) => !l.supersedes);
@@ -46,7 +44,6 @@ export function screenVerdicts(records, spec) {
     const count = (arm, verdict) => mine.filter((r) => r.arm === arm && r.lessons[0]?.first === verdict).length;
     const row = { familyId: family.id, a0Breaks: count('A0', 'fail'), a0Of: A0_OF, a4Follows: count('A4', 'pass'), a4Of: A4_OF };
     const bad = mine.find((r) => r.invalid || r.void);
-    // An invalid, void or missing screen session leaves the family undecided, never kept by default.
     if (bad) return { ...row, verdict: 'undecided', reason: `${bad.taskId} ${bad.arm} seed${bad.seed}: ${bad.invalid ? `invalid ${bad.invalid}` : `void ${bad.void}`}` };
     if (mine.length !== A0_OF + A4_OF) return { ...row, verdict: 'undecided', reason: `${mine.length} of ${A0_OF + A4_OF} screen sessions recorded` };
     return { ...row, verdict: row.a0Breaks >= 2 && row.a4Follows === A4_OF ? 'kept' : 'dropped' };
@@ -64,7 +61,6 @@ export function screenLines(spec, steps) {
 
 /** Run the screen; records go to screen.jsonl and the keep and drop lists to screen.json. */
 export async function runScreen(opts) {
-  // arms is pinned here, so no caller can open the Codex login vault for a screen.
   const ctx = await openContext({ ...opts, arms: SCREEN_ARMS, recordsFile: 'screen.jsonl', screen: true });
   const records = await runSteps(ctx, planScreen(opts.spec));
   const verdicts = screenVerdicts(records, opts.spec);

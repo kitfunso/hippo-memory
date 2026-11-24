@@ -1,4 +1,3 @@
-// simulate() accumulates forces in place; this keeps the allocating implementation it replaced and holds the two together.
 import { describe, expect, it, vi } from 'vitest';
 import {
   attractionForce,
@@ -71,7 +70,6 @@ function fixture(): Fixture {
     temperature: 1,
     lastSimulation: '2026-01-01T00:00:00.000Z',
   }));
-  // m11 equals m10 so the zero-distance direction branch runs; m3 and m4 sit opposite so a negative cosine runs.
   particles[11].position = particles[10].position.slice();
   particles[4].position = particles[3].position.map((v) => -v);
   const ctx: ForceContext = {

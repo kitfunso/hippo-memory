@@ -1,4 +1,3 @@
-// Context reads on a store flagged `"sharedStore": true` must name the caller's project, so no member sees another's rows.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -45,7 +44,6 @@ let home: string;
 let globalHome: string;
 let handle: ServerHandle | null = null;
 
-/** A served store holding one row per origin, beside a global store with one user-global row. */
 async function start(flagged: boolean, extra: Record<string, boolean> = {}): Promise<ServerHandle> {
   const config = flagged ? { ...extra, sharedStore: true } : extra;
   home = makeRoot('shared-ctx', Object.keys(config).length > 0 ? { config } : {});
@@ -219,7 +217,6 @@ describe('context reads on a store that is not shared', () => {
     const plain = await contextTexts(h, '');
     expect(plain.status).toBe(200);
     expect([...plain.texts].sort()).toEqual(Object.values(ROWS).sort());
-    // A read strengthens what it returns, so the second read may order the same rows differently.
     const withParam = await contextTexts(h, '?project=beta');
     expect(withParam.status).toBe(200);
     expect([...withParam.texts].sort()).toEqual(Object.values(ROWS).sort());

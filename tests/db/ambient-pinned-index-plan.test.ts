@@ -1,5 +1,3 @@
-// The ambient pinned query and its date-drift probe must run off the v51 partial indexes, not a memories scan.
-
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';
@@ -9,7 +7,6 @@ import { LATEST_SCHEMA_VERSION_STR } from '../_helpers/schema-version.js';
 import { makeStore } from '../_helpers/make-root.js';
 import { loadAmbientCandidates, writeEntriesTogether } from '../_helpers/root-forms.js';
 
-/** The pinned and drift statements loadAmbientCandidates really prepares, so the plan checks run the production SQL. */
 interface AmbientSql {
   readonly pinned: string;
   readonly drift: string;

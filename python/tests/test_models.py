@@ -1,10 +1,3 @@
-"""Pure model round-trip tests (no server needed).
-
-These run on every test invocation regardless of whether the integration
-suite finds a working hippo serve subprocess. They lock the wire-shape
-contract for each Pydantic model.
-"""
-
 from __future__ import annotations
 
 from hippo_memory import (
@@ -19,10 +12,8 @@ from hippo_memory import (
 
 
 def _roundtrip(model_cls, payload: dict) -> None:
-    """Validate -> dump -> compare. extra fields stay; alias preserved."""
     instance = model_cls.model_validate(payload)
     dumped = instance.model_dump(by_alias=True, exclude_unset=True)
-    # Every input key should round-trip (extra='allow' keeps unknown fields).
     for key in payload:
         assert key in dumped, f"{model_cls.__name__}: key '{key}' lost in round-trip"
 
@@ -82,14 +73,12 @@ def test_context_result_roundtrip():
 
 
 def test_outcome_result_with_ids_path():
-    """ids-supplied path: server returns just {applied}."""
     instance = OutcomeResult.model_validate({"applied": 2})
     assert instance.applied == 2
     assert instance.ids is None
 
 
 def test_outcome_result_last_recall_path():
-    """last-recall path: server returns {applied, ids} with tenant-filtered ids."""
     instance = OutcomeResult.model_validate({"applied": 2, "ids": ["mem_a", "mem_b"]})
     assert instance.applied == 2
     assert instance.ids == ["mem_a", "mem_b"]
@@ -125,9 +114,6 @@ def test_archive_supersede_promote_forget_roundtrip():
 
 
 def test_auth_models_roundtrip():
-    # v0.2.0: AuthCreated.key → AuthCreated.plaintext (server returns 'plaintext';
-    # v0.1 'key' was a model bug never exercised by an integration test).
-    # role field is v1.12.3+ server, optional here for back-compat.
     _roundtrip(AuthCreated, {
         "keyId": "hk_abc", "plaintext": "hk_abc.secret_body",
         "tenantId": "default", "label": "test-key", "createdAt": "2026-05-23T18:00:00Z",
@@ -149,13 +135,11 @@ def test_audit_event_roundtrip():
 
 
 def test_extra_fields_allowed_forward_compat():
-    """Server adding a new field doesn't break the SDK (extra='allow')."""
     instance = MemoryEnvelope.model_validate({
         "id": "mem_x", "content": "y", "tenantId": "default",
         "futureField": "value-the-sdk-doesnt-know",
     })
     assert instance.id == "mem_x"
-    # extra fields land in model_extra
     assert instance.model_extra.get("futureField") == "value-the-sdk-doesnt-know"
 
 
@@ -167,15 +151,7 @@ def test_hippo_error_carries_status_and_body():
     assert "good is required" in str(err)
 
 
-# ---------------------------------------------------------------------------
-# v1.12.13 / C5 — WYSIATI cutoff transparency (RecallSuppressionSummary)
-# ---------------------------------------------------------------------------
-
-
 def test_recall_suppression_summary_roundtrip():
-    """Server emits camelCase wire keys (totalCandidates etc.); Python sees
-    snake_case attribute names. _Base's alias_generator=to_camel + populate_
-    by_name=True handle both directions."""
     payload = {
         "totalCandidates": 47,
         "droppedPreRank": 2,
@@ -188,8 +164,6 @@ def test_recall_suppression_summary_roundtrip():
 
 
 def test_recall_suppression_summary_defaults_to_zero():
-    """All 6 counters default to 0; the model can be hand-constructed for
-    test fixtures without supplying every field."""
     s = RecallSuppressionSummary()
     assert s.total_candidates == 0
     assert s.dropped_pre_rank == 0
@@ -200,7 +174,6 @@ def test_recall_suppression_summary_defaults_to_zero():
 
 
 def test_recall_result_with_suppression_summary():
-    """RecallResult parses suppressionSummary nested field over the wire."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -221,29 +194,19 @@ def test_recall_result_with_suppression_summary():
 
 
 def test_recall_result_back_compat_without_suppression_summary():
-    """Pre-v1.12.13 server payloads omit suppressionSummary; SDK must still
-    parse cleanly. suppression_summary defaults to None."""
     payload_pre_v1_12_13 = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
         "tokens": 5,
-        # NOTE: no suppressionSummary key (legacy server shape).
     }
     instance = RecallResult.model_validate(payload_pre_v1_12_13)
     assert instance.suppression_summary is None
-    # All existing fields still populate normally.
     assert instance.results[0].id == "mem_a"
     assert instance.total == 1
     assert instance.tokens == 5
 
 
-# ---------------------------------------------------------------------------
-# v0.32 / J3.2 — PlanningFallacyHint round-trips
-# ---------------------------------------------------------------------------
-
-
 def test_planning_fallacy_hint_roundtrip():
-    """Wire shape: camelCase -> snake_case attrs preserved on dump."""
     _roundtrip(PlanningFallacyHint, {
         "classTag": "migration-effort",
         "baserateSummary": "Last 3 estimates in class migration-effort averaged 2.00x actual (MAE 2.00).",
@@ -255,7 +218,6 @@ def test_planning_fallacy_hint_roundtrip():
 
 
 def test_planning_fallacy_hint_mean_ratio_null_allowed():
-    """meanRatio is None when all closed rows had estimate_value=0 (no ratio)."""
     hint = PlanningFallacyHint.model_validate({
         "classTag": "zero-estimates",
         "baserateSummary": "Last 1 estimate in class zero-estimates no ratio-eligible rows (all estimates were 0) (MAE 3.00).",
@@ -269,7 +231,6 @@ def test_planning_fallacy_hint_mean_ratio_null_allowed():
 
 
 def test_recall_result_with_planning_fallacy_hint():
-    """RecallResult parses planningFallacyHint when present + populates attribute."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -292,7 +253,6 @@ def test_recall_result_with_planning_fallacy_hint():
 
 
 def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
-    """Back-compat: pre-v0.32 server payload (no planningFallacyHint key) still parses."""
     payload_no_hint = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -300,17 +260,10 @@ def test_recall_result_without_planning_fallacy_hint_defaults_to_none():
     }
     instance = RecallResult.model_validate(payload_no_hint)
     assert instance.planning_fallacy_hint is None
-    # v0.2.1 / v1.13.4 fold: watching is also None when not present.
     assert instance.planning_fallacy_watching is None
 
 
-# ---------------------------------------------------------------------------
-# v0.2.1 / v1.13.4 — PlanningFallacyWatching round-trips
-# ---------------------------------------------------------------------------
-
-
 def test_planning_fallacy_watching_roundtrip_no_class_match():
-    """Wire shape: camelCase -> snake_case attrs preserved on dump."""
     _roundtrip(PlanningFallacyWatching, {
         "detectedPhrase": "will take 3 days",
         "reason": "no_class_match",
@@ -319,7 +272,6 @@ def test_planning_fallacy_watching_roundtrip_no_class_match():
 
 
 def test_planning_fallacy_watching_roundtrip_tiebreak():
-    """Tiebreak reason serializes alongside no_class_match."""
     _roundtrip(PlanningFallacyWatching, {
         "detectedPhrase": "ship by Friday",
         "reason": "tiebreak",
@@ -328,20 +280,15 @@ def test_planning_fallacy_watching_roundtrip_tiebreak():
 
 
 def test_planning_fallacy_watching_unknown_reason_forward_compat():
-    """v1 server emits 'no_class_match' | 'tiebreak'; future variants must not break SDK."""
     watching = PlanningFallacyWatching.model_validate({
         "detectedPhrase": "will land in 2 weeks",
-        "reason": "embedding_fallback_failed",  # hypothetical future reason
+        "reason": "embedding_fallback_failed",
         "suggestion": "...",
     })
     assert watching.reason == "embedding_fallback_failed"
 
 
 def test_recall_result_with_planning_fallacy_watching():
-    """RecallResult parses planningFallacyWatching when present + populates attribute.
-
-    Asserts mutual exclusivity: watching present, hint absent.
-    """
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -357,17 +304,10 @@ def test_recall_result_with_planning_fallacy_watching():
     assert instance.planning_fallacy_watching.reason == "no_class_match"
     assert instance.planning_fallacy_watching.detected_phrase == "will take 3 days"
     assert "hippo predict --class" in instance.planning_fallacy_watching.suggestion
-    # Mutual exclusivity: hint is absent on this payload.
     assert instance.planning_fallacy_hint is None
 
 
-# ---------------------------------------------------------------------------
-# v0.33 / J1 — AnchoringHint round-trips
-# ---------------------------------------------------------------------------
-
-
 def test_anchoring_hint_roundtrip_memory_dominance():
-    """Wire shape: camelCase to snake_case attrs preserved on dump."""
     _roundtrip(AnchoringHint, {
         "reason": "memory_dominance",
         "memoryId": "mem_abc",
@@ -378,7 +318,6 @@ def test_anchoring_hint_roundtrip_memory_dominance():
 
 
 def test_anchoring_hint_roundtrip_query_repeat_no_query_count():
-    """queryCount is None for query_repeat reason."""
     hint = AnchoringHint.model_validate({
         "reason": "query_repeat",
         "memoryId": "mem_xyz",
@@ -390,7 +329,6 @@ def test_anchoring_hint_roundtrip_query_repeat_no_query_count():
 
 
 def test_recall_result_with_anchoring_hint():
-    """RecallResult parses anchoringHint when present + populates attribute."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -410,7 +348,6 @@ def test_recall_result_with_anchoring_hint():
 
 
 def test_recall_result_without_anchoring_hint_defaults_to_none():
-    """Back-compat: pre-v0.33 server payload (no anchoringHint key) parses."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -421,7 +358,6 @@ def test_recall_result_without_anchoring_hint_defaults_to_none():
 
 
 def test_anchoring_hint_source_accepts_future_variants():
-    """Forward-compat: AnchoringHint.source is `str`, not Literal['j1-recurrence']."""
     for future_source in ("j1-recurrence-v2", "j1-embedding", "j8-composition"):
         hint = AnchoringHint.model_validate({
             "reason": "memory_dominance",
@@ -433,9 +369,6 @@ def test_anchoring_hint_source_accepts_future_variants():
 
 
 def test_planning_fallacy_hint_source_accepts_future_variants():
-    """Forward-compat: PlanningFallacyHint.source is `str`, not `Literal['j3.2-auto']`,
-    so a future server emitting 'j3.2-auto-v2', 'j3.3-auto', etc. does not break
-    existing SDK consumers (independent-review-critic round 1 MED catch)."""
     for future_source in ("j3.2-auto-v2", "j3.3-auto", "j4-auto", "manual-override"):
         hint = PlanningFallacyHint.model_validate({
             "classTag": "migration-effort",
@@ -448,13 +381,7 @@ def test_planning_fallacy_hint_source_accepts_future_variants():
         assert hint.source == future_source
 
 
-# ---------------------------------------------------------------------------
-# v1.13.x / J2 — AvailabilityHint round-trips
-# ---------------------------------------------------------------------------
-
-
 def test_availability_hint_roundtrip():
-    """Wire shape: camelCase in -> snake_case attrs preserved on dump."""
     _roundtrip(AvailabilityHint, {
         "recentCount": 4,
         "returnedCount": 5,
@@ -468,7 +395,6 @@ def test_availability_hint_roundtrip():
 
 
 def test_availability_hint_camelcase_maps_to_snake_attrs():
-    """camelCase JSON keys populate the snake_case Python attributes."""
     hint = AvailabilityHint.model_validate({
         "recentCount": 4,
         "returnedCount": 5,
@@ -489,7 +415,6 @@ def test_availability_hint_camelcase_maps_to_snake_attrs():
 
 
 def test_recall_result_with_availability_hint():
-    """RecallResult parses availabilityHint when present + populates attribute."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -512,7 +437,6 @@ def test_recall_result_with_availability_hint():
 
 
 def test_recall_result_without_availability_hint_defaults_to_none():
-    """Back-compat: pre-J2 server payload (no availabilityHint key) parses."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -523,8 +447,6 @@ def test_recall_result_without_availability_hint_defaults_to_none():
 
 
 def test_recall_result_all_track_j_hints_coexist():
-    """availabilityHint coexists with anchoringHint + planningFallacyHint
-    on the same RecallResult (the three Track J signals are independent)."""
     payload = {
         "results": [{"id": "mem_a", "content": "a", "score": 0.9, "tokens": 5}],
         "total": 1,
@@ -563,7 +485,6 @@ def test_recall_result_all_track_j_hints_coexist():
 
 
 def test_availability_hint_source_accepts_future_variants():
-    """Forward-compat: AvailabilityHint.source is `str`, not Literal['j2-recency']."""
     for future_source in ("j2-recency-v2", "j2-embedding", "j8-composition"):
         hint = AvailabilityHint.model_validate({
             "recentCount": 4,

@@ -1,5 +1,3 @@
-// What a user sees after upgrading: `hippo serve` says the key rule at start, and a routed CLI write sends the key
-// serve wrote, with no switch to set.
 import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest';
 import { spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
@@ -12,7 +10,6 @@ import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
 import { hippoOut, hippoRun } from '../_helpers/spawn-hippo.js';
 import { makeStore } from '../_helpers/make-root.js';
 
-// The removed keyless switches stay in this list, so a leftover one in the test run's env cannot change a case.
 const MODE_KEYS = ['HIPPO_ALLOW_KEYLESS_LOCAL', 'HIPPO_KEYLESS_LOCAL_ROLE', 'HIPPO_REQUIRE_AUTH', 'HIPPO_API_KEY'];
 const KEY_RULE = 'every request needs an API key: the hippo CLI here sends HIPPO_API_KEY, else the member key in ';
 
@@ -24,7 +21,6 @@ interface Served {
 let workspace: string;
 let stops: Array<() => Promise<void>>;
 
-/** The test run's env with the auth variables removed, so each case states the ones it sets. */
 function childEnv(extra: Readonly<Record<string, string>> = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -48,13 +44,11 @@ function startServe(extra: Readonly<Record<string, string>> = {}): Promise<Serve
     const stop = async (): Promise<void> => {
       child.kill('SIGKILL');
       await exited;
-      // A killed server leaves its pidfile, and the next one in the same store must not read it as a live twin.
       rmSync(join(workspace, '.hippo', 'server.pid'), { force: true });
     };
     stops.push(stop);
     let stdout = '';
     let stderr = '';
-    // A start that never prints its lines fails at the test timeout; this keeps what it did print.
     onTestFailed(() => {
       console.error(`stdout=${stdout} stderr=${stderr}`);
     });
@@ -112,7 +106,6 @@ describe('a routed CLI write', () => {
 
   it('sends HIPPO_API_KEY when it is set', async () => {
     await startServe();
-    // The host CLI opens the store itself, so a key can be minted while the server runs.
     // SAFETY: `hippo auth create --json` prints one JSON object whose `plaintext` is the key.
     const minted = JSON.parse(
       hippoOut(['auth', 'create', '--label', 'upgrade', '--json'], { cwd: workspace, env: childEnv() }),

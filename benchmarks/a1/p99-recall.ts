@@ -1,47 +1,8 @@
-/**
- * p99 recall benchmark — A1 ROADMAP success criterion.
- *
- * v0.39 (2026-04-30): the <50ms p99 target stated in v0.36 plan is retracted.
- * Measured ~58.4ms on 10k store, sequential single-thread.
- * Server-mode concurrent measurement is a v0.40+ effort.
- *
- * Pinned spec:
- *   - Query mix: top-10 BM25 against tier-1 micro-eval queries
- *   - Cold cache (fresh server start, no warmup)
- *   - Single SQLite connection (server default)
- *   - Store: 10k synthetic memories with realistic distribution
- *   - Success: p99 < 50ms
- *
- * Note on "Hybrid embeddings ON" from the ROADMAP: src/api/index.ts:recall is
- * BM25-only today (the `mode` param is forward-compat). The HTTP recall
- * surface measured here is the actual implementation. When hybrid lands
- * (post-A1), re-run with the same harness.
- *
- * Last measured (v0.36.0 candidate, 10k / 1000 queries):
- *   p50 = 39.5ms  p95 = 54.9ms  p99 = 58.4ms  mean = 41.0ms
- *   gate: FAIL — 58.4ms vs 50ms target. Tracked in TODOS.md under
- *   "v0.37.0 — A1 p99 latency hardening". Architecture ships; the
- *   latency target slips one minor.
- *
- * Run:
- *   node --experimental-strip-types benchmarks/a1/p99-recall.ts \
- *     --store-size 10000 --queries 1000 [--gate-ms 50] [--report-only] [--warmup N] [--rounds R]
- *
- * --warmup sends N untimed queries first; --rounds repeats the timed pass and
- * gates on the fastest round's p99. Defaults (0, 1) keep the cold single pass.
- *
- * Output JSON lands in benchmarks/a1/results/p99-<timestamp>.json.
- * Exit code 0 if no request failed and the gated p99 < --gate-ms, else 1.
- * --report-only drops the latency gate, for a machine of unknown speed; CI gates the 1k run at 40 ms (docs/ARCHITECTURE.md).
- */
-
 import { appendFileSync, mkdtempSync, rmSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Imports resolve against the compiled dist/ output. Run `npm run build` first,
-// then `node --experimental-strip-types benchmarks/a1/p99-recall.ts`.
 import { loadConfig } from '../../dist/host/config-file.js';
 import { initStore } from '../../dist/entry/testing.js';
 import { sqliteStore } from '../../dist/store/sqlite/store.js';
@@ -49,7 +10,6 @@ import { remember as apiRemember } from '../../dist/entry/eval-scripts.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 import { readLocalKey } from '../../dist/surface/server/local-key.js';
 
-// The key serve wrote for this machine, set once the server is up.
 let authHeader = { authorization: '' };
 
 interface CliArgs {
@@ -121,7 +81,6 @@ const FILLER_WORDS: ReadonlyArray<string> = [
   'option', 'parameter', 'data', 'record', 'entry', 'item', 'thing',
 ];
 
-/** Deterministic LCG so seedings are reproducible across runs. */
 function makeRng(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -135,7 +94,7 @@ function pick<T>(rng: () => number, arr: ReadonlyArray<T>): T {
 }
 
 function buildContent(rng: () => number, cluster: { tag: string; words: ReadonlyArray<string> }): string {
-  const targetLen = 50 + Math.floor(rng() * 451); // 50–500 chars
+  const targetLen = 50 + Math.floor(rng() * 451);
   const parts: string[] = [];
   let len = 0;
   while (len < targetLen) {
@@ -219,7 +178,6 @@ function computeStats(samples: number[]): Stats {
 }
 
 
-/** Sends `count` sequential recalls starting at query index `offset`; samples are full-response latencies. */
 async function runQueries(
   baseUrl: string,
   queries: ReadonlyArray<string>,
@@ -253,9 +211,6 @@ async function main(): Promise<void> {
   mkdirSync(join(home, '.hippo'), { recursive: true });
   initStore(home);
 
-  // Seed phase. 90-day window of created timestamps is implicit in createMemory's
-  // `now`; the bench uses content distribution, not temporal spread, since recall
-  // ranks by BM25 + decay+strength but cold-cache p99 is dominated by FTS lookup.
   console.log(`[p99-recall] seeding ${args.storeSize} memories…`);
   const rng = makeRng(0xC0FFEE);
   const seedStart = Date.now();
@@ -276,11 +231,7 @@ async function main(): Promise<void> {
   const queries = loadTier1Queries();
   console.log(`[p99-recall] loaded ${queries.length} tier-1 queries`);
 
-  // Server start AFTER seed so the default run measures cold-cache fetch latency.
-  // Port 0 = ephemeral to avoid collisions.
-  // The bench measures recall, not the per-IP limiter, which would 429 most queries and drop them from the stats.
   process.env.HIPPO_V1_RPS = '0';
-  // One key sends every request, so the per-caller limiter would measure itself rather than recall.
   const server: ServerHandle = await serve({ hippoRoot: home, port: 0, rateLimits: { perCaller: 'off' } });
   authHeader = { authorization: `Bearer ${readLocalKey(home)}` };
   console.log(`[p99-recall] server listening on ${server.url}`);
@@ -304,7 +255,6 @@ async function main(): Promise<void> {
   const samples = rounds.flat();
   const stats = computeStats(samples);
   const roundP99 = rounds.map((r) => computeStats(r).p99);
-  // A slower recall slows every round; runner contention rarely hits all of them.
   const gatedP99 = Math.min(...roundP99);
   const gateThreshold = args.gateMs;
   const gatePass = errorCount === 0 && (gateThreshold === null || gatedP99 < gateThreshold);
@@ -371,7 +321,6 @@ async function main(): Promise<void> {
   process.exit(gatePass ? 0 : 1);
 }
 
-// Every finish calls process.exit, so an emptied event loop means an await never settled and no report was written.
 process.once('beforeExit', () => {
   console.error('[p99-recall] the event loop emptied before the report: an await never settled');
   process.exit(3);

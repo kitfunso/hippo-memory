@@ -1,5 +1,3 @@
-// Two page reads in loadAllEntries' order: the mention read's FTS hits and non-ASCII rows, read apart and joined in JS,
-// page as the one OR statement did; and a page over every tenant is one statement however many tenants there are.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -27,7 +25,6 @@ afterEach(() => {
   for (const db of opened.splice(0)) closeHippoDb(db);
 });
 
-// Rows share a `created` in threes, so the id settles ties at page edges; every fifth row is tagged quuxlib.
 function seeded(rows: number, tenants: number): DatabaseSyncLike {
   const root = makeRoot('entry-page-reads');
   const entries: MemoryEntry[] = Array.from({ length: rows }, (_, i) => ({
@@ -45,7 +42,6 @@ function seeded(rows: number, tenants: number): DatabaseSyncLike {
   return db;
 }
 
-// The one statement the mention read ran before the split, for the same MATCH its FTS path builds.
 function oneOrStatement(db: DatabaseSyncLike, tenantId: TenantId): string[] {
   const tenant = tenantId === ALL_TENANTS ? '' : ' AND tenant_id = ?';
   const nonAscii = (c: string): string => `length(${c}) != length(CAST(${c} AS BLOB))`;
@@ -76,7 +72,6 @@ describe('the mention read over ASCII and non-ASCII rows', () => {
       expect(expected.length).toBeGreaterThan(limit === 100 ? 0 : limit);
       const { result, statements } = recordStatements(() => mentionWalk(db, tenantId, limit));
       expect(result).toEqual(expected);
-      // The FTS path ran, not the LIKE fallback.
       expect(countMatching(statements, 'memories_fts MATCH')).toBeGreaterThan(0);
     }
   });

@@ -1,6 +1,3 @@
-// A memory page answers what the one-statement page answered before lists were kept (the snapshot was written by that
-// code on this store), whether its list was sorted for it or for an earlier page; a later page reads the list, and a
-// commit, a new instant or the cap sorts again.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type ConfidenceLevel, type EmotionalValence, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { buildMemoryPage, type MemoryQuery } from '../../src/api/dashboard/queries.js';
@@ -37,7 +34,6 @@ const BASE: MemoryQuery = {
 
 const SORTS = ['content', 'layer', 'strength', 'retrievals', 'last', 'age', 'confidence', 'scope'] as const;
 
-/** Every sort both ways, each chip, each brush, the text test and a layer subset, alone and together. */
 const QUERIES: ReadonlyArray<[string, MemoryQuery]> = [
   ...SORTS.flatMap((sort): Array<[string, MemoryQuery]> => [
     [`${sort} asc`, { ...BASE, sort }],
@@ -87,7 +83,6 @@ function line(name: string, offset: number, page: MemoryPage | null): string {
   return `${name} @${offset}: total=${page.total} ${JSON.stringify(page.counts)} ${JSON.stringify(page.decay)} ${rows.join(' ')}`;
 }
 
-/** Every query's windows on one reads instance, in `order`. */
 async function pagesOf(view: DashboardView, order: readonly number[]): Promise<string[]> {
   const stamp = await view.clock.at('default');
   const lines: string[] = [];
@@ -141,7 +136,6 @@ describe('dashboard memory lists', () => {
       );
       expect(later.result?.rows).toHaveLength(BASE.limit);
       expect(countMatching(later.statements, SCAN)).toBe(0);
-      // The commit signal's one row, then the page.
       expect(later.rowsRead).toBe(BASE.limit + 1);
     } finally {
       await reads.close();
@@ -161,7 +155,6 @@ describe('dashboard memory lists', () => {
       for (const query of queries) expect(await scans(query)).toBe(1);
       expect(await scans(queries[7])).toBe(0);
       expect(await scans({ ...BASE, sort: 'age', dir: 'desc' })).toBe(1);
-      // Nine lists held eight: the least recently read went.
       expect(await scans(queries[0])).toBe(1);
       expect(await scans(queries[7])).toBe(0);
       now += 1;

@@ -48,7 +48,6 @@ describe('a store rebuilt from its markdown mirror', () => {
   });
 });
 
-/** The mirror text of `entry` with its confidence line replaced, or dropped when `line` is null. */
 function withConfidenceLine(entry: MemoryEntry, line: string | null): string {
   return serializeEntry(entry).replace(/^confidence: .*\n/m, line === null ? '' : `${line}\n`);
 }

@@ -1,17 +1,3 @@
-/**
- * F5 (v1.6.5) — typed RecallContractError thrown from `api.recall` when the
- * deployment opts in via HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1 and the
- * caller asks for fresh-tail without a session id.
- *
- * Default behaviour (env unset) preserves v1.6.x back-compat: tenant-wide
- * rows are returned and tagged isFreshTail=true. Guard lives only in
- * api.recall — api.assemble is already session-scoped via
- * its session raw-row read and never calls tenant-wide listFreshRawMemories.
- *
- * No library `console.warn` introduced anywhere — codex C9 said library
- * stderr noise is bad behaviour; enforcement is only at the API boundary.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -26,7 +12,6 @@ afterEach(() => {
 });
 const { writeEntry, apiCtx } = sessionPerTest();
 
-// The settings a root reads per request, so each case's stubbed variable reaches recall as it does in production.
 function ctxFor(root: string, tenantId: string = 'default'): FullContext {
   const ctx = apiCtx(root, tenantId, { subject: 'test:f5-policy', role: 'admin' });
   return { ...ctx, config: { ...ctx.config, runtime: envRuntimeSettings() } };
@@ -54,7 +39,6 @@ describe('fresh-tail policy', () => {
   it('back-compat: env unset, freshTailCount > 0, no sessionId → tenant-wide rows, no throw', async () => {
     for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`event ${i}`));
     const r = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
-    // Tenant-wide policy: the three raw rows come back, and at least one is tagged isFreshTail.
     expect(r.results).toHaveLength(3);
     expect(r.results.some((it) => it.isFreshTail === true)).toBe(true);
   });
@@ -83,7 +67,6 @@ describe('fresh-tail policy', () => {
       const e = makeRaw(`session A event ${i}`, { sourceSessionId: sess });
       writeEntry(root, e);
     }
-    // Different session — should NOT surface as fresh-tail.
     for (let i = 0; i < 2; i++) {
       const e = makeRaw(`session B event ${i}`, { sourceSessionId: 'sess-B' });
       writeEntry(root, e);
@@ -96,9 +79,7 @@ describe('fresh-tail policy', () => {
       .filter((it) => it.isFreshTail)
       .map((it) => it.content)
       .sort();
-    // Every fresh-tail row must come from sess-A, and all three of them surface.
     expect(fresh).toEqual(['session A event 0', 'session A event 1', 'session A event 2']);
-    // And no fresh-tail row should mention "session B".
     for (const it of r.results) {
       if (it.isFreshTail) {
         expect(it.content).not.toContain('session B');
@@ -118,14 +99,12 @@ describe('fresh-tail policy', () => {
   });
 
   it('env=an off or unknown spelling → treated as unset, no throw', async () => {
-    // Only the on spellings (1, true, on) enable the guard; "yes" is unknown and takes the off side.
     for (const val of ['yes', '0', '', 'false']) {
       vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', val);
       for (let i = 0; i < 3; i++) writeEntry(root, makeRaw(`v-${val}-event ${i}`));
       const none = await retrieve(ctxFor(root), { query: 'event' });
       expect(none.results.length).toBeGreaterThanOrEqual(3);
       expect(none.results.filter((it) => it.isFreshTail)).toEqual([]);
-      // The guard is off, so the newest three raw rows come back tagged, each exactly once.
       const r = await retrieve(ctxFor(root), { query: 'event', window: { freshTailCount: 3 } });
       const tail = r.results.filter((it) => it.isFreshTail);
       expect(tail).toHaveLength(3);

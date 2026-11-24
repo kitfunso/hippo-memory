@@ -1,5 +1,3 @@
-// How hippo replaces settings.json when another program holds it, it is read-only, the rename is refused, or the temp file cannot be written;
-// and that the other config files it rewrites go through the same replace.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import fs from 'node:fs';
@@ -32,7 +30,6 @@ function seed(): string {
   return file;
 }
 
-/** A child that opens `file` for reading and keeps it open until the test kills it; resolves once the file is held. */
 async function holdOpen(file: string) {
   const script = `const fs = require('node:fs'); fs.openSync(process.argv[1], 'r'); console.log('held'); setInterval(() => {}, 1 << 30);`;
   const child = spawn(process.execPath, ['-e', script, file], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -40,11 +37,8 @@ async function holdOpen(file: string) {
   return child;
 }
 
-// How long hippo retries a refused rename before it writes in place.
 const RETRY_BUDGET_MS = 1_000;
 
-/** Puts the retry on a clock the test owns: each pause runs `onPause`, moves that clock on and returns at once. Answers
- * the total paused, in ms. */
 function skipPauses(onPause: () => void = () => undefined): () => number {
   let now = Date.now();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -64,7 +58,6 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
 
   it('waits for the program to let go, then writes', () => {
     const file = seed();
-    // This process holds the file and lets go at hippo's first pause, so the retry, not a race, decides what happens.
     let held: number | undefined = fs.openSync(file, 'r');
     const letGo = (): void => {
       if (held !== undefined) fs.closeSync(held);
@@ -78,7 +71,6 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
       letGo();
     }
 
-    // One 10 ms pause, then the rename: an in-place write would come only after the whole retry budget.
     expect(pausedMs()).toBe(10);
     expect(JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SessionEnd).toHaveLength(1);
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
@@ -101,7 +93,6 @@ describe.skipIf(!WINDOWS)('a settings.json another program has open (Windows ref
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });
 
-  // The write is stubbed to EBUSY: no Windows open mode here lets a program stop writes while the file stays readable.
   it('gives up with an error that names the file when the in-place write is refused too, and leaves no temp file', async () => {
     const file = seed();
     const target = fs.realpathSync(file);
@@ -195,7 +186,6 @@ describe.skipIf(ROOT)('a read-only settings.json', () => {
   it('is refused at once, as the in-place write was, not replaced by a rename or retried', () => {
     const file = seed();
     fs.chmodSync(file, 0o444);
-    // A retry pauses between renames, so no pause means no retry, however slow the runner.
     const pause = vi.spyOn(Atomics, 'wait');
     try {
       expect(() => installJsonHooks('claude-code')).toThrow(/EACCES|EPERM/);
@@ -208,7 +198,6 @@ describe.skipIf(ROOT)('a read-only settings.json', () => {
     expect(fs.readdirSync(path.dirname(file))).toEqual(['settings.json']);
   });
 
-  // A write that dies half way leaves its temp file; a stale read-only one at the temp name makes the temp write fail, so the file is written in place.
   it('removes the temp file when writing it fails, and writes the settings in place instead', () => {
     const file = seed();
     const tmp = `${fs.realpathSync(file)}.${process.pid}.tmp`;
@@ -270,7 +259,6 @@ const OTHER_CONFIG_FILES: ReadonlyArray<readonly [string, (home: string) => Rewr
   [
     'copilot-instructions.md',
     (home) => {
-      // A first install leaves the hooks and MCP files current, so the rerun's only write is the instructions file.
       fs.mkdirSync(path.join(home, '.copilot'));
       const file = seedFile(
         installCopilot().paths.instructions,
@@ -295,7 +283,6 @@ describe('a write that dies halfway, as on a full disk', () => {
   it.each(OTHER_CONFIG_FILES)('%s keeps its old bytes and gains no temp file', (_name, arrange) => {
     const { file, rewrite } = arrange(env.home);
     const before = fs.readFileSync(file, 'utf8');
-    // Stubbed because no real fault stops a write midway on demand: each write lands its first half, then fails.
     const write = fs.writeFileSync.bind(fs);
     vi.spyOn(fs, 'writeFileSync').mockImplementation((dest, data, options) => {
       const text = String(data);

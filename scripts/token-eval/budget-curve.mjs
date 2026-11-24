@@ -1,39 +1,4 @@
 #!/usr/bin/env node
-/**
- * Token-at-accuracy curve (ROADMAP Part IX, TE3).
- *
- * Question: how many tokens of memory does an agent need to see the evidence
- * for an answer, with hippo versus simpler strategies? Retrieval recall at a
- * fixed 4000-token budget is saturated on LongMemEval per-haystack, so this
- * sweeps the budget and reports evidence recall against the tokens actually
- * injected, plus the minimum tokens needed per question.
- *
- * Per question it builds a hermetic store holding that question's haystack
- * (one memory per session, full text, no truncation) and compares:
- *   hippo         hybridSearch (BM25, plus cosine when embeddings exist) packed
- *                 to the budget with hippo's own greedy packer (minResults 1,
- *                 the product default, so tokens can exceed a tiny budget and
- *                 are reported as actually injected)
- *   recency       the newest sessions that fit the budget (a window: stops at
- *                 the first session that does not fit)
- *   full-context  every session (the "stuff everything in" baseline)
- *   no-memory     nothing
- *
- * Scoring: evidence recall = the packed memories include at least one of the
- * question's answer_session_ids. It measures whether the agent could see the
- * evidence, not whether a model answers correctly.
- *
- * Data: any LongMemEval-format JSON (longmemeval_s_cleaned.json,
- * longmemeval_oracle.json from the LongMemEval release). Fields may be JSON
- * arrays or Python-literal strings (the bundled synthetic_smoke.json); the
- * latter are converted with python3.
- *
- * Deferred: an LLMLingua-2 compression arm (needs its Python package and
- * model); add it as another arm when run where those are available.
- *
- * Run: npm run build && node scripts/token-eval/budget-curve.mjs
- *      [--data FILE] [--limit N] [--budgets 250,500,1000,2000,4000,8000] [--out FILE]
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -72,9 +37,6 @@ function sessionText(date, sessionId, turns) {
   return `[Date: ${date || 'unknown'}]\n[Session: ${sessionId}]\n\n${body}`;
 }
 
-// Recency is a window: the newest sessions until the next one does not fit,
-// like "keep the last N messages". It does not skip ahead to older, smaller
-// sessions, which would make it a size-based picker rather than recency.
 function packRecent(items, budget) {
   const out = [];
   let used = 0;

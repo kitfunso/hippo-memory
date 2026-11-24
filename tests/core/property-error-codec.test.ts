@@ -1,4 +1,3 @@
-// A store worker's thrown error crosses to the server as plain data: for generated errors of every listed class the server still gets the class, the message, the fields (a flush's list of unit ids among them) and the cause chain.
 import { describe, it, expect } from 'vitest';
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '../../src/base/errors/api-errors.js';
 import { RawAppendOnlyError } from '../../src/base/errors/raw-append-only.js';
@@ -11,7 +10,6 @@ import { decodeError, encodeError } from '../../src/store/sqlite/runtime/error-c
 import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
 import { arr, both, forAll, int, map, pick, str, type Gen } from '../_helpers/property.js';
 
-// One way to throw each class the codec lists; HttpError twice, with and without its optional field.
 const MAKERS: readonly ((text: string) => Error)[] = [
   (m) => new Error(m),
   (m) => new TypeError(m),
@@ -45,17 +43,13 @@ const MAKERS: readonly ((text: string) => Error)[] = [
   (m) => Object.assign(new RawAppendOnlyError(new Error(m)), { cause: undefined }),
 ];
 
-// The codec keeps this many causes under an error and cuts the rest.
 const KEPT_CAUSES = 4;
 
-/** An error to build afresh on every check: which maker, and the text it is given. */
 type Recipe = readonly [maker: number, text: string];
 
 interface Case {
   readonly top: Recipe;
-  /** Extra fields holding plain data, which must cross. */
   readonly carried: readonly (readonly [string, string | number | boolean | null | readonly string[]])[];
-  /** Extra fields holding something a thread message cannot carry as a field, which must be left behind. */
   readonly dropped: readonly (readonly [string, object | bigint])[];
   readonly causes: readonly Recipe[];
 }
@@ -80,13 +74,11 @@ function thrownFrom({ top, causes, carried, dropped }: Case): Error {
   return error;
 }
 
-/** The error and each cause under it, outermost first. */
 function chain(error: Error): Error[] {
   const next = error.cause;
   return next instanceof Error ? [error, ...chain(next)] : [error];
 }
 
-/** The own fields of `error` that hold plain data: everything but its cause and the fields named in `dropped`. */
 function plainFields(error: Error, dropped: readonly string[]): object {
   return Object.fromEntries(Object.entries(error).filter(([name]) => name !== 'cause' && !dropped.includes(name)));
 }
@@ -95,7 +87,6 @@ describe('error codec properties', () => {
   it('decode(encode(e)) keeps the class, message, plain fields and cause chain of every listed class', async () => {
     await forAll(0xc0dec, 300, CASE, (drawn) => {
       const error = thrownFrom(drawn);
-      // structuredClone is what a thread message does to the encoded error.
       const arrived = chain(decodeError(structuredClone(encodeError(error))));
       const sent = chain(error).slice(0, KEPT_CAUSES + 1);
       expect(arrived.length).toBe(Math.min(drawn.causes.length, KEPT_CAUSES) + 1);

@@ -1,4 +1,3 @@
-// One salience gate in api.remember: a direct, a routed and a REST write of the same text are judged the same way.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -95,7 +94,6 @@ describe('api.remember with salienceGate and a lead-in', () => {
 
   it('starts an error turn weak when its lead-in repeats the row before it, which a bare turn does not', async () => {
     const ctx = store(true);
-    // Four recent errors fill maxRepeatErrors; the last one is the row the lead-in repeats.
     for (let i = 0; i < 4; i++) {
       await remember(ctx, { content: `Error ${i}: connection timeout on database`, tags: ['error'] });
     }

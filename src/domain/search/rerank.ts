@@ -4,7 +4,6 @@ import type { SearchResult } from '../../base/rank/search-types.js';
 
 export const DEFAULT_RERANK_TOP_K = 50;
 
-// MMR is O(K^2) cosine ops; candidates below this window never survive budget filtering anyway.
 const MMR_CANDIDATE_CAP = 100;
 
 /** MMR: repeatedly picks the candidate maximising lambda * relevance - (1 - lambda) * max(cos(cand,

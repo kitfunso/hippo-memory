@@ -27,12 +27,11 @@ BENCH = Path.home() / "hippo-bench"
 EMB = BENCH / "retrieval-emb-locomo"
 STORE = BENCH / "stores-v3" / "locomo-hippo-emb"
 SAMPLE = HERE.parent / "results" / "2026-09-25-lane-a" / "locomo" / "sample.json"
-TOP_K = 200  # the runner's --top-k for every LoCoMo arm (retrieval-emb-locomo/run.sh)
+TOP_K = 200
 BAD_LOG = re.compile(r"failed|error|traceback|exception|fell back", re.IGNORECASE)
 
 
 def client_order(results: list[dict]) -> list[dict]:
-    """The Mem0 OSS client's normalisation and its stable sort by score, highest first."""
     out = []
     for r in results:
         e = {"memory": r.get("memory", r.get("data", "")), "score": r.get("score", 0), "id": r.get("id", "")}
@@ -56,7 +55,6 @@ def search(srv, rec: dict) -> tuple[list[dict], float]:
 
 
 def replay(qids: list[str], saved: dict[str, dict], base, arm) -> tuple[dict[str, dict], list[str], dict]:
-    """The arm's files by question, the gate problems, and the counts each gate passed."""
     files, off1, off2, off3 = {}, [], [], []
     for n, qid in enumerate(qids):
         rec = saved[qid]

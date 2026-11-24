@@ -1,5 +1,3 @@
-// DAG drill-down from a summary to its children.
-
 import type { SummaryDescendants } from '../../base/ports/store.js';
 import { estimateTokens } from '../../base/util/token-text.js';
 import { leadInField, shownText } from '../../base/memory/lead-in.js';
@@ -13,14 +11,11 @@ export const DEFAULT_DRILL_DOWN_LIMIT = 50;
 export const MAX_DRILL_DOWN_DEPTH = 10;
 
 export interface DrillDownOptions {
-  /** Cap on number of children returned. Default 50. */
   limit?: number;
   /** Token budget: children append in created order until the next would exceed it (cost:
    * printed line under `cost`, else ceil(content.length / 4)). For depth > 1 the budget is
    * global and cumulative, not per level. */
   budget?: number;
-  /** Levels to walk down (default 1 = direct children); capped at MAX_DRILL_DOWN_DEPTH. BFS
-   * dedups with a visited Set, defensive against shared-child anomalies. */
   depth?: number;
   cost?: DrillDownCost;
   project?: CallerProject;
@@ -36,15 +31,12 @@ export interface DrillDownSummary {
 export interface DrillDownChild {
   id: string;
   content: string;
-  /** The conversation text that led into the memory; absent when unset. */
   leadIn?: string;
   layer: string;
   dagLevel: number;
   created: string;
 }
 
-// Absent, the budget pays for child content alone. `fixed` gets the largest child count the heading
-// can print.
 export interface DrillDownCost {
   child: (c: DrillDownChild) => number;
   fixed: (summary: DrillDownSummary, widest: number) => number;
@@ -76,8 +68,6 @@ export async function drillDown(
   opts: DrillDownOptions = {},
 ): Promise<DrillDownOutcome> {
   const limit = opts.limit ?? DEFAULT_DRILL_DOWN_LIMIT;
-  // The cap bounds the walk on a pathologically deep tree; CLI, HTTP and MCP reject invalid values
-  // before this.
   const depth = Math.max(1, Math.min(Math.trunc(opts.depth ?? 1), MAX_DRILL_DOWN_DEPTH));
   const admit: DescendantAdmission = {
     ownScope: personalScopeOf(ctx.actor) ?? undefined,
@@ -88,15 +78,10 @@ export async function drillDown(
   const walked = await ctx.store.dagReads.summaryWithDescendants(ctx.tenantId, summaryId, {
     depth,
     admit,
-    // A leaf answers not_drillable, so nothing under it is read.
     minSummaryLevel: DAG_LEVEL.topic,
     page: limit >= 0 && Number.isSafeInteger(pastLimit) ? { rows: pastLimit } : undefined,
   });
-  // No unscoped cross-tenant probe: the tenant-scoped miss covers "missing" and "in another tenant"
-  // alike, because telling them apart would leak existence to unauthorised tenants.
   if (!walked) return { failure: 'not_found' };
-  // A distinguishable "scope_blocked" would tell a no-scope caller "this row exists, just not for
-  // you", the existence leak the HTTP 404 collapse prevents.
   if (!descendantAdmits(walked.summary, admit)) return { failure: 'not_found' };
   if (!isDrillable(walked.summary)) return { failure: 'not_drillable' };
   return drillResult(walked, opts, limit);
@@ -117,8 +102,6 @@ function drillResult(
   const summaryOut: DrillDownSummary = {
     id: summary.id,
     content: summary.content,
-    // The stored direct-child count; the fallback counts level-0 children, never the whole depth-N
-    // walk.
     descendantCount: summary.descendantCount ?? sizes[0] ?? 0,
     earliestAt: summary.earliestAt ?? null,
     latestAt: summary.latestAt ?? null,
@@ -138,8 +121,6 @@ function drillResult(
   return {
     summary: summaryOut,
     children,
-    // totalChildren is the BFS-collected count, cumulative across levels (equals the
-    // direct-children count at depth=1).
     totalChildren: total,
     truncated,
   };

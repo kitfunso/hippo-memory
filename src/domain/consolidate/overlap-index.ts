@@ -1,6 +1,3 @@
-// All-pairs overlap join through an inverted index over rare-first token prefixes (prefix
-// filtering, Chaudhuri et al. 2006).
-
 /** Smallest number of shared tokens any qualifying pair can have, given either side's token
  * count. */
 export type MinShared = (size: number) => number;
@@ -26,8 +23,6 @@ export function overlapPartners(
   const rareFirst = (a: string, b: string): number =>
     (docFreq.get(a) ?? 0) - (docFreq.get(b) ?? 0) || (a < b ? -1 : a > b ? 1 : 0);
 
-  // Under one total order the first token two sets share lies in both sets' first size - minShared
-  // + 1 tokens.
   const prefixes = sets.map((set) => {
     const keep = set.size - Math.max(1, minShared(set.size)) + 1;
     return keep > 0 ? [...set].sort(rareFirst).slice(0, keep) : [];

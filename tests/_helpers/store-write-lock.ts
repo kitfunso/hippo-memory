@@ -1,4 +1,3 @@
-// A second process that holds a store's write lock, as `hippo sleep` or another session's write does, so a test can show what a CLI does meanwhile.
 import { spawn, type ChildProcess } from 'node:child_process';
 
 const HOLDER_SRC = `
@@ -25,7 +24,6 @@ export function holdStoreWriteLock(dbPath: string, holdMs = 30_000): Promise<Chi
 
 /** Kills the holder and waits until it is gone, which is when SQLite frees the lock. Safe to call twice. */
 export async function releaseStoreWriteLock(holder: ChildProcess | null): Promise<void> {
-  // A killed child keeps exitCode null and sets signalCode, so both are read.
   if (holder === null || holder.exitCode !== null || holder.signalCode !== null) return;
   const exited = new Promise((resolve) => holder.once('exit', resolve));
   holder.kill();

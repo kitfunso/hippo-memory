@@ -58,7 +58,6 @@ describe('github idempotency', () => {
     const db = openHippoDb(root);
     try {
       markKeySeen(db, { idempotencyKey: 'k4', deliveryId: 'd4', eventName: 'issues', memoryId: 'm-first' });
-      // Second call with different metadata must not throw and must not overwrite memory_id.
       markKeySeen(db, {
         idempotencyKey: 'k4',
         deliveryId: 'd4-other',

@@ -1,5 +1,3 @@
-// hippo.db's CompactionHooks: each call opens with the hook's wait, and every line a step logs
-// comes back as a note.
 import {
   COMPACTION_DB_WAIT_MS,
   REPLAY_AFTER_MS,
@@ -52,8 +50,6 @@ import type {
 } from '../../../base/ports/store/capture.js';
 import { handleNow } from '../runtime/handle-clock.js';
 
-// A note leaves the store only as the port's answer, so a caught error also goes to the shared
-// logger with its stack.
 const noteTo =
   (notes: string[]): Log =>
   (message, err) => {
@@ -67,7 +63,6 @@ const noteTo =
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-/** The one place a record becomes the argument saveItems takes. */
 function itemContext(
   tenantId: string,
   record: CompactionRef,
@@ -106,7 +101,6 @@ function recordStep(step: SaveStep): CompactionRecord | null {
   }
 }
 
-/** Busy with a saved record defers to sleep; any other failure goes to the caller. */
 function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
   const { meta, files, log } = step;
   try {
@@ -125,14 +119,11 @@ function itemsStep(step: SaveStep, record: CompactionRecord | null): void {
     });
   } catch (err) {
     if (!isSqliteBusy(err) || record === null) throw err;
-    // The record already holds the items; sleep finishes them.
     step.result.deferred = true;
     log('store busy, items left for the next sleep', err);
   }
 }
 
-/** The PostCompact store work, on a handle of its own: record the summary, then write its items.
- * Each step is independent. Never throws. */
 function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutcome {
   const result: CompactionSaveResult = { written: null, deferred: false, snapshotSaved: false };
   const notes: string[] = [];
@@ -151,8 +142,6 @@ function saveCompaction(on: OnHandle, save: CompactionSave): CompactionSaveOutco
   return { result, spoolReason: null, notes };
 }
 
-/** A row that will not map is skipped and a record that throws is noted, so the rest still run
- * until the deadline; a held lock stops the run, as every later row would wait on it too. */
 function saveStalled(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -232,8 +221,6 @@ function saveRecordItems(
   }
 }
 
-/** Old enough that their PostCompact will not come, young enough that the transcript may still
- * reach back to them. */
 function openRecords(db: DatabaseSyncLike, tenantId: string): OpenCompaction[] {
   const now = handleNow(db).getTime();
   const rows = openTranscriptRows(db, {
@@ -266,8 +253,6 @@ function fillRecord(
 ): boolean {
   const { tenantId, record, text, log } = fill;
   if (text === null) {
-    // The record is past REPLAY_AFTER_MS, so a window that is fully scanned or out of reach stays
-    // empty.
     if (closeStartedWithoutSummary(db, tenantId, record.id) > 0) {
       log(`${record.id} closed as no-summary: its transcript holds no summary for it`);
     }

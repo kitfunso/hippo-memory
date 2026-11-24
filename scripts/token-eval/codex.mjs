@@ -1,4 +1,3 @@
-// The `codex exec` session driver for set X apply tasks (E6 plan D4, D5, R1, R9, R11, R14, R15, R28): launcher, home, args and the wait.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -21,7 +20,6 @@ export const wrapperLog = (run) => path.join(run.dirs.home, '.hippo', 'logs', 'c
 const sha256 = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const isBareName = (cmd) => /^[\w.-]+$/.test(cmd);
 
-/** Whether a launcher is hippo's Codex wrapper; only the head is read, since a real codex.exe is large. */
 function isWrapper(file) {
   const fd = fs.openSync(file, 'r');
   try {
@@ -40,7 +38,6 @@ function onPath(name, pathValue, exts) {
   return null;
 }
 
-/** The real codex behind hippo's wrapper, from the operator's wrapper metadata; refuses when it cannot be named for sure. */
 function unwrap(launcher, env) {
   const meta = path.join(env.HOME || env.USERPROFILE || '', '.hippo', 'integrations', 'codex.json');
   const fix = 'pass --codex-bin <path to the real codex>';
@@ -137,7 +134,6 @@ export function codexArgs(ctx, run) {
 
 export const quoteArg = (a) => (/^[\w./:=@+-]+$/.test(a) ? a : `"${a}"`);
 
-/** Every file under memories/ with its size and mtime, so the wait sees a write it would miss by name alone. */
 function memoryState(dir) {
   if (!fs.existsSync(dir)) return '';
   return fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter((e) => e.isFile())
@@ -192,7 +188,6 @@ export function codexContext(opts, baseEnv = process.env, checkTools = () => {})
   return { ...tools, codexVault: openAuthVault(opts.codexAuth ?? defaultAuthFile(baseEnv)) };
 }
 
-/** A login failure stops the run: a run that goes on without a login would fill cells with a broken tool (plan R6). */
 function assertLoggedIn(ctx, run, t, cc) {
   const said = failureText(cc);
   if (!CODEX_AUTH_RE.test(said)) return;
@@ -200,7 +195,6 @@ function assertLoggedIn(ctx, run, t, cc) {
   throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: Codex says its login failed (${text}); log in to Codex again, then start a new run`);
 }
 
-/** MCP or app tools in a run's Codex home are a setup fault that hits every arm, so the run stops (plan R28). */
 function assertNoMcp(run, t, files) {
   const names = [...new Set(parseRollouts(files).mcp)];
   if (names.length) throw new Error(`${run.s.id} ${t.id} ${run.arm} seed${run.seed}: the Codex session called MCP or app tools (${names.join(', ')}); a run's Codex home must load none`);
@@ -213,9 +207,7 @@ export async function runCodexSession(ctx, run, t, reset) {
   let before = new Set(listRollouts(codexHome));
   let priorLog = '';
   const command = () => {
-    // Taken per attempt, so a cut-off attempt's rollout stays on disk (prereg 113) but is never priced.
     before = new Set(listRollouts(codexHome));
-    // A finished worker log from an earlier apply or attempt stays until this attempt's worker truncates it.
     priorLog = readIfPresent(wrapperLog(run))?.toString('utf8') ?? '';
     return `${quoteArg(run.codexLauncher)} ${codexArgs(ctx, run).map(quoteArg).join(' ')}`;
   };

@@ -1,5 +1,3 @@
-// Readers that turn parsed CLI flags into typed values, and the flag types they share.
-
 import { knownOption } from '../../base/util/json.js';
 import { resolveListLimit } from '../../base/util/limits.js';
 import type { CallerState } from '../../api/callers.js';
@@ -41,7 +39,6 @@ export function parseBudgetFlag<F extends number | undefined>(
 ): number | F {
   const value = flags['budget'];
   if (value === undefined) return fallback;
-  // A value-less flag and a junk value are different typos; the --hops guard already splits them.
   if (!isStringFlag(value)) {
     fail('--budget requires an integer value (e.g. --budget 1500).');
   }
@@ -129,12 +126,10 @@ export function stringFlag(flags: CliFlags, name: string): string | undefined {
   return isStringFlag(v) ? v : undefined;
 }
 
-// An empty value reads as absent, so `--change ""` keeps the default.
 export function nonEmptyStringFlag(flags: CliFlags, name: string): string | undefined {
   return stringFlag(flags, name) || undefined;
 }
 
-// A repeated flag is already a list; a single value is a comma-separated list.
 export function stringListFlag(flags: CliFlags, name: string): string[] | undefined {
   const v = flags[name];
   if (Array.isArray(v)) return v;
@@ -146,8 +141,6 @@ export function stringListFlag(flags: CliFlags, name: string): string[] | undefi
     : undefined;
 }
 
-// A repeated flag is a list and a single value a one-item list; unlike stringListFlag it never
-// splits on commas.
 export function repeatedFlag(flags: CliFlags, name: string): string[] {
   const v = flags[name];
   return Array.isArray(v) ? v : isStringFlag(v) ? [v] : [];
@@ -157,7 +150,6 @@ export function isOneOf<T extends string>(allowed: readonly T[], value: string):
   return knownOption(allowed, value) !== undefined;
 }
 
-// A junk value exits instead of becoming NaN, which would pass every `<` gate.
 export function numberFlag(flags: CliFlags, name: string): number | undefined {
   const v = flags[name];
   if (!isStringFlag(v)) return undefined;
@@ -168,17 +160,14 @@ export function numberFlag(flags: CliFlags, name: string): number | undefined {
   return parsed;
 }
 
-// Any truthy value counts, so a string value is true too.
 export function boolFlag(flags: CliFlags, name: string): boolean {
   return Boolean(flags[name]);
 }
 
-// A flag that takes a value was typed with none (`--x` and nothing after it).
 export function flagValueless(flags: CliFlags, name: string): boolean {
   return flags[name] === true;
 }
 
-// Typed at all, bare or with a value.
 export function hasFlag(flags: CliFlags, name: string): boolean {
   return flags[name] !== undefined;
 }
@@ -189,8 +178,6 @@ export interface CommandContext {
   readonly tenantId: string;
   readonly args: string[];
   readonly flags: CliFlags;
-  /** Unset in a hippo process, which runs one command, so its recall starts empty rings; a
-   * caller that runs several commands in one process passes one set to each. */
   readonly callers?: CallerState;
 }
 

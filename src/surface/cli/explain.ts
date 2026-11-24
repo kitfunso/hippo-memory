@@ -1,5 +1,3 @@
-// The `hippo explain` verb; main() loads it lazily from the command table.
-
 import { envActiveScope } from '../../base/util/env.js';
 import { confidenceFacets } from '../../base/memory/strength.js';
 import { leadInField } from '../../base/memory/lead-in.js';
@@ -33,8 +31,6 @@ import { plural } from '../../base/util/format.js';
 
 const EXPLAIN_PREVIEW_CHARS = 48;
 
-/** The SQL predicate drops denied rows before the window, so an unscoped probe counts what the
- * policy hides. */
 async function noteScopeHidden(
   ctx: ReturnType<typeof cliApiContext>,
   global: CliStore | undefined,
@@ -49,8 +45,6 @@ async function noteScopeHidden(
   }
 }
 
-/** Where the read-only ranking lands; a `let` the callback assigned would read as never-assigned
- * after the await. */
 interface InspectedSlot {
   rank?: RankRecallResult;
 }
@@ -80,7 +74,6 @@ async function explainQuery({
   const scope = await explainScope(ctx, flags, globalRoot, query);
 
   const engine = engineFlags(flags, ctx.config);
-  // Priced as recall prints each result, so explain returns what recall's engines would.
   const now = ctx.infra.clock();
   const cost = (r: SearchResult): number =>
     printedTokens(
@@ -118,11 +111,8 @@ async function explainScope(
   globalRoot: string,
   query: string,
 ): Promise<ExplainScope> {
-  // Explain shows what recall would see, so it applies the same scope rule.
   const explicitScope = stringFlagOrExit(flags, 'scope') ?? null;
   const activeScope = explicitScope || envActiveScope();
-  // Unlike recall, explain reads the global store whenever it exists, even when it is the local
-  // root.
   const origin = recallRowOrigin(ctx, { globalRoot, primaryIsGlobal: false, activeScope });
   await noteScopeHidden(
     ctx,
@@ -248,7 +238,6 @@ function printExplainTable(
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const b = r.breakdown;
-    // A preview shows the memory itself: a lead-in first would fill the cut.
     const preview = r.entry.content.replace(/\s+/g, ' ').slice(0, EXPLAIN_PREVIEW_CHARS);
     const ageStr = b ? `${b.ageDays}d` : '?';
     console.log(
@@ -297,7 +286,6 @@ function printHybridBreakdown(r: SearchResult, b: ScoreBreakdown): void {
   console.log(`    final:     ${fmt(b.final, 4)}`);
 }
 
-/** The multipliers that differ from 1, then the MMR move when diversity re-ranked the row. */
 function printBoostLines(r: SearchResult, b: ScoreBreakdown): void {
   if (b.decisionBoost !== 1) {
     console.log(`    decision:  x${fmt(b.decisionBoost, 2)}  (tagged 'decision')`);

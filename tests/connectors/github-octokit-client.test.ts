@@ -29,14 +29,10 @@ describe('parseNextLink', () => {
   });
 });
 
-// A minimal structural stand-in for the fetch Response shape that
-// realGitHubFetcher actually reads (status, headers, text(), json()) — this
-// lets the object literal satisfy the type directly, with no assertion.
 interface FakeFetchResponse {
   readonly status: number;
   readonly headers: Headers;
   text: () => Promise<string>;
-  // realGitHubFetcher only reads json() on 200s, always a GitHub list payload.
   json: () => Promise<unknown[]>;
 }
 
@@ -114,7 +110,6 @@ describe('realGitHubFetcher: a 200 reply that is not a list', () => {
     vi.unstubAllGlobals();
   });
 
-  /** The rejection of one page fetch whose reply is `reply`; a page that came back fails the test, since ingest would take its items. */
   async function failure(reply: Response): Promise<GitHubFetchError> {
     vi.stubGlobal(
       'fetch',

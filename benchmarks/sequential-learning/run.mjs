@@ -1,22 +1,3 @@
-/**
- * Sequential Learning Benchmark Runner
- *
- * Tests whether a memory system helps an AI agent learn from mistakes
- * over a sequence of N_TASKS tasks containing TRAP_CATEGORIES.length trap
- * categories. v1.7.x: 50 tasks, 10 categories. v1.8.0: 62 tasks, 13
- * categories (10 v1.7.x + 3 adversarial).
- *
- * Usage:
- *   node run.mjs                           # Run all adapters
- *   node run.mjs --adapter hippo           # Run only hippo
- *   node run.mjs --adapter static          # Run only static
- *   node run.mjs --adapter none            # Run only no-memory baseline
- *   node run.mjs --adapter all             # Run all (default)
- *   node run.mjs --output results/         # Custom output directory
- *
- * Zero npm dependencies beyond Node.js 22.16+ built-ins.
- */
-
 import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,10 +8,6 @@ import staticAdapter from './adapters/static.mjs';
 import hippoAdapter from './adapters/hippo.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// ---------------------------------------------------------------------------
-// CLI argument parsing
-// ---------------------------------------------------------------------------
 
 /**
  * Parse and validate the --restrict-late-to flag value. Expects a non-negative
@@ -79,22 +56,16 @@ function parseArgs() {
     } else if (args[i] === '--output' && args[i + 1]) {
       opts.output = args[++i];
     } else if (args[i] === '--use-goal-stack') {
-      // v1.7.5 -- exercise the B3 dlPFC goal-stack via pushGoal/completeGoal.
       opts.useGoalStack = true;
     } else if (args[i] === '--eval-strict') {
-      // v1.7.5 -- hook errors hard-fail instead of being logged + swallowed.
       opts.evalStrict = true;
     } else if (args[i] === '--seed' && args[i + 1]) {
-      // v1.7.5 -- explicit single-run seed. Implies nSeeds=1 unless overridden.
       opts.seed = parseInt(args[++i], 10);
     } else if (args[i] === '--n-seeds' && args[i + 1]) {
-      // v1.7.5 -- multi-seed run. Hash-derived seed list overrides --seed.
       opts.nSeeds = parseInt(args[++i], 10);
     } else if (args[i] === '--budget' && args[i + 1]) {
-      // v1.7.6 -- recall budget for the discriminating-workload sweep.
       opts.budget = parseInt(args[++i], 10);
     } else if (args[i] === '--restrict-late-to' && args[i + 1]) {
-      // v1.7.7 -- narrow the late-phase metric to last N trap encounters.
       opts.restrictLateTo = parseRestrictLateTo(args[++i]);
     } else if (args[i] === '--help' || args[i] === '-h') {
       console.log(`
@@ -132,10 +103,6 @@ Options:
   return opts;
 }
 
-// ---------------------------------------------------------------------------
-// Seed list derivation (v1.7.5)
-// ---------------------------------------------------------------------------
-
 /**
  * Build the seed list for a run. Hash-derived to avoid correlated mulberry32
  * streams between adjacent base indices. Constant matches `aggregate.mjs`.
@@ -155,19 +122,11 @@ function deriveSeedList(opts) {
   return [undefined];
 }
 
-// ---------------------------------------------------------------------------
-// Adapter registry
-// ---------------------------------------------------------------------------
-
 const ADAPTERS = {
   none: baselineAdapter,
   static: staticAdapter,
   hippo: hippoAdapter,
 };
-
-// ---------------------------------------------------------------------------
-// Simulation engine
-// ---------------------------------------------------------------------------
 
 /**
  * Check whether recall results match a trap category.
@@ -181,11 +140,9 @@ const ADAPTERS = {
  */
 function isRecalled(results, category) {
   return results.some((r) => {
-    // Tag overlap
     const rTags = r.tags ?? [];
     const tagMatch = category.tags.some((tag) => rTags.includes(tag));
 
-    // Content text match: check if significant words from the lesson appear
     const contentLower = (r.content ?? '').toLowerCase();
     const textMatch = category.lesson
       .split(' ')
@@ -231,7 +188,6 @@ async function simulate(adapter, tasks, opts = {}) {
   let pushFailures = 0;
   let completeFailures = 0;
 
-  // Lives outside the finally block so its strict-mode throw is not an unsafe-finally.
   async function completeGoalReportingFailure(adapter, goalId, matched, taskId, evalStrict) {
     try {
       await adapter.completeGoal(goalId, matched);
@@ -246,7 +202,6 @@ async function simulate(adapter, tasks, opts = {}) {
   }
 
   for (const task of tasks) {
-    // Clean task: no trap
     if (!task.trapCategory) {
       results.push({
         taskId: task.id,
@@ -259,8 +214,6 @@ async function simulate(adapter, tasks, opts = {}) {
 
     const category = getTrapCategory(task.trapCategory);
 
-    // v1.7.5 -- push the goal so the dlPFC boost can match `task.trapCategory`
-    // against any prior memory tagged with that id.
     let goalId = null;
     if (useGoalStack) {
       try {
@@ -284,7 +237,6 @@ async function simulate(adapter, tasks, opts = {}) {
       matched = isRecalled(top5, category);
 
       if (matched) {
-        // Agent recalled the right lesson, avoids the trap
         await adapter.outcome(true);
         results.push({
           taskId: task.id,
@@ -293,12 +245,7 @@ async function simulate(adapter, tasks, opts = {}) {
           memoryRecalled: true,
         });
       } else {
-        // Agent missed the trap, hits it, then learns
         await adapter.outcome(false);
-        // v1.7.5 P0 tag-fix -- include the category id as the FIRST tag so
-        // the goal-stack boost (which iterates tags and checks
-        // goalsByTag.has(tag)) can match. Pre-v1.7.5 stored only
-        // category.tags which lacked the id.
         await adapter.store(category.lesson, [
           task.trapCategory,
           ...category.tags,
@@ -312,7 +259,6 @@ async function simulate(adapter, tasks, opts = {}) {
         });
       }
     } finally {
-      // v1.7.5 P1 -- complete the goal even if recall/outcome/store threw.
       if (useGoalStack && goalId) {
         completeFailures += await completeGoalReportingFailure(adapter, goalId, matched, task.id, evalStrict);
       }
@@ -321,8 +267,6 @@ async function simulate(adapter, tasks, opts = {}) {
 
   await adapter.cleanup();
 
-  // v1.7.5 P1 -- in eval-strict mode, re-throw if any hook quietly failed
-  // before a strict gate would have caught it (defensive belt + braces).
   if (evalStrict && (pushFailures > 0 || completeFailures > 0)) {
     throw new Error(
       `evalStrict: ${pushFailures} push failures, ${completeFailures} complete failures`,
@@ -331,10 +275,6 @@ async function simulate(adapter, tasks, opts = {}) {
 
   return { results, hookFailures: { push: pushFailures, complete: completeFailures } };
 }
-
-// ---------------------------------------------------------------------------
-// Analysis
-// ---------------------------------------------------------------------------
 
 /**
  * Compute trap-hit-rate for a set of results.
@@ -373,7 +313,6 @@ export function hitRateByPhase(results, restrictLateTo = null) {
   };
 
   if (restrictLateTo === null) {
-    // Default: chronological third (v1.7.0..v1.7.6 behavior).
     const third = Math.ceil(n / 3);
     return {
       early: rate(trapTasks.slice(0, third)),
@@ -382,7 +321,6 @@ export function hitRateByPhase(results, restrictLateTo = null) {
     };
   }
 
-  // v1.7.7: late = last N. early = first ceil((n-N)/2). mid = remainder.
   const N = Math.max(0, Math.min(restrictLateTo, n));
   const earlyEnd = Math.ceil((n - N) / 2);
   const midEnd = n - N;
@@ -402,10 +340,6 @@ function showsLearning(phases) {
   return phases.late < phases.early && (phases.early - phases.late) >= 0.20;
 }
 
-// ---------------------------------------------------------------------------
-// Output formatting
-// ---------------------------------------------------------------------------
-
 /**
  * Format a rate as a percentage string, right-aligned in 4 chars.
  * @param {number} rate
@@ -424,7 +358,6 @@ function printTable(conditions) {
   const trapCount = TRAP_CATEGORIES.length;
   const taskCount = N_TASKS;
 
-  // Count total trap encounters from the task sequence
   const tasks = generateTasks();
   const trapEncounters = tasks.filter((t) => t.trapCategory !== null).length;
 
@@ -447,14 +380,6 @@ function printTable(conditions) {
   console.log('');
 }
 
-/**
- * Build the JSON output object.
- *
- * v1.7.5 -- when condition.seedRuns is present (length > 1) the output gains
- * a `seeds` array (per-seed details) and a `phaseAggregate` block (mean / std
- * / ci95 per phase across seeds). For single-seed/canonical runs the legacy
- * shape is preserved.
- */
 function buildOutput(conditionResults, opts = {}) {
   const tasks = generateTasks();
   const trapEncounters = tasks.filter((t) => t.trapCategory !== null).length;
@@ -475,14 +400,10 @@ function buildOutput(conditionResults, opts = {}) {
       entry.improvement_pct = Math.round((cond.phases.early - cond.phases.late) * 100);
     }
 
-    // v1.7.5 -- record hook failure counts per condition (zero when goal-stack
-    // hooks weren't exercised).
     if (cond.hookFailures) {
       entry.hook_failures = cond.hookFailures;
     }
 
-    // v1.7.5 -- multi-seed extras. Skipped for canonical (single, undefined-seed)
-    // runs to keep the legacy single-seed JSON shape unchanged.
     if (cond.seedRuns && cond.seedRuns.length > 0) {
       entry.seeds = cond.seedRuns.map((s) => ({
         seed: s.seed,
@@ -510,19 +431,13 @@ function buildOutput(conditionResults, opts = {}) {
     tasks: N_TASKS,
     traps: TRAP_CATEGORIES.length,
     trap_encounters: trapEncounters,
-    // v1.7.7 -- audit field. null preserves chronological-third behavior.
     restrict_late_to: opts.restrictLateTo ?? null,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 async function main() {
   const opts = parseArgs();
 
-  // Determine which adapters to run
   const adapterKeys =
     opts.adapter === 'all'
       ? Object.keys(ADAPTERS)
@@ -536,8 +451,6 @@ async function main() {
     }
   }
 
-  // v1.7.5 -- derive the seed list. nSeeds=1 with no --seed -> [undefined]
-  // (canonical fixed-position run, identical to pre-v1.7.5 behaviour).
   const seedList = deriveSeedList(opts);
   const conditionResults = {};
 
@@ -568,7 +481,6 @@ async function main() {
         if (key === 'hippo' && err.message.includes('hippo')) {
           console.error('  Hint: ensure hippo CLI is on PATH (npm link or global install)');
         }
-        // v1.7.5 -- in eval-strict mode propagate the failure so CI can detect it.
         if (opts.evalStrict) throw err;
         runFailed = true;
         break;
@@ -587,8 +499,6 @@ async function main() {
 
     const elapsed = ((performance.now() - startMs) / 1000).toFixed(1);
 
-    // For single-run (canonical or --seed) reporting matches legacy shape.
-    // For multi-seed runs the headline numbers are means across seeds.
     const overall =
       seedRuns.reduce((a, r) => a + r.overall, 0) / seedRuns.length;
     const phases = {
@@ -605,8 +515,6 @@ async function main() {
       { push: 0, complete: 0 },
     );
 
-    // v1.7.5 -- compute phase aggregate when multi-seed; aggregatePhases
-    // gracefully handles n=1 (mean=value, std=0, ci95=0 below n<5 floor).
     const phaseAggregate =
       seedRuns.length > 1
         ? aggregatePhases(seedRuns.map((r) => r.phases))
@@ -617,8 +525,6 @@ async function main() {
       overall,
       phases,
       learns,
-      // legacy single-run results array kept for compatibility (uses last
-      // seed's results when multi-seed; downstream code should use seedRuns)
       results: seedRuns[seedRuns.length - 1].results,
       hookFailures,
       seedRuns: seedList.length > 1 ? seedRuns : null,
@@ -637,10 +543,8 @@ async function main() {
     process.exit(1);
   }
 
-  // Print comparison table
   printTable(conditionResults);
 
-  // Write JSON output
   if (!existsSync(opts.output)) {
     mkdirSync(opts.output, { recursive: true });
   }
@@ -650,14 +554,10 @@ async function main() {
   writeFileSync(outputPath, JSON.stringify(output, null, 2));
   console.log(`Results written to: ${outputPath}`);
 
-  // Also write a latest.json symlink-equivalent
   const latestPath = join(opts.output, 'latest.json');
   writeFileSync(latestPath, JSON.stringify(output, null, 2));
 }
 
-// v1.7.7 P0-1 -- run.mjs is now import-safe. main() only runs when invoked as a
-// script (matches `calibrate.mjs::invokedAsScript` pattern). Tests can import
-// `hitRateByPhase` and `parseRestrictLateTo` without spawning hippo subprocesses.
 const invokedAsScript =
   process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (invokedAsScript) {

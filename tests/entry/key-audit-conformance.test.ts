@@ -1,4 +1,3 @@
-// KeyWrites' revoke answers: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -15,7 +14,6 @@ import { auditHighId } from '../_helpers/root-forms.js';
 const NOW = '2026-03-01T12:00:05.000Z';
 const AT = '2026-03-01T12:00:00.000Z';
 
-/** Every value a call below resolves to: a revoked_at, or a key's revoked_at read back. */
 type KeyAuditValue = string | null | undefined;
 type Call = GroupCall<'keyWrites', KeyAuditValue>;
 type Side = SideResult<KeyAuditValue>;
@@ -23,7 +21,6 @@ type Side = SideResult<KeyAuditValue>;
 let fixture: TwoTenantFixture;
 let baseline: Side;
 
-/** Runs the calls on a copy of the fixture and returns their outcomes and audit rows. */
 async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'keyWrites', calls);
 }
@@ -36,7 +33,6 @@ const revokedAtOf =
   (keyId: string): Call =>
   async (_g, store) =>
     (await store.findApiKey(keyId))?.revokedAt;
-/** The audit id the next row gets: one past the fixture's high-water id, which a pruned newest row sits under. */
 const nextAuditId = (root: string): number => auditHighId(root) + 1;
 
 beforeAll(async () => {

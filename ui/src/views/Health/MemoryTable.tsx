@@ -31,15 +31,10 @@ export interface TableProps {
   sortKey: MemorySort;
   sortDir: SortDir;
   onSort: (key: MemorySort) => void;
-  /** Phone only: flips the direction without changing the key. */
   onToggleDir: () => void;
-  /** Changing this scrolls to the top and clears the active row. */
   resetKey: string;
-  /** The memory the drawer shows, or null. */
   activeId: string | null;
-  /** Row click or Enter. */
   onOpen: (index: number, id: string) => void;
-  /** The active row moved by keyboard; an open desktop drawer follows it. */
   onPreview: (index: number, id: string) => void;
   empty: ReactNode;
   ref?: Ref<VTableHandle>;

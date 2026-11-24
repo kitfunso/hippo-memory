@@ -1,5 +1,3 @@
-// `hippo session-rules` through the real CLI: the SessionStart reply that carries only the rules the person taught, and
-// the cases where it must print nothing. Real stores in tmp dirs, each test with its own HIPPO_HOME and project folder.
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -16,7 +14,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 const FIRST_MS = Date.UTC(2026, 0, 1);
 const HEADING = '## Rules from the user';
-// The project name for the folder `work`, which the admission rules match a row's origin against.
 const PROJECT = 'work';
 
 let dir: string;
@@ -31,7 +28,6 @@ function env(): NodeJS.ProcessEnv {
   return e;
 }
 
-/** The row capture writes for a rule the person stated; a higher `n` is newer. */
 function ruleRow(content: string, n: number, over: Partial<MemoryEntry> = {}): MemoryEntry {
   const row = createMemory(content, {
     source: 'capture',
@@ -126,7 +122,6 @@ describe('hippo session-rules in a project with its own store', () => {
   });
 
   it('keeps the newest rules that fit the budget, prints them oldest first, and counts the rest', async () => {
-    // Each line prints as `- Rule n: always run the linter first.`, 10 tokens, so a budget of 20 holds two.
     const rule = (n: number) => `Rule ${n}: always run the linter first.`;
     for (const n of [2, 0, 4, 1, 3]) writeEntry(local, ruleRow(rule(n), n));
     setBudget(20);

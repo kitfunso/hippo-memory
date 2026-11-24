@@ -1,5 +1,3 @@
-// Consolidation answers: a sleep's opening, its reads, the settle of a
-// dirty summary, the flush and dormant expiry, and the run record.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { DAG_LEVEL, Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -91,12 +89,9 @@ function seedTables(): void {
       const entry = { ...createMemory(content, { tenantId: TENANT_A }), originProject: 'proj' };
       insertDormantRow(db, { entry, strength: 0.01, reason: 'decay', dormantAt });
     };
-    // A hold left behind for a clean summary: the sweep drops it, so it cannot hold the row once it is dirty again.
     db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)').run(`rebuild_hold:${rows.topicB!.id}`, STALE_HOLD);
-    // Marks as an earlier sleep left them: three for sources that left, one that is not JSON.
     const mark = db.prepare('INSERT INTO meta(key, value) VALUES (?, ?)');
     db.prepare('UPDATE memories SET superseded_by = ? WHERE id = ?').run(id('kept'), id('replaced'));
-    // A blank link counts as superseded; no writer makes one, so the UPDATE is the test's subject.
     db.prepare("UPDATE memories SET superseded_by = '' WHERE id IN (?, ?)").run(id('blankMarked'), id('blankUnmarked'));
     mark.run(`empty_extraction:${id('replaced')}`, STALE_MARK);
     mark.run(`empty_extraction:${id('blankMarked')}`, STALE_MARK);
@@ -144,7 +139,6 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-/** Each call one second after the one before. */
 async function conforms(calls: readonly GroupCall<'consolidation', unknown>[]) {
   const timed = calls.map((call, i): GroupCall<'consolidation', unknown> => (methods, store) => {
     vi.setSystemTime(START + i * 1000);
@@ -172,7 +166,6 @@ function rebuilt(name: string, text: string): SummarySettle {
 
 const nameOf = (entryId: string): string => Object.keys(rows).find((n) => rows[n]!.id === entryId) ?? entryId;
 
-/** What a dirtySummaries answer holds: each summary's stored failure count by row name, and `held`. */
 function dirtyView(outcomes: readonly Outcome<unknown>[], i: number) {
   const { summaries, held } = valueAt<DirtySummaries>(outcomes, i);
   return { failures: Object.fromEntries(summaries.map((s) => [nameOf(s.summary.id), s.failures])), held };
@@ -196,7 +189,6 @@ const laterChild = (parent: string, tenantId: string): MemoryEntry => ({
   originProject: 'proj',
 });
 
-// An untraced session comes with its events, the ones its complete event ends.
 const untraced = (sessionId: string) => ({
   sessionId,
   events: expect.arrayContaining([expect.objectContaining({ eventType: 'session_complete' })]),
@@ -277,7 +269,6 @@ describe('Consolidation', () => {
       (g) => g.dirtySummaries(10, before),
       (g) => g.dirtySummaries(10),
       (g) => g.dirtySummaries(10, HELD_UNTIL),
-      // A stale prior count and another tenant's row write nothing.
       (g) =>
         g.noteRebuildFailures!([
           failedRebuild('refusing', 5, 6, HELD_UNTIL),
@@ -285,13 +276,11 @@ describe('Consolidation', () => {
         ]),
       (g) => g.dirtySummaries(10, before),
       (g) => g.settleSummary(rebuilt('topic', 'alice runs billing and payroll for acme')),
-      // The row is clean now, so a late note writes nothing.
       (g) => g.noteRebuildFailures!([failedRebuild('topic', 0, 1, null)]),
       (_g, s) => s.entryWrites.writeEntry({ entry: laterChild('topic', TENANT_A), actor: 'cli' }),
       (_g, s) => s.entryWrites.writeEntry({ entry: laterChild('topicB', TENANT_B), actor: 'cli' }),
       (g) => g.dirtySummaries(10, before),
     ]);
-    // Each note resolved, so the reads below show what it wrote rather than a rejected call.
     for (const i of [1, 5, 8]) expect(valueAt(sqlite.outcomes, i)).toBeUndefined();
     const clean = { topic: 0, refusing: 0, fresh: 0 };
     expect(dirtyView(sqlite.outcomes, 0)).toEqual({ failures: clean, held: undefined });
@@ -299,7 +288,6 @@ describe('Consolidation', () => {
     expect(dirtyView(sqlite.outcomes, 3)).toEqual({ failures: { ...clean, topic: 3 }, held: undefined });
     expect(dirtyView(sqlite.outcomes, 4)).toEqual({ failures: { ...clean, topic: 3 }, held: 0 });
     expect(dirtyView(sqlite.outcomes, 6)).toEqual({ failures: { refusing: 0, fresh: 0 }, held: 1 });
-    // The settle cleared topic's hold and the sweep cleared topicB's stale one, so neither is held again.
     expect(dirtyView(sqlite.outcomes, 11)).toEqual({ failures: { ...clean, topicB: 0 }, held: 0 });
   });
 
@@ -307,7 +295,6 @@ describe('Consolidation', () => {
     const live = named('kept', 'edited', 'gone').sort();
     const sqlite = await conforms([
       (g) => g.emptyExtractions!({ limit: 10 }),
-      // The first note drops the marks left for a superseded, a blank-linked and a missing source, and replaces the one that is not JSON.
       (g) =>
         g.noteEmptyExtractions!({
           mark: [
@@ -319,7 +306,6 @@ describe('Consolidation', () => {
         }),
       (g) => g.emptyExtractions!({ limit: 2 }),
       (g) => g.emptyExtractions!({ limit: 2, after: live[1] }),
-      // A superseded and a missing source take no mark.
       (g) =>
         g.noteEmptyExtractions!({
           mark: [markOf('replaced', 'eeeeeeeeeeeeeeee'), { ...markOf('kept', 'x'), id: ABSENT }],

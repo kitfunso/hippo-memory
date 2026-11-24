@@ -1,4 +1,3 @@
-// The composition roots' request sessions carry the lock wait each root had before they moved into the store layer.
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { HOOK_DB_WAIT_MS, SERVER_DB_WAIT_MS } from '../../src/db/index.js';

@@ -1,5 +1,3 @@
-// GET /v1/context and the hippo_context MCP tool answer the same over serve() on hippo.db's default store, in process
-// and through the port alone.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -43,14 +41,12 @@ async function send(url: string, call: Call): Promise<Reply> {
   return { status: res.status, body: await res.json() };
 }
 
-/** Every call over serve() on a fresh copy of the fixture, with no global store. */
 async function runServed(makeStore?: (root: string) => HippoStore) {
   const home = mkdtempSync(join(tmpdir(), 'hippo-context-served-'));
   try {
     const root = join(home, 'store');
     copyTree(fixture.dir, root);
     vi.stubEnv('HIPPO_HOME', join(home, 'global'));
-    // serve() reads a store that is not hippo.db as shared, so the hippo.db pass is shared too to compare like with like.
     shareRoot(root);
     const store = makeStore?.(root);
     const handle = await serve({ hippoRoot: root, port: 0, store });
@@ -80,7 +76,6 @@ beforeEach(() => {
   for (const k of CLEARED_ENV) vi.stubEnv(k, '');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   vi.stubEnv('HIPPO_V1_RPS', '0');
-  // A fake Date stays on this thread; the store worker that strengthens the recalled rows reads this clock instead.
   vi.stubEnv('HIPPO_FAKE_NOW', CONTEXT_NOW);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(CONTEXT_NOW));
@@ -99,7 +94,6 @@ describe('context over serve()', () => {
     const onPort = await runServed(portOnlyStore);
     expect(onPort.replies).toEqual(onHippoDb.replies);
     expect(onPort.rows).toEqual(onHippoDb.rows);
-    // The default store answers the data-only context reads from worker threads; the same store in process must agree with it.
     const inProcess = await runServed(sqliteStore);
     expect(onHippoDb.replies).toEqual(inProcess.replies);
     expect(onHippoDb.rows).toEqual(inProcess.rows);

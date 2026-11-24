@@ -1,6 +1,3 @@
-// One sleep over three tenants: the rows it keeps, moves, merges, retires, makes dormant and removes, and the audit,
-// conflict, particle, run, full-text and mirror rows it leaves. Every host-wide step runs: the half-life move, decay, a
-// trace, replay, physics, a retired text, merges with a tombstone refusal, the conflict replace and the run counters.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import * as fs from 'node:fs';
@@ -40,7 +37,6 @@ const CLUSTER_HEADER = '[Consolidated pattern from 3 related memories, newest fi
 
 type Tenant = (typeof TENANTS)[number];
 
-/** Seeded rows get fixed ids and times; every row starts on the 7-day base the half-life move leaves. */
 function rowsOf(tenant: Tenant): MemoryEntry[] {
   let n = 0;
   const row = (
@@ -80,7 +76,6 @@ function rowsOf(tenant: Tenant): MemoryEntry[] {
     }),
     row('payments webhook retries are disabled for the eu cluster', 11, 1),
     row('faded note about the retired staging cluster', 400, 400, {}, { halfLifeDays: 3 }),
-    // Outcomes the memory-value weights rank in the tenant's top 30%, so that case rescues it.
     row(
       'faded note about the old vpn gateway',
       390,
@@ -133,7 +128,6 @@ function onStore<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-/** Three tenants on the legacy half-life base, with particles, a completed session, an open conflict and a tombstoned merge. */
 async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<string> {
   const root = makeRoot('sleep-host-golden', {
     config: { physics: { enabled: true }, ...config },
@@ -192,7 +186,6 @@ async function seed(config: { memoryValue?: { enabled: boolean } }): Promise<str
   return root;
 }
 
-/** Ids from a counter, so every run mints the same ones; generateId keeps randomUUID's first 12 hex digits. */
 async function withCountedIds<T>(run: () => Promise<T>): Promise<T> {
   let n = 0;
   const spy = vi
@@ -215,12 +208,10 @@ function columnsBut(db: DatabaseSyncLike, table: string, skip: readonly string[]
   return names.filter((name) => !skip.includes(name)).join(', ');
 }
 
-// node:sqlite cells; the particle blobs are read as hex text.
 type Row = Record<string, string | number | null>;
 type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json };
 type JsonObject = { readonly [key: string]: Json };
 
-/** Everything a sleep writes, minus wall-clock stamps. */
 function hostState(root: string) {
   return onStore(root, (db) => {
     // SAFETY: node:sqlite answers each row as a plain column-keyed object.
@@ -262,7 +253,6 @@ async function sleepOnce(root: string, opts: { dryRun?: boolean; pageRows?: numb
   return { result, state: hostState(root) };
 }
 
-/** The default page's sleep, after checking one-row pages and one page for the whole store end the same. */
 async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean } }, opts: { dryRun?: boolean } = {}) {
   const pinned = await sleepOnce(await seed(config), opts);
   for (const pageRows of [1, Infinity]) {
@@ -274,7 +264,6 @@ async function sleepAtEveryPageSize(config: { memoryValue?: { enabled: boolean }
 beforeEach(() => {
   vi.stubEnv('HIPPO_FAKE_NOW', NOW.toISOString());
   vi.stubEnv('HIPPO_TENANT', 'default');
-  // The store reads its pause at each flush, so a yield here stands in for the real gap between chunks.
   vi.spyOn(WRITE_BUDGET, 'pause').mockImplementation(() => new Promise<void>((resolve) => setImmediate(resolve)));
 });
 
@@ -287,12 +276,10 @@ type HostState = ReturnType<typeof hostState>;
 type SleepResult = Awaited<ReturnType<typeof sleepOnce>>['result'];
 
 const BY_NAME = ['acme', 'default', 'globex'] as const;
-// The order the sleep reaches each tenant's retired text, and the tenants whose cluster merges (globex's is refused).
 const RETIRED = ['globex', 'default', 'acme'] as const;
 const CLUSTERED = ['acme', 'default'] as const;
 const BILLING = 'the billing export lands in the shared bucket nightly';
 const idOf = (tenant: Tenant, n: number): string => `mem_${tenant}_${String(n).padStart(2, '0')}`;
-// generateId keeps the first 12 hex digits of the counted UUID.
 const minted = (prefix: string, n: number): string => `${prefix}_${n.toString(16).padStart(8, '0')}0000`;
 const TRACE = minted('mem', 1);
 const IDLE_STEPS = {
@@ -311,7 +298,6 @@ const IDLE_STEPS = {
   tracesSkippedMixedScope: 0,
 };
 
-/** A live row as `tenant layer half-life retrievals`, then its successor when superseded. */
 const described = (tenant: string, layer: string, halfLife: number, retrievals: number, by: string | null = null) =>
   `${tenant} ${layer} ${halfLife}d x${retrievals}${by === null ? '' : ` > ${by}`}`;
 
@@ -329,10 +315,8 @@ const live = (state: HostState) =>
     ]),
   );
 
-/** The live rows both writing sleeps leave before replay: moved half-lives, merged clusters and retired texts. */
 function sleptRows() {
   const seeded = BY_NAME.flatMap((t): Array<[string, string]> => [
-    // A merged cluster's rows drop to a short half-life; the superseded row keeps its old one.
     ...[0, 1, 2].map((n): [string, string] => [idOf(t, n), described(t, 'episodic', t === 'globex' ? 365 : 109, 0)]),
     ...[3, 5, 6, 7, 11, 14].map((n): [string, string] => [idOf(t, n), described(t, 'episodic', 365, 0)]),
     [idOf(t, 4), described(t, 'episodic', 7, 0, idOf(t, 3))],
@@ -383,7 +367,6 @@ const made = (state: HostState) =>
       content: m['content'],
     }));
 
-/** The detail lines less their leading emoji. */
 const detailText = (result: SleepResult): string[] => detailLines(result).map((d) => d.replace(/^\s*\S+\s+/, ''));
 const faded = (verb: string, n: number): string[] =>
   BY_NAME.map((t) => `${verb} ${idOf(t, n)} (strength 0.0000 < 0.05)`);
@@ -430,7 +413,6 @@ const auditLines = (state: HostState): string[] =>
 // SAFETY: every audit writer stores a JSON object in metadata_json.
 const auditMeta = (state: HostState, op: string): JsonObject[] =>
   state.audit.filter((a) => a['op'] === op).map((a) => JSON.parse(String(a['metadata_json'])) as JsonObject);
-// Live rows on the old 7-day base move; the faded rows on their own 3 days and the superseded row do not.
 const MOVED = [0, 1, 2, 3, 5, 6, 7, 12, 13, 14, 15];
 
 function expectAudit(state: HostState, rescued: boolean): void {
@@ -463,7 +445,6 @@ function expectAudit(state: HostState, rescued: boolean): void {
   expect(rescues.every((m) => Number(m['score']) > 0)).toBe(true);
 }
 
-/** Particles of rows that left are dropped, every other one moved; mirrors name only live rows and open conflicts. */
 function expectFollowers(state: HostState, liveRows: Readonly<Record<string, string>>): void {
   const seeded = TENANTS.flatMap(rowsOf).filter((_, i) => i % 3 === 0);
   expect(state.particles.map((p) => p['memory_id'])).toEqual(
@@ -510,14 +491,12 @@ function expectSleptStore(
 }
 
 describe('one sleep over three tenants', () => {
-  // Each case also runs at one-row pages and at one page for the whole store, which must end the same.
   it('moves, decays, promotes, replays, retires, merges and records each tenant on its own rows', async () => {
     const { result, state } = await sleepAtEveryPageSize({});
     const { events: _, ...counts } = result;
     expect(counts).toEqual(sleepCounts({ decayed: 39, dormant: 6, extractionCandidates: 30 }));
     const replayed = [idOf('globex', 1), idOf('acme', 15), idOf('acme', 12), idOf('default', 15), TRACE];
     expect(detailText(result)).toEqual(sleepDetails(false, replayed));
-    // A replayed row whose text is retired hands its retrieval to the row that holds the rest.
     const bumped = {
       [idOf('globex', 1)]: described('globex', 'episodic', 367, 1),
       [idOf('acme', 12)]: described('acme', 'semantic', 367, 1),
@@ -557,7 +536,6 @@ describe('one sleep over three tenants', () => {
       dryRun: true,
       removed: 3,
       removedIds: BY_NAME.map((t) => idOf(t, 10)),
-      // A preview checks the refusal as the real sleep does, so globex's refused cluster does not count.
       merged: 6,
       semanticCreated: 0,
       promotedTraces: 0,

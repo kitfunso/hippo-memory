@@ -1,5 +1,3 @@
-"""qa/codex_judge.py: the CLI stamp on every record, an empty working folder outside any checkout, tool use read from
-the event stream and stderr, and a preamble that a caller may replace at run time (runner/answer_judge.py does)."""
 from __future__ import annotations
 
 import base64
@@ -18,8 +16,6 @@ from qa.ledger import JUDGE, Item, Ledger, decide
 
 NOTICE_LINE = ('{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable '
                'because code-mode host is disabled. Code mode will fail closed."}}')
-# `codex exec --json` from codex-cli 0.164.0 on 11 Nov 2026: a plain grading reply, then a prompt that made the model
-# call a tool. The tool call shows no item, only a second agent message and the router's stderr line.
 PLAIN = "\n".join([
     '{"type":"thread.started","thread_id":"t1"}', NOTICE_LINE, '{"type":"turn.started"}',
     '{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\\"label\\":\\"CORRECT\\"}"}}',
@@ -74,7 +70,6 @@ def _login(home: Path) -> None:
 
 @pytest.fixture
 def fake_codex(tmp_path, monkeypatch):
-    """A CodexJudge whose codex process is faked: `--version` prints codex-cli 0.164.0 and exec prints PLAIN."""
     sent: list[bytes] = []
 
     def run(cmd, **kw):

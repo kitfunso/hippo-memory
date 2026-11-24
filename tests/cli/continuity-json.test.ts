@@ -1,4 +1,3 @@
-// The port's session rows are camelCase; these pin the snake_case JSON the CLI's --json prints.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { handleCurrent, handleSnapshot } from '../../src/surface/cli/continuity.js';
@@ -19,7 +18,6 @@ const EVENT_JSON =
 let root = '';
 const c = (args: string[], flags: CliFlags): CommandContext => ({ hippoRoot: root, tenantId: 'default', args, flags });
 
-/** The printed JSON, key order kept, with each timestamp masked. */
 async function printed(run: () => Promise<void>): Promise<string> {
   const { stdout } = await runInProcess(run);
   return JSON.stringify(JSON.parse(stdout)).replace(/"\d{4}-\d{2}-\d{2}[T ][^"]*"/g, '"<at>"');

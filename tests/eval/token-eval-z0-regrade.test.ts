@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166): every saved check and acceptance test runs again on the saved commits; flips drop lessons, harness faults are error rows.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -32,7 +31,6 @@ describe('z0-regrade regrade and grading', () => {
     expect(rows.map((x) => x.status)).toEqual(Array(8).fill('done'));
     expect(rows.flatMap((x) => x.checks).filter((x) => x.flip)).toEqual([]);
     expect(rows.filter((x) => x.acceptance?.flip)).toEqual([]);
-    // The teach was resumed, so its final check ran again; the stale check rides on a4.
     expect(rowFor(c.out, 't1').checks.map((x) => x.which)).toEqual(['first', 'final']);
     expect(rowFor(c.out, 'a4').checks.map((x) => [x.lessonId, x.which, x.saved, x.regraded])).toEqual([['f1-l2', 'first', 'pass', 'pass'], ['f1-l2', 'final', 'pass', 'pass'], ['f1-l1', 'stale', true, true]]);
     expect(rowFor(c.out, 'n1').checks).toEqual([]);
@@ -41,7 +39,6 @@ describe('z0-regrade regrade and grading', () => {
     expect(Object.keys(g)).toEqual(['acceptanceFlips', 'flippedLessons', 'g5', 'readerSample']);
     expect(g).toMatchObject({ flippedLessons: [], acceptanceFlips: 0, g5: { pass: 'repro', cells: 8, unreproducible: { cells: 0, lessons: [] }, extraEnvKeys: [] } });
     expect(readFileSync(join(c.out, 'grading.json'), 'utf8').endsWith('}\n')).toBe(true);
-    // A reader round on a real run: pairs come from the saved bundles, and labels equal to the key score zero disagreements.
     expect(await cli(['reader', '--out', c.out, '--tasks', c.tasks, '--seed', '7'])).toMatchObject({ code: 0, stdout: expect.stringContaining('reader round 1: drew') });
     const pairs: { file: string; verdict: string }[] = JSON.parse(readFileSync(join(c.out, 'g5', 'sealed', 'reader-r1.key.json'), 'utf8')).pairs;
     const labels = join(c.out, 'labels-r1.tsv');
@@ -49,9 +46,7 @@ describe('z0-regrade regrade and grading', () => {
     expect(await cli(['reader', '--out', c.out, '--labels', labels])).toMatchObject({ code: 0 });
     expect(await grading(c.out)).toMatchObject({ code: 0 });
     expect(readGrading(c.out)).toMatchObject({ readerSample: { n: pairs.length, disagreements: 0 }, g5: { readerRound: 1 } });
-    // Every teach resumes, so the three give a first and a final pair each; the four applies pass first and give one; n1 has no lesson.
     expect(pairs).toHaveLength(10);
-    // The round passed, so the checkers are frozen: a changed one is refused before any cell runs.
     const raw: RawSpec = JSON.parse(readFileSync(c.tasks, 'utf8'));
     const { check } = lessonOf(raw, 'f1-l1');
     const fixed = join(tmp('z0-rg-fix-'), 'toggle-fixed.mjs');
@@ -75,7 +70,6 @@ describe('z0-regrade regrade and grading', () => {
     const r = await regrade(c, ['--cell', keyOf('a1'), '--cell', keyOf('a4')], { Z0_TOGGLE: 'regrade', Z0_TOGGLE_TO: '3' });
     expect(r).toMatchObject({ code: 0 });
     expect(rowFor(c.out, 'a1').checks[0]).toMatchObject({ saved: 'pass', regraded: 'na', flip: true, reason: 'verdict' });
-    // The stale lesson is compared as pass-ness (reading 6): na is not a pass.
     expect(rowFor(c.out, 'a4').checks[2]).toMatchObject({ which: 'stale', saved: true, regraded: false, flip: true });
     expect(rowFor(c.out, 'a1').extraEnvKeys).toEqual(['Z0_TOGGLE_TO']);
   }, 300_000);
@@ -105,7 +99,6 @@ describe('z0-regrade regrade and grading', () => {
     expect(check).toMatchObject({ saved: 'pass', regraded: 'fail', second: 'fail', flip: false, reason: null });
     const sha = createHash('sha256').update(readFileSync(join(CHECKS, 'toggle.mjs'))).digest('hex');
     expect(check.checkerSha).not.toBe(sha);
-    // A repro pass has no fix to allow, so the same args change is checker-changed there.
     expect(await regrade(fixed, ['--cell', keyOf('a1')], { Z0_TOGGLE_TEST: 'regrade' })).toMatchObject({ code: 0 });
     expect(rowFor(fixed.out, 'a1')).toMatchObject({ status: 'error', error: { stage: 'checker-changed' } });
   }, 300_000);
@@ -147,7 +140,6 @@ describe('z0-regrade regrade and grading', () => {
       expect(keys.filter((k) => then[k] !== now[k]).sort()).toEqual([...files, 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']);
       const mapped = (p: string) => p.replace(join(shared.out, 'runs'), join(realpathSync.native(c.out), 'rg'));
       for (const k of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HIPPO_HOME']) expect(now[k]).toBe(mapped(then[k]));
-      // One commands file per cell, so after both calls it holds the final check's list.
       if (i === 1) expect(JSON.parse(readFileSync(now.CHECK_COMMANDS, 'utf8'))).toEqual(grade.commandsFinal);
       if (i === 1) expect(JSON.parse(readFileSync(now.CHECK_RESUME_COMMANDS, 'utf8'))).toEqual(grade.commandsResume);
       for (const d of [then, now]) expect(Object.keys(d).some((k) => k.toUpperCase() === 'CLAUDE_CODE_OAUTH_TOKEN') || Object.values(d).includes(TOKEN)).toBe(false);

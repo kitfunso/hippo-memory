@@ -1,4 +1,3 @@
-// Z0 G5 (prereg 166): which files a lesson checker's identity holds, which imports stop the load, and what stays outside.
 import { describe, it, expect, afterEach } from 'vitest';
 import { copyFileSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -17,7 +16,6 @@ const put = (dir: string, files: Files) => {
 };
 const fresh = (files: Files) => put(tmp('z0-ident-'), files);
 const body = (file: string, v: number) => (file.endsWith('.json') ? `{ "v": ${v} }\n` : file.endsWith('.mjs') ? `export const v = ${v};\n` : `module.exports = { v: ${v} };\n`);
-/** Whether a new body in `helper` gives the checker another identity. */
 const moves = (files: Files, entry: string, helper: string) => {
   const d = fresh({ ...files, [helper]: body(helper, 1) });
   const before = at(d, entry);
@@ -97,7 +95,6 @@ describe('checker identity follows every local import written with a plain strin
     expect(moves({ [entry]: text }, entry, helper)).toBe(true);
   });
 
-  // Shapes the two regular expressions already followed, kept so the parser cannot lose them.
   it.each<[name: string, entry: string, text: string, helper: string]>([
     ['an import on the line after an import with no semicolon (U12)', 'check.mjs', "import * as fs from 'node:fs'\nimport { v } from './h.mjs'\nconsole.log(v, typeof fs)\n", 'h.mjs'],
     ['createRequire saved as require in an .mjs', 'check.mjs', "import { createRequire } from 'node:module';\nconst require = createRequire(import.meta.url);\nconsole.log(require('./h.cjs').v);\n", 'h.cjs'],
@@ -230,7 +227,6 @@ describe('checker identity stops the load on an import it cannot hash', () => {
 describe('checker identity names a parser it cannot use', () => {
   afterEach(cleanup);
   const MODULE = fileURLToPath(new URL('../../scripts/token-eval/checker-identity.mjs', import.meta.url));
-  /** A copy of the module beside a stub typescript package, so the copy loads the stub. */
   const withParser = async (stub: string) => {
     const d = fresh({
       'check.mjs': "console.log('ok');\n",

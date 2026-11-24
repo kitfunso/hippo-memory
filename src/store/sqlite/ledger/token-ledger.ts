@@ -1,8 +1,3 @@
-/** Token ledger: one row per block of memory text sent to an agent on any surface, with its
- * token cost; the input for the token-savings evals. Backs inject-only-on-change: the hook
- * records a `skip` when the block hash matches the session's last; `reread` rows cover {@link
- * REREAD_SURFACES} blocks. Counts use {@link estimateTokens} (chars / 4); rows never hold
- * content or query text. Writes are best-effort: a ledger failure must not break recall. */
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import {
   countSkipsAfter,
@@ -27,9 +22,6 @@ import type { ApiCall } from '../../../base/session/transcript-calls.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { handleStamp } from '../runtime/handle-clock.js';
 
-// The token ledger's surfaces and retention.
-
-/** Every surface a block is sent on, in report order. */
 const TOKEN_SURFACES: readonly TokenSurface[] = [
   'hook',
   'hook_recall',
@@ -44,8 +36,6 @@ const TOKEN_SURFACES: readonly TokenSurface[] = [
   'http_assemble',
 ];
 
-/** Surfaces whose re-reads are counted: only a hook payload tells a sub-agent's block from its
- * parent's, as both carry one session id. */
 const REREAD_SURFACES: readonly TokenSurface[] = [
   'hook',
   'hook_recall',
@@ -53,10 +43,8 @@ const REREAD_SURFACES: readonly TokenSurface[] = [
   'session_start',
 ];
 
-/** Rows older than this are pruned on write. */
 const TOKEN_LEDGER_RETENTION_DAYS = 90;
 
-/** The stamp a row written at `ts` prunes before: {@link TOKEN_LEDGER_RETENTION_DAYS} earlier. */
 const ledgerCutoff = (ts: string): string =>
   new Date(Date.parse(ts) - TOKEN_LEDGER_RETENTION_DAYS * DAY_MS).toISOString();
 
@@ -130,14 +118,10 @@ export function summarizeTokenUse(
   };
 }
 
-/** Tokens hippo sent and skipped in one session, for {@link tokensBySession}. */
 interface SessionTokens {
   sessionId: string;
-  /** Tokens of memory text sent to the agent. */
   sent: number;
-  /** Tokens of unchanged blocks not sent. */
   skipped: number;
-  /** Blocks sent. */
   injections: number;
 }
 
@@ -159,15 +143,11 @@ export function tokensBySession(
 /** Calls that carried a block sent at `at` (epoch ms): every later call in the first later
  * call's context window. */
 export function carryingCalls(calls: readonly ApiCall[], at: number): ApiCall[] {
-  // Windows come from file order, not boundary timestamps: the compact-resume block is booked
-  // before its boundary's timestamp.
   const first = calls.find((call) => call.at > at);
   if (!first) return [];
   return calls.filter((call) => call.at > at && call.compactions === first.compactions);
 }
 
-/** A surface's re-reads on one UTC day; `at` is the day's last carrying call or send and dates
- * the row. */
 interface RereadDay {
   surface: TokenSurface;
   at: number;
@@ -199,10 +179,7 @@ export function recordRereads(
     };
     for (const row of rows) {
       const sentAt = Date.parse(row.ts);
-      // Dated by when the calls happened, so a --days window counts re-reads in it; the empty
-      // send-day row keeps the session in coverage.
       add({ surface: row.surface, at: sentAt, rereads: 0, tokens: 0 });
-      // The first carrying call is the send itself; every later one is a re-read.
       for (const call of carryingCalls(calls, sentAt).slice(1)) {
         add({ surface: row.surface, at: call.at, rereads: 1, tokens: Number(row.tokens) });
       }

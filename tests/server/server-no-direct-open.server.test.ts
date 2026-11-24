@@ -1,5 +1,3 @@
-// A route or tool that opens hippo.db by its folder, past the store serve() was given, fails here. The served folder
-// carries the other-store marker, so such an open throws and answers 501; the store keeps its rows in a folder of its own.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -21,10 +19,8 @@ const SECRETS = { slack: randomBytes(24).toString('hex'), github: randomBytes(24
 const AS_OF = '?date=2099-01-01T00:00:00.000Z';
 
 interface Sent {
-  /** `$mem` stands for the newest memory id, `$key` for the newest key id. */
   readonly path?: string;
   readonly body?: JsonValue;
-  /** A signed webhook body, sent as these exact bytes. */
   readonly raw?: string;
 }
 
@@ -70,8 +66,6 @@ function githubHeaders() {
   };
 }
 
-/** One request per /v1 row that its handler reads far enough to reach the store, sent in this order so each finds the
- * row the one before it left. */
 const SENDS = {
   'POST /v1/memories': { body: { content: 'deploy the eu cluster on friday', kind: 'raw' } },
   'GET /v1/graph': {},
@@ -169,9 +163,7 @@ const TOOL_ARGS = {
   hippo_predict_baserate: { class_tag: 'cutover' },
 } satisfies Record<string, JsonValue>;
 
-// The one route and two tools that need hippo.db's local files answer 501 by design under any other store.
 const LOCAL_FILE_TOOLS = new Set(['hippo_share', 'hippo_peers']);
-// Every group but the folder ones, so a 501 here comes only from a direct open, not from a group the store lacks.
 const FOLDER: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 const SERVED_GROUPS = OPTIONAL_GROUPS.filter((group) => !FOLDER.has(group));
 

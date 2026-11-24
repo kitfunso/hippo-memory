@@ -1,5 +1,3 @@
-// Pages of the /v1 list routes: the rows a page keeps, its next cursor, and the header a bare-array
-// route sends it in.
 import type { ServerResponse } from 'node:http';
 import { encodeCursor } from '../../api/cursor.js';
 import { keysetPage, type KeysetPosition } from '../../base/util/keyset.js';

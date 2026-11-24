@@ -1,4 +1,3 @@
-// The event row the delivery recorder writes.
 import {
   hookPayloadSessionId,
   hookPayloadString,
@@ -18,15 +17,11 @@ import type {
 import type { DeliveryRecorderInit } from './delivery-recorder.js';
 import type { Candidate, ObservedPick, RecorderState } from './delivery-observation.js';
 
-/** Only the per-prompt calls keep prompt facts; a boundary or a `hippo context` run is not a
- * prompt. */
 const carriesPrompt = (type: DeliveryEventType): boolean =>
   type === 'prompt-submit' || type === 'pinned-manual';
 
-/** Rejected candidate rows kept per event; the rest only add to `rejected_unlisted`. */
 const DELIVERY_REJECTED_ROW_CAP = 16;
 
-// Deeper stages were closer to being sent, so the row cap keeps them first.
 const STAGE_DEPTH: ReadonlyMap<DeliveryStage, number> = new Map<DeliveryStage, number>([
   ['load', 0],
   ['eligible', 1],
@@ -66,7 +61,6 @@ export function readPayload(init: DeliveryRecorderInit): PayloadFacts {
   const hostTurnId = rawTurnId !== null && rawTurnId.trim() !== '' ? rawTurnId : null;
   const hookEvent = hookPayloadString(init.stdinText, 'hook_event_name');
   const rawToolUseId = hookPayloadString(init.stdinText, 'tool_use_id')?.trim() ?? '';
-  // Cut as failure_log cuts its payload fields: the payload is not trusted to be short.
   const toolUseId = rawToolUseId !== '' ? rawToolUseId.slice(0, MAX_HOOK_FIELD_LEN) : null;
   const sessionState: DeliverySessionState = subagent
     ? 'subagent'
@@ -80,7 +74,6 @@ export function readPayload(init: DeliveryRecorderInit): PayloadFacts {
 
 function pickedPool(p: ObservedPick, held: Candidate | undefined): DeliveryPool {
   if (p.promptRecall) return 'prompt-recall';
-  // A ranked call's rows keep the ranking that chose them, a pinned hit included.
   if (held?.pool === 'search' || held?.pool === 'strength') return held.pool;
   return held?.pool === 'pin' || p.entry.pinned ? 'pin' : 'recent';
 }
@@ -107,12 +100,10 @@ function pickedRows(state: RecorderState): DeliveryCandidateInput[] {
 interface RejectedRows {
   rows: DeliveryCandidateInput[];
   rejected: number;
-  /** Offered but never judged. */
   undecided: number;
   overflow: number;
 }
 
-/** Rejected candidates deepest first, capped at DELIVERY_REJECTED_ROW_CAP rows. */
 function rejectedRows(state: RecorderState): RejectedRows {
   const rejected: Candidate[] = [];
   let undecided = 0;
@@ -174,8 +165,6 @@ function promptFields(
   payload: PayloadFacts,
   eventType: DeliveryEventType,
 ): Pick<DeliveryEventInput, 'promptHash' | 'promptLength'> {
-  // Whatever the payload holds, so a hook-run `hippo context` is never matched to an earlier row by
-  // its prompt.
   const prompt = carriesPrompt(eventType) ? payload.prompt : null;
   return {
     promptHash: prompt !== null ? blockHash(prompt) : null,

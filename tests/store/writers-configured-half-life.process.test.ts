@@ -1,5 +1,3 @@
-// Every path that writes a new memory starts it on the store's configured default
-// half-life, never the compiled one. Real stores and the built CLI; only the LLM fetch is stubbed.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
@@ -59,7 +57,6 @@ function store(): string {
   return root;
 }
 
-/** `hippo <args>` run in this process from the store's project dir, the call bin/hippo.js makes; returns the exit code. */
 async function hippoStatus(root: string, ...args: string[]): Promise<number> {
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
   const saved = process.cwd();
@@ -91,7 +88,6 @@ function seed(root: string, content: string, opts: Partial<Parameters<typeof cre
   return entry;
 }
 
-/** The memories `write` added to the store. */
 async function added<T>(root: string, write: () => T): Promise<MemoryEntry[]> {
   const before = new Set(loadAllEntries(root, 'default').map((e) => e.id));
   await write();
@@ -143,7 +139,6 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
       fs.writeFileSync(path.join(repo, 'a.txt'), 'x');
       git('add', 'a.txt');
       git('commit', '-q', '-m', 'fix: the parser dropped the trailing newline on windows paths during export');
-      // A fresh process names the project from the repo made after the store; in process that git config is never read.
       return added(root, () =>
         execFileSync(process.execPath, [HIPPO_BIN, 'learn', '--git', '--days', '30'], {
           cwd: repo,
@@ -157,7 +152,6 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     'CLI watch',
     (root) =>
       added(root, async () => {
-        // watch exits with the watched command's code.
         expect(await hippoStatus(root, 'watch', '--', 'node', '-e', 'process.exit(3)')).toBe(3);
       }),
   ],
@@ -213,7 +207,6 @@ const writers: [string, (root: string) => Promise<MemoryEntry[]>][] = [
     async (root) => {
       const vault = tmp();
       fs.writeFileSync(path.join(vault, 'note.md'), 'The on-call rota changes every Monday at 09:00.\n');
-      // The row itself goes through remember(); the result's copy must say what was stored.
       return (await importVault(vault, { tenantId: 'default', hippoRoot: root, name: 'notes' })).entries;
     },
   ],
@@ -300,7 +293,6 @@ describe('writers on a configured default half-life', () => {
   it.each(writers)('%s starts the new memory on the configured default', async (name, write) => {
     const root = store();
     const written = await write(root);
-    // The file import splits its two paragraphs into two rows; every other writer makes one row from its seed.
     expect(written).toHaveLength(name === 'file import' ? 2 : 1);
     for (const entry of written) {
       expect(entry.halfLifeDays).toBe(deriveHalfLife(CONFIGURED, entry));

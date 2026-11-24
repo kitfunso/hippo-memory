@@ -24,7 +24,6 @@ function mkdirs(...segments: string[]): string {
 beforeEach(() => {
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-pid-'));
   home = mkdirs('home');
-  // The global store lives in the home dir, like ~/.hippo on a real machine.
   fs.mkdirSync(path.join(home, '.hippo'), PRIVATE_DIR);
 });
 
@@ -123,7 +122,6 @@ describe('resolveProjectIdentity', () => {
   });
 
   it('the walk from a child project does not treat home/.hippo as a project marker', () => {
-    // No .hippo/.git in the project dir itself; home/.hippo must not win.
     const bare = mkdirs('home', 'bare-project');
     const id = resolveProjectIdentity(bare, { homeDir: home });
     expect(id.isHome).toBe(true);
@@ -163,7 +161,6 @@ describe('resolveProjectIdentity', () => {
     const proj = mkdirs('home', 'cached-app');
     fs.mkdirSync(path.join(proj, '.hippo'), PRIVATE_DIR);
     const first = resolveProjectIdentity(proj, { homeDir: home });
-    // Remove the marker; an uncached resolve must now differ.
     fs.rmdirSync(path.join(proj, '.hippo'));
     const second = resolveProjectIdentity(proj, { homeDir: home });
     expect(first.name).toBe('cached-app');

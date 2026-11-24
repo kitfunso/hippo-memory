@@ -1,6 +1,3 @@
-/**
- * Gemini CLI adapter: GEMINI.md's Added Memories section (user) and the projects.json-routed memory folder (project).
- */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';

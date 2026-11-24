@@ -1,5 +1,3 @@
-// Root-keyed goals and predictions forms tests call; production code goes through the port or the handle-first forms.
-
 import { CLI_ACTOR } from '../../../src/base/scope/actor.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type { CompleteGoalOptions, PushGoalOptions } from '../../../src/base/ports/store/goals.js';

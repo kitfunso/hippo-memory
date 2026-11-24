@@ -10,11 +10,7 @@
  * Extracted from hippo's internal agent-eval test suite.
  */
 
-export const N_TASKS = 62; // v1.8: 50 v1.7.x slots + 12 new (6 adversarial trap + 6 clean)
-
-// ---------------------------------------------------------------------------
-// Trap categories
-// ---------------------------------------------------------------------------
+export const N_TASKS = 62;
 
 export const TRAP_CATEGORIES = [
   {
@@ -77,10 +73,6 @@ export const TRAP_CATEGORIES = [
     tags: ['verification', 'metrics', 'agent-output'],
     recallQueries: ['model upgrade metrics improved', 'verifying model performance claims'],
   },
-  // ---------------------------------------------------------------------------
-  // v1.8.0 adversarial categories (lesson vocabulary <0.30 Jaccard vs v1.7.x).
-  // Fixed positions, no shape-group shuffle. See TRAP_PLACEMENTS adversarial flag.
-  // ---------------------------------------------------------------------------
   {
     id: 'timezone_naive',
     lesson: 'Persist instants in UTC. Wall-clock arithmetic across daylight-saving boundaries shifts events one hour; convert to local zone at presentation, never at storage.',
@@ -101,10 +93,6 @@ export const TRAP_CATEGORIES = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Trap placements: position -> trap category
-// ---------------------------------------------------------------------------
-
 export const TRAP_PLACEMENTS = [
   { category: 'overwrite_production', positions: [2, 22, 42] },
   { category: 'bare_except',          positions: [4, 28, 46] },
@@ -116,16 +104,10 @@ export const TRAP_PLACEMENTS = [
   { category: 'exit_code_trust',      positions: [16, 26] },
   { category: 'data_mining',          positions: [18, 40] },
   { category: 'unverified_metrics',   positions: [20, 50] },
-  // v1.8.0 adversarial: fixed positions (no shape-group shuffle), uniform across early/mid/late.
-  // Last 4 trap encounters by chronology = [48, 50, 51, 59] = 2 existing + 2 adversarial (mixed, NOT pure-adversarial).
   { category: 'timezone_naive',       positions: [11, 41], adversarial: true },
   { category: 'idempotency_retry',    positions: [21, 51], adversarial: true },
   { category: 'float_accumulation',   positions: [33, 59], adversarial: true },
 ];
-
-// ---------------------------------------------------------------------------
-// Clean task descriptions (for non-trap positions)
-// ---------------------------------------------------------------------------
 
 const CLEAN_DESCRIPTIONS = [
   'Add logging to the data refresh script',
@@ -148,7 +130,6 @@ const CLEAN_DESCRIPTIONS = [
   'Refactor error codes to enum',
   'Add pagination to list endpoint',
   'Update monitoring alerts threshold',
-  // v1.8.0: 6 new clean descriptions for the expanded 62-task workload.
   'Add caching layer to user profile lookups',
   'Update OpenAPI schema for new query params',
   'Refactor session middleware to use middleware chain',
@@ -156,21 +137,6 @@ const CLEAN_DESCRIPTIONS = [
   'Document the cron schedule for batch jobs',
   'Add fixture data generator for integration tests',
 ];
-
-// ---------------------------------------------------------------------------
-// Phase boundaries (PRE-LOCKED for v1.7.5 multi-seed harness)
-// ---------------------------------------------------------------------------
-//
-//   early = positions  1..17 (trap-slots: 2,4,6,8,10,12,14,16)             8 slots
-//   mid   = positions 18..34 (trap-slots: 18,20,22,24,26,28,30,32,34)      9 slots
-//   late  = positions 35..50 (trap-slots: 36,38,40,42,44,46,48,50)         8 slots
-//                                                                       --------
-//                                                                  total: 25 slots
-//
-// "phase shape" = the multiset of phases a category spans across its 2-3 slots.
-// Categories with the same shape form a "shape group". Seeded variance =
-// shuffle the assignment of categories to slot-tuples WITHIN each shape group.
-// Slot positions stay fixed; only WHICH category lands at each slot rotates.
 
 import { mulberry32 } from '../../scripts/lib/prng.mjs';
 
@@ -224,8 +190,6 @@ function deriveSubSeed(baseSeed, groupSalt) {
 function buildSeededTrapMap(seed) {
   const trapMap = new Map();
 
-  // v1.8.0: adversarial categories use fixed positions (no shape-group shuffle).
-  // Place them first so existing-10 shape-group shuffling is unchanged from v1.7.x.
   const nonAdversarialPlacements = [];
   for (const tp of TRAP_PLACEMENTS) {
     if (tp.adversarial) {
@@ -235,24 +199,17 @@ function buildSeededTrapMap(seed) {
     }
   }
 
-  // Group non-adversarial categories by their canonical phase shape (e.g. "early,mid,late").
-  const phasePatternGroups = new Map(); // phase pattern -> [{category, positions}]
+  const phasePatternGroups = new Map();
   for (const tp of nonAdversarialPlacements) {
     const phasePattern = tp.positions.map(phaseOf).sort().join(',');
     if (!phasePatternGroups.has(phasePattern)) phasePatternGroups.set(phasePattern, []);
     phasePatternGroups.get(phasePattern).push(tp);
   }
 
-  // Salt per shape group keeps streams independent across groups. Sort by
-  // shape key for determinism (Map insertion order is non-deterministic
-  // across spec versions; explicit sort future-proofs the seeded output).
   const sortedPhasePatterns = [...phasePatternGroups.keys()].sort();
 
   sortedPhasePatterns.forEach((phasePattern, idx) => {
     const group = phasePatternGroups.get(phasePattern);
-    // Shuffle the array of category IDs within this group. The list of
-    // slot-tuples stays in canonical order; we only rotate which category
-    // attaches to which tuple.
     const categoryIds = group.map((tp) => tp.category);
     const slotTuples = group.map((tp) => tp.positions);
     const rng = mulberry32(deriveSubSeed(seed, idx + 1));
@@ -266,10 +223,6 @@ function buildSeededTrapMap(seed) {
 
   return trapMap;
 }
-
-// ---------------------------------------------------------------------------
-// Task generator
-// ---------------------------------------------------------------------------
 
 /**
  * Generate the N_TASKS-task sequence.

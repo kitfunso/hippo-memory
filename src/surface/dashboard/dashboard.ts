@@ -1,5 +1,3 @@
-// The dashboard's JSON API behind the Health view and the Board; surface/server/dashboard-routes.ts
-// maps each path here.
 import type * as http from 'node:http';
 import type { DashboardContext, DashboardRouteRequest } from '../server/dashboard-types.js';
 import { readBody, sendJson } from '../http/http-util.js';
@@ -32,7 +30,6 @@ function sendOrNotFound<T extends object>(res: http.ServerResponse, body: T | nu
   else sendJson(res, 200, body);
 }
 
-/** The Refresh button's flag: take a new snapshot id now, not when the clock says. */
 const freshOf = (r: DashboardRouteRequest): boolean => r.query.get('fresh') === '1';
 
 export async function overviewRoute(r: DashboardRouteRequest): Promise<void> {
@@ -56,8 +53,6 @@ export async function searchRoute(r: DashboardRouteRequest): Promise<void> {
   sendOrNotFound(r.res, await r.reader.search(parseSearchText(r.query), freshOf(r)));
 }
 
-// next_cursor rides only a page with more after it, so a board that fits one page gets its old
-// reply byte for byte.
 export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
   const after = parseCursor(r.query.get('cursor'), 'string', 'string');
   const { cards, next } = await r.ctx.store.cards.list(r.ctx.tenantId, {
@@ -68,7 +63,6 @@ export async function cardsRoute(r: DashboardRouteRequest): Promise<void> {
 }
 
 export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promise<void> {
-  // The Board has always answered 404, not 400, for an id that does not fit the pattern.
   sendOrNotFound(
     r.res,
     CARD_ID.test(id!) ? await r.ctx.store.cards.detail(r.ctx.tenantId, id!) : null,
@@ -77,8 +71,6 @@ export async function cardRoute(r: DashboardRouteRequest, { id }: Params): Promi
 
 type Action = (ctx: DashboardContext, body: ActionBody) => Promise<ActionResult>;
 
-// Nothing runs until the content type and the body pass; a committed write then moves the snapshot
-// id before the reply.
 async function runAction(r: DashboardRouteRequest, action: Action): Promise<void> {
   const { req, res } = r;
   if (!JSON_CONTENT_TYPE.test(req.headers['content-type'] ?? '')) {

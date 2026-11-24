@@ -12,8 +12,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The stand-in fallback REVERSES its input, so a fallback is distinguishable
-// from both a Jev ordering and an identity ordering.
 const reversingFallback: RerankerFn = async (_query, results) =>
   [...results].reverse().map((r, i) => ({
     ...r,
@@ -22,7 +20,6 @@ const reversingFallback: RerankerFn = async (_query, results) =>
     postRerankRank: i + 1,
   }));
 
-// warn-once is per reranker, so every test builds its own.
 const freshReranker = (): RerankerFn => createJevReranker(reversingFallback, processHttp);
 
 const FAKE_KEY = 'fake-key-for-tests';

@@ -1,9 +1,7 @@
 export interface WaitForOptions {
   readonly timeoutMs?: number;
   readonly intervalMs?: number;
-  /** Named in the timeout error so a failure says what never happened. */
   readonly what?: string;
-  /** A throw from `check` counts as "not yet", for a store another process holds locked; the last one is named in the timeout error. */
   readonly retryOnThrow?: boolean;
 }
 

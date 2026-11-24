@@ -15,15 +15,10 @@ import type { AmbientStoreFilter } from '../../../base/ports/store/context-reads
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { isJsonNumber, isJsonString, parseJson } from '../../../base/util/json.js';
 
-// The SQL form of isErrorTagged, built from its constants; the values are fixed words, never input.
 const ERROR_TAG_SQL =
   `value IN (${ERROR_TAGS.map((tag) => `'${tag}'`).join(', ')}) ` +
   `OR substr(value, 1, ${ERROR_TAG_PREFIX.length}) = '${ERROR_TAG_PREFIX}'`;
 
-/**
- * A secret tag's row, the half of detectSecret SQL can check; the LIKEs only skip json_each on rows
- * that cannot match.
- */
 function secretTaggedSql(): SqlFragment {
   const tags = [...SECRET_TAGS];
   return {
@@ -34,8 +29,6 @@ function secretTaggedSql(): SqlFragment {
   };
 }
 
-/** How many times each tag occurs across the rows `scope` admits, grouped in SQL and returned as
- * one row in first-seen order; an item reads as its String() form, as parseJsonArray maps it. */
 function countTags(
   db: DatabaseSyncLike,
   scope: string,

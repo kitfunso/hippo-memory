@@ -203,7 +203,6 @@ describe('claudeCodeAdapter project layouts', () => {
     const home = tmp();
     const plain = claudeFolder(project);
     const config = configOf(home);
-    // Both spellings exist so a case-sensitive disk lists each platform's choice.
     writeIn(
       path.join(config, 'projects', plain, 'memory'),
       'a.md',

@@ -1,6 +1,3 @@
-// The rows a kind of record serves under its collection path, built from one spec so the route
-// table names each kind once: create, list, the kind's literal sub-paths, its POST actions on one
-// id, then the id read.
 import type { GroupRequest, Route, RouteParams } from '../types.js';
 
 /** A request on a store boot proved holds objects, as every kind's row needs. */
@@ -20,12 +17,10 @@ export interface NamedRoute {
 }
 
 export interface KindRoutes {
-  /** The collection path, such as `/v1/policies`. */
   readonly base: string;
   readonly create: KindHandler;
   readonly list: KindHandler;
   readonly named?: readonly NamedRoute[];
-  /** `POST <base>/:id/<action>`, in this order. */
   readonly actions: Readonly<Record<string, IdHandler>>;
   readonly get: IdHandler;
 }

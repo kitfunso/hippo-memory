@@ -1,5 +1,3 @@
-// `hippo daily-runner`: the machine-level daily sleep across every registered workspace.
-
 import { HOUR_MS, MINUTE_MS } from '../../base/util/time.js';
 import { pruneSessionFiles } from '../capture/session-worker.js';
 import type { Log } from '../../infra/spool-files.js';
@@ -19,14 +17,8 @@ import { printAgentImport } from './print.js';
 import { repairQualityOnce } from './quality-repair-once.js';
 import { plural } from '../../base/util/format.js';
 
-// Three times the 10 minutes POST /v1/sleep allows a consolidation, so a slow real sleep fits and a
-// hung child cannot stall every later workspace.
 const DAILY_STEP_TIMEOUT_MS = 30 * MINUTE_MS;
 
-/**
- * Why a child step failed; a child killed at the deadline says so, since its own message is only
- * the spawn error code.
- */
 function dailyStepFailure<E>(err: E, timeoutMs: number): string {
   if (errorCode(err) === 'ETIMEDOUT') {
     return `timed out after ${timeoutMs} ms and was stopped`;
@@ -36,8 +28,6 @@ function dailyStepFailure<E>(err: E, timeoutMs: number): string {
 
 export async function handleDailyRunner({ tenantId }: CommandContext): Promise<void> {
   const globalRoot = hippoHomeDir();
-  // No workspace sleep ever opens the global store, yet hooks in folders without a store compact
-  // into it.
   if (isInitialized(globalRoot)) await finishGlobalCompactions(globalRoot, tenantId);
   printAgentImport(
     await importUserMemories(globalRoot, cliSyncOptions(tenantId, currentMachine())),
@@ -46,8 +36,6 @@ export async function handleDailyRunner({ tenantId }: CommandContext): Promise<v
   const workspaces = listRegisteredWorkspaces(globalRoot);
 
   const { runStep, counts } = dailyStepRunner(envDailyStepTimeoutMs() ?? DAILY_STEP_TIMEOUT_MS);
-  // Before the no-workspace return: a box with no workspaces still has a global store that hooks
-  // write to.
   if (isInitialized(globalRoot)) await sleepGlobalStore(globalRoot, tenantId, runStep);
 
   if (workspaces.length === 0) {
@@ -76,7 +64,6 @@ async function finishGlobalCompactions(globalRoot: string, tenantId: string): Pr
 
 interface DailyStepRunner {
   readonly runStep: (cwd: string, args: string[]) => void;
-  /** Mutated by runStep, so the closing report reads the totals of every step it ran. */
   readonly counts: { processed: number; failed: number };
 }
 
@@ -108,8 +95,6 @@ function dailyStepRunner(timeout: number): DailyStepRunner {
 
 const GLOBAL_SLEEP_GAP_MS = 20 * HOUR_MS;
 
-/** Sleeps the global store once a day, as a child step like a workspace's; an unreadable history
- * sleeps it anyway. */
 async function sleepGlobalStore(
   globalRoot: string,
   tenantId: string,
@@ -136,7 +121,5 @@ function reportDailyRun(processed: number, failed: number): void {
     `Daily maintenance complete: ${plural(processed, 'workspace')} processed, ` +
       `${plural(failed, 'command failure')}.`,
   );
-  // The scheduler that runs this only sees the exit code, so a failed workspace must not read as a
-  // clean run.
   if (failed > 0) process.exitCode = 1;
 }

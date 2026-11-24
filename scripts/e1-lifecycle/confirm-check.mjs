@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Checks for docs/evals/2026-09-28-e1-release-confirmation-prereg.md. r4-seeds, params and gates run before any
-// compare and read no verdict: the generator, run metadata, control arms, and for M4 only whether two arms differ.
-// diff and split run with the lanes.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateProtocol } from './generate.mjs';
@@ -12,7 +9,6 @@ const USAGE = 'usage: confirm-check.mjs r4-seeds <from> <count> | params <dir> <
 const fail = (msg) => { throw new Error(msg); };
 const [mode, ...rest] = process.argv.slice(2);
 
-// compare.mjs's seed syntax ("121-140", "1,5"), except that a bad token, a reversed range or a repeat throws.
 function parseSeeds(spec = '') {
   const seeds = spec.split(',').flatMap((s) => {
     const m = s.match(/^(\d+)(?:-(\d+))?$/);
@@ -31,7 +27,6 @@ const runFile = (ref, seed) => {
 const epochs = (ref, seed) => runFile(ref, seed).epochs;
 const differing = (a, b) => Object.keys({ ...a, ...b }).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
 
-// A hard negative's fact comes from its token, not its position: NEG{f}N{n}D####, or VAL{f}X1D#### for a v1 paraphrase (generate.mjs:258, :288).
 function afterV1Share(seed, lookalikeWindow) {
   const p = generateProtocol(lookalikeWindow ? { seed, lookalikeWindow } : { seed });
   const negs = p.memories.filter((m) => m.kind === 'distractor');
@@ -44,8 +39,6 @@ function afterV1Share(seed, lookalikeWindow) {
   return after.length / negs.length;
 }
 
-// compare.mjs's one-group boot, copied because compare.mjs is a CLI with no exports.
-// split's nonStaleR5 line must match compare.mjs's to the digit.
 const quantile = (sorted, p) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)))];
 const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
 function boot(bySeed, B = 10000) {
@@ -78,7 +71,6 @@ if (mode === 'r4-seeds') {
   }
   console.log(`R4 seeds: ${kept.join(',')}`);
 } else if (mode === 'params') {
-  // halfLife sits outside protocolHash (run.mjs:211), so compare.mjs cannot see a wrong --half-life.
   const [dir, arms, spec, window, after] = rest;
   const seeds = parseSeeds(spec);
   const lockMs = Date.parse(after);
@@ -103,7 +95,6 @@ if (mode === 'r4-seeds') {
   const seeds = parseSeeds(spec);
   if (seeds.length !== 20) fail(`gates read the main block's 20 seeds, got ${seeds.length}`);
   const report = (lanes, what, n) => console.log(`${lanes}: ${what} on ${n}/20 seeds (needs 18): ${n >= 18 ? 'PASS' : 'FAIL'}`);
-  // A lane whose control arm fails its gate has no verdict: the workload did not exercise the mechanism. A missing value fails.
   for (const [lanes, arm, metric, bar, pass] of [
     ['C2 C4 C5', 'bm25-static', 'trapPersistenceRate', '>= 0.20', (x) => x >= 0.2],
     ['M1', 'outcome-off', 'trapPersistenceRate', '>= 0.20', (x) => x >= 0.2],
@@ -131,7 +122,6 @@ if (mode === 'r4-seeds') {
   }
   console.log(`${refA} vs ${refB}: identical on ${same}/${seeds.length} seeds`);
 } else if (mode === 'split') {
-  // The paper splits currentR5 into facts that changed and facts that never did (paper.tex:434-435); compare.mjs has only the second.
   const [refA, refB, spec] = rest;
   const seeds = parseSeeds(spec);
   const rows = seeds.map((s) => {

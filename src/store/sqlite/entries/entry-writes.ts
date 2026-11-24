@@ -1,5 +1,3 @@
-// hippo.db's EntryWrites group: the writes remember, outcome, supersede, archive and forget run,
-// and the shared entry write path.
 import { deleteMemoryOnlyGraphRows } from '../graph/graph-writes.js';
 import { type MemoryEntry, markRetrieved } from '../../../base/memory/entry.js';
 import { entryAfterOutcome } from '../../../base/memory/keep-rules.js';
@@ -71,10 +69,7 @@ export interface WriteEntryOptions {
   afterCommit?: () => void;
 }
 
-/** Store-side only, never exported from a package entry: `afterWrite` hands the write's own db
- * handle to the hook. */
 interface WriteEntryInternalOptions extends WriteEntryOptions {
-  /** Runs in the same SAVEPOINT as the INSERT, so a throw rolls the row back. */
   afterWrite?: (db: DatabaseSyncLike, memoryId: string) => void;
 }
 
@@ -122,7 +117,6 @@ export function writeEntriesTogether(
     });
     for (const entry of stamped) writeEntryMirrors(files.hippoRoot, entry);
   } catch (error) {
-    // The scope has unwound, so the refusal row outlives the rollback, as writeEntry's does.
     if (error instanceof RejectedValueError) auditRejectionRefusal(db, error, CLI_ACTOR);
     throw error;
   }
@@ -146,8 +140,6 @@ export function writeEntriesSkippingRejected(
       try {
         writeEntryDbOnly(db, stamped, { actor });
       } catch (error) {
-        // Skipped like a tombstoned value, so one foreign id cannot abort a sync or share batch;
-        // the audit ops are a published list, so the refusal is logged instead of audited.
         if (error instanceof CrossTenantIdError) {
           log.warn(`${error.message}; row skipped`, errorFields(error));
           return false;
@@ -195,8 +187,6 @@ export function writeEntryOn(
     opts?.afterCommit?.();
     writeEntryMirrors(files.hippoRoot, stamped);
   } catch (error) {
-    // writeEntryDbOnly's write scope has already unwound here, so the refusal audit lands
-    // post-rollback in a fresh implicit transaction; then rethrow so the caller sees it.
     if (error instanceof RejectedValueError) {
       auditRejectionRefusal(db, error, opts?.actor ?? CLI_ACTOR);
     }
@@ -212,8 +202,6 @@ export function writeEntryDbOnly(
   entry: MemoryEntry,
   opts?: Pick<WriteEntryInternalOptions, 'actor' | 'afterWrite'>,
 ): void {
-  // Inside a caller's transaction (e.g. supersede's BEGIN IMMEDIATE) the scope is a SAVEPOINT, so a
-  // throw here rolls back only this write and leaves the outer open.
   withWriteScope(db, 'write_entry', () => {
     upsertEntryRow(db, entry);
     if (opts?.afterWrite) {
@@ -233,14 +221,11 @@ export function auditEntryWrite(db: DatabaseSyncLike, entry: MemoryEntry, actor:
     actor,
     tenantId,
   });
-  // A child write marks its summary parent dirty for the sleep-cycle rebuild; most writes have no
-  // parent, so the hot path pays one null check.
   if (entry.dagParentId) {
     markSummaryDirtyInTx(db, { summaryId: entry.dagParentId, tenantId: entry.tenantId, actor });
   }
 }
 
-/** What a row write's `remember` audit row records. */
 function rememberAuditMetadata(entry: MemoryEntry) {
   return { kind: entry.kind ?? 'distilled', scope: entry.scope ?? null };
 }
@@ -250,8 +235,6 @@ export function writeEntryMirrors(hippoRoot: string, entry: MemoryEntry): void {
   mirrorBestEffort(`${entry.id}.md`, () => writeMarkdownMirror(hippoRoot, entry));
 }
 
-/** No ids, or a run that ablates the recall boost: nothing to strengthen, so no handle opens and
- * no scope starts. */
 function strengthensNothing(ids: readonly string[], opts: StrengthenOptions): boolean {
   return ids.length === 0 || opts.recallBoostAblated;
 }
@@ -305,9 +288,6 @@ export function strengthenRetrieved(
   }
 }
 
-// One statement text for any number of rows. Numbers round-trip through JSON exactly from 1e-80 up;
-// only the cached strength of a long-decayed wrong memory falls below, and that one may land a unit
-// in the last place off.
 const RETRIEVAL_UPDATE_SQL =
   `WITH v AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS rc, ` +
   `json_extract(value, '$[2]') AS lr, json_extract(value, '$[3]') AS hl, json_extract(value, '$[4]') AS st ` +
@@ -367,8 +347,6 @@ export function deleteEntryRowInTx(db: DatabaseSyncLike, entry: MemoryEntry, act
   }
 }
 
-// The last value given for an id wins, as a row-by-row write left it: UPDATE FROM applies any one
-// of an id's matches.
 const lastPerId = (pairs: ReadonlyArray<readonly [string, number | string]>): string =>
   JSON.stringify([...new Map(pairs)]);
 
@@ -418,7 +396,6 @@ export function stampOriginProjects(
   cachedStatement(db, ORIGIN_STAMP_SQL).run(lastPerId(rows.map((r) => [r.id, r.origin])), tenantId);
 }
 
-/** A tenant's row `id` and the source names it moves `from` and `to`. */
 interface RenameEntrySourceOptions {
   readonly tenantId: string;
   readonly id: string;
@@ -456,7 +433,6 @@ export function renameEntrySourceAndOrigin(
   return Number(done.changes ?? 0);
 }
 
-/** A tenant's row `id` and the row `newId` that supersedes it. */
 interface SupersedeEntryOptions {
   readonly tenantId: string;
   readonly id: string;
@@ -591,8 +567,6 @@ function notFound(id: string): NotFoundError {
   return new NotFoundError(memoryNotFoundText(id));
 }
 
-/** Another tenant's row, or one out of reach, answers as missing, so a caller learns nothing
- * about it. */
 function assertMayChange(db: DatabaseSyncLike, target: EntryTarget, id: string): void {
   const reach = readMemoryReach(db, id);
   const own = reach?.tenantId === target.tenantId ? reach : undefined;
@@ -625,10 +599,6 @@ export function writeInOwnTenant(
   );
 }
 
-/** The read, row rewrites, audit rows and mirror marks share one BEGIN IMMEDIATE transaction,
- * hippo.db's form of the port's row lock, each a set statement whatever the id count. Returns
- * one entry per applied id with repeats, as callers count them. An outcome never changes
- * content, so the rejected-value guard has nothing to check. */
 function applyOutcomeOn(
   db: DatabaseSyncLike,
   outcome: OutcomeWrite,
@@ -647,7 +617,6 @@ function applyOutcomeOn(
     }
     const rows = [...latest.values()];
     updateMemoryRows(db, rows);
-    // A good outcome drops the churn-stale tag; only those rows' indexed text changes.
     const retagged = rows.filter((row) => row.tags.join(' ') !== read.get(row.id)?.tags.join(' '));
     if (retagged.length > 0) {
       replaceFtsRows(
@@ -667,8 +636,6 @@ function applyOutcomeOn(
   });
 }
 
-/** Per applied id, the rows its own write used to add in turn: remember, the parent's first
- * dirty mark, outcome. */
 function outcomeAuditRows(
   applied: readonly MemoryEntry[],
   flipped: ReadonlyMap<string, number>,
@@ -721,19 +688,15 @@ export function commitSupersede(
   afterWrite?: WriteEntryInternalOptions['afterWrite'],
 ): void {
   const { tenantId, actor, oldId, successor } = write;
-  // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the
-  // aborted one cannot undo.
   auditingRefusal(db, actor, () =>
     withWriteScope(db, 'supersede', () => {
       assertMayChange(db, write, oldId);
-      // No row means another writer got there first.
       const won = cachedStatement(
         db,
         `UPDATE memories SET superseded_by = ? WHERE id = ? AND tenant_id = ? AND ${notSupersededIn()} ` +
           'RETURNING dag_parent_id',
       ).get(successor.id, oldId, tenantId) as { dag_parent_id: string | null } | undefined;
       if (!won) throw new ConflictError(`Memory ${oldId} already superseded by another writer`);
-      // After the CAS, so a lost race marks no parent for rebuild.
       if (won.dag_parent_id) {
         markSummaryDirtyInTx(db, { summaryId: won.dag_parent_id, tenantId, actor });
       }
@@ -745,8 +708,6 @@ export function commitSupersede(
   );
 }
 
-/** A mirror left on disk would bring the archived row back on the next import; on failure the
- * reaper retries, as mirror_cleaned_at stays NULL. */
 function cleanArchivedMirrors(db: DatabaseSyncLike, files: StoreFiles, id: string): void {
   try {
     removeEntryMirrors(files.hippoRoot, id);

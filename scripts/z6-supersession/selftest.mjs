@@ -1,4 +1,3 @@
-// The Z6 --selftest: checks the committed fixture, the labeller and the output parsers; spawns nothing and writes nothing.
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -9,8 +8,6 @@ import {
   reasonTest, contextShows, labelChange, labelControl, fillerCounts, fillerLostTotal, changeDiagnostics, computeVerdict,
 } from './scoring.mjs';
 import { rootBaseOk, dailyRunnerOk, parseWorkerLog, checkHooks, parseRankedIds, parseExplainBlocks } from './output-checks.mjs';
-
-// --- selftest ---
 
 function selftestFixtureContract(fx, check) {
   const problems = fixtureProblems(fx);
@@ -40,7 +37,6 @@ async function selftestQuestionReach(fx, check, distDir) {
   const tokenize = search.tokenize;
   const content = (t) => new Set(tokenize(t).filter((w) => !STOP.has(w)));
   const shares = (a, b) => { const B = content(b); return [...content(a)].some((w) => B.has(w)); };
-  // N/50 counts scenarios, not statement pairs: a scenario counts once, only if every one of its statements reaches.
   let hit = 0;
   for (const s of fx.scenarios) {
     const ok = s.statements.every((st) => {
@@ -56,13 +52,10 @@ async function selftestQuestionReach(fx, check, distDir) {
 }
 
 function selftestLabeller(check) {
-  // synthetic row helper: minimal RowMeta plus pre-set values/flags for direct label-function tests
   const row = (id, db, content, step, stmtK, extra = {}) => ({ id, db, content, superseded_by: null, kind: 'episodic', confidence: 'observed', tags: [], layer: 'episodic', source: 'cli', firstSeen: { step, stmtK }, ...extra });
-  // The line shape printContextMarkdown writes for an observed row, so label tests exercise the real context regex.
   const ctxLine = (content) => `- **[observed] Previously observed (2026-01-01): ${content}**`;
   const throwsHook = (fn) => { try { fn(); return false; } catch (err) { return /hook mismatch/.test(err.message); } };
   const stmts2 = [{ marker: 'Mumbai' }, { marker: 'Delhi' }].map((s, i) => ({ marker: i === 0 ? 'Mumbai' : 'Delhi' }));
-  // S = statements[0] (Mumbai), C = statements[1] (Delhi) for these synthetic checks (K=2).
   const h = { row, ctxLine, throwsHook, stmts2 };
   selftestLabelCases(check, h);
   selftestAttribution(check, h);
@@ -77,18 +70,15 @@ function selftestLabeller(check) {
 
 function selftestLabelCases(check, h) {
   const { row, ctxLine, stmts2 } = h;
-  // a: neither statement captured.
   { const rows = new Map(); computeValues([], stmts2);
     const r = labelChange(rows, new Set(), stmts2, '', [], []);
     check(r.label === 'a', 'labelChange: a when nothing captured'); }
 
-  // x: captured but not present at ask time.
   { const rows = new Map([['s1', row('s1', 'local', 'moved to Mumbai', 1, 1)], ['c1', row('c1', 'local', 'now in Delhi', 2, 2)]]);
     computeValues([...rows.values()], stmts2);
     const r = labelChange(rows, new Set(), stmts2, '', [], []);
     check(r.label === 'x', 'labelChange: x when captured rows are gone by the ask'); }
 
-  // d: S retired with a reason that links to C, C shown, S shown nowhere.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -98,7 +88,6 @@ function selftestLabelCases(check, h) {
     const r = labelChange(rows, finalIds, stmts2, ctxLine('now in Delhi'), ['c1'], blocks);
     check(r.label === 'd', 'labelChange: d when S is retired, linked, with a reason, and only C is shown'); }
 
-  // d0: same shape but the reason test fails (no cross reference).
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -108,7 +97,6 @@ function selftestLabelCases(check, h) {
     const r = labelChange(rows, finalIds, stmts2, ctxLine('now in Delhi'), ['c1'], blocks);
     check(r.label === 'd0', 'labelChange: d0 when retired but no reason links S to C'); }
 
-  // s: S shown, C not shown.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -116,7 +104,6 @@ function selftestLabelCases(check, h) {
     const r = labelChange(rows, new Set(['s1', 'c1']), stmts2, ctxLine('moved to Mumbai'), ['s1'], []);
     check(r.label === 's', 'labelChange: s when only the stale value is shown'); }
 
-  // n: neither shown.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -124,7 +111,6 @@ function selftestLabelCases(check, h) {
     const r = labelChange(rows, new Set(['s1', 'c1']), stmts2, '', [], []);
     check(r.label === 'n', 'labelChange: n when neither surface shows anything'); }
 
-  // c: C shown, S active but not shown anywhere (vacuous win).
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -136,7 +122,6 @@ function selftestLabelCases(check, h) {
     const recallView = labelChange(rows, new Set(['s1', 'c1']), stmts2, ctxLine('now in Delhi'), [], [], { context: false, recall: true });
     check(recallView.label === 'n', 'labelChange: the recall-only view ignores what context showed'); }
 
-  // b: both shown, S wins on a surface where C also shows (current does not win everywhere S shows).
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -147,30 +132,25 @@ function selftestLabelCases(check, h) {
 
 function selftestAttribution(check, h) {
   const { row, stmts2 } = h;
-  // attribution: own marker wins even when the other marker also appears.
   { const r1 = row('r1', 'local', 'moved from Delhi to Mumbai', 1, 1);
     computeValues([r1], stmts2);
     check(r1.values.has('mumbai') && r1.values.size === 1, 'attribution: own-step marker wins over a mentioned other marker'); }
 
-  // attribution: echo (wrong statement's marker, none of its own) carries no value, and a derived copy of it carries none either.
   { const r1 = row('r1', 'local', 'still thinking about Delhi', 1, 1);
     const der = row('der', 'local', '[Consolidated from 2 related memories]\n\nstill thinking about Delhi', 3, null);
     computeValues([r1, der], stmts2);
     check(r1.values.size === 0 && r1.flags.includes('echo'), 'attribution: echo row carries no value and is flagged');
     check(der.values.size === 0 && !der.flags.includes('unlinked'), 'attribution: a derived row quoting an echo row carries no value and is linked'); }
 
-  // attribution: derived row linked to one earlier member.
   { const src = row('src', 'local', 'now in Delhi for work', 2, 2);
     const der = row('der', 'local', '[Consolidated from 1 memory]\n\nnow in Delhi for work', 3, null);
     computeValues([src, der], stmts2);
     check(der.values.has('delhi') && !der.flags.includes('unlinked'), 'attribution: derived row inherits its source member\'s values'); }
 
-  // attribution: derived row with no linkable source falls back to marker scan, flagged unlinked.
   { const der = row('der', 'local', '[Consolidated summary]\n\nliving in Delhi now', 3, null);
     computeValues([der], stmts2);
     check(der.values.has('delhi') && der.flags.includes('unlinked'), 'attribution: unlinked derived row falls back to a marker scan'); }
 
-  // attribution: exact global copy inherits values and does not count as captured.
   { const loc = row('loc', 'local', 'now in Delhi', 2, 2);
     const glob = row('glob', 'global', 'now in Delhi', 4, null);
     const rows = new Map([['loc', loc], ['glob', glob]]);
@@ -178,8 +158,6 @@ function selftestAttribution(check, h) {
     check(glob.values.has('delhi') && !glob.flags.includes('unlinked'), 'attribution: exact global copy inherits its local source\'s values');
     check(captured(2, 'Delhi', rows) && !captured(4, 'Delhi', rows), 'attribution: a global copy is never itself a captured carrier'); }
 
-  // reversal: S (step-2 pnpm) captured but C (step-3 npm reassertion) never its own row gives a, missing new.
-  // captured() binds on firstSeen.stmtK exactly, so a step-1 "npm" row cannot stand in for the step-3 one.
   { const rev = [{ marker: 'npm' }, { marker: 'pnpm' }, { marker: 'npm' }];
     const r1 = row('r1', 'local', 'use npm for installs', 1, 1);
     const r2 = row('r2', 'local', 'switched to pnpm for installs', 2, 2);
@@ -191,27 +169,22 @@ function selftestAttribution(check, h) {
 
 function selftestParsers(check, h) {
   const { row } = h;
-  // context regex: all three prefixes match; a substring hit inside a longer stored row does not.
   { const target = row('t', 'local', 'Always use tabs in the web repo.', 1, 1);
     check(contextShows(target, '- **[verified] Always use tabs in the web repo.** [tags]'), 'context: "] " prefix matches');
     check(contextShows(target, 'note): Always use tabs in the web repo.** end'), 'context: "): " prefix matches');
-    // ⚠️ is the real warn-label suffix cli.ts prints (confWarning); a bare unrelated emoji has no VS16 and would not match.
     check(contextShows(target, '- **[stale] ⚠️ Always use tabs in the web repo.** end'), 'context: emoji-variation-selector prefix matches');
     const longer = row('l', 'local', 'Reminder: Always use tabs in the web repo. Also ship the changelog.', 1, 1);
     check(!contextShows(target, '] ' + longer.content + '**'), 'context: a row whose text is a substring of another shown row does not itself match'); }
 
-  // explain block parsing: the rank table is excluded, a block ends at Note:.
   { const text = 'Rank  Score   ID\n1     0.5     mem_x  preview text\n\n[1] mem_x   composite=0.53\n    mode:      bm25-only\nNote: something\n[2] mem_y   composite=0.10\n    mode:      bm25-only';
     const blocks = parseExplainBlocks(text);
     check(blocks.length === 2 && blocks[0].id === 'mem_x' && !blocks[0].text.includes('Rank'), 'explain: rank table excluded from the first block');
     check(!blocks[0].text.includes('Note:'), 'explain: block ends at the Note: line'); }
 
-  // R19: two "--- id [" lines must both survive (matchAll, not the first-only match()).
   { const out = '--- mem_a [0.90]\ntext one\n--- mem_b [0.40]\ntext two\n';
     const ids = parseRankedIds(out);
     check(ids.length === 2 && ids[0] === 'mem_a' && ids[1] === 'mem_b', 'recall parse: two ranked ids survive in order'); }
 
-  // reason test: both directions pass, a bare status word with no cross reference fails.
   { const blocksS = [{ id: 's1', text: 'superseded by c1' }];
     check(reasonTest(blocksS, ['s1'], ['c1'], 'Mumbai', 'Delhi'), 'reason test: S block naming a C id passes');
     const blocksC = [{ id: 'c1', text: 'this replaced s1' }];
@@ -222,7 +195,6 @@ function selftestParsers(check, h) {
 
 function selftestControl(check, h) {
   const { row } = h;
-  // control: pass needs both statements stored; a restatement skipped as a duplicate counts as stored.
   { const ctrlStmts = [{ marker: 'Delhi' }, { marker: 'Delhi' }];
     const r1 = row('r1', 'local', 'I live in Delhi', 1, 1);
     const r2 = row('r2', 'local', 'Still based in Delhi', 2, 2);
@@ -265,10 +237,8 @@ function selftestControl(check, h) {
 }
 
 function selftestVerdict(check) {
-  // wilson(0, 20) upper bound is about 0.161.
   { const [lo, hi] = wilson(0, 20); check(lo === 0 && hi > 0.15 && hi < 0.17, 'wilson(0,20) upper bound is about 0.161'); }
 
-  // verdict: PASS, FAIL, VOID, PARTIAL.
   { const rows = [];
     for (let i = 0; i < 20; i++) rows.push({ id: `h${i}`, split: 'heldout', category: 'move', domain: 'personal', arm: 'capture', label: i < 18 ? 'd' : 'a', contextLabel: 'd', recallLabel: 'd', detail: {} });
     for (let i = 0; i < 5; i++) rows.push({ id: `hc${i}`, split: 'heldout', category: 'control-restate', domain: 'personal', arm: 'capture', label: 'pass', contextLabel: 'pass', recallLabel: 'pass', detail: {} });
@@ -294,7 +264,6 @@ function selftestVerdict(check) {
 
 function selftestRetirementLinks(check, h) {
   const { row, ctxLine, stmts2 } = h;
-  // R9: each retirement form is honoured.
   { for (const [label, r] of [
       ['superseded_by', row('r', 'local', 'x', 1, 1, { superseded_by: 'y' })],
       ['kind superseded', row('r', 'local', 'x', 1, 1, { kind: 'superseded' })],
@@ -303,11 +272,9 @@ function selftestRetirementLinks(check, h) {
       ['confidence stale', row('r', 'local', 'x', 1, 1, { confidence: 'stale' })],
     ]) check(isRetired(r), `retirement form recognized: ${label}`); }
 
-  // A derived row does not show its source in context: the source's own line needs its text right after the label.
   { const src = row('src', 'local', 'now in Delhi for work', 2, 2);
     check(!contextShows(src, ctxLine('[Consolidated from 2 related memories]\n\nnow in Delhi for work')), 'context: a derived row quoting a source does not count as the source shown'); }
 
-  // R9: link through a 2-hop superseded_by chain; a chain into a vanished row reaches nothing.
   { const a = row('a', 'local', 'x', 1, 1, { superseded_by: 'mid' });
     const mid = row('mid', 'local', 'y', 2, null, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
@@ -320,7 +287,6 @@ function selftestRetirementLinks(check, h) {
     const loop2 = row('l2', 'local', 'y', 2, 2, { superseded_by: 'l1' });
     check(!chainReaches(loop, new Map([['l1', loop], ['l2', loop2]]), () => false), 'link: a superseded_by cycle ends'); }
 
-  // d0 with a dangling link: S points at a C row that sleep removed, while a later C row is shown.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const c2 = row('c2', 'local', 'living in Delhi now', 3, 2);
@@ -330,7 +296,6 @@ function selftestRetirementLinks(check, h) {
     const r = labelChange(rows, new Set(['s1', 'c2']), stmts2, ctxLine('living in Delhi now'), [], blocks);
     check(r.label === 'd0' && r.detail.danglingLinks === 1 && r.detail.unlinkedRetired === 1, 'link: a chain into a vanished C row is dangling and blocks d'); }
 
-  // A stale S (not superseded_by) stays on the surfaces: counted as retired and shown, and labelled b.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { confidence: 'stale' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -338,7 +303,6 @@ function selftestRetirementLinks(check, h) {
     const r = labelChange(rows, new Set(['s1', 'c1']), stmts2, ctxLine('moved to Mumbai') + '\n' + ctxLine('now in Delhi'), [], []);
     check(r.label === 'b' && r.detail.sRetired === 1 && r.detail.sRetiredShown === 1, 'retired-but-shown: a stale S still in context is counted and gives b'); }
 
-  // The auto surface joins the union: S shown only there turns c into b; the auto-only view sees it alone.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -354,7 +318,6 @@ function selftestRetirementLinks(check, h) {
 
 function selftestDiagnostics(check, h) {
   const { row, ctxLine, throwsHook, stmts2 } = h;
-  // Derived-row diagnostics and the dedup value relation.
   { const s1 = row('s1', 'local', 'moved to Mumbai for the job', 1, 1);
     const c1 = row('c1', 'local', 'now in Delhi for the new job', 2, 2);
     const dc = row('dc', 'local', '[Consolidated from 2 related memories]\n\nnow in Delhi for the new job', 3, null);
@@ -367,7 +330,6 @@ function selftestDiagnostics(check, h) {
     check(diag.dedupDeletions.length === 2 && diag.dedupDeletions[0].kept === 'older' && diag.dedupDeletions[0].value === 'same', 'diagnostics: a derived row deduped against its own earlier copy is older/same');
     check(diag.dedupDeletions[1].kept === 'newer' && diag.dedupDeletions[1].value === 'other', 'diagnostics: an S row deduped into a C row is newer/other'); }
 
-  // The seven hook commands: the exact set passes; an extra or changed command voids the run.
   { const settings = () => ({ hooks: {
       SessionEnd: [{ hooks: [{ type: 'command', command: 'hippo session-end --log-file "/t/s.log"' }] }],
       SessionStart: [{ hooks: [{ type: 'command', command: 'hippo last-sleep --path "/t/s.log"' }] }, { matcher: 'compact', hooks: [{ type: 'command', command: 'hippo compact-resume' }] }],
@@ -384,7 +346,6 @@ function selftestDiagnostics(check, h) {
     changed.hooks.UserPromptSubmit[0].hooks[0].command = 'hippo context --auto --format additional-context';
     check(throwsHook(() => checkHooks(changed)), 'hooks: a changed prompt-hook command voids the run'); }
 
-  // R9: a retired global S copy with no link gives d0.
   { const localS = row('s1', 'local', 'moved to Mumbai', 1, 1);
     const globalS = row('gs', 'global', 'moved to Mumbai', 3, null, { superseded_by: null, confidence: 'stale' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
@@ -394,7 +355,6 @@ function selftestDiagnostics(check, h) {
     const r = labelChange(rows, finalIds, stmts2, ctxLine('now in Delhi'), ['c1'], []);
     check(r.label === 'd0', 'link: an unlinked retired global S copy blocks d and gives d0'); }
 
-  // R7: filler guard counts present filler rows by retirement.
   { const bg = row('bg', 'local', 'The staging database snapshot runs nightly.', 5, null);
     const bgGone = row('gone', 'local', 'An old note.', 6, null);
     const fillerNorm = new Set([norm('The staging database snapshot runs nightly.'), norm('An old note.')]);
@@ -406,7 +366,6 @@ function selftestDiagnostics(check, h) {
 
 function selftestWorkerAndGuards(check, h) {
   const { row, stmts2 } = h;
-  // R4: oracle success additionally needs reach (explain lists an S and a C carrier).
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -418,7 +377,6 @@ function selftestWorkerAndGuards(check, h) {
     const reach = blocksNoS.some((b) => sIds.has(b.id)) && blocksNoS.some((b) => cIds.has(b.id));
     check(!reach, 'oracle reach: false when explain never lists an S carrier'); }
 
-  // R1/R14/R18: worker-log parsing, tested against the real parseWorkerLog, not a reimplementation that could drift.
   { check(parseWorkerLog('No actionable items found in the input.').ok === false, 'worker log: missing the two complete markers is rejected even with a clean outcome line');
     const noCue = parseWorkerLog('[hippo] sleep complete\n[hippo] capture complete\nNo actionable items found in the input.');
     check(noCue.ok && noCue.outcome.type === 'no-cue', 'worker log: a clean no-cue log passes');
@@ -435,13 +393,11 @@ function selftestWorkerAndGuards(check, h) {
     check(!parseWorkerLog('had no user/assistant messages').ok, 'worker log: misfed session, empty session');
     check(!parseWorkerLog('skip: no session_id').ok, 'worker log: misfed session, no session id'); }
 
-  // R2/R18: the daily-runner summary line, the only proof the exit code alone does not give.
   { check(dailyRunnerOk('Daily maintenance complete: 1 workspace processed, 0 command failures.'), 'daily-runner line: 1 workspace processed, 0 failures passes');
     check(!dailyRunnerOk('Daily maintenance complete: 0 workspaces processed, 0 command failures.'), 'daily-runner line: 0 workspaces processed fails');
     check(!dailyRunnerOk('Daily maintenance complete: 1 workspace processed, 1 command failure.'), 'daily-runner line: 1 command failure fails');
     check(!dailyRunnerOk('No registered Hippo workspaces found; nothing to do.'), 'daily-runner line: no-registry note fails'); }
 
-  // R11/R18: root-base guard, tested as pure string logic so selftest creates no directory.
   { check(rootBaseOk(path.relative('/tmp', '/tmp/hz6q')), 'root-base guard: <tmp>/hz6q is accepted');
     check(!rootBaseOk(path.relative('/tmp', '/home/user/zzz')), 'root-base guard: a path outside the temp dir is refused');
     check(!rootBaseOk(''), 'root-base guard: the temp dir itself is refused');
@@ -450,7 +406,6 @@ function selftestWorkerAndGuards(check, h) {
 
 function selftestLossCauses(check, h) {
   const { row, stmts2 } = h;
-  // R15/R18: filler rows lost (not just retired) count against the verdict, split out by cause.
   { const lost = row('lost', 'local', 'The staging database snapshot runs nightly.', 5, null);
     const fillerNorm = new Set([norm('The staging database snapshot runs nightly.')]);
     const rows = new Map([['lost', lost]]);
@@ -468,7 +423,6 @@ function selftestLossCauses(check, h) {
     const sum = addCauses([{ dedup: 1, dormant: 0 }, undefined, { dedup: 2, unrecorded: 1 }]);
     check(sum.dedup === 3 && sum.unrecorded === 1, 'addCauses: sums per cause and skips missing entries'); }
 
-  // R16/R18: reach is recorded in the capture arm too, not just oracle, and does not change the label.
   { const s1 = row('s1', 'local', 'moved to Mumbai', 1, 1, { superseded_by: 'c1' });
     const c1 = row('c1', 'local', 'now in Delhi', 2, 2);
     const rows = new Map([['s1', s1], ['c1', c1]]);
@@ -479,7 +433,6 @@ function selftestLossCauses(check, h) {
     check(computeReach(blocks, sIds, cIds), 'reach: an explain listing both an S and a C id reaches, independent of arm');
     check(!computeReach([{ id: 'c1', text: '[1] c1' }], sIds, cIds), 'reach: explain listing only a C id does not reach'); }
 
-  // a/x reason and cause fields, added alongside R11-R18 since the first draft recorded only missing/vanished.
   { const stmt2 = [{ marker: 'Mumbai' }, { marker: 'Delhi' }];
     const outcomes = [{ k: 1, outcome: { type: 'captured', n: 0, m: 2, r: 0 } }];
     const rows = new Map();

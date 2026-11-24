@@ -13,10 +13,6 @@ import { dumpFrontmatter, parseFrontmatter } from '../util/yaml.js';
 
 type FrontmatterValue = string | number | boolean | null | string[] | number[];
 
-/**
- * Fixed-shape field set for `serializeEntry`'s frontmatter; tenant_id/origin_project are optional
- * so they stay absent from the YAML when unset.
- */
 interface EntryFrontmatterFields {
   id: FrontmatterValue;
   created: FrontmatterValue;
@@ -53,7 +49,6 @@ interface EntryFrontmatterFields {
   lead_in?: FrontmatterValue;
 }
 
-// Four decimal places: enough to tell two strengths apart, short enough to read in a mirror file.
 const MIRROR_SCALE = 10_000;
 
 /** A strength or score as every mirror file prints it. */
@@ -61,7 +56,6 @@ export function mirrorDecimal(value: number): number {
   return Math.round(value * MIRROR_SCALE) / MIRROR_SCALE;
 }
 
-/** The fields every mirror file carries; serializeEntry adds the optional ones. */
 function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
   return {
     id: wire.id,
@@ -89,8 +83,6 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
     scope: wire.scope ?? null,
     owner: wire.owner ?? null,
     artifact_ref: wire.artifact_ref ?? null,
-    // A rebuild from these files must keep supersession and the DAG; deserializeEntry reads all
-    // five.
     valid_from: wire.valid_from,
     superseded_by: wire.superseded_by,
     extracted_from: wire.extracted_from,
@@ -103,14 +95,10 @@ function entryFrontmatter(wire: MemoryWire): EntryFrontmatterFields {
 export function serializeEntry(entry: MemoryEntry): string {
   const wire = toWire(entry);
   const frontmatter = entryFrontmatter(wire);
-  // Emit tenant_id only when not 'default' to keep diffs clean for the dominant single-tenant case
-  // (mirrors the plan's task 7 guidance).
   const tenantId = wire.tenant_id ?? DEFAULT_TENANT_ID;
   if (tenantId !== DEFAULT_TENANT_ID) {
     frontmatter['tenant_id'] = tenantId;
   }
-  // v39: '' (user-global) and null (unknown, hidden by default) must both round-trip; only
-  // undefined (unstamped) is omitted, so a rebuild stamps nothing it can read.
   if (wire.origin_project !== undefined) {
     frontmatter['origin_project'] = wire.origin_project;
   }
@@ -191,7 +179,6 @@ function scoringWireOf(
 
 function confidenceOf(data: FrontmatterData): ConfidenceLevel {
   const given = data['confidence'];
-  // This parser reads a bare `confidence:` line as '', so it counts as missing like null.
   const value = given === undefined || given === null || given === '' ? 'observed' : given;
   const text = String(value);
   if (isConfidenceLevel(text)) return text;

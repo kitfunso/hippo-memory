@@ -1,4 +1,3 @@
-// A memory row whose JSON column will not parse still reads, as empty, and the row is named once at warn so the damage can be found.
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -80,7 +79,6 @@ describe('a memory row with a damaged JSON column', () => {
   });
 
   it('names each damaged column of a row, and each damaged row, on its own line', () => {
-    // A column an earlier case named at warn repeats at debug for this process, so debug keeps this case its own.
     vi.stubEnv('HIPPO_LOG', 'debug');
     const root = newRoot();
     const first = createMemory('first damaged row', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, tenantId: TENANT });

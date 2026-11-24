@@ -24,7 +24,6 @@ describe('Windows daily task', () => {
     expect(quoteInsideWindowsArg('C:\\a\\b')).toBe('C:\\a\\b');
   });
 
-  // It creates and runs a real scheduled task, so only on a throwaway CI machine, never a developer's.
   it.skipIf(process.platform !== 'win32' || !process.env.CI)(
     'creates a task whose quoted && command runs intact',
     async () => {
@@ -38,7 +37,6 @@ describe('Windows daily task', () => {
         expect(schtasks('/query', '/tn', name, '/xml')).toContain('<Command>conhost.exe</Command>');
         schtasks('/run', '/tn', name);
         const out = join(dir, 'out.txt');
-        // echo creates out.txt before it writes the line, so wait for the line, not the name.
         await waitFor(() => existsSync(out) && readFileSync(out, 'utf8').trim() !== '', {
           timeoutMs: 10_000,
           intervalMs: 200,

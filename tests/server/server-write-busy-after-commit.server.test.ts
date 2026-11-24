@@ -1,4 +1,3 @@
-// A busy store never fails a routed write that already committed, and a busy 503 always means nothing landed, so the thin client may replay it.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { StoreRuntime } from '../../src/db/store-runtime.js';
 import { createRequire } from 'node:module';
@@ -25,7 +24,6 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
   DatabaseSync: new (path: string) => DatabaseSyncLike;
 };
 
-/** A genuine SQLITE_BUSY from node:sqlite, so every check classifies it exactly as it would a held lock. */
 function realBusyError(dir: string): Error {
   const file = join(dir, 'busy-probe.db');
   const holder = new DatabaseSync(file);
@@ -60,7 +58,6 @@ async function forgottenTotal(root: string): Promise<number> {
   return Number((await sqliteStore(root).reports.stats()).total_forgotten);
 }
 
-/** Holds the store's write lock while `fn` runs, or until `fn` calls the release it is handed. */
 async function withLockHeld<T>(root: string, fn: (release: () => void) => Promise<T>): Promise<T> {
   const holder = new DatabaseSync(getHippoDbPath(root));
   holder.exec('BEGIN IMMEDIATE');
@@ -75,7 +72,6 @@ async function withLockHeld<T>(root: string, fn: (release: () => void) => Promis
   }
 }
 
-/** Runs a routed write with the lock held until the server has refused one try busy, so the client's retry lands it. */
 async function landedOnRetry<T>(root: string, write: () => Promise<T>): Promise<{ result: T; statuses: number[] }> {
   const realFetch = globalThis.fetch;
   const statuses: number[] = [];
@@ -110,7 +106,6 @@ describe('routed writes under a busy store', () => {
     vi.stubEnv('HIPPO_HOME', globalHome);
     initTestStore(globalHome);
     busyErr = realBusyError(home);
-    // The local key is a member, which may not change a row it does not own, so forget and archive send an admin key.
     adminKey = mintAdminKey(home);
     const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     url = handle.url;
@@ -201,7 +196,6 @@ describe('routed writes under a busy store', () => {
   });
 
   it('a stats increment a busy store refused is added to the next update for that root', async () => {
-    // The store runtime holds the refused increment, as a CLI or server process's does.
     const runtime = new StoreRuntime();
     try {
       const before = await forgottenTotal(home);
@@ -243,7 +237,6 @@ describe('routed writes under a busy store', () => {
   );
 
   it('MCP: a busy store answers with a retry message, not the generic internal error', () => {
-    // The adapter hands a driver busy code to every layer above it as the port's error.
     expect(mcpErrorResponse(7, portError(busyErr))).toEqual({
       jsonrpc: '2.0',
       id: 7,

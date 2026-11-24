@@ -11,7 +11,6 @@ const TARGET_ID_CHARS = 100;
 export type AutodebiasMode = 'off' | 'regex';
 
 export interface ComputePlanningFallacyHintOptions {
-  /** 'off' short-circuits to null before the regex gate; 'regex' when unset. */
   mode?: AutodebiasMode;
 }
 
@@ -33,7 +32,6 @@ export function detectPlanningClaim(
   queryText: string,
   opts: ComputePlanningFallacyHintOptions = {},
 ): ForwardClaimMatch | null {
-  // Checked FIRST so AUTODEBIAS=off pays zero regex cost.
   if ((opts.mode ?? 'regex') === 'off') return null;
   if (!queryText) return null;
   return detectForwardClaim(queryText);
@@ -49,18 +47,13 @@ export function decidePlanningFallacy(
 ): PlanningFallacyDecision {
   const by = { tenantId, actor };
   if (evidence.tiebreak) {
-    // Telemetry: forward-claim detected, ≥2 classes tied at best overlap. The watching variant lets
-    // the caller render "watching but no baserate (tiebreak)"; the audit channel stays the source
-    // of truth.
     return watchingWithAudit(match, 'tiebreak', TIEBREAK_SUGGESTION, by);
   }
   if (!evidence.classTag) {
-    // Telemetry: no class scored ≥ 1. High volume here means regex+token-overlap misses real
-    // forward-claims with no class signal, the case for an embedding fallback.
     return watchingWithAudit(match, 'no_class_match', NO_CLASS_MATCH_SUGGESTION, by);
   }
   const baserate = evidence.baserate;
-  if (!baserate || baserate.nClosed === 0) return { output: {} }; // Silent — wait for closed data.
+  if (!baserate || baserate.nClosed === 0) return { output: {} };
   return {
     output: {
       hint: {

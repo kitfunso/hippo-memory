@@ -22,8 +22,6 @@ import { gateConnectorWrite } from '../_helpers/write-gate.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
-// -- Test helpers ----------------------------------------------------------
-
 const ctx = (root: string): FullContext => apiCtx(root, 'default', { subject: 'connector:github', role: 'admin' });
 
 function makeIssueEvent(overrides: Partial<GitHubIssueEvent['issue']> = {}): GitHubIssueEvent {
@@ -108,7 +106,6 @@ interface LostRace {
   readonly winner: IngestResult;
 }
 
-/** The second worker's write of the same issue event, on its own context. */
 async function storeAsOtherWorker(root: string, { event }: IngestInput): Promise<IngestResult> {
   const opts = event.eventName === 'issues' ? issueEventToRememberOpts(event.payload) : null;
   if (event.eventName !== 'issues' || !opts) throw new Error('the raced event is an issue with a body');
@@ -125,21 +122,17 @@ async function storeAsOtherWorker(root: string, { event }: IngestInput): Promise
   };
 }
 
-/** Ingests `input` as the loser of a race: the second worker's write commits after this ingest's pre-check and before its own write. */
 async function ingestBehindAnotherWorker(root: string, input: IngestInput): Promise<LostRace> {
   const winners: IngestResult[] = [];
   const gated = gateConnectorWrite(ctx(root), async () => {
     winners.push(await storeAsOtherWorker(root, input));
   });
   const loser = await ingestEvent(gated.ctx, input);
-  // A pre-check after the second worker's commit answers 'duplicate' and never reaches the guarded write.
   expect(gated.preChecks).toEqual([false]);
   const [winner] = winners;
   if (!winner) throw new Error('the loser never reached its write, so the second worker never ran');
   return { loser, winner };
 }
-
-// -- Tests -----------------------------------------------------------------
 
 describe('ingestEvent', () => {
   let root: string;
@@ -161,7 +154,6 @@ describe('ingestEvent', () => {
     expect(result.status).toBe('ingested');
     expect(result.memoryId).toMatch(/^mem_[0-9a-f]+$/);
 
-    // Memory exists with correct shape.
     const entries = loadAllEntries(root, 'default');
     const ghEntries = entries.filter((e) => e.tags.includes('source:github'));
     expect(ghEntries).toHaveLength(1);
@@ -171,7 +163,6 @@ describe('ingestEvent', () => {
     expect(entry.owner).toBe('user:github:alice');
     expect(entry.artifactRef).toBe('github://acme/demo/issue/42');
 
-    // github_event_log row written.
     const db = openHippoDb(root);
     try {
       const idempotencyKey = computeIdempotencyKey('github://acme/demo/issue/42', null);
@@ -204,7 +195,6 @@ describe('ingestEvent', () => {
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
 
-    // Still only one memory row.
     const entries = loadAllEntries(root, 'default');
     expect(entries.filter((e) => e.tags.includes('source:github'))).toHaveLength(1);
   });
@@ -233,11 +223,9 @@ describe('ingestEvent', () => {
     expect(r1.status).toBe('skipped');
     expect(r1.memoryId).toBeNull();
 
-    // No memory row.
     const entries = loadAllEntries(root, 'default');
     expect(entries.filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
 
-    // github_event_log row exists with memory_id=NULL.
     const db = openHippoDb(root);
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
@@ -250,7 +238,6 @@ describe('ingestEvent', () => {
       closeHippoDb(db);
     }
 
-    // Replay returns 'duplicate', not 'skipped' (transform isn't re-run).
     const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'd-2' });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBeNull();
@@ -312,8 +299,6 @@ describe('ingestEvent', () => {
     expect(result.status).toBe('skipped_duplicate');
     expect(result.memoryId).toBe(otherWorkerMemoryId);
 
-    // The github_event_log delivery_id is the OTHER worker's, confirming
-    // ingest's INSERT OR IGNORE was the loser of the race.
     const db = openHippoDb(root);
     try {
       const key = computeIdempotencyKey('github://acme/demo/issue/42', null);
@@ -336,30 +321,22 @@ describe('ingestEvent', () => {
     const r1 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-1' });
     expect(r1.status).toBe('ingested');
 
-    // Same signed body, different (unsigned, attacker-controlled) delivery UUID.
     const r2 = await ingestEvent(ctx(root), { event, rawBody, deliveryId: 'attacker-replay-uuid-2' });
     expect(r2.status).toBe('duplicate');
     expect(r2.memoryId).toBe(r1.memoryId);
   });
 
   it('7. different artifact_refs produce different idempotency keys; same artifact + same updated_at collapses', () => {
-    // The v1.3.1 hotfix changed the key from sha256(eventName + ':' + rawBody)
-    // to sha256(artifactRef + ':' + updatedAt) so backfill and webhook ingests
-    // of the same source revision dedupe onto the same row.
     const k1 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T10:00:00Z');
     const k2 = computeIdempotencyKey('github://acme/demo/issue/43', '2026-05-04T10:00:00Z');
     expect(k1).not.toBe(k2);
 
-    // Same artifact + same updated_at: same key (so backfill + later webhook of
-    // same revision collapse to one log row).
     const k3 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T10:00:00Z');
     expect(k3).toBe(k1);
 
-    // Same artifact + different updated_at (an edit): different key.
     const k4 = computeIdempotencyKey('github://acme/demo/issue/42', '2026-05-04T11:00:00Z');
     expect(k4).not.toBe(k1);
 
-    // Null updated_at + missing updated_at fold to the same empty-string key.
     const kNull = computeIdempotencyKey('github://acme/demo/issue/42', null);
     const kUndef = computeIdempotencyKey('github://acme/demo/issue/42', undefined);
     expect(kNull).toBe(kUndef);
@@ -379,8 +356,6 @@ describe('ingestEvent', () => {
 
     expect(result.status).toBe('skipped_duplicate');
 
-    // Exactly ONE memory row matching the artifact_ref: this worker's was
-    // rolled back with its write scope, only the other worker's row survives.
     const db = openHippoDb(root);
     try {
       // SAFETY: the SELECT explicitly lists id, so the row shape matches.

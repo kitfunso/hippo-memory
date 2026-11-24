@@ -1,6 +1,3 @@
-// What a project is and how a reader's rows match it: the nearest ancestor with `.hippo` (else
-// `.git`), and never home or the temp root. Its name: `.hippo-project.json`, else the normalized
-// `origin`, else the folder name. src/host/project-identity.ts walks the disk to resolve one.
 import { BadRequestError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 
@@ -50,7 +47,6 @@ export function projectNames(project: ProjectRef): readonly string[] {
   );
 }
 
-// Each project name is matched against every candidate row, so the caller's list stays short.
 export const MAX_PROJECT_ALIASES = 10;
 export const MCP_PROJECT_SCOPED_HEADER = 'X-Hippo-Project-Scoped';
 

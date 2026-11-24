@@ -1,5 +1,3 @@
-// What one hippo.db open may use. Only the SQLite adapter mints a grant
-// (src/store/sqlite/runtime/grant.ts); openHippoDb without one is a plain connection of its own.
 import { existsSync } from 'node:fs';
 import { DatabaseSync, type DatabaseSyncLike } from './sqlite.js';
 import { DEFAULT_BUSY_WAIT_MS } from './busy.js';
@@ -16,13 +14,8 @@ const WORKER_ONLY_MESSAGE =
 
 /** What a grant opens with. */
 export interface GrantScope {
-  /** Caches the store's open steps, lends idle handles and holds file writes; undefined starts
-   * each open fresh. */
   readonly runtime: StoreRuntime | undefined;
-  /** The request's own handles: an open reuses the session's handle on the same store. */
   readonly session: RequestStores | undefined;
-  /** The server thread's part of a worker store: its work runs on worker threads, so an open
-   * here is a defect. */
   readonly workerOnly: boolean;
 }
 
@@ -47,13 +40,10 @@ export class DbGrant {
     return this.#session;
   }
 
-  /** A read-write handle; `busyWaitMs` shortens its lock waits, a session's own wait when
-   * unset. */
   open(hippoRoot: string, busyWaitMs?: number): DatabaseSyncLike {
     return this.openWithFacts(hippoRoot, busyWaitMs).db;
   }
 
-  /** `open`, with what the open's probe read when this call made the connection. */
   openWithFacts(hippoRoot: string, busyWaitMs?: number): OpenedDb {
     DbGrant.#allow(this, hippoRoot);
     const session = this.#session;
@@ -61,14 +51,11 @@ export class DbGrant {
     return connectWithFacts({ hippoRoot, runtime: this.#runtime }, busyWaitMs);
   }
 
-  /** An existing store, unchanged: no mkdir, WAL switch, migration or mirror cleanup. */
   openReadOnly(hippoRoot: string): DatabaseSyncLike {
     DbGrant.#allow(this, hippoRoot);
     return openHippoDbReadOnly(hippoRoot);
   }
 
-  /** Runs `fn` on an existing hippo.db opened without migrations, for a repair of a store whose
-   * schema is behind; closes it after. */
   withUnmigrated<T>(hippoRoot: string, readOnly: boolean, fn: (db: DatabaseSyncLike) => T): T {
     DbGrant.#allow(this, hippoRoot);
     const file = getHippoDbPath(hippoRoot);
@@ -82,7 +69,6 @@ export class DbGrant {
     }
   }
 
-  // Static, so the brand check runs on a look-alike object before any private field is read.
   static #allow(grant: DbGrant, hippoRoot: string): void {
     if (!(#runtime in grant)) {
       throw new Error('hippo.db opens need a grant from the SQLite adapter');

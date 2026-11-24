@@ -1,4 +1,3 @@
-// The project write gate: one hook asked before a write under a caller's project, at REST, MCP and add-on doors.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -125,11 +124,9 @@ beforeAll(async () => {
   keyM = mint('gate-m', 'member');
   keyO = mint('gate-o', 'member', 'oid-a');
   mint('gate-adm', 'admin');
-  // One server per folder, so the no-gate server gets its own shared store.
   plainStore = path.join(tmp, 'srv-plain', 'hippo-team');
   fs.mkdirSync(plainStore, { recursive: true });
   initTestStore(plainStore);
-  // Salience on, so case 17 has a write the gate-less path skips.
   fs.writeFileSync(
     path.join(plainStore, 'config.json'),
     JSON.stringify({ sharedStore: true, salience: { enabled: true } }),
@@ -252,7 +249,6 @@ describe('project write gate', () => {
   it('11. a gate that throws fails the write with 500 and no row', async () => {
     set(() => {
       const boom = new Error('gate broke');
-      // A plain stack string keeps vitest's source-map lookup (it crashes on this file's frames) out of the server's error log.
       boom.stack = 'Error: gate broke';
       throw boom;
     });
@@ -380,7 +376,6 @@ describe('project write gate', () => {
     expect(Object.isFrozen(calls.at(-1)?.actor)).toBe(true);
     expect(seenScopes).toBeDefined();
     expect(scopesThrew).toBe(true);
-    // A second call sees the request's own scopes, unchanged by the first gate.
     let second: readonly string[] | undefined;
     set((c) => {
       second = c.actor.scopes;

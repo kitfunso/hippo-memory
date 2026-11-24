@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Runs `hippo mcp` on this process's stdio, so the server and its store stay on this machine.
 import { spawnHippo } from './spawn-hippo.mjs';
 
 function fail(err) {

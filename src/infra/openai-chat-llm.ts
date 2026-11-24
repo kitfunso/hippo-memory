@@ -1,6 +1,3 @@
-// The OpenAI-compatible chat adapter behind the Llm port, for a model the customer runs: one user
-// prompt in, the reply text or a typed failure out.
-
 import type { Llm, LlmReply, LlmRequest, LlmUsage } from '../base/ports/llm.js';
 import { envLlmTimeoutMs } from '../base/util/env.js';
 
@@ -14,7 +11,6 @@ export interface ChatEndpoint {
   readonly baseUrl: URL;
   readonly model: string;
   readonly apiKey?: string;
-  /** Injected for tests; defaults to the real fetch. */
   readonly fetcher?: typeof fetch;
 }
 
@@ -23,7 +19,6 @@ export function openAiChatLlm(endpoint: ChatEndpoint): Llm {
   return { send: (request) => sendChat(endpoint, request) };
 }
 
-/** The reply's first choice text; undefined when the reply holds no string there. */
 function contentOf(reply: { [key: string]: JsonValue }): string | undefined {
   const choice = Array.isArray(reply.choices) ? reply.choices[0] : undefined;
   const message = isJsonObject(choice) ? choice.message : undefined;
@@ -31,7 +26,6 @@ function contentOf(reply: { [key: string]: JsonValue }): string | undefined {
   return isJsonString(content) ? content : undefined;
 }
 
-/** The reply's billed tokens, or undefined when its usage block is missing or malformed. */
 function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
   const usage = reply.usage;
   if (!isJsonObject(usage)) return undefined;
@@ -40,10 +34,8 @@ function usageOf(reply: { [key: string]: JsonValue }): LlmUsage | undefined {
   return { inputTokens: Number(inputTokens), outputTokens: Number(outputTokens) };
 }
 
-// The statuses that carry a Location; a 304 or 305 is no redirect to name.
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
-// A failed reply's body is never read: a server that echoes the prompt would put memory text in a log.
 function failureDetail(status: number): string {
   switch (status) {
     case 401:
@@ -66,8 +58,6 @@ function chatHeaders(apiKey: string | undefined): Headers {
   return headers;
 }
 
-/** The reply's first choice text, trimmed; a reply with no text is a failure of kind 'empty'.
- * Never throws. */
 async function readReply(res: Response): Promise<LlmReply> {
   try {
     const data = await readCappedJson(res, MAX_REPLY_BYTES);
@@ -93,12 +83,10 @@ async function readReply(res: Response): Promise<LlmReply> {
       text === '' ? { ok: false, failure: { kind: 'empty' } } : { ok: true, text };
     return usage === undefined ? reply : { ...reply, usage };
   } catch (err) {
-    // The parse error under this message quotes the reply.
     return { ok: false, failure: { kind: 'unreadable', message: errorMessage(err) } };
   }
 }
 
-/** The reply text or a typed failure for one prompt. Never throws. */
 async function sendChat(endpoint: ChatEndpoint, req: LlmRequest): Promise<LlmReply> {
   let headers: Headers;
   // fetch's header error quotes the value, so the key; only a fixed text leaves.
@@ -149,10 +137,8 @@ function postChat(
         messages: [{ role: 'user', content: req.prompt }],
       }),
       signal: req.signal,
-      // A redirect would resend the memory text to a host no setting named.
       redirect: 'manual',
     },
-    // A chat call stores nothing on the far side, so a 429 or a 5xx is replayed.
     {
       timeoutMs,
       totalMs: llmTotalMs(timeoutMs),

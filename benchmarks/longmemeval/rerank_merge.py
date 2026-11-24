@@ -1,20 +1,4 @@
 #!/usr/bin/env python3
-"""
-rerank_merge.py — Merge rerank outputs into a reranked JSONL.
-
-Reads:
-  - results/f9_baseline/best.jsonl (original retrieval with full memory objects)
-  - /tmp/rerank_outputs/batch_*.json (50 batch rerank outputs)
-
-For each question:
-  1. Looks up ranked_ids from the batch output.
-  2. Reorders retrieved_memories to follow ranked_ids order.
-  3. Writes to results/f9_rerank/best_reranked.jsonl.
-
-Output JSONL has 500 lines, each preserving all original fields except
-retrieved_memories (reordered per LLM-rerank output).
-"""
-
 import json
 import os
 import glob
@@ -27,7 +11,6 @@ OUTPUT_JSONL = OUTPUT_DIR / "best_reranked.jsonl"
 
 
 def load_rerank_outputs():
-    """Load all rerank outputs into a dict: question_id -> ranked_ids list."""
     ranking_map = {}
     files = sorted(glob.glob(str(RERANK_OUTPUT_DIR / "batch_*.json")))
     print(f"Loading {len(files)} rerank output files...")
@@ -60,7 +43,6 @@ def main():
 
             if question_id not in ranking_map:
                 missing_ranking.append(question_id)
-                # Fall back to original order
                 fout.write(json.dumps(entry) + "\n")
                 written += 1
                 continue
@@ -68,10 +50,8 @@ def main():
             ranked_ids = ranking_map[question_id]
             original_mems = entry.get("retrieved_memories", [])
 
-            # Build lookup: mem_id -> memory object
             mem_by_id = {m["id"]: m for m in original_mems}
 
-            # Reorder memories per ranked_ids
             reordered = []
             for mem_id in ranked_ids:
                 if mem_id in mem_by_id:
@@ -79,7 +59,6 @@ def main():
                 else:
                     missing_memory.append((question_id, mem_id))
 
-            # If some memories are missing from ranking (shouldn't happen), append them
             ranked_set = set(ranked_ids)
             for m in original_mems:
                 if m["id"] not in ranked_set:

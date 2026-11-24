@@ -1,5 +1,3 @@
-// A dirty summary's rebuild hold, one `meta` row per summary: {"failures": n, "retryAfter": ISO | null}.
-// When a hold ends is decided in src/domain/consolidate/retry-holds.ts.
 import { DAG_LEVEL } from '../../../base/memory/entry.js';
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
@@ -8,9 +6,7 @@ import type { Consolidation } from '../../../base/ports/store/consolidation.js';
 
 /** The meta key prefix of a summary's hold; the summary's id follows. */
 export const REBUILD_HOLD_KEY = 'rebuild_hold:';
-// The first key past every hold key, as ';' follows ':'.
 const REBUILD_HOLD_END = 'rebuild_hold;';
-// substr is 1-based, so this is the first character of the id.
 const ID_FROM = REBUILD_HOLD_KEY.length + 1;
 
 type RebuildFailure = Parameters<NonNullable<Consolidation['noteRebuildFailures']>>[0][number];
@@ -47,8 +43,6 @@ export function clearRebuildHold(db: DatabaseSyncLike, summaryId: string): void 
   cachedStatement(db, 'DELETE FROM meta WHERE key = ?').run(`${REBUILD_HOLD_KEY}${summaryId}`);
 }
 
-// Writes only while the stored count is still the one the caller saw, and only for a summary
-// that is dirty and live: a settle that ended the hold in between wins.
 const NOTE_FAILURE_SQL = `INSERT INTO meta(key, value)
   SELECT ?, ?
    WHERE EXISTS (SELECT 1 FROM memories
@@ -58,7 +52,6 @@ const NOTE_FAILURE_SQL = `INSERT INTO meta(key, value)
      AND COALESCE((SELECT ${holdFailuresSql('h')} FROM meta h WHERE h.key = ?), 0) = ?
   ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
 
-// A hold left for a summary that is gone, archived or clean would hold it again once it is dirty.
 const SWEEP_SQL = `DELETE FROM meta
   WHERE key > '${REBUILD_HOLD_KEY}' AND key < '${REBUILD_HOLD_END}'
     AND NOT EXISTS (SELECT 1 FROM memories m

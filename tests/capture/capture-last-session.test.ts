@@ -12,9 +12,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/**
- * Per-test tmpdir so the fake transcript fixtures don't leak between cases.
- */
 function withTmpDir() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-capture-test-'));
   return {
@@ -220,7 +217,6 @@ describe('resolveLastSessionTranscript', () => {
     const newer = path.join(projects, 'newer.jsonl');
     fs.writeFileSync(older, '{}');
     fs.writeFileSync(newer, '{}');
-    // Force older mtime into the past so newer wins deterministically
     const past = new Date(Date.now() - 60_000);
     fs.utimesSync(older, past, past);
 
@@ -233,7 +229,6 @@ describe('resolveLastSessionTranscript', () => {
     fs.mkdirSync(proj, { recursive: true });
     const real = path.join(proj, 'real.jsonl');
     fs.writeFileSync(real, '{}');
-    // A dangling link lists fine and then fails stat with ENOENT, as a file deleted between the two calls does.
     if (
       !trySymlink(path.join(tmp.dir, 'gone.jsonl'), path.join(proj, 'gone.jsonl')) ||
       !trySymlink(path.join(tmp.dir, 'gone-dir'), path.join(projects, 'gone-dir'), 'dir')
@@ -247,7 +242,6 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, undefined, { mayScan: true })).toBeNull();
   });
 
-  // os.homedir() would still name a real profile, so with no home variable and no CLAUDE_CONFIG_DIR the scan must not start.
   it('scans nothing when CLAUDE_CONFIG_DIR, HOME and USERPROFILE are all unset', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', undefined);
     vi.stubEnv('HOME', undefined);
@@ -272,7 +266,6 @@ describe('resolveLastSessionTranscript', () => {
     expect(resolveLastSessionTranscript(undefined, 'some plain text', { mayScan: true })).toBeNull();
   });
 
-  // Another project's newest transcript, which only a manual run may pick up.
   function plantOtherProjectTranscript(): string {
     const dir = path.join(tmp.dir, '.claude', 'projects', 'other-project');
     fs.mkdirSync(dir, { recursive: true });
@@ -317,7 +310,6 @@ describe('resolveLastSessionTranscript', () => {
 describe('session workers never capture a transcript they were not handed', () => {
   let tmp: { dir: string; cleanup: () => void };
 
-  // In process, so coverage sees both workers; the capture end-to-end case below keeps the real child.
   beforeEach(async () => {
     tmp = withTmpDir();
     const env = { ...process.env, HIPPO_HOME: tmp.dir, HOME: tmp.dir, USERPROFILE: tmp.dir };
@@ -391,18 +383,12 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     );
 
     const logFile = path.join(tmp.dir, 'session.log');
-    // Simulate `hippo sleep --log-file` having already written its output —
-    // capture runs second in the SessionEnd sequence and must append.
     fs.writeFileSync(logFile, '[hippo] sleep complete\n', 'utf8');
 
-    // Init a hippo store in the tmp cwd so capture doesn't bail out
-    // on `No .hippo directory found`.
-    // HIPPO_HOME isolates the global store: `hippo init` registers the workspace into <globalRoot>/workspaces.json.
     const env = { ...process.env, HIPPO_HOME: tmp.dir };
     const init = await runCliAs(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: tmp.dir, env });
     expect(init.status).toBe(0);
 
-    // --dry-run so no hippo store writes are needed; we only care that the tee wrapper captures stdout.
     const result = await runCliAs(
       ['capture', '--last-session', '--transcript', transcript, '--log-file', logFile, '--dry-run'],
       { cwd: tmp.dir, env },
@@ -411,8 +397,8 @@ describe('hippo capture --last-session --log-file (end-to-end via CLI)', () => {
     expect(result.status).toBe(0);
 
     const contents = fs.readFileSync(logFile, 'utf8');
-    expect(contents).toContain('[hippo] sleep complete'); // preserved
-    expect(contents).toContain('capturing session...'); // banner appended
-    expect(contents).toContain('[hippo] capture complete'); // completion marker
+    expect(contents).toContain('[hippo] sleep complete');
+    expect(contents).toContain('capturing session...');
+    expect(contents).toContain('[hippo] capture complete');
   });
 });

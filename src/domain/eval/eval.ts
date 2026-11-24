@@ -1,6 +1,3 @@
-/** Recall eval harness: runs recall over (query, expected_memory_ids) cases and reports MRR, Recall@K and NDCG@K.
- *  It exists so MMR lambda, embedding weights and scoring tweaks are tuned against evidence instead of intuition. */
-
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RuntimeSettings } from '../../base/config/config.js';
 import type { EvalSwitches } from '../../base/memory/eval-switches.js';
@@ -12,41 +9,31 @@ import type { ConfiguredFolder } from '../../base/config/configured-folder.js';
 import type { SharingStore } from '../sharing/text-keys.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 
-// Generous so metrics are not truncated.
 const DEFAULT_EVAL_BUDGET = 100_000;
 const QUERY_WORDS = 8;
 
 export interface EvalCase {
-  /** Free-form ID for humans to reference the case. */
   id: string;
-  /** The query text to run through recall. */
   query: string;
-  /** Memory IDs considered relevant. At least one required. */
   expectedIds: string[];
-  /** Optional short description so a failure report is self-explaining. */
   description?: string;
 }
 
 export interface EvalCaseResult {
   case: EvalCase;
   returnedIds: string[];
-  /** 1 / rank of the first expected id, else 0. */
   mrr: number;
-  /** |expected ∩ returned[0..K]| / |expected|, 0 when expected is empty. */
   recallAt5: number;
   recallAt10: number;
-  /** Normalized DCG at 10 using binary relevance (expected = 1, else 0). */
   ndcgAt10: number;
 }
 
 export interface EvalSummary {
   cases: EvalCaseResult[];
-  /** Simple arithmetic means across cases. */
   meanMrr: number;
   meanRecallAt5: number;
   meanRecallAt10: number;
   meanNdcgAt10: number;
-  /** Wall-clock runtime in ms for the whole eval. */
   durationMs: number;
 }
 
@@ -54,25 +41,17 @@ export interface RunEvalOptions {
   mmr?: boolean;
   mmrLambda?: number;
   embeddingWeight?: number;
-  /** Max returned results per case. Larger than K-at-10 so metrics stay honest. */
   budget?: number;
-  /** Where the vector arm reads when `entries` rank alone; BM25 only when unset. */
   source?: VectorSource;
-  /** When set, eval runs through searchBothHybrid so global memories are in scope, each store's
-   * query embedded by `embedderFor`. Otherwise only the `entries` list is searched. */
   stores?: {
     local: ConfiguredFolder<SharingStore>;
     global: ConfiguredFolder<SharingStore>;
     embedderFor: EmbedderFor;
   };
-  /** Multiplier for local-over-global results when `stores` is in play. */
   localBump?: number;
   now: Date;
-  /** The root's environment settings, which ranking reads as recall does. */
   runtime?: RuntimeSettings;
-  /** The folder whose path segments boost a memory, as recall's are. */
   cwd?: string;
-  /** The strength model and rank switches the cases rank under. */
   switches: EvalSwitches;
 }
 
@@ -109,7 +88,6 @@ export function ndcgAtK(returned: string[], expected: string[], k: number): numb
       dcg += 1 / Math.log2(i + 2);
     }
   }
-  // Ideal DCG: all relevant items at top positions.
   const idealHits = Math.min(k, expected.length);
   let idcg = 0;
   for (let i = 0; i < idealHits; i++) {
@@ -155,8 +133,6 @@ export async function runEval(
   };
 }
 
-/** One case's ranking: across the local and global stores when `stores` is set, else over
- * `entries` alone. */
 function rankForCase(query: string, entries: MemoryEntry[], options: RunEvalOptions) {
   const ranking = {
     budget: options.budget ?? DEFAULT_EVAL_BUDGET,

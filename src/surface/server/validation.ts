@@ -1,4 +1,3 @@
-// Request-body and path-segment validators shared by the /v1 route handlers.
 import type { IncomingMessage } from 'node:http';
 import type { Context, RememberOptions } from '../../api/index.js';
 import { envBodyTimeoutMs } from '../../base/util/env.js';
@@ -109,9 +108,7 @@ export function getString(
 
 export interface RequiredStringRule {
   readonly max: number;
-  /** The field name is a plural noun, so the replies read "are required" and "exceed". */
   readonly plural?: boolean;
-  /** The blank check does not trim, so a value of only spaces passes it. */
   readonly untrimmed?: boolean;
 }
 
@@ -136,12 +133,9 @@ export function requiredString(
 /** Which items a string array refuses and what each refusal says; a route with published text
  * passes its own. */
 export interface StringArrayRule {
-  /** Refuse an item that is empty (after trim when `trimmed`). */
   readonly nonEmpty?: 'raw' | 'trimmed';
-  /** A null value is a 400 instead of an absent field. */
   readonly rejectNull?: boolean;
   readonly messages?: {
-    /** The value is not an array; also the text for a non-string item unless `itemType` is set. */
     readonly notArray?: string;
     readonly itemType?: string;
     readonly empty?: string;
@@ -216,12 +210,6 @@ export function getCallerProject(body: Record<string, JsonValue>): RememberOptio
   return { name: v.name, aliases };
 }
 
-/**
- * Charset + length validation for `:id` captures, called right after `matchPath` so
- * empty/overlong/illegal ids get a 400, not "not found". Allows every production id notArray
- * (`mem_<hex>`, `sess-<id>`, Slack ids) plus `:` and `.`; no `/`, since `rejectEncodedSlash` stops
- * `%2F` smuggling.
- */
 const ID_SEGMENT_RE = /^[A-Za-z0-9_:.-]+$/;
 export function validateIdSegment(id: string, fieldName: string): void {
   if (id.length === 0) throw new HttpError(400, `${fieldName} is required`);

@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory/store-kit` (src/entry/store-kit.ts), the contract for a second store. */
-
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {
@@ -97,7 +95,6 @@ describe('hippo-memory/store-kit entry types', () => {
 
   it('entryAfterOutcome takes the entry, a boolean and the root ratio and clock, and returns an entry', () => {
     expectTypeOf(entryAfterOutcome).parameters.toEqualTypeOf<[MemoryEntry, boolean, OutcomeRules?]>();
-    // The ratio stays the type the root's DecayOptions gives it.
     expectTypeOf<OutcomeRules['lossAversionRatio']>().toEqualTypeOf<DecayOptions['lossAversionRatio']>();
     expectTypeOf(entryAfterOutcome).returns.toEqualTypeOf<MemoryEntry>();
     expectTypeOf<InstanceType<typeof RejectedValueError>>().toMatchTypeOf<Error>();

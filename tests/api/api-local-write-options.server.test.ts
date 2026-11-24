@@ -1,5 +1,3 @@
-// The row fields `api.remember` and `api.supersede` take from a caller in this process reach the row,
-// and a client that sends the same fields over HTTP or MCP changes nothing.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -15,7 +13,6 @@ import { loadAllEntries, readEntry } from '../_helpers/root-forms.js';
 
 const NOTE = 'the billing service retries a failed charge three times';
 const NEWER = 'the billing service retries a failed charge five times';
-// What a client would send to pin a row, pick its layer and source, or start it weak.
 const LOCAL = {
   layer: 'semantic',
   pinned: true,
@@ -45,7 +42,6 @@ function row(id: string | null | undefined): MemoryEntry {
   return entry;
 }
 
-/** The fields the local group and the supersede overrides can set. */
 function settable(entry: MemoryEntry) {
   const { layer, pinned, confidence, source, schemaFit, traceOutcome, sourceSessionId, halfLifeDays, tags } = entry;
   return {

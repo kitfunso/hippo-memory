@@ -1,14 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { hitRateByPhase, parseRestrictLateTo } from '../../benchmarks/sequential-learning/run.mjs';
 
-// Synthetic 25-trap result fixture. Hit pattern: alternate hit/miss for clarity.
 function buildTrapResults(hitPattern: boolean[]): Array<{ trapCategory: string | null; trapHit: boolean }> {
   return hitPattern.map((hit, i) => ({ trapCategory: 'cat_' + i, trapHit: hit }));
 }
 
 describe('hitRateByPhase with restrictLateTo', () => {
   it('default (no restrictLateTo) preserves chronological-third behavior', () => {
-    // 25 traps: third=9, early=slice(0,9), mid=slice(9,18), late=slice(18) = last 7
     const results = buildTrapResults(Array(25).fill(true));
     const phases = hitRateByPhase(results);
     expect(phases.early).toBe(1.0);
@@ -17,7 +15,6 @@ describe('hitRateByPhase with restrictLateTo', () => {
   });
 
   it('restrictLateTo=4 puts last 4 traps in late, first 11 in early, middle 10 in mid', () => {
-    // Build pattern: first 11 all hit, middle 10 half hit, last 4 none hit.
     const pattern = [
       ...Array(11).fill(true), // early all hit -> 100%
       ...Array(5).fill(true),
@@ -55,7 +52,7 @@ describe('hitRateByPhase with restrictLateTo', () => {
     const results = buildTrapResults(Array(25).fill(true));
     const phases = hitRateByPhase(results, 30);
     expect(phases.late).toBe(1.0);
-    expect(phases.early).toBe(0); // empty slice
+    expect(phases.early).toBe(0);
     expect(phases.mid).toBe(0);
   });
 
@@ -73,13 +70,11 @@ describe('hitRateByPhase with restrictLateTo', () => {
     expect(parseRestrictLateTo('25')).toBe(25);
   });
 
-  // Post-review P2-1 -- additional boundary coverage
   it('restrictLateTo=1 puts only the last trap in late', () => {
-    const pattern = [...Array(24).fill(false), true]; // last one hit
+    const pattern = [...Array(24).fill(false), true];
     const results = buildTrapResults(pattern);
     const phases = hitRateByPhase(results, 1);
     expect(phases.late).toBe(1.0);
-    // n-N=24 so early=ceil(24/2)=12, mid=12. Both all-miss.
     expect(phases.early).toBe(0.0);
     expect(phases.mid).toBe(0.0);
   });
@@ -88,7 +83,7 @@ describe('hitRateByPhase with restrictLateTo', () => {
     const results = buildTrapResults(Array(25).fill(true));
     const phases = hitRateByPhase(results, 25);
     expect(phases.late).toBe(1.0);
-    expect(phases.early).toBe(0); // empty slice
+    expect(phases.early).toBe(0);
     expect(phases.mid).toBe(0);
   });
 

@@ -1,4 +1,3 @@
-// MCP on a shared store stamps the caller's X-Hippo-Project, refuses memory tools without one, and never stamps the served folder's ''.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -27,7 +26,6 @@ const OPEN = new Map<string, Record<string, JsonValue>>([['hippo_predict_baserat
 let tmp: string;
 let handle: ServerHandle | null = null;
 
-/** `<tmp>/srv/hippo-team`, a folder with no project marker, so the folder stamp is '' (user-global). */
 function flaggedStore(): string {
   const store = path.join(tmp, 'srv', 'hippo-team');
   fs.mkdirSync(store, { recursive: true });

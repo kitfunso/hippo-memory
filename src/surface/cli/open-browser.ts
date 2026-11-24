@@ -1,8 +1,6 @@
-// Best-effort browser launch for CLI verbs that write a file.
 import { spawn } from 'node:child_process';
 import { errorMessage, log, errorFields } from '../../base/util/log.js';
 
-/** The part of a child process the launch reads. */
 interface Launched {
   on(event: 'error', listener: (err: Error) => void): void;
   unref(): void;
@@ -27,7 +25,6 @@ export function openInBrowser(out: string, launch: Launcher = spawn): void {
     process.exitCode = 1;
     return;
   }
-  // Best-effort browser launch; never fail the command if it doesn't work.
   try {
     const [cmd, cmdArgs]: [string, string[]] =
       process.platform === 'win32'
@@ -44,8 +41,6 @@ export function openInBrowser(out: string, launch: Launcher = spawn): void {
     });
     child.unref();
   } catch (err) {
-    // The file is written and its path printed above, so a browser that will not start costs
-    // nothing.
     log.debug(`browser not opened: ${errorMessage(err)}`, errorFields(err));
   }
 }

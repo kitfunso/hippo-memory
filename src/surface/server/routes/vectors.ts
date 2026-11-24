@@ -1,5 +1,3 @@
-// POST /v1/vectors/nearest: the ids nearest a query vector, from the served store's vector graph,
-// so a CLI on this host asks the daemon instead of scanning every stored vector itself.
 import { nearestMemoryIds } from '../../../api/recall/nearest.js';
 import type { RecallScopeFilter } from '../../../base/scope/recall-scope.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
@@ -17,7 +15,6 @@ import { parseJsonBody } from '../validation.js';
 
 // Past the longest vector any configured provider returns (3072), so a real query always fits.
 const MAX_VECTOR_DIM = 4096;
-// Origins name projects, and a recall names its own and a few aliases.
 const MAX_ORIGINS = 64;
 
 export async function handleNearestVectors({

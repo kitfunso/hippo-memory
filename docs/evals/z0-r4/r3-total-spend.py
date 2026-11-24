@@ -1,6 +1,3 @@
-"""Sum round 3's list-price spend over every record of every run attempt, kept or not, by arm and folder kind.
-Usage: python -I docs/evals/z0-r4/r3-total-spend.py ROOT [--sequences q12,q14,...] [--manifest FILE] [--write-manifest]
-Stops unless ROOT's runs files match the manifest; --write-manifest writes it, once, when a round's folder is frozen."""
 import argparse
 import pathlib
 import sys

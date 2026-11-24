@@ -1,5 +1,3 @@
-// Outcome writes rows, audit rows and mirror marks in set statements, and the mirrors after: pinned against the per-id
-// path it replaced.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -30,7 +28,6 @@ const LAYERS = [Layer.Buffer, Layer.Episodic, Layer.Semantic, Layer.Trace];
 const open: DatabaseSyncLike[] = [];
 
 beforeEach(() => {
-  // strength decays with the clock and audit rows stamp it, so both paths read one fixed time.
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
 });
@@ -40,7 +37,6 @@ afterEach(() => {
   for (const db of open.splice(0)) closeHippoDb(db);
 });
 
-/** The per-id path outcome ran before the set rewrite, kept as the reference the new path must match. */
 function applyOutcomePerId(db: DatabaseSyncLike, root: string, outcome: OutcomeWrite): string[] {
   const applied = auditingRefusal(db, outcome.actor, () =>
     withWriteScope(db, 'apply_outcome', () => {
@@ -76,8 +72,6 @@ function memory(i: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   return { ...base, originProject: 'pin-project', ...extra };
 }
 
-/** Summary parents (one already dirty), churn-stale tags, three layers, an out-of-reach personal row, another tenant's
- * row, repeated ids and a missing one. */
 function fixture(count: number) {
   const summaries = [0, 1, 2].map((i) => memory(10_000 + i, { dagLevel: DAG_LEVEL.topic, layer: Layer.Semantic }));
   const rows = Array.from({ length: count }, (_, i) =>
@@ -101,9 +95,7 @@ function seeded(label: string, entries: readonly MemoryEntry[]) {
   const db = openStore(root, storeFilesOf(root).opens);
   open.push(db);
   writeEntriesTogether(db, storeFilesOf(root), entries);
-  // The seed's own child writes marked every parent; clear all but one so the outcome has flips to make.
   db.prepare('UPDATE memories SET summary_dirty = (id = ?)').run(entries[2]!.id);
-  // A stale copy in another layer, which every mirror write removes.
   fs.copyFileSync(
     path.join(root, entries[3]!.layer, `${entries[3]!.id}.md`),
     path.join(root, Layer.Semantic, `${entries[3]!.id}.md`),
@@ -137,7 +129,6 @@ interface FtsRow {
   tags: string;
 }
 
-/** Every stored value outcome can touch, with each column's storage class; updated_at is SQLite's own clock. */
 function snapshot(root: string, db: DatabaseSyncLike) {
   // SAFETY: PRAGMA table_info answers one row per column, its name in `name`.
   const columns = (db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>)
@@ -165,14 +156,12 @@ describe('outcome over 200 ids', () => {
     const before = seeded('outcome-pin-old', entries);
     const after = seeded('outcome-pin-new', entries);
     const expected = applyOutcomePerId(before.db, before.root, outcomeOf(ids, good));
-    // A runtime holds the outcome's mirror rewrite until the flush, as the CLI's does.
     const runtime = new StoreRuntime();
     const got = writeOutcome(after.db, storeFilesOf(after.root, { runtime }), outcomeOf(ids, good));
     runtime.held.flush(after.root);
     expect(got).toEqual(expected);
     expect(got.length).toBeGreaterThan(190);
     const want = snapshot(before.root, before.db);
-    // The fixture reaches every branch: two summaries flip dirty, and a good outcome re-indexes churn-stale rows.
     expect(want.audit.filter((row) => row.op === 'summary_marked_dirty' && row.actor === 'test:pin')).toHaveLength(2);
     expect(want.fts.some((row) => row.tags.includes(CHURN_STALE_TAG))).toBe(!good);
     expect(snapshot(after.root, after.db)).toEqual(want);
@@ -189,13 +178,11 @@ describe('outcome statement count', () => {
       return statements.length;
     });
     expect(counts[0]).toBe(counts[1]);
-    // One of them marks the mirrors due, in place of a file write per row on the job's path.
     expect(counts[0]).toBeLessThanOrEqual(7);
   });
 });
 
 describe('outcome that fails mid-batch', () => {
-  // 900 rows span two UPDATE chunks, so the failing last row sits in a later statement than the rest.
   function failingStore(trigger: (lastId: string) => string) {
     const entries = Array.from({ length: 900 }, (_, i) => memory(i));
     const root = makeRoot('outcome-fail');

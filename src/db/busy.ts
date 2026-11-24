@@ -1,11 +1,8 @@
 import { errorFields, errorMessage, isLevelEnabled, log } from '../base/util/log.js';
 import type { DatabaseSyncLike } from './sqlite.js';
 
-// SQLite's busy result codes; the SQLite adapter turns each into the port's StoreBusyError at its
-// boundary.
 const SQLITE_BUSY = 5;
 const SQLITE_LOCKED = 6;
-// SQLITE_BUSY with extended code 2: a write on a read snapshot another writer has since moved past.
 const SQLITE_BUSY_SNAPSHOT = 517;
 
 function carriesErrcode(cause: unknown): cause is { errcode: unknown } {
@@ -20,8 +17,6 @@ export function isSqliteBusy(cause: unknown): boolean {
 /** The lock wait of an open that names none: its busy_timeout and every explicit wait below. */
 export const DEFAULT_BUSY_WAIT_MS = 5000;
 
-// The wait blocks its thread, the only one in a CLI or hook run, so a wait past this gets one line
-// naming the file.
 const LONG_LOCK_WAIT_MS = 1000;
 
 function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): void {
@@ -32,8 +27,6 @@ function noteLongWait(db: DatabaseSyncLike, sql: string, startedAt: number): voi
 }
 
 // busy_timeout covers neither contended statement here: SQLite skips the busy handler for `PRAGMA
-// journal_mode` and for a write that upgrades a deferred read snapshot, so both need an explicit
-// wait.
 export function execWithBusyRetry(
   db: DatabaseSyncLike,
   sql: string,
@@ -79,10 +72,6 @@ function undoScope(db: DatabaseSyncLike, top: boolean, name: string): void {
   }
 }
 
-/**
- * Undo after a failure without letting a failed undo replace the caller's error; an idle handle
- * means SQLite already unwound the scope.
- */
 function undoAfterFailure(db: DatabaseSyncLike, top: boolean, name: string): void {
   if (db.isTransaction === false) return;
   try {
@@ -164,8 +153,6 @@ export function withTrialScope<T>(db: DatabaseSyncLike, name: string, fn: () => 
   return result;
 }
 
-/** What `withWriteScopeOr` hands its callback's `rollback(value)`; a class so no stored value
- * can pass for one. */
 class RolledBack<V> {
   readonly value: V;
   constructor(value: V) {

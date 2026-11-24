@@ -1,16 +1,3 @@
-"""Terminal-Bench 2.0 with Claude Code, arms `none` and `hippo`, one harbor job per (task, arm).
-
-  python -I run_tbench.py bundle --out DIR             # linux node + hippo dist + hook settings, once
-  python -I run_tbench.py run --out RUN --bundle DIR [--limit N] [--tasks a,b] [--arms none,hippo]
-  python -I run_tbench.py store --out RUN --bundle DIR # memories in the hippo arm's store, as JSON
-
-Tasks run in one fixed order (sorted names, shuffled with seed 1); both arms of a task run at the
-same time, and the next task starts when both end. The hippo arm's store is one docker volume that
-every hippo task mounts, so it carries across tasks. Re-running `run` resumes: a finished
-(task, arm) is skipped. A trial whose agent never started, or whose session ended on a usage
-limit, is infrastructure: it is retried, the hippo store first restored to its copy from before
-that task. Progress lines go to RUN/progress.jsonl, one per finished trial.
-"""
 from __future__ import annotations
 
 import argparse
@@ -33,11 +20,10 @@ HARBOR = os.environ.get("HARBOR_EXE", "harbor")
 TASKS = Path(os.environ.get("TBENCH_TASKS", Path.home() / "hippo-bench/tbench/data/terminal-bench"))
 MODEL = "anthropic/claude-sonnet-5"
 EFFORT = "medium"
-CLAUDE_VERSION = "2.1.321"  # pinned so a multi-day run never changes agent build mid-way
+CLAUDE_VERSION = "2.1.321"
 HELPER_IMAGE = "node:22-bookworm-slim"
-SETUP_SEC = 1800  # harbor's apt install of nodejs and npm took over the 360 s default in the smoke
+SETUP_SEC = 1800
 SEED = 1
-# hippo runs from a docker volume: from a Windows bind mount each call took 40 s to load, against 0.3 s.
 BUNDLE_VOL = "hippo-tbench-bundle"
 ARMS = ("none", "hippo")
 AUTH_RE = re.compile(r"invalid api key|authentication|oauth token|not logged in|/login", re.I)
@@ -67,8 +53,6 @@ def task_digest(name: str) -> str:
     return h.hexdigest()
 
 
-# ---------- bundle: a linux hippo every task container can run, mounted read-only ----------
-
 def bundle(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     pkg = out / "pkg"
@@ -81,10 +65,8 @@ def bundle(out: Path) -> None:
     r = sh(["docker", "run", "--rm", *mount, HELPER_IMAGE, "cp", "/usr/local/bin/node", "/opt/hippo/node"])
     if r.returncode:
         sys.exit(f"copying node out of {HELPER_IMAGE} failed: {r.stderr}")
-    # HIPPO_HOME is fixed here so the hooks, the MCP server and every helper use the one store.
     (out / "hippo").write_bytes(
         b'#!/bin/sh\nHIPPO_HOME=/hippo-store exec /opt/hippo/node /opt/hippo/pkg/bin/hippo.js "$@"\n')
-    # The arm's hooks are exactly what `hippo hook install claude-code` writes, with the binary's path.
     r = sh(["docker", "run", "--rm", *mount, "-e", "CLAUDE_CONFIG_DIR=/tmp/cfg", "-e", "HIPPO_SKIP_AUTO_INTEGRATIONS=1",
             HELPER_IMAGE, "sh", "-c", "mkdir -p /tmp/cfg && sh /opt/hippo/hippo hook install claude-code >&2"
             " && cat /tmp/cfg/settings.json"])
@@ -112,8 +94,6 @@ def bundle(out: Path) -> None:
     print(json.dumps(meta, indent=2))
 
 
-# ---------- the hippo store volume ----------
-
 def volume_name(run: Path) -> str:
     return "hippo-tbench-" + hashlib.sha256(str(run.resolve()).encode()).hexdigest()[:10]
 
@@ -135,7 +115,6 @@ def init_store(run: Path, bdir: Path) -> None:
 
 
 def store_memories(run: Path, bdir: Path) -> list[dict]:
-    # `export` reads only a project store, so the global store is reached through a `.hippo` link.
     r = helper(run, bdir, "sh", "-c", "mkdir -p /w && ln -s /hippo-store /w/.hippo && cd /w && /opt/hippo/hippo export")
     if r.returncode:
         raise RuntimeError(f"hippo export failed: {r.stderr[-500:]}")
@@ -154,10 +133,7 @@ def snapshot(run: Path, bdir: Path, tag: str, restore: bool = False) -> None:
         raise RuntimeError(f"store {'restore' if restore else 'snapshot'} {tag} failed: {r.stderr[-500:]}")
 
 
-# ---------- one trial ----------
-
 def agent_env() -> dict[str, str]:
-    """Harbor's process env: the parked subscription token as CLAUDE_CODE_OAUTH_TOKEN, no API key, no session vars."""
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(("CLAUDE", "ANTHROPIC")) and k != "CLAUDECODE"}
     token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN_DISABLED") or sh(
@@ -195,7 +171,6 @@ def job_config(run: Path, bdir: Path, arm: str, idx: int, name: str, attempt: in
 
 
 def trial_outcome(job_dir: Path) -> dict:
-    """reward, and whether the trial is infrastructure (agent never ran, or a usage limit ended it)."""
     results = [p for p in job_dir.glob("*/result.json")]
     if not results:
         return {"infra": True, "why": "no trial result"}
@@ -215,7 +190,6 @@ def trial_outcome(job_dir: Path) -> dict:
     rewards = ((res.get("verifier_result") or {}).get("rewards") or {})
     reward = float(rewards.get("reward", 0.0) or 0.0)
     ran = bool(res.get("agent_execution")) and last is not None
-    # A session that ends on an API error (usage limit, overload, outage) never got its full try: infrastructure.
     api_err = bool(last and last.get("is_error") and (last.get("terminal_reason") == "api_error" or last.get("api_error_status")))
     limit = bool(rejected) or bool(last and last.get("api_error_status") == 429)
     auth = bool(AUTH_RE.search(tail[-3000:])) and not (last and last.get("num_turns", 0) > 1)
@@ -243,12 +217,10 @@ def done(run: Path) -> dict[tuple[str, str], dict]:
 
 
 def run_one(run: Path, bdir: Path, arm: str, idx: int, name: str, env: dict) -> dict:
-    # Attempts count across resumes, so a job name is never reused and harbor never resumes an old job.
     first = 1 + len(list((run / arm / "configs").glob(f"{idx:02d}-{name}-a*.json")))
     for attempt in range(first, first + 100):
         if arm == "hippo":
             tag = f"before-{idx:02d}"
-            # The first try of a task saves the store; any later try, or a resume after a kill, starts from that copy.
             restore = (run / "hippo" / "store-snapshots" / f"{tag}.tgz").exists()
             snapshot(run, bdir, tag, restore=restore)
         cfg, job = job_config(run, bdir, arm, idx, name, attempt)
@@ -292,7 +264,6 @@ def run_all(run: Path, bdir: Path, arms: list[str], limit: int | None, only: lis
         fresh = sh(["docker", "volume", "inspect", volume_name(run)]).returncode != 0
         init_store(run, bdir)
         if seed and fresh:
-            # Smoke only: one memory so the recall hook has something to show in the transcript.
             if "smoke" not in run.as_posix():
                 sys.exit("--seed-memory is for smoke runs only")
             r = helper(run, bdir, "/opt/hippo/hippo", "remember", "--global", seed)

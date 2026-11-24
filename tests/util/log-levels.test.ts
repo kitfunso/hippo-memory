@@ -1,4 +1,3 @@
-// HIPPO_LOG picks the stderr threshold; the timestamp and fields such as the request id ride on the same line.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -11,7 +10,6 @@ import { runCliAs } from '../_helpers/run-cli-as.js';
 const AT = '2026-01-02T03:04:05.678Z';
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
-/** The logger of a fresh module graph, whose once-only keys start empty as a new process's do. */
 async function freshLog() {
   vi.resetModules();
   const [logModule, storedJson] = await Promise.all([
@@ -87,7 +85,6 @@ describe('log level filtering', () => {
     log.warnThenDebug('row-1000', 'damaged 1000');
     log.once('row-1002', 'warn', 'once past the cap');
     log.once('row-1002', 'warn', 'once past the cap');
-    // row-0 was seen last, so row-1 was the one forgotten and row-0 is still spent.
     log.warnThenDebug('row-0', 'damaged 0');
     log.warnThenDebug('row-1', 'damaged 1');
     expect(lines()).toEqual([
@@ -184,8 +181,6 @@ describe('a command that fails at the top level', () => {
   it('prints only the message by default, and adds the error class and stack under HIPPO_LOG=debug', async () => {
     vi.useRealTimers();
     const dir = makeRoot('cli-top-error', { init: false });
-    // A store file that is not a database makes the first read throw past every verb; owner-only modes, as hippo makes
-    // them, keep the wide-mode warn out of the output.
     mkdirSync(join(dir, '.hippo'), { mode: 0o700 });
     writeFileSync(join(dir, '.hippo', 'hippo.db'), 'x'.repeat(4096), { mode: 0o600 });
     const run = (level: string) =>

@@ -21,10 +21,6 @@ import { DEFAULT_PHYSICS_CONFIG } from '../../src/base/rank/physics-config.js';
 import { dot, norm } from '../../src/base/rank/cosine.js';
 import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeParticle(overrides: Partial<PhysicsParticle> & { memoryId: string }): PhysicsParticle {
   return {
     position: [1, 0, 0],
@@ -45,10 +41,6 @@ function makeCtx(overrides?: Partial<ForceContext>): ForceContext {
     ...overrides,
   };
 }
-
-// ---------------------------------------------------------------------------
-// 1. Vector math
-// ---------------------------------------------------------------------------
 
 describe('Vector math', () => {
   describe('dot', () => {
@@ -94,10 +86,6 @@ describe('Vector math', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Property derivation
-// ---------------------------------------------------------------------------
-
 describe('Property derivation', () => {
   describe('computeMass', () => {
     it('increases with strength', () => {
@@ -110,7 +98,6 @@ describe('Property derivation', () => {
       const m100 = computeMass(1, 100, PRODUCTION_STRENGTH);
       expect(m10).toBeGreaterThan(m0);
       expect(m100).toBeGreaterThan(m10);
-      // Logarithmic: gap narrows
       expect(m100 - m10).toBeLessThan(m10 - m0);
     });
 
@@ -120,7 +107,6 @@ describe('Property derivation', () => {
     });
 
     it('formula matches expected value', () => {
-      // strength=1.0, retrievalCount=3 -> 1.0 * (1 + 0.1 * log2(4)) = 1.0 * 1.2 = 1.2
       expect(computeMass(1.0, 3, PRODUCTION_STRENGTH)).toBeCloseTo(1.2, 5);
     });
   });
@@ -155,23 +141,17 @@ describe('Property derivation', () => {
     });
 
     it('formula matches: 1 / (age * decay + 1)', () => {
-      // age=4, decay=1.0 -> 1/(4+1) = 0.2
       expect(computeTemperature(4, 1.0)).toBeCloseTo(0.2, 10);
     });
   });
 });
 
-// ---------------------------------------------------------------------------
-// 3. Force computations
-// ---------------------------------------------------------------------------
-
 describe('Force computations', () => {
   describe('queryGravityMagnitude', () => {
     it('high cosine similarity = high force', () => {
       const p = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
-      const query = [1, 0, 0]; // identical direction
+      const query = [1, 0, 0];
       const force = queryGravityMagnitude(p, query, 2.0);
-      // gQuery * mass * cos^2 = 2 * 1 * 1 = 2
       expect(force).toBeCloseTo(2.0, 5);
     });
 
@@ -199,7 +179,6 @@ describe('Force computations', () => {
     });
 
     it('partial cosine gives cos^2 scaling', () => {
-      // cos(45deg) ~ 0.707, cos^2 ~ 0.5
       const p = makeParticle({ memoryId: 'a', position: vecNormalize([1, 1, 0]) });
       const query = [1, 0, 0];
       const force = queryGravityMagnitude(p, query, 1.0);
@@ -229,7 +208,6 @@ describe('Force computations', () => {
     it('partially aligned velocity gives intermediate value', () => {
       const p = makeParticle({ memoryId: 'a', velocity: vecNormalize([1, 1, 0]) });
       const bonus = velocityAlignmentBonus(p, [1, 0, 0]);
-      // cos(45) ~ 0.707
       expect(bonus).toBeCloseTo(Math.SQRT1_2, 2);
     });
   });
@@ -239,7 +217,6 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]) });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
       const force = attractionForce({ pi, pj, gMemory: 0.01 });
-      // The force is a unit direction times G * m_i * m_j * cos^3, with cos = 1.02 / sqrt(1.01 * 1.04).
       expect(norm(force)).toBeCloseTo(0.01 * (1.02 / Math.sqrt(1.01 * 1.04)) ** 3, 10);
     });
 
@@ -261,12 +238,9 @@ describe('Force computations', () => {
     });
 
     it('magnitude uses cos^3 scaling', () => {
-      // Identical positions: cos=1, cos^3=1
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0], mass: 1 });
       const pj = makeParticle({ memoryId: 'b', position: [1, 0, 0], mass: 1 });
       const force = attractionForce({ pi, pj, gMemory: 1.0 });
-      // Direction of (pj - pi) = [0,0,0] -> normalized to zero -> magnitude * zero = zero
-      // Identical positions means difference is zero, so force is zero despite high cosine
       expect(norm(force)).toBe(0);
     });
 
@@ -274,7 +248,6 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 1, 0]) });
       const force = attractionForce({ pi, pj, gMemory: 1.0 });
-      // Should have positive y component (toward pj): cos^3 = 1 / (2 * sqrt(2)) along pj - pi, whose length is sqrt(2 - sqrt(2)).
       expect(force[1]).toBeCloseTo(0.25 / Math.sqrt(2 - Math.SQRT2), 10);
     });
   });
@@ -284,10 +257,6 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.1, 0]) });
       const pj = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.2, 0]) });
       const force = repulsionForce({ pi, pj, kRepulsion: 0.5 });
-      // Force should point from j toward i (away from j)
-      // pi is at [~1, ~0.1, 0], pj is at [~1, ~0.2, 0]
-      // Direction away from pj should have negative y component relative to pj
-      // 1 - cos is about 0.0048, under the 0.01 floor, so the magnitude is K / 0.01^2.
       expect(norm(force)).toBeCloseTo(5000, 6);
     });
 
@@ -302,7 +271,6 @@ describe('Force computations', () => {
     });
 
     it('scales with inverse cosine_distance^2', () => {
-      // Close particles (high cos -> small distance) => stronger repulsion
       const close_i = makeParticle({ memoryId: 'a', position: vecNormalize([1, 0.05, 0]) });
       const close_j = makeParticle({ memoryId: 'b', position: vecNormalize([1, 0.1, 0]) });
       const far_i = makeParticle({ memoryId: 'c', position: [1, 0, 0] });
@@ -316,7 +284,6 @@ describe('Force computations', () => {
       const pi = makeParticle({ memoryId: 'a', position: [1, 0, 0] });
       const pj = makeParticle({ memoryId: 'b', position: [0, 1, 0] });
       const force = repulsionForce({ pi, pj, kRepulsion: 1.0 });
-      // Direction is normalize(pi.pos - pj.pos) = normalize([1,-1,0]); orthogonal rows have distance 1, so magnitude 1.
       expect(force[0]).toBeCloseTo(Math.SQRT1_2, 10);
       expect(force[1]).toBeCloseTo(-Math.SQRT1_2, 10);
     });
@@ -326,7 +293,6 @@ describe('Force computations', () => {
     it('opposes velocity direction', () => {
       const p = makeParticle({ memoryId: 'a', velocity: [1, 2, 3] });
       const fd = dragForce(p, 0.3, 7);
-      // Each component should be opposite sign of velocity
       expect(fd[0]).toBeLessThan(0);
       expect(fd[1]).toBeLessThan(0);
       expect(fd[2]).toBeLessThan(0);
@@ -361,10 +327,6 @@ describe('Force computations', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Scoring
-// ---------------------------------------------------------------------------
-
 describe('Scoring', () => {
   describe('physicsScore', () => {
     it('returns results sorted by score (highest first)', () => {
@@ -377,7 +339,6 @@ describe('Scoring', () => {
       const results = physicsScore(particles, query, { ...DEFAULT_PHYSICS_CONFIG });
       expect(results[0].memoryId).toBe('high');
       expect(results[results.length - 1].memoryId).toBe('low');
-      // Verify sorted
       for (let i = 1; i < results.length; i++) {
         expect(results[i - 1].finalScore).toBeGreaterThanOrEqual(results[i].finalScore);
       }
@@ -416,7 +377,6 @@ describe('Scoring', () => {
 
   describe('Cluster amplification', () => {
     it('nearby high-scoring memories reinforce each other', () => {
-      // Create a cluster of 3 similar particles and one far away
       const cluster = [
         makeParticle({ memoryId: 'c1', position: vecNormalize([1, 0.01, 0]) }),
         makeParticle({ memoryId: 'c2', position: vecNormalize([1, 0.02, 0]) }),
@@ -432,15 +392,12 @@ describe('Scoring', () => {
         interferenceGain: 1.0,
       };
 
-      // Score cluster particles
       const clusterResults = physicsScore([...cluster, isolated], query, config);
       const c1Result = clusterResults.find((r) => r.memoryId === 'c1')!;
-      // c1 should get cluster amplification > 1 from c2 and c3
       expect(c1Result.clusterAmplification).toBeGreaterThan(1.0);
     });
 
     it('isolated memory gets amplification of 1.0', () => {
-      // Two very distant particles -- below threshold
       const particles = [
         makeParticle({ memoryId: 'a', position: [1, 0, 0] }),
         makeParticle({ memoryId: 'b', position: [0, 1, 0] }),
@@ -466,10 +423,6 @@ describe('Scoring', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 5. Simulation
-// ---------------------------------------------------------------------------
-
 describe('Simulation', () => {
   describe('simulate', () => {
     it('empty particles returns zero stats', () => {
@@ -489,7 +442,6 @@ describe('Simulation', () => {
       const ctx = makeCtx();
       simulate([p1, p2], ctx);
 
-      // At least one particle should have moved
       const moved1 = p1.position.some((v, i) => Math.abs(v - posBefore1[i]) > 1e-15);
       const moved2 = p2.position.some((v, i) => Math.abs(v - posBefore2[i]) > 1e-15);
       expect(moved1 || moved2).toBe(true);
@@ -531,21 +483,16 @@ describe('Simulation', () => {
       const config = { ...DEFAULT_PHYSICS_CONFIG, substeps: 5, drag: 0.5 };
       const ctx1 = makeCtx({ config });
 
-      // Run first batch
       simulate(particles, ctx1);
       const energyAfterFirst = computeSystemEnergy(particles, config.gMemory).kinetic;
 
-      // Run second batch
       const ctx2 = makeCtx({ config });
       simulate(particles, ctx2);
 
-      // Run third batch
       const ctx3 = makeCtx({ config });
       simulate(particles, ctx3);
       const energyAfterThird = computeSystemEnergy(particles, config.gMemory).kinetic;
 
-      // Kinetic energy should generally decrease due to drag
-      // At least one of these should show decrease
       expect(energyAfterThird).toBeLessThanOrEqual(energyAfterFirst + 1e-6);
     });
 
@@ -576,7 +523,6 @@ describe('Simulation', () => {
     it('kinetic energy = 0.5 * m * v^2', () => {
       const p = makeParticle({ memoryId: 'a', mass: 2, velocity: [3, 4, 0] });
       const energy = computeSystemEnergy([p], 0.01);
-      // KE = 0.5 * 2 * 25 = 25
       expect(energy.kinetic).toBeCloseTo(25, 5);
     });
 

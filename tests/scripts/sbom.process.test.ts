@@ -1,11 +1,8 @@
-// scripts/sbom.mjs: the release SBOM lists what the npm tarball ships (root
-// runtime components plus the ui root plus ui runtime components), never dev deps.
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-// Imported from the .mjs script; the CLI main is guarded so this import does NOT run it.
 import { runtimeComponents, mergeRuntimeBoms } from '../../scripts/sbom.mjs';
 
 interface CdxProperty {
@@ -42,8 +39,6 @@ describe('runtimeComponents', () => {
 });
 
 describe('mergeRuntimeBoms', () => {
-  // shared-dep sits in both BOMs, runtime-dep depends on a dev package and on one in neither BOM,
-  // and dev-dep / ui-dev must not survive the merge.
   const rootBom: CdxBom = {
     specVersion: '1.5',
     metadata: { component: comp('root-pkg@1.0.0') },
@@ -84,7 +79,6 @@ describe('mergeRuntimeBoms', () => {
 
   it('de-dupes the shared dependency entry to one, and strips dangling dependsOn', () => {
     expect(merged.dependencies.filter((d) => d.ref === 'shared-dep@3.0.0')).toHaveLength(1);
-    // dev-dep and ghost were runtime-dep's only dependsOn entries; both are non-survivors.
     expect(dep('runtime-dep@1.0.0').dependsOn).toEqual([]);
   });
 

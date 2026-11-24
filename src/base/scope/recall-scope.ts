@@ -1,10 +1,3 @@
-/**
- * Recall-side scope predicates, in a leaf module so search-both.ts can apply the same default-deny
- * rule to searchBothHybrid's candidate loads without an import cycle. src/api/index.ts imports
- * these and re-exports them for back-compat (`api.isPrivateScope`, tests importing
- * `passesScopeFilterForRecall`).
- */
-
 import { BadRequestError, ForbiddenError, NotFoundError } from '../errors/api-errors.js';
 import { MAX_ID_LEN } from '../util/limits.js';
 import type { Role } from './role.js';
@@ -45,7 +38,6 @@ export function isPrivateScope(scope: string | null | undefined): boolean {
 }
 
 export const PERSONAL_SCOPE_PREFIX = 'personal:private:';
-// The scope must fit the 256-character scope caps, so the owner gets what the prefix leaves.
 export const PERSONAL_OWNER_MAX = MAX_ID_LEN - PERSONAL_SCOPE_PREFIX.length;
 
 /** True for a `personal:private:<owner>` scope, any case, so a case variant is never mistaken
@@ -194,7 +186,6 @@ export type ReaderRole = 'admin' | 'member';
 export type StoreActor = ScopeActor & { readonly role: ReaderRole };
 
 function readerRoleOf(actor: ScopeActor): ReaderRole {
-  // Every by-id write sits behind an editor-level gate, so only admin reads wider.
   return actor.role === 'admin' ? 'admin' : 'member';
 }
 
@@ -238,8 +229,6 @@ export function readerMayChange(reader: ScopeReader, row: WrittenRow): boolean {
   return Boolean(reader.owner) && row.owner === reader.owner;
 }
 
-/** A row the reader reaches but may not act on is a 403 naming the key that can, since the caller
- * already sees the row; absent and out of reach share one 404 so neither leaks. */
 function assertRowRight(
   reader: ScopeReader,
   row: WrittenRow | undefined,
@@ -329,7 +318,6 @@ export function derivationPartitionKey(
   scope: string | null | undefined,
   origin: string | null | undefined,
 ): string {
-  // unstamped, unknown and named never share a bucket
   const project = origin === undefined ? '\u0002' : (origin ?? '\u0001');
   return `${tenantId}\u0000${derivationScope(scope) ?? ''}\u0000${project}`;
 }

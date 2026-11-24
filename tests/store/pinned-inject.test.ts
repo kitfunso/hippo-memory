@@ -25,7 +25,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** `hippo <args>` run in this process from `cwd` with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippoIn(cwd: string, globalDir: string, args: string[]): Promise<string> {
   vi.stubEnv('HIPPO_HOME', globalDir);
   const saved = process.cwd();
@@ -40,9 +39,6 @@ async function hippoIn(cwd: string, globalDir: string, args: string[]): Promise<
 }
 
 function runHippo(args: string[]): Promise<string> {
-  // Point HIPPO_HOME at a separate dir so the global store doesn't leak into
-  // the test (printContext merges local + global). The local store lives at
-  // `${tmpDir}/.hippo` (resolved via getHippoRoot(cwd)).
   return hippoIn(tmpDir, path.join(tmpDir, 'global'), args);
 }
 
@@ -147,8 +143,6 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('is read-only — does NOT bump retrieval_count on pinned memories', async () => {
-    // Hook fires every turn; if each call inflated retrieval_count the
-    // under-rehearsal score for pinned memories would skew over time.
     initTestStore(hippoDir);
     const pinned = createMemory('read-only test memory that should not be mutated by a context call', { pinned: true });
     writeEntry(hippoDir, pinned);
@@ -157,7 +151,6 @@ describe('hippo context --pinned-only', () => {
     await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
     await runHippo(['context', '--pinned-only', '--format', 'additional-context', '--budget', '500']);
 
-    // Reload from disk and verify retrieval_count is still 0
     const { loadAllEntries } = await import('../_helpers/root-forms.js');
     const reloaded = loadAllEntries(hippoDir, 'default');
     const target = reloaded.find((e) => e.id === pinned.id);
@@ -186,18 +179,6 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('does NOT fail when local .hippo is missing (regression: UserPromptSubmit hook error)', async () => {
-    // Regression for v0.29.2: the UserPromptSubmit hook fires in EVERY Claude
-    // Code session, including directories without a .hippo/ store. Before the
-    // fix, `hippo context --pinned-only` called requireInit() first and the
-    // hook would error with "No .hippo directory found."
-    //
-    // Expected behaviour: when the cwd has no local store, fall back to
-    // global-only. If global also has no pinned memories, exit cleanly with
-    // empty stdout (hook no-ops).
-    //
-    // We stand up a tmp GLOBAL with a pinned memory, point cwd at a fresh
-    // tmpdir that has NO local .hippo/, and expect the global memory to show
-    // up in the additional-context payload.
     const globalDir = makeRoot('global');
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-fresh-cwd-'));
     try {
@@ -215,12 +196,10 @@ describe('hippo context --pinned-only', () => {
         '500',
       ]);
 
-      // Must NOT throw, must NOT print to stderr, must contain the pinned memory.
       expect(out.trim()).not.toBe('');
       const parsed = JSON.parse(out);
       expect(parsed.hookSpecificOutput.additionalContext).toContain('REGRESSION GUARD');
 
-      // And must NOT have auto-created .hippo in freshCwd (would pollute user's dirs).
       expect(fs.existsSync(path.join(freshCwd, '.hippo'))).toBe(false);
     } finally {
       fs.rmSync(freshCwd, { recursive: true, force: true });
@@ -228,12 +207,9 @@ describe('hippo context --pinned-only', () => {
   });
 
   it('exits cleanly when both local AND global are empty (pinned-only, fresh cwd)', async () => {
-    // Variant of the regression test: no local, no global pinned memories,
-    // hook must produce empty stdout (not an error).
     const globalDir = makeRoot('empty', { init: false });
     const freshCwd = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-cwd-'));
     try {
-      // Do NOT init globalDir — it's just an empty path.
       const out = await hippoIn(freshCwd, globalDir, [
         'context',
         '--pinned-only',

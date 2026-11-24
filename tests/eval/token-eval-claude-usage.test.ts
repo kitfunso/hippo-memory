@@ -1,8 +1,3 @@
-/**
- * Desktop usage reader: Claude Code transcripts (usage counted once per API
- * message id, subagents folded into their session) joined to hippo's token
- * ledger by session id. Fixture transcripts in the real line format.
- */
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,7 +15,6 @@ function usage(w: number, r: number, o: number) {
   return { input_tokens: 2, cache_creation_input_tokens: w, cache_read_input_tokens: r, output_tokens: o };
 }
 
-/** One transcript line in Claude Code's JSONL format (only the fields the reader uses). */
 interface TranscriptLine {
   type: string;
   timestamp: string;

@@ -1,5 +1,3 @@
-// POSIX: a worker thread holds a lock, this thread takes through the create path, and a separate process then asks.
-// Prints the kind that process got: held, unless this process dropped the worker thread's lock with a raw close.
 import { spawnSync } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 import { pathToFileURL } from 'node:url';

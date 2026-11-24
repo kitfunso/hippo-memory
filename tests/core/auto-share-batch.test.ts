@@ -1,4 +1,3 @@
-// autoShare writes every candidate to the global store in one transaction, from the rows it already holds.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,7 +22,6 @@ describe('autoShare batching', () => {
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'hippo-autoshare-batch-'));
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
-    // The first open migrates the store, which would count as writes in whichever call comes first.
     initTestStore(getGlobalRoot());
   });
 

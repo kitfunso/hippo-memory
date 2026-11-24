@@ -1,5 +1,3 @@
-// A session's working state read from its transcript tail, with no store in the imports, so a hook
-// with no store can derive it.
 import * as fs from 'node:fs';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorFields, errorMessage, type LineLog } from '../../base/util/log.js';
@@ -12,10 +10,6 @@ import { copilotTurn } from './copilot-transcript.js';
 type LineFlags = Parameters<typeof humanUserText>[0];
 type LineMessage = Parameters<typeof humanUserText>[1];
 
-/**
- * Newest main-agent `role` turn in a JSONL tail, from a Claude Code or a Copilot transcript;
- * `textOf` reads a Claude Code line, '' when it has no text.
- */
 function lastTurnText(
   jsonl: string,
   role: 'user' | 'assistant',
@@ -23,7 +17,6 @@ function lastTurnText(
 ): string {
   const lines = jsonl.split('\n').filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
-    // The tail read can start mid-line; a torn fragment parses to nothing.
     const entry: unknown = tryParseJson(lines[i]);
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry)) continue;
@@ -46,8 +39,6 @@ function lastTurnText(
   return '';
 }
 
-/** The last text block of an assistant message, skipping thinking and tool_use blocks (as
- * summariseTranscript does). */
 function lastTextBlock(_entry: LineFlags, message: LineMessage): string {
   const content = message.content;
   if (!Array.isArray(content)) return '';

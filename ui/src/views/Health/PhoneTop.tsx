@@ -6,7 +6,6 @@ import { useHealth } from "./HealthContext";
 const TICK_MS = 15_000;
 
 interface PhoneTopProps {
-  /** The open project, or null on the overview. */
   projectKey: string | null;
   name: string;
   memoryId: string | null;

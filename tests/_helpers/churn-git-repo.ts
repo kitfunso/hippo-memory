@@ -1,4 +1,3 @@
-// A temp git repo with dated commits, and the anchor dates the churn-staleness tests measure against.
 import { execSync, execFileSync } from 'node:child_process';
 import { DAY_MS } from '../../src/base/util/time.js';
 

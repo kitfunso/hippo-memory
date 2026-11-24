@@ -1,5 +1,3 @@
-/** The 2.0 signatures that moved to options objects, on a real store, and the published write options that lost the db handle. */
-
 import { describe, it, expect, expectTypeOf, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { WriteEntryOptions } from '../../src/store/sqlite/entries/entry-writes.js';

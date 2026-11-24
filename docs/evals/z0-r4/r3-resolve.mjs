@@ -1,5 +1,3 @@
-// Read-only: round 3, sets R+N, seeds 1-3. Part (b)'s harmT resolve difference against the pooled task-level difference, per arm pair.
-// Usage: node docs/evals/z0-r4/r3-resolve.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { api, prices, scoredNoDrop } = await openRound3();

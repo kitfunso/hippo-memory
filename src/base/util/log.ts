@@ -1,6 +1,3 @@
-/** Leveled stderr logger. `HIPPO_LOG` picks the threshold (error, warn, info, debug); unset or
- * unknown means warn (a server also writes its request trail). `HIPPO_LOG_FORMAT=json` writes JSON lines. */
-
 import { envLogJson, envLogLevel } from './env.js';
 import { currentRequestId } from './request-scope.js';
 import { redactSecretsStrict } from './secret-detect.js';
@@ -23,8 +20,6 @@ function isLogLevel(value: string): value is LogLevel {
   return Object.hasOwn(RANK, value);
 }
 
-/** The active threshold, read on every call so a test or a long-lived server can change it
- * without a restart. */
 function logThreshold(): LogLevel {
   const raw = envLogLevel();
   return isLogLevel(raw) ? raw : 'warn';
@@ -34,11 +29,8 @@ export function isLevelEnabled(level: LogLevel): boolean {
   return RANK[level] <= RANK[logThreshold()];
 }
 
-// A field value is caller data; flattening newlines keeps one event on one line.
 const oneLine = (value: string): string => value.replace(/[\r\n]+/g, ' ');
 
-// A value with a space, quote or `=` is quoted, so a reader of the line can tell where it ends and
-// the next key starts.
 const fieldValue = (value: string): string =>
   /[\s"=]/.test(value) ? JSON.stringify(value) : value;
 
@@ -72,8 +64,6 @@ function write(level: LogLevel, message: string, fields?: LogFields): void {
 }
 
 function emit(level: LogLevel, message: string, fields?: LogFields): void {
-  // The request id is ambient, so a line logged deep in a library call still names the request it
-  // ran for.
   const stamped: LogFields = {
     ts: new Date().toISOString(),
     requestId: currentRequestId(),
@@ -83,15 +73,10 @@ function emit(level: LogLevel, message: string, fields?: LogFields): void {
   process.stderr.write(`${format(level, message, stamped)}\n`);
 }
 
-// No key follows the data: each names a table, column, errno or site. The cap guards a call site
-// that puts a per-row value in its key, which would otherwise grow the set without bound.
 const ONCE_KEY_CAP = 1_000;
 const onceKeys = new Set<string>();
 let onceCapReported = false;
 
-/** 'new' records the key and 'seen' is a repeat. A full set forgets its least recently seen key
- * to take a new one, so a new failure class always logs at its level; the first eviction says so
- * at warn. */
 function sightOnceKey(key: string): 'new' | 'seen' {
   if (onceKeys.has(key)) {
     // Re-inserting moves the key last in Set order, so Set order tracks least recently seen.
@@ -117,14 +102,10 @@ function sightOnceKey(key: string): 'new' | 'seen' {
   return 'new';
 }
 
-/** Write `message` at `level` the first time `key` is seen in this process; later calls are
- * dropped. */
 function once(key: string, level: LogLevel, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') write(level, message, fields);
 }
 
-/** Warn the first time `key` is seen in this process, then log at debug, so a repeating failure
- * stays findable without flooding stderr. */
 function warnThenDebug(key: string, message: string, fields?: LogFields): void {
   write(sightOnceKey(key) === 'new' ? 'warn' : 'debug', message, fields);
 }
@@ -132,16 +113,11 @@ function warnThenDebug(key: string, message: string, fields?: LogFields): void {
 const SAMPLE_EVERY = 100;
 const repeatCounts = new Map<string, number>();
 
-/** Warn the first time `key` is seen, then count repeats at debug and warn again with the
- * running count on every 100th, so a failure that keeps happening stays visible without flooding
- * stderr. */
 function warnThenSample(key: string, message: string, fields?: LogFields): void {
   if (sightOnceKey(key) === 'new') {
     write('warn', message, fields);
     return;
   }
-  // Counts only keys sightOnceKey recorded, and it drops a count with its key, so the map is
-  // bounded by ONCE_KEY_CAP.
   const seen = (repeatCounts.get(key) ?? 0) + 1;
   repeatCounts.set(key, seen);
   if (seen % SAMPLE_EVERY === 0) {
@@ -151,8 +127,6 @@ function warnThenSample(key: string, message: string, fields?: LogFields): void 
 
 const CAUSE_DEPTH = 5;
 
-/** `class: message` for each link of an Error.cause chain, at most CAUSE_DEPTH deep, stopping at
- * a cycle. */
 function causeChain(err: Error): string | undefined {
   const seen = new Set<unknown>([err]);
   const links: string[] = [];
@@ -171,13 +145,11 @@ function causeChain(err: Error): string | undefined {
 
 const VALUE_PREVIEW_CHARS = 200;
 
-/** A short, secret-redacted text of a thrown non-Error value. */
 function valuePreview<E>(value: E): string {
   let text: string;
   try {
     text = value instanceof Object ? JSON.stringify(value) : String(value);
   } catch {
-    // A throwing toString or a cyclic object has no text to show; the class name still logs.
     return '(unprintable)';
   }
   const redacted = redactSecretsStrict(text ?? String(value));
@@ -220,8 +192,6 @@ export function enableRequestTrail(): void {
   requestTrailOn = true;
 }
 
-/** An info-level line of the server's request trail: written at info, and also at the default
- * threshold once the process has enabled the trail. */
 function trail(message: string, fields?: LogFields): void {
   if (isLevelEnabled('info') || (requestTrailOn && !isLogLevel(envLogLevel()))) {
     emit('info', message, fields);

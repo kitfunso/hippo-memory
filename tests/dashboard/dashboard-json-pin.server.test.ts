@@ -1,5 +1,3 @@
-// Pins the dashboard reads the golden leaves out, recorded on the snapshot build before bounded reads replaced it:
-// every sort, brushes, case folding past ASCII, tag hits, first-seen project order, strength cut points, a past-cap grid.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -24,21 +22,18 @@ const SAME_TIME = isoAgo(40);
 let store: TmpStore;
 let dash: RunningDashboard;
 
-/** Varied alpha rows: each sort key spreads, two rows share every created time, and the cut points are hit exactly. */
 function seedAlpha(root: string): void {
   seed(root, 'Zulu first', { id: 'mem_p_a01', created: SAME_TIME, retrievalCount: 3, scope: 'team:a' });
   seed(root, 'alpha shared word', { id: 'mem_p_a02', created: SAME_TIME, layer: Layer.Semantic });
   seed(root, 'Kelvin sign note', { id: 'mem_p_a03', confidence: 'verified', scope: 'Team:b' });
   seed(root, 'Ärger upper umlaut', { id: 'mem_p_a04', confidence: 'inferred', retrievalCount: 9 });
   seed(root, 'plain body', { id: 'mem_p_a05', tags: ['NeedleTag', 'ops'], confidence: 'stale' });
-  // Exactly 0.5 now and 0.25 at 30 days: strong on the cut point.
   seed(root, 'on the strong cut', {
     id: 'mem_p_a06',
     halfLifeDays: 30,
     created: isoAgo(30),
     lastRetrieved: isoAgo(30),
   });
-  // Exactly 0.5 at seven days: strong in the seven-day bucket.
   seed(root, 'cut at seven days', { id: 'mem_p_a07', halfLifeDays: 10, created: isoAgo(3), lastRetrieved: isoAgo(3) });
   seed(root, 'made in the future', { id: 'mem_p_a08', created: isoAgo(-3), lastRetrieved: isoAgo(-3) });
   seed(root, 'wrong twice', { id: 'mem_p_a09', outcomeNegative: 2, emotionalValence: 'negative', layer: Layer.Buffer });
@@ -48,7 +43,6 @@ function seedAlpha(root: string): void {
   seed(root, 'Zulu second', { id: 'mem_p_a13', retrievalCount: 3, scope: 'team:a', created: isoAgo(7) });
 }
 
-/** Projects whose first rows share alpha's first created time, so the order they are first seen in rests on ids. */
 function seedOthers(root: string): void {
   seed(root, 'zeta shared word', { id: 'mem_p_z01', originProject: 'zeta', created: SAME_TIME });
   seed(root, 'beta shared word', { id: 'mem_p_b01', originProject: 'beta', created: SAME_TIME });
@@ -63,7 +57,6 @@ function seedOthers(root: string): void {
   embed(root, ['mem_p_a01', 'mem_p_a05', 'mem_p_b01']);
 }
 
-/** One project past the scatter's point cap, its ages, strengths and layers spread over many grid cells. */
 function bigRows(): MemoryEntry[] {
   return Array.from({ length: BIG_ROWS }, (_, i) => ({
     ...createMemory(`big row ${String(i).padStart(5, '0')}`, { tags: [] }),
@@ -129,7 +122,6 @@ const READS: readonly string[] = [
 
 const FILE_OVER = 6_000;
 
-/** Reads the dashboard serves as JSON; the snapshot id differs per run, so it is masked. */
 function parsed(body: string): Json {
   return JSON.parse(body.replace(/"snapshotId":\d+/g, '"snapshotId":"<id>"'));
 }
@@ -137,7 +129,6 @@ function parsed(body: string): Json {
 const slug = (path: string): string => path.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 describe('dashboard JSON on a varied store', () => {
-  // A failure names the read and diffs the field that changed; a grid body too long to read inline has its own file.
   it.each([...READS, BIG])('answers GET %s with the body the snapshot build gave', async (path) => {
     const reply = await get(dash.port, path);
     const body = parsed(reply.body);

@@ -1,5 +1,3 @@
-// serve() under a store that has the predictions, quarantine or graphReads group runs those routes on it, and one
-// without a feature group answers 501 on that group's routes from boot.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -248,7 +246,6 @@ describe('serve() under a store that has the graphReads group', () => {
     const spokes = [node(e.spoke1, 'system', 'Spoke'), node(e.spoke2, 'project', 'Spoke')];
     const shared = node(e.shared, 'project', 'Shared');
     const amongSpokes = [edge(e.spoke1, e.spoke2), edge(e.hub, e.spoke2), edge(e.hub, e.spoke1)];
-    // An admin reads the held scope and not another person's own: Mine is gone, and with it the relation that ends there.
     expect(await get(adminA, '/v1/graph')).toEqual({
       status: 200,
       body: {

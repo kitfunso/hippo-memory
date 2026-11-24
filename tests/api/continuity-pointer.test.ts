@@ -1,6 +1,3 @@
-// Another session's task snapshot and handoff reach the text readers as a pointer to the command that prints them;
-// the caller's own session, a shared store, JSON and the remote hook route (unless it opts in) get them whole.
-// The per-prompt hook text leaves another session's handoff out; `hippo context` and `hippo handoff latest` print it.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as path from 'node:path';
 import { contextGet } from '../../src/api/index.js';
@@ -59,7 +56,6 @@ function additionalContext(stdout: string): string {
     .additionalContext;
 }
 
-/** Records each (shown, budget-dropped) pair the task sections report. */
 function sectionsSpy() {
   const calls: Array<[number, number]> = [];
   const noop = (): void => undefined;
@@ -92,7 +88,6 @@ describe('task state in a project store', () => {
     store = path.join(tmp, '.hippo');
     vi.stubEnv('HIPPO_HOME', path.join(tmp, 'global'));
     vi.stubEnv('HIPPO_TENANT', '');
-    // The unknown-caller cases need no host id, and the others pass theirs in the payload.
     vi.stubEnv('HIPPO_SESSION_ID', '');
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
     initTestStore(store);
@@ -124,9 +119,7 @@ describe('task state in a project store', () => {
     await appendSessionEvent(store, 'default', { sessionId, eventType: 'note', content, source: 'test', scope });
   };
 
-  /** `hippo context` in this process; no session id means no payload, so the caller is unknown. */
   async function cli(flags: CliFlags, sessionId?: string): Promise<string> {
-    // No prompt, so the hook takes the recent-N path that surfaces a digest.
     const stdin = sessionId === undefined ? undefined : JSON.stringify({ session_id: sessionId });
     const r = await runInProcess(() =>
       withHookStdin(stdin, () => handleContext({ hippoRoot: store, tenantId: 'default', args: [], flags })),
@@ -137,7 +130,6 @@ describe('task state in a project store', () => {
 
   const hookText = async (sessionId?: string): Promise<string> => {
     const stdout = await cli(HOOK_FLAGS, sessionId);
-    // The hook prints nothing when no block is left to send.
     return stdout === '' ? '' : additionalContext(stdout);
   };
   const markdown = (sessionId?: string): Promise<string> => cli({ budget: '1500' }, sessionId);
@@ -208,7 +200,6 @@ describe('task state in a project store', () => {
     });
 
     it("a newer handoff from another session hides the caller's own (known limit, decision 2026-11-01)", async () => {
-      // No fresh snapshot, so the read returns the newest handoff of any session; row id breaks a same-millisecond tie.
       const own = saveHandoff('own', { summary: 'Unfinished: the caller left this one first' });
       const newer = saveHandoff('earlier', { summary: 'Unfinished: a parallel session left this one later' });
       const text = await hookText('own');
@@ -241,7 +232,6 @@ describe('task state in a project store', () => {
     it('is printed by buildPromptHookContext unless its caller opts in, and then matches the CLI hook text', async () => {
       const snapshot = saveSnapshot('earlier');
       const handoff = saveHandoff('earlier');
-      // The CLI first: a buildPromptHookContext call books a ledger row that would make the CLI skip the same block.
       const cliText = await hookText('now');
       expect(cliText).toContain(snapshotPointer(snapshot));
       expect(cliText).not.toContain('Session Handoff');
@@ -269,7 +259,6 @@ describe('task state in a project store', () => {
       const result = await contextGet(apiCtx(store), hookOpts(1500, 'pointer'));
       expect(result.sessionHandoff?.summary).toBe(HANDOFF_SUMMARY);
       expect(result.handoffMode).toBeUndefined();
-      // Another session's handoff stays out of the hook text whatever its id.
       expect(await hookText('now')).not.toContain(HANDOFF_SUMMARY);
     });
 
@@ -291,7 +280,6 @@ describe('task state in a project store', () => {
       expect(text).not.toContain('Recent Session Trail');
       expect(text).not.toContain(TRAIL_EVENT);
 
-      // A budget the whole trail cannot fit: as a pointer it never reaches the purse, so nothing counts as dropped.
       const pointer = sectionsSpy();
       const result = await contextGet(apiCtx(store), { ...hookOpts(150, 'pointer'), deliveryObserver: pointer.obs });
       expect(result.snapshotMode).toBe('pointer');
@@ -343,7 +331,6 @@ describe('task state in a project store', () => {
       expect(await hookText('now')).toContain(snapshotPointer(snapshot));
     });
 
-    // A pointer names a command, so a trail with no pointer printing it goes through the scope filter and the purse.
     it("prints another session's trail in full when its snapshot is scope-hidden, as without the opt-in", async () => {
       saveSnapshot('earlier', { scope: PRIVATE_SCOPE });
       await logEvent('earlier');
@@ -370,7 +357,6 @@ describe('task state in a project store', () => {
       saveSnapshot('earlier');
       await logEvent('earlier', 'Sweep timed out');
 
-      // At 49 tokens the 40-token pointer is dropped and the 37-token trail is paid; at 60 the pointer fits and hides it.
       const unpaid = sectionsSpy();
       const result = await contextGet(apiCtx(store), { ...hookOpts(49, 'pointer'), deliveryObserver: unpaid.obs });
       expect(result.activeSnapshot).toBeUndefined();
@@ -428,7 +414,6 @@ describe('task state in a project store', () => {
         expect(text).not.toContain(TRAIL_EVENT);
       }
       expect(md).toContain(handoffPointer(handoff));
-      // No session id means no handoff is the caller's own, so the hook leaves them all out.
       expect(hook).not.toContain('Session Handoff');
     });
 
@@ -539,7 +524,6 @@ describe('task state in a project store', () => {
       expect(text).not.toContain('upload timeout');
       expect(text).toContain('queue worker');
 
-      // The pointer readers still print the handoff in place of the digest.
       const pointer = await markdown('now');
       expect(pointer).toContain(handoffPointer(handoff));
       expect(pointer).not.toContain('upload timeout');
@@ -547,7 +531,6 @@ describe('task state in a project store', () => {
   });
 
   describe('the commands a pointer names', () => {
-    /** Runs the `hippo <verb> ...` line a pointer printed, through the CLI's own parser and the verb handler. */
     async function runPrinted(text: string, verb: 'session' | 'handoff') {
       const printed = [...text.matchAll(/run `hippo ([^`]+)`/g)].map((m) => m[1]).find((c) => c.startsWith(`${verb} `));
       expect(printed, text).toBeDefined();
@@ -624,7 +607,6 @@ describe('task state on a shared store', () => {
     home = makeRoot('continuity-pointer-shared', { config: { sharedStore: true } });
   });
 
-  /** Bob's snapshot and handoff, both left by session sb1. */
   function seedBob() {
     saveActiveTaskSnapshot(
       home,

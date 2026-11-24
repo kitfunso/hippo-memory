@@ -1,5 +1,3 @@
-// the static and recall token-ledger rows each opened their own connection
-// via withLedgerDb. Drives the built CLI, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -89,7 +87,6 @@ describe('the static and recall ledger rows share one connection', () => {
 
     const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n').filter(Boolean);
     const connIds = new Set(lines.map((l) => l.split('\t')[0]));
-    // One shared connection prepares the cached insert once; two connections would log it twice.
     expect(lines.length).toBe(1);
     expect(connIds.size).toBe(1);
   });

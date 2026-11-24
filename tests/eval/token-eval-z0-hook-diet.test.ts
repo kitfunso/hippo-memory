@@ -1,4 +1,3 @@
-/** Z0 hook diet replay pure parts: hook block parsing, config staging, the isolated env, the fidelity rule, request-log reads, the work-dir guard and the saving sums. */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -27,7 +26,6 @@ const BLOCK = [
 const PRICES = { cacheWritePerMTok: 8, cacheReadPerMTok: 0.2 };
 const wrapped = (text: string): string => JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } });
 
-/** One logged request, shaped like the proxy's request log. */
 const logLine = (body: Body, method = 'POST', url = '/v1/messages?beta=true'): string => JSON.stringify({ at: '2026-11-07T23:10:57.497Z', method, url, body: JSON.stringify(body) });
 const mainBody = (text: string): Body => ({ tools: ['a', 'b', 'c', 'd'], messages: [{ role: 'user', content: [{ type: 'text', text }] }] });
 const arm = (tokens: number, chars: number, name = 'Project Memory'): Arm => ({ exit: 0, chars, sections: [[name, 5, tokens]] });

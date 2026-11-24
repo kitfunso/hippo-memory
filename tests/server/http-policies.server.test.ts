@@ -1,13 +1,3 @@
-/**
- * E2 policy first-class object (bi-temporal-first) - HTTP route parity test.
- * Docs: docs/plans/2026-05-30-e2-policy-object.md
- *
- * Covers what only policies have; the shared route rules run per kind in http-objects.server.test.ts.
- * 1. GET /v1/policies lists + status filter
- * 2. GET /v1/policies/asof (as-of query; date + name; missing date 400)
- * 3. inverted valid_to (400)
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -73,12 +63,10 @@ describe('HTTP /v1/policies (bi-temporal first-class object)', () => {
       await fetch(`${handle.url}/v1/policies/asof?date=2026-03-01`, { headers: authHeaders(apiKey) }),
     );
     expect(inForce.policies.length).toBe(1);
-    // half-open: == valid_to not in force
     const atEnd = await jsonAs<{ policies: Policy[] }>(
       await fetch(`${handle.url}/v1/policies/asof?date=2026-06-01`, { headers: authHeaders(apiKey) }),
     );
     expect(atEnd.policies.length).toBe(0);
-    // missing date -> 400
     const noDate = await fetch(`${handle.url}/v1/policies/asof`, { headers: authHeaders(apiKey) });
     expect(noDate.status).toBe(400);
   });

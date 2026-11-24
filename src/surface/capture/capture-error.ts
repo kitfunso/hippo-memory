@@ -1,7 +1,3 @@
-// `hippo capture-error`, run by the Claude Code PostToolUseFailure hook: routine failures and
-// repeats are not stored, because error memories decay slowly and would crowd out real lessons;
-// what is stored stays `observed` until outcome feedback confirms it. Every failure, stored or not,
-// goes to the failure log.
 import type { ContextWith } from '../../api/types.js';
 import type { InfraPorts } from '../../base/ports/infra.js';
 import { CLI_ACTOR } from '../../base/scope/actor.js';
@@ -22,7 +18,6 @@ export type FailureTarget = Pick<
   'tenantId' | 'store' | 'config'
 > & {
   readonly infra: Pick<InfraPorts, 'clock'>;
-  /** Embeds a stored lesson off the hook's path; without it the row has no vector. */
   readonly embed?: (entry: MemoryEntry) => void;
 };
 
@@ -53,8 +48,6 @@ interface LogAndReportOptions {
   readonly onLogged: ((failureId: number | null) => void) | undefined;
 }
 
-/** Logs the failure, then tells the caller the row id, or null when the write threw; the throw
- * goes on. */
 async function logAndReport({
   target,
   payload,
@@ -117,7 +110,6 @@ export async function storeLesson(
     },
     infra.clock(),
   );
-  // A caller's project is its checked one; the store's own folder would name the server.
   const write =
     caller === undefined
       ? { entry, actor: CLI_ACTOR }

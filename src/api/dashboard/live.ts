@@ -1,9 +1,7 @@
-// What the dashboard shows: live memories by origin project, under the wire's layer and band names.
 import type { DashboardChip, Origin } from '../../base/ports/store/dashboard-reads.js';
 import type { Band, Layer, ProjectKind } from './types.js';
 
 export const LAYERS: readonly Layer[] = ['buffer', 'episodic', 'semantic', 'trace'];
-// Wire order of `Band`, and the order the mockup sorts bands in.
 export const BANDS: readonly Band[] = ['pinned', 'strong', 'fading', 'atRisk'];
 
 export type Chip = DashboardChip;

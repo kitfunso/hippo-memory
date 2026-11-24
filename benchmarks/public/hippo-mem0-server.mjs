@@ -1,32 +1,4 @@
 #!/usr/bin/env node
-/**
- * Hippo behind the three HTTP calls Mem0's benchmark runner makes
- * (github.com/mem0ai/memory-benchmarks, `--backend oss`), so that runner can
- * score hippo unchanged: same datasets, prompts, answering and judging models.
- * Pre-registration: docs/evals/2026-09-24-public-benchmarks-prereg.md.
- *
- *   POST   /memories  {messages, user_id, timestamp}   store one chunk
- *   POST   /search    {query, user_id, limit}          ranked memories
- *   DELETE /memories?user_id=...                       drop a user's store
- *
- * Each chunk the runner sends is stored verbatim as one memory ("role:
- * content" lines), dated with the session timestamp the runner sends. Each
- * user gets its own store under --data-dir. Search ranks with hippo's
- * hybridSearch ("hippo" arm) or by the BM25 component alone ("bm25" arm),
- * with "now" one day after the user's latest memory.
- *
- * Usage:
- *   npm run build
- *   node benchmarks/public/hippo-mem0-server.mjs --arm hippo --port 8888 --data-dir /tmp/hippo-bench
- *   # then, in memory-benchmarks: MEM0_HOST=http://localhost:8888 python -m benchmarks.locomo.run --backend oss ...
- *
- * Optional: --dist DIR serves another hippo build (default: this checkout's dist),
- * --host ADDR binds one address (default: all), --read-only answers only
- * POST /search and GET /health and refuses every other route with 403.
- * --reranker-top-k N re-orders the top N with hippo's local cross-encoder (`hippo recall
- * --reranker cross-encoder`); --rank-score returns 1 - rank/limit as the score, so a client
- * that sorts by score keeps hippo's final order (dated notes 9).
- */
 import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -57,19 +29,15 @@ const PORT = Number(arg('port', '8888'));
 const HOST = arg('host', undefined);
 const READ_ONLY = args.includes('--read-only');
 const DATA_DIR = path.resolve(arg('data-dir', path.join(REPO, 'benchmarks', 'public', 'stores')));
-// eval-only: overrides the shipped half-life default for sensitivity checks (Amendment 2).
 const HALF_LIFE_DAYS = arg('half-life-days', undefined);
 const DAY_MS = 86_400_000;
 if (!['hippo', 'bm25'].includes(ARM)) throw new Error(`--arm must be hippo or bm25, got ${ARM}`);
-// Amendment 2 fixes "no embeddings on any arm" regardless of what's installed locally.
 const EMBED = ARM === 'hippo' && isEmbeddingAvailable() && arg('embeddings', '0') === '1';
 const RERANK_K = Number(arg('reranker-top-k', '0'));
 const RANK_SCORE = args.includes('--rank-score');
 if (!Number.isInteger(RERANK_K) || RERANK_K < 0) throw new Error(`--reranker-top-k must be a whole number, got ${RERANK_K}`);
 if (RERANK_K > 0 && ARM !== 'hippo') throw new Error('--reranker-top-k needs --arm hippo');
-// A cold model can outlast the 5 s query-embedding deadline, and that search then runs on BM25 alone.
 if (EMBED && (await getEmbedding('probe')).length === 0) throw new Error('the local embedder returned no vector');
-// hippo keeps the base score for a candidate the cross-encoder fails on; the bench counts those and fails the search.
 let crossEncoderFailures = 0;
 const crossEncoder = transformersCrossEncoder();
 async function countedCrossEncoder() {
@@ -82,14 +50,12 @@ if (RERANKER) {
   if (!Number.isFinite(score)) throw new Error('cross-encoder self-check returned a non-finite score');
 }
 
-/** Per-user store root. The user id is hashed so any string is a safe path. */
 function rootFor(userId) {
   const slug = String(userId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
   const hash = createHash('sha256').update(String(userId)).digest('hex').slice(0, 10);
   return path.join(DATA_DIR, `${slug}-${hash}`, '.hippo');
 }
 
-/** Entries per user, dropped whenever that user's store changes. */
 const cache = new Map();
 function entriesFor(userId) {
   const root = rootFor(userId);
@@ -97,7 +63,6 @@ function entriesFor(userId) {
   return cache.get(root);
 }
 
-/** Store one chunk of messages as one memory dated at the session time. */
 async function addChunk(body) {
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const text = messages
@@ -121,7 +86,6 @@ async function addChunk(body) {
   return { results: [{ id: entry.id, memory: text, event: 'ADD' }] };
 }
 
-/** Rank the user's memories for a query and return Mem0's result shape. */
 async function search(body) {
   const entries = entriesFor(body.user_id);
   if (entries.length === 0) return { results: [] };
@@ -170,15 +134,12 @@ function readBody(req) {
   });
 }
 
-// One request at a time: each user's store is a single SQLite file, and the
-// runner's parallel adds must land in order.
 let queue = Promise.resolve();
 const server = http.createServer((req, res) => {
   queue = queue.then(async () => {
     const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
     try {
       let out;
-      // Search is a POST but reads only, so read-only mode allows it and GET alone.
       if (READ_ONLY && req.method !== 'GET' && !(req.method === 'POST' && url.pathname === '/search')) {
         res.writeHead(403, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'read-only server: only POST /search and GET /health are served' }));

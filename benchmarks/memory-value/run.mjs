@@ -1,37 +1,4 @@
 #!/usr/bin/env node
-/**
- * LC2-E1 — orchestrator CLI: split -> ingest -> simulate -> extract -> evaluate.
- *
- * Usage:
- *   node run.mjs --smoke
- *   node run.mjs --data <path> --questions 3
- *   node run.mjs --data <path> --budget 0.3 [--full] [--skip-simulate] [--keep-stores]
- *
- * --data <path>       Real LongMemEval dataset (required unless --smoke). In
- *                      the episode worktree this MUST be the main checkout's
- *                      copy: benchmarks/longmemeval/data/ is gitignored and
- *                      not populated in worktrees (see benchmarks/memory-value/README.md).
- * --smoke              Synthetic 12-question fixture (common.mjs
- *                      generateSmokeFixture), no --data needed. <60s.
- * --questions N        Seeded stratified-by-type subset of N questions
- *                      instead of the full dataset.
- * --budget B           Report emphasis only — NEVER changes which budget
- *                      drives pairedRecords/the E2 bootstrap input (always
- *                      CONFIG.PRIMARY_BUDGET, 0.3, per the pre-reg). B is
- *                      appended to the evaluated budgets list as a
- *                      DESCRIPTIVE-only budget if it isn't already one of
- *                      CONFIG.KEEP_BUDGETS, and becomes the headline number
- *                      the printed summary reads. Default CONFIG.PRIMARY_BUDGET (0.3).
- * --skip-simulate      Ablation: extract features WITHOUT the usage
- *                      simulation (retrieval_count/outcome_* stay at their
- *                      ingest-time defaults). Lowers the variance-gate
- *                      threshold to CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE
- *                      (usage-derived dims are constant by design in this mode).
- * --keep-stores        Do not delete scratch stores after extraction
- *                      (default: cleaned up once features.jsonl exists).
- * --weights <file>     Forwarded to evaluate.mjs's --weights hook (E2).
- * --seed N             Overrides CONFIG.GLOBAL_SEED for this run.
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +22,6 @@ import { simulateQuestion } from './simulate.mjs';
 import { extractQuestion } from './extract.mjs';
 import { evaluateAll } from './evaluate.mjs';
 
-/** Seeded stratified-by-type subset of `n` question ids from `questions`. */
 function selectSubset(questions, n, seed) {
   if (n >= questions.length) return questions.map((q) => q.question_id);
   const byType = new Map();
@@ -116,16 +82,6 @@ async function main() {
   const targetIds = questionsN !== null ? selectSubset(questions, questionsN, seed) : questions.map((q) => q.question_id);
   const byId = new Map(questions.map((q) => [q.question_id, q]));
 
-  // Persist split.json so a later standalone `evaluate.mjs --weights <file>`
-  // (E2's re-scoring path, no re-ingest/simulate/extract needed) has a
-  // split to read by default, not just `split.mjs` run in isolation.
-  // Filtered to the PROCESSED ids only (codex review fix round, 2026-08-09
-  // P2 fix): a --questions N (or any other subsetting) run must never write
-  // a split.json listing ids that were never ingested/extracted this run —
-  // a standalone rescoring pass reading the full split would then crash or
-  // silently mix in stale features.jsonl from an unrelated earlier run.
-  // The FULL split's counts still land in results.split (below) for
-  // reference; only THIS file is subset-filtered.
   const targetIdSet = new Set(targetIds);
   writeJson(path.join(RESULTS_DIR, 'split.json'), {
     ...splitResult,
@@ -159,7 +115,6 @@ async function main() {
     if (!skipSimulate) {
       t0 = Date.now();
       const meta = readJson(path.join(questionDir(questionId), 'meta.json'));
-      // Causal clock clamp: tEval (not questionDate) — see ingest.mjs header.
       await simulateQuestion(questionId, meta.tEval, { seed });
       per.simulateMs = Date.now() - t0;
       timings.simulateMs += per.simulateMs;
@@ -175,26 +130,11 @@ async function main() {
     processed.push({ questionId, split: splitById.get(questionId) ?? 'train', memoryCount: ingestResult.memoryCount });
   }
 
-  // evaluate.mjs reads each question's features.jsonl from its scratch dir,
-  // so cleanup MUST happen after evaluation, not right after extraction.
   const evalT0 = Date.now();
   const weights = weightsPath ? readJson(weightsPath) : undefined;
-  // --budget contract (codex review fix round #2, 2026-08-09 P2 fix):
-  // primaryBudget is ALWAYS CONFIG.PRIMARY_BUDGET (0.3, pre-registered) —
-  // pairedRecords (the E2 bootstrap input) must stay pinned there regardless
-  // of what --budget the user passes for report emphasis. A previous fix
-  // forwarded budgetHeadline as primaryBudget, which is wrong per the
-  // pre-reg. --budget only controls which cell the HEADLINE print reads; it
-  // is appended to the evaluated budgets list as a DESCRIPTIVE budget (no
-  // bars) if not already one of CONFIG.KEEP_BUDGETS, so that cell always
-  // exists (no `undefined` in the headline print).
   const budgetsForEval = CONFIG.KEEP_BUDGETS.includes(budgetHeadline)
     ? CONFIG.KEEP_BUDGETS
     : [...CONFIG.KEEP_BUDGETS, budgetHeadline].sort((a, b) => a - b);
-  // --skip-simulate variance-gate exemption (P2 fix): usage-derived dims
-  // (retrieval_count, outcome_*, half_life_days) are constant BY DESIGN
-  // without simulation — see config.mjs's MIN_VARYING_FEATURES_SKIP_SIMULATE
-  // comment for exactly which 3 dims naturally survive.
   const minVarying = skipSimulate ? CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE : CONFIG.MIN_VARYING_FEATURES;
   const evaluation = evaluateAll(
     processed.map(({ questionId, split }) => ({ questionId, split })),
@@ -203,12 +143,6 @@ async function main() {
   const evaluateMs = Date.now() - evalT0;
   const totalMs = Date.now() - overallT0;
 
-  // Cleanup deletes ONLY the SQLite store dir (codex review fix round,
-  // 2026-08-09), not the whole question dir: gold.json/meta.json/
-  // features.jsonl survive, so a later standalone `evaluate.mjs --weights`
-  // (E2's re-scoring path) can run against this run's features without
-  // re-ingesting. safeRemoveScratchDir re-verifies containment before
-  // every delete (common.mjs).
   if (!keepStores) {
     for (const { questionId } of processed) {
       safeRemoveScratchDir(hippoRootFor(questionId));
@@ -253,17 +187,6 @@ async function main() {
   console.log(`[run] stages: ingest=${timings.ingestMs}ms simulate=${timings.simulateMs}ms extract=${timings.extractMs}ms evaluate=${evaluateMs}ms total=${totalMs}ms`);
   console.log(`[run] gold modes: ${JSON.stringify(goldModeCounts)}`);
 
-  // Runtime variance gate (code-review-critic fix round, 2026-08-09): a real
-  // (non-smoke) run where fewer than MIN_VARYING_FEATURES features vary
-  // dataset-wide means the substrate degenerated (e.g. an ingest regression
-  // froze every lifecycle field) — fail loudly instead of silently shipping
-  // a uniform/best-single comparison built on dead dims. Results are written
-  // FIRST so the failure is debuggable. Exempt for --smoke: a 12-question
-  // synthetic fixture can legitimately have thinner variance than the
-  // acceptance bar cares about. Liveness is WITHIN-STORE (fix round #2, P2
-  // fix): a feature constant in every store individually but differing
-  // across stores pools as "varying" yet is provably inert for every
-  // per-store-normalized scorer — see computeDatasetVariance (evaluate.mjs).
   const gate = evaluation.varianceGate;
   if (skipSimulate) {
     console.log(

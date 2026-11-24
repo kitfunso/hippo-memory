@@ -44,10 +44,6 @@ describe('messageToRememberOpts', () => {
   });
 
   it('falls back to bot:unknown when neither user nor bot_id is present', () => {
-    // v1.4.0: the v0.40.0 provenance gate requires a non-null owner on every
-    // raw row. Userless events without bot_id are rare (older REST shapes)
-    // but still need a sentinel so the gate stays clean. See codex round 1
-    // P1 in docs/plans/2026-05-05-provenance-ci-gate.md.
     const opts = messageToRememberOpts({
       teamId: 'T1',
       channel: { id: 'C1', is_private: false },

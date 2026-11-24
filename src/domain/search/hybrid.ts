@@ -149,8 +149,6 @@ export type HybridSearchOptions = HybridRanking & HybridFolder;
 /** hybridSearch's options once the caller names its stores; the folder fields belong to the
  * published wrapper. */
 export type HybridRankOptions = HybridRanking & {
-  /** The global store the graph stream also walks; the published wrapper opens it from
-   * `graphStream.globalRoot`. */
   graphGlobal?: StoreWith<never, 'graphReads'>;
 };
 
@@ -197,8 +195,6 @@ type ArmFusion = Omit<FusionInput, 'graph' | 'graphStream'>;
 
 function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOptions): ArmFusion {
   const embeddingWeight = options.embeddingWeight ?? DEFAULT_EMBEDDING_WEIGHT;
-  // A prepared corpus covers the caller's entries only, so rows the vector arm added force a
-  // rebuild.
   const corpus =
     (arm.addedRows ? undefined : options.preparedCorpus) ?? buildCorpus(arm.entries.map(entryText));
   const bm25Scores = arm.entries.map((_, i) => bm25Score(corpus, i, queryTerms));
@@ -212,8 +208,6 @@ function armFusion(arm: VectorArm, queryTerms: string[], options: HybridRankOpti
   };
 }
 
-/** Score order, then MMR or the reranker over the deduped rows and their DAG children, then the
- * budget. */
 async function orderAndFit(
   query: string,
   scored: SearchResult[],
@@ -254,7 +248,6 @@ export function vectorSourceOf({
   return { store, vectors, graphReads, provider, onHippoDb };
 }
 
-/** The graphs the graph list walks: the source store's and the global one's, each when kept. */
 function graphStoresOf(
   source: VectorSource | undefined,
   options: HybridRankOptions,
@@ -283,7 +276,6 @@ function hybridBoostContext(
   };
 }
 
-/** MMR when vectors are loaded, then the optional reranker. */
 async function orderHybrid(
   query: string,
   scored: SearchResult[],

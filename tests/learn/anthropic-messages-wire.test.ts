@@ -11,7 +11,6 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-// Real local HTTP server per case; the callers' own `fetcher` option points them at it, so the request bytes are what a real call sends.
 type Mode = 'ok' | 'http400' | 'http500' | 'badjson' | 'empty' | 'hang' | 'refused';
 
 interface Recorded {
@@ -72,7 +71,7 @@ async function startWire(mode: Mode, okText: string): Promise<Wire> {
         headers,
         body: Buffer.concat(chunks).toString('utf8'),
       });
-      if (reply === null) return; // 'hang' never answers
+      if (reply === null) return;
       res.writeHead(reply.status, { 'content-type': 'application/json' });
       res.end(reply.body);
     });
@@ -119,7 +118,6 @@ const FACT: ExtractedFact = { content: 'Alice likes tea', tags: ['speaker:Alice'
 const DAG_TEXT = 'Alice likes tea and drinks it every morning before work.';
 const REFINE_TEXT = 'People prefer tea in the morning.';
 
-// onError callers surface the typed failure through `messages`; refine surfaces it as a warn line on stderr.
 const callers: CallerSpec[] = [
   {
     name: 'extractFacts',

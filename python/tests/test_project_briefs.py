@@ -1,16 +1,3 @@
-"""E2 project_brief first-class object (repo-scoped / auto-refreshes) - SDK tests.
-
-Docs: docs/plans/2026-05-30-e2-project-brief-object.md
-
-Covers:
-1. ProjectBrief model round-trips wire camelCase <-> Python snake_case
-2. Defaults: status='active', version=1, optionals None
-3. Back-compat: response missing optional fields parses
-4. ON DELETE SET NULL: memory_id wire null -> None
-5. SDK methods exist on Hippo + HippoSync (6 each, incl refresh_project_brief)
-6. models.__all__ AND package __all__ contain ProjectBrief (codex P3 carry-forward)
-"""
-
 from __future__ import annotations
 
 import hippo_memory

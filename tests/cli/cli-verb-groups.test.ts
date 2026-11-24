@@ -1,10 +1,7 @@
-// Each verb names the optional store groups it reaches, and main refuses one whose group the store lacks before the
-// verb opens anything, with the StoreNotPortedError an unported store path throws, which runCli prints and exits 1 on.
 import { describe, expect, it } from 'vitest';
 import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
 import { assertVerbPorted, CLI_STORE, COMMANDS, type ServedGroups } from '../../src/surface/cli/verbs.js';
 
-// A store the CLI could open one day: every optional group but objects.
 const withoutObjects: ServedGroups = {
   kind: 'port-only',
   groups: CLI_STORE.groups.filter((group) => group !== 'objects'),
@@ -51,7 +48,6 @@ describe('verb groups', () => {
   });
 
   it('every verb whose code reaches one of the seven groups that left the required store names it', () => {
-    // The feature groups each verb's code under src/surface/cli reads, found by grep, so a verb that reads one names it.
     const reached = {
       status: ['reports', 'vectors'],
       provenance: ['reports'],

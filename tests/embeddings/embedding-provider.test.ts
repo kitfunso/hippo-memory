@@ -29,8 +29,6 @@ function mkRoot(embeddings: EmbeddingsConfig): string {
   return dir;
 }
 
-// A real Response satisfies fetch's return type directly, so no assertion is
-// needed to hand it back through a mocked `fetch`.
 function jsonResponse<T>(data: T, status = 200): Response {
   return new Response(JSON.stringify(data), { status });
 }
@@ -39,8 +37,6 @@ function errorResponse(status: number, body: string): Response {
   return new Response(body, { status });
 }
 
-/** Shape of the JSON request body posted to an embeddings API, as far as
- * these tests inspect it. */
 interface EmbedRequestBody {
   input_type?: string;
 }
@@ -53,8 +49,6 @@ const ENV_KEYS = ['OPENAI_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY'];
 
 describe('EmbeddingProvider', () => {
   beforeEach(() => {
-    // Embedding-API hosts are egress-blocked in the build sandbox, so every test
-    // here uses a mocked fetch; a real integration test is Workstream C.
     for (const k of ENV_KEYS) vi.stubEnv(k, undefined);
   });
 
@@ -88,18 +82,11 @@ describe('EmbeddingProvider', () => {
   });
 
   describe('upgrade reindex contract (embed-text format #t2)', () => {
-    // Contract change (docs/plans/2026-07-09-recall-determinism.md T1): a
-    // pre-#t2 store's vectors were computed over path-contaminated text, so
-    // the upgrade DOES force exactly one reindex — the historical
-    // "no forced reindex on upgrade" guarantee is deliberately retired.
     it('a legacy MiniLM index is stale exactly once, then stable after reindex', () => {
       const root = mkRoot({ provider: 'local', model: 'Xenova/all-MiniLM-L6-v2' });
-      // Legacy store: index present, model defaults to MiniLM (the historical default).
       saveEmbeddingIndex(root, { mem_legacy: [0.1, 0.2, 0.3] });
       const identity = resolveEmbeddingProvider(loadConfig(root).embeddings).id;
       expect(embeddingModelRequiresReindex(handlesOf(root).on, identity)).toBe(true);
-      // The reindex path persists the versioned identity; after that the
-      // same provider id compares clean (no reindex loop).
       saveStoredEmbeddingModel(handlesOf(root).on, identity);
       expect(embeddingModelRequiresReindex(handlesOf(root).on, identity)).toBe(false);
     });
@@ -156,8 +143,6 @@ describe('EmbeddingProvider', () => {
       const vecs = await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b'], 'passage');
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      // Typing fetchMock's own params above gives `.mock.calls[0]` this exact
-      // tuple shape already, so no assertion is needed to read it.
       const [url, init] = fetchMock.mock.calls[0];
       expect(String(url)).toMatch(/\/embeddings$/);
       expect(init.headers.authorization).toBe('Bearer sk-secret-123');
@@ -167,7 +152,6 @@ describe('EmbeddingProvider', () => {
       const body = JSON.parse(init.body) as { model: string; input: string[] };
       expect(body.model).toBe('text-embedding-3-large');
       expect(body.input).toEqual(['a', 'b']);
-      // [3,0,4] -> /5 ; [0,6,8] -> /10
       expect(l2norm(vecs[0])).toBeCloseTo(1, 6);
       expect(l2norm(vecs[1])).toBeCloseTo(1, 6);
       expect(vecs[0][0]).toBeCloseTo(0.6, 6);
@@ -192,7 +176,6 @@ describe('EmbeddingProvider', () => {
       vi.stubGlobal('fetch', fetchMock);
 
       await resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a', 'b', 'c'], 'passage');
-      // 0.5 is rejected -> default batch (64) -> one request for all 3 inputs.
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
@@ -285,7 +268,6 @@ describe('EmbeddingProvider', () => {
     it('throws when a 200 returns fewer vectors than inputs (contract violation, not silent misses)', async () => {
       vi.stubEnv('OPENAI_API_KEY', 'sk-test');
       const root = mkRoot({ provider: 'openai', model: 'm' });
-      // 200 OK but only one vector for two inputs.
       vi.stubGlobal(
         'fetch',
         vi.fn(async () => jsonResponse({ data: [{ embedding: [1, 0] }] })),

@@ -7,7 +7,6 @@ export class Lru<V> {
     return this.entries.size;
   }
 
-  /** The value, left where it is in the recency order. */
   peek(key: string): V | undefined {
     return this.entries.get(key);
   }

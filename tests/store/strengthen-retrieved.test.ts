@@ -1,4 +1,3 @@
-// Recall strengthening updates the live row's four retrieval columns, never a stale copy, in one statement.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,5 +1,3 @@
-// Builds the card-cabinet hero figure: src/components/CardCabinet.astro, plus a preview page with --preview=<dir>.
-// Run: node website/scripts/figure/build-cabinet.mjs [--audit] [--preview=<dir>]
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,8 +9,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const COMPONENT = join(HERE, "..", "..", "src", "components", "CardCabinet.astro");
 const PREVIEW = (process.argv.find((arg) => arg.startsWith("--preview=")) ?? "").slice(10);
 
-// Strength model, one to one with src/base/memory/strength.ts:31-46 and 141-179, entry.ts:150 and 436-451,
-// and consolidate/merge.ts:28 and 291-296. `every` (a session each 30 days) is the scenario, not code.
 const MODEL = { half: 365, base: 0.5, boost: 0.1, gain: 2, merged: 0.3, every: 30, file: 0.3, sleep: 0.7, days: 1460 };
 const STILL_DAY = 365;
 
@@ -34,7 +30,6 @@ function readoutOf(d, M, strength) {
   return `day ${Math.floor(d + 1e-6)} · ${d < M.every ? "filed" : "recalled"} ${f("recalled")} · unused ${f("unused")}`;
 }
 
-// The pointer blade turns in the dial's plane, so one affine matrix moves it; knurl ribs are rebuilt.
 function dialPose(t, D) {
   const shift = (v) => [v[0] * D.ex[0] + v[1] * D.ey[0] + v[2] * D.ez[0], v[0] * D.ex[1] + v[1] * D.ey[1] + v[2] * D.ez[1]];
   const at = (p) => { const s = shift(p); return [D.o[0] + s[0], D.o[1] + s[1]]; };
@@ -66,7 +61,6 @@ function dialPose(t, D) {
   return { blade, ribs };
 }
 
-// World: x across, y toward the front, z up; about 1 unit per px.
 const W = 600;
 const H = 450;
 const CASE = { x: -66, y: -34, w: 132, d: 68, r: 1.2 };
@@ -127,7 +121,6 @@ const put = (name, centre, svg, shapes, extra = {}) => R.put({ name, at: centre,
 const slab = (plan, z, h, name, meta = {}) => A.slab(plan, z, h, { name, ...meta });
 const FRAME_Y = (y) => G.frameOf([0, y, 0], [0, 1, 0], [1, 0, 0], [0, 0, 1]);
 
-// Plinth on four turned feet, the case, the top board.
 function base() {
   const corners = k.corners(PLINTH, 9).sort((a, b) => k.depthOf([...a, 0], P) - k.depthOf([...b, 0], P));
   corners.forEach(([x, y], index) => {
@@ -152,7 +145,6 @@ function base() {
   put("top", [0, 0, 112], topSvg + groove + screwSvg, [slab(TOP, TOP_Z[0], TOP_Z[1] - TOP_Z[0], "top")]);
 }
 
-// A drawer front with its brass label holder, cup pull and rod knob, at front face `y`.
 function front(col, row, y, name) {
   const x = COLS[col];
   const z = ROWS[row];
@@ -185,7 +177,6 @@ function front(col, row, y, name) {
   put(name, [cx, y + 1, z + DH / 2], svg, shapes);
 }
 
-// One index card in the plane y, standing on z = b, with its ink drawn on the face.
 const outlineOf = (cx, b, tab) => {
   const x0 = cx - CW / 2;
   const z1 = b + CH;
@@ -209,7 +200,6 @@ function cardSvg(card, d) {
 }
 const cardShape = (card, rise = 0, name) => A.prism(FRAME_Y(card.y), outlineOf(card.cx, card.b, card.tab).map(([x, z], i) => [x, z + (i >= 2 && rise ? rise : 0)]), 0, 0.3, { name });
 
-// A drawer pulled out: floor, walls and cards outside the case, and what shows through the opening.
 const AGES = { 0: [30, 140, 40, 210, 95, 0, 0, 260, 75, 180, 15, 320], 2: [400, 150, 520, 260, 0, 90, 330] };
 const SOURCES = [2, 8];
 function pulled(spec, name, cards) {
@@ -241,7 +231,6 @@ function pulled(spec, name, cards) {
   return { cx, z, panel };
 }
 
-// The open slot in the case front behind a pulled drawer; drawn clipped to the opening, after the case.
 function opening(spec, id) {
   const x = COLS[spec.col];
   const z = ROWS[spec.row];
@@ -261,7 +250,6 @@ function opening(spec, id) {
   return { clip: `<clipPath id="${id}"><path d="${path3(hole, true)}"/></clipPath>`, svg: `<g class="cab-cave" clip-path="url(#${id})">${parts.join("")}</g>` };
 }
 
-// The buffer tray and the recall holder on the top board.
 function tray() {
   const [z0, z1, z2] = TRAY_Z;
   const { x, y, w, d } = TRAY;
@@ -295,7 +283,6 @@ function holder() {
   cheeks.forEach((plan, i) => put(`holder.cheek${i}`, [plan.x + 0.7, 14.8, 121.5], S(k.slabOf(plan, z1, 8.5, P, 2, 0.3), { tone: "mid" }), [slab(plan, z1, 8.5, `holder.cheek${i}`)]));
 }
 
-// The day dial on the side: mount plate, dial with a four-year scale, pointer blade and knurled knob.
 const DIAL_F = G.frameOf(DIAL_C, [1, 0, 0], [0, 1, 0], [0, 0, 1]);
 const onDial = (s, r, theta) => [DIAL_C[0] + s, DIAL_C[1] - r * Math.sin(theta), DIAL_C[2] + r * Math.cos(theta)];
 const thetaOf = (day) => (day / MODEL.days) * Math.PI * 2;
@@ -343,7 +330,6 @@ function dial() {
   ]);
 }
 
-// The watched card: drawn once at its tray position, moved by the live script between slot groups.
 const WATCHED = { cx: TRAY_C[0], y: TRAY_C[1], b: TRAY_C[2], tab: TABS[2], kind: "recalled", age: 0, lit: true };
 const NEW_SEM = { kind: "merged", age: 0 };
 const SLOT_TOP = { tray: TRAY_Z[2] + 1.5, drawer: ROWS[EPI.row] + DH + 1.5, holder: LIP_TOP + 1.5 };
@@ -362,7 +348,6 @@ function slots(cards) {
   put("semantic.new", [card.cx, card.y, card.b + 10], `<g data-cab="sem" style="opacity:1">${cardSvg(card, STILL_DAY)}</g>`, [cardShape(card, 22, "semantic.new")]);
 }
 
-// Build every item, settle the painter's order from true depth, then audit.
 base();
 for (let row = 0; row < 3; row++) {
   for (let col = 0; col < 3; col++) {
@@ -385,7 +370,6 @@ holes.forEach((hole, i) => R.items.push({ name: `opening${i}`, key: caseKey + 0.
 R.items.sort((a, b) => a.key - b.key);
 A.auditOrExit(R, P);
 
-// Live data: the camera as affine screen vectors, the card's track, the slots and the model.
 const track = [
   [TRAY_C, [TRAY_C[0], TRAY_C[1], Z_AIR], [DRAWER_C[0], DRAWER_C[1], Z_AIR], DRAWER_C],
   [DRAWER_C, [DRAWER_C[0], DRAWER_C[1], Z_AIR], [HOLDER_C[0], HOLDER_C[1], Z_AIR], HOLDER_C],
@@ -404,7 +388,6 @@ const DATA = {
 };
 const round = (value) => JSON.parse(JSON.stringify(value, (_, v) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v)));
 
-// The live script: one loop, eased day, card on its track, ink from the model, dial and readout.
 function live(root, DATA, strengthOf, readoutOf, dialPose) {
   const M = DATA.model;
   const stage = root.querySelector("[data-stage]");
@@ -548,7 +531,6 @@ function live(root, DATA, strengthOf, readoutOf, dialPose) {
   draw();
 }
 
-// Markup, scoped CSS and the component.
 const body = R.items.map((item) => item.svg).join("");
 const LABEL = "An oak card-catalogue cabinet. A new index card sits in a tray on top, is filed into a drawer pulled half out, and rises into a holder on top when it is recalled. A dial on the side passes the days: cards nobody recalls lose their ink, the recalled card stays dark.";
 const svg = k.figureSvg({ width: W, height: H, label: LABEL, body: `<defs>${holes.map((hole) => hole.clip).join("")}</defs>${body}` });

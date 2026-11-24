@@ -6,10 +6,6 @@ import { createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-// ---------------------------------------------------------------------------
-// Metric math — hand-computed expected values
-// ---------------------------------------------------------------------------
-
 describe('mrr', () => {
   it('returns 1 when the first result is relevant', () => {
     expect(mrr(['a', 'b', 'c'], ['a'])).toBe(1);
@@ -41,7 +37,6 @@ describe('recallAtK', () => {
   });
 
   it('is bounded by K', () => {
-    // Expected 'b' is at position 4 (0-indexed=3), outside top-3
     expect(recallAtK(['x', 'a', 'y', 'b'], ['a', 'b'], 3)).toBe(1 / 2);
   });
 
@@ -52,12 +47,10 @@ describe('recallAtK', () => {
 
 describe('ndcgAtK', () => {
   it('returns 1 when relevant items are at top positions', () => {
-    // expected at positions 0 and 1 = ideal ranking
     expect(ndcgAtK(['a', 'b', 'x', 'y'], ['a', 'b'], 10)).toBeCloseTo(1, 6);
   });
 
   it('penalises relevant items at lower positions', () => {
-    // single relevant at position 3 (discount log2(5)) vs ideal at position 1 (log2(2))
     const result = ndcgAtK(['x', 'y', 'z', 'a'], ['a'], 10);
     expect(result).toBeCloseTo(1 / Math.log2(5) / (1 / Math.log2(2)), 6);
     expect(result).toBeLessThan(1);
@@ -68,15 +61,10 @@ describe('ndcgAtK', () => {
   });
 
   it('caps IDCG at K even when expected has more items', () => {
-    // Expected has 5 items, K=2 → ideal can fit only 2
     const result = ndcgAtK(['a', 'b'], ['a', 'b', 'c', 'd', 'e'], 2);
     expect(result).toBeCloseTo(1, 6);
   });
 });
-
-// ---------------------------------------------------------------------------
-// runEval end-to-end on an in-memory store
-// ---------------------------------------------------------------------------
 
 describe('runEval', () => {
   it('scores per-case and aggregates summary metrics', async () => {
@@ -96,7 +84,7 @@ describe('runEval', () => {
 
     const summary = await runEval(cases, entries, { now: evalNow(), switches: PRODUCTION_SWITCHES });
     expect(summary.cases).toHaveLength(2);
-    expect(summary.meanMrr).toBe(1); // both cases hit at rank 1
+    expect(summary.meanMrr).toBe(1);
     expect(summary.meanRecallAt5).toBe(1);
     expect(summary.meanNdcgAt10).toBeCloseTo(1, 6);
     expect(summary.durationMs).toBeGreaterThanOrEqual(0);
@@ -114,10 +102,6 @@ describe('runEval', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// bootstrapCorpus
-// ---------------------------------------------------------------------------
-
 describe('bootstrapCorpus', () => {
   it('produces one case per memory with opening-words query and its id expected', () => {
     const m1 = createMemory('The FRED cache silently dropped the TIPS series after refresh', {
@@ -133,7 +117,6 @@ describe('bootstrapCorpus', () => {
   });
 
   it('skips memories with fewer than 3 substantive words', () => {
-    // "fix now" = 2 substantive words (>2 chars each), so filtered out
     const tiny = createMemory('fix now', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     const full = createMemory('The cache reliably drops entries under load', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -151,10 +134,6 @@ describe('bootstrapCorpus', () => {
     expect(corpus).toHaveLength(3);
   });
 });
-
-// ---------------------------------------------------------------------------
-// compareSummaries — baseline vs current deltas
-// ---------------------------------------------------------------------------
 
 function mockSummary(cases: Array<{ id: string; mrr: number; r10: number; ndcg: number }>): EvalSummary {
   const converted = cases.map((c) => ({
@@ -227,7 +206,7 @@ describe('compareSummaries', () => {
       { id: 'big', mrr: 1, r10: 1, ndcg: 0.9 },
     ]);
     const cmp = compareSummaries(base, cur);
-    expect(cmp.improved[0].id).toBe('big'); // +0.8 uplift first
-    expect(cmp.improved[1].id).toBe('small'); // +0.05 uplift second
+    expect(cmp.improved[0].id).toBe('big');
+    expect(cmp.improved[1].id).toBe('small');
   });
 });

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Z0 round 3 hook diet replay: renders hippo's prompt hook block from each A2 pre-session store in three pinnedInject.excludeTags arms and prices the cut.
- * Free and local, no model call. The no-list arm is checked against the block round 3 sent, read from its request logs.
- * Exit 0 on a clean read, 1 on bad input, an unbuilt checkout or any failed render. */
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -44,7 +41,6 @@ const cutPct = (base, x) => (100 * (base - x)) / base;
 const headerTokens = (sections) => sum(sections.filter((s) => s[0] !== RULES).map((s) => s[2]));
 const linesOf = (file) => fs.readFileSync(file, 'utf8').split('\n');
 
-/** One request-log line as an entry, or null for a blank line. */
 function parseLine(line) {
   if (line.trim() === '') return null;
   try {
@@ -54,12 +50,10 @@ function parseLine(line) {
   }
 }
 
-/** The additionalContext of the hook's JSON wrapper, or undefined when the output is not that wrapper. */
 function wrappedText(stdout) {
   try {
     return JSON.parse(stdout).hookSpecificOutput?.additionalContext;
   } catch {
-    // Non-JSON output has no wrapper; blockOf reports it as an error.
     return undefined;
   }
 }
@@ -80,14 +74,12 @@ export function stagedConfig(cfg, excludeTags) {
   return { ...copy, pinnedInject: { ...copy.pinnedInject, excludeTags: [...excludeTags] } };
 }
 
-/** The first PATH folder holding the command, so a render sees node and git and nothing else of the parent PATH. */
 function dirHolding(command, parent) {
   const names = process.platform === 'win32' ? [`${command}.exe`, `${command}.cmd`] : [command];
   const dirs = (parent.PATH ?? '').split(path.delimiter);
   return dirs.find((d) => d !== '' && names.some((n) => fs.existsSync(path.join(d, n)))) ?? null;
 }
 
-/** The folders a render's PATH holds: node's, then git's. */
 const pathDirs = (parent) => [...new Set([path.dirname(process.execPath), dirHolding('git', parent)])].filter(Boolean);
 
 /** hippo rewrites any codex launcher it finds on PATH, so a render refuses a PATH folder that holds one, as hippo-iso.sh does.
@@ -191,12 +183,10 @@ function checkCheckout(checkout) {
 function shaOf(checkout) {
   const git = (args) => execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   try {
-    // The figures belong to the code that rendered them, so an edited tree must not pass as its commit.
     // SHORTCUT: dist/ is gitignored, so a stale build still prints clean; hash dist if a read ever needs that proof.
     const dirty = git(['status', '--porcelain', '--untracked-files=no', '--', 'src', 'bin', 'scripts', 'package.json']) !== '';
     return `${git(['rev-parse', '--short', 'HEAD'])}${dirty ? '-dirty' : ''}`;
   } catch {
-    // A checkout with no git history has no sha, and the read still holds.
     return 'unknown';
   }
 }
@@ -210,7 +200,6 @@ function pricesOf(file) {
   return p;
 }
 
-/** One store per (run, task, seed) of the final-read runs that kept an A2 pre-session snapshot. */
 function storesOf(scored) {
   const stores = [];
   for (const run of runNames(scored)) {
@@ -232,7 +221,6 @@ function storesOf(scored) {
   return stores;
 }
 
-/** The store's pre-session folders copied under `dir`, with the arm's excludeTags written and the project id round 3 gave it. */
 function stageStore(snap, dir, excludeTags) {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.cpSync(path.join(snap, 'hippoWork', '.hippo'), path.join(dir, 'cwd', '.hippo'), { recursive: true });
@@ -245,12 +233,10 @@ function stageStore(snap, dir, excludeTags) {
     if (err.code !== 'ENOENT') throw err;
   }
   fs.writeFileSync(file, JSON.stringify(stagedConfig(cfg, excludeTags), null, 2));
-  // Round 3 named each project after its folder, `work`; without the id the block renders empty.
   fs.writeFileSync(path.join(dir, 'cwd', '.hippo-project.json'), '{"id":"work"}');
   for (const sub of ['Roaming', 'Local']) fs.mkdirSync(path.join(dir, 'user', 'AppData', sub), { recursive: true });
 }
 
-/** One hook call through the built CLI; a failed call keeps its exit code and stderr for the row. */
 function renderHook(checkout, dir, prompt, session, fakeNow) {
   const input = JSON.stringify({ session_id: session, hook_event_name: 'UserPromptSubmit', prompt });
   const options = { cwd: path.join(dir, 'cwd'), env: renderEnv(dir, fakeNow), input, encoding: 'utf8', timeout: RENDER_TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] };
@@ -261,7 +247,6 @@ function renderHook(checkout, dir, prompt, session, fakeNow) {
   }
 }
 
-/** The session's start as an ISO time, from the first line of its request log. */
 function sessionStart(lines, file) {
   const at = parseLine(lines[0])?.at;
   const time = new Date(at);
@@ -294,8 +279,6 @@ function renderArms(store, i, ctx, prompt, fakeNow) {
   return arms;
 }
 
-/** One store: its last A2 session's prompt, the three renders, round 3's recorded block and the session's usage.
- * A store with no session log is `noLog` and keeps the log path it expected; one whose log holds no first prompt is `noPrompt`. */
 function readStore(store, i, ctx) {
   const { run, runDir, task, seed } = store;
   const taskId = lastA2Task(store.plan, task, seed);
@@ -325,7 +308,6 @@ function armStats(rendered) {
   );
 }
 
-/** What one session saves in an arm: the dollars of one cache write and a cache read per later main call, and the tokens re-read. */
 function savedBy(cut, calls, prices) {
   const rereads = Math.max(calls - 1, 0);
   return { usd: (cut * (prices.cacheWritePerMTok + rereads * prices.cacheReadPerMTok)) / 1e6, rereadTokens: cut * rereads };
@@ -374,7 +356,6 @@ function failedRenders(rows) {
   return rows.flatMap((r) => (r.arms ? ARM_NAMES.filter((a) => r.arms[a].error).map((a) => ({ r, arm: a })) : []));
 }
 
-/** The error for a read that rendered nothing, so a moved raw folder never reports NaN with exit 0. */
 function noneRendered(rows) {
   const first = rows.find((r) => r.noLog);
   const missing = first ? `, first missing log ${first.log}` : '';
@@ -386,7 +367,6 @@ function noneRendered(rows) {
  * @param {(line: string) => void} progress */
 export function readHookDiet(args, progress = () => {}) {
   if (!isDir(path.join(args.scored, 'r3run'))) throw new Error(`no round 3 runs at ${path.join(args.scored, 'r3run')}; pass --scored <dir> with the scored folder that holds r3run/`);
-  // The child runs from the staged store, so a relative checkout would point inside it.
   const checkout = path.resolve(args.checkout);
   checkCheckout(checkout);
   checkPathDirs();

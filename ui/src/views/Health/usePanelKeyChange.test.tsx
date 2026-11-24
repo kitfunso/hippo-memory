@@ -15,7 +15,6 @@ interface Props {
 const fails = (message: string) => () => Promise.reject(new Error(message));
 const hangs = () => new Promise<Snap>(() => {});
 
-// Records every render's result: the stale frame between a key change and its effect is the thing under test.
 function mountPanel(initial: Props) {
   const renders: Panel<Snap>[] = [];
   const view = renderHook(

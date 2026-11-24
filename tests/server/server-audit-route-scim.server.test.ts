@@ -1,5 +1,3 @@
-/** The four SCIM user ops, written by an add-on, must round-trip through GET /v1/audit?op= and `hippo audit list --op`. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

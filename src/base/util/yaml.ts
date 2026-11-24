@@ -1,8 +1,3 @@
-/**
- * Minimal YAML frontmatter serializer/deserializer with no external deps: simple key-value pairs
- * and inline arrays, enough for the MemoryEntry schema.
- */
-
 type YamlValue = string | number | boolean | null | string[] | number[];
 
 const SCALAR_LOOKALIKE = /^(null|true|false|-?\d+(\.\d+)?)$/;
@@ -14,7 +9,6 @@ const UNESCAPES: ReadonlyMap<string, string> = new Map([
 ]);
 
 function escapeString(s: string): string {
-  // A string that reads as null, a boolean or a number is quoted so it comes back a string.
   if (/[:#[\]{},\n\r"']/.test(s) || s.trim() !== s || s === '' || SCALAR_LOOKALIKE.test(s)) {
     const escaped = s
       .replace(/\\/g, '\\\\')
@@ -26,7 +20,6 @@ function escapeString(s: string): string {
   return s;
 }
 
-// An unknown escape stays as written, so a hand-written Windows path still reads back.
 function unescapeQuoted(body: string): string {
   return body.replace(/\\([\s\S])/g, (all, ch: string) => UNESCAPES.get(ch) ?? all);
 }

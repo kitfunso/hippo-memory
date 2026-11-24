@@ -31,7 +31,6 @@ describe('automatic assertion quality', () => {
     ['and the cache is cold', 'sentence-fragment'],
     ['for the deploy script', 'sentence-fragment'],
     ['succeeds (inserts or updates)', 'subjectless-outcome'],
-    // An aside ends at its first ")", so "for" is blanked with it.
     ['returned (for (3) rows)', 'subjectless-outcome'],
     ['returned 3 matching rows', 'subjectless-outcome'],
     ['TypeError: Cannot read properties of undefined', 'raw-output'],
@@ -53,7 +52,6 @@ describe('automatic assertion quality', () => {
     expect(isContentWorthStoring(content)).toBe(false);
   });
 
-  // A text the old capture segmenter cut: admission accepts it now, so only repair looks for the start.
   it.each([
     'never closed.** The run ends by sending to Telegram',
     'Skip the stores.** Ship it as the web app',
@@ -85,7 +83,6 @@ describe('automatic assertion quality', () => {
     expect(assessAutomaticMemory(content)).toEqual({ accepted: true, reason: null });
   });
 
-  // Repair reads only the text, so it may set these valid rows aside; admission stores them.
   it.each(['Always ignore cache_** files when deploying', 'Never use the suffix "test)" for generated filenames'])(
     'admits a rule the repair check would misread: %s',
     (content) => {
@@ -93,7 +90,6 @@ describe('automatic assertion quality', () => {
     },
   );
 
-  // A cut right after a word or bracket looks like "2** (n + 1)" or "cache** files": repair keeps it stored.
   it.each([
     'sleep** (when plugged in)',
     'sleep** (when plugged in) the job runs',
@@ -108,7 +104,6 @@ describe('automatic assertion quality', () => {
     expect(assessAutomaticMemory(content).accepted).toBe(true);
   });
 
-  // At this length the old regexes, which rescanned to the end from every start, ran past the test timeout.
   it.each([
     ['a long run of marks before a word', (n: number) => `Deploy the build${' \t.'.repeat(n)}x`],
     ['many unclosed asides after an outcome', (n: number) => `returned ${'('.repeat(3 * n)}`],
@@ -213,7 +208,6 @@ describe('automatic assertion quality', () => {
   });
 
   it('counts Hangul letters as substantive, as it counts Han and kana', () => {
-    // Two-syllable words fall under the spaced-word length floor, so only the letter count keeps it.
     const korean = '배포 전에 캐시 비워';
     expect(substantiveWordCount(korean)).toBe(4);
     expect(assessAutomaticMemory(korean)).toEqual({ accepted: true, reason: null });
@@ -255,7 +249,6 @@ describe('automatic provenance', () => {
   });
 
   it('reads a writer tag as provenance only on a promoted or shared copy', () => {
-    // A "## Captured" heading in an imported MEMORY.md becomes the tag "captured" on a person's note.
     for (const source of ['import:markdown', 'cli', 'mcp']) {
       expect(
         isAutomaticEntry(

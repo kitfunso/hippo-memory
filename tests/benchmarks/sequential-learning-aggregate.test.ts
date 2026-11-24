@@ -1,8 +1,3 @@
-/**
- * v1.7.5 -- multi-seed aggregation helpers + seeded task generator.
- * Pure math, no DB. Determinism + variance tests for traps.mjs::generateTasks(seed).
- */
-
 import { describe, it, expect } from 'vitest';
 import {
   mean,
@@ -12,10 +7,6 @@ import {
   pairedPermutationCI,
 } from '../../benchmarks/sequential-learning/aggregate.mjs';
 import { generateTasks, TRAP_PLACEMENTS } from '../../benchmarks/sequential-learning/traps.mjs';
-
-// ---------------------------------------------------------------------------
-// Pure aggregator math
-// ---------------------------------------------------------------------------
 
 describe('aggregate helpers', () => {
   it('mean of [0.1, 0.2, 0.3] = 0.2', () => {
@@ -27,8 +18,6 @@ describe('aggregate helpers', () => {
   });
 
   it('ciHalfWidth95 for 10-sample [0.10..0.20] is approximately 0.032', () => {
-    // Hand-verified: mean=0.15, sample variance ~0.001944, sd ~0.04410,
-    // CI = 2.262 * 0.04410 / sqrt(10) ~= 0.0315.
     expect(ciHalfWidth95([0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.1, 0.15, 0.2, 0.15])).toBeCloseTo(0.032, 2);
   });
 
@@ -40,12 +29,10 @@ describe('aggregate helpers', () => {
     expect(ciHalfWidth95([0.5, 0.6])).toBe(0);
     expect(ciHalfWidth95([0.5, 0.6, 0.7])).toBe(0);
     expect(ciHalfWidth95([0.5, 0.6, 0.7, 0.8])).toBe(0);
-    // n=5 is the floor where CI is reportable
-    expect(ciHalfWidth95([0.5, 0.5, 0.5, 0.5, 0.5])).toBe(0); // zero variance
+    expect(ciHalfWidth95([0.5, 0.5, 0.5, 0.5, 0.5])).toBe(0);
   });
 
   it('ciHalfWidth95 produces a positive bound for n=5 with variance', () => {
-    // t(4) = 2.776 times sd sqrt(0.025), over sqrt(5).
     expect(ciHalfWidth95([0.1, 0.2, 0.3, 0.4, 0.5])).toBeCloseTo(0.19629, 5);
   });
 
@@ -59,9 +46,7 @@ describe('aggregate helpers', () => {
     expect(agg.early.mean).toBeCloseTo(0.75, 5);
     expect(agg.mid.mean).toBeCloseTo(0.25, 5);
     expect(agg.late.mean).toBeCloseTo(0.1, 5);
-    // Only n=3 -> ci95 returns 0 (below the n=5 floor)
     expect(agg.late.ci95).toBe(0);
-    // Late is 0.10 +/- 0.05 around a 0.10 mean: sqrt(0.005 / 2).
     expect(agg.late.std).toBeCloseTo(0.05, 10);
   });
 
@@ -74,14 +59,9 @@ describe('aggregate helpers', () => {
       { early: 0.65, mid: 0.35, late: 0.1 },
     ];
     const agg = aggregatePhases(seeds);
-    // Late has mean 0.11 and sample variance 0.017 / 4, so 2.776 * sqrt(0.00425 / 5).
     expect(agg.late.ci95).toBeCloseTo(0.08093, 5);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Paired permutation CI
-// ---------------------------------------------------------------------------
 
 describe('pairedPermutationCI', () => {
   it('zero-delta on identical inputs: CI contains 0', () => {
@@ -97,7 +77,6 @@ describe('pairedPermutationCI', () => {
     const xsB = [0.2, 0.25, 0.18, 0.22, 0.19, 0.21, 0.23, 0.24, 0.2, 0.22];
     const { deltaMean, ciLow, ciHigh } = pairedPermutationCI(xsA, xsB);
     expect(deltaMean).toBeCloseTo(0.6, 10);
-    // Every diff is 0.6, so the sign-flip quantiles are -0.36 and +0.36; the fixed seed puts the resample mean at -0.003912.
     expect(ciLow).toBeCloseTo(0.243912, 6);
     expect(ciHigh).toBeCloseTo(0.963912, 6);
   });
@@ -121,16 +100,11 @@ describe('pairedPermutationCI', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Seeded task generator -- determinism + variance + structural invariants
-// ---------------------------------------------------------------------------
-
 describe('generateTasks(seed)', () => {
   it('without a seed, returns the canonical fixed-position output', () => {
     const a = generateTasks();
     const b = generateTasks();
     expect(a).toEqual(b);
-    // Specifically: position 2 still maps to overwrite_production canonical map.
     const trapAt2 = a.find((t: { id: number }) => t.id === 2);
     if (!trapAt2) throw new Error('no task at position 2');
     expect(trapAt2.trapCategory).toBe('overwrite_production');
@@ -143,14 +117,6 @@ describe('generateTasks(seed)', () => {
   });
 
   it('varies meaningfully across different seeds (>= a third of trap slots differ)', () => {
-    // Threshold deviation from brief: brief says ">half". With the ELL shape
-    // group containing only `slop_words` (cannot shuffle a single-element
-    // group), 3 slots are structurally frozen across all seeds. With small
-    // shape groups (EM=3, ML=2, EML=4) adjacent seeds can land on
-    // permutations that overlap substantially. Across pairs (1->2, 42->43)
-    // we observe 17-19/25 differ, which is well above half; for adjacent
-    // seeds (1000->1001) we observe 10/25, below half. A third (8/25) is the
-    // honest floor that demonstrates real variance rather than theatre.
     const s1 = generateTasks(1000);
     const s2 = generateTasks(1001);
     const trapPositions: number[] = [];
@@ -165,7 +131,6 @@ describe('generateTasks(seed)', () => {
   });
 
   it('varies meaningfully across far-apart seeds (>= half of trap slots differ)', () => {
-    // Stronger pair confirms the algorithm produces real variance.
     const s1 = generateTasks(1);
     const s2 = generateTasks(2);
     const trapPositions: number[] = [];
@@ -203,8 +168,6 @@ describe('generateTasks(seed)', () => {
   });
 
   it('preserves each category native phase pattern (shape group invariant)', () => {
-    // For each category, classify each canonical position into a phase.
-    // After seeding, the multiset of phases the category spans must match.
     const phaseOf = (pos: number): 'early' | 'mid' | 'late' => {
       if (pos <= 17) return 'early';
       if (pos <= 34) return 'mid';
@@ -239,7 +202,7 @@ describe('generateTasks(seed)', () => {
         }
       });
       for (const pos of Object.values(firstSeen)) {
-        expect(pos).toBeLessThanOrEqual(34); // early or mid, never late
+        expect(pos).toBeLessThanOrEqual(34);
       }
     }
   });

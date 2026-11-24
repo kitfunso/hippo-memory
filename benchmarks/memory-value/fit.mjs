@@ -1,25 +1,4 @@
 #!/usr/bin/env node
-/**
- * LC2-E2 — linear memory-value weight fitter.
- *
- * Fits signed weights over the 8 live lifecycle dims (FIT_DIMS) that
- * maximize TRAIN mean gold retention at CONFIG.PRIMARY_BUDGET (0.3), using
- * the SHIPPED scoring path (evaluateStore/evaluateAll, imported unmodified
- * from evaluate.mjs) as the objective. See
- * docs/plans/2026-08-10-lc2-e2-memory-value-fit.md for the full protocol —
- * every constant below is pinned there, not invented here.
- *
- * Contract (plan decision 1): the ONLY new arithmetic in this file is the
- * train-mean-with-zero-gold-skip in computeTrainObjective. All
- * normalization, keep-selection, and retention math stays in the imported,
- * unmodified evaluateStore/evaluateAll.
- *
- * Usage:
- *   node fit.mjs                 integrity gate -> 5-restart ES fit -> freeze
- *   node fit.mjs --dry-run-timing  gate, time ~20 candidates, project total
- *   node fit.mjs --report        post-freeze: heldout paired bootstrap CIs
- *   node fit.mjs --help          print usage and exit
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -27,12 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { CONFIG } from './config.mjs';
 import { evaluateStore, evaluateAll } from './evaluate.mjs';
 import { readJson, writeJson, readJsonl, featuresPathFor, rngFor, RESULTS_DIR, scratchRootDir } from './common.mjs';
-
-// ---------------------------------------------------------------------------
-// Pinned constants (plan decisions 2, 3, 6). None of these live in
-// config.mjs — that file is E1's frozen protocol block and is off limits
-// here (hard constraint: no changes to config.mjs).
-// ---------------------------------------------------------------------------
 
 /** The 8 live lifecycle dims (plan decision 2). Chosen from E1's
  *  within-store variance gate (results-latest.json `varyingFeatures`) — the
@@ -63,14 +36,7 @@ const META_PATH = path.join(HERE, 'weights-learned.meta.json');
 const SPLIT_REGISTERED_PATH = path.join(HERE, 'split-registered.json');
 const RESULTS_LATEST_PATH = path.join(HERE, 'results-latest.json');
 const REPORT_PATH = path.join(RESULTS_DIR, 'fit-report-latest.json');
-// Committed registration copy (fix-round: mirrors E1's results-latest.json
-// convention — the mutable results/ path is the run output, this one is the
-// git-diffable record of the last registered report).
 const REPORT_REGISTERED_PATH = path.join(HERE, 'fit-report-registered.json');
-
-// ---------------------------------------------------------------------------
-// Small pure helpers
-// ---------------------------------------------------------------------------
 
 function clipTo([lo, hi], v) {
   return Math.min(hi, Math.max(lo, v));
@@ -80,9 +46,6 @@ function l2norm(vec) {
   return Math.sqrt(vec.reduce((s, x) => s + x * x, 0));
 }
 
-/** One Gaussian sample, exactly two rng() draws (Box-Muller). `rng()` can
- *  return 0 (mulberry32's range is [0,1)); floor u1 at Number.EPSILON so
- *  log() never returns -Infinity. */
 function gaussianFromRng(rng) {
   const u1 = Math.max(rng(), Number.EPSILON);
   const u2 = rng();
@@ -102,10 +65,6 @@ export function toWeights(vector, dims = FIT_DIMS) {
   });
   return w;
 }
-
-// ---------------------------------------------------------------------------
-// (1+lambda)-ES — objective-agnostic pure function (plan decision 3).
-// ---------------------------------------------------------------------------
 
 /**
  * @param {{
@@ -147,7 +106,7 @@ export function runES({
     for (let k = 0; k < lambda; k++) {
       const candidate = Array(D);
       for (let i = 0; i < D; i++) candidate[i] = clipTo(box, parent[i] + sigma * gaussianFromRng(rng));
-      if (l2norm(candidate) < 1e-9) continue; // reject; skip this offspring, no resample
+      if (l2norm(candidate) < 1e-9) continue;
       const candObjective = objective(candidate);
       if (candObjective > bestOffspringObjective) {
         bestOffspringObjective = candObjective;
@@ -155,7 +114,6 @@ export function runES({
       }
     }
 
-    // Parent moves ONLY on strictly greater objective — a tie never replaces it.
     let improved = false;
     if (bestOffspring !== null && bestOffspringObjective > parentObjective) {
       parent = bestOffspring;
@@ -218,10 +176,6 @@ export function initVectorForRestart(restartIndex, dims, rng, box = BOX) {
   return dims.map(() => lo + rng() * (hi - lo));
 }
 
-// ---------------------------------------------------------------------------
-// Objective: train mean `weighted` retention, evaluateStore-backed
-// ---------------------------------------------------------------------------
-
 /** Read every train question's features.jsonl ONCE (caching contract, plan
  *  decision 1) — never re-read per ES candidate. gold is already embedded
  *  in each row; gold.json is not part of evaluateStore's contract. */
@@ -245,16 +199,12 @@ export function computeTrainObjective(weights, cachedRowsById, trainIds, budget 
     const rows = cachedRowsById.get(id);
     const result = evaluateStore(rows, [budget], weights);
     const cell = result.perScorer.weighted[budget];
-    if (cell.retention === null) continue; // zero-gold skip, mirrors evaluateAll
+    if (cell.retention === null) continue;
     sum += cell.retention;
     count++;
   }
   return count > 0 ? sum / count : null;
 }
-
-// ---------------------------------------------------------------------------
-// Integrity gate (plan decision 4) — runs before any fitting.
-// ---------------------------------------------------------------------------
 
 function assertGate(cond, message) {
   if (!cond) throw new Error(`[integrity-gate] FAILED ${message}`);
@@ -264,21 +214,11 @@ function isNumber(value) {
   return Object.prototype.toString.call(value) === '[object Number]';
 }
 
-/** Asserts `value` is present (not null/undefined) before any caller does a
- *  `.property`/`.toFixed()` access on it — every place this wraps a deep
- *  `registered`/`reproduced` dereference turns a would-be raw TypeError
- *  (malformed/tampered JSON) into a named assertGate failure instead
- *  (gate-hardening fix round). Returns `value` so call sites can inline it. */
 function requireCell(value, message) {
   assertGate(value !== undefined && value !== null, message);
   return value;
 }
 
-/** Like `requireCell`, additionally requiring the summary-cell shape
- *  (`{meanRetention, questionsIncluded}`) that every `.toFixed(4)` /
- *  inclusion-integrity comparison below depends on — a cell object present
- *  but missing/non-numeric `meanRetention` would otherwise throw a raw
- *  TypeError at the `.toFixed()` call site rather than a named failure. */
 function requireMeanCell(value, message) {
   assertGate(
     value !== undefined &&
@@ -290,11 +230,6 @@ function requireMeanCell(value, message) {
   return value;
 }
 
-/** (0) scratch existence pre-check (fix round): a wiped or never-populated
- *  scratch root turns every subsequent read (evaluateAll, cacheTrainRows)
- *  into a raw, unnamed ENOENT thrown from deep inside those calls. Checking
- *  every split id up front (fs.existsSync loop; milliseconds) turns that
- *  into one named, actionable failure before any real work starts. */
 function assertScratchExists(split) {
   const root = scratchRootDir();
   if (!fs.existsSync(root)) {
@@ -313,11 +248,6 @@ function assertScratchExists(split) {
   }
 }
 
-/** (a) split integrity: split-registered's train/heldout id arrays must be
- *  duplicate-free, disjoint, and their lengths must equal results-latest's
- *  split block. Targets come from `registered` itself (the committed file),
- *  not a duplicate hardcoded literal — a second copy of the same fact is a
- *  second place it can drift out of sync. */
 function assertSplitIntegrity(split, registered) {
   const trainIds = requireCell(split?.train, '(a) split-registered is missing a train id array');
   const heldoutIds = requireCell(split?.heldout, '(a) split-registered is missing a heldout id array');
@@ -345,15 +275,10 @@ function assertSplitIntegrity(split, registered) {
   assertGate(overlap === 0, `(a) split-registered train and heldout overlap on ${overlap} id(s) — splits must be disjoint`);
 }
 
-/** `summary?.[splitName]?.[scorerName]?.[budget]`, guarded via requireMeanCell. */
 function getMeanCell(summary, splitName, scorerName, budget, label) {
   return requireMeanCell(summary?.[splitName]?.[scorerName]?.[budget], label);
 }
 
-/** (b) inclusion integrity — `reproducedCell.questionsIncluded` must match
- *  the registered file's own recorded post-zero-gold count. `assertionTag`
- *  is 'b' for the original two checks, 'c' for the NEW train-uniform check
- *  (the fix that added it framed both its halves as part of extending (c)). */
 function assertInclusionMatches(reproducedCell, registeredCell, label, assertionTag) {
   assertGate(
     reproducedCell.questionsIncluded === registeredCell.questionsIncluded,
@@ -361,14 +286,6 @@ function assertInclusionMatches(reproducedCell, registeredCell, label, assertion
   );
 }
 
-/** (c) baseline reproduction at 4dp against the committed results-latest.json.
- *  Compared as a numeric epsilon, not a toFixed(4) string, because float
- *  summation order differs between E1's run and the gate's reproduction
- *  (same math, different accumulation order) — string-rounding equality is
- *  boundary-fragile (0.12345 vs 0.123449999... can round to different 4dp
- *  strings). 5e-5 is the exact half-ULP-at-4dp tolerance, so the prereg
- *  intent (4-decimal-place reproduction) is unchanged; only the comparison
- *  mechanism is. Failure MESSAGES still print the 4dp-formatted numbers. */
 function assertReproducesBaseline(reproducedCell, registeredCell, label) {
   assertGate(
     Math.abs(reproducedCell.meanRetention - registeredCell.meanRetention) < 5e-5,
@@ -376,18 +293,6 @@ function assertReproducesBaseline(reproducedCell, registeredCell, label) {
   );
 }
 
-/**
- * Reproduces the no-weights (baseline scorers only) summary over the
- * COMMITTED split and checks it against `registered` (results-latest.json):
- * (b) inclusion integrity and (c) baseline reproduction at 4dp. The
- * train-uniform check is the all-features-sensitive baseline (fix round
- * addition): recency alone only exercises age_days, so a corruption in any
- * OTHER train feature is invisible to it — uniform sums all 30 features and
- * so surfaces non-age corruption that recency-only reproduction would miss.
- * (A committed per-question feature hash would be the airtight fix; this is
- * the practical stand-in until that lands.) Returns the reproduced
- * evaluateAll() result for the variance check.
- */
 function reproduceAndAssertBaselines(split, registered, budget) {
   const registeredSummary = registered?.evaluate?.summary;
   const registeredTrainRecency = getMeanCell(registeredSummary, 'train', 'recency', budget, '(b) registered summary missing train.recency cell');
@@ -412,21 +317,12 @@ function reproduceAndAssertBaselines(split, registered, budget) {
   assertReproducesBaseline(heldoutRecency, registeredHeldoutRecency, 'heldout recency');
   assertReproducesBaseline(heldoutUniform, registeredHeldoutUniform, 'heldout uniform');
   assertReproducesBaseline(trainRecency, registeredTrainRecency, 'train recency');
-  // All-features-sensitive baseline (see function doc comment above).
   assertReproducesBaseline(trainUniform, registeredTrainUniform, 'train uniform');
   assertInclusionMatches(trainUniform, registeredTrainUniform, 'train uniform', 'c');
 
   return reproduced;
 }
 
-/**
- * Varying-features set (registered, committed) must equal `expectedFitDims`
- * exactly (production default: FIT_DIMS). NEW (gate-hardening fix round):
- * the live-scratch reproduced varying set must ALSO equal the registered
- * set — a scratch that has drifted (a feature gone dead, or a new one now
- * varying, since results-latest.json was registered) is caught here even if
- * assertions (b)/(c) above happen not to move at 4dp.
- */
 function assertVarianceLiveness(reproduced, registered, expectedFitDims) {
   const registeredVarying = requireCell(
     registered?.evaluate?.varyingFeatures,
@@ -446,14 +342,6 @@ function assertVarianceLiveness(reproduced, registered, expectedFitDims) {
   );
 }
 
-/**
- * Row cache (caching contract, plan decision 1) + recency cross-check (plan
- * test 8): the fitter's OWN mean/skip-rule arithmetic, run on the pure
- * recency vector, must reproduce the registered train recency. Any drift
- * here means the objective's mean or skip rule disagrees with evaluateAll's.
- * Returns the row cache (for the caller to reuse across ES candidates) and
- * the cross-check value itself (runFit's non-tautological restart-0 bar).
- */
 function crossCheckRecency(split, registered, budget) {
   const registeredTrainRecency = requireMeanCell(
     registered?.evaluate?.summary?.train?.recency?.[budget],
@@ -463,7 +351,6 @@ function crossCheckRecency(split, registered, budget) {
   const recencyWeights = toWeights(recencyVector());
   const recencyCrossCheck = computeTrainObjective(recencyWeights, cachedRowsById, split.train, budget);
   const registeredTrainRecency4dp = registeredTrainRecency.meanRetention.toFixed(4);
-  // Epsilon compare, not toFixed(4) string equality — see assertReproducesBaseline's doc comment for why.
   assertGate(
     recencyCrossCheck !== null && Math.abs(recencyCrossCheck - registeredTrainRecency.meanRetention) < 5e-5,
     `recency cross-check: fitter's own objective must reproduce train recency ${registeredTrainRecency4dp}, got ${recencyCrossCheck?.toFixed(4)}`,
@@ -498,12 +385,6 @@ export function runIntegrityGate({
   assertScratchExists(split);
   const reproduced = reproduceAndAssertBaselines(split, registered, budget);
   assertVarianceLiveness(reproduced, registered, expectedFitDims);
-  // crossCheckRecency's own cacheTrainRows read is unavoidable here (the
-  // cross-check IS a gate assertion, run unconditionally) — needTrainRows
-  // only controls whether the caller gets the resulting cache back to reuse
-  // (runFit needs it for thousands of ES candidate evaluations; runReport
-  // never touches train rows again and would otherwise hold the cache in
-  // memory for no reason). This drops the reference, it does not skip a read.
   const { cachedRowsById, recencyCrossCheck } = crossCheckRecency(split, registered, budget);
 
   return {
@@ -514,10 +395,6 @@ export function runIntegrityGate({
     recencyCrossCheck,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Fit (pure): 5 restarts, winner selection, L2-normalize on emit.
-// ---------------------------------------------------------------------------
 
 /**
  * No file I/O — callers write the two frozen artifacts. Exposed separately
@@ -548,10 +425,6 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
     const rng = rngFor('fit', r);
     const init = initVectorForRestart(r, FIT_DIMS, rng, esOpts.box);
     const es = runES({ objective, dims: FIT_DIMS, rng, init, ...esOpts });
-    // Non-finite guard (gate-hardening fix round): a restart whose winning
-    // objective is NaN/Infinity means the objective function degenerated
-    // (e.g. every candidate hit the zero-gold skip) — fail loudly rather
-    // than silently propagate a non-finite value into selectWinner/meta.
     if (!Number.isFinite(es.bestObjective)) {
       throw new Error(
         `[fit] restart ${r} produced a non-finite train objective (${es.bestObjective}) — the objective ` +
@@ -571,9 +444,6 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
 
   const winner = selectWinner(perRestart);
   const norm = l2norm(winner.best);
-  // Zero-norm guard (gate-hardening fix round): normalizing a (near-)zero
-  // vector divides by (near-)zero and hands weights-learned.json NaNs —
-  // fail loudly instead of freezing a broken scorer.
   if (norm < 1e-9) {
     throw new Error(
       `[fit] winning vector has near-zero L2 norm (${norm}) — restart ${winner.restart} converged to (near-)zero ` +
@@ -586,10 +456,6 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
   const meta = {
     globalSeed: CONFIG.GLOBAL_SEED,
     restarts,
-    // Seed provenance (gate-hardening fix round): documents which rngFor
-    // namespaces produced this freeze. GLOBAL_SEED itself is NOT consumed
-    // by the ES/bootstrap streams (see seedNote) — recorded here only so a
-    // reader doesn't have to infer that from the source.
     esSeedNamespaces: Array.from({ length: restarts }, (_, r) => `fit|${r}`),
     reportSeedNamespace: 'report',
     seedNote:
@@ -613,10 +479,6 @@ export function computeFit(trainIds, cachedRowsById, opts = {}) {
 
   return { weights, meta, perRestart, winner };
 }
-
-// ---------------------------------------------------------------------------
-// Bootstrap CI (plan decision 6) — paired per-question, percentile method.
-// ---------------------------------------------------------------------------
 
 function mean(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
@@ -699,15 +561,7 @@ export function computeBarsMet(heldout, ciVsRecency, ciVsUniform) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// CLI orchestration
-// ---------------------------------------------------------------------------
-
 function runFit() {
-  // Freeze enforcement (gate-hardening fix round): checked BEFORE the
-  // (potentially ~60 min) gate + fit run, not after — an operator re-running
-  // `fit.mjs` by mistake gets refused immediately, not after paying the full
-  // cost. --force is the explicit, named override.
   if (fs.existsSync(WEIGHTS_PATH) && !boolFlag('force')) {
     throw new Error(
       `[fit] refusing to overwrite existing ${WEIGHTS_PATH} — weights are already frozen. Pass --force to ` +
@@ -726,14 +580,6 @@ function runFit() {
     );
   }
 
-  // Restart-0 invariant, checked against the gate's OWN recency cross-check
-  // rather than restart 0's own objective (the old check was tautological:
-  // selectWinner can never pick a winner worse than restart 0, since restart
-  // 0 IS one of the candidates it selects from). recencyCrossCheck is an
-  // independent computation of the recency-vector objective on the SAME
-  // cached rows, so "winner >= recencyCrossCheck" is a real invariant.
-  // Non-finite objectives already throw inside computeFit (see its
-  // per-restart guard).
   if (winner.trainObjective < recencyCrossCheck) {
     throw new Error(
       `restart-0 invariant violated: winner trainObjective ${winner.trainObjective} < recency cross-check ${recencyCrossCheck}`,
@@ -741,9 +587,6 @@ function runFit() {
   }
 
   writeJson(WEIGHTS_PATH, weights);
-  // Freeze binding (codex round-2 P2): digest the weights FILE BYTES so
-  // --report can refuse a weights file edited or swapped after freeze —
-  // configHash alone binds only the protocol, not the model.
   meta.weightsFileSha256 = sha256Hex(fs.readFileSync(WEIGHTS_PATH));
   writeJson(META_PATH, meta);
   console.log(`[fit] winner: restart ${meta.winnerRestart}, trainObjective=${meta.trainObjective.toFixed(4)}`);
@@ -810,21 +653,8 @@ export function verifyFrozenWeights(weights, weightsFileSha256, meta, fitDims = 
 }
 
 function runReport() {
-  // Gate FIRST (gate-hardening fix round): --report previously ran ungated,
-  // so a stale/tampered scratch or split could produce a "bars met" report
-  // that never touched verified data. The gate DOES read every train
-  // features.jsonl too (baseline reproduction (b)/(c) + the recency
-  // cross-check) even though --report itself only evaluates heldout below —
-  // that read is a gate-integrity assertion, not something --report opted
-  // into. needTrainRows:false just drops the resulting row-cache reference
-  // once the gate returns (memory, not I/O — --report never uses the cache
-  // again, so there is no reason to keep 300 stores' worth of rows alive).
   const { splitRegistered } = runIntegrityGate({ needTrainRows: false });
 
-  // Freeze provenance (fix round): a half-frozen state — one of the two
-  // frozen artifacts present, the other missing (e.g. an interrupted freeze,
-  // or one file deleted by hand) — must be named explicitly rather than
-  // surfacing as a raw ENOENT from whichever readJson() happens to run first.
   const weightsExists = fs.existsSync(WEIGHTS_PATH);
   const metaExists = fs.existsSync(META_PATH);
   if (weightsExists !== metaExists) {
@@ -835,9 +665,6 @@ function runReport() {
     );
   }
 
-  // Freeze provenance: refuse to report against weights frozen under a
-  // DIFFERENT config.mjs than the one currently checked out — configHash is
-  // written at freeze time (computeFit) precisely so this can be checked.
   const weights = readJson(WEIGHTS_PATH);
   const meta = readJson(META_PATH);
   const currentConfigHash = sha256Hex(JSON.stringify(CONFIG));
@@ -850,15 +677,7 @@ function runReport() {
   }
   verifyFrozenWeights(weights, sha256Hex(fs.readFileSync(WEIGHTS_PATH)), meta);
 
-  // Reuse the gate's own parsed split (splitRegistered above) instead of a
-  // second readJson(SPLIT_REGISTERED_PATH) — same file, same call graph,
-  // no reason to parse it twice (fix round).
   const budget = CONFIG.PRIMARY_BUDGET;
-  // Held-out ONLY for the evaluation BELOW (gate-hardening fix round): this
-  // function's own evaluateAll call never touches train ids. The gate above
-  // already read every train features.jsonl (baseline reproduction + recency
-  // cross-check) — "never reads train" described this function, not the
-  // gate it calls first.
   const questionSplits = splitRegistered.heldout.map((questionId) => ({ questionId, split: 'heldout' }));
   const evalResult = evaluateAll(questionSplits, { weights, budgets: [budget], primaryBudget: budget });
 
@@ -867,8 +686,6 @@ function runReport() {
   const recencyMap = buildRetentionMap(heldoutPaired, 'recency');
   const uniformMap = buildRetentionMap(heldoutPaired, 'uniform');
 
-  // One shared rng stream (rngFor('report')), consumed sequentially by both
-  // CIs — plan decision 6.
   const rng = rngFor('report');
   const ciVsRecency = bootstrapCI(pairedDeltas(weightedMap, recencyMap), CONFIG.E2_BOOTSTRAP_RESAMPLES, rng);
   const ciVsUniform = bootstrapCI(pairedDeltas(weightedMap, uniformMap), CONFIG.E2_BOOTSTRAP_RESAMPLES, rng);
@@ -879,8 +696,6 @@ function runReport() {
     recency: s.recency[budget].meanRetention,
     uniform: s.uniform[budget].meanRetention,
   };
-  // Throws (never returns false) on a degenerate/empty paired-delta set —
-  // see computeBarsMet's doc comment.
   const barsMet = computeBarsMet(heldout, ciVsRecency, ciVsUniform);
 
   const report = {
@@ -895,8 +710,6 @@ function runReport() {
   console.log(JSON.stringify(report, null, 2));
   writeJson(REPORT_PATH, report);
   console.log(`[fit] wrote ${REPORT_PATH}`);
-  // Committed registration copy (registration convention mirroring E1's
-  // results-latest.json — see REPORT_REGISTERED_PATH's doc comment).
   writeJson(REPORT_REGISTERED_PATH, report);
   console.log(`[fit] wrote ${REPORT_REGISTERED_PATH}`);
 }
@@ -921,11 +734,6 @@ function boolFlag(name) {
 
 const KNOWN_FLAGS = ['help', 'dry-run-timing', 'report', 'force'];
 
-/** Argv whitelist (fix round): a `--flag` outside KNOWN_FLAGS is (almost
- *  always) a typo — e.g. `--reprot` — and without this check it silently
- *  falls through every `boolFlag()` check below to the default (destructive,
- *  freeze-writing) fit path. Checked BEFORE any dispatch, so a typo can
- *  never run the wrong command. */
 function checkKnownFlags(argv) {
   for (const arg of argv) {
     if (arg.startsWith('--') && !KNOWN_FLAGS.includes(arg.slice(2))) {

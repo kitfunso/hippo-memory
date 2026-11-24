@@ -4,7 +4,6 @@ import { execFile } from 'node:child_process';
 import { errorCode, errorFields, errorMessage, log } from '../base/util/log.js';
 import { spawnArgv } from './spawn-argv.js';
 
-/** Starts taskkill; a test passes a stand-in, as it does for the ps snapshot. */
 type SpawnKiller = typeof spawnArgv;
 
 const TASKKILL_MS = 10_000;
@@ -12,7 +11,6 @@ const PS_MS = 2_000;
 const MAX_ROUNDS = 5;
 let warnedNoPs = false;
 
-/** Sends `signal`; a process already gone (ESRCH) or not ours (EPERM) counts as ended. */
 function send(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal);
@@ -26,7 +24,6 @@ function send(pid: number, signal: NodeJS.Signals): void {
 
 type Snapshot = typeof parentsByPid;
 
-/** Parent of each process, from one `ps` snapshot. Rejects when ps cannot run. */
 function parentsByPid(): Promise<Map<number, number>> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -49,7 +46,6 @@ function parentsByPid(): Promise<Map<number, number>> {
   });
 }
 
-/** Every descendant of `root` in the snapshot, nearest first. */
 function descendants(root: number, parents: ReadonlyMap<number, number>): number[] {
   const found: number[] = [];
   const queue = [root];
@@ -64,8 +60,6 @@ function descendants(root: number, parents: ReadonlyMap<number, number>): number
   return found;
 }
 
-/** Stops the child and each new descendant until a snapshot shows no new one, so none can start
- * another while the tree is walked; then kills them, deepest first. */
 async function killPosixTree(pid: number, snapshot: Snapshot): Promise<void> {
   send(pid, 'SIGSTOP');
   const stopped: number[] = [];
@@ -93,7 +87,6 @@ async function killPosixTree(pid: number, snapshot: Snapshot): Promise<void> {
   send(pid, 'SIGKILL');
 }
 
-/** taskkill /T walks the tree itself. */
 function killWindowsTree(pid: number, spawnKiller: SpawnKiller): Promise<void> {
   return new Promise((resolve) => {
     let timedOut = false;

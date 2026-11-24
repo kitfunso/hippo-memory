@@ -1,8 +1,3 @@
-/**
- * Session handoff types and helpers: a handoff captures a session's state so a successor session or
- * another agent can pick up where it left off.
- */
-
 import { isJsonString, type JsonValue } from '../util/json.js';
 import { parseStoredJson, warnDamagedColumn } from '../util/stored-json.js';
 
@@ -87,8 +82,6 @@ function isHandoffEvidence(v: JsonValue): v is JsonValue & HandoffEvidence {
   );
 }
 
-/** A stored list column as strings; a damaged one logs and reads as empty instead of hiding the
- * whole handoff. */
 function storedList(
   row: SessionHandoffRow,
   column: 'artifacts_json' | 'constraints_json',
@@ -99,8 +92,6 @@ function storedList(
   return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
 }
 
-/** Stored evidence, or null (after a log line) when the column is damaged or holds another
- * shape. */
 function storedEvidence(row: SessionHandoffRow): HandoffEvidence | null {
   if (!row.evidence_json) return null;
   const site = { table: 'session_handoffs', id: row.id, column: 'evidence_json' };

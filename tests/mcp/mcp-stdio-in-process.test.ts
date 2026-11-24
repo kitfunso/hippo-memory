@@ -1,4 +1,3 @@
-// The stdio loop in process: stdin's listeners are captured and fed frames, stdout is read, and exit is stubbed.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
@@ -34,7 +33,6 @@ beforeEach(() => {
   dir = makeRoot('mcp-stdio', { init: false });
   mkdirSync(join(dir, 'project'));
   vi.stubEnv('HIPPO_HOME', join(dir, 'global'));
-  // A cwd under the temp dir has no project store above it, so the first tool call creates the global store.
   vi.spyOn(process, 'cwd').mockReturnValue(join(dir, 'project'));
   stdin = recordListeners(process.stdin, 'on');
   recordListeners(process.stdout, 'on');
@@ -61,7 +59,6 @@ function toolCall(id: number, name: string, args: Record<string, string | boolea
   return JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } });
 }
 
-/** The id in brackets in the text of the reply to call `id`. */
 async function bracketedId(id: number): Promise<string> {
   await vi.waitFor(() => expect(replies().map((r) => r.id)).toContain(id), { timeout: 15_000 });
   const text = replies().find((r) => r.id === id)?.result?.content?.[0]?.text ?? '';
@@ -125,7 +122,6 @@ describe('startStdioLoop, in process', () => {
     dribble(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`, 4);
     await vi.waitFor(() => expect(ids()).toContain(2), { timeout: 15_000 });
 
-    // Two frames split mid-way across one chunk boundary each still come out in order.
     dribble(`${list(3)}\n${list(4)}\n`, 17);
     await vi.waitFor(() => expect(ids()).toContain(4), { timeout: 15_000 });
     expect(ids().filter((id) => id === 3 || id === 4)).toEqual([3, 4]);
@@ -142,7 +138,6 @@ describe('startStdioLoop, in process', () => {
       startStdioLoop(cliStdioHost());
       feed(toolCall(1, 'hippo_remember', { text: 'the staging queue drains at midnight' }));
       const local = await bracketedId(1);
-      // The share answers before its embed does, so the vector is there at exit only if the drain waits for it.
       embeddings.setFault(500);
       feed(toolCall(2, 'hippo_share', { id: local, force: true }));
       const shared = await bracketedId(2);

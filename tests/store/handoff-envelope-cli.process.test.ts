@@ -1,4 +1,3 @@
-// W1 handoff envelope: `hippo handoff create` then `handoff latest --json` through the built CLI.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +35,6 @@ describe('CLI round trip: handoff create -> handoff latest --json', () => {
     }
   }
 
-  // Shared by every CLI case below: a throwaway git repo plus an initialised hippo store.
   function setupCliHome() {
     const home = mkdtempSync(join(tmpdir(), 'hippo-w1-cli-'));
     const globalDir = join(home, 'global');

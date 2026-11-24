@@ -1,5 +1,3 @@
-// Store upkeep verbs: `hippo refine`, `hippo dedup` and `hippo embed`.
-
 import { llmRoute } from '../../infra/llm-route.js';
 import { llmFromEnv } from '../../infra/ports.js';
 import { dedupWholeStore, type DedupResult } from '../../api/sleep/dedup.js';
@@ -104,7 +102,6 @@ export async function handleDedup({ hippoRoot, tenantId, flags }: CommandContext
 }
 
 function printDedupGroups(result: DedupResult, dryRun: boolean): void {
-  // Group by reason
   const {
     semantic: sameLayerSem,
     episodic: sameLayerEpi,
@@ -153,13 +150,9 @@ export async function handleEmbed(
   given?: EmbeddingProvider,
 ): Promise<void> {
   // --global mirrors resolveAuthRoot: initGlobal() + the global root, skipping the local
-  // requireInit, so it heals pre-1.27.0 global stores from a directory with no local .hippo.
   const root = resolveAuthRoot(hippoRoot, flags);
   const ctx = cliApiContext(root, tenantId);
 
-  // --status and --reset-physics only read cached state, so they must work with no provider key
-  // (e.g. removed after an earlier embed); the provider-availability gate is deferred to the embed
-  // path.
   if (boolFlag(flags, 'reset-physics')) {
     await resetPhysics(ctx);
     return;
@@ -175,7 +168,6 @@ export async function handleEmbed(
   await embedMissing(ctx, provider);
 }
 
-/** Embeds what has no vector yet; a failure or a leftover sets exit code 1, the saved part kept. */
 async function embedMissing(ctx: CliContext, provider: EmbeddingProvider): Promise<void> {
   console.log('Embedding all memories (this may take a moment on first run to download model)...');
   let count: number;
@@ -218,9 +210,7 @@ async function printEmbedStatus(ctx: CliContext): Promise<void> {
   }
 }
 
-/** The provider to embed with, or null after saying why none is usable. */
 function readyEmbedProvider(ctx: CliContext, given?: EmbeddingProvider): EmbeddingProvider | null {
-  // Embedding (unlike status/reset) needs an available provider.
   const embedProvider =
     given ??
     (() => {

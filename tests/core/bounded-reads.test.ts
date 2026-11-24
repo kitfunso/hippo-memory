@@ -1,4 +1,3 @@
-// Invalidation, the dirty-summary queue and the store count read only the rows they need: counted in rows, never timed.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { makeRoot } from '../_helpers/make-root.js';

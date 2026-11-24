@@ -1,11 +1,3 @@
-/**
- * E3.1 cross-object `references` edges (name-match, Pass 3) - tests.
- * Docs: docs/plans/2026-06-02-e3-cross-object-references.md
- *
- * extractGraph Pass 3 emits a `references` edge when one consolidated object's text
- * contains another extracted entity's name (conservative: word-boundary, length-bounded,
- * ambiguity-guarded, self-skipped, per-source capped, supersedes-pair-skipped). Real DB.
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { extractGraph } from '../../src/domain/graph/extract.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -19,7 +11,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 const { sqliteStore } = sessionPerTest();
 
 const T = 'default';
-/** All `references` edges in a tenant's graph. */
 function refs(home: string, tenant: string = T) {
   return loadRelations(home, tenant, { limit: 1000 }).filter((r) => r.relType === 'references');
 }
@@ -49,7 +40,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
     const polEnt = entByName(home, 'RetryPolicy')!;
     expect(edges[0].fromEntityId).toBe(decEnt.id);
     expect(edges[0].toEntityId).toBe(polEnt.id);
-    expect(edges[0].memoryId).toBe(dec.memoryId); // source object's memory
+    expect(edges[0].memoryId).toBe(dec.memoryId);
     expect(edges[0].sourceKind === 'distilled' || edges[0].sourceKind === 'superseded').toBe(true);
     void pol;
   });
@@ -84,7 +75,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
       decisionText: 'we onboarded Abc this quarter',
     });
     await extractGraph(sqliteStore(home), T);
-    expect(refs(home)).toHaveLength(0); // 'Abc' (3 chars) is below MIN_REF_NAME_LEN
+    expect(refs(home)).toHaveLength(0);
   });
 
   it('MAX_NAME_LEN: a long prose decision is a source but never a target', async () => {
@@ -95,8 +86,6 @@ describe('cross-object references (Pass 3 name-match)', () => {
       decisionText: `${longText} - refined further`,
     });
     await extractGraph(sqliteStore(home), T);
-    // The second decision's text contains the first's full text verbatim, but the first's
-    // name is > MAX_REF_NAME_LEN, so it is not a target -> no references edge.
     expect(refs(home)).toHaveLength(0);
   });
 
@@ -113,7 +102,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
       decisionText: 'this references Shared somehow',
     });
     await extractGraph(sqliteStore(home), T);
-    expect(refs(home)).toHaveLength(0); // 'shared' maps to 2 entities -> dropped from index
+    expect(refs(home)).toHaveLength(0);
   });
 
   it('per-source cap: a decision naming many policies is capped at 25', async () => {
@@ -129,7 +118,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
       decisionText: `a decision that mentions ${names.join(' and ')}`,
     });
     await extractGraph(sqliteStore(home), T);
-    expect(refs(home).length).toBe(25); // the per-source cap in src/domain/graph/extract.ts
+    expect(refs(home).length).toBe(25);
   });
 
   it('idempotent: re-running extractGraph yields the same references (no duplication)', async () => {
@@ -155,14 +144,10 @@ describe('cross-object references (Pass 3 name-match)', () => {
     const dec = await saveDecision(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       decisionText: 'uses AlphaPolicy heavily',
     });
-    // Delete the decision's mirror memory -> ON DELETE SET NULL nulls memory_id, but the
-    // decision row stays active and authoritative. v38 anchors the entity to the E2 object,
-    // so the forgotten-mirror decision is STILL a Pass-3 source (provenance = the object,
-    // not the decaying mirror). This is the whole point of the graph/E2 provenance fix.
     deleteEntry(home, dec.memoryId!);
     await extractGraph(sqliteStore(home), T);
     const edges = refs(home);
-    expect(edges).toHaveLength(1); // forgotten-mirror decision still references AlphaPolicy
+    expect(edges).toHaveLength(1);
     const decEnt = entByName(home, 'uses AlphaPolicy heavily')!;
     const polEnt = entByName(home, 'AlphaPolicy')!;
     expect(edges[0].fromEntityId).toBe(decEnt.id);
@@ -178,8 +163,8 @@ describe('cross-object references (Pass 3 name-match)', () => {
       supersedesDecisionId: d1.id,
     });
     const r = await extractGraph(sqliteStore(home), T);
-    expect(r.references).toBe(0); // d2's name contains d1's, but they supersede
-    expect(r.relations).toBe(1); // only the supersedes edge
+    expect(r.references).toBe(0);
+    expect(r.relations).toBe(1);
     expect(refs(home)).toHaveLength(0);
   });
 
@@ -217,7 +202,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
     });
     await extractGraph(sqliteStore(home), T);
     const edges = refs(home);
-    expect(edges).toHaveLength(1); // only the active NewPol, not the superseded OldPol
+    expect(edges).toHaveLength(1);
     expect(entByName(home, 'NewPol')!.id).toBe(edges[0].toEntityId);
   });
 
@@ -234,7 +219,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
       supersedesDecisionId: d1.id,
     });
     await extractGraph(sqliteStore(home), T);
-    expect(refs(home)).toHaveLength(0); // d1 (superseded source) skipped; d2 names nothing
+    expect(refs(home)).toHaveLength(0);
   });
 
   it('longest-match: a prefix name does not shadow a longer entity name (codex)', async () => {
@@ -252,7 +237,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
     await extractGraph(sqliteStore(home), T);
     const edges = refs(home);
     expect(edges).toHaveLength(1);
-    expect(entByName(home, 'postgres pro')!.id).toBe(edges[0].toEntityId); // longest, not 'postgres'
+    expect(entByName(home, 'postgres pro')!.id).toBe(edges[0].toEntityId);
   });
 
   it('a source naming two distinct targets emits two references edges', async () => {
@@ -284,7 +269,7 @@ describe('cross-object references (Pass 3 name-match)', () => {
     });
     await extractGraph(sqliteStore(home), 'tenantA');
     await extractGraph(sqliteStore(home), 'tenantB');
-    expect(refs(home, 'tenantB')).toHaveLength(0); // cross-tenant name never matched (per-tenant index)
+    expect(refs(home, 'tenantB')).toHaveLength(0);
     expect(refs(home, 'tenantA')).toHaveLength(0);
   });
 });

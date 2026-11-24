@@ -1,5 +1,3 @@
-// hippo.db's Quarantine group: the review queue's rows, and the approve and reject writes with
-// their audit rows.
 import { appendAuditEvents } from '../audit/audit.js';
 import { withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import type { KeysetPosition } from '../../../base/util/keyset.js';
@@ -100,8 +98,6 @@ function listQuarantineRows(
     afterRow,
   }: ListQuarantineRowsOptions,
 ): QuarantineRow[] {
-  // A pending row whose memory was deleted (e.g. Slack message_deleted) is dead; keep its history,
-  // drop it from the queue.
   const live =
     status === 'pending'
       ? ' AND EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_quarantine.memory_id AND m.tenant_id = ' +
@@ -150,7 +146,6 @@ export function recordQuarantine(db: DatabaseSyncLike, opts: RecordQuarantineOpt
   ]);
 }
 
-/** Who decides on which tenant's quarantined memory. */
 interface DecisionOptions {
   readonly tenantId: string;
   readonly id: string;
@@ -181,7 +176,6 @@ function rejectQuarantineRow(
   });
 }
 
-/** A page of the tenant's records, each with its memory's content read in the same query batch. */
 function listQuarantined(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -200,7 +194,6 @@ function listQuarantined(
   });
 }
 
-/** The pending record, or why a decision on `id` is refused. */
 function pendingOrRefusal(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -212,8 +205,6 @@ function pendingOrRefusal(
   return row;
 }
 
-/** Puts the memory back under its original scope; the scope guard refuses a row moved since it
- * was quarantined. */
 function approveQuarantined(
   db: DatabaseSyncLike,
   { tenantId, id, actor }: DecisionOptions,
@@ -245,7 +236,6 @@ function approveQuarantined(
   );
 }
 
-/** Marks the record rejected; the memory row is left as stored. */
 function rejectQuarantined(
   db: DatabaseSyncLike,
   { tenantId, id, actor }: DecisionOptions,
@@ -265,14 +255,10 @@ function rejectQuarantined(
   );
 }
 
-/** What editQuarantined answers inside the store; the successor rides along so its mirror can be
- * written after the commit. */
 type EditDone =
   | Exclude<QuarantineEditOutcome, { readonly outcome: 'edited' }>
   | { readonly outcome: 'edited'; readonly newId: string; readonly successor: MemoryEntry };
 
-/** The admin's text as the held row's successor under its original scope; the held row stays as
- * delivered. */
 function editQuarantined(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -294,7 +280,6 @@ function editQuarantined(
     const successor = stampOriginProject(files, {
       ...createSuccessor(held, edit.content, options, handleNow(db)),
       scope: row.originalScope,
-      // A plain approve keeps the held row's tier, so an edit does too.
       confidence: held.confidence,
       artifactRef: held.artifactRef,
       parents: [id],
@@ -318,8 +303,6 @@ function editQuarantined(
   });
 }
 
-/** After the commit, best effort: a failed rewrite leaves the markdown mirror showing the
- * quarantine scope, which still hides the memory. */
 function rewriteMirror(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -352,8 +335,6 @@ function decide(
   return result;
 }
 
-/** A tombstone refusal leaves its reject_refusal row after the rollback; the mirrors follow the
- * commit. */
 function editThenMirror(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -372,7 +353,6 @@ function editThenMirror(
 export function sqliteQuarantine({ on, files }: Handles): Quarantine {
   const quarantine: QuarantineCalls = {
     ...bound<Pick<QuarantineCalls, 'listQuarantined'>>(on, { listQuarantined: listQuarantined }),
-    // An approval or an edit rewrites a mirror, so each opens the store with its mirror folders.
     ...bound<Pick<QuarantineCalls, 'decideQuarantined' | 'editQuarantined'>>(
       on,
       {

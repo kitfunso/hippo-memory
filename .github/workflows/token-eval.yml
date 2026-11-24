@@ -1,6 +1,3 @@
-# The slow token-eval harness tests (EVAL_TESTS in vitest.config.ts), kept out of ci.yml's shards because they take a quarter of its Windows time.
-# Every push to master or next/2.0 runs them, and so does a PR that touches src or the harness, so a src change that breaks the harness cannot skip them.
-# npm-publish.yml calls this workflow on the tagged commit and publishes only when it passes.
 name: Token eval
 
 on:
@@ -34,7 +31,6 @@ on:
 permissions:
   contents: read
 
-# A new push to a PR cancels the run for the commit it replaced. On master and next/2.0 a started run finishes and only the newest waiting run is kept.
 concurrency:
   group: token-eval-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -46,9 +42,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        # One Codex file per runner: each runs set X end to end many times, and together they overran one 30-minute job.
-        # One shard per -z0-codex- file in EVAL_TESTS; a new file there needs a new shard here.
-        # The harness project splits three ways so its Windows jobs do not set the wall time of a PR's checks.
         part:
           - { name: harness 1/3, args: --project harness --shard=1/3 }
           - { name: harness 2/3, args: --project harness --shard=2/3 }
@@ -67,7 +60,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      # The temp dirs ci.yml gives these tests: tmpfs on Linux, and D: on Windows, where C: takes 5 ms per fsync.
       - name: Temp dir on tmpfs
         if: runner.os == 'Linux'
         run: echo "TMPDIR=/dev/shm" >> "$GITHUB_ENV"

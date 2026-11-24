@@ -117,8 +117,6 @@ export function parseClefReply(
   };
 }
 
-/** Where one scoring request goes and how: the transport, the model asked for, its route and the
- * call's timeout. */
 interface ClefCall {
   readonly http: Http;
   readonly model: ClefModel;
@@ -146,7 +144,6 @@ async function requestScores(
     signal,
   });
   if (!resp.ok) {
-    // A third-party header ends up on stderr, so keep printable ASCII only.
     const ray = resp.headers
       .get('cf-ray')
       ?.replace(/[^\x20-\x7e]/g, '')
@@ -160,14 +157,12 @@ async function requestScores(
   return parsed;
 }
 
-/** The input order, unchanged, with the reason recorded. Never a partial reorder. */
 function nativeOrder(head: SearchResult[], provenance: RerankProvenance): RerankResult[] {
   return head.map((r, i) => ({
     ...r,
     rerankScore: r.score,
     preRerankRank: r.preRerankRank ?? i + 1,
     postRerankRank: i + 1,
-    // A copy per row, so a caller editing one result cannot change another's provenance.
     rerankProvenance: { ...provenance },
   }));
 }

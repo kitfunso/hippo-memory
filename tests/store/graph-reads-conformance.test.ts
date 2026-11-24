@@ -1,4 +1,3 @@
-// GraphReads answers: the same rows, the same order, the same rows hidden and the same truncated flag.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { StoreActor } from '../../src/base/scope/recall-scope.js';
@@ -26,7 +25,6 @@ import {
 type Call<R = GraphRows> = GroupCall<'graphReads', R>;
 type Edge = readonly [from: number, to: number];
 
-/** The rows by id, which is all most cases need to tell one answer from another. */
 interface RowIds {
   readonly entities: readonly number[];
   readonly relations: readonly Edge[];
@@ -46,9 +44,7 @@ interface IdLists {
   readonly entities: number[];
   readonly relations: Edge[];
 }
-/** Tenant A's entities and relations, newest first. */
 let newest: IdLists;
-/** What a walk from Hub holds, and the relations among those five. */
 let aroundHub: IdLists;
 
 const rows =
@@ -66,7 +62,6 @@ const ids = (entities: readonly number[], relations: readonly Edge[], truncated 
   truncated,
 });
 
-/** The answers, with nothing appended to the audit log. */
 async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   const sqlite = await runOnFixture(fixture, 'graphReads', calls);
   expect(sqlite.audit).toEqual(auditBefore);
@@ -76,7 +71,6 @@ async function answers<R>(calls: readonly Call<R>[]): Promise<R[]> {
   });
 }
 
-/** A walk by memory or by entity: its entity ids, with no relations and never truncated. */
 async function entityIds(calls: readonly Call[]): Promise<number[][]> {
   return (await readIds(calls)).map(({ entities, ...rest }) => {
     expect(rest).toEqual({ relations: [], truncated: false });
@@ -84,7 +78,6 @@ async function entityIds(calls: readonly Call[]): Promise<number[][]> {
   });
 }
 
-/** A walk by neighbor: its relations as edges, with no entities and never truncated. */
 async function edges(calls: readonly Call[]): Promise<Edge[][]> {
   return (await readIds(calls)).map(({ relations, ...rest }) => {
     expect(rest).toEqual({ entities: [], truncated: false });
@@ -230,7 +223,6 @@ describe('GraphReads.graphRows over the whole graph', () => {
     expect(granted).toEqual(admin);
     expect(alice).toEqual(ids(without(newest.entities, e.twinHeld, e.secret), without(newest.relations, heldEdge)));
     expect(memberAtCap).toEqual({ ...memberSees, truncated: true });
-    // The hidden relation is not replaced by the next newest one.
     expect(memberTwo).toEqual(ids([e.anchored, e.shared], [[e.shared, e.hub]], true));
   });
 });
@@ -287,7 +279,6 @@ describe('GraphReads.graphRows from a name', () => {
       ids([e.hub, e.shared], [sharedHub!], true),
       ids([e.hub, e.secret, e.shared], [sharedHub!, hubSecret!], true),
       ids([e.hub, e.spoke2, e.secret, e.shared], [sharedHub!, hubSecret!, hubSpoke2!], true),
-      // Every neighbor fits, and the relations among them come back exactly limit long.
       ids(aroundHub.entities, aroundHub.relations, true),
       ids(aroundHub.entities, aroundHub.relations, false),
       ids(aroundHub.entities, aroundHub.relations, false),
@@ -309,7 +300,6 @@ describe('GraphReads.graphRows from a name', () => {
         rows({ entity: 'Twin' }),
       ]);
     expect([secret, secretAtCap, mine, aliceSecret, adminMine]).toEqual([EMPTY, EMPTY, EMPTY, EMPTY, EMPTY]);
-    // The cap picks the start entities before any is hidden: the one Twin a member may read sits past a cap of one.
     expect(twinFirst).toEqual(EMPTY);
     expect(twinBoth).toEqual(ids([e.twinOpen], [], true));
     expect(twinUnder).toEqual(ids([e.twinOpen], []));
@@ -349,7 +339,6 @@ describe('GraphReads.graphRows from a name', () => {
       rows({ entity: 'Many', limit: 400 }, BULK_TENANT),
       rows({ limit: 3 }, BULK_TENANT),
     ]);
-    // The older relation joins first because its start entity sits in the first 400, so the one id left goes to TailA.
     expect(oneTail).toEqual(ids([...many.slice(0, 400), e.tailA, ...many.slice(400)], [[first, e.tailA]], true));
     expect(bothTails).toEqual(
       ids(
@@ -401,7 +390,6 @@ describe('GraphReads walk reads', () => {
     ]);
     expect(scrambled).toEqual([e.hub, e.secret, e.shared]);
     expect(crossTenant).toEqual([e.hub]);
-    // The first 400 asked are the last 400 made, so they come back before the five oldest.
     expect(reversed).toEqual([...many.slice(MANY - 400), ...many.slice(0, MANY - 400)]);
     expect(none).toEqual([]);
   });
@@ -435,7 +423,6 @@ describe('GraphReads walk reads', () => {
       [e.hub, e.spoke2],
       [e.hub, e.spoke1],
     ]);
-    // The limit holds for the whole call: of the two batches' newest relations, the newer TailB one is kept.
     expect(perBatch).toEqual([[last, e.tailB]]);
     expect(repeated).toEqual([[first, e.tailA]]);
     expect([otherTenant, zero, none]).toEqual([[], [], []]);

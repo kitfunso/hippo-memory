@@ -1,7 +1,3 @@
-/**
- * `hippo refine` picks its model the way sleep does: a half-set endpoint is refused by name, and no model names both routes.
- */
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { runCli as runCliEntry } from '../../src/cli.js';

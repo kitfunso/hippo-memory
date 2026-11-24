@@ -1,6 +1,3 @@
-// Pins which rows hybrid recall returns when vectors exist: the CLI shared-store path, api.retrieve and the plain hybrid pool.
-// Ids are random per seed, so rows are named by label.
-
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,7 +43,6 @@ function add(s: Seeded, label: string, content: string, opts: Partial<CreateMemo
   s.idByLabel.set(label, entry.id);
 }
 
-/** S1 and S2 share no word with the query; SC1, PR1 and LG1 sit in scopes default recall denies. */
 function seed(): Seeded {
   const home = makeRoot('vec-cand', { init: false });
   const global = makeRoot('vec-cand-global');
@@ -70,7 +66,6 @@ function seed(): Seeded {
   return s;
 }
 
-/** The query vector is [1,0,0]: S1 and the scoped rows match it exactly, S2 nearly, lexical rows at 0.6, noise not at all. */
 function withEmbeddings(s: Seeded): void {
   const index: Record<string, number[]> = {};
   for (const [label, id] of s.idByLabel) {
@@ -93,7 +88,6 @@ function withEmbeddings(s: Seeded): void {
 const labels = (s: Seeded, ids: readonly string[]): string[] => ids.map((id) => s.labelById.get(id) ?? id);
 
 describe('hybrid recall candidates with stored vectors', () => {
-  // Removed once the test is done, after its session has closed its handles.
   const track = (s: Seeded): Seeded => {
     onTestFinished(() => [s.home, s.global].forEach(removeDir));
     return s;
@@ -197,7 +191,6 @@ describe('hybrid recall candidates with stored vectors', () => {
   });
 });
 
-// S1, S2 and SC1 share no word with the query and arrive through the vector arm; PR1 and LG1 never do.
 const LEXICAL = ['L1', 'L4', 'L2', 'L3'];
 const WITH_VECTORS = ['L1', 'S1', 'SC1', 'S2', 'L2', 'L4', 'L3'];
 const EXPECTED = {

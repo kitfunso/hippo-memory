@@ -1,6 +1,3 @@
-// Memories seeded from git history never reach the global store on their own;
-// a hand-run share or promote of one still does. Real stores and the real CLI.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { execFileSync } from 'node:child_process';
@@ -43,7 +40,6 @@ describe('git-learned rows and the global store', () => {
     hippoRoot = join(tmp, 'proj', '.hippo');
     initTestStore(hippoRoot);
     vi.stubEnv('HIPPO_HOME', join(tmp, 'global'));
-    // The tags learnFromRepo gives every seed.
     seed = createMemory(SEED, {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['error', 'git-learned'],
@@ -124,7 +120,6 @@ describe('git-learned rows and the global store', () => {
 
   it('DAG summaries and entity profiles built over git-learned facts keep the tag', async () => {
     let calls = 0;
-    // Stands in for the summary model, so no API key is read.
     const fetcher = async (): Promise<Response> =>
       new Response(
         JSON.stringify({ content: [{ text: `Upload retry summary number ${++calls} for the storage token.` }] }),

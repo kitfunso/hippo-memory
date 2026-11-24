@@ -1,15 +1,3 @@
-"""Score Mem0-runner LoCoMo output two ways, and compare arms.
-
-1. The runner's own judge verdicts (as Mem0 reports them).
-2. The LoCoMo authors' token F1 (snap-research/locomo, task_eval/evaluation.py),
-   applied to the same generated answers.
-
-Arms are compared question by question with a paired bootstrap (95%).
-
-    pip install nltk regex numpy
-    python score_locomo.py --locomo-repo path/to/locomo --dataset path/to/locomo10.json \
-        --arm hippo=out/predicted_hippo --arm bm25=out/predicted_bm25 [--baseline bm25]
-"""
 from __future__ import annotations
 
 import argparse
@@ -54,7 +42,6 @@ def main() -> None:
     data = json.load(open(a.dataset))
     arms = dict(x.split("=", 1) for x in a.arm)
 
-    # scores[arm][cutoff][metric][question_id] = value
     scores: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     for name, run_dir in arms.items():
         for f in glob.glob(f"{run_dir}/*.json"):

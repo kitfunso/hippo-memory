@@ -1,5 +1,3 @@
-// W2a work-queue cards (trajectories/01M2D5VSYJFK4YXQ0RG2NGCPYJ/plan.md), tests 1,2,4-5 and 12-13 with the input checks.
-// Test 3 (self-heal parity) lives in tests/db/db-continuity-tables-self-heal.test.ts's CONTINUITY_TABLES.
 import { describe, it, expect } from 'vitest';
 import {
   openHippoDb,
@@ -124,7 +122,6 @@ describe('createCard initial status', () => {
   it('one backlog-status dep -> backlog', async () => {
     const parent = await createCard(root, 'default', { title: 'Parent' });
     expect(parent.status).toBe('ready');
-    // Force the parent to a non-done status so the child's pre-check sees a not-done parent.
     const db = openHippoDb(root);
     try {
       db.prepare(`UPDATE cards SET status = 'backlog' WHERE id = ?`).run(parent.id);

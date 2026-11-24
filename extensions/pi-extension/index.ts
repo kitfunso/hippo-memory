@@ -1,22 +1,6 @@
-/**
- * Hippo Memory - Pi Coding Agent Extension
- *
- * Auto-injects memory context at session start, captures tool errors,
- * and runs consolidation on shutdown. Registers hippo tools for the LLM.
- *
- * Install: copy to ~/.pi/agent/extensions/hippo-memory/
- * Or add to .pi/extensions/ in your project.
- *
- * Requires: hippo-memory CLI installed globally (npm install -g hippo-memory)
- */
-
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
 
 interface HippoConfig {
   budget: number;
@@ -38,10 +22,6 @@ const DEFAULT_CONFIG: HippoConfig = {
   maxErrorsPerSession: 5,
 };
 
-// ---------------------------------------------------------------------------
-// Noise filtering (matches openclaw-plugin patterns)
-// ---------------------------------------------------------------------------
-
 const NOISE_ERROR_PATTERNS: RegExp[] = [
   /Local media path is not under an allowed directory/i,
   /timed out\.?\s*Restart/i,
@@ -62,8 +42,6 @@ function isNoiseError(error: string): boolean {
   return NOISE_ERROR_PATTERNS.some((p) => p.test(error));
 }
 
-/** True for a string value, without assuming the input's shape — used on
- * fields read off the untyped Pi extension event/plugin surface. */
 function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
@@ -72,17 +50,9 @@ function hashError(toolName: string, error: string): string {
   return `${toolName}::${error.replace(/\s+/g, ' ').trim().slice(0, 80).toLowerCase()}`;
 }
 
-// ---------------------------------------------------------------------------
-// Session state
-// ---------------------------------------------------------------------------
-
 let sessionErrorCount = 0;
 const sessionErrorHashes = new Set<string>();
 let sessionMemoryCount = 0;
-
-// ---------------------------------------------------------------------------
-// Hippo CLI wrapper (no shell, args as array)
-// ---------------------------------------------------------------------------
 
 function runHippo(args: readonly string[], cwd?: string): string {
   try {
@@ -93,8 +63,6 @@ function runHippo(args: readonly string[], cwd?: string): string {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    // `encoding: 'utf8'` above selects the ExecFileSyncOptionsWithStringEncoding
-    // overload, so `result` is always a `string` here — no runtime check needed.
     return result.trim();
   } catch (err: any) {
     return err.stdout?.trim() || err.message || 'hippo command failed';
@@ -119,22 +87,13 @@ function hippoInitialized(cwd: string): boolean {
   return existsSync(join(cwd, '.hippo'));
 }
 
-// ---------------------------------------------------------------------------
-// Extension entry point
-// ---------------------------------------------------------------------------
-
 export default function (pi: any) {
-  // Check hippo is available
   if (!hippoAvailable()) {
     console.error('[hippo] hippo-memory CLI not found. Install: npm install -g hippo-memory');
     return;
   }
 
   const config = { ...DEFAULT_CONFIG };
-
-  // -------------------------------------------------------------------------
-  // Session start: inject memory context
-  // -------------------------------------------------------------------------
 
   pi.on('session_start', async (_event: any, ctx: any) => {
     sessionErrorCount = 0;
@@ -158,10 +117,6 @@ export default function (pi: any) {
     }
   });
 
-  // -------------------------------------------------------------------------
-  // Tool errors: auto-capture (with noise filtering + rate limiting + dedup)
-  // -------------------------------------------------------------------------
-
   if (config.autoLearn) {
     pi.on('tool_result', async (event: any, ctx: any) => {
       if (!event.isError) return;
@@ -174,13 +129,10 @@ export default function (pi: any) {
 
       if (!error || error.length < 10) return;
 
-      // Filter 1: noise
       if (isNoiseError(error)) return;
 
-      // Filter 2: rate limit
       if (sessionErrorCount >= config.maxErrorsPerSession) return;
 
-      // Filter 3: dedup
       const hash = hashError(event.toolName || 'unknown', error);
       if (sessionErrorHashes.has(hash)) return;
 
@@ -208,19 +160,13 @@ export default function (pi: any) {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // Session shutdown: run consolidation
-  // -------------------------------------------------------------------------
-
   pi.on('session_shutdown', async (_event: any, ctx: any) => {
     if (!config.autoSleep) return;
 
     const cwd = ctx.cwd || process.cwd();
     if (!hippoInitialized(cwd)) return;
 
-    // Only sleep if we captured some memories this session
     if (sessionMemoryCount < 1) {
-      // Still run sleep for the auto-learn-from-git + auto-share features
       try { runHippo(['sleep'], cwd); } catch { /* best effort */ }
       return;
     }
@@ -231,10 +177,6 @@ export default function (pi: any) {
       // Best effort — don't block shutdown
     }
   });
-
-  // -------------------------------------------------------------------------
-  // Tools: hippo_recall
-  // -------------------------------------------------------------------------
 
   pi.registerTool({
     name: 'hippo_recall',
@@ -255,10 +197,6 @@ export default function (pi: any) {
       return { content: [{ type: 'text', text: result || 'No relevant memories found.' }] };
     },
   });
-
-  // -------------------------------------------------------------------------
-  // Tools: hippo_remember
-  // -------------------------------------------------------------------------
 
   pi.registerTool({
     name: 'hippo_remember',
@@ -289,10 +227,6 @@ export default function (pi: any) {
     },
   });
 
-  // -------------------------------------------------------------------------
-  // Tools: hippo_outcome
-  // -------------------------------------------------------------------------
-
   pi.registerTool({
     name: 'hippo_outcome',
     description: 'Report whether recalled memories were helpful. Strengthens or weakens them.',
@@ -312,10 +246,6 @@ export default function (pi: any) {
     },
   });
 
-  // -------------------------------------------------------------------------
-  // Tools: hippo_status
-  // -------------------------------------------------------------------------
-
   pi.registerTool({
     name: 'hippo_status',
     description: 'Show memory health: counts, strength distribution, conflicts.',
@@ -327,10 +257,6 @@ export default function (pi: any) {
       return { content: [{ type: 'text', text: result || 'No hippo store found.' }] };
     },
   });
-
-  // -------------------------------------------------------------------------
-  // Tools: hippo_context
-  // -------------------------------------------------------------------------
 
   pi.registerTool({
     name: 'hippo_context',

@@ -1,4 +1,3 @@
-// writeFileAtomic flushes the temp file before the rename and the folder after it (off Windows), and says so when it has to write in place.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
@@ -26,7 +25,6 @@ afterEach(() => {
 
 type Step = { op: 'flush file'; bytes: number } | { op: 'flush folder' } | { op: 'rename'; from: string; to: string };
 
-/** Records each flush and rename as it happens, then lets it through. A crash cannot be staged, so the order of the calls is the evidence. */
 function recordSteps(): Step[] {
   const steps: Step[] = [];
   const fsync = fs.fsyncSync.bind(fs);
@@ -44,7 +42,6 @@ function recordSteps(): Step[] {
   return steps;
 }
 
-/** The lines hippo logged, without the trailing timestamp field. */
 function captureLog(): () => string[] {
   const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   return () => stderr.mock.calls.map((call) => String(call[0]).replace(/ ts=\S+.*$/s, ''));
@@ -132,7 +129,6 @@ describe('writeFileAtomic when the platform refuses the rename', () => {
 });
 
 describe('writeFileAtomic when the in-place write fails too', () => {
-  /** Refuses the rename, so the write falls back to in place, then fails that write with `error`. */
   function failInPlace(error: Error): void {
     const write = fs.writeFileSync.bind(fs);
     vi.spyOn(fs, 'renameSync').mockImplementation(() => {

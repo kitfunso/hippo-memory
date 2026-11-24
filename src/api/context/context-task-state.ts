@@ -1,4 +1,3 @@
-// The snapshot, handoff and events a context call shows.
 import {
   freshActiveSnapshot,
   SNAPSHOT_AMBIENT_MAX_AGE_MS,
@@ -22,8 +21,6 @@ export interface TaskSections {
   shownSnapshot: TaskSnapshot | null;
   snapshotMode: ContinuityMode;
   shownHandoff: SessionHandoff | null;
-  /** An eligible handoff the caller asked to leave out, kept so its transcript-digest row stays
-   * hidden. */
   omittedHandoff: SessionHandoff | null;
   handoffMode: ContinuityMode;
   shownEvents: SessionEvent[];
@@ -38,8 +35,6 @@ interface RawTaskState {
 
 const NO_TASK_STATE: RawTaskState = { snapshot: null, handoff: null, events: [] };
 
-// Keyed on the RAW snapshot: a scope-hidden active session must not fall through to another
-// session's ambient handoff.
 async function loadRawTaskState(
   ctx: Context,
   opts: ContextOptions,
@@ -47,36 +42,25 @@ async function loadRawTaskState(
 ): Promise<RawTaskState> {
   if (!plan.hasLocalTaskState) return NO_TASK_STATE;
   const { store } = plan.local;
-  // On a shared store task state is one person's, keyed by owner and project so it follows them
-  // into their next session.
   const key: ContinuityKey | null = plan.sharedStore
     ? { owner: ownerOrSubject(ctx.actor), project: projectNames(plan.currentProject) }
     : null;
   const block = await store.continuity(ctx.tenantId, CONTINUITY_EVENT_LIMIT, key);
-  // Bounded read: an orphaned snapshot ages out of this ambient surface; the owner session's read
-  // stays unbounded.
   const snapshot = freshActiveSnapshot(block.activeSnapshot, { sessionId: opts.currentSessionId });
-  // The block's handoff and events are the raw snapshot's session's, so they stand only while that
-  // snapshot is fresh.
   if (snapshot?.sessionId) {
     return { snapshot, handoff: block.sessionHandoff, events: block.recentSessionEvents };
   }
-  // An unfinished handoff's scope is admitted in the read, so a newer denied row can't hide an
-  // older eligible one.
   const unfinished = {
     sessionId: null,
     unfinishedOnly: true,
     maxAgeMs: SNAPSHOT_AMBIENT_MAX_AGE_MS,
     scopeFilter: 'default-deny',
   } as const;
-  // A store that keeps no session rows has no handoff to offer.
   const { sessions } = store;
   const handoff = sessions && (await sessions.read(ctx.tenantId, 'handoff', unfinished, key));
   return { snapshot, handoff: handoff ?? null, events: [] };
 }
 
-// Sections print ahead of the memories, so they are paid first; one that does not fit is dropped,
-// as an oversize entry is.
 export async function loadTaskSections(
   ctx: Context,
   opts: ContextOptions,
@@ -85,7 +69,6 @@ export async function loadTaskSections(
 ): Promise<TaskSections> {
   const { exactScope, ownScope, cost } = plan;
   const { pays, left } = tokenPurse(startLeft);
-  // The same envelope rule ambientAdmitEntry applies to memory rows.
   const admits = (r: { scope?: string | null }): boolean =>
     passesScopeFilterForRecall(r.scope ?? null, exactScope, ownScope);
   const raw = await loadRawTaskState(ctx, opts, plan);
@@ -102,7 +85,6 @@ export async function loadTaskSections(
     sessionHandoff && (!cost || pays(cost.handoff(sessionHandoff, handoffMode)))
       ? sessionHandoff
       : null;
-  // The pointer's command prints the snapshot session's events, so they drop only when that pointer is shown.
   const recentSessionEvents =
     shownSnapshot !== null && snapshotMode === 'pointer' ? [] : raw.events.filter(admits);
   const shownEvents =
@@ -127,8 +109,6 @@ export async function loadTaskSections(
   };
 }
 
-// The hook leaves out another session's handoff; it is neither shown nor dropped for budget, so the
-// section counts skip it.
 function splitHandoff(
   opts: ContextOptions,
   eligible: SessionHandoff | null,
@@ -140,7 +120,6 @@ function splitHandoff(
     : { sessionHandoff: eligible, omittedHandoff: null };
 }
 
-// The command must return this reader's row, so own, shared-store, unsafe-id print whole; no id: `hippo snapshot show`.
 function continuityModeFor(
   opts: ContextOptions,
   plan: ContextPlan,

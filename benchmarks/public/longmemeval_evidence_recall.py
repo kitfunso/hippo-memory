@@ -1,14 +1,3 @@
-"""Free retrieval check on Mem0-runner LongMemEval-S output (no model calls).
-
-For each question, the share of its evidence turns (haystack messages with
-`has_answer: true`) found in the top k retrieved memories, from
-`--predict-only` output of mem0ai/memory-benchmarks. Sibling of
-evidence_recall.py (LoCoMo); see docs/evals/2026-09-24-public-benchmarks-prereg.md
-Amendment 2. Usage:
-
-    python longmemeval_evidence_recall.py --dataset longmemeval_s_cleaned.json \
-        --run-dir out/predicted_<name> [--k 10,50,200] [--baseline out/predicted_<other>]
-"""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +8,6 @@ from collections import defaultdict
 
 
 def boot(diffs: list[float], draws: int = 4000) -> tuple[float, float, float]:
-    """Paired bootstrap 95% CI for a mean of per-question differences."""
     random.seed(1)
     n = len(diffs)
     means = sorted(sum(random.choice(diffs) for _ in range(n)) / n for _ in range(draws))
@@ -36,12 +24,11 @@ def evidence_texts(q: dict) -> list[str]:
 
 
 def score_run(run_dir: str, evidence: dict, ks: list[int]) -> tuple[dict, dict]:
-    """agg[type][metric] -> list of values; per_q[k] -> {question_id: recall}."""
     agg: dict = defaultdict(lambda: defaultdict(list))
     per_q: dict = defaultdict(dict)
     for f in sorted(glob.glob(f"{run_dir}/*.json")):
         if f.split("/")[-1].split("\\")[-1].startswith("_ingestion_"):
-            continue  # per-session checkpoint, not a scored question
+            continue
         q = json.load(open(f, encoding="utf-8"))
         ev = evidence.get(q["question_id"], [])
         if not ev:

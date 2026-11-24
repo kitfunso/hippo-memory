@@ -1,12 +1,3 @@
-/**
- * v1.5.2 fresh-tail recall — Task 4 of docs/plans/2026-05-05-dag-recall.md.
- *
- * RecallOptions.freshTailCount (default 0): when > 0, prepend the last N
- * kind='raw' rows so an agent's "what did I just see" path always covers
- * the recent window even when query terms don't match. Tenant + scope
- * filtered, deduplicated against the BM25 hits.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -48,11 +39,6 @@ describe('fresh-tail recall', () => {
   });
 
   it('2. freshTailCount=3 stamps isFreshTail on the 3 most recent raw rows', async () => {
-    // Five raw rows with sequential timestamps. listSearchEntries returns
-    // all tenant-scoped rows scored by BM25, so the recent rows ALSO surface
-    // as BM25 hits. The fresh-tail logic stamps `isFreshTail=true` on the
-    // top-3 recent ids regardless of whether they came in via BM25 or via
-    // the prepend path.
     const ids: string[] = [];
     for (let i = 0; i < 5; i++) {
       const e = makeRaw(`recent raw row ${i}`);
@@ -66,7 +52,6 @@ describe('fresh-tail recall', () => {
     });
     const tailIds = r.results.filter((it) => it.isFreshTail).map((it) => it.id);
     expect(tailIds.length).toBe(3);
-    // Top 3 by created DESC: ids[4], ids[3], ids[2].
     expect(new Set(tailIds)).toEqual(new Set([ids[4], ids[3], ids[2]]));
   });
 
@@ -88,9 +73,6 @@ describe('fresh-tail recall', () => {
       query: 'completely unrelated string',
       window: { freshTailCount: 5 },
     });
-    // BM25 already drops private rows in the no-scope path; fresh-tail must
-    // not undo that. Public row appears with isFreshTail=true; private one
-    // does not appear at all.
     const allContent = r.results.map((it) => it.content);
     expect(allContent.every((c) => !c.includes('payroll'))).toBe(true);
     const publicHit = r.results.find((it) => it.content === 'public chatter alpha');
@@ -111,8 +93,6 @@ describe('fresh-tail recall', () => {
   });
 
   it('6. fresh-tail row not matched by query is prepended at score 1.0', async () => {
-    // Two rows: one only matches the query, one only fits the recent window.
-    // The recent-only row should be in results with isFreshTail=true.
     const queryHit = makeRaw('alpha bravo charlie match');
     queryHit.created = '2026-01-01T00:00:00.000Z';
     writeEntry(root, queryHit);
@@ -125,7 +105,6 @@ describe('fresh-tail recall', () => {
     });
     const recentHit = r.results.find((it) => it.id === recent.id);
     expect(recentHit?.isFreshTail).toBe(true);
-    // Both rows surface, both flagged as expected.
     const queryMatchHit = r.results.find((it) => it.id === queryHit.id);
     expect(queryMatchHit?.id).toBe(queryHit.id);
   });

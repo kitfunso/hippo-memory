@@ -1,4 +1,3 @@
-// Request plumbing: request ids, error replies, URL parsing and path matching.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { isStoreBusy, STORE_BUSY_MESSAGE } from '../../base/ports/store.js';
@@ -10,11 +9,8 @@ import { MINUTE_MS } from '../../base/util/time.js';
 import type { RouteParams } from './types.js';
 import type { Role } from '../../base/scope/role.js';
 
-// The caller's id lands in a response header and in logs, so only a short plain token is echoed
-// back.
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
-/** The caller's `X-Request-Id` when it is a short plain token, else a fresh UUID. */
 function resolveRequestId(header: string | string[] | undefined): string {
   const value = Array.isArray(header) ? undefined : header;
   return value && REQUEST_ID_RE.test(value) ? value : randomUUID();
@@ -28,7 +24,6 @@ function resolveRequestId(header: string | string[] | undefined): string {
 export function logRequestFailure<E>(req: IncomingMessage, err: E, status: number): void {
   const message = errorMessage(err);
   const line = `${req.method ?? 'GET'} ${accessRouteOf(req)} failed: ${message}`;
-  // A 5xx that tells the caller when to retry is back-pressure too.
   if (
     isStoreBusy(err) ||
     (status >= 500 && err instanceof HttpError && err.retryAfterSec !== undefined)
@@ -37,8 +32,6 @@ export function logRequestFailure<E>(req: IncomingMessage, err: E, status: numbe
   } else if (status >= 500 && status !== 501) {
     log.error(line, { status, ...errorFields(err) });
   } else if (status === 401 || status === 403) {
-    // A failed login is the one 4xx an operator needs by default; the id (never the credential) is
-    // stamped from the request scope.
     log.warn(line, { status, ...errorClassFields(err) });
   } else {
     log.trail(line, { status, ...errorClassFields(err) });
@@ -51,12 +44,8 @@ export function replyFor<E>(err: E): { status: number; message: string } {
   return isStoreBusy(err) ? { status: 503, message: STORE_BUSY_MESSAGE } : mapApiError(err);
 }
 
-// Above the 30 s body deadline and the 5 s resolver deadline, so a request those govern is answered
-// before it is called slow.
 const SLOW_REQUEST_WARN_MS = MINUTE_MS;
 
-/** Logs one warn when `res` has sent nothing after `afterMs`. It never ends the request or
- * touches the reply; the timer goes when the reply finishes or the socket closes. */
 function watchSlowRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -65,21 +54,18 @@ function watchSlowRequest(
 ): void {
   const startedAt = Date.now();
   const timer = setTimeout(() => {
-    // A reply already under way is a stream doing its job, not a stuck request.
     if (res.headersSent) return;
     log.warn(`${req.method ?? 'GET'} ${accessRouteOf(req)} is still running`, {
       requestId,
       elapsedMs: Date.now() - startedAt,
     });
   }, afterMs);
-  // The watchdog alone must never keep the process alive.
   timer.unref();
   const clear = (): void => clearTimeout(timer);
   res.once('finish', clear);
   res.once('close', clear);
 }
 
-/** What the route layer learned about a request, for its access line. */
 interface AccessNote {
   route?: string;
   tenant?: string;
@@ -88,7 +74,6 @@ interface AccessNote {
 
 const accessNotes = new WeakMap<IncomingMessage, AccessNote>();
 
-// A path that matched no route is caller data, so the access line never repeats it.
 const UNMATCHED_ROUTE = 'unmatched';
 
 /**
@@ -106,10 +91,6 @@ export function accessRouteOf(req: IncomingMessage): string {
   return accessNotes.get(req)?.route ?? UNMATCHED_ROUTE;
 }
 
-/**
- * One info line per finished request. A path id and a query string can both hold caller data, so
- * the line carries neither.
- */
 function logAccessWhenFinished(req: IncomingMessage, res: ServerResponse, requestId: string): void {
   const note: AccessNote = {};
   accessNotes.set(req, note);
@@ -182,7 +163,6 @@ export function parseRequest(req: IncomingMessage): ParsedRoute {
   try {
     url = new URL(req.url ?? '/', 'http://placeholder');
   } catch (e) {
-    // A request target the URL parser rejects is the caller's fault, not a server failure.
     if (e instanceof TypeError) throw new HttpError(400, e.message);
     throw e;
   }
@@ -205,16 +185,11 @@ function decodePathSegment(segment: string): string {
 export const INT_PARAM = '(int)';
 const DIGITS = /^\d+$/;
 
-/** A pattern segment's param name: `id` for both `:id` and `:id(int)`. */
 function paramName(spec: string): string {
   return spec.slice(1, spec.endsWith(INT_PARAM) ? -INT_PARAM.length : undefined);
 }
 
-/** The value a `:name` segment takes: decoded text, or for `:name(int)` digits only; null when
- * the segment misses. */
 function paramValue(spec: string, segment: string): string | null {
-  // Digits need no decoding, so an escape in an id segment misses the row rather than throwing a
-  // 400.
   if (spec.endsWith(INT_PARAM)) return DIGITS.test(segment) ? segment : null;
   return segment.length === 0 ? null : decodePathSegment(segment);
 }

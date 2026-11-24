@@ -1,4 +1,3 @@
-// Parsing helpers and the port-parameter scan for check-store-port.mjs.
 import { existsSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import ts from 'typescript';
@@ -14,12 +13,10 @@ export function resolveSpec(file, spec) {
   return [`${base}.ts`, `${base}/index.ts`].find((c) => existsSync(c));
 }
 
-// port-groups.ts holds the session and admin groups (conflicts, dormant), so it is a port file here too.
 const declaresPort = (f) =>
   f === 'src/base/ports/store.ts' || f.startsWith('src/base/ports/store/') || f === 'src/base/ports/store-groups.ts';
 const typeTables = new Map();
 
-/** The interfaces and type aliases a file declares, and the file and name each imported or re-exported name comes from. */
 function typeTable(file) {
   if (typeTables.has(file)) return typeTables.get(file);
   const sf = parse(file);
@@ -55,7 +52,6 @@ export function declarationsOf(file, name, hops = 0) {
   return link && hops < 10 ? declarationsOf(link.file, link.name, hops + 1) : [];
 }
 
-/** The first function a member list holds, as `.member` plus its path, or null. */
 function functionInMembers(file, members, seen) {
   for (const m of members) {
     if (ts.isMethodSignature(m)) return `.${m.name.getText()}`;
@@ -66,8 +62,6 @@ function functionInMembers(file, members, seen) {
   return null;
 }
 
-/** The path to the first function a type holds ('' when it is one), or null when it is data. Lib and generic names are
- * data; src interfaces and aliases are read through their members, unions, intersections, arrays and type arguments. */
 function functionIn(file, node, seen) {
   if (!node) return null;
   if (ts.isFunctionTypeNode(node) || ts.isConstructorTypeNode(node)) return '';
@@ -99,7 +93,6 @@ function functionIn(file, node, seen) {
   return null;
 }
 
-/** An interface's own members, then each interface it extends. */
 function functionInDeclared(file, iface, seen) {
   const own = functionInMembers(file, iface.members, seen);
   if (own !== null) return own;
@@ -116,9 +109,6 @@ function functionInDeclared(file, iface, seen) {
 
 const STORE_ROOT = 'src/base/ports/store.ts';
 
-/** The interfaces and aliases the store hands out, as `file#name`: HippoStore and every type its members and return types
- * reach, parameters left out. A type only ever passed in is implemented by the caller, and the method that takes it
- * already counts its function. Null when the root is not declared (a fixture without it scans every port type). */
 function storeImplemented() {
   if (!existsSync(STORE_ROOT) || !typeTable(STORE_ROOT).decls.has('HippoStore')) return null;
   const seen = new Set();

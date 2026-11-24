@@ -12,7 +12,6 @@ beforeEach(() => {
   root = makeRoot('unmigrated', { init: false });
 });
 
-// The adapter's own grant, as audit-maintenance repairs through it.
 const grant = grantFor({});
 
 describe('DbGrant.withUnmigrated', () => {

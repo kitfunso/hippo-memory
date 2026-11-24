@@ -14,11 +14,6 @@ import { tryParseJson } from '../../base/util/json.js';
 const RECENT_USER_TURNS = 20;
 const RECENT_ASSISTANT_TURNS = 10;
 
-/**
- * Build a compact text summary from a Claude Code / OpenCode / Copilot JSONL transcript: plain
- * user messages and the final assistant text chunk, without thinking, tool_use and tool_result
- * noise. Exported for tests. */
-
 /** Leading markers of the lines Claude Code writes with type 'user' that no person typed: commands,
  * `!` shell input and output, task notices. */
 const CLAUDE_CODE_COMMAND_PREFIXES = [
@@ -51,7 +46,6 @@ const SCRIPTED_CLAUDE_ENTRYPOINT = /^(?:sdk-|claude-code-github-action$)/;
 
 /** How to read a scripted session's user turns; the roots read HIPPO_CAPTURE_SCRIPTED into it. */
 export interface TranscriptReadOptions {
-  /** A test harness that plays the person through `claude -p` or `codex exec` sets this. */
   readonly scriptedIsHuman?: boolean;
 }
 
@@ -137,7 +131,6 @@ export function collectSessionTurns(
   let scriptedCodex = false;
 
   for (const line of lines) {
-    // A torn or partial transcript line carries no turn.
     const entry: unknown = tryParseJson(line);
     if (!isObjectLike(entry) || !('type' in entry)) continue;
     visit?.(entry);
@@ -159,10 +152,6 @@ function isScriptedCodexSession(entry: TranscriptRecord): boolean {
   return source === 'exec' || (isObjectLike(source) && 'subagent' in source);
 }
 
-/**
- * The turn a Claude Code `user` or `assistant` line carries; null for any other line or one with no
- * human or reply text.
- */
 function claudeCodeTurn(entry: TranscriptRecord, opts: TranscriptReadOptions): SessionTurn | null {
   if (entry.type !== 'user' && entry.type !== 'assistant') return null;
   const message = 'message' in entry && isObjectLike(entry.message) ? entry.message : undefined;
@@ -174,7 +163,6 @@ function claudeCodeTurn(entry: TranscriptRecord, opts: TranscriptReadOptions): S
     return text ? { role: 'user', text } : null;
   }
   if (!Array.isArray(content)) return null;
-  // Keep assistant text blocks; drop thinking + tool_use
   const chunks: string[] = [];
   for (const block of content) {
     if (isObjectLike(block)) {
@@ -262,8 +250,6 @@ export function summarizeSessionTurns(turns: readonly SessionTurn[]): string {
     ...tailUsers.map((m) => `- ${m}`),
     '',
     '## Assistant Responses',
-    // A blank line between replies keeps capture from joining two of them; each user turn opens its
-    // own list item.
     tailAssistants.join('\n\n'),
   ].join('\n');
 }
@@ -282,13 +268,11 @@ export function resolveLastSessionTranscript(
 
   if (stdinText && stdinText.trim() !== '') {
     const receipt = readSessionEnd(stdinText, false);
-    // A refused payload is still a payload, so no scan.
     const tp = receipt.status === 'received' ? receipt.input.transcriptPath : null;
     return tp !== null && fs.existsSync(tp) ? tp : null;
   }
 
   if (!opts.mayScan) return null;
-  // With no home set, os.homedir() would send the scan into the real profile's transcripts.
   const { home, env } = processHomes();
   if (!claudeHomeIsSet(env)) return null;
 
@@ -304,7 +288,7 @@ export function resolveLastSessionTranscript(
       `transcript scan: cannot list ${projectsDir}: ${errorMessage(err)}`,
       errorFields(err),
     );
-    return null; // an unlistable projects dir means no transcript to find; the caller prints that
+    return null;
   }
   for (const entry of entries) {
     const subDir = path.join(projectsDir, entry);
@@ -317,7 +301,6 @@ export function resolveLastSessionTranscript(
   return newest?.path ?? null;
 }
 
-/** mtime of `file`, or null when it vanished after the listing; any other stat error is real. */
 function statMtime(file: string): number | null {
   try {
     return fs.statSync(file).mtimeMs;
@@ -327,7 +310,6 @@ function statMtime(file: string): number | null {
   }
 }
 
-/** The .jsonl names in `dir`; empty when it is not a directory or vanished after the listing. */
 function listJsonl(dir: string): string[] {
   try {
     if (!fs.statSync(dir).isDirectory()) return [];

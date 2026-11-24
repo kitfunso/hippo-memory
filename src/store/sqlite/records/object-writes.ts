@@ -1,5 +1,3 @@
-// The typed-object writes: audit rows, close, save with versions, the half-life mirror and incident open.
-
 import { appendAuditEvents } from '../audit/audit.js';
 import { getMeta, withWriteScopeOr, type DatabaseSyncLike } from '../../../db/index.js';
 import { placeholders } from '../../../db/sql.js';
@@ -42,7 +40,6 @@ import type { JsonObject } from '../../../base/util/json.js';
 import { META_KEY } from '../../../db/meta.js';
 import { KINDS, SAVE_RULES, hasText, isVersioned, objectTable, readRow } from './object-rows.js';
 
-/** One audit row's op, target and metadata; the adapter adds the tenant and actor. */
 interface ObjectAudit {
   readonly op: AuditOp;
   readonly targetId: string;
@@ -59,14 +56,12 @@ function createAudit<K extends SavableKind>(
   return { op: `${kind}_create`, targetId: String(id), metadata };
 }
 
-/** The object id `replaced`, the id that replaces it and that row's version. */
 interface SupersedeAuditOptions {
   readonly replaced: number;
   readonly id: number;
   readonly version: number;
 }
 
-/** The row for `replaced` giving way to `id`, which holds `version`. */
 function supersedeAudit<K extends SavableKind>(
   kind: K,
   { replaced, id, version }: SupersedeAuditOptions,
@@ -106,7 +101,6 @@ export function saveAny(
   files: StoreFiles,
   ...[tenantId, kind, object]: ObjectSaveArgs
 ) {
-  // The prediction writes its mirror files too, so it opens the store as every mirrored save does.
   if (kind === 'prediction') {
     return on((db) => writePrediction(db, files, tenantId, object), openStore);
   }
@@ -121,8 +115,6 @@ interface CloseRow<K extends ObjectKind> {
   readonly close: ObjectClose<K>;
 }
 
-/** The status guard sits in the UPDATE, so zero rows changed means missing or not closable; the
- * reread tells which. */
 function closeRow<K extends ObjectKind>(
   db: DatabaseSyncLike,
   { tenantId, kind, id, close }: CloseRow<K>,
@@ -163,8 +155,6 @@ function close<K extends ObjectKind>(
   return on((db) => {
     const closed = closeRow(db, { tenantId, kind, id, close });
     if (isObjectRefusal(closed) || !graphType) return closed;
-    // Each graph write takes its own write lock, so both wait for the commit. The rows go at once
-    // because the rebuild queue is keyed by a mirror memory that may be gone.
     removeGraphEntitiesForObject(db, tenantId, graphType, closed.id);
     markGraphDirty(db, tenantId, closed.memoryId);
     return closed;
@@ -179,7 +169,6 @@ interface NewRow<K extends SavableKind> {
   readonly version: number;
 }
 
-/** Runs before the INSERT, so the new row's id can never be the id it replaces. */
 function successorVersion(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -219,8 +208,6 @@ function insertRow<K extends SavableKind>(db: DatabaseSyncLike, row: NewRow<K>):
   return Number(result.lastInsertRowid ?? 0);
 }
 
-/** The status guard sits in the UPDATE, so a row another writer retired since the preflight
- * fails the whole save; false says so. */
 function supersedeRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   row: NewRow<K>,
@@ -242,8 +229,6 @@ function supersedeRow<K extends SavableKind>(
   return true;
 }
 
-/** The object half of a save, inside the scope that holds the mirror memory: a refusal or a
- * throw here leaves no row, memory or audit event. */
 function writeObjectRow<K extends SavableKind>(
   db: DatabaseSyncLike,
   { tenantId, kind, memoryId, save }: Omit<NewRow<K>, 'version'>,
@@ -263,7 +248,6 @@ function writeObjectRow<K extends SavableKind>(
   return saved;
 }
 
-/** What a write hands back in place of a row. */
 interface Refused {
   readonly refused: string;
 }
@@ -275,15 +259,10 @@ function refusalOf<R extends object, F extends Refused>(written: R | F): written
 interface MirroredWrite<F extends Refused = never> {
   readonly mirror: MemoryEntry;
   readonly actor: string;
-  /** Set for a kind the graph reads, so its mirror is queued for a rebuild. */
   readonly graphTenant?: string;
-  /** Runs in the scope after the mirror's remember row: the other memories it wrote, whose
-   * markdown follows the commit, or a refusal that undoes the whole write. */
   readonly alsoWrite?: (db: DatabaseSyncLike) => MemoryEntry[] | F;
 }
 
-/** Until the typed migration has run, a mirror goes in on the flat half-life that migration
- * moves; the flag is read under the save's write lock, so the two cannot interleave. */
 function onStoreHalfLife(
   db: DatabaseSyncLike,
   mirror: MemoryEntry,
@@ -294,8 +273,6 @@ function onStoreHalfLife(
   return { ...legacy, strength: calculateStrength(legacy, rules.clock(), rules.strength) };
 }
 
-/** One write scope on one handle holds the mirror, the row `writeRow` adds, the successor link
- * and every audit row, the mirror's remember row last. */
 function withMirror<R extends object, F extends Refused>(
   on: OnHandle,
   write: MirroredWrite<F>,
@@ -318,7 +295,6 @@ function withMirror<R extends object, F extends Refused>(
           return row;
         });
         if (refusalOf<R, F>(written)) return written;
-        // The graph mark takes its own write lock, so it waits for the commit.
         if (write.graphTenant !== undefined) markGraphDirty(db, write.graphTenant, mirror.id);
         writeEntryMirrors(files.hippoRoot, mirror);
         for (const entry of also) writeEntryMirrors(files.hippoRoot, entry);
@@ -328,7 +304,6 @@ function withMirror<R extends object, F extends Refused>(
   );
 }
 
-/** The memory the replaced row mirrors; none when the save replaces nothing or the mirror is gone. */
 function replacedMirrorId(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -344,8 +319,6 @@ function replacedMirrorId(
   return row?.memory_id ?? undefined;
 }
 
-/** Weakens the memory the replaced row mirrors, if it has one, and the one the save names, in the
- * save's scope. A named memory the tenant does not hold refuses the save; a gone mirror is skipped. */
 function weakenWithSave(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -392,8 +365,6 @@ function save<K extends SavableKind>(
   return refusalOf<RowByKind[K], SaveRefusal>(written) ? written : spec.rowTo(written);
 }
 
-/** The linked ids are checked once the mirror is in and before the INSERT, so a refusal undoes
- * the mirror with it. */
 function openIncidentRow(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -448,8 +419,6 @@ function openIncident(
   return 'refused' in written ? written : rowSpec('incident').rowTo(written);
 }
 
-/** The status guard sits in the UPDATE, so zero rows changed means missing or not open; the
- * reread tells which. */
 function resolveRow(
   db: DatabaseSyncLike,
   tenantId: string,

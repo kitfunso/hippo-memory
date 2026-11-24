@@ -1,4 +1,3 @@
-// The incident kind answers: open, resolve, close and links.
 import { describe, expect, it } from 'vitest';
 import { TENANT_A, TENANT_B } from '../_helpers/store-conformance.js';
 import {

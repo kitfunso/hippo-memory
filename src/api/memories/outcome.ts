@@ -1,5 +1,3 @@
-// Outcome feedback on recalled memories.
-
 import { scopeReaderOf } from '../../base/scope/recall-scope.js';
 import type { ContextWith, EntryContext } from '../types.js';
 

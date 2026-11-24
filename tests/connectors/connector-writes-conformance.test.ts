@@ -1,5 +1,3 @@
-// ConnectorWrites answers: the outcomes, the errors, the entries,
-// event log rows, quarantine records and audit rows, over two tenants. The last block holds hippo.db to all-or-nothing.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -141,7 +139,6 @@ const archive =
       event,
     });
 
-/** The audit rows a run added, without the ids and times both sides already matched on. */
 const added = (side: Side): Omit<AuditEvent, 'id' | 'ts'>[] =>
   side.audit.slice(baseline.audit.length).map(({ id: _id, ts, ...row }) => {
     expect(ts).toBe(NOW);
@@ -366,7 +363,6 @@ describe('ConnectorWrites.archiveConnectorEntry', () => {
   });
 });
 
-/** The method under test: this suite runs against stores that implement it, though the port makes it optional. */
 function supersedeHeldOf(g: ConnectorWrites): NonNullable<ConnectorWrites['supersedeHeld']> {
   if (!g.supersedeHeld) throw new Error('the store under test has no supersedeHeld');
   return g.supersedeHeld.bind(g);
@@ -464,7 +460,6 @@ describe('ConnectorWrites.supersedeHeld', () => {
   });
 });
 
-/** A copy of the fixture whose event log refuses every insert, as a failing constraint would. */
 function copyWithBrokenLog(table: 'slack_event_log' | 'github_event_log'): string {
   const root = copyOfFixture();
   const db = openHippoDb(root);

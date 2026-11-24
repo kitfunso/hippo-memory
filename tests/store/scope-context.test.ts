@@ -11,7 +11,6 @@ import { writeEntry } from '../_helpers/root-forms.js';
 let tmpDir: string;
 let hippoDir: string;
 
-/** `hippo <args>` run in this process from tmpDir with an empty hook stdin, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function runHippo(args: string[]): Promise<string> {
   const vars = { HIPPO_HOME: path.join(tmpDir, 'global'), HIPPO_SCOPE: '', GSTACK_SKILL: '', OPENCLAW_SKILL: '' };
   for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
@@ -68,7 +67,6 @@ describe('scope-aware context injection', () => {
     const unscopedMem = parsed.memories.find((m: { id: string }) => m.id === unscoped.id);
     expect(scopedMem?.id).toBe(scoped.id);
     expect(unscopedMem?.id).toBe(unscoped.id);
-    // Scoped memory should have higher score (1.5x boost)
     expect(scopedMem.score).toBeGreaterThan(unscopedMem.score);
   });
 
@@ -96,7 +94,6 @@ describe('scope-aware context injection', () => {
     const unscopedMem = parsed.memories.find((m: { id: string }) => m.id === unscoped.id);
     expect(scopedMem?.id).toBe(scoped.id);
     expect(unscopedMem?.id).toBe(unscoped.id);
-    // Mismatched scope (0.5x) should rank lower than neutral (1.0x)
     expect(unscopedMem.score).toBeGreaterThan(scopedMem.score);
   });
 });

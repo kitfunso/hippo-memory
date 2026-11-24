@@ -15,11 +15,6 @@ import { saveActiveTaskSnapshot } from '../_helpers/root-forms.js';
 import { testInfra } from '../_helpers/infra.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
 
-// DF1 (docs/plans/2026-08-23-df1-snapshot-lifecycle.md) T2 tests: the two
-// ambient surfaces (MCP recall block, CLI `hippo context`) reroute through
-// the bounded read; explicit surfaces (`snapshot show`, `compact-resume`)
-// must stay unaffected. Real SQLite / real built CLI, no mocks.
-
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 function isoAgo(ms: number): string {
@@ -98,11 +93,6 @@ describe('7. MCP hippo_context surface: backdated snapshot is bounded out', () =
   });
 });
 
-// -----------------------------------------------------------------------
-// Explicit surfaces (`snapshot show`, `compact-resume`) run through the
-// real built CLI, the same idiom as tests/core/pre-compact-e2e.process.test.ts.
-// -----------------------------------------------------------------------
-
 function withScratchEnv() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df1-explicit-e2e-'));
   const env: NodeJS.ProcessEnv = {
@@ -114,7 +104,6 @@ function withScratchEnv() {
   return { dir, env };
 }
 
-// In process unless `spawned`: the snapshot show case pins the CLI in a real child, the rest read bytes only.
 async function runHippo(
   args: string[],
   cwd: string,
@@ -183,14 +172,6 @@ describe('8. explicit-surface regression: unaffected by the freshness bound (rea
   });
 });
 
-// -----------------------------------------------------------------------
-// Bonus (beyond the plan's 8 enumerated tests): end-to-end proof that the
-// `hippo context` CLI dispatch itself -- isTTY-guarded stdin parse ->
-// payload.session_id -> ContextOptions.currentSessionId -> api.contextGet ->
-// readFreshActiveTaskSnapshot -- is wired correctly, not just the
-// underlying store function in isolation (tests 1-5).
-// -----------------------------------------------------------------------
-
 describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
   let dir: string;
   let env: NodeJS.ProcessEnv;
@@ -254,7 +235,6 @@ describe('bonus: `hippo context` ambient CLI surface end-to-end', () => {
     delete env.HIPPO_SESSION_ID;
     delete env.CLAUDE_CODE_SESSION_ID;
     env.CLAUDE_CODE_SESSION_ID = 'sess-owner-hostvar';
-    // Empty string, not omitted: guarantees stdin EOF instead of a hung read on fd 0.
     const result = await runHippo(['context', '--format', 'json'], dir, env, '');
 
     expect(result.status).toBe(0);

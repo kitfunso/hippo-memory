@@ -14,13 +14,11 @@ import {
 } from './rules/opencode.js';
 import { processHomes } from '../../host/agent-homes.js';
 
-// The installer module exposes the path it installs to.
 /** Where hippo's OpenCode plugin lives under this process's home folder. */
 export function resolveOpencodePluginPath(): string {
   return opencodePluginPathOn(processHomes());
 }
 
-/** `jsonRepairFailed`: opencode.json is there but does not parse, so it was left alone. */
 function migrateLegacyOpencodeHooksBlock() {
   const configPath = opencodeConfigPathOn(processHomes());
   if (!fs.existsSync(configPath)) return { migrated: false, jsonRepairFailed: false };
@@ -34,8 +32,6 @@ function migrateLegacyOpencodeHooksBlock() {
 export function installOpencodePlugin(): OpencodePluginInstallResult {
   const pluginPath = resolveOpencodePluginPath();
   const { migrated, jsonRepairFailed } = migrateLegacyOpencodeHooksBlock();
-  // A marker-only match with stale content is rewritten, so plugin-source patches reach existing
-  // installs.
   if (fs.existsSync(pluginPath) && isCurrentPlugin(fs.readFileSync(pluginPath, 'utf8'))) {
     return { installed: false, pluginPath, migratedLegacyHooks: migrated, jsonRepairFailed };
   }
@@ -53,8 +49,6 @@ export function uninstallOpencodePlugin(): boolean {
     fs.unlinkSync(pluginPath);
     removedFile = true;
   }
-  // The legacy migration runs on uninstall too: a user removing hippo entirely must be left with a
-  // launchable opencode.
   const { migrated } = migrateLegacyOpencodeHooksBlock();
   return removedFile || migrated;
 }

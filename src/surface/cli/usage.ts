@@ -1,6 +1,3 @@
-// The help listing's header and examples, and the longer usage of a few sub-commands; each verb's
-// help is in its row.
-
 export function printAuditPruneUsage(): void {
   console.log('hippo audit prune --older-than <Nd> [--dry-run] [--tenant <t>]');
   console.log('  --older-than <Nd>  Delete audit_log rows with ts older than N days (e.g. 90d).');

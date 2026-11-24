@@ -1,14 +1,3 @@
-/**
- * v1.12.13 / C5 — WYSIATI cutoff transparency (Track C Pineal Gland, C5).
- *
- * api.recall populates RecallResult.suppressionSummary with 6 counters
- * describing what was excluded and why. Test asserts: shape always present
- * when produced by api.recall; counters reflect actual filter activity in
- * the api.recall pipeline; back-compat preserved (existing fields unchanged).
- *
- * Real DB throughout (project convention: always use real DB for tests).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -43,13 +32,10 @@ describe('RecallResult.suppressionSummary', () => {
   it('always present on api.recall response (back-compat preserved on existing fields)', async () => {
     writeEntry(root, makeRaw('alpha'));
     const result = await retrieve(ctxFor(root), { query: 'alpha' });
-    // Existing fields unchanged.
     expect(result.results.map((r) => r.content)).toEqual(['alpha']);
     expect(result.total).toBe(1);
-    // estimateTokens is ceil(length / 4): 'alpha' is 5 chars.
     expect(result.tokens).toBe(2);
     expect(result.windowSize).toBe(200);
-    // New field always present from api.recall.
     expect(result.suppressionSummary).toEqual({
       totalCandidates: 1,
       droppedPreRank: 0,
@@ -58,8 +44,6 @@ describe('RecallResult.suppressionSummary', () => {
       freshTailAdded: 0,
       suppressedByInterference: 0,
     });
-    // Each field is a non-negative integer counter (RecallSuppressionSummary,
-    // src/api/index.ts); Number.isInteger is the domain-correct runtime shape check.
     const s = result.suppressionSummary!;
     for (const n of [
       s.totalCandidates,
@@ -75,14 +59,12 @@ describe('RecallResult.suppressionSummary', () => {
   });
 
   it('totalCandidates reflects loaded candidate pool (post tenant + SQL scope predicate)', async () => {
-    // Insert 5 query-matching memories; the store holds no other row, so the pool is exactly 5.
     for (let i = 0; i < 5; i++) writeEntry(root, makeRaw(`zeta ${i}`));
     const result = await retrieve(ctxFor(root), { query: 'zeta', window: { limit: 10 } });
     expect(result.suppressionSummary!.totalCandidates).toBe(5);
   });
 
   it('droppedByBudget reflects rows excluded by the final limit slice', async () => {
-    // Insert 20 matching memories; limit to 5; expect droppedByBudget = 15.
     writeEntriesTogether(
       root,
       Array.from({ length: 20 }, (_, i) => makeRaw(`omega ${i}`)),
@@ -106,7 +88,6 @@ describe('RecallResult.suppressionSummary', () => {
     const again = await retrieve(ctxFor(root), opts);
     expect(again.results.map((r) => r.id)).toEqual(first.results.map((r) => r.id));
     expect(again.suppressionSummary).toEqual(first.suppressionSummary);
-    // The superseded row never loads, so 8 current rows meet a limit of 5.
     expect(first.suppressionSummary!.droppedByBudget).toBe(3);
   });
 });

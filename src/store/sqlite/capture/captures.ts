@@ -1,5 +1,3 @@
-// hippo.db's Captures: the whole batch on one handle, opened with openStore since a write sets up
-// the mirror folders.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { isUserMessage, USER_RULE_TAG, type MemoryEntry } from '../../../base/memory/entry.js';
 import type { HeldText } from '../../../base/ports/store/types.js';
@@ -27,7 +25,6 @@ import { EVERY_SCOPE } from '../runtime/rule-sql.js';
 import { openStore } from '../runtime/handles.js';
 import { bound, skipEmpty, type Bodies } from '../runtime/bound.js';
 
-/** The rows under `dedup` that may hold an entry's text. */
 function heldRows(
   db: DatabaseSyncLike,
   entries: readonly MemoryEntry[],
@@ -38,13 +35,11 @@ function heldRows(
   return listTextsHolding(db, { tenantId: dedup.tenantId, texts, project: dedup.project, admit });
 }
 
-/** The caller's rule project names when the stamped rule carries one of them, else none. */
 function ruleProjectNames(rule: MemoryEntry, dedup: CaptureDedup): readonly string[] {
   const origin = rule.originProject;
   return origin && dedup.ruleProject?.includes(origin) ? dedup.ruleProject : [];
 }
 
-/** The ids of the held copies of the stamped rule's text that the rule replaces. */
 function copiesTheRuleReplaces(
   rows: readonly HeldText[],
   rule: MemoryEntry,
@@ -56,9 +51,6 @@ function copiesTheRuleReplaces(
   );
 }
 
-/** One outcome per entry, in order, in one transaction that reads the caller's dedup again
- * first, so a text another writer stored since that read is skipped; mirrors and stats follow
- * the commit. */
 function writeCapturedEntries(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -68,16 +60,12 @@ function writeCapturedEntries(
   const written: MemoryEntry[] = [];
   const actor = opts.actor ?? CLI_ACTOR;
   const outcomes = withWriteScope(db, 'capture_write', () => {
-    // A message is the transcript and an item is what capture made of it, so each lane dedupes
-    // only against its own rows, and a held message never stops a rule.
     const all = heldRows(db, entries, opts.dedup);
     const rows = all.filter((row) => !isUserMessage(row));
     const held = storedTextKeys(rows);
     const heldMessages = storedTextKeys(all.filter(isUserMessage));
     return entries.map((entry): CapturedOutcome => {
       const stamped = stampOriginProject(files, entry);
-      // A stated rule replaces an unpinned or untagged-pin capture copy of its own project, which
-      // would hide it from the hooks.
       const project = entry.tags.includes(USER_RULE_TAG)
         ? ruleProjectNames(stamped, opts.dedup)
         : null;
@@ -87,8 +75,6 @@ function writeCapturedEntries(
           ? storedTextKeys(rows.filter((r) => !ruleReplaces(r, project)))
           : held;
       if (stops.has(duplicateKey(identityText(entry)))) return 'skipped';
-      // One rejected entry must not abort the rest of this capture's entries. A person wrote a
-      // message, as with imported notes, and the worth check drops a one-line fact.
       const worthCheck = !isUserMessage(stamped);
       const outcome = gatedWrite(db, files, stamped, { actor: opts.actor, worthCheck });
       if (outcome === 'skipped:rejected') return 'rejected';
@@ -102,8 +88,6 @@ function writeCapturedEntries(
       return 'captured';
     });
   });
-  // A message gets no markdown mirror: the transcript is its source, and a mirror is a file a team
-  // may commit.
   for (const entry of written) if (!isUserMessage(entry)) writeEntryMirrors(files.hippoRoot, entry);
   if (!opts.lean && written.length > 0) updateStatsOn(db, files, { remembered: written.length });
   return outcomes;

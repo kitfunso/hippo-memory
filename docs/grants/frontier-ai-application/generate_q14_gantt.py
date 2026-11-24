@@ -1,5 +1,3 @@
-"""Generate Q14 appendix: Gantt chart for Frontier AI Discovery feasibility study."""
-
 from pathlib import Path
 
 from fpdf import FPDF
@@ -28,7 +26,6 @@ def generate() -> None:
     pdf.cell(0, 5, "Duration: 3 months (October - December 2026) | Total cost: GBP 50,000", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    # Weekly Gantt - 3 months = 13 weeks
     weeks = [f"W{i}" for i in range(1, 14)]
     month_labels = [
         ("October 2026", 4),
@@ -42,7 +39,6 @@ def generate() -> None:
     col_week = 14.5
     row_h = 9
 
-    # Header row 1: months
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_fill_color(0, 51, 102)
     pdf.set_text_color(255, 255, 255)
@@ -51,7 +47,6 @@ def generate() -> None:
         pdf.cell(col_week * span, row_h, label, border=1, fill=True, align="C")
     pdf.ln()
 
-    # Header row 2: weeks
     pdf.cell(col_wp, row_h, "WP", border=1, fill=True, align="C")
     pdf.cell(col_task, row_h, "Task", border=1, fill=True, align="C")
     pdf.cell(col_cost, row_h, "Cost", border=1, fill=True, align="C")
@@ -61,7 +56,6 @@ def generate() -> None:
 
     pdf.set_text_color(0, 0, 0)
 
-    # Task data: (wp, task_name, cost, start_week, end_week, color, is_milestone)
     tasks = [
         ("WP1", "Formalise Lyapunov energy functions", "", 1, 2, (142, 68, 173), False),
         ("", "Prove bounded energy convergence", "", 2, 3, (142, 68, 173), False),
@@ -86,16 +80,12 @@ def generate() -> None:
 
     pdf.set_font("Helvetica", "", 7.5)
     for wp, task, cost, start, end, (r, g, b), is_milestone in tasks:
-        # WP column
         pdf.set_font("Helvetica", "B", 7.5)
         pdf.cell(col_wp, row_h, wp, border=1, align="C")
-        # Task column
         pdf.set_font("Helvetica", "B" if is_milestone else "", 7.5)
         pdf.cell(col_task, row_h, task, border=1)
-        # Cost column
         pdf.set_font("Helvetica", "", 7)
         pdf.cell(col_cost, row_h, cost, border=1, align="C")
-        # Week columns
         for w_idx in range(1, 14):
             if start <= w_idx <= end:
                 if is_milestone:
@@ -112,7 +102,6 @@ def generate() -> None:
                 pdf.cell(col_week, row_h, "", border=1)
         pdf.ln()
 
-    # Milestones summary
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 10)
     pdf.cell(0, 7, "Key Milestones and Deliverables", new_x="LMARGIN", new_y="NEXT")
@@ -157,7 +146,6 @@ def generate() -> None:
         pdf.cell(col_criteria, 8, criteria, border=1)
         pdf.ln()
 
-    # Dependencies note
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(0, 6, "Dependencies", new_x="LMARGIN", new_y="NEXT")

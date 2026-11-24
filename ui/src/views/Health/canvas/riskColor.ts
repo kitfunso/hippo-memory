@@ -13,7 +13,6 @@ const RISK_STOPS: readonly (readonly [number, string])[] = [
 /** Fill and label colours of a tile for one at-risk share. */
 export interface RiskColor {
   css: string;
-  /** Label colour chosen for contrast on `css`. */
   ink: string;
   sub: string;
 }

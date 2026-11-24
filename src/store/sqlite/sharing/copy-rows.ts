@@ -1,6 +1,3 @@
-// The rows that may hold one of a batch of texts word for word, spacing aside, one query per chunk:
-// the index's phrase hits for the texts it can name, else the tenant's rows, each kept only by
-// mayHoldCopy's SQL twin.
 import { chunked } from '../../../base/util/chunked.js';
 import { DEFAULT_TENANT_ID, type TenantId } from '../../../base/util/tenant.js';
 import { isFtsAvailable, isFtsInSync, type DatabaseSyncLike } from '../../../db/index.js';
@@ -15,18 +12,12 @@ import { bareTextSql, IDENTITY_TEXT_SQL } from '../runtime/rule-sql.js';
 import { tenantAnd, TENANT_IS } from '../runtime/tenant.js';
 import { duplicateKey, LEAD_IN_MARK } from '../../../base/util/same-text.js';
 
-// Letters and digits in every Unicode table unicode61 has shipped (Latin, Greek, Cyrillic, Hebrew,
-// Arabic, Devanagari, Thai, kana, CJK, Hangul), so a phrase holding one names at least one token.
 const SURE_TOKEN_CHAR = new RegExp(
   '[0-9A-Za-zÀ-ÖØ-öø-ſΑ-ΡΣ-Ωα-ωА-яא-תء-غف-يअ-हก-ะぁ-んァ-ヶ一-龥가-힣]',
 );
 const PHRASE_WORDS = 32;
 
-/** The first words of `text`, which a row holding the text word for word holds in a row; null
- * when they might name no token, since an empty phrase matches no row. */
 function openingPhrase(text: string): string | null {
-  // The index holds the content first, then the lead-in, so the content part of the identity finds
-  // a lead-in row.
   const opening = duplicateKey(text.split(LEAD_IN_MARK)[0])
     .split(' ')
     .slice(0, PHRASE_WORDS)
@@ -36,13 +27,11 @@ function openingPhrase(text: string): string | null {
 
 const IN_PHRASE_HITS = 'id IN (SELECT id FROM memories_fts WHERE memories_fts MATCH ?)';
 
-/** The index query for `text`'s first words; null when the phrase might name no token. */
 function holdingPhrase(text: string): string | null {
   const opening = openingPhrase(text);
   return opening === null ? null : `content : ${ftsPhrase(opening)}`;
 }
 
-// mayHoldCopy over `memories` columns; binds the JSON list of bare texts twice.
 const MAY_HOLD_COPY_SQL =
   `(${bareTextSql(IDENTITY_TEXT_SQL)} IN (SELECT value FROM json_each(?)) OR (source = 'consolidation' AND ` +
   `EXISTS (SELECT 1 FROM json_each(?) WHERE instr(${bareTextSql('content')}, value) > 0)))`;
@@ -119,7 +108,6 @@ export function rowsHoldingTexts(
   return rows;
 }
 
-/** Each row `read` admits that may hold one of `texts`, once. */
 function distinctRowsHolding(
   db: DatabaseSyncLike,
   read: CopyRead,

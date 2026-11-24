@@ -1,4 +1,3 @@
-// Tagging a batch commits once, however many rows it tags, and tags the same rows the per-row writes did.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { writeEntryDbOnly } from '../../src/store/sqlite/entries/entry-writes.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

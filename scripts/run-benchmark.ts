@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-/**
- * Benchmark runner: seeds a temporary Hippo store with real lessons from MEMORY.md
- * and runs all 20 retrieval benchmark queries, printing a formatted summary table.
- *
- * Usage:
- *   npx tsx scripts/run-benchmark.ts
- *   node --import tsx/esm scripts/run-benchmark.ts
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -19,10 +11,6 @@ import { initStore, writeEntry, loadAllEntries } from '../src/entry/testing.js';
 import { search } from '../src/domain/search/bm25-search.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// ---------------------------------------------------------------------------
-// Seed data (mirrors benchmark.test.ts seed set)
-// ---------------------------------------------------------------------------
 
 const seedIds: Record<string, string> = {};
 
@@ -202,7 +190,6 @@ function seedQuantLessons(hippoRoot: string): void {
 }
 
 function seedFrontendAndOps(hippoRoot: string): void {
-  // Frontend/deploy
   seedMemory(
     hippoRoot,
     'build_before_deploy',
@@ -217,7 +204,6 @@ function seedFrontendAndOps(hippoRoot: string): void {
     { tags: ['frontend', 'backend', 'constants', 'sync', 'error'], emotional_valence: 'negative' },
   );
 
-  // Ops
   seedMemory(
     hippoRoot,
     'cron_timeout_sizing',
@@ -240,10 +226,6 @@ function buildSeedSet(hippoRoot: string): void {
   seedQuantLessons(hippoRoot);
   seedFrontendAndOps(hippoRoot);
 }
-
-// ---------------------------------------------------------------------------
-// Benchmark queries (mirrors benchmark.test.ts)
-// ---------------------------------------------------------------------------
 
 interface QueryCase {
   query: string;
@@ -297,10 +279,6 @@ const TEST_CASES: QueryCase[] = [
   { query: 'scheduling cron jobs timeout size', expectedLabels: ['cron_timeout_sizing'] },
 ];
 
-// ---------------------------------------------------------------------------
-// Metric functions
-// ---------------------------------------------------------------------------
-
 function precision3(topIds: string[], expectedIds: string[]): number {
   return topIds.slice(0, 3).filter((id) => expectedIds.includes(id)).length / 3;
 }
@@ -317,10 +295,6 @@ function mrr(topIds: string[], expectedIds: string[]): number {
   return 0;
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
 function main(): void {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-bench-script-'));
 
@@ -333,7 +307,6 @@ function main(): void {
     console.log(`   Memories seeded: ${entries.length}`);
     console.log(`   Queries:         ${TEST_CASES.length}\n`);
 
-    // Header
     const col1 = 45;
     const col2 = 6;
     const col3 = 8;

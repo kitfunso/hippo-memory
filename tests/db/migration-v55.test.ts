@@ -1,4 +1,3 @@
-// Schema v55 adds the tool-call key and failure link to delivery_events, plus the partial unique index over the key.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -42,7 +41,6 @@ function addEvent(db: DatabaseSyncLike, session: string): void {
   ).run(new Date().toISOString(), session);
 }
 
-/** Puts the store back to its v54 shape, keeping every row; `alsoRun` changes it further before the close. */
 function rewindToV54(alsoRun?: (db: DatabaseSyncLike) => void): void {
   withDb((db) => {
     db.exec(`DROP INDEX IF EXISTS ${INDEX}`);

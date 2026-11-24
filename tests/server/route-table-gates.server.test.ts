@@ -1,5 +1,3 @@
-// The route table's gate is where a caller is refused: sleep takes only a caller on this host with no proxy or page in
-// between, and key minting refuses a member before it reads the body.
 import * as http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';

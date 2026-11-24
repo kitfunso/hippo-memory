@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 12 (AMENDMENT 3) of docs/EXPERIMENT-PROTOCOL.md: base ranking vs
- *  hippo's own free local cross-encoder reranker, same ~300 paraphrase
- *  queries as Lane 9b. No API calls, $0. Mirrors jev-retrieval-ab-paraphrase.mjs. */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -15,9 +12,9 @@ const BOOTSTRAP_DRAWS = 2000;
 const CANDIDATE_TOPK = 40;
 const BUDGET = 4000;
 const ALPHA_LO = 0.00625,
-  ALPHA_HI = 0.99375; // 98.75% CI, Bonferroni 0.0125 (AMENDMENT 3)
+  ALPHA_HI = 0.99375;
 const DIAG_LO = 0.025,
-  DIAG_HI = 0.975; // nominal 95%, diagnostic only
+  DIAG_HI = 0.975;
 
 const hippoRoot = join(homedir(), '.hippo');
 
@@ -53,11 +50,9 @@ console.error(
 );
 
 const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
-const NOW = new Date(); // pinned once so recency decay cannot drift mid-run
+const NOW = new Date();
 const SEARCH_OPTS = { budget: 1000000, hippoRoot, preparedCorpus: corpus, minResults: 50, mmr: true, now: NOW };
 
-/** hippo's real production cut (search.ts:410-411, 777-786): admit at least
- *  minResults, then stop once the running token total exceeds budget. */
 function applyBudget(ordered, budget, minResults) {
   const admitted = [];
   let used = 0;
@@ -76,8 +71,6 @@ const rankIn = (list, id) => {
 
 const crossEncoderReranker = getReranker('cross-encoder');
 
-// crossEncoderReranker fails OPEN (identity order + a console.warn) rather than
-// throwing, so a silent fallback would look like a real result without this spy.
 let fallbackWarning = null;
 const realWarn = console.warn;
 console.warn = (...a) => {
@@ -175,7 +168,6 @@ console.log(`median returned-set size (post-budget-cut): ${median(baseCutSizes)}
 for (const [name, fn] of Object.entries(METRICS)) console.log(`  ${name.padEnd(14)} ${f(fn(baseRanks))}`);
 console.log('======================================================================\n');
 
-// One resample index matrix per report, shared across every metric below (not redrawn per metric).
 const idxMatrix = Array.from({ length: BOOTSTRAP_DRAWS }, () =>
   Array.from({ length: out.length }, () => Math.floor(rng() * out.length)),
 );

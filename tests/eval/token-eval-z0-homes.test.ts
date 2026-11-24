@@ -1,4 +1,3 @@
-// Z0 runner units: arm env and PATH, settings, per-run homes, workspace carry and the preflight checks.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync, renameSync, statSync, lstatSync, symlinkSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +34,6 @@ interface GitRepo {
   g: (...args: string[]) => string;
 }
 
-/** A git repo with `files` committed as `base`, then `fix` changing lib.js. */
 async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
   const repo = tmp('z0-repo-');
   const g = (...args: string[]): string => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
@@ -53,7 +51,6 @@ async function gitRepo(files: Record<string, string>): Promise<GitRepo> {
   return { repo, base, fix: await ga('rev-parse', 'HEAD'), g };
 }
 
-/** An empty work repo set up the way the runner sets one up. */
 function workRepo(): string {
   const work = tmp('z0-work-');
   execFileSync('git', ['init', '-q'], { cwd: work });
@@ -61,7 +58,6 @@ function workRepo(): string {
   return work;
 }
 
-/** A dir holding empty stand-ins for the named tools, in both bare and .cmd form. */
 function toolDir(names: string[]): string {
   const d = tmp('z0-tools-');
   for (const n of names) {
@@ -298,7 +294,6 @@ describe('applyInstructions', () => {
     for (const k of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'XDG_CONFIG_HOME']) vi.stubEnv(k, undefined);
     vi.stubEnv('HOME', home);
     vi.stubEnv('USERPROFILE', home);
-    // Inside a repo, diff3 turns off git's zealous trim, so a union merge read with it repeats the shared line.
     for (const [name, cfg] of [['diff3', '[merge]\n\tconflictStyle = diff3\n'], ['broken', '[core\n']]) {
       writeFileSync(join(home, '.gitconfig'), cfg);
       const r = apply({ 'AGENTS.md': 'common\ntheirs\n' }, { 'AGENTS.md': ['base\n', 'common\nmine\n'] }, join(outDir, name));
@@ -308,7 +303,6 @@ describe('applyInstructions', () => {
   });
 });
 
-/** Every dir under root holding a .git entry, an object store or a worktree admin file, root-relative ('' for root). */
 function repoDirs(root: string, rel = ''): string[] {
   const entries = readdirSync(join(root, rel), { withFileTypes: true });
   const names = entries.map((e) => e.name);
@@ -325,7 +319,6 @@ interface FsHooks {
   after?: (p: string) => void;
 }
 
-/** Run fn with one node:fs function wrapped in every module that imported it, then put it back. */
 function withFs<K extends 'readdirSync' | 'openSync'>(name: K, hooks: FsHooks, fn: () => void): void {
   const real = nodeFs[name];
   nodeFs[name] = new Proxy(real, {
@@ -452,7 +445,6 @@ describe('workspace checkout', () => {
     if (arm === 'A2') expect(repoDirs(work)).toEqual(['']);
   });
 
-  /** gitRepo plus one commit adding `links` as 120000 entries; returns that commit. */
   const withLinks = (r: GitRepo, links: Record<string, string>): string => {
     for (const [rel, target] of Object.entries(links)) {
       const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: r.repo, input: target, encoding: 'utf8' }).trim();
@@ -818,7 +810,6 @@ describe('parseImportDryRun', () => {
 });
 
 describe('homes check (built CLI, no claude session)', () => {
-  /** A fake operator HOME and APPDATA holding canary memories in every place an importer could look. */
   function operatorWithCanaries(): string {
     const home = tmp('z0-operator-');
     const notes: Array<[string, string]> = [

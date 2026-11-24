@@ -1,4 +1,3 @@
-// The 50+ seeded lessons both benchmark test files query; useBenchmarkCorpus writes them to a fresh store.
 import { beforeAll } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -12,39 +11,27 @@ import type { StoreFiles } from '../../src/store/sqlite/runtime/open.js';
 export const createMemory7 = (content: string, options: Partial<Parameters<typeof createMemory>[1]> = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 export let tmpDir: string;
-// The seeding pass's store, on one session so the 50 writes share a handle.
 let files: StoreFiles;
-export const seedIds: Record<string, string> = {}; // label -> id
+export const seedIds: Record<string, string> = {};
 
 export function daysAgo(n: number): string {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
-/** Write a memory and record its id under a stable label. */
 function seed(label: string, content: string, opts: Partial<Parameters<typeof createMemory>[1]> = {}): MemoryEntry {
   const entry = createMemory7(content, opts);
-  // Use label as a deterministic ID fragment so tests are readable
   const withLabel: MemoryEntry = { ...entry, id: `bm_${label}` };
   writeEntryIn(files, withLabel);
   seedIds[label] = withLabel.id;
   return withLabel;
 }
 
-// ---------------------------------------------------------------------------
-// Seed memories (real lessons from MEMORY.md)
-// ---------------------------------------------------------------------------
-
 export function useBenchmarkCorpus() {
   const seedCorpus = (session: RequestStores): void => {
     tmpDir = makeRoot('bench');
     files = storeFilesOf(tmpDir, { session });
 
-    // ── Production rules ──────────────────────────────────────────────────────
     seed(
       'never_overwrite',
       `NEVER overwrite existing production files. When improving a model:
@@ -92,7 +79,6 @@ The && operator causes silent failure in PowerShell; use ; instead.`,
       },
     );
 
-    // ── Data pipeline errors ──────────────────────────────────────────────────
     seed(
       'fred_cache_drop',
       `FRED cache can silently drop series. tips_10y (DFII10) vanished from
@@ -197,7 +183,6 @@ scripts/pull_new_sources.py. Don't expect daily_cache_refresh to update those fi
       },
     );
 
-    // ── Sub-agent gotchas ─────────────────────────────────────────────────────
     seed(
       'subagent_american_english',
       `Sub-agents consistently use American English spelling. Review all
@@ -243,7 +228,6 @@ Think beyond the obvious when suggesting data sources.`,
       },
     );
 
-    // ── Quant model lessons ───────────────────────────────────────────────────
     seed(
       'walk_forward_overestimates',
       `Walk-forward OOS Sharpe overestimates by ~50%. CPCV experiment
@@ -381,7 +365,6 @@ any public-facing PnL claims. Historical live PnL is sacrosanct; never overwrite
       },
     );
 
-    // ── Frontend/deploy rules ─────────────────────────────────────────────────
     seed(
       'build_before_deploy',
       `Always run build before deploying frontend. Build command:
@@ -425,7 +408,6 @@ exist. Fixed to map direction -> numeric + label. Check this mapping if signal f
       },
     );
 
-    // ── Platform / ops issues ─────────────────────────────────────────────────
     seed(
       'cron_timeout_sizing',
       `Cron timeout sizing for heavy jobs. If a cron task must read

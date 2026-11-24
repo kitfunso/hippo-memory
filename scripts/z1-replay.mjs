@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Z1 prompt-recall replay: docs/plans/2026-09-26-z1-prompt-recall.md, prereg in docs/evals/.
-// Prints AGGREGATE NUMBERS ONLY: never transcript, prompt, error or memory text.
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -22,10 +20,6 @@ const { contentTokens, promptTokens, gatePromptRecall, scoreOverlap } = await di
 const PIN_BUDGET = 1500;
 const REFRESH_TURNS = 10;
 
-// ---------------------------------------------------------------------------
-// CLI args
-// ---------------------------------------------------------------------------
-
 function parseArgs(argv) {
   const out = { store: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -45,12 +39,7 @@ function parseArgs(argv) {
   return out;
 }
 
-// Z1b tool-failure block: same LEADING_CD as src/capture/failure-reading.ts, its cd-stripping is query-only here.
 const LEADING_CD = /^\s*(?:(?:cd|pushd)\b[^;&|]*(?:&&|\|\||;)\s*)+/;
-
-// ---------------------------------------------------------------------------
-// Store loading (read-only, tenant 'default' only)
-// ---------------------------------------------------------------------------
 
 function loadStore(dir) {
   const db = new DatabaseSync(path.join(dir, 'hippo.db'), { readOnly: true });
@@ -71,7 +60,6 @@ function loadStore(dir) {
       superseded_by: r.superseded_by ?? null,
       origin_project: r.origin_project ?? null,
       scope: r.scope ?? null,
-      // isWorthSurfacing judges by provenance, so without these every row would get a person's looser floor.
       source: String(r.source ?? ''),
       confidence: r.confidence ?? null,
       extracted_from: r.extracted_from ?? null,
@@ -95,10 +83,6 @@ function samePath(a, b) {
   return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
-// ---------------------------------------------------------------------------
-// admit: not superseded, scope passes, secret rule, not cross-project
-// ---------------------------------------------------------------------------
-
 function admitEntry(entry, tsMs, projectName) {
   if (entry.superseded_by) return false;
   if (!(Date.parse(entry.created) < tsMs)) return false;
@@ -108,7 +92,6 @@ function admitEntry(entry, tsMs, projectName) {
   return true;
 }
 
-// Admission at an arbitrary (cwd, ts), for the Z1b tool-failure query (not tied to a hook prompt).
 function admittedAt(resolvers, globalEntries, cwd, tsMs) {
   const projectName = resolvers.projectNameFor(cwd);
   const localEntries = resolvers.localEntriesFor(cwd);
@@ -116,10 +99,6 @@ function admittedAt(resolvers, globalEntries, cwd, tsMs) {
   const globalAdm = globalEntries.filter((e) => admitEntry(e, tsMs, projectName));
   return { localAdm, globalAdm };
 }
-
-// ---------------------------------------------------------------------------
-// cwd -> project name / local store (live disk walk, cached per cwd)
-// ---------------------------------------------------------------------------
 
 function makeResolvers(home, storeMap) {
   const nameCache = new Map();
@@ -166,10 +145,6 @@ function makeResolvers(home, storeMap) {
 
   return { projectNameFor, localEntriesFor };
 }
-
-// ---------------------------------------------------------------------------
-// SI0 machinery, copied verbatim (docs/plans/2026-09-24-si0-automatic-outcomes.md)
-// ---------------------------------------------------------------------------
 
 const sig = (t) => t.toLowerCase().replace(/[0-9a-f]{7,}/g, '#').replace(/\d+/g, '#').replace(/\s+/g, ' ').trim();
 const ROUTINE = [
@@ -227,10 +202,6 @@ function idsFromRecall(byId, txt) {
       .filter((id) => byId.has(id)),
   );
 }
-
-// ---------------------------------------------------------------------------
-// A1 (today's hook, simulated as-of a prompt ts)
-// ---------------------------------------------------------------------------
 
 // SHORTCUT: oldest-first, not production's strength order; exact only while all pins fit the budget (740 of 1500 tokens in this corpus).
 function rankPins(localAdm, globalAdm) {
@@ -319,10 +290,6 @@ function renderBlock(items, totalTokens, heading = 'Project Memory') {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
-// Z1 candidates (grid / final only; a0 mode never calls these)
-// ---------------------------------------------------------------------------
-
 const tokenSetCache = new Map();
 function tokensOf(entry) {
   let t = tokenSetCache.get(entry.id);
@@ -347,14 +314,13 @@ function z1Candidates(localAdm, globalAdm, promptTok, opts = {}) {
       seen.add(entry.id);
       const tokens = tokensOf(entry);
       const { shared } = scoreOverlap(promptTok, tokens, 'jaccard');
-      if (shared < 2) continue; // every grid point has minShared >= 2 (prereg Speed note)
+      if (shared < 2) continue;
       out.push({ id: entry.id, tokens, entry, isGlobal });
     }
   }
   return out;
 }
 
-// Z1b tool-failure block: same candidate/gate/budget shape as selectZ1Recall, minus the pin reserve.
 function computeZ1bBlock(localAdm, globalAdm, queryTok, gate) {
   const candidates = z1Candidates(localAdm, globalAdm, queryTok, { excludeAutoCaptured: true });
   const gated = gatePromptRecall(queryTok, candidates, gate);
@@ -369,7 +335,6 @@ function computeZ1bBlock(localAdm, globalAdm, queryTok, gate) {
   return { items, totalTokens: used };
 }
 
-// Pins-only, same budget rule as A1's own pin admission; TE2-gated on its own state.
 function selectZ1Static(rankedPins) {
   const items = [];
   let used = 0;
@@ -381,7 +346,6 @@ function selectZ1Static(rankedPins) {
   return { items, totalTokens: used };
 }
 
-// Never TE2-skipped: sent whenever non-empty (prereg: "always sent when non-empty").
 function selectZ1Recall(precomputed, promptTok, gate, pinnedReserve) {
   const gated = gatePromptRecall(promptTok, precomputed, gate);
   const budget = Math.max(0, PIN_BUDGET - pinnedReserve);
@@ -395,10 +359,6 @@ function selectZ1Recall(precomputed, promptTok, gate, pinnedReserve) {
   }
   return { items, totalTokens: used };
 }
-
-// ---------------------------------------------------------------------------
-// Stats accumulation
-// ---------------------------------------------------------------------------
 
 function makeAcc() {
   return { total: 0, withContext: 0, atLeast02: 0, sumAll: 0, scores: [], contextSizes: [] };
@@ -467,7 +427,6 @@ function seededShuffle(arr, seed) {
   return out;
 }
 
-// The newest |count| distinct ids A1 put in context, newest first (judge control C).
 function buildControlC(a1OrderList, count, byId) {
   const seen = new Set();
   const out = [];
@@ -481,7 +440,6 @@ function buildControlC(a1OrderList, count, byId) {
   return out;
 }
 
-// Judge items T (Z1b block) and C (control) for one eligible event; command/error not pre-collapsed for T's cap.
 function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byId, session) {
   const command = cmd.slice(0, 500);
   const error = err.slice(0, 1500);
@@ -496,10 +454,6 @@ function buildJudgeEntries(eventId, cmd, err, tItems, maxItems, a1OrderList, byI
   return entries;
 }
 
-// ---------------------------------------------------------------------------
-// Per-file replay
-// ---------------------------------------------------------------------------
-
 async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJudge = false) {
   const { byId, mapBlock, resolvers } = ctx;
   const scored = (t) => ctx.sinceMs == null || t >= ctx.sinceMs;
@@ -508,15 +462,12 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   const isZ1b = runZ1 && arm === 'z1b';
   const a0 = { reset: new Set(), lifetime: new Set() };
   const a1 = { reset: new Set(), lifetime: new Set(), te2: null };
-  // One state per config: static block has its own TE2; recall is never skipped, so no TE2 state for it.
   const z1States = runZ1 && !isZ1b ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teStatic: null })) : null;
   const z1FileAccs = runZ1 && !isZ1b ? z1Configs.map(() => emptyZ1Bucket()) : null;
-  // Z1b state per config: A1's ids plus a tool-failure block; teBlock gates the block's own skip rule.
   const z1bStates = isZ1b
     ? z1Configs.map(() => ({ reset: new Set(), lifetime: new Set(), teBlock: null, lastSentItems: { items: [], ts: null }, pendingTokens: 0, intervalHasBlock: false, lastIntervalIdx: null }))
     : null;
   const z1bFileAccs = isZ1b ? z1Configs.map(() => emptyZ1bBucket()) : null;
-  // A1's per-prompt injection order, oldest first, reset at compaction: judge control C reads from its tail.
   let a1Order = isZ1b ? [] : null;
   const judgeItems = [];
   let nonRoutineFailures = 0;
@@ -563,7 +514,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     }
 
     if (isZ1b) {
-      // Z1b arm = A1's own injections plus the tool-failure block; no prompt-gated recall of its own.
       if (a1Sent) {
         for (const it of sel.items) a1Order.push({ id: it.id });
       }
@@ -571,8 +521,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
         const s = z1bStates[i];
         const acc = z1bFileAccs[i];
         if (a1Sent) for (const it of sel.items) { s.reset.add(it.id); s.lifetime.add(it.id); }
-        // Finalize the interval this prompt is closing: its blocks landed after it fired, before this new one.
-        // Since gate: the interval is scored iff the prompt that opened it (acc.tokensScored[idx]) was scored.
         if (s.lastIntervalIdx !== null) {
           const intervalScored = acc.tokensScored[s.lastIntervalIdx];
           acc.tokens[s.lastIntervalIdx] += s.pendingTokens;
@@ -581,7 +529,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
             if (s.intervalHasBlock) acc.intervalHasBlock.count++;
           }
         } else {
-          acc.tokensUnattributed += s.pendingTokens; // blocks before this file's first hook prompt
+          acc.tokensUnattributed += s.pendingTokens;
         }
         acc.tokens.push(a1TokensThisPrompt);
         acc.tokensScored.push(isScored);
@@ -592,7 +540,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     } else if (runZ1) {
       const promptTok = promptTokens(text);
       const precomputed = z1Candidates(sel.localAdm, sel.globalAdm, promptTok);
-      // Static (pins) block is gate-independent: compute its text/tokens once, gate its TE2 send per config.
       const staticSel = selectZ1Static(sel.rankedPins);
       const staticText = renderBlock(staticSel.items, staticSel.totalTokens);
       const staticHash = staticSel.items.length > 0 ? blockHash(staticText) : null;
@@ -659,7 +606,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     }
 
     const promptText = o.message?.content;
-    // String(x) === x holds only for string primitives; array content is a tool result, not a prompt.
     if (o.type === 'user' && !o.isMeta && String(promptText) === promptText) {
       pendingPrompt = { ts: Date.parse(o.timestamp), cwd: o.cwd, text: promptText };
     }
@@ -721,10 +667,10 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
                 const added = [...s.reset].some((id) => !snap.a1.reset.has(id));
                 if (added) {
                   z1bFileAccs[i].addedEvents++;
-                  const sent = z1bStates[i].lastSentItems; // most recent block sent before this event's own injection
+                  const sent = z1bStates[i].lastSentItems;
                   const tItems = sent.items.slice(0, z1Configs[i].maxItems);
                   for (const it of tItems) {
-                    const age = sent.ts - Date.parse(it.created); // age against the block's originating failure, not this repeat
+                    const age = sent.ts - Date.parse(it.created);
                     if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
                   }
                   if (collectJudge) {
@@ -737,11 +683,8 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
           } else {
             firstErr.set(es, true);
           }
-          // Snapshot A1's order now: a compaction before the eventual success must not change the judge's control C.
           if (!firstFail.has(cs)) firstFail.set(cs, { err, cmd, snap, ts, a1OrderSnapshot: a1Order ? a1Order.slice() : [] });
 
-          // Z1b tool-failure block: after the event is recorded, so it counts toward later repeats and fail-then-pass.
-          // The block's own computation/skip-state stays unconditional; only its accounting is since-gated.
           if (isZ1b) {
             const cwd = o.cwd || lastCwd;
             const tsMs = ts;
@@ -753,7 +696,7 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               const acc = z1bFileAccs[i];
               if (isScoredFailure) acc.failuresSeen++;
               const blk = computeZ1bBlock(localAdm, globalAdm, queryTok, gate);
-              if (blk.items.length === 0) return; // nothing clears the gate: no block, no skip-state change
+              if (blk.items.length === 0) return;
               const idsKey = blk.items.map((it) => it.id).sort().join(',');
               if (shouldSkipUnchanged(s.teBlock, idsKey, REFRESH_TURNS)) {
                 s.teBlock = { hash: idsKey, skipsSince: s.teBlock.skipsSince + 1 };
@@ -800,10 +743,10 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
               const added = [...dReset].some((id) => !dReset1.has(id));
               if (added) {
                 z1bFileAccs[i].addedEvents++;
-                const sent = s.lastSentItems; // live: no block fires on a success line
+                const sent = s.lastSentItems;
                 const tItems = sent.items.slice(0, z1Configs[i].maxItems);
                 for (const it of tItems) {
-                  const age = sent.ts - Date.parse(it.created); // age against the originating failure, not this success line
+                  const age = sent.ts - Date.parse(it.created);
                   if (age >= 0 && age <= 10 * 60 * 1000) z1bFileAccs[i].recalledCreatedWithin10MinEligible++;
                 }
                 if (collectJudge) {
@@ -820,7 +763,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   }
 
   if (isZ1b) {
-    // Include the final interval (blocks after the last hook prompt, to EOF); unattributed only if no prompt ever fired.
     z1bStates.forEach((s, i) => {
       const acc = z1bFileAccs[i];
       if (s.lastIntervalIdx !== null) {
@@ -836,7 +778,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
     });
   }
 
-  // --since: drop token entries for unscored prompts/intervals; no-op (arrays untouched) when sinceMs is unset.
   if (ctx.sinceMs != null) {
     const keepScored = (arr, flags) => arr.filter((_, idx) => flags[idx]);
     const filteredTokensPerPrompt = keepScored(tokensPerPrompt, tokensPerPromptScored);
@@ -846,10 +787,6 @@ async function processFile(filePath, mode, ctx, z1Configs, arm = 'z1', collectJu
   }
   return { primary, secondary, tokensPerPrompt, z1PerConfig: z1FileAccs, z1bPerConfig: z1bFileAccs, judgeItems, nonRoutineFailures };
 }
-
-// ---------------------------------------------------------------------------
-// Corpus walking + split
-// ---------------------------------------------------------------------------
 
 function walkCorpus(dir) {
   const out = [];
@@ -869,10 +806,6 @@ function splitOf(file) {
   const h = createHash('sha256').update(path.basename(file)).digest('hex');
   return parseInt(h.slice(0, 2), 16) % 2 === 0 ? 'tune' : 'heldout';
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 function emptyBucket() {
   return {
@@ -918,7 +851,6 @@ function renderBucket(bucket) {
   };
 }
 
-// One Z1 arm, one config: same shape as a0/a1's per-arm stats plus its own tokens and no-recall share.
 function emptyZ1Bucket() {
   return {
     reset: { primary: makeAcc(), secondary: makeAcc() },
@@ -948,7 +880,6 @@ function renderZ1Bucket(bucket) {
   };
 }
 
-// Prereg pick rule, tune split only: eligible on token budget and a sample floor, then max signal.
 function pickConfig(rows, a1TokenMedian) {
   const eligible = rows.filter((r) => {
     const tm = r.tune.tokens.median;
@@ -965,7 +896,6 @@ function pickConfig(rows, a1TokenMedian) {
   return eligible[0].config;
 }
 
-// One Z1b arm, one config: Z1's fields plus addedEvents, the block-created-recently audit, tokensUnattributed.
 function emptyZ1bBucket() {
   return {
     reset: { primary: makeAcc(), secondary: makeAcc() },
@@ -1013,7 +943,6 @@ function renderZ1bBucket(bucket) {
   };
 }
 
-// Z1b pick rule (prereg "Split and tuning"): token budget, mean cap, and an addedEvents floor, then max signal.
 function pickConfigZ1b(rows, a1TokenMedian, a1TokenMean) {
   const eligible = rows.filter((r) => {
     const tm = r.tune.tokens.median;
@@ -1035,7 +964,6 @@ function pickConfigZ1b(rows, a1TokenMedian, a1TokenMean) {
   return eligible[0].config;
 }
 
-// Judge export: shuffled, unlabelled main file plus a separate itemId -> {eventId, arm} key file.
 function writeJudgeExport(filePath, rawItems) {
   const shuffled = seededShuffle(rawItems, 20260926);
   const items = shuffled.map((it, idx) => ({ itemId: idx, autoNo: it.autoNo, command: it.command, error: it.error, memories: it.memories }));
@@ -1092,7 +1020,6 @@ async function main() {
   } else if (args.mode === 'final') {
     z1Configs = [JSON.parse(args.config)];
   } else if (args.mode === 'selftest') {
-    // Hidden wiring check: fixed config, first 3 tune files, counts only, never a scored run.
     z1Configs = arm === 'z1b'
       ? [{ metric: 'jaccard', threshold: 0.08, minShared: 2, maxItems: 3 }]
       : [{ metric: 'cosine', threshold: 0.2, minShared: 2, maxItems: 3 }];

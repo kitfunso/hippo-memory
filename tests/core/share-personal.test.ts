@@ -1,4 +1,3 @@
-// E10 lane A: a personal row never reaches the global store, by hand or by autoShare. Real stores, temp HIPPO_HOME.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';

@@ -1,4 +1,3 @@
-// roleFromGroups maps an IdP groups claim onto the role ladder; the highest match wins.
 import { describe, expect, it } from 'vitest';
 import {
   GROUPS_CLAIM_TOO_LONG,

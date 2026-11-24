@@ -8,10 +8,6 @@ import { REQUIRE_EMBEDDINGS_VAR } from '../_helpers/embedding-backend.js';
 const LOCAL_JS = new URL('../../dist/base/embeddings/local.js', import.meta.url).href;
 const INSTALLED_ONLY = fileURLToPath(new URL('../_helpers/transformers-installed.cjs', import.meta.url));
 
-// ---------------------------------------------------------------------------
-// Tests that run without a Transformers.js backend installed
-// ---------------------------------------------------------------------------
-
 describe('cosineSimilarity', () => {
   it('returns 1.0 for identical vectors', () => {
     const v = [1, 2, 3, 4];
@@ -41,19 +37,13 @@ describe('cosineSimilarity', () => {
   it('returns partial similarity for related vectors', () => {
     const a = [1, 1, 0];
     const b = [1, 0, 0];
-    // a . b = 1 over |a| |b| = sqrt(2).
     expect(cosineSimilarity(a, b)).toBeCloseTo(Math.SQRT1_2, 12);
   });
 });
 
-// ---------------------------------------------------------------------------
-// isEmbeddingAvailable - should return false without the library
-// ---------------------------------------------------------------------------
-
 describe('isEmbeddingAvailable', () => {
   const TRANSFORMERS = ['@xenova/transformers', '@huggingface/transformers'];
 
-  /** What the built local.js answers in a fresh node that can resolve only `installed` of the two packages. */
   function availableWith(installed: readonly string[]): string {
     const script = `import(${JSON.stringify(LOCAL_JS)}).then((m) => process.stdout.write(String(m.isEmbeddingAvailable())))`;
     return execFileSync(process.execPath, ['--require', INSTALLED_ONLY, '-e', script], {
@@ -97,10 +87,6 @@ describe('isEmbeddingAvailable', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// loadEmbeddingIndex / saveEmbeddingIndex
-// ---------------------------------------------------------------------------
-
 describe('embedding index persistence', () => {
   it('round-trips an index via save + load', async () => {
     const { loadEmbeddingIndex, saveEmbeddingIndex } = await import('../_helpers/root-forms.js');
@@ -109,7 +95,6 @@ describe('embedding index persistence', () => {
     const path = await import('node:path');
 
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-embed-'));
-    // We need the .hippo structure; here we just use tmpDir directly as root
     const index = {
       mem_abc: [0.1, 0.2, 0.3],
       mem_def: [0.4, 0.5, 0.6],
@@ -118,7 +103,6 @@ describe('embedding index persistence', () => {
     saveEmbeddingIndex(tmpDir, index);
     const loaded = loadEmbeddingIndex(tmpDir);
 
-    // Vectors are stored as float32.
     expect(loaded['mem_abc']).toEqual([0.1, 0.2, 0.3].map(Math.fround));
     expect(loaded['mem_def']).toEqual([0.4, 0.5, 0.6].map(Math.fround));
 

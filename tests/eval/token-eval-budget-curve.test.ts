@@ -1,8 +1,3 @@
-/**
- * TE3 token-at-accuracy harness: scoring logic on a hand-built haystack where
- * the evidence is the oldest session, so recency needs the whole budget and
- * relevance does not. Real SQLite, hippo's real search and packer.
- */
 import { describe, it, expect } from 'vitest';
 import { evaluateQuestion, summarize } from '../../scripts/token-eval/budget-curve.mjs';
 

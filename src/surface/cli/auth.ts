@@ -1,5 +1,3 @@
-// `hippo auth`: create, list, revoke and scope API keys.
-
 import * as api from '../../api/index.js';
 import { cliApiContext } from './api-context.js';
 import { printError } from './output.js';
@@ -9,12 +7,6 @@ import { errorMessage } from '../../base/util/log.js';
 import { fail } from './exit.js';
 import type { ApiKeyListItem } from '../../base/ports/store/keys.js';
 
-// ---------------------------------------------------------------------------
-// Auth subcommands
-// ---------------------------------------------------------------------------
-
-/** --role as given, or undefined for the default; anything else exits 1, so a typo never picks a
- * role. */
 function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   const roleFlag = stringFlag(flags, 'role');
   if (roleFlag !== undefined && roleFlag !== 'admin' && roleFlag !== 'member') {
@@ -23,8 +15,6 @@ function roleFlagOrExit(flags: CliFlags): 'admin' | 'member' | undefined {
   return roleFlag;
 }
 
-/** Says which defaults a mint took and how to ask for the wider key. Stderr keeps --json output
- * clean. */
 function noteMintDefaults(roleGiven: boolean, expiryGiven: boolean): void {
   const notes: string[] = [];
   if (!roleGiven) {
@@ -48,10 +38,6 @@ async function createApiKey(
   const ttlDays = ttlFlag === undefined ? undefined : Number(ttlFlag);
   const noExpiry = boolFlag(flags, 'no-expiry');
 
-  // The CLI's --tenant flag is the only legitimate cross-tenant override (admin minting a key for
-  // another tenant from the local machine). It flows through ctx.tenantId, NOT through opts;
-  // authCreate's opts no longer accepts a tenantId field, so the HTTP layer cannot smuggle a
-  // body.tenantId across.
   const ctx = cliApiContext(root, tenantFlag ?? defaultTenantId);
   const result = await mintApiKey(ctx, {
     label: labelFlag,
@@ -145,7 +131,6 @@ interface KeyContextOptions {
   readonly keyId: string;
 }
 
-// The local CLI owns every tenant, so revoke and grant run in the key's own tenant.
 async function keyContext({ root, tenantId, keyId }: KeyContextOptions): Promise<api.Context> {
   const hostCtx = cliApiContext(root, tenantId);
   const keyTenant = await api.authKeyTenant(hostCtx, keyId);
@@ -191,8 +176,6 @@ interface AuthScopeGrantOptions {
   flags: CliFlags;
 }
 
-/** `hippo auth grant|ungrant <key_id> <scope>`, routed through api so the tenant,
- * restricted-scope and audit checks live in one place. */
 async function changeKeyScope(options: AuthScopeGrantOptions): Promise<void> {
   const { hippoRoot, tenantId, keyId, scope, grant, flags } = options;
   const ctx = await keyContext({ root: resolveAuthRoot(hippoRoot, flags), tenantId, keyId });

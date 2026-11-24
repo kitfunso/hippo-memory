@@ -1,5 +1,3 @@
-// serve's keyQuota hook: asked after the per-caller charge, so only admitted requests reach it.
-// It fails open: a quota guards load, not access.
 import type { IncomingMessage } from 'node:http';
 import { isPromise } from 'node:util/types';
 import type { Actor } from '../../api/index.js';
@@ -16,7 +14,6 @@ import type { KeyQuota } from './types.js';
 const FAULT_LOG_EVERY_MS = MINUTE_MS;
 // A huge finite wait would print as `1e+21`, which is not valid delta-seconds.
 const MAX_RETRY_AFTER_SEC = 86_400;
-// One slot for the process: a broken meter faults on every request, and a line a minute shows it.
 let faultLoggedAt = Number.NEGATIVE_INFINITY;
 // V8 throws RangeError when a joined log line passes its maximum string length; the cap also bounds the line.
 const FAULT_FIELD_MAX = 8192;
@@ -32,7 +29,6 @@ function plainFields(built: LogFields): LogFields {
 
 function quotaFault(what: string, fields?: () => LogFields): void {
   const now = Date.now();
-  // A clock stepped back sits behind the stamp, and that must not silence a later fault.
   if (now >= faultLoggedAt && now - faultLoggedAt < FAULT_LOG_EVERY_MS) return;
   faultLoggedAt = now;
   const message = `key quota: ${what}; the request is admitted, and further faults this minute are not logged`;
@@ -40,7 +36,6 @@ function quotaFault(what: string, fields?: () => LogFields): void {
   try {
     plain = fields === undefined ? undefined : plainFields(fields());
   } catch {
-    // Describing a plugin's thrown value reads its traps and getters, so this path must not throw.
     plain = { errorClass: 'unprintable' };
   }
   log.error(message, plain);
@@ -53,7 +48,6 @@ interface Refusal {
 
 function refusalOf(answer: JsonValue | undefined): Refusal | null {
   if (!isJsonObject(answer)) return null;
-  // Each field is read once: a getter on plugin code could answer differently the second time.
   const { retryAfterSec, message } = answer;
   if (!isJsonNumber(retryAfterSec) || !Number.isFinite(retryAfterSec) || retryAfterSec <= 0) {
     return null;
@@ -69,7 +63,6 @@ export function askKeyQuota(
   quota: KeyQuota | undefined,
 ): void {
   if (quota === undefined) return;
-  // The operator's own CLI on this host is never metered.
   if (actor.subject === LOCAL_KEY_SUBJECT) return;
   const { method, path } = parseRequest(req);
   let answer: unknown;
@@ -83,7 +76,6 @@ export function askKeyQuota(
       requestId: currentRequestId(),
     });
     if (answer === null) return;
-    // Every read of the answer runs plugin getters, so all of it sits inside the guard.
     // Mute a returned native promise so it cannot crash the process; Promise.resolve would adopt a thenable.
     // SHORTCUT: a promise whose `then` lookup throws (own constructor getter, subclass species, Proxy) still rejects
     // unhandled; off-contract. Upgrade path: an async hook contract awaited under a deadline.
@@ -98,6 +90,5 @@ export function askKeyQuota(
     quotaFault('the hook answered neither null nor a refusal');
     return;
   }
-  // Outside the try, so the 429 is never taken for a fault.
   throw new HttpError(429, refusal.message, refusal.seconds);
 }

@@ -1,9 +1,3 @@
-/**
- * Secret detection for memory content: conservative provider-bounded patterns (a bare `sk-` in
- * prose must not flag). Flagged rows are never shared to the global store or injected as ambient
- * context outside their project; explicit recall is unaffected. Leaf module: no imports from
- * store/api/shared.
- */
 import { tryParseJson } from './json.js';
 
 /** Result of scanning one memory. `reason` names the tag or pattern that fired. */
@@ -48,15 +42,8 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
     re: /\bhooks\.slack\.com\/(?:services|workflows|triggers)\/[A-Za-z0-9+/]{43,56}/,
   },
   { name: 'private-key-block', re: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  // sk-... (OpenAI/Anthropic) and sk_<vendor>_... shapes need a key-ish noun nearby (co-occurrence
-  // guard), so prose like "the sk- prefix identifies API keys" does not flag but "prod API key
-  // sk_live_..." does.
   { name: 'sk-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}/ },
   { name: 'sk-underscore-key', re: /\bsk_[A-Za-z0-9]+_[A-Za-z0-9_]{6,}\b/ },
-  // Value needs 12+ token-safe chars and a digit, or `token = estimateTokens(...)` and
-  // user:password@ templates would hide code lessons from ambient context. Secret names end in the
-  // keyword (dbPassword), so the match opens there, no prefix scan; pwd and pass need a _ (OLDPWD,
-  // bypass are not secrets).
   {
     name: 'secret-assignment',
     re: new RegExp(
@@ -72,8 +59,6 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
 const KEYISH_CONTEXT_RE = /key|token|secret|credential|bearer|auth|password/i;
 const CO_OCCURRENCE_GUARDED = new Set(['sk-style-key', 'sk-underscore-key']);
 
-// redactSecretsStrict-only: too noisy for whole-entry memory scanning, worth hiding once text
-// leaves the machine.
 const STRICT_ONLY_PATTERNS: readonly RegExp[] = [
   /\bbearer\s+[A-Za-z0-9._~+/-]{16,}=*/gi,
   /\bauthorization["']?\s*[:=]\s*["']?basic\s+[A-Za-z0-9+/]{8,}={0,2}/gi,
@@ -93,7 +78,6 @@ export function detectSecret(entry: {
       return { flagged: true, reason: `tag:${tag.toLowerCase()}` };
     }
   }
-  // Recall shows the two together, so a key-ish word in either one counts for the guard.
   const text = entry.leadIn ? `${entry.content}\n${entry.leadIn}` : entry.content;
   for (const { name, re } of SECRET_PATTERNS) {
     if (!re.test(text)) continue;
@@ -145,7 +129,6 @@ export const DLQ_REDACTED_NOTE =
  * stays byte-identical so its signature still verifies.
  */
 export function redactPayload(raw: string): string {
-  // Not JSON, so there is no structure to keep valid; redact the raw text.
   if (tryParseJson(raw) === undefined) return redactSecretsStrict(raw);
   return raw.replace(JSON_STRING, (literal) => {
     const text: string = JSON.parse(literal);
@@ -202,7 +185,6 @@ const STRICT_PATTERNS: readonly RegExp[] = [
  */
 export function redactSecretsStrict(text: string): string {
   if (!text) return text;
-  // PEM blocks first: SECRET_PATTERNS only matches the BEGIN line.
   let result = redactPemBlocks(text);
   for (const re of STRICT_PATTERNS) result = result.replace(re, '[REDACTED]');
   return result;

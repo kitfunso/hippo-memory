@@ -13,12 +13,6 @@ function selectRow<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): 
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-// Regression: rawArchive and forget previously looked up the target row by
-// id alone, with no tenant filter. A valid Bearer for tenant A could
-// archive or delete tenant B's row by guessing or leaking the id. Both
-// paths now pre-check tenant_id and throw a not-found error on mismatch
-// (same shape as the missing-row error, no info leak).
-
 describe('api tenant deny - rawArchive and forget', () => {
   let home: string;
 
@@ -27,13 +21,11 @@ describe('api tenant deny - rawArchive and forget', () => {
   });
 
   it('rawArchive refuses to archive a row that belongs to another tenant', async () => {
-    // Tenant A creates a kind='raw' memory.
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'raw-row-from-alpha tenant-deny canary',
       kind: 'raw',
     });
 
-    // Tenant B (bravo) tries to archive it. Should fail with not-found.
     await expect(
       rawArchive(
         apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }),
@@ -42,7 +34,6 @@ describe('api tenant deny - rawArchive and forget', () => {
       ),
     ).rejects.toThrow(/memory not found/i);
 
-    // Original row must still exist with its kind intact.
     const db = openHippoDb(home);
     try {
       const row = selectRow<{ tenant_id: string; kind: string }>(
@@ -58,18 +49,15 @@ describe('api tenant deny - rawArchive and forget', () => {
   });
 
   it('forget refuses to delete a row that belongs to another tenant', async () => {
-    // Tenant A creates a kind='distilled' memory.
     const created = await remember(apiCtx(home, 'alpha', { subject: 'cli', role: 'admin' }), {
       content: 'distilled-row-from-alpha tenant-deny canary',
       kind: 'distilled',
     });
 
-    // Tenant B tries to forget it.
     await expect(
       forget(apiCtx(home, 'bravo', { subject: 'api_key:bravo-key', role: 'admin' }), created.id),
     ).rejects.toThrow(/memory not found/i);
 
-    // Original row must still exist.
     const db = openHippoDb(home);
     try {
       const row = selectRow<{ tenant_id: string }>(db, `SELECT tenant_id FROM memories WHERE id = ?`, created.id);

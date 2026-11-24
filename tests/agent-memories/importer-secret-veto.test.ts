@@ -1,13 +1,3 @@
-/**
- * Regression: the agent memory import must never
- * ingest a secret-bearing memory file. Some ~/.claude/projects/<p>/memory/*.md
- * files exist purely to hold a live credential (e.g. an API-key reference).
- *
- * v1.24.0 added the secret veto to share/promote/sync/ambient but missed this
- * ingest path, so a live key could land in the store on `hippo sleep`. v1.24.1
- * gates the importer with detectSecret. This test locks that in.
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,15 +23,12 @@ const sync = async (root: string, home: string): Promise<Tally> =>
     }),
   );
 
-// AWS's own documented example access key — a well-known non-secret placeholder,
-// safe to embed. NEVER put a real credential in a fixture, even here.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 
 let hippoRoot: string;
 let homeDir: string;
 
 function writeMemoryFile(name: string, frontmatter: string, body: string): void {
-  // The importer reads only the folder Claude Code names after the store's project.
   const project = fs.realpathSync.native(path.dirname(hippoRoot)).replace(/[^a-zA-Z0-9]/g, '-');
   const memDir = path.join(homeDir, '.claude', 'projects', project, 'memory');
   fs.mkdirSync(memDir, { recursive: true });
@@ -76,15 +63,12 @@ describe('agent memory import secret veto', () => {
 
     const tally = await sync(hippoRoot, homeDir);
 
-    // Only the benign file is ingested.
     expect([tally.imported, tally.secret]).toEqual([1, 1]);
 
     const entries = loadAllEntries(hippoRoot, 'default');
     const joined = entries.map((e) => e.content).join('\n');
 
-    // The benign lesson is present...
     expect(joined).toContain('run lighthouse after deploys');
-    // ...and the secret never entered the store.
     expect(joined).not.toContain(FAKE_KEY);
     expect(joined).not.toContain('only recoverable copy');
   });

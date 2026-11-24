@@ -1,10 +1,3 @@
-/**
- * HTTP client wrapper for `hippo serve`: the routed writes (remember, forget, archive, promote) and
- * the nearest-vector read; every other command opens the store directly. Server errors rethrow with
- * the message verbatim so CLI substring matches still work; network errors propagate as the native
- * fetch failure.
- */
-
 import type { RememberOptions, RememberResult, RememberSkipped } from '../../api/index.js';
 import { fetchWithRetry } from '../../infra/http-retry.js';
 import { readCappedJson } from '../../base/util/capped-json.js';
@@ -13,28 +6,14 @@ import { isJsonObject, isJsonString, type JsonValue } from '../../base/util/json
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { isObjectLike } from '../../base/session/capture-contract.js';
 
-/** A write the local server has not answered in this long is stuck; the caller treats it as
- * delivery-unknown. */
 const SERVER_TIMEOUT_MS = 30_000;
 
-/**
- * Five tries at the server's 1 s Retry-After keeps the roughly 5 s wait the CLI had before the
- * server answered busy with 503.
- */
 const STORE_BUSY_ATTEMPTS = 5;
 
-/**
- * The server sets Retry-After on a 503 only for a held write lock (server.ts replyFor); the
- * auth-provider 503 has none.
- */
 function isStoreBusy(res: Response): boolean {
   return res.status === 503 && res.headers.has('retry-after');
 }
 
-/**
- * Replaying is safe because each routed write commits in one transaction and anything after it
- * is best-effort, so a busy 503 means nothing landed; a sleep is safe too, as a re-run finishes
- * a partial one. */
 function sendWrite(url: string, init: RequestInit): Promise<Response> {
   return fetchWithRetry(url, init, {
     timeoutMs: SERVER_TIMEOUT_MS,
@@ -64,8 +43,6 @@ export class HttpResponseError extends Error {
   }
 }
 
-/** Throw an Error carrying the server's message verbatim, so cli.ts handlers can match the same
- * substrings ("not found", "already superseded") as on the direct path. */
 async function throwForStatus(res: Response): Promise<never> {
   let message = `${res.status} ${res.statusText}`;
   try {
@@ -74,7 +51,6 @@ async function throwForStatus(res: Response): Promise<never> {
       message = body.error;
     }
   } catch (err) {
-    // body wasn't JSON or ran past the cap; fall back to status line.
     log.debug(
       `server error body unreadable (${errorMessage(err)}); using the status line`,
       errorFields(err),
@@ -99,8 +75,6 @@ export class MalformedReplyError extends Error {
   }
 }
 
-/** A 2xx body under the cap: the plain Errors `readCappedJson` throws become a MalformedReplyError,
- * and a transport error keeps its class. */
 async function readReplyBody(res: Response, route: string): Promise<JsonValue> {
   try {
     return await readCappedJson(res, MAX_REPLY_BYTES);
@@ -112,10 +86,6 @@ async function readReplyBody(res: Response, route: string): Promise<JsonValue> {
   }
 }
 
-/**
- * A 2xx reply's body, read under the cap; it must be a JSON object, and `guard` narrows it further
- * where the shape is known.
- */
 async function readReply<T>(
   res: Response,
   route: string,
@@ -267,8 +237,6 @@ const SOCKET_CODES: ReadonlySet<string> = new Set([
   'UND_ERR_SOCKET',
 ]);
 
-/** A request that was on the wire when it failed: a dead socket, a fetch TypeError (no code means no
- * known syscall) or a server gone quiet. */
 function diedOnTheWire(err: Error): boolean {
   return (
     SOCKET_CODES.has(transportCode(err)) || err instanceof TypeError || err.name === 'TimeoutError'
@@ -276,13 +244,9 @@ function diedOnTheWire(err: Error): boolean {
 }
 
 export function classifyTransportFailure(err: Error): TransportFailure {
-  // The server answered, or encodeURIComponent threw before any request existed.
   if (err instanceof HttpResponseError || err instanceof URIError) return 'none';
   const code = transportCode(err);
-  // Connect-phase failures: no request bytes ever left the client, so a stale pidfile can be healed
-  // and the call replayed on the direct path.
   if (code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'never-sent';
-  // Any other error may have committed: only the two classes above are known not to have.
   return 'delivery-unknown';
 }
 

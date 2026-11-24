@@ -1,6 +1,3 @@
-// Read-only: round 3 scored records, seeds 1-3. Per pair, the family units whose value differs between the two
-// codings or that one coding drops (the prereg item 10 count), in batch 1 and over all 29 repositories.
-// Usage: node docs/evals/z0-r4/r3-coding-units.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { load, scoredNoDrop } = await openRound3(['scripts/token-eval/z0-hypotheses.mjs']);

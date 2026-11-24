@@ -1,4 +1,3 @@
-// withDeadline: a callback that answers after its deadline is late, even when it blocks the thread.
 import * as vm from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import { DeadlineError, withDeadline } from '../../src/base/util/deadline.js';
@@ -8,7 +7,6 @@ function busyWait(ms: number): void {
   while (performance.now() < end);
 }
 
-// The key is built at run time, so unicorn/no-thenable stays quiet about objects that must be plain thenables.
 const THEN = ['th', 'en'].join('');
 
 describe('withDeadline', () => {
@@ -96,7 +94,6 @@ describe('withDeadline', () => {
     await expect(
       withDeadline(10, (signal) => {
         seen = signal;
-        // The vm realm has no performance, so the clock comes in from here.
         const foreign: Promise<string> = vm.runInNewContext(
           "(async () => { await 0; const end = now() + 60; while (now() < end); return 'late'; })()",
           { now: () => performance.now() },

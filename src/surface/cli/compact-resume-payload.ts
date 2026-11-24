@@ -1,5 +1,3 @@
-// The payload gate for `hippo compact-resume`.
-
 import { isSubagentPayload } from '../../base/util/hook-payload.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../../base/util/json.js';
 
@@ -20,20 +18,13 @@ export function readCompactResumePayload(
   // An older Claude Code that ignores `matcher: 'compact'` runs this on every SessionStart, so a
   // parsed payload with any other source stays silent.
   const nonEmptyStdin = !!stdinText && stdinText.trim() !== '';
-  // Without a payload session_id the cross-restore guard can never fire, so a timed-out empty read
-  // must not reach the print path.
   let suppressOutput = stdinTimedOut && !nonEmptyStdin;
   let payloadSessionId: string | null = null;
-  // A boundary is a manual run or a payload that says it follows a compaction; anything else is not
-  // one.
   let boundary = !nonEmptyStdin && !stdinTimedOut;
 
   if (nonEmptyStdin) {
-    // Malformed JSON is handled as a missing payload by the fail-closed check below.
     const payload = tryParseJson(stdinText!.trim());
     if (!isJsonObject(payload)) {
-      // Fail closed on malformed non-empty stdin; only a TTY/no-stdin manual run, which never
-      // reaches here, prints.
       suppressOutput = true;
     } else {
       // Fail closed on structurally incomplete payloads too ({}, [], source missing/non-string): a

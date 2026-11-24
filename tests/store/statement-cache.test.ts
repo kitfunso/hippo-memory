@@ -1,4 +1,3 @@
-// The per-handle statement cache drops its least recently used statement when full, never the whole cache.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -9,7 +8,6 @@ const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement.
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: { prepare(sql: string): object } } };
 
-// The cache's cap; a test of eviction has to fill it.
 const CAP = 512;
 const sql = (n: number): string => `SELECT ${n} AS n`;
 

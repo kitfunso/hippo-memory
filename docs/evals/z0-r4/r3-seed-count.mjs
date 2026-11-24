@@ -1,5 +1,3 @@
-// Read-only: the seed count each round 4 test's seed rule gives (T1, T3, T2 parts (a) and (b), H4) on round 3's records (seeds 1-3, four families dropped), for the prereg's budget check.
-// Usage: node docs/evals/z0-r4/r3-seed-count.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { api, prices, inputs, load, scoredNoDrop } = await openRound3(['scripts/token-eval/z0-hypotheses.mjs', 'scripts/token-eval/z0-size-sim.mjs', 'scripts/token-eval/z0-seed-rule.mjs', 'dist/eval/repository-t.js']);
@@ -10,7 +8,6 @@ const { parseArgs, seedRule } = await load('scripts/token-eval/z0-seed-rule.mjs'
 const DROP = new Set(['hu3-f2', 'q133-f2', 'q14-f3', 'q256-f1']);
 const CAP = 9;
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
-// seedsNeeded keeps its variance private, so its formula is repeated here and a count that disagrees with it throws.
 function sized(units, m, z) {
   const { repos } = pooledComponents(units);
   const { family, sequence, noise } = spreadComponents(units, 0.2);
@@ -21,7 +18,6 @@ function sized(units, m, z) {
   if ((se(n) <= bar) !== (k !== null) || (n > SEEDS && se(n - 1) <= bar)) throw new Error(`predicted SE disagrees with seedsNeeded's ${k} seeds`);
   return { se, bar, barName: 'bar', k, n, repos: repos.length };
 }
-// The rule starts at SEEDS, so there is no one-fewer figure at 3.
 const fmt = ({ se, bar, barName, n }) => `se(${n}) ${se(n).toFixed(5)}${n > SEEDS ? ` se(${n - 1}) ${se(n - 1).toFixed(5)}` : ''} ${barName} ${bar.toFixed(5)}`;
 const s = scoredNoDrop().filter((r) => r.seed <= 3);
 const counts = [];
@@ -33,7 +29,6 @@ for (const [test, t, c] of [['T1', 'A2', 'A1'], ['T3', 'A2', 'A5']]) {
     console.log(`${test} ${t}/${c} ${coding}: units ${units.length} repos ${r.repos} ${fmt(r)} seeds ${r.k ?? `over ${CAP}`}`);
   }
 }
-// T2's cells, v and b are r3-parta-se.mjs's for A2/A1 on sets R+N; the drop comes before the cells so the four families leave every cell.
 const g = new Map();
 for (const x of api.taskUnits(s, 'A2', 'A1', prices, api.inSets('R', 'N')).filter((u) => !DROP.has(u.family))) {
   const k = JSON.stringify([x.repo, x.family, x.seed]);
@@ -45,7 +40,6 @@ const m = (f) => sum(cells.map(f)) / cells.length;
 const [mCt, mCc, mSt, mSc] = [m((x) => x.Ct), m((x) => x.Cc), m((x) => x.St), m((x) => x.Sc)];
 const v = cells.map((x) => ({ repo: x.repo, family: x.family, seed: x.seed, value: x.Ct / mCt - x.Cc / mCc - x.St / mSt + x.Sc / mSc }));
 const b = cells.map((x) => ({ repo: x.repo, family: x.family, seed: x.seed, value: (x.St - x.Sc) / x.n }));
-// Part (a) at item 10's fixed m, log(1 / 0.9); on a miss, the fewest seeds from 3 to the cap within 1.1 times the cap's SE (prereg item 10).
 const M_A = Math.log(1 / 0.9);
 let a = sized(v, M_A, 3.08);
 if (a.k === null) {
@@ -56,11 +50,8 @@ console.log(`T2 part (a) A2/A1: cells ${cells.length} repos ${a.repos} m ${M_A.t
 const pb = sized(b, 0.03, 3.08);
 console.log(`T2 part (b) A2/A1: cells ${cells.length} repos ${pb.repos} m 0.03 ${fmt(pb)} seeds ${pb.k ?? `over ${CAP}`}`);
 counts.push(a.n, pb.n);
-// Round 3's drop list is empty, so the four families are added to the list the rule's filterRecords reads and H4 sees the same read as T1, T3 and T2.
 const dropList = { ...inputs.dropList, droppedFamilies: [...(inputs.dropList?.droppedFamilies ?? []), ...DROP] };
-// parseArgs only supplies the analyzer's own defaults; its three file arguments are placeholders it never opens.
 const opts = { ...parseArgs(['--runs', '-', '--plan', '-', '--prices', '-']), dropList };
-// H4 is last: its harm sizer simulates at every seed count from 3 up and can run for minutes.
 const h4 = seedRule(inputs.records, inputs.planCells, inputs.prices, opts).perHypothesis.H4;
 counts.push(h4 ?? opts.cap);
 console.log(`H4 harmSeeds (four families dropped): seeds ${h4 ?? `over ${opts.cap}`}`);

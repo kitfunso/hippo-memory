@@ -1,7 +1,3 @@
-// The vector side of a store for the embed and import verbs: embed what is missing, count coverage,
-// re-seed physics. Vectors and physics rows carry no tenant, so each op covers the whole store and
-// needs the host admin.
-
 import type { ConfiguredFolder } from '../base/config/configured-folder.js';
 import type { MemoryEntry } from '../base/memory/entry.js';
 import type { EmbeddingProvider } from '../base/ports/embedder.js';

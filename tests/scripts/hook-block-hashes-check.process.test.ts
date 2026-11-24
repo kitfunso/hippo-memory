@@ -9,7 +9,6 @@ const SCRIPT = join(REPO, 'scripts', 'checks', 'check-hook-block-hashes.mjs');
 const DIST_FILES = ['dist/surface/hooks-install/rules/hook-blocks.js', 'dist/base/util/escape.js'];
 const DIST_BLOCKS = DIST_FILES[0];
 const SRC_BLOCKS = 'src/surface/hooks-install/rules/hook-blocks.ts';
-// The Pi footer is the one sentence only the pi block carries, so a change to it moves one agent's hash.
 const PI_SENTENCE = 'copy the hippo-memory Pi extension';
 
 function withScratchRoot(body: (root: string) => void): void {

@@ -1,5 +1,3 @@
-// The nearest-vector scan reads the admitted vectors a page at a time and keeps the best k in a heap: its answer is a
-// full sort's, ties across a page edge included, and no one statement hands back more than a page.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { decodeVector } from '../../src/db/vector-store.js';
@@ -27,11 +25,9 @@ afterAll(() => {
 
 interface ScanStore {
   readonly db: DatabaseSyncLike;
-  /** The vector every seventh t1 row holds. */
   readonly twin: number[];
 }
 
-// Every seventh row of t1 repeats one vector, so equal scores straddle each page edge and the id decides them.
 function seeded(t1Rows: number): ScanStore {
   const vectors = clusteredVectors(t1Rows + 300, DIM, 5);
   const twin = vectors[0];
@@ -46,7 +42,6 @@ function seeded(t1Rows: number): ScanStore {
   return { db, twin };
 }
 
-/** Every admitted t1 vector scored as the scan scores one, sorted whole: higher score first, then the smaller id. */
 function fullSort(db: DatabaseSyncLike, query: readonly number[], k: number): VectorMatch[] {
   const q = Float32Array.from(query);
   const qNorm = Math.sqrt(q.reduce((sum, x) => sum + x * x, 0));

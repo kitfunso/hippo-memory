@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Names which delivery class one lesson reached in one session, from the ledger, the host transcript and a label file; read-only, not shipped.
-//   node scripts/z10-reconstruct.mjs --store <dir> --session <id> (--memory <id> | --key <text>) [--transcript <file>] [--labels <file>] [--tenant <t>] [--global <dir>|--no-global]
-//   node scripts/z10-reconstruct.mjs --store <dir> --session <id> --tool-failures [--tenant <t>] [--global <dir>|--no-global]   (lists the session's tool failures)
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -42,20 +39,17 @@ function findMemories(stores, tenant, opts) {
   return found;
 }
 
-// Copies keep the source's creation time, so their audit row dates them.
 function presenceIn(m, tenant) {
   if (!/^(shared|promoted):/.test(m.source ?? '')) return m.created;
   if (!hasTable(m.db, 'audit_log')) return null;
   return m.db.prepare("SELECT MIN(ts) AS ts FROM audit_log WHERE op = 'remember' AND target_id = ? AND tenant_id = ?").get(m.id, tenant).ts ?? null;
 }
 
-// The earliest time any store holds the lesson; null when every holder is a copy with no remember row.
 function presentSince(found, tenant) {
   const times = found.filter((m) => m.id === found[0].id).map((m) => presenceIn(m, tenant)).filter((t) => t !== null);
   return times.length === 0 ? null : times.reduce((a, b) => (b < a ? b : a));
 }
 
-// Version 4 hashes the resolved store root; older rows keep the two-path rule they were written under.
 const hashFor = (version, hashes) => (version !== null && version >= 4 ? hashes.v4 : hashes.v3);
 
 function loadSession(db, tenant, session, hashes, notes) {
@@ -68,7 +62,6 @@ function loadSession(db, tenant, session, hashes, notes) {
   return rows;
 }
 
-// The verdict reports the hash under the rule of the session's last row; a session with no rows reports the version 4 hash.
 function verdictHash(db, tenant, session, hashes) {
   if (!hasTable(db, 'delivery_events')) return hashes.v4;
   const last = db.prepare('SELECT ledger_version FROM delivery_events WHERE tenant_id = ? AND session_id = ? ORDER BY id DESC LIMIT 1').get(tenant, session);
@@ -78,7 +71,6 @@ function verdictHash(db, tenant, session, hashes) {
 const logRowOf = (db, tenant, id) => (id === null || !hasTable(db, 'failure_log') ? undefined
   : db.prepare('SELECT outcome, tool, sig_hash FROM failure_log WHERE id = ? AND tenant_id = ?').get(id, tenant));
 
-// Exact and clock-free: only the newest stored log row for a signature links, and then to the one tool-failure memory with that signature; none or several is no link.
 function lessonFor(db, tenant, eventId, failureId, sigHash, notes) {
   if (sigHash !== null) {
     const newest = db.prepare("SELECT MAX(id) AS id FROM failure_log WHERE tenant_id = ? AND sig_hash = ? AND outcome = 'stored'").get(tenant, sigHash).id;
@@ -93,7 +85,6 @@ function lessonFor(db, tenant, eventId, failureId, sigHash, notes) {
   return null;
 }
 
-// A tool call is one entry: the numbered row, read through the stored log row of its duplicate group when there is one, since either process may flush first.
 function sourceOf(db, tenant, row, dups) {
   for (const m of [row, ...dups].sort((x, y) => x.id - y.id)) {
     const log = logRowOf(db, tenant, m.failure_id);
@@ -121,7 +112,6 @@ function toolFailureEntries(db, tenant, rows, notes) {
   return entries;
 }
 
-// A tool-failure lesson names the listing entry that links to it; every other memory has no origin.
 function originOf(db, memory, tenant, rows, notes) {
   if (memory === null || memory.store !== 'local' || memory.source !== 'tool-failure') return null;
   return toolFailureEntries(db, tenant, rows, notes).find((e) => e.lesson === memory.id)?.event_id ?? null;
@@ -149,7 +139,6 @@ function splitRows(rows, targetCands, notes) {
       notes.push(`unnumbered:${r.id}`);
     }
   }
-  // Only a main row owns a group, so a duplicate of any other row is dropped and noted.
   const mainIds = new Set(mains.map((r) => r.id));
   for (const [original, list] of dups) {
     if (!mainIds.has(original)) for (const r of list) notes.push(`orphan-duplicate:${r.id}`);
@@ -179,7 +168,6 @@ function emittedDelivery(g, env) {
   return seen.some((h) => sent.has(h)) ? proven('application-unknown', null, 'confirmed') : unconfirmed('no-attachment');
 }
 
-// Positions bounding where a turn's prompt can sit: its own pairing, else the nearest pairings either side.
 function span(env, gi) {
   const posOf = (i) => {
     const pair = env.pairs.get(env.prompts[i].row.id);
@@ -222,7 +210,6 @@ function absentReason(env, ts) {
   return env.hasCandidates ? null : 'no-row';
 }
 
-// What a turn with no candidate row reads as when the lesson was in the store.
 function ifPresent(g) {
   const { row } = g;
   if (g.surface) return ranged('not-retrieved', 'rejected', 'context-surface');
@@ -312,7 +299,6 @@ function fold(turns, label) {
   return out;
 }
 
-// A label acts only on application-unknown; on any other class it is noted, never applied.
 function noteLabelMisfit(label, part, notes) {
   if (label === null) return false;
   if (part.class === 'application-unknown' || part.class.startsWith('applied') || part.reason === 'outcome-unknown') return true;
@@ -326,7 +312,6 @@ function forgotten(stores, tenant, id, firstTs) {
     const row = db.prepare("SELECT ts FROM audit_log WHERE op = 'forget' AND target_id = ? AND tenant_id = ? ORDER BY id LIMIT 1").get(id, tenant);
     if (row !== undefined) return firstTs === null || row.ts > firstTs ? 'forgotten' : 'forgotten-before';
   }
-  // Several delete paths write no forget row, so a trace of the id anywhere still means it existed.
   for (const { db } of stores) {
     if (hasTable(db, 'delivery_candidates') && db.prepare('SELECT 1 AS x FROM delivery_candidates WHERE tenant_id = ? AND memory_id = ? LIMIT 1').get(tenant, id) !== undefined) return 'forgotten';
     if (hasTable(db, 'recall_trace_results') && db.prepare('SELECT 1 AS x FROM recall_trace_results WHERE tenant_id = ? AND memory_id = ? LIMIT 1').get(tenant, id) !== undefined) return 'forgotten';
@@ -366,7 +351,6 @@ function build(local, opts, base) {
   if (env.memory === null && !env.hasCandidates) {
     const why = base.memory_id === null ? null : forgotten(stores, tenant, base.memory_id, rows[0]?.ts ?? null);
     if (why === 'forgotten') return { class: 'indeterminate', reason: why };
-    // A read told to skip the global store cannot show a lesson that lives only there was never written.
     if (why === null && opts.global === false && !opts.isGlobal) return { class: 'indeterminate', reason: 'global-unread' };
     return { class: 'not-written', reason: why ?? 'no-row' };
   }
@@ -399,7 +383,6 @@ function foldSession(env, { rows, targetCands, opts, base }) {
   };
 }
 
-// The hook hashes a project store under its resolved project folder and the global store under its configured path.
 function storeHashes(store, global) {
   const abs = path.resolve(store);
   const classRoot = path.resolve(global || resolveGlobalRootDir());

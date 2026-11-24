@@ -1,4 +1,3 @@
-// A malformed cursor is still a 400 with the text it always had, though the api now throws its own error class.
 import { describe, expect, it } from 'vitest';
 import { parseCursor } from '../../src/api/cursor.js';
 import { mapApiError } from '../../src/api/error-reply.js';

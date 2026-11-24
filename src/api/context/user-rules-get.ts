@@ -1,4 +1,3 @@
-// Every rule the person taught this project, for the session-start hook, which cuts the list.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { compareEntryIdentity } from '../../base/rank/compare.js';
 import type { Context } from '../types.js';

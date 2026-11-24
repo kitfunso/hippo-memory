@@ -1,5 +1,3 @@
-// A store already at CURRENT_SCHEMA_VERSION must open write-free: same-value
-// meta upserts on every open turned a concurrent writer into a locked read.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -22,7 +20,6 @@ const { DatabaseSync } = require('node:sqlite') as {
   };
 };
 
-// Statements that need the write lock; a caught one waits out the lock holder, which only a clock would show.
 const NEEDS_WRITE_LOCK =
   /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|BEGIN|SAVEPOINT|VACUUM)\b|PRAGMA (user_version|schema_version) =/;
 
@@ -34,7 +31,6 @@ beforeEach(() => {
 
 describe('openHippoDb on an already-current store is write-free', () => {
   it('runs no statement that needs the write lock, even while a second connection holds BEGIN IMMEDIATE', () => {
-    // Fully migrate + stamp fts5_available first.
     closeHippoDb(openHippoDb(root));
 
     const dbPath = join(root, 'hippo.db');
@@ -48,7 +44,6 @@ describe('openHippoDb on an already-current store is write-free', () => {
     try {
       const { result: db, statements } = recordStatements(() => openHippoDb(root));
       closeHippoDb(db);
-      // The recorder saw exactly the one connection this open makes, so the empty list below is not a dead spy.
       expect(countMatching(statements, STORE_OPEN)).toBe(1);
       expect(statements.filter((sql) => NEEDS_WRITE_LOCK.test(sql))).toEqual([]);
     } finally {

@@ -1,5 +1,3 @@
-// The rows a recall leaves, cut to the parts a surface or a branch changes: timestamps, query hashes and float scores
-// are dropped, so a test asserts which rows were written and never the bytes of one.
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { rowsOf } from './recall-golden-seed.js';
 
@@ -29,21 +27,14 @@ export function recallAuditOps(root: string): string[] {
 }
 
 export interface RecallWrites {
-  /** meta total_recalled. */
   recalled: string;
-  /** Each recall_traces row as `pipeline result_count session`. */
   traces: string[];
-  /** recall_trace_results memory ids in rank order. */
   ranked: string[];
-  /** Each token_ledger row as `surface items session`. */
   ledger: string[];
-  /** retrieval_count of every memory recalled at least once. */
   bumped: Record<string, number>;
-  /** Each goal_recall_log row as `memory session`. */
   goalLog: string[];
 }
 
-/** The columns recallWrites reads from each rowsOf table. */
 interface RecallTables {
   stats: { key: string; value: string }[];
   traces: { session_id: string | null; pipeline: string; result_count: number }[];

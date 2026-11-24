@@ -1,5 +1,3 @@
-// The domain rankers take the eval switches as input; the `./search` and `./testing` entries fill them from the
-// environment, so frozen evals that set HIPPO_ABLATE_*, HIPPO_EVAL_RECENCY_DAYS or HIPPO_FAKE_NOW still see each one.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyOutcome, createMemory } from '../../src/entry/memory.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
@@ -31,7 +29,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A deploy-runbook memory created `createdDaysAgo` and last read `readDaysAgo` days before NOW. */
 function aged(createdDaysAgo: number, readDaysAgo = createdDaysAgo, outcome?: boolean): MemoryEntry {
   const base = createMemory('deploy runbook for the staging cluster', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   const m = outcome === undefined ? base : applyOutcome(base, outcome);
@@ -99,7 +96,6 @@ describe('the ./search entry reads each eval switch from the environment', () =>
 
   it('HIPPO_FAKE_NOW: with no `now` passed, scoring runs on the fake clock', async () => {
     vi.stubEnv('HIPPO_FAKE_NOW', '2030-01-01T00:00:00.000Z');
-    // Dated 2026, so the 2030 clock leaves almost no strength: 0.5 + 0.5 * strength.
     expect((await breakdownOf(aged(0), {})).strengthMultiplier).toBeLessThan(0.51);
   });
 

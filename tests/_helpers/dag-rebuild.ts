@@ -1,4 +1,3 @@
-// Fetchers, dirty-summary setters and entry builders the DAG rebuild tests share.
 import { vi } from 'vitest';
 import { closeHippoDb, getMeta, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { createMemory } from '../../src/entry/memory.js';

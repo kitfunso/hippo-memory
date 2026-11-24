@@ -1,4 +1,3 @@
-// The home page's two WebGL scenes. The page imports this after first paint, so three.js never blocks the first screen.
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import * as THREE from 'three';
@@ -23,7 +22,6 @@ function track(s, keys, out, dwell = 0) {
   return out.set(l[1], l[2], l[3]);
 }
 
-// Set as scene.background: through the composer a clear colour gets sRGB-encoded twice and black turns grey.
 const BG = 0x0c0f11;
 const VERT = `varying vec2 vUv; varying float vDepth; void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vDepth = -mv.z; gl_Position = projectionMatrix * mv; }`;
 const FRAG = `
@@ -57,7 +55,6 @@ void main(){
 }`;
 
 const AMBER = new THREE.Color('#7af5e0'), RED = new THREE.Color('#2cb4d9'), PLUM = new THREE.Color('#4a6dea'), COOL = new THREE.Color('#b8fff2');
-// Amber is far brighter than red, so additive layers wash out unless each card is scaled by its brightness.
 const deckHot = (t) => (t < 0.5 ? AMBER.clone().lerp(RED, t * 2) : RED.clone().lerp(PLUM, (t - 0.5) * 2)).multiplyScalar(0.64 + 0.36 * t);
 const CARD = new THREE.PlaneGeometry(4.2, 2.6);
 const TIME = { value: 0 };
@@ -68,7 +65,6 @@ function glass(hot, o = {}) {
   });
   return new THREE.Mesh(CARD, mat);
 }
-// A high threshold keeps the glow on lifted cards, so dozens of dim ones don't add up to a grey wash.
 function makeComposer(renderer, scene, camera, b = [0.5, 0.1, 0.22]) {
   const c = new EffectComposer(renderer);
   c.addPass(new RenderPass(scene, camera));
@@ -79,7 +75,6 @@ function makeComposer(renderer, scene, camera, b = [0.5, 0.1, 0.22]) {
 }
 const ORDER = [4, 2, 6, 1, 7, 3, 5, 0, 8];
 
-// First screen: the deck from 6, recoloured along the colour bar.
 export function hero() {
   const canvas = document.getElementById('gl'), host = canvas.parentElement;
   let renderer;
@@ -137,7 +132,6 @@ export function hero() {
   root.classList.add('hero-live');
 }
 
-// The film: the same deck comes back, one card leaves it, and the camera follows that memory.
 export function film() {
   const story = document.getElementById('story'), pin = story.querySelector('.pin'), win = pin.querySelector('.win');
   const hud = win.querySelector('.hud'), box = hud.querySelector('.box'), tag = box.querySelector('.tag'), num = hud.querySelector('.stagenum');
@@ -153,7 +147,6 @@ export function film() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BG);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
-  // Card text goes through the bloom too (platform's glowing type), so the threshold sits above the dim glass.
   const GLOW = [0.62, 0.28, 0.5];
   const composer = makeComposer(renderer, scene, camera, GLOW);
   const SEC = story.dataset.sec || '1';
@@ -163,14 +156,11 @@ export function film() {
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
   const qY = (a) => new THREE.Quaternion().setFromEuler(new THREE.Euler(0, a, 0));
 
-  // Where things sit.
   const A1 = V(1.2, 0.1, 1.5), R = V(0, 0.2, -2), SP = V(6.5, 0.5, -1.6), TP = V(9.6, 0.7, -5.5), QP = V(-3.4, 4.7, -8);
   const WP = V(4.6, -2.6, -4.6), OP = V(-6.4, -2.4, -5.2), NOFF = V(2.4, -1.0, 1.1);
   const SROT = -0.3, TROT = -0.34;
-  // A phone is too narrow for props side by side, so they stack above the followed card.
   if (narrow) { SP.set(1.2, 4.0, 0.2); QP.set(0.4, 5.6, -6); }
 
-  // Deck poses, the same transforms the first screen uses.
   const tiltO = new THREE.Object3D(), deckO = new THREE.Object3D();
   tiltO.rotation.z = 0.66; deckO.rotation.set(0.18, -1.02, 0); tiltO.add(deckO);
   if (narrow) tiltO.position.y = 0.9;
@@ -183,7 +173,6 @@ export function film() {
   tiltO.updateMatrixWorld(true);
   deckO.children.forEach((o) => { const p = V(0, 0, 0), q = new THREE.Quaternion(), s = V(1, 1, 1); o.matrixWorld.decompose(p, q, s); deckPose.push({ p, q }); });
 
-  // Field of memories: the 8 other deck cards plus more, spread through the room.
   const zones = [[-3.5, 3.5, -2.2, 2.4, -4.5, 4], [2.2, 9.8, -2.5, 3.4, -3.5, 1], [6.2, 13.4, -2.6, 3.8, -8, -3], [-7.5, 1.2, 3.2, 6.4, -10.5, -6], [2.2, 9.8, -5.2, 0, -7, -2.5], [-10, -2.8, -5, 0.2, -8, -3], [-12, 12, -8, 8, 3, 30]];
   const blocked = (p) => zones.some((z) => p.x > z[0] && p.x < z[1] && p.y > z[2] && p.y < z[3] && p.z > z[4] && p.z < z[5]);
   const pal = [AMBER, RED, PLUM];
@@ -201,7 +190,6 @@ export function film() {
   items.forEach((it) => { it.mesh = glass(it.hot, { seed: rnd(), dim: 0 }); scene.add(it.mesh); it.now = V(0, 0, 0); it.recall = false; });
   items.slice().sort((a, b) => a.p.distanceTo(QP) - b.p.distanceTo(QP)).slice(0, 4).forEach((it) => { it.recall = true; });
 
-  // Text faces, drawn on canvases and shown in a second pass so the bloom leaves the type sharp.
   // The Astro font API hashes family names, so the cards read them from its CSS variables.
   const cssFont = (v, f) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || f;
   const MONO = cssFont('--font-geist-mono', 'monospace'), SANS = cssFont('--font-geist', 'sans-serif'), DISP = cssFont('--font-newsreader', 'serif');
@@ -218,7 +206,6 @@ export function film() {
     const ctx = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = maxAniso;
     const api = { tex, state: null, draw: (st) => { api.state = st; ctx.clearRect(0, 0, w, h); ctx.textBaseline = 'top'; draw(ctx, st); tex.needsUpdate = true; } };
-    // A face not drawn yet has no state; its first draw already uses the loaded font.
     redraws.push(() => { if (api.state) api.draw(api.state); });
     return api;
   }
@@ -242,7 +229,6 @@ export function film() {
     x.fillStyle = '#96aec2'; x.font = `400 27px ${MONO}`; x.fillText(d.foot, 56, 548);
   }
 
-  // The followed memory: deck card 4, the one the first screen lifts.
   const A = { mesh: glass(deckHot(0.5), { seed: (4 * 0.37) % 1 }), api: faceTex(1024, 634, drawCard) };
   scene.add(A.mesh); A.face = faceMesh(A.api);
   const A_TEXT = 'always run the migration before the deploy, the release script does not run it for you';
@@ -254,7 +240,6 @@ export function film() {
   let aKey = '';
   const setA = (s) => { const f = aFace(s), k = f.chip + f.foot; if (k === aKey) return; aKey = k; A.api.draw({ id: 'mem_22f16003d809', chip: f.chip, text: A_TEXT, foot: f.foot }); };
 
-  // Pin, dropped onto the card once the rule word matches.
   const pinG = new THREE.Group();
   const pinHead = new THREE.Mesh(new THREE.SphereGeometry(0.17, 20, 14), new THREE.MeshBasicMaterial({ color: '#71f6e4' }));
   pinHead.position.z = 0.42;
@@ -262,7 +247,6 @@ export function film() {
   needle.rotation.x = Math.PI / 2; needle.position.z = 0.22;
   pinG.add(pinHead, needle); pinG.position.set(-1.62, 0.92, 0); A.mesh.add(pinG);
 
-  // A memory that misleads, and an old fact with its replacement.
   const W = { mesh: glass(RED, { seed: 0.3, dim: 0 }), api: faceTex(1024, 634, drawCard) }; scene.add(W.mesh); W.face = faceMesh(W.api);
   const O = { mesh: glass(PLUM, { seed: 0.6, dim: 0 }), api: faceTex(1024, 634, drawCard) }; scene.add(O.mesh); O.face = faceMesh(O.api);
   const Nn = { mesh: glass(AMBER, { seed: 0.1, dim: 0 }), api: faceTex(1024, 634, drawCard) }; scene.add(Nn.mesh); Nn.face = faceMesh(Nn.api);
@@ -272,7 +256,6 @@ export function film() {
   Nn.api.draw({ id: 'mem_9c4e1a7d20b3', chip: 'current', text: 'API v1 is deprecated, new endpoints go under /v2', foot: 'supersedes mem_5f2b1c8e93a0' });
   setW(false); setO(false);
 
-  // Panels: the session where you said it, the next session, three agents, and the next prompt.
   function panel(w, h, draw) {
     const api = faceTex(1024, Math.round(1024 * h / w), draw);
     const g = glass(AMBER, { lift: 0.05, dim: 0 }); g.scale.set(w / 4.2, h / 2.6, 1); scene.add(g);
@@ -319,7 +302,6 @@ export function film() {
     }
   });
 
-  // Glowing threads between things.
   const lineMat = () => new THREE.LineBasicMaterial({ color: '#71f6e4', transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending });
   const seg = (n) => { const l = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3)), lineMat()); l.frustumCulled = false; scene.add(l); return l; };
   const capLine = seg(1), agLines = seg(3), recLines = seg(6);
@@ -375,7 +357,6 @@ export function film() {
       it.now.copy(it.mesh.position);
     });
 
-    // A
     const aPos = s < 0.4 ? v.copy(deckPose[4].p) : track(s, A_POS, v);
     A.mesh.position.copy(aPos); A.mesh.position.y += Math.sin(t * 0.8) * 0.04 * spread;
     const dk = smooth(1.4, 1.95, s) * (1 - smooth(2.4, 2.95, s));
@@ -391,14 +372,12 @@ export function film() {
     const pe = smooth(0.95, 1.25, s); pinG.visible = pe > 0.001; pinG.position.z = 3 * (1 - pe) * (1 - pe);
     pinHead.scale.setScalar(1 + 0.35 * smooth(6.4, 7, s) * (0.6 + 0.4 * Math.sin(t * 3)));
 
-    // Panels
     setPanel(SESS, SP, qSess, bump(s, 0.62, 1.45, 0.3));
     setPanel(TERM, TP, qDock, bump(s, 1.35, 2.5, 0.3));
     const ak = bump(s, 2.6, 3.55, 0.3);
     AG.forEach((p, i) => setPanel(p, AGP[i], qY(i === 0 ? 0.32 : -0.32), ak));
     setPanel(PROMPT, QP, qY(0.2), bump(s, 3.45, 4.5, 0.3));
 
-    // W: recalled at 1.4, marked bad and sinking at 1.5
     const wIn = smooth(3.35, 3.8, s), sink = smooth(4.6, 5.3, s);
     W.mesh.position.set(WP.x, WP.y - sink * 4.8 + Math.sin(t * 0.7 + 2) * 0.05, WP.z - sink * 1.5);
     W.mesh.quaternion.setFromEuler(eu.set(-0.6 * sink, -0.25 + 0.2 * sink, 0.25 * sink));
@@ -406,7 +385,6 @@ export function film() {
     W.mesh.material.uniforms.uLift.value = recK * 0.9;
     show(W, wIn * (1 - 0.65 * sink) * (1 - 0.6 * fadeK)); setW(s > 4.6); sync(W);
 
-    // O and N: the old fact steps back, the new one takes its place
     const oIn = smooth(4.4, 4.9, s), back = smooth(5.6, 6.2, s), nIn = smooth(5.5, 6.05, s);
     O.mesh.position.set(OP.x - back * 1.2, OP.y + back * 0.5, OP.z - back * 3.6);
     O.mesh.quaternion.setFromEuler(eu.set(0, 0.28 + back * 0.15, 0));
@@ -416,7 +394,6 @@ export function film() {
     Nn.mesh.quaternion.setFromEuler(eu.set(0, 0.26, 0));
     show(Nn, nIn * (1 - 0.8 * fadeK)); sync(Nn);
 
-    // Threads
     const cpos = capLine.geometry.attributes.position, sa = local(SESS, -2.5, -0.12);
     cpos.setXYZ(0, sa.x, sa.y, sa.z); cpos.setXYZ(1, A.mesh.position.x + 2.0, A.mesh.position.y, A.mesh.position.z); cpos.needsUpdate = true;
     capLine.material.opacity = bump(s, 0.8, 1.3, 0.2) * 0.9;
@@ -431,7 +408,6 @@ export function film() {
     spos.setXYZ(0, Nn.mesh.position.x, Nn.mesh.position.y, Nn.mesh.position.z); spos.setXYZ(1, O.mesh.position.x, O.mesh.position.y, O.mesh.position.z); spos.needsUpdate = true;
     supLine.computeLineDistances(); supLine.material.opacity = bump(s, 5.9, 6.6, 0.3) * 0.9;
 
-    // Camera
     track(s, CAM_P, cp, 0.12); track(s, CAM_T, ct, 0.12);
     const aspect = Wd / Hd, kz = aspect >= 1.2 ? 1 : aspect >= 0.8 ? 1.25 : 1.75;
     cp.sub(ct).multiplyScalar(lerp(aspect >= 1.2 ? 1 : 1.0, kz, smooth(0.4, 1, s))).add(ct);

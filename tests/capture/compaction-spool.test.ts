@@ -27,7 +27,6 @@ const log = (message: string): void => {
   logs.push(message);
 };
 const spoolDir = (): string => path.join(root, 'compactions-spool');
-/** The spool folder's files, leaving out the lock database a finished run keeps. */
 const listing = (): string[] => fs.readdirSync(spoolDir()).filter((n) => n !== 'replay.lock.db');
 const lockFile = (): string => path.join(spoolDir(), 'replay.lock.db');
 const stamp = (ms: number): string => String(ms).padStart(13, '0');
@@ -67,7 +66,6 @@ interface Collector {
   importer: SpoolImporter;
 }
 
-/** An importer that notes each session id it is handed and finishes the file. */
 function collector(): Collector {
   const seen: string[] = [];
   return {

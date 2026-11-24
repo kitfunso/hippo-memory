@@ -1,6 +1,3 @@
-// The reject, unreject and list flow the CLI verbs and the api functions share: the rules and their
-// wording live here, and the store's rejections group runs each one in one write.
-
 import type { StoreWith } from '../../base/ports/store.js';
 import { normalizeValueForRejection } from '../../base/records/rejection-digest.js';
 import type { AppliedRejection, LiftedRejection } from '../../base/ports/store/rejections.js';
@@ -10,14 +7,8 @@ export interface RejectFlowOptions {
   tenantId: string;
   actor: string;
   reason: string;
-  /** By-id form: reject the CURRENT content of an existing memory. */
   memoryId?: string;
-  /** Pre-emptive form: reject a value not currently stored (or already gone). */
   value?: string;
-  /**
-   * The caller's own personal scope: the only personal rows the sweep may remove. Unset (the CLI)
-   * skips every personal row.
-   */
   ownScope?: string;
 }
 
@@ -33,13 +24,9 @@ function assertRejectOpts(opts: RejectFlowOptions): void {
     throw new Error('reject requires either a memory id or --value.');
   }
   if (opts.memoryId !== undefined && opts.value !== undefined) {
-    // Enforced here, not only in the CLI parser, so a direct api caller passing both is refused
-    // instead of silently getting the memoryId path with `value` ignored.
     throw new Error('reject accepts either a memory id or --value, not both.');
   }
   if (opts.value !== undefined && normalizeValueForRejection(opts.value).length === 0) {
-    // Direct api callers can pass strings the CLI flag parser would refuse; an empty-normalized
-    // tombstone would refuse nothing and pollute the listing.
     throw new Error('reject --value requires non-empty content.');
   }
 }
@@ -79,7 +66,6 @@ export async function unrejectValue(
   store: StoreWith<'rejections'>,
   { tenantId, digestOrPrefix, actor }: UnrejectOptions,
 ): Promise<UnrejectOutcome> {
-  // A blank prefix would match every digest and list the whole tombstone set as ambiguous.
   if (digestOrPrefix.trim().length === 0) {
     return { status: 'not_found' };
   }

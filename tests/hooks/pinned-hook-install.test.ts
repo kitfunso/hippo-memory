@@ -24,18 +24,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/**
- * Tests for the mid-session pinned-rule re-injection hook.
- *
- * Phase C of docs/plans/2026-04-21-pinned-reinject.md: `installJsonHooks`
- * must add a UserPromptSubmit entry that invokes
- * `hippo context --pinned-only --include-recent 5 --format additional-context`
- * every turn, so pinned memories and fresh same-session writes survive long
- * sessions where the model would otherwise "forget" them.
- *
- * We override HOME + USERPROFILE to redirect `homeDir()` in src/hooks.ts to
- * a tmp directory — no signature change on installJsonHooks/uninstallJsonHooks.
- */
 let tmpHome: string;
 
 beforeEach(() => {
@@ -118,7 +106,6 @@ describe('installJsonHooks — UserPromptSubmit pinned-inject (claude-code)', ()
 
     const result = installJsonHooks('claude-code');
     expect(result.migratedPinnedInjectRecent).toBe(false);
-    // The install test is the loose substring one, so a mention counts as installed and nothing is appended.
     expect(result.installedUserPromptSubmit).toBe(false);
 
     const groups = JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.UserPromptSubmit;
@@ -183,7 +170,6 @@ describe('installJsonHooks(claude-code) and the record of installed hooks', () =
     HIPPO_NOTE_WRITTEN_MARKER,
   ];
   type Handler = { type: string; command: string; args: string[] };
-  // The stock prompt hook is the one users swap for their own wrapper, so it is the hook removed here.
   function removePinnedInject(wrapper?: Handler): void {
     const settings = readSettings();
     if (wrapper) settings.hooks.UserPromptSubmit = [{ hooks: [wrapper] }];

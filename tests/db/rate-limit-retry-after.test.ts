@@ -1,4 +1,3 @@
-// A refused caller learns when to come back, and a throttled heartbeat never reads as a revoked key.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -48,7 +47,6 @@ describe('createRateLimiter', () => {
   });
 });
 
-/** Top-level argument texts of the call whose `(` sits at `open`; commas inside strings, templates and brackets do not split. Null when unclosed. */
 function callArgs(text: string, open: number): string[] | null {
   const stack: string[] = [')'];
   const args: string[] = [];
@@ -83,7 +81,6 @@ function callArgs(text: string, open: number): string[] | null {
   return null;
 }
 
-/** Lines where `429` is neither a comment, a status comparison, nor an HttpError given a real Retry-After value. */
 function unexplained429s(file: string, text: string): string[] {
   const out: string[] = [];
   for (const m of text.matchAll(/\b429\b/g)) {
@@ -91,7 +88,6 @@ function unexplained429s(file: string, text: string): string[] {
     const before = text.slice(lineStart, m.index);
     if (/^\s*(\*|\/\*)/.test(before) || before.includes('//')) continue;
     if (/[!=]==\s*$/.test(before) || /^\s*[!=]==/.test(text.slice(m.index + 3))) continue;
-    // The formatter may put `HttpError(` on the line above the status.
     const head = text.slice(0, m.index).trimEnd();
     const args = head.endsWith('HttpError(') ? callArgs(text, head.length - 1) : null;
     if (args?.length === 3 && args[2] !== 'undefined' && args[2] !== 'void 0') continue;
@@ -102,7 +98,6 @@ function unexplained429s(file: string, text: string): string[] {
 
 describe('every 429 in core src', () => {
   it('is an HttpError with a Retry-After value, a status comparison, or a comment', () => {
-    // A lint-style scan: no request reaches an unwritten 429, so the source text is the only place to check it.
     const files = readdirSync(join(repoRoot, 'src'), { recursive: true, encoding: 'utf8' }).filter((f) =>
       f.endsWith('.ts'),
     );

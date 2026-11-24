@@ -1,4 +1,3 @@
-/** Recall gated on the hook prompt, not the five newest memories (pure, no I/O). */
 import { cjkIndexTerms, hasCjk, partitionCjkTerms, tokenizeMin } from '../util/tokenize.js';
 import { MEMORY_QUALITY_STOPWORDS } from '../util/stopwords.js';
 
@@ -11,7 +10,6 @@ export interface PromptRecallGate {
   maxItems: number;
 }
 
-// Latency bound, not tuned: fixed in the prereg regardless of gate config.
 export const PROMPT_RECALL_MAX_CHARS = 4000;
 
 /** Distinct content tokens: longer than 2 chars or CJK, not a stop word. */
@@ -84,8 +82,6 @@ export function gatePromptRecall<T extends { id: string; tokens: ReadonlySet<str
   return kept.slice(0, gate.maxItems);
 }
 
-// bm25 ranks every row matching any term, so fewer and rarer terms bound latency; 8 is a bound, not
-// tuned.
 export const RAREST_TERM_COUNT = 8;
 
 /** Terms sorted by ascending FTS doc count (rarest first), zero-count terms dropped, ties by term.

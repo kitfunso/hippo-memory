@@ -1,5 +1,3 @@
-// The session-end worker owns its process, so it, not the api, writes the held re-read lines when a step ends the
-// process before the run writes them.
 import { describe, expect, it } from 'vitest';
 import { heldLog } from '../../src/api/session-end.js';
 import { flushingOnExit } from '../../src/surface/cli/hook-runtime.js';
@@ -15,7 +13,6 @@ describe('flushingOnExit', () => {
 
     await flushingOnExit(held, async () => {
       held.hold([LINE]);
-      // Only the listeners this run added fire, as a real exit would fire them.
       for (const listener of process.listeners('exit')) if (!before.has(listener)) listener(0);
       atExit = [...written];
     });

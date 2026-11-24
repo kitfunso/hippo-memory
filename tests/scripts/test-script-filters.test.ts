@@ -1,4 +1,3 @@
-// A "test:*" npm script whose path filter matches no file runs zero tests and still exits green.
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -14,7 +13,6 @@ function testFiles(dir: string): string[] {
   });
 }
 
-/** The bare words after `vitest run` that are paths, not flags or flag values. */
 function filters(command: string): string[] {
   const all = command.split(/\s+/);
   const words = all.slice(all.indexOf('run') + 1);

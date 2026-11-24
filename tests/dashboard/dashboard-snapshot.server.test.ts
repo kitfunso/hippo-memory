@@ -1,6 +1,3 @@
-// The dashboard's tallies group live memories by origin project and count bands, layers, conflicts and embeddings over
-// that one population.
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
 import { memoryFacts, seriesDay } from '../../src/base/memory/memory-facts.js';
@@ -52,9 +49,7 @@ async function totals(): Promise<DashboardTotals> {
 
 const summaryOf = (o: Overview, key: string): ProjectSummary => o.projects.find((p) => p.key === key)!;
 
-// Ten day half-life, just retrieved: strong today, under 0.2 in thirty days.
 const AT_RISK = { halfLifeDays: 10, created: isoAgo(0), lastRetrieved: isoAgo(0) } as const;
-// Hundred day half-life, last used 150 days ago: weak today, still above 0.2 in thirty days.
 const FADING = { halfLifeDays: 100, created: isoAgo(150), lastRetrieved: isoAgo(150) } as const;
 
 const EVERY_ROW: MemoryQuery = {
@@ -68,7 +63,6 @@ const EVERY_ROW: MemoryQuery = {
   q: null,
 };
 
-/** The tally a fold over whole entries gives, the way the in-memory snapshot counted before SQL did. */
 function foldOf(entries: readonly MemoryEntry[], vectors: ReadonlySet<string>): Omit<ProjectTally, 'openConflicts'>[] {
   const byOrigin = new Map<string | null, MemoryEntry[]>();
   const ordered = [...entries].sort((a, b) => (a.created + '\u0001' + a.id < b.created + '\u0001' + b.id ? -1 : 1));
@@ -165,7 +159,6 @@ describe('dashboard tallies', () => {
     await reads.close();
 
     expect(o.kpis.find((k) => k.id === 'openConflicts')?.value).toBe(2);
-    // The cross-project conflict counts once in each project it touches; the one inside alpha counts once.
     expect(summaryOf(o, 'p:alpha').openConflicts).toBe(2);
     expect(summaryOf(o, 'p:beta').openConflicts).toBe(1);
     expect(page?.rows.map((r) => r.id)).not.toContain(q.id);
@@ -178,7 +171,6 @@ describe('dashboard tallies', () => {
     seed(store.hippoRoot, 'not embedded');
     seed(store.hippoRoot, 'also not embedded');
     const old = seed(store.hippoRoot, 'replaced', { kind: 'superseded', supersededBy: one.id });
-    // memory_vectors has no foreign key, so a vector for a superseded or deleted memory must not count.
     embed(store.hippoRoot, [one.id, two.id, old.id, 'orphan-id']);
 
     const o = await overview();
@@ -197,7 +189,6 @@ describe('dashboard tallies', () => {
     });
     seed(root, 'raw global row', { kind: 'raw', originProject: '', layer: Layer.Buffer, ...AT_RISK });
     seed(root, 'unassigned and long unused', { originProject: null, ...FADING });
-    // The prefix test is exact, so a scope that differs only in case stays live.
     seed(root, 'scope that only looks quarantined', { scope: 'Quarantine:private:team', originProject: 'beta' });
     seed(root, 'x'.repeat(300), { originProject: 'beta', layer: Layer.Semantic });
     seed(root, 'replaced by the pinned one', { supersededBy: pinned.id });

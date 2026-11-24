@@ -1,13 +1,3 @@
-/**
- * v1.6.4 — error distinguishability + path matcher hardening.
- *
- *   Task 1: drillDown returns discriminated DrillDownOutcome with
- *           failure='not_found' | 'scope_blocked' | 'not_drillable'.
- *           HTTP maps not_drillable → 422; others → 404.
- *   Task 2: pre-match raw-URL %2F rejection + post-match charset
- *           validation on every :id path segment.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -67,7 +57,6 @@ describe('drillDown discriminated outcome', () => {
     writeEntry(root, s);
     const r = await drillDown(ctxFor(root, 'default'), s.id);
     expect('failure' in r).toBe(true);
-    // Intentionally collapsed; distinguishing would leak existence.
     if ('failure' in r) expect(r.failure).toBe('not_found');
   });
 
@@ -85,9 +74,6 @@ describe('drillDown discriminated outcome', () => {
   });
 
   it('failure=not_found for a private-scoped summary', async () => {
-    // Distinguishable scope_blocked told no-scope callers "row exists but
-    // not for you" — same existence leak the HTTP 404 collapse fixed.
-    // Now collapsed at the JS API level to match HTTP behaviour.
     const s = makeSummary('secret topic', { scope: 'slack:private:CSEC' });
     writeEntry(root, s);
     const r = await drillDown(ctxFor(root), s.id);
@@ -135,8 +121,6 @@ describe('HTTP /v1/recall/drill status mapping', () => {
     writeEntry(home, leaf);
     const res = await fetch(`${handle.url}/v1/recall/drill/${leaf.id}`);
     expect(res.status).toBe(422);
-    // Regression guard: body must contain "leaf" so a future "fix" that
-    // collapses the message back to a generic "not found" is caught.
     // SAFETY: HTTP error responses are always { error: message } (src/server.ts sendJson error handler).
     const body = (await res.json()) as { error?: string };
     expect((body.error ?? '').toLowerCase()).toContain('leaf');
@@ -180,7 +164,6 @@ describe('HTTP path-segment validation', () => {
   });
 
   it('400 on illegal charset (semicolon)', async () => {
-    // Direct charset hit. The id `foo;bar` has chars outside `[A-Za-z0-9_:.-]`.
     const res = await fetch(`${handle.url}/v1/recall/drill/foo;bar`);
     expect(res.status).toBe(400);
   });
@@ -192,8 +175,6 @@ describe('HTTP path-segment validation', () => {
   });
 
   it('200/404 on length boundary == 256 (charset OK)', async () => {
-    // 256 chars passes validateIdSegment; route then 404s because no such row.
-    // Important: 256 is the inclusive cap, NOT a 400.
     const ok = 'a'.repeat(256);
     const res = await fetch(`${handle.url}/v1/recall/drill/${ok}`);
     expect(res.status).toBe(404);
@@ -221,15 +202,11 @@ describe('HTTP path-segment validation', () => {
   });
 
   it('400 on /v1/auth/keys/:keyId DELETE with illegal charset', async () => {
-    // 7th :id route the plan-stage review missed; final-pass /review caught.
     const res = await fetch(`${handle.url}/v1/auth/keys/has;semi`, { method: 'DELETE' });
     expect(res.status).toBe(400);
   });
 
   it('200 on /v1/memories with %2F in QUERY string', async () => {
-    // Pre-codex-round-3 rejectEncodedSlash scanned the full URL including
-    // query, so any recall query containing a URL would 400. Splitting
-    // on the first `?` confines the check to the pathname.
     const res = await fetch(`${handle.url}/v1/memories?q=https%3A%2F%2Fexample.com`);
     expect(res.status).toBe(200);
   });

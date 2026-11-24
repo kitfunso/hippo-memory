@@ -1,4 +1,3 @@
-// A message call stores nothing on the far side, so a dropped connection is replayed as a 5xx is.
 import { describe, expect, it, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 

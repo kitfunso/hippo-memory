@@ -1,6 +1,3 @@
-// What the `hippo recall` verb reads beside its ranking core: the stores it searches, the resume
-// packet and the JSON rows.
-
 import { confidenceFacets } from '../../base/memory/strength.js';
 import { Layer } from '../../base/memory/entry.js';
 import { leadInField } from '../../base/memory/lead-in.js';
@@ -44,8 +41,6 @@ export function recallStoreSetting(ctx: Context, activeScope: string | null): Re
 
 export interface RecallRowOrigin {
   readonly globalOn: boolean;
-  /** True when a ranked row came from the global store: this store is it, or the merge tagged
-   * the row global. */
   readonly isGlobal: (r: SearchResult) => boolean;
 }
 
@@ -88,7 +83,6 @@ export async function loadScopedContinuity(
     sessionHandoff: rawHandoff,
     recentSessionEvents: rawEvents,
   } = await ctx.store.continuity(ctx.tenantId, CONTINUITY_EVENT_LIMIT, null);
-  // The same shared scope rule as api.recall; the active scope merges --scope and detectScope().
   const effectiveScope = setting.activeScope || undefined;
   const passes = (r: { scope?: string | null }): boolean =>
     passesScopeFilterForRecall(r.scope ?? null, effectiveScope);
@@ -134,15 +128,11 @@ export function rerankerWithClef(
 /** How a shown list is cut to a token budget: each row by its own cost, then the rendered text
  * as a whole. */
 export interface RecallFit<R> {
-  /** Tokens the rows may spend: the budget less what prints ahead of them. */
   readonly room: number;
-  /** Tokens the whole rendered text may spend. */
   readonly budget: number;
-  /** The first `floor` rows stay whatever they cost. */
   readonly floor: number;
   readonly cost: ResultCost;
   readonly render: (rows: SearchResult[]) => R;
-  /** The text `render` printed, which the budget measures. */
   readonly textOf: (rendered: R) => string;
 }
 
@@ -152,8 +142,6 @@ export function fitRecall<R>(ranked: SearchResult[], fit: RecallFit<R>): R {
   const fitted = fitBudget(ranked, fit.room, fit.floor, fit.cost);
   let kept = fitted.length;
   let rendered = fit.render(fitted.slice(0, kept));
-  // The hints, cutoff and heading vary with the list, so the whole text is re-measured after each
-  // drop.
   while (kept > fit.floor && estimateTokens(fit.textOf(rendered)) > fit.budget) {
     kept--;
     rendered = fit.render(fitted.slice(0, kept));
@@ -232,7 +220,6 @@ export function recallJsonRow({
     if (explanation.envelope) {
       base.envelope = explanation.envelope;
     }
-    // The ordered lifecycle re-ranking steps, so a caller can see why a row moved.
     if (r.rerankTrace && r.rerankTrace.length > 0) {
       base.rerankTrace = r.rerankTrace;
     }

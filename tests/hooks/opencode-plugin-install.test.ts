@@ -1,15 +1,3 @@
-/**
- * Tests for the opencode plugin installer (fix for issue #24).
- *
- * The opencode plugin installer replaces the v1.10.x-v1.11.1 JSON-hook installer
- * which wrote a Claude Code-style `hooks` block into ~/.config/opencode/opencode.json,
- * breaking opencode's launch (opencode's schema is additionalProperties:false and
- * has no `hooks` key). The fix writes a TS plugin at ~/.config/opencode/plugins/hippo.ts
- * subscribing to opencode's `session.idle` and `session.created` events, and migrates
- * any pre-existing broken hooks block out of opencode.json.
- *
- * Convention: real FS, no mocks. HOME isolated via tests/_helpers/with-fake-home.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -23,7 +11,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** The plugin text installOpencodePlugin writes into the current (fake) home. */
 function installedSource(): string {
   installOpencodePlugin();
   return fs.readFileSync(resolveOpencodePluginPath(), 'utf8');
@@ -56,18 +43,10 @@ describe('the installed opencode plugin source', () => {
   });
 
   it('guards against non-Bun runtimes (typeof $ check)', () => {
-    // Critic-mandated defense: opencode runs in Bun in practice but a future
-    // Node-mode deployment would have $ undefined; fail closed instead of
-    // crashing the host session with the idempotence marker locking the
-    // broken file in place.
     expect(source).toMatch(/typeof\s+\$\s*!==\s*['"]function['"]/);
   });
 
   it('uses no type imports (avoids unverified @opencode-ai/plugin dependency)', () => {
-    // @opencode-ai/plugin's npm publication status was unverifiable from the
-    // build sandbox (npmjs.com returned 403 to WebFetch). opencode infers
-    // plugin shape from the returned object so the type annotation was
-    // convenience-only — drop it to eliminate the runtime resolution risk.
     expect(source).not.toContain('import type');
     expect(source).not.toContain('@opencode-ai/plugin');
   });
@@ -132,9 +111,7 @@ describe('installOpencodePlugin (real-FS)', () => {
 
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
     expect(after.theme).toBe('dark');
-    // SessionStart was 100% hippo → key removed entirely.
     expect(after.hooks.SessionStart).toBeUndefined();
-    // SessionEnd had a non-hippo entry → key preserved with only that entry left.
     expect(after.hooks.SessionEnd).toHaveLength(1);
     expect(JSON.stringify(after.hooks.SessionEnd)).toContain('my own hook');
   });
@@ -164,9 +141,9 @@ describe('installOpencodePlugin (real-FS)', () => {
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     fs.writeFileSync(opencodeJsonPath, '{ "hooks": ["unterminated string ');
     const result = installOpencodePlugin();
-    expect(result.installed).toBe(true); // plugin file still written
-    expect(result.migratedLegacyHooks).toBe(false); // nothing migrated
-    expect(result.jsonRepairFailed).toBe(true); // structured error surfaced
+    expect(result.installed).toBe(true);
+    expect(result.migratedLegacyHooks).toBe(false);
+    expect(result.jsonRepairFailed).toBe(true);
   });
 
   it('does NOT create opencode.json on a fresh install with no legacy block', () => {
@@ -178,8 +155,6 @@ describe('installOpencodePlugin (real-FS)', () => {
   it('leaves a non-hippo hooks key alone (false-positive defense)', () => {
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
-    // User's coincidental substring "hippo sleep" inside an echo payload —
-    // must NOT trigger hippo-owned detection.
     fs.writeFileSync(
       opencodeJsonPath,
       JSON.stringify(
@@ -199,7 +174,6 @@ describe('installOpencodePlugin (real-FS)', () => {
   });
 
   it('handles non-object hooks values gracefully (string)', () => {
-    // Belt-and-braces: critic Rev 1 low-sev #3.
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     fs.writeFileSync(opencodeJsonPath, JSON.stringify({ hooks: 'oops, a string' }));
@@ -207,7 +181,6 @@ describe('installOpencodePlugin (real-FS)', () => {
     expect(result.installed).toBe(true);
     expect(result.migratedLegacyHooks).toBe(false);
     expect(result.jsonRepairFailed).toBe(false);
-    // File untouched.
     expect(JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8')).hooks).toBe('oops, a string');
   });
 
@@ -221,9 +194,6 @@ describe('installOpencodePlugin (real-FS)', () => {
   });
 
   it('preserves user-authored hooks in the same inner array as a hippo hook (per-hook surgery)', () => {
-    // Independent-review-critic flagged this as the missed surgical case:
-    // if an entry's inner `hooks` array mixes a hippo command and a user
-    // command, the user command must survive.
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     fs.writeFileSync(
@@ -253,7 +223,6 @@ describe('installOpencodePlugin (real-FS)', () => {
     expect(after.hooks.SessionEnd).toHaveLength(1);
     expect(after.hooks.SessionEnd[0].hooks).toHaveLength(1);
     expect(after.hooks.SessionEnd[0].hooks[0].command).toBe('echo "my custom cleanup"');
-    // timeout preserved on the surviving entry
     expect(after.hooks.SessionEnd[0].hooks[0].timeout).toBe(10);
   });
 
@@ -286,9 +255,6 @@ describe('installOpencodePlugin (real-FS)', () => {
   });
 
   it('does NOT match a third-party `hippo` binary that lacks a canonical hippo verb', () => {
-    // entryIsHippoOwned regex now requires a known hippo verb. A user with a
-    // wrapper script literally named 'hippo' that takes non-hippo args should
-    // not have their entry deleted.
     const opencodeJsonPath = path.join(env.home, '.config', 'opencode', 'opencode.json');
     fs.mkdirSync(path.dirname(opencodeJsonPath), { recursive: true });
     fs.writeFileSync(
@@ -350,9 +316,6 @@ describe('uninstallOpencodePlugin (real-FS)', () => {
         2,
       ),
     );
-    // No plugin installed; uninstall should still clean the legacy block so a
-    // user running `hippo hook uninstall opencode` to remove hippo entirely
-    // leaves opencode launchable.
     expect(uninstallOpencodePlugin()).toBe(true);
     const after = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf8'));
     expect(after.hooks).toBeUndefined();

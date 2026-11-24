@@ -1,4 +1,3 @@
-// A quiet Copilot search or shell failure reads as routine, as the Claude Code tool of the same kind does (critic test 5, unit half).
 import { describe, it, expect } from 'vitest';
 import { lessonFromFailure } from '../../src/surface/capture/failure-reading.js';
 import { normalizeHookPayload } from '../../src/surface/cli/stdin.js';
@@ -6,7 +5,6 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { copilotPayload } from '../_helpers/copilot-hooks.js';
 
 const CWD = '/home/user/proj';
-// The error strings are synthetic: neither harness documents a failed tool's error text.
 const SEARCH_ERROR = 'search failed: IO error reading src/auth';
 const QUIET_EXIT = 'Command failed with exit code 1';
 
@@ -30,7 +28,6 @@ function fixture(
 }
 
 describe('Copilot tool names in the routine-failure rules', () => {
-  // Copilot CLI names: docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference, "Tool availability values".
   it.each(['grep', 'glob', 'rg'])('Copilot CLI search tool %s is routine', (tool) => {
     expect(lessonFromFailure(failure(tool, SEARCH_ERROR))).toMatchObject({
       skip: 'skipped-routine',
@@ -45,7 +42,6 @@ describe('Copilot tool names in the routine-failure rules', () => {
     });
   });
 
-  // VS Code names: microsoft/vscode extensions/copilot/src/extension/tools/common/toolNames.ts, ToolName.Codebase, FindFiles, FindTextInFiles, CoreRunInTerminal.
   it.each(['semantic_search', 'file_search', 'grep_search'])('VS Code search tool %s is routine', (tool) => {
     expect(lessonFromFailure(failure(tool, SEARCH_ERROR))).toMatchObject({
       skip: 'skipped-routine',
@@ -78,7 +74,6 @@ describe('Copilot tool names in the routine-failure rules', () => {
 });
 
 describe('the fixture payloads after stdin.ts maps them', () => {
-  // hook-payloads.json: GH hooks reference camelCase postToolUseFailure, plus a synthetic Claude-style snake_case one, since VS Code's Local agent fires no failure event.
   it('a synthetic Claude-style snake_case run_in_terminal grep exit 1 is a quiet exit', () => {
     expect(lessonFromFailure(fixture('syntheticClaudeStyleTerminalFailure'))).toMatchObject({
       skip: 'skipped-routine',

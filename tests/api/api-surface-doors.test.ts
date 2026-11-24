@@ -1,4 +1,3 @@
-// The api functions the CLI and MCP commands call instead of src/domain: tenant scope and the host-admin gate.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';

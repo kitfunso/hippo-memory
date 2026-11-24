@@ -1,6 +1,3 @@
-// The process facts a composition root keeps for its life, in one object it builds and passes down:
-// project walks and shared-store flags. Nothing here is module state, so two roots in one process
-// never share an answer.
 import * as path from 'node:path';
 import type { ProjectIdentity } from '../base/scope/project-identity.js';
 import { configReader, sharedStoreCheck } from './config-file.js';
@@ -8,16 +5,10 @@ import { walkIdentity, type RemoteRule } from './project-identity.js';
 import { hippoHomeDir } from './agent-homes.js';
 
 export interface Host {
-  /** The project `dir` belongs to; each path is walked once while the global remote rule stays
-   * as it was. */
   readonly projectIdentity: (dir: string) => ProjectIdentity;
-  /** The store's config marks it shared; once true, true for this host, so a broken edit cannot
-   * turn it off. */
   readonly isSharedStore: (hippoRoot: string) => boolean;
 }
 
-// A walk costs milliseconds and a batch write stamps every row, so each path is walked once per
-// host.
 const IDENTITY_CACHE_MAX = 1_000;
 
 /** A root's Host: a CLI command, a server, an MCP host or a store object each build one and drop

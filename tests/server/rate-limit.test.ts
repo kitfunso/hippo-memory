@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRateLimiter } from '../../src/surface/server/rate-limit.js';
 
-// ratePerSec 10, burst 5: a fresh client may spend 5 at once, then 10/sec.
 const OPTS = { ratePerSec: 10, burst: 5, idleEvictMs: 60000, maxKeys: 1000 };
 
 describe('createRateLimiter', () => {
@@ -20,16 +19,14 @@ describe('createRateLimiter', () => {
 
   it('refills at ratePerSec over elapsed time', () => {
     const rl = createRateLimiter(OPTS);
-    for (let i = 0; i < 5; i++) rl.check('a', 1000); // drain the bucket
+    for (let i = 0; i < 5; i++) rl.check('a', 1000);
     expect(rl.check('a', 1000)).toBe(false);
-    // 10 tokens/sec means 500 ms refills 5 tokens.
     expect(rl.check('a', 1500)).toBe(true);
   });
 
   it('caps refill at burst — an idle bucket does not accrue past capacity', () => {
     const rl = createRateLimiter(OPTS);
     rl.check('a', 1000);
-    // A long idle gap would refill far past burst; it must cap at burst (5).
     for (let i = 0; i < 5; i++) {
       expect(rl.check('a', 100000)).toBe(true);
     }
@@ -39,16 +36,14 @@ describe('createRateLimiter', () => {
   it('tracks each key independently', () => {
     const rl = createRateLimiter(OPTS);
     for (let i = 0; i < 5; i++) rl.check('a', 1000);
-    expect(rl.check('a', 1000)).toBe(false); // a is drained
-    expect(rl.check('b', 1000)).toBe(true); // b is untouched
+    expect(rl.check('a', 1000)).toBe(false);
+    expect(rl.check('b', 1000)).toBe(true);
   });
 
   it('evicts a bucket idle longer than idleEvictMs', () => {
     const rl = createRateLimiter({ ...OPTS, idleEvictMs: 1000 });
-    for (let i = 0; i < 5; i++) rl.check('a', 1000); // drain a
+    for (let i = 0; i < 5; i++) rl.check('a', 1000);
     expect(rl.check('a', 1000)).toBe(false);
-    // A check far past idleEvictMs fires the sweep, dropping a's idle bucket;
-    // a's next check then sees a fresh full bucket.
     rl.check('z', 1_000_000);
     expect(rl.check('a', 1_000_000)).toBe(true);
   });
@@ -56,7 +51,6 @@ describe('createRateLimiter', () => {
   it('gives each new key its own bucket when the table is full, so none starves another', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
     for (const k of ['k1', 'k2', 'k3']) for (let i = 0; i < 5; i++) rl.check(k, 1000);
-    // A shared overflow bucket would run dry after five requests across n1 and n2; each key spends a burst of its own.
     const n1 = Array.from({ length: 6 }, () => rl.check('n1', 1000));
     expect(n1).toEqual([true, true, true, true, true, false]);
     expect(rl.check('n2', 1000)).toBe(true);
@@ -64,12 +58,11 @@ describe('createRateLimiter', () => {
 
   it('evicts the least-recently-used key at maxKeys, not the one that was asking', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
-    for (let i = 0; i < 4; i++) rl.check('idle', 1000); // one token left
-    for (let i = 0; i < 5; i++) rl.check('busy', 1000); // drained, and the most recent
+    for (let i = 0; i < 4; i++) rl.check('idle', 1000);
+    for (let i = 0; i < 5; i++) rl.check('busy', 1000);
     rl.check('other', 1000);
-    rl.check('n1', 1000); // the table is full: this evicts idle
+    rl.check('n1', 1000);
     expect(rl.check('busy', 1000)).toBe(false);
-    // idle starts over with a full burst of five; had it been kept, it would be refused on the second request.
     expect(Array.from({ length: 5 }, () => rl.check('idle', 1000))).toEqual([true, true, true, true, true]);
   });
 
@@ -91,10 +84,10 @@ describe('createRateLimiter', () => {
 
   it('drops a refilled bucket before one that can still spend', () => {
     const rl = createRateLimiter({ ...OPTS, maxKeys: 3 });
-    for (let i = 0; i < 4; i++) rl.check('spending', 1000); // one token left
-    rl.check('refilled', 1000); // four tokens at 1000, full again by 1100
+    for (let i = 0; i < 4; i++) rl.check('spending', 1000);
+    rl.check('refilled', 1000);
     rl.check('later', 1000);
-    rl.check('new', 1100); // refilled is full again, so it goes; spending holds two tokens and stays
+    rl.check('new', 1100);
     expect(Array.from({ length: 3 }, () => rl.check('spending', 1100))).toEqual([true, true, false]);
   });
 
@@ -105,12 +98,11 @@ describe('createRateLimiter', () => {
     const mapIterator: Iterator<unknown> = Object.getPrototypeOf(new Map().keys());
     const steps = vi.spyOn(mapIterator, 'next');
     try {
-      expect(rl.check('new', 1000)).toBe(true); // every bucket is throttled, so none ends the walk early
+      expect(rl.check('new', 1000)).toBe(true);
       expect(steps.mock.calls.length).toBeLessThanOrEqual(64);
     } finally {
       steps.mockRestore();
     }
-    // drained-0 went and starts over with a full burst; drained-1 kept its empty bucket.
     expect([rl.check('drained-1', 1000), rl.check('drained-0', 1000)]).toEqual([false, true]);
   });
 

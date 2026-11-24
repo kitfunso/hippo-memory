@@ -1,5 +1,3 @@
-"""mem0/h2h.py --arm hippo-emb (prereg Amendment 6 dated notes 5): the extra arm reads only its own gated retrieval, and
-its score pairs it with each registered arm, re-made from the registered run's own call logs."""
 from __future__ import annotations
 
 import argparse
@@ -58,7 +56,7 @@ def test_the_extra_arm_is_scored_minus_each_registered_arm_from_that_runs_logs(t
     for other, v in theirs.items():
         f1 = next(x for x in lines if x.startswith(f"top 200 {EMB} - {other} (") and x.split(")")[1].split(":")[0].strip() == "F1")
         assert f"({100 * v:.1f} in locomo-h2h)" in f1 and f"{100 * (1.0 - v):+.1f} pp" in f1 and "n=2 over 2 units" in f1
-    assert not any("judge2" in x for x in lines)  # the registered run has no codex log here, so no judge2 pair
+    assert not any("judge2" in x for x in lines)
 
 
 @pytest.mark.parametrize("extra", [["--arm", EMB], ["--pairs-with", "R", "O"], ["--arm", EMB, "--pairs-with", "RUN", "O"]])

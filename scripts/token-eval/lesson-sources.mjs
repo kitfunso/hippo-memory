@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Z0 lesson sources (stage 2 plan D4, prereg 50-52, 64): the one transform from a maintainer's line to a rule, the fixed reasons, the template list.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -15,7 +14,6 @@ export const REASONS = Object.freeze({
   maintainerReversal: "the project's maintainers changed this rule",
 });
 
-// Prereg 52's four examples, each with the reversal a template family uses when no real rule change exists (D4).
 export const TEMPLATES = Object.freeze({
   'test-flag': {
     rule: 'Run the tests with `{command}`, not the bare `{bare}`', reason: 'the bare command leaves out part of the test setup',

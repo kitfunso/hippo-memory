@@ -13,7 +13,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The instance the registry serves, whose outage state lasts the process.
 const llmReranker = getReranker('llm')!;
 
 function asResult(content: string, score: number): SearchResult {
@@ -81,9 +80,6 @@ describe('llmReranker', () => {
   });
 
   it('aborts the fetch and falls back to input ordering on timeout', async () => {
-    // Tiny timeout + a fetch that respects AbortSignal proves the
-    // AbortController is wired through. Falls back to identity ordering,
-    // does NOT throw.
     vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', '5');
     let abortedFromSignal = false;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
@@ -194,14 +190,12 @@ describe('llmReranker against a local endpoint', () => {
     } finally {
       vi.stubEnv('HIPPO_LLM_RERANKER_TIMEOUT_MS', undefined);
     }
-    // The first backoff alone outlasts 100 ms, so a second attempt never reaches the endpoint; a slow runner may not land the first.
     expect(hits).toBeLessThanOrEqual(1);
     expect(lines(stderr).join('')).toContain('no answer within 100 ms');
   });
 
   it('warns again after five minutes of failure, then says once that the endpoint is back', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    // Only the clock is faked: the endpoint and the request timers stay real.
     vi.useFakeTimers({ toFake: ['Date'] });
     const rerank = createLlmReranker(processHttp);
     script = ['refuse'];
@@ -231,7 +225,6 @@ describe('llmReranker against a local endpoint', () => {
     script = ['refuse'];
     hits = 0;
     await rerank('q', inputs());
-    // A new outage is reported at once, not held back by the old one's five minutes.
     expect(lines(stderr).filter((line) => line.includes('llm reranker unavailable'))).toHaveLength(3);
   });
 });
@@ -252,7 +245,6 @@ describe('llmReranker reply size cap', () => {
       res.on('close', () => {
         closedEarly = true;
       });
-      // Streams up to 200 MiB, so a reader with no cap would sit here buffering until the end.
       const pump = (): void => {
         while (sent < 200 * 1024 * 1024 && !closedEarly) {
           sent += chunk.length;

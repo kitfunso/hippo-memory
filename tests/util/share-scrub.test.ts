@@ -1,4 +1,3 @@
-// scrubForSharing: transcript text bound for another machine loses secrets, emails and the user name in home paths.
 import { describe, expect, it } from 'vitest';
 import { maskHomePaths, USER_SEGMENT } from '../../src/base/util/home-path.js';
 import { scrubForSharing } from '../../src/surface/capture/share-scrub.js';
@@ -106,7 +105,6 @@ describe('scrubForSharing', () => {
     expect(scrubForSharing(text)).toBe(text);
   });
 
-  // Built at runtime, so no secret-shaped literal sits in source.
   const PASSWORD = runtimeJoin('Hunter2', 'Hunter2');
   const AWS_SECRET = runtimeJoin('wJalrXUtnFEMI/K7MDENG/', 'bPxRfiCYEXAMPLEKEY');
   it.each([
@@ -149,7 +147,6 @@ describe('scrubForSharing', () => {
     expect(out).toContain('[REDACTED]');
   });
 
-  // Two of these hold a home path, so the home mask is the one change allowed.
   it.each(ORDINARY_CONFIG_LINES)('masks no secret in the ordinary config %s', (text) => {
     expect(scrubForSharing(text)).toBe(maskHomePaths(text));
   });
@@ -159,9 +156,7 @@ describe('scrubForSharing', () => {
   });
 });
 
-// JavaScript counts no regex backtracking steps; rescanning a 1 MiB run from every repeat outlasts the watchdog by hours.
 describe('scrubForSharing on hostile input', () => {
-  // Each run sits on the hot path of at least one pattern, so a super-linear pattern shows here before it reaches the server.
   const UNITS = [
     'a.',
     'a-',

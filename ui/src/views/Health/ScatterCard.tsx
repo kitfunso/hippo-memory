@@ -17,11 +17,8 @@ export interface ScatterCardProps {
   onLayer: (index: number) => void;
   brush: Brush | null;
   brushRev: number;
-  /** A brush drawn on the canvas, or null to clear it. */
   onDragBrush: (brush: Brush | null) => void;
-  /** A brush typed into the number inputs. */
   onFieldBrush: (brush: Brush | null) => void;
-  /** Rows the brush selects. */
   selected: number;
   openId: string | null;
   onOpen: (id: string) => void;

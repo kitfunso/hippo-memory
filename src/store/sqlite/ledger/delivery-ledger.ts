@@ -1,5 +1,3 @@
-// The delivery ledger writer: one event and its candidates per write, then the retention prune.
-
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import type { OnHandle } from '../runtime/open.js';
 import {
@@ -14,23 +12,13 @@ import { cachedStatement } from '../../../db/statement-cache.js';
 import { DAY_MS } from '../../../base/util/time.js';
 import { pruneRecallTraces } from '../recall/recall-trace.js';
 
-// How long the delivery ledger and the recall traces stay.
-
-/** Delivery events, and recall traces with no outcome that are not the store's last recall, are
- * kept this long. */
 const RETENTION_DAYS = 90;
 
-/** The stamp a prune deletes rows before, counted back from the write's `ts` capped at the real
- * clock, so a far-future fake time spares real rows. */
 const deliveryCutoff = (ts: string, nowMs: number): string =>
   new Date(Math.min(Date.parse(ts), nowMs) - RETENTION_DAYS * DAY_MS).toISOString();
 
-/** Lock wait for the ledger's own connection: a busy store drops the row rather than slow the
- * hook. */
 const DELIVERY_LEDGER_WAIT_MS = 50;
 
-/** Two prompt-identical events without a host turn id, or two boundary events of one type, this
- * close are one fire twice. */
 const DELIVERY_DUPLICATE_WINDOW_MS = 2000;
 
 const DELIVERY_EVENT_COLUMNS = [
@@ -89,7 +77,6 @@ function readDuplicateBoundary(db: DatabaseSyncLike, input: DeliveryEventInput):
 }
 
 function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
-  // Without a call id a time window would merge parallel failures, so two such fires stay two rows.
   if (input.toolUseId === undefined || input.toolUseId === null) return null;
   const row = cachedStatement(
     db,
@@ -106,8 +93,6 @@ function readDuplicateToolFailure(db: DatabaseSyncLike, input: DeliveryEventInpu
 
 function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): number | null {
   if (input.eventType === 'tool-failure') return readDuplicateToolFailure(db, input);
-  // A boundary has no prompt, and two compactions of one session never start within the window, so
-  // time alone decides.
   if (isBoundaryEvent(input.eventType)) return readDuplicateBoundary(db, input);
   if (input.hostTurnId !== null) {
     const row = cachedStatement(
@@ -136,7 +121,6 @@ function readDuplicateTurn(db: DatabaseSyncLike, input: DeliveryEventInput): num
     ts: string;
   }>;
   const at = Date.parse(input.ts);
-  // Absolute difference: two hook processes can commit out of ts order.
   return (
     rows.find((r) => Math.abs(Date.parse(r.ts) - at) <= DELIVERY_DUPLICATE_WINDOW_MS)?.id ?? null
   );
@@ -214,8 +198,6 @@ const DELIVERY_CANDIDATE_COLUMNS = [
   'tokens',
 ] as const;
 
-/** VALUES binds rather than one JSON array, since a score is a float that JSON text need not
- * give back bit for bit. */
 function insertDeliveryCandidates(
   db: DatabaseSyncLike,
   eventId: number,
@@ -245,8 +227,6 @@ function insertDeliveryCandidates(
   }
 }
 
-/** How often a store prunes its delivery ledger and old recall traces: each prune walks the
- * expired rows, so a busy server skips most. */
 const DELIVERY_PRUNE_EVERY_MS = 60_000;
 
 /** When a store last pruned its delivery ledger; each store holds its own, so the minute is
@@ -260,7 +240,6 @@ export interface DeliveryPruneSchedule {
 export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   let last = Number.NEGATIVE_INFINITY;
   return {
-    // A clock set back by a minute or more prunes too, rather than waiting out the gap.
     due: (nowMs) => Math.abs(nowMs - last) >= DELIVERY_PRUNE_EVERY_MS,
     pruned: (nowMs) => {
       last = nowMs;
@@ -268,8 +247,6 @@ export function deliveryPruneSchedule(): DeliveryPruneSchedule {
   };
 }
 
-/** Old traces, and old delivery events, one prune deletes at most each, so the first prune after
- * an upgrade holds the hook's write lock briefly; the rest of a backlog goes on the next prunes. */
 const TRACE_PRUNE_BATCH = 1000;
 
 function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): void {
@@ -281,8 +258,6 @@ function pruneExpired(db: DatabaseSyncLike, eventTs: string, nowMs: number): voi
   pruneRecallTraces(db, cutoff, TRACE_PRUNE_BATCH);
 }
 
-/** One event plus its candidates in one write transaction, then a prune when `prune` is due;
- * fail-soft. The caller must not hold a transaction on `db`. */
 function writeDeliveryEvent(
   db: DatabaseSyncLike,
   input: DeliveryEventInput,
@@ -292,8 +267,6 @@ function writeDeliveryEvent(
     const now = Date.now();
     const pruning = prune.due(now);
     const eventId = withWriteScope(db, 'write_delivery_event', () => {
-      // Missing-session and sub-agent events are not turns of a session, so they get no number and
-      // no duplicate check.
       const isTurn =
         input.sessionId !== null &&
         (input.sessionState === 'payload' || input.sessionState === 'env');
@@ -313,7 +286,6 @@ function writeDeliveryEvent(
       if (pruning) pruneExpired(db, input.ts, now);
       return id;
     });
-    // Only after the commit, so a rolled-back prune leaves the next write due.
     if (pruning) prune.pruned(now);
     return eventId;
   } catch (error) {

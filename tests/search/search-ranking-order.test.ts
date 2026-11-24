@@ -1,5 +1,3 @@
-// The order and the boosts of every ranking path in the search modules over one fixed pool. Scores are held to their
-// sign and their order, never to a float, so a change to a weight moves an order before it moves a test.
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -59,7 +57,6 @@ const ENTRIES: MemoryEntry[] = [
   mk('z2', 'ship to production with zero downtime', 6),
 ];
 
-/** Query vector is [1,0,0]: z2 matches it exactly with no shared word, d1 and s1 sit close, noise is orthogonal. */
 const VECTORS = {
   d1: [0.9, 0.1, 0],
   d2: [0.6, 0.8, 0],
@@ -77,7 +74,6 @@ const VECTORS = {
   z2: [1, 0, 0],
 } satisfies Record<string, number[]>;
 
-/** Rows only the vector arm can add: in the store, absent from the caller's pool. */
 const OUTSIDE: MemoryEntry[] = [
   mk('v1', 'release trains leave every tuesday morning', 7),
   mk('v2', 'canary hosts get the build first', 8),
@@ -87,7 +83,6 @@ const OUTSIDE_VECTORS = { v1: [0.99, 0.05, 0], v2: [0.95, 0.2, 0.1] } satisfies 
 const clone = (): MemoryEntry[] => ENTRIES.map((e) => ({ ...e, tags: [...e.tags] }));
 const ids = (results: readonly SearchResult[]): string[] => results.map((r) => r.entry.id);
 
-/** The order, every score above zero, and, unless a re-rank ran after scoring, scores that never rise down the list. */
 function expectRanked(results: readonly SearchResult[], order: readonly string[], sorted = true): void {
   expect(ids(results)).toEqual(order);
   for (const r of results) expect(r.score, r.entry.id).toBeGreaterThan(0);
@@ -247,7 +242,6 @@ function seedStore(): string {
   return root;
 }
 
-/** The blend's order with MMR on: d6, a near copy of d5, sits below d3 although it scores higher. */
 const BLEND = ['x1', 'd1', 's1', 'd5', 'n1', 'd2', 'z2', 'd3', 'd6', 'c1', 'd4'];
 
 describe('hybrid and physics with a store', () => {

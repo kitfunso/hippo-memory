@@ -1,5 +1,3 @@
-// HippoStore's own methods answer: key lookup, recall's candidate
-// search and writes, id and raw reads, continuity, the planning-fallacy read, audit appends, counters and the ledger.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -61,7 +59,6 @@ beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }));
 
 afterEach(() => vi.useRealTimers());
 
-/** Each call one second after the one before. */
 async function conforms(calls: readonly GroupCall<'base', unknown>[]) {
   const timed = calls.map((call, i): GroupCall<'base', unknown> => (store, same) => {
     vi.setSystemTime(START + i * 1000);
@@ -243,7 +240,6 @@ describe('HippoStore base writes', () => {
       value: { classTag: 'deploy-work', tiebreak: false, baserate: { nClosed: 2 } },
     });
     expect(outcomes[7]).toEqual({ value: { classTag: null, tiebreak: false, baserate: null } });
-    // A repeated id moves once, and an id of another tenant than the strengthen names does not move.
     const strengthened = valueAt<[number, number, string][]>(outcomes, 12);
     expect(strengthened.map(([count]) => count)).toEqual([1, 0]);
     expect(strengthened[0]?.[2]).toBe(new Date(START + 11_000).toISOString());

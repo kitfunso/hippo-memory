@@ -66,7 +66,6 @@ describe('backfillChannel', () => {
           next_cursor: null,
         };
       }
-      // Second pass returns the same message — replay must not duplicate.
       return {
         messages: [{ type: 'message', channel: 'C1', user: 'U1', text: 'msg-a', ts: '1.1' }],
         next_cursor: null,

@@ -1,5 +1,3 @@
-// Qwen Code's auto memory: markdown notes under its base folder, or inside the project when it
-// keeps them local.
 import path from 'node:path';
 import { splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, type FolderRules } from './folder-store.js';
@@ -20,8 +18,6 @@ function baseDir(ctx: AdapterContext): string {
   );
 }
 
-/** The nearest folder at or above `start` holding a `.git` entry; a file counts, so a linked
- * worktree keeps its own. */
 function gitRoot(ctx: AdapterContext, start: string): string | null {
   for (let dir = start; ;) {
     if (ctx.files.exists(path.join(dir, '.git'))) return dir;

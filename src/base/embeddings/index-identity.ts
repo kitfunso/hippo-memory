@@ -1,6 +1,3 @@
-// Which model and text format built a vector index, and when a provider change means a rebuild:
-// pure rules that every store and the search side apply alike.
-
 import { findableText } from '../memory/lead-in.js';
 import { DEFAULT_EMBEDDING_MODEL } from './local.js';
 
@@ -10,8 +7,6 @@ export interface EmbeddingIndexState {
   readonly hasVectors: boolean;
 }
 
-/** Bump when `embeddingInputText` changes existing vectors, so the text change reindexes like a
- * model change. */
 const EMBED_TEXT_FORMAT = 2;
 
 /** The stored identity for a provider id; compare and save must both go through it or every call

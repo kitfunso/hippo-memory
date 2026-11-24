@@ -1,4 +1,3 @@
-// One server for the http-objects tests: the request limits are off and every test makes its own rows.
 import { beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';

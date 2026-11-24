@@ -11,7 +11,6 @@ const TEST = "import { seam } from '../src/a.js';\nseam();\n";
 type Run = { args?: string[]; status: number; output: string[] };
 type Row = { name: string; files: Record<string, string>; runs: Run[] };
 
-// A second src user keeps the export check quiet so each row isolates the naming rule.
 function seamRow(name: string, seam: string, status: number, output: string[]): Row {
   return {
     name,

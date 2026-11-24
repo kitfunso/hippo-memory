@@ -1,30 +1,3 @@
-"""Sync httpx client for hippo-memory HTTP API (v0.2.0).
-
-The main public class is :class:`HippoSync`. A line-for-line mirror of
-:class:`hippo_memory.client.Hippo` using ``httpx.Client`` instead of
-``httpx.AsyncClient``. Each method is the sync equivalent; the wire shape,
-return models, and error semantics are identical.
-
-Use when:
-- Your code already runs synchronously (CLI scripts, notebooks).
-- You can't ``await`` cleanly (e.g. inside a ``threading.Thread`` callback).
-- You don't want to manage an event loop.
-
-Example::
-
-    from hippo_memory import HippoSync
-
-    with HippoSync(base_url="http://127.0.0.1:6789") as client:
-        mem = client.remember(content="bug fix lesson")
-        results = client.recall(q="bug fix")
-        ctx = client.get_context(budget=1500)
-        client.outcome(good=True)
-
-The async :class:`Hippo` class remains the recommended default — only
-adopt :class:`HippoSync` when you have a specific reason to avoid
-``asyncio``.
-"""
-
 from __future__ import annotations
 from typing import Any, Literal
 
@@ -113,20 +86,12 @@ class HippoSync:
         self._client.close()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Internal HTTP wrapper. Raises HippoError on non-2xx; returns parsed JSON on success.
-
-        Returns None for 204 / empty-body 200 responses. Callers that expect
-        a payload pass the result straight to ``Model.model_validate`` which
-        will raise on None — no server route currently returns 204, but if
-        one ever does, switch to ``_expect_body`` (v0.3 candidate).
-        """
         response = self._send(method, path, **kwargs)
         if response.status_code == 204 or not response.content:
             return None
         return response.json()
 
     def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Send one request and raise HippoError on non-2xx; callers that read headers use this."""
         response = self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None
@@ -138,18 +103,10 @@ class HippoSync:
             raise HippoError(response.status_code, message or response.text, body)
         return response
 
-    # -------------------------------------------------------------------
-    # Health
-    # -------------------------------------------------------------------
-
     def health(self) -> HealthInfo:
         """GET /health. Returns server version + pid + boot timestamp."""
         data = self._request("GET", "/health")
         return HealthInfo.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Memory CRUD
-    # -------------------------------------------------------------------
 
     def remember(
         self,
@@ -265,10 +222,6 @@ class HippoSync:
         data = self._request("POST", f"/v1/memories/{memory_id}/promote")
         return PromoteResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Outcome (Episode B)
-    # -------------------------------------------------------------------
-
     def outcome(
         self,
         good: bool,
@@ -280,10 +233,6 @@ class HippoSync:
             body["ids"] = ids
         data = self._request("POST", "/v1/outcome", json=body)
         return OutcomeResult.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Context (Episode B)
-    # -------------------------------------------------------------------
 
     def get_context(
         self,
@@ -312,10 +261,6 @@ class HippoSync:
         data = self._request("GET", "/v1/context", params=params)
         return ContextResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Sleep (Episode B) - loopback-only on the server side, admin-gated since v1.12.0
-    # -------------------------------------------------------------------
-
     def sleep(
         self,
         *,
@@ -336,18 +281,10 @@ class HippoSync:
         data = self._request("POST", "/v1/sleep", json=body)
         return SleepResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Assemble (Phase 2 context engine)
-    # -------------------------------------------------------------------
-
     def assemble(self, session_id: str) -> AssembleResult:
         """GET /v1/sessions/:id/assemble. Phase 2 context-engine assembly."""
         data = self._request("GET", f"/v1/sessions/{session_id}/assemble")
         return AssembleResult.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Auth keys
-    # -------------------------------------------------------------------
 
     def auth_create(
         self,
@@ -389,7 +326,6 @@ class HippoSync:
         while True:
             response = self._send("GET", "/v1/auth/keys", params=params)
             data = response.json()
-            # Server returns either a list directly or {keys: [...]}; handle both.
             items.extend(data if isinstance(data, list) else data.get("keys", []))
             cursor = response.headers.get("x-next-cursor")
             if not cursor:
@@ -400,10 +336,6 @@ class HippoSync:
         """DELETE /v1/auth/keys/:keyId. Revoke a key."""
         data = self._request("DELETE", f"/v1/auth/keys/{key_id}")
         return AuthRevoked.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Audit
-    # -------------------------------------------------------------------
 
     def audit(
         self,
@@ -423,11 +355,6 @@ class HippoSync:
         data = self._request("GET", "/v1/audit", params=params)
         items = data if isinstance(data, list) else data.get("events", [])
         return [AuditEvent.model_validate(item) for item in items]
-
-    # -------------------------------------------------------------------
-    # E2 prediction first-class object (v0.31)
-    # docs/plans/2026-05-26-e2-prediction-object.md
-    # -------------------------------------------------------------------
 
     def predict(
         self,
@@ -496,8 +423,6 @@ class HippoSync:
         data = self._request("GET", "/v1/predictions/stats", params=params)
         return PredictionBaserate.model_validate(data["baserate"])
 
-    # ── decisions (E2 first-class object) ──────────────────────────────
-
     def decide(self, text: str, *, context: str | None = None) -> Decision:
         """POST /v1/decisions. Sync mirror of Hippo.decide."""
         body: dict[str, Any] = {"text": text}
@@ -545,8 +470,6 @@ class HippoSync:
         """GET /v1/decisions/:id. Sync mirror of Hippo.get_decision."""
         data = self._request("GET", f"/v1/decisions/{decision_id}")
         return Decision.model_validate(data["decision"])
-
-    # ── incidents (E2 first-class object) ──────────────────────────────
 
     def open_incident(
         self,

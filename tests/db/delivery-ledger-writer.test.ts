@@ -1,4 +1,3 @@
-// The delivery ledger writer (src/store/sqlite/ledger/delivery-ledger.ts) and the recorder's row building, on a real SQLite store.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import {
@@ -25,13 +24,10 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { handlesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-// A prompt hook waits a second for a lock in all; the ledger may spend a fraction of it.
 const MAX_LEDGER_WAIT_MS = 100;
-// The ledger keeps 90 days and lists 16 rejected rows; pinned here so a change to either shows up as a test edit.
 const DELIVERY_LEDGER_RETENTION_DAYS = 90;
 const DELIVERY_REJECTED_ROW_CAP = 16;
 
-/** One write attempt, made under a short lock wait: a bounded delay on any runner, which elapsed time is not. */
 function expectOneShortWait(statements: readonly string[]): void {
   expect(countMatching(statements, /^BEGIN IMMEDIATE$/)).toBe(1);
   const waitsSet = statements
@@ -520,7 +516,6 @@ describe('createDeliveryRecorder row building', () => {
     expect(rejectedRows.slice(0, 10).every((c) => c.stage === 'budget')).toBe(true);
     expect(rejectedRows.slice(10).every((c) => c.stage === 'gate')).toBe(true);
     expect(rejectedRows[0].score).toBeGreaterThan(rejectedRows[1].score ?? 0);
-    // 30 rejected (16 listed) + 8 never decided = 38 rejected, 22 unlisted.
     expect([input.consideredCount, input.selectedCount, input.rejectedCount, input.rejectedUnlisted]).toEqual([
       40, 2, 38, 22,
     ]);

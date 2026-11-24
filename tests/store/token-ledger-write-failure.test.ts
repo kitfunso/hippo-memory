@@ -1,4 +1,3 @@
-// A failed token-ledger write never fails the recall that produced the text, but it is logged instead of swallowed.
 import { afterEach, beforeEach, describe, expect, it, vi, MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -44,7 +43,6 @@ beforeEach(() => {
   const db = openHippoDb(root);
   db.exec('DROP TABLE token_ledger');
   closeHippoDb(db);
-  // No global store, so the hook reads and writes this one alone.
   vi.stubEnv('HIPPO_HOME', path.join(root, 'no-global'));
   stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
@@ -64,7 +62,6 @@ describe('token ledger write failures', () => {
   });
 
   it('an MCP recall still answers and the ledger failure is warned', async () => {
-    // The case above spent the warn; a repeat logs at debug, which this case reads.
     vi.stubEnv('HIPPO_LOG', 'debug');
     writeEntry(root, createMemory('ledger probe note about deploys'));
     const res = await handleMcpRequest(
@@ -94,7 +91,6 @@ describe('token ledger write failures', () => {
     const store = makeRoot('ledger-refused');
     pinNote(store);
     const db = openHippoDb(store);
-    // Reads still work, so only the hook's own insert can fail.
     db.exec(
       "CREATE TRIGGER refuse_ledger BEFORE INSERT ON token_ledger BEGIN SELECT RAISE(ABORT, 'ledger insert refused'); END",
     );
@@ -120,7 +116,6 @@ describe('token ledger write failures', () => {
 
     vi.stubEnv('HIPPO_LOG', 'debug');
     expect((await hook('s-dropped-2')).stdout).toContain('the deploy window opens on Tuesdays');
-    // With no printed hash the hook skips the last-sent read, so its one inject row is the one write that fails.
     const lines = skippedLines();
     expect(lines).toHaveLength(1);
     for (const line of lines) {

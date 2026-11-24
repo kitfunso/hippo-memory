@@ -1,4 +1,3 @@
-// Reads the package's own package.json, found from src/base/config/package-root.ts.
 import * as path from 'node:path';
 import { PACKAGE_ROOT } from '../base/config/package-root.js';
 import { isJsonObject, isJsonString } from '../base/util/json.js';

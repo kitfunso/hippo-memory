@@ -1,4 +1,3 @@
-// A malformed legacy mirror or a non-string package.json script must read as empty, never break the open.
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import * as os from 'node:os';
@@ -19,7 +18,6 @@ afterEach(() => {
 
 describe('legacy index.json and stats.json shapes', () => {
   it.each(['null', '[]', '"text"', '7'])('opens a store whose index.json holds %s, twice', (body) => {
-    // A folder that is not a store yet: the open under test builds it from the legacy files.
     const { root } = makeStore('shapes', { init: false });
     fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(path.join(root, 'index.json'), body, 'utf8');

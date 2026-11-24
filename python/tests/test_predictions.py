@@ -1,14 +1,3 @@
-"""E2 prediction first-class object — Python SDK Pydantic tests.
-
-Docs: docs/plans/2026-05-26-e2-prediction-object.md
-
-Covers:
-1. Prediction model round-trips wire camelCase ↔ Python snake_case
-2. Back-compat: server response missing optional fields parses cleanly
-3. Defaults: closure_state='open', all optional fields default to None
-4. SDK methods exist on Hippo + HippoSync (shape only; no server roundtrip)
-"""
-
 from __future__ import annotations
 
 from hippo_memory import (
@@ -20,7 +9,6 @@ from hippo_memory import (
 
 
 def _roundtrip(model_cls, payload: dict) -> None:
-    """Validate -> dump -> compare. Mirrors test_models.py pattern."""
     instance = model_cls.model_validate(payload)
     dumped = instance.model_dump(by_alias=True, exclude_unset=True)
     for key in payload:
@@ -28,9 +16,6 @@ def _roundtrip(model_cls, payload: dict) -> None:
 
 
 def test_prediction_roundtrip_full_shape():
-    """Server emits camelCase wire keys (classTag etc.); Python sees
-    snake_case attribute names. _Base's alias_generator=to_camel +
-    populate_by_name=True handle both directions."""
     payload = {
         "id": 42,
         "memoryId": "mem_abc123",
@@ -50,8 +35,6 @@ def test_prediction_roundtrip_full_shape():
 
 
 def test_prediction_defaults_to_open_with_nulls():
-    """Hand-construct without optional fields; closure_state defaults to
-    'open' and all nullable fields default to None."""
     pred = Prediction(
         id=1,
         tenant_id="default",
@@ -70,16 +53,12 @@ def test_prediction_defaults_to_open_with_nulls():
 
 
 def test_prediction_back_compat_missing_optional_fields():
-    """Server response from a build that omits the new optional fields
-    (e.g. a categorical prediction with no estimate) still parses."""
     payload = {
         "id": 7,
         "tenantId": "default",
         "classTag": "rollout-risk",
         "claimText": "low risk",
         "createdAt": "2026-05-26T12:00:00Z",
-        # memoryId, estimateValue, estimateUnit, targetDate, actualValue,
-        # closureState, closedAt, closureNote all omitted (categorical / open)
     }
     pred = Prediction.model_validate(payload)
     assert pred.id == 7
@@ -91,8 +70,6 @@ def test_prediction_back_compat_missing_optional_fields():
 
 
 def test_prediction_orphaned_memory_id_parses():
-    """After ON DELETE SET NULL on the server, memory_id wire value is
-    JSON null. Pydantic must parse it as Python None, not reject."""
     payload = {
         "id": 9,
         "memoryId": None,
@@ -107,7 +84,6 @@ def test_prediction_orphaned_memory_id_parses():
 
 
 def test_hippo_async_has_prediction_methods():
-    """Shape-only check: Hippo (async) exposes 4 prediction methods."""
     assert hasattr(Hippo, "predict")
     assert hasattr(Hippo, "predict_close")
     assert hasattr(Hippo, "list_predictions")
@@ -115,21 +91,13 @@ def test_hippo_async_has_prediction_methods():
 
 
 def test_hippo_sync_has_prediction_methods():
-    """Shape-only check: HippoSync exposes the same 4 prediction methods."""
     assert hasattr(HippoSync, "predict")
     assert hasattr(HippoSync, "predict_close")
     assert hasattr(HippoSync, "list_predictions")
     assert hasattr(HippoSync, "get_prediction")
 
 
-# ---------------------------------------------------------------------------
-# v0.31 / J3 — reference-class / planning-fallacy detector
-# ---------------------------------------------------------------------------
-
-
 def test_prediction_baserate_roundtrip_full_shape():
-    """Server emits camelCase wire keys (classTag, nClosed, etc.); Python
-    sees snake_case attribute names via _Base.alias_generator=to_camel."""
     payload = {
         "classTag": "migration-effort",
         "nClosed": 5,
@@ -145,8 +113,6 @@ def test_prediction_baserate_roundtrip_full_shape():
 
 
 def test_prediction_baserate_empty_class_defaults():
-    """When n_closed=0 (no closed predictions yet), numeric fields default
-    to None and summary is empty string."""
     br = PredictionBaserate(class_tag="empty")
     assert br.class_tag == "empty"
     assert br.n_closed == 0
@@ -160,6 +126,5 @@ def test_prediction_baserate_empty_class_defaults():
 
 
 def test_hippo_has_get_prediction_baserate():
-    """Shape-only check: both Hippo + HippoSync expose get_prediction_baserate."""
     assert hasattr(Hippo, "get_prediction_baserate")
     assert hasattr(HippoSync, "get_prediction_baserate")

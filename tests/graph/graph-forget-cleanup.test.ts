@@ -1,4 +1,3 @@
-// Deleting a memory removes the graph rows only it backs, and the cascade takes their edges, on every delete path; rows left all-null before stay hidden from scoped readers.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';

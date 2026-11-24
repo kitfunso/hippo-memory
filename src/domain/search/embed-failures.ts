@@ -1,4 +1,3 @@
-// An embed failure, reported once.
 import { errorCode, log } from '../../base/util/log.js';
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { FailureNotices } from '../../base/util/failure-notices.js';
@@ -14,8 +13,6 @@ function embedFailureKey(source: string, cause: unknown): string {
   return `${source}:${kind}`;
 }
 
-// A loop, not /\.+$/: that regex retries from every dot, so a provider error with a long run of
-// dots costs O(n^2).
 function withoutTrailingDots(text: string): string {
   let end = text.length;
   while (end > 0 && text[end - 1] === '.') end -= 1;
@@ -37,8 +34,6 @@ export function warnEmbedFailureOnce(
     );
     return;
   }
-  // Strict scrub: this line can land in a hook log file, and an API may echo the key back in its
-  // error body.
   const message = withoutTrailingDots(redactSecretsStrict(rawMessage).replace(/\s+/g, ' '));
   log.warn(
     `embedding failed (${source}): ${message}. Memories are stored without embeddings until this is fixed.`,

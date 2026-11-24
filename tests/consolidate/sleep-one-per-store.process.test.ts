@@ -1,5 +1,3 @@
-// Two real `hippo sleep` processes on one store, the model held at its first call: the second one is refused and the sources are
-// extracted once, and a first sleep that dies leaves no claim behind. The held model call is the hold point, not a delay.
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -31,7 +29,6 @@ afterEach(() => {
   for (const child of live.splice(0)) child.kill('SIGKILL');
 });
 
-/** A store whose sources are the episodic rows extraction offers to the model, one call each. */
 function seededStore() {
   const { base, root } = makeStore('one-sleep');
   const now = Date.now();
@@ -91,7 +88,6 @@ function startSleep(base: string, markers: string, extra: readonly string[] = []
 const enteredExtractions = (markers: string): number =>
   readdirSync(markers).filter((name) => name.startsWith('entered-') && name.endsWith('-extract')).length;
 
-/** How many facts each extracted-from source carries. */
 function factsPerSource(root: string): number[] {
   const db = openHippoDb(root);
   try {
@@ -104,7 +100,6 @@ function factsPerSource(root: string): number[] {
   }
 }
 
-/** The first sleep, held inside its first model call. */
 async function startHeldSleep(base: string, markers: string): Promise<Run> {
   holdModel(markers);
   const first = startSleep(base, markers);
@@ -115,7 +110,6 @@ async function startHeldSleep(base: string, markers: string): Promise<Run> {
   return first;
 }
 
-/** The second sleep's outcome, or 'running' when it was still going after the wait. */
 async function refusedOutcome(second: Run): Promise<{ status: number | null; stdout: string } | 'running'> {
   const waited = new Promise<'running'>((resolveWait) => setTimeout(() => resolveWait('running'), 12_000));
   return Promise.race([second.done, waited]);

@@ -1,4 +1,3 @@
-// The globalSetup leak verdict itself, and that workers write to the global store it watches.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -10,7 +9,6 @@ let home: string;
 beforeEach(() => {
   home = realpathSync.native(makeRoot('guard-leak', { init: false }));
   vi.stubEnv('HIPPO_HOME', home);
-  // Blank, so a clean teardown here cannot remove this run's own temp dirs.
   for (const key of ['HIPPO_TEST_TMP_HOME', 'HIPPO_TEST_TMP_USERHOME', 'HIPPO_TEST_TMP_RUN']) vi.stubEnv(key, '');
 });
 

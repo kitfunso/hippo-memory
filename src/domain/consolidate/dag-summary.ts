@@ -1,5 +1,3 @@
-// The one LLM call behind every DAG summary, kept apart from the graph writes so its request bytes
-// are tested on their own.
 import { redactSecretsStrict } from '../../base/util/secret-detect.js';
 import { describeLlmFailure, type Llm, type LlmFailure } from '../../base/ports/llm.js';
 import { certainDefect } from '../../base/memory/memory-quality.js';
@@ -7,8 +5,6 @@ import { certainDefect } from '../../base/memory/memory-quality.js';
 export interface DagSummaryOptions {
   llm: Llm;
   model?: string;
-  /** Called once per failed attempt. `failure` is set if and only if the model call itself failed;
-   * a refused reply carries only the message, and a too short one is not reported. */
   onError?: (msg: string, failure?: LlmFailure) => void;
 }
 
@@ -24,7 +20,6 @@ Facts:
   'This summary will be used to quickly determine if this cluster is relevant to a future query, ' +
   'so include specific names, dates, numbers, and key details. Output ONLY the summary paragraph, no preamble.';
 
-// Output budget for one summary paragraph, and the shortest reply kept as a summary.
 const SUMMARY_MAX_TOKENS = 400;
 const SUMMARY_MIN_CHARS = 20;
 

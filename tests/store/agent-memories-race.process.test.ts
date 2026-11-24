@@ -1,4 +1,3 @@
-// Two first imports at once give one row: 4 child processes x 40 notes, sized as store-stats-concurrency.process.test.ts sizes its race.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
@@ -18,7 +17,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 
 const WORKERS = 4;
 const NOTES = 40;
-// Each worker signals it is loaded, then blocks until all have, so a run that serialised the workers would time out here.
 const WORKER = `
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -83,7 +81,6 @@ function runWorker(args: readonly string[]): Promise<Finished> {
   });
 }
 
-/** Every worker waits at a barrier until all are loaded, then the imports overlap; the timestamps prove it. */
 async function race(roots: readonly string[]): Promise<WorkerOut[]> {
   writeFileSync(join(w.dir, 'worker.mjs'), WORKER, 'utf8');
   const barrier = join(w.dir, 'barrier');

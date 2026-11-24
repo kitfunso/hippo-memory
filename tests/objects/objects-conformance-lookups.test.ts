@@ -1,4 +1,3 @@
-// Policy, skill and brief-receipt lookups answer.
 import { describe, expect, it, vi } from 'vitest';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { objectMirror } from '../../src/domain/objects/lifecycle.js';
@@ -26,11 +25,9 @@ interface PutOptions {
   readonly tenantId?: string;
   readonly supersedesId?: number;
   readonly tags?: readonly string[];
-  /** Set over the mirror core builds, for the reads that turn on a memory's own columns. */
   readonly mirror?: Partial<MemoryEntry>;
 }
 
-/** A save whose fields and mirror the caller picks, for the reads that turn on them. */
 function put<K extends SavableKind>(kind: K, fields: ObjectFields[K], opts: PutOptions = {}) {
   const { at = T1, tenantId = TENANT_A } = opts;
   const mirror: MemoryEntry = {
@@ -73,7 +70,6 @@ describe('Objects, the policies in force at an instant', () => {
       (
         await g.listObjects(more.tenantId ?? TENANT_A, 'policy', { asOf, name: more.name, limit: more.limit ?? 10 })
       ).map((p) => p.id);
-  /** Ids 1 to 7: 1 is replaced by 2 from June, 3 and 6 share a start, 4 is closed, 5 is the other tenant's and 7 starts in May under the name 3 holds. */
   const seed = (): Call[] => [
     policy('retention', '01-01', null),
     policy('retention', '06-01', null, { at: T2, supersedesId: 1 }),
@@ -235,7 +231,6 @@ describe('Objects, the receipts a brief refresh cites', () => {
     (tag: string, limit = 10, tenantId = TENANT_A): Call =>
     (g) =>
       g.briefReceipts(tenantId, tag, limit);
-  /** Newest first, the larger id first on a shared instant. */
   const newestFirst = (mirrors: readonly MemoryEntry[]): BriefReceipt[] =>
     [...mirrors]
       .sort(
@@ -313,7 +308,6 @@ describe('Objects, the receipts a brief refresh cites', () => {
       { value: [receiptOf(percent.mirror)] },
       { value: [receiptOf(accent.mirror)] },
       { value: [receiptOf(upperAccent.mirror)] },
-      // A backslash is written doubled in the stored tag list, so the tag as given never finds it.
       { value: [] },
       { value: [] },
     ]);

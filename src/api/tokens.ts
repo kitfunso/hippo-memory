@@ -1,5 +1,3 @@
-// Token-use and failure reports.
-
 import { rethrowIfStoreBlocked } from '../base/util/store-blocked.js';
 import type { TokenSummary, TokenSurface } from '../base/ports/store/ledger.js';
 import type { FailureSummary } from '../base/ports/store/rejections.js';

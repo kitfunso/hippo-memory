@@ -1,8 +1,3 @@
-/**
- * Graph observability and visualization, READ-ONLY over the entity/relation graph (no writes, so
- * `scripts/checks/check-graph-writes.mjs` stays green). Shared by `hippo graph show|view` and the HTTP
- * `GET /v1/graph` route, which all build the same `GraphModel`. */
-
 import type { StoreActor } from '../../base/scope/recall-scope.js';
 import type { GraphReads, GraphRows } from '../../base/ports/store.js';
 import type { EntityType, RelationType } from '../../base/ports/store/graph.js';
@@ -22,8 +17,6 @@ export interface GraphEdge {
 export interface GraphModel {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  /** Conservative "maybe incomplete" flag: true when a loader returned exactly its limit (the graph MAY be truncated).
-   *  Can over-report, never under-report. */
   truncated: boolean;
 }
 
@@ -49,8 +42,6 @@ export async function buildGraphModel(
   );
 }
 
-/** The reply model of the rows a store read: an edge with an endpoint outside the node set is
- * dropped. */
 function graphModelOf({ entities, relations, truncated }: GraphRows): GraphModel {
   const nodeIds = new Set(entities.map((e) => e.id));
   const nodes: GraphNode[] = entities.map((e) => ({
@@ -73,15 +64,10 @@ export const LAYOUT_H = 700;
 
 type Point = { x: number; y: number };
 
-/** Share of the shorter viewport side that the seed circle fills. */
 const SEED_RADIUS_FRACTION = 0.4;
-/** Stand-in for a zero length, so coincident points divide by it rather than by zero. */
 const MIN_DISTANCE = 0.01;
-/** Keeps nodes this many pixels off the viewport edge. */
 const EDGE_MARGIN_PX = 20;
 
-/** Distance from pj to pi and the unit vector between them, with a zero length floored at
- * MIN_DISTANCE. */
 function separation(pi: Point, pj: Point) {
   const dx = pi.x - pj.x;
   const dy = pi.y - pj.y;
@@ -103,12 +89,9 @@ function seedCircle(nodes: GraphNode[], width: number, height: number): Map<numb
   return pos;
 }
 
-/** Repulsion reaches this many ideal edge lengths; past it a pair pushes under k/2, so the grid
- * leaves it out. */
 const REPULSION_REACH_K = 2;
 const CELL_KEY_STRIDE = 1 << 20;
 
-/** Node indexes by grid cell of side `reach`, each cell's list in index order. */
 function gridOf(pts: readonly Point[], reach: number): Map<number, number[]> {
   const cells = new Map<number, number[]>();
   pts.forEach((p, i) => {
@@ -128,8 +111,6 @@ interface AddRepulsionOptions {
   readonly visits: { pairs: number };
 }
 
-/** Adds every pair's repulsion within the reach, reading only the 3 by 3 cells around each node;
- * `visits` counts the pairs looked at. */
 function addRepulsion({ nodes, pos, disp, k, visits }: AddRepulsionOptions): void {
   const reach = REPULSION_REACH_K * k;
   const pts = nodes.map((node) => pos.get(node.id)!);
@@ -150,7 +131,6 @@ function addRepulsion({ nodes, pos, disp, k, visits }: AddRepulsionOptions): voi
   }
 }
 
-/** Two points and the displacements their repulsion adds to. */
 interface RepelOptions {
   readonly pi: Point;
   readonly pj: Point;
@@ -240,7 +220,7 @@ export function layoutGraph(
 
   const pos = seedCircle(nodes, width, height);
   const idIndex = new Map<number, number>(nodes.map((node, i) => [node.id, i]));
-  const k = Math.sqrt((width * height) / n); // ideal edge length
+  const k = Math.sqrt((width * height) / n);
   const visits = opts.visits ?? { pairs: 0 };
 
   for (let iter = 0; iter < iterations; iter++) {

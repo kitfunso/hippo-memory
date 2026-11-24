@@ -1,5 +1,3 @@
-// The memory list's native filters keep exactly the rows the JavaScript rules keep: the text test is hippo_holds_text's
-// and the age brush is daysBetween's, on content, tags and created values built to sit on each edge of the SQL forms.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { daysBetween } from '../../src/base/memory/memory-facts.js';
 import { closeHippoDb, openHippoDb, type SqlValue } from '../../src/db/index.js';
@@ -13,8 +11,6 @@ import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
 const ROWS = 320;
-// Pieces that sit on an edge: the two letters JavaScript lower-cases into ASCII, case past ASCII, JSON's escapes and
-// String()'s ways with numbers, objects and nested lists.
 const PIECES = ['ka', 'KA', 'k', '\u212a', 'i', 'I', '\u0130', '\u0307', 'é', 'É', 'Σ', 'σ', '日', ' ', '"', '\\'];
 const MORE = ['\n', '\u0000', '1', '0', '.', '{', '[', ']', ',', 'a', 'b', 'object', '1e2', '100'];
 const ALL_PIECES = [...PIECES, ...MORE];
@@ -81,7 +77,6 @@ const pick = <T>(rand: () => number, list: readonly T[]): T => list[Math.floor(r
 const textOf = (rand: () => number, most: number): string =>
   Array.from({ length: Math.floor(rand() * most) }, () => pick(rand, ALL_PIECES)).join('');
 
-// A tag list as another writer may have left it: escaped, holding numbers or lists, not a list, or not JSON.
 function tagsJsonOf(rand: () => number, i: number): string {
   const tags = [textOf(rand, 4), textOf(rand, 4)];
   const escaped = (s: string): string =>
@@ -99,7 +94,6 @@ function tagsJsonOf(rand: () => number, i: number): string {
   return forms[i % forms.length];
 }
 
-// Plain instants on and off whole days, and created text toISOString never writes.
 function createdOf(rand: () => number, i: number): string {
   const odd = ['2026-02-30T00:00:00.000Z', '2026-09-30T24:00:00.000Z', '2026-09-01T00:00:00Z', '2026-09-01 10:00:00'];
   const more = ['not a date', '', '+012026-01-01T00:00:00.000Z', '2026-09-24T12:00:00.000+00:00'];
@@ -145,7 +139,6 @@ describe('dashboard list filters', () => {
     const db = openHippoDb(store.hippoRoot);
     try {
       useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
-      // Each letter becomes a memory row inside a transaction rolled back after, so the trigram index holds it too.
       db.exec('BEGIN');
       // SAFETY: pragma_table_info answers one TEXT `name` per column.
       const rest = (db.prepare(`SELECT name FROM pragma_table_info('memories')`).all() as Array<{ name: string }>)
@@ -171,7 +164,6 @@ describe('dashboard list filters', () => {
             .get({ tenant: template.tenant_id, ...binds }) as { n: number }
         ).n;
       for (const letter of letters) {
-        // The ASCII run JavaScript's lower-casing leads with, such as xi from the dotted capital I.
         const needle = `x${letter}y`.toLowerCase().split(/[^\x20-\x7e]/)[0];
         const want = count('hippo_holds_text(id, content, tags_json, :text)', { text: needle });
         expect(want).toBeGreaterThan(0);
@@ -227,7 +219,6 @@ describe('dashboard list filters', () => {
       try {
         useDashboardFunctions(db, { strength: PRODUCTION_STRENGTH, clock: evalNow });
         let calls = 0;
-        // Four parameters, so it takes the place of the four-argument function the store registered.
         db.function('hippo_holds_text', { deterministic: true }, (_id, _content, _tags, _text) => {
           calls += 1;
           return 1;

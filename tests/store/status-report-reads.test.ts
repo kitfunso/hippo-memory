@@ -1,4 +1,3 @@
-// The status verbs read only the rows their report needs, and the report is the one the whole-store read gave.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { indexStep } from '../../src/domain/search/embed-index-target.js';

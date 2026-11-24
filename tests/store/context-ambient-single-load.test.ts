@@ -1,5 +1,3 @@
-// `hippo context` renders the ambient state contextGet returns, so the printed summary counts the rows the context admitted.
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -37,7 +35,6 @@ describe('`hippo context` prints the ambient summary contextGet computed', () =>
     try {
       expect((await hippo('init', '--no-hooks', '--no-schedule', '--no-learn')).status).toBe(0);
       expect((await hippo('remember', 'ambient single-load pin row')).status).toBe(0);
-      // A row the context leaves out: a summary re-derived from every row would count two.
       writeEntry(
         path.join(dir, '.hippo'),
         createMemory('PRIVATE-SCOPE-ROW lives behind a private channel scope', {
@@ -119,8 +116,6 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     fs.mkdirSync(projA, { recursive: true });
     initTestStore(projA);
 
-    // Half-life 7 days, aged ~8 months before the call below: pre-retrieval
-    // strength decays to near zero.
     const aged = {
       ...createMemory('AGED-ROW decayed far past its half-life', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
       originProject: 'proj-a',
@@ -128,7 +123,6 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     writeEntry(projA, aged);
 
     vi.stubEnv('HIPPO_FAKE_NOW', FAKE_NOW);
-    // A root reads the fake clock as it opens the store, so the context comes after the stub.
     const ctx: FullContext = apiCtx(projA, 'default', { subject: 'cli', role: 'admin' });
 
     const result = await contextGet(ctx, { currentProject: 'proj-a', budget: 5000 });
@@ -136,10 +130,7 @@ describe('ambient summary: avgStrength reflects post-retrieval strength, not the
     expect(result.entries.length).toBe(1);
     expect(result.ambientState?.totalMemories).toBe(1);
 
-    // What the pre-fix code computed: the admitted entry BEFORE markRetrieved ran.
     const preRetrievalState = computeAmbientState([aged], new Date(FAKE_NOW), PRODUCTION_STRENGTH);
-    // What the post-fix code should compute: overlaid with the returned,
-    // now-strengthened entry.
     const postRetrievalState = computeAmbientState(
       result.entries.map((e) => e.entry),
       evalNow(),

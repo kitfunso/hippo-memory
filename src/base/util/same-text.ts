@@ -1,6 +1,3 @@
-// One meaning of "the same text" for every path that skips, dedups or hides a memory: equal apart
-// from spacing. A digit, sign or word that differs is a different value, so nothing looser may
-// count as a copy.
 import type { MemoryEntry } from '../memory/entry.js';
 
 type Text = Pick<MemoryEntry, 'content' | 'leadIn'> & { source?: string; pinned?: boolean };
@@ -81,7 +78,7 @@ export function dropHeldCopies<T>(rows: readonly T[], textOf: (row: T) => Text):
   return rows.filter((r) => {
     const keys = heldTextKeys(textOf(r));
     const hidden = seen.has(keys[0]) || (keys.length === 1 && held.has(keys[0]));
-    if (hidden && !textOf(r).pinned) return false; // rows merged by older releases can hold a pin's text
+    if (hidden && !textOf(r).pinned) return false;
     seen.add(keys[0]);
     return true;
   });

@@ -1,5 +1,3 @@
-// Follow-up rules: a model picks which sentences of the person's later turns state a lasting rule,
-// by number only, so capture stores the person's own words.
 import {
   describeLlmFailure,
   llmFailureFields,
@@ -22,14 +20,11 @@ import { detectInstruction } from '../../domain/trust/instruction-detect.js';
 
 const FOLLOW_UP_TURNS = 20;
 const TURN_CHARS = 1000;
-// The prompt was measured on this model; the adapter's default picked task orders as rules (gate 2).
 const MODEL = 'claude-sonnet-5-5';
 // Adaptive thinking spends from the same cap as the reply.
 const MAX_TOKENS = 4096;
-// One attempt: the session-end cursor moves only when capture returns, so a hung call must not hold it.
 const CALL_MS = 20_000;
 
-// The prompt the held-out study measured, word for word.
 const FROZEN_PROMPT = [
   'Each message below was typed by a person to a coding agent, after the first message of a session.',
   'Mark a message lasting if any part of it states something the agent must still follow in a LATER session:',
@@ -47,8 +42,6 @@ const FROZEN_PROMPT = [
 const LOG_LEAD =
   /^(?:\d{4}-\d\d-\d\d|\[\d|at [\w$.<>]+ ?\(|(?:[A-Za-z]:)?[^\s:]*[/\\.][^\s:]*:\d+|\$ |> )/;
 
-/** A line of program output, not prose: the lead of a log, trace or prompt line, or few letters
- * unless the sentence above is still open, as before a numeric condition. */
 function isLogLine(line: string, sentenceOpen: boolean): boolean {
   if (LOG_LEAD.test(line.trimStart())) return true;
   const marks = line.replace(/\s/g, '');
@@ -56,13 +49,10 @@ function isLogLine(line: string, sentenceOpen: boolean): boolean {
   return !sentenceOpen && letters < 0.4 * marks.length;
 }
 
-/** One turn's numbered sentences, as a pattern reads them, scrubbed for sharing. */
 function sentencesOf(turn: string): string[] {
-  // Scrubbed again after: removing bold can rebuild an address or key the first pass could not see.
   const sentences = statedSentences(scrubForSharing(turn), isLogLine)
     .map(scrubForSharing)
     .filter((piece) => piece.length >= 3);
-  // Whole sentences only: a sentence the limit cuts could lose its condition and still read as a rule.
   const whole: string[] = [];
   let used = 0;
   for (const sentence of sentences) {
@@ -72,7 +62,6 @@ function sentencesOf(turn: string): string[] {
   }
   const last = whole.at(-1);
   const cut = sentences[whole.length];
-  // A sentence with no stop may read on in the one the limit cut, so it could lose a condition too.
   if (last !== undefined && cut !== undefined && leftOpen(last, cut)) whole.pop();
   return whole;
 }
@@ -104,7 +93,6 @@ function isPick(value: JsonValue): value is { i: number; s: number[] } {
   );
 }
 
-/** The reply's picks, or why it holds none that can be read. */
 function readPicks(text: string): { picks: readonly Pick[] } | { problem: string } {
   const start = text.indexOf('[');
   const end = text.lastIndexOf(']');
@@ -117,7 +105,6 @@ function readPicks(text: string): { picks: readonly Pick[] } | { problem: string
   return { picks: parsed };
 }
 
-/** One rule per turn with picks: its picked sentences in turn order; an id out of range is dropped. */
 function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]): FollowUpRule[] {
   const chosen = new Map<number, Set<number>>();
   for (const { i, s } of picks) {
@@ -133,7 +120,6 @@ function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]):
       const ids = [...(chosen.get(i) ?? [])].sort((a, b) => a - b);
       const sentences = ids.map((j) => turns[i][j]);
       const content = pickedText(sentences);
-      // It prints as the person's order, so text shaped like an injected instruction never becomes one.
       if (content === null || detectInstruction(content).flagged) return [];
       return [{ content, category: 'rule', tags: ['follow-up'], fromUser: true, sentences }];
     });
@@ -150,7 +136,6 @@ async function ask(llm: Llm, prompt: string, log: LineLog): Promise<Asked> {
   try {
     reply = await llm.send({ model: MODEL, maxTokens: MAX_TOKENS, prompt, signal });
   } catch (err) {
-    // The port never throws, but capture must outlive an adapter that does.
     log(`follow-up rules skipped: the model call threw: ${errorMessage(err)}`, {
       fields: errorFields(err),
     });
@@ -166,7 +151,6 @@ async function ask(llm: Llm, prompt: string, log: LineLog): Promise<Asked> {
 
 export interface FollowUpRules {
   readonly rules: FollowUpRule[];
-  /** What the model call was billed; undefined when no call ran or the reply named none. */
   readonly usage: LlmUsage | undefined;
 }
 

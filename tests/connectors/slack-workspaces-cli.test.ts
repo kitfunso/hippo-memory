@@ -1,17 +1,10 @@
-/**
- * CLI integration tests for `hippo slack workspaces <add|list|remove>` (T2B 2026-05-24).
- *
- * Mirror of tests/connectors/slack-cli.test.ts pattern: runs each verb in process, asserts
- * stdout/stderr.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { join } from 'node:path';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { makeStore } from '../_helpers/make-root.js';
 
 interface RunOptions {
-  ok?: boolean; // when false, expect non-zero exit and return captured stderr
+  ok?: boolean;
 }
 
 interface CliRunResult {

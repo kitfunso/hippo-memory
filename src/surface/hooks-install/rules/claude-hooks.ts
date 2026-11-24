@@ -1,5 +1,3 @@
-// Claude Code's hooks: install, migrate older forms, and remove hippo's handlers.
-
 import {
   HIPPO_SLEEP_MARKER,
   HIPPO_LAST_SLEEP_MARKER,
@@ -84,8 +82,6 @@ interface LegacyHookMigration {
 function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
   const migratedFromStop = stripHandlers(hooks, 'Stop', runsHippo(HIPPO_SLEEP_MARKER));
 
-  // The legacy SessionEnd forms in the file header collapse into `hippo session-end`, but only
-  // while that entry is absent.
   let migratedLegacySessionEnd = false;
   let migratedSplitSessionEnd = false;
   if (
@@ -97,8 +93,6 @@ function migrateLegacyClaudeHooks(hooks: ClaudeHooks): LegacyHookMigration {
       runsHippo(HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER),
     );
     if (kept !== null) {
-      // Whatever form was removed reports as the split migration; the legacy flag also marks a
-      // SessionEnd that held several groups.
       migratedSplitSessionEnd = true;
       migratedLegacySessionEnd = hooks.SessionEnd.length > 1;
       if (kept.length === 0) delete hooks.SessionEnd;
@@ -113,8 +107,6 @@ function claudeCommandGroup(command: string, timeout: number, matcher?: string):
   return matcher === undefined ? { hooks } : { matcher, hooks };
 }
 
-/** Every command hippo has written to Claude Code's settings per event, the legacy forms
- * included; uninstall removes only handlers that run one. */
 const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['SessionEnd', [HIPPO_SESSION_END_MARKER, HIPPO_SLEEP_MARKER, HIPPO_CAPTURE_MARKER]],
   [
@@ -129,8 +121,6 @@ const CLAUDE_HOOK_MARKERS: ReadonlyArray<readonly [string, readonly string[]]> =
   ['Stop', [HIPPO_SLEEP_MARKER]],
 ];
 
-// Stop is only ever migrated away, so install never appends to it and a Stop that is not a list
-// does not block the install.
 const CLAUDE_APPENDED_EVENTS = CLAUDE_HOOK_MARKERS.map(([event]) => event).filter(
   (event) => event !== 'Stop',
 );
@@ -154,9 +144,6 @@ function appendSessionHooks(hooks: ClaudeHooks, append: AppendHook, logFile: str
     claudeCommandGroup(HIPPO_SESSION_RULES_COMMAND, HOOK_SHORT_TIMEOUT_SECONDS),
   );
 
-  // Mid-session pinned-rule re-injection: UserPromptSubmit runs every turn, so pinned memories stay
-  // in context; the fresh write tail makes lessons saved earlier in the session visible on the next
-  // prompt even before they are pinned.
   const migratedPinnedInjectRecent = migratePinnedInjectRecentCommands(hooks.UserPromptSubmit);
   const installedUserPromptSubmit = append(
     'UserPromptSubmit',
@@ -205,7 +192,6 @@ function appendCompactionHooks(append: AppendHook, compactLog: string) {
   return { installedPreCompact, installedCompactResume, installedPostCompact };
 }
 
-/** Where Claude Code's settings live and where its session, compaction and note hooks log. */
 interface ClaudeHookPaths {
   readonly settingsPath: string;
   readonly logFile: string;
@@ -270,9 +256,6 @@ function invalidClaudeSettings(settingsPath: string): HookInstallPlan {
 }
 
 function appendCaptureErrorHook(append: AppendHook): boolean {
-  // PostToolUseFailure: a failed tool call becomes an error memory, after `hippo capture-error`
-  // drops routine failures (interrupts, declined permissions, empty searches) and repeats. Same
-  // hook the plugin ships.
   return append(
     'PostToolUseFailure',
     HIPPO_CAPTURE_ERROR_MARKER,

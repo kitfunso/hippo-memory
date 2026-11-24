@@ -1,4 +1,3 @@
-// The OpenAI-compatible Llm over a real local server: request bytes, reply mapping, and no reply text or key in any failure.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -80,7 +79,6 @@ function chainText(err: Error): string {
   return [err.name, err.message, err.stack ?? '', err.cause instanceof Error ? chainText(err.cause) : ''].join('\n');
 }
 
-/** Every character of a failure, its cause chain included. */
 function failureText(failure: LlmFailure): string {
   const cause = 'cause' in failure && failure.cause instanceof Error ? chainText(failure.cause) : '';
   return `${JSON.stringify(failure)}\n${cause}`;

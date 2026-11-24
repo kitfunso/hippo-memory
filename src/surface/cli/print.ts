@@ -1,5 +1,3 @@
-// Text printers for recall results, agent imports, task snapshots, session trails and handoffs.
-
 import { confidenceLabel } from '../../base/memory/strength.js';
 import { shownText } from '../../base/memory/lead-in.js';
 import type { TaskSnapshot, SessionEvent } from '../../base/ports/store/sessions.js';
@@ -30,7 +28,6 @@ export interface RecallEntryTextOptions {
   readonly now: Date;
 }
 
-// What `hippo recall` prints for one result; the budget prices this same text.
 export function recallEntryText({
   r,
   query,
@@ -51,16 +48,12 @@ export function recallEntryText({
       `${e.retrievalCount}x`,
   ];
   if (showWhy) {
-    // The row --json prints carries the same reason and envelope, so the two outputs never explain
-    // a match apart.
     const { reason, envelope: env } = recallJsonRow({ r, query, showWhy: true, isGlobal, now });
     lines.push(
       `    source:${isGlobal ? ' [global]' : ' [local]'} | layer: [${e.layer}] | confidence: [${label.text}]`,
       `    reason: ${reason}`,
     );
     if (env) lines.push(...envelopeLines(env));
-    // The recall trace, e.g. "ranking: base 0.420 -> interference x0.30 -> 0.126 -> goal-boost
-    // x1.50 -> 0.189".
     if (r.rerankTrace && r.rerankTrace.length > 0) lines.push(rankingLine(r.rerankTrace));
   }
   lines.push('', shownText(e), '');

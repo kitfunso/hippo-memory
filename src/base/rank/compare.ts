@@ -52,7 +52,6 @@ function compareTags(a: readonly string[] | undefined, b: readonly string[] | un
   const ua = [...new Set(a ?? [])].sort();
   const ub = [...new Set(b ?? [])].sort();
   if (ua.length !== ub.length) return ub.length - ua.length;
-  // element-wise, not a joined string: a separator inside a tag would collide
   for (let i = 0; i < ua.length; i++) {
     const c = compareStrings(ua[i], ub[i]);
     if (c !== 0) return c;
@@ -102,8 +101,6 @@ export function comparePhysicsResultsBy<T extends { memoryId: string }>(
     const bi = tieKeyOf ? tieKeyOf(b) : b.memoryId;
     if (ai < bi) return -1;
     if (ai > bi) return 1;
-    // Tie-key collision (e.g. duplicate content): fall through to memoryId so the comparator still
-    // yields a total order within one store.
     return a.memoryId < b.memoryId ? -1 : a.memoryId > b.memoryId ? 1 : 0;
   };
 }

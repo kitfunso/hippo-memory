@@ -7,7 +7,6 @@ export const RN_ARMS = ['A0', 'A1', 'A2', 'A4', 'A5'];
 export const X_ARMS = ['X1', 'X2', 'X3', 'X4'];
 export const ALL_ARMS = [...RN_ARMS, ...X_ARMS];
 export const TWO_SEED_ARMS = new Set(['A0', 'A4', 'X4']);
-// Amendment 2 item 5: only the arms the seed rule sizes may run a seed above 3, up to SEED_CAP.
 export const SEED_CAP = 9;
 export const RULE_ARMS = new Set(['A1', 'A2', 'A5', 'X2', 'X3']);
 
@@ -73,7 +72,6 @@ function checkLessons(r, crashed) {
   }
 }
 
-/** Set, arm, seed, kind and family rules, shared by records and plan cells. */
 function checkSlot(x) {
   check(SETS.has(x.set), 'set must be R, N or X');
   check(Number.isInteger(x.seed) && x.seed >= 1 && x.seed <= SEED_CAP, `seed must be an integer from 1 to ${SEED_CAP}`);
@@ -122,12 +120,10 @@ function checkOutcome(r, crashed) {
   check(nullable('acceptancePassed') || isBool(r.acceptancePassed), 'acceptancePassed must be boolean');
   check(isBool(r.timedOut) && isBool(r.leak), 'timedOut and leak must be boolean');
   check(isBool(r.resolved), 'resolved must be boolean');
-  // E1 still runs the hidden tests after a crash, so acceptancePassed can be true on a record that never resolves.
   if (crashed) check(r.resolved === false, 'resolved must be false on an invalid record');
   else check(r.resolved === resolvedOf(r), 'resolved must equal acceptancePassed with every final check pass and no timeout (reading 7)');
   check(r.invalid === null || isName(r.invalid), 'invalid must be null or a reason');
   check(r.void === null || isName(r.void), 'void must be null or a reason');
-  // A setup failure ran no session, so E1 writes no retry or carry counts for it.
   for (const f of ['limitRetries', 'carryUnionMerges']) check(nullable(f) || isCount(r[f]), `${f} must be a non-negative integer`);
   check(r.surfaceRestored === undefined || isBool(r.surfaceRestored), 'surfaceRestored must be boolean when present');
   if (r.chain === undefined) return;
@@ -216,8 +212,6 @@ function checkApply(a, teach) {
   for (const l of a.lessons) check(taught.has(l.lessonId), `${where}: lesson ${l.lessonId} is in no teach record of family ${a.familyId}`);
 }
 
-/** Per apply record, over its arm's planned teach cells of its family before it: valid records, all valid (`complete`), latest
- * valid (`taught`). An invalid teach counts as missing, since the runner writes no verdicts for it (orchestrator, 2026-10-03). */
 function teachIndex(records, planCells) {
   const planned = new Map();
   for (const c of planCells) {
@@ -240,7 +234,6 @@ export function untaughtApplies(records, planCells) {
   return records.filter((a) => a.kind === 'apply' && !teachOf(a).taught);
 }
 
-/** Each sequence names one repo, each familyId one repo, and every arm runs the same task at a position (prereg 117). */
 function checkIdentities(records, planned) {
   const repoOf = new Map();
   const familyRepo = new Map();

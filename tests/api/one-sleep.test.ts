@@ -1,5 +1,3 @@
-// sleepWholeStore under the store's sleep claim: a sleep refused by a holder runs nothing and writes nothing, a dry run
-// is never refused, and a sleep that fails gives the claim back.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { remember, sleepWholeStore } from '../../src/api/index.js';
@@ -19,10 +17,8 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A store with one row, and a sleep claim held by a connection of its own, as another process would hold it. */
 async function heldStore(): Promise<{ home: string; ctx: FullContext }> {
   const home = makeRoot('one-sleep');
-  // Auto-share writes to the global store, which HIPPO_HOME names.
   vi.stubEnv('HIPPO_HOME', home);
   const ctx = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
   await remember(ctx, { content: 'a row for the sleep to look at', kind: 'distilled' });

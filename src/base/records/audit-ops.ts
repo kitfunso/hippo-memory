@@ -1,5 +1,3 @@
-// The one list of audit ops: the AuditOp type, `hippo audit list --op` and GET /v1/audit?op= all
-// read it.
 export const AUDIT_OPS = [
   'remember',
   'recall',
@@ -23,13 +21,9 @@ export const AUDIT_OPS = [
   'recall_autodebias_hint_no_class_match', // telemetry: forward-claim detected, no class scored
   'recall_autodebias_hint_tiebreak', // telemetry: forward-claim detected, two or more classes tied
   'recall_anchor_detected_query_repeat', // emitted by the anchoring detector when the same query returns the same top-1
-  // emitted by the anchoring detector when one memory wins top-1 across distinct queries
   'recall_anchor_detected_memory_dominance',
   'recall_anchor_skipped_no_session', // telemetry: no sessionId, so ring tracking was skipped
   'recall_availability_detected', // emitted when the availability/recency-bias hint fires
-  // The typed-object ops: the objects store group writes each one with its row, from saveObject (a
-  // create, or a supersede when the save replaces an active row), closeObject, openIncident and
-  // resolveOpenIncident.
   'decision_create',
   'decision_supersede',
   'decision_close',
@@ -69,7 +63,6 @@ export const AUDIT_OPS = [
   'project_merge', // emitted by `hippo projects merge --apply` with every id it touched
   'project_repair', // emitted by `hippo projects repair --apply` with every id it touched
   'quality_repair', // emitted by `hippo audit repair --apply` for each memory it moved to dormant storage
-  // Written by a SCIM add-on for each committed user write; core writes none.
   'scim_user_create',
   'scim_user_replace',
   'scim_user_patch',

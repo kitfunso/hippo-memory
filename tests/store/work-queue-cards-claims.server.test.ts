@@ -1,4 +1,3 @@
-// W2a work-queue cards: concurrent claim, completion, handoffs and the run each transition closes (tests 6-9).
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { Worker } from 'node:worker_threads';
@@ -17,7 +16,6 @@ import { root, useCardsRoot } from '../_helpers/work-queue-cards.js';
 
 useCardsRoot();
 
-// Runs a real second thread (its own node:sqlite connection) so the lock is genuinely
 // held while this process's claimCard blocks under PRAGMA busy_timeout, not simulated in-process.
 function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
   const workerCode = `
@@ -35,7 +33,6 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
       parentPort.postMessage('released');
     }, workerData.holdMs));
   `;
-  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, cardId, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
@@ -51,7 +48,6 @@ function holdLockThenRelease(dbPath: string, cardId: string, holdMs: number) {
       }
     });
   });
-  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
   return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
@@ -68,7 +64,6 @@ describe('concurrent claim', () => {
     const endedByReturn = holdHadEnded();
 
     expect(result).toBeNull();
-    // A claim that did not wait returns while the lock is still held, before the hold ends.
     expect(endedByReturn).toBe(true);
     await released;
   });
@@ -93,7 +88,7 @@ describe('completeCard promotes only children whose parents are all done', () =>
 
     await claimCard(root, 'default', a.id, 'codex');
     await reviewCard(root, 'default', a.id);
-    await claimCard(root, 'default', d.id, 'codex'); // D stays running, never completes.
+    await claimCard(root, 'default', d.id, 'codex');
 
     const result = await completeCard(root, 'default', a.id, 'success');
     expect(result).not.toBeNull();
@@ -132,8 +127,6 @@ describe('claim -> block -> reclaim -> review -> complete closes exactly the liv
   });
 });
 
-// Runs a real second connection that takes BEGIN IMMEDIATE, completes the parent, then
-// commits, so createCard's parent-status probe is forced to happen after that commit.
 function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: number) {
   const workerCode = `
     const { parentPort, workerData } = require('node:worker_threads');
@@ -151,7 +144,6 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
       parentPort.postMessage('released');
     }, workerData.holdMs));
   `;
-  // Set before COMMIT: the commit frees the lock, and the waiting call can return before this thread runs its next line.
   const holdEnded = new Int32Array(new SharedArrayBuffer(4));
   const worker = new Worker(workerCode, { eval: true, workerData: { dbPath, parentId, holdMs, holdEnded } });
   const locked = new Promise<void>((resolve) => {
@@ -167,7 +159,6 @@ function holdLockThenCompleteParent(dbPath: string, parentId: string, holdMs: nu
       }
     });
   });
-  // The hold is counted from this call, made right before the blocking one, so a stalled test thread cannot let the lock go early.
   const startHold = (): void => worker.postMessage('hold');
   return { locked, released, startHold, holdHadEnded: () => Atomics.load(holdEnded, 0) === 1 };
 }
@@ -176,7 +167,7 @@ describe('a parent completing while createCard waits for the write lock still yi
   it('createCard blocks on BEGIN IMMEDIATE, then reads the parent as done once the lock is released', async () => {
     const parent = await createCard(root, 'default', { title: 'Parent' });
     await claimCard(root, 'default', parent.id, 'codex');
-    await reviewCard(root, 'default', parent.id); // in review, not done yet: a read before the commit would see this.
+    await reviewCard(root, 'default', parent.id);
 
     const dbPath = join(root, 'hippo.db');
     const { locked, released, startHold, holdHadEnded } = holdLockThenCompleteParent(dbPath, parent.id, 300);
@@ -186,7 +177,6 @@ describe('a parent completing while createCard waits for the write lock still yi
     const child = await createCard(root, 'default', { title: 'Child', dependsOn: [parent.id] });
     const endedByReturn = holdHadEnded();
 
-    // A createCard that did not wait would return while the lock is still held, before the hold ends.
     expect(endedByReturn).toBe(true);
     expect(child.status).toBe('ready');
     expect((await loadCard(root, 'default', child.id))?.status).toBe('ready');

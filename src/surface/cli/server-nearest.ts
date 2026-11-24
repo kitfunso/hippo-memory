@@ -1,5 +1,3 @@
-// A CLI store's nearest-row read, handed to the `hippo serve` on the same store: its vector graph
-// answers in milliseconds where this process would score every stored vector.
 import type { JsonValue } from '../../base/util/json.js';
 import { errorFields, log } from '../../base/util/log.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -8,8 +6,6 @@ import { detectServer } from '../server/server-detect.js';
 import { callerKey } from '../server/local-key.js';
 import { nearestIds } from './client.js';
 
-// A graph read takes milliseconds (docs/ARCHITECTURE.md), so a later reply means a stalled server,
-// and the scan after it still fits the 5 s hook budget.
 const NEAREST_TIMEOUT_MS = 1000;
 
 /** The ask a CLI store on `hippoRoot` makes of its server: undefined with no server, and after
@@ -49,7 +45,6 @@ function wireSpec(spec: VectorCandidateSpec): JsonValue | undefined {
     includeSuperseded,
     ...(limit !== undefined && { limit }),
     ...(scope !== undefined && { scope: { ...scope } }),
-    // The store reads one origin and a list of one alike.
     ...(origin !== undefined && { origin: [origin].flat() }),
   };
 }

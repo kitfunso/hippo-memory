@@ -143,7 +143,6 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const featureOn = buildResumeScorecard(tmpDir, sessionId);
     expect(featureOn.coverage).toBeGreaterThan(baseline.coverage);
     expect(featureOn.coverage).toBe(1);
-    // The six trail steps joined by newlines are 1204 characters, at four per token.
     expect(featureOn.rawTranscriptTokens).toBe(301);
     expect(featureOn.distilledTokens).toBeLessThan(featureOn.rawTranscriptTokens * 0.45);
   });
@@ -181,7 +180,6 @@ describe('Company Brain continuity scorecard scaffold', () => {
     });
     const block = onResult.continuity!;
 
-    // Same six scorecard signals derived from the recall path.
     const signals = {
       task: Boolean(block.activeSnapshot?.task?.trim()),
       snapshotSummary: Boolean(block.activeSnapshot?.summary?.trim()),
@@ -195,11 +193,6 @@ describe('Company Brain continuity scorecard scaffold', () => {
     const coverage = covered / Object.keys(signals).length;
     expect(coverage).toBe(1);
 
-    // Token budget: continuityTokens reports the FULL payload (snapshot + handoff +
-    // every event's content). Callers needing a tight resume packet should truncate
-    // event content themselves before display. This test measures the scorecard's
-    // 45% gate against the *displayable* distillation that a caller would actually
-    // use (snapshot + handoff + 1 event preview), not the raw payload.
     const rawEvents = listSessionEvents(tmpDir, 'default', { session_id: sessionId, limit: 12 });
     const rawTranscriptTokens = estimateTokens(rawEvents.map((e) => e.content).join('\n'));
     const lastEvent = block.recentSessionEvents.at(-1);
@@ -216,14 +209,10 @@ describe('Company Brain continuity scorecard scaffold', () => {
       `Recent: ${lastPreview}`,
     ];
     const distilledTokens = estimateTokens(distilledParts.join('\n'));
-    // 1204 characters of trail; 384 of distilled parts, whose preview is the oldest-first trail's last step.
     expect(rawTranscriptTokens).toBe(301);
     expect(distilledTokens).toBe(96);
     expect(distilledTokens).toBeLessThan(rawTranscriptTokens * 0.45);
 
-    // Sanity: the unfiltered continuityTokens IS larger than the displayable
-    // distillation (because it includes full event content). This documents the
-    // design: recall returns the full payload, callers shape it for display.
     expect(onResult.continuityTokens!).toBeGreaterThan(distilledTokens);
   });
 

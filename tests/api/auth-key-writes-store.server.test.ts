@@ -1,5 +1,3 @@
-// authCreate, authCreateSelf and authListRows with a store go through its keyWrites group and never open hippo.db, and
-// POST and GET /v1/auth/keys run under another store only when that store has the group.
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -19,7 +17,6 @@ import { OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/owned-keys.js'
 import { testInfra } from '../_helpers/infra.js';
 import { copyTree } from '../_helpers/copy-tree.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 let fixture: TwoTenantFixture;
@@ -33,7 +30,6 @@ function copyOf(): string {
   return root;
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);

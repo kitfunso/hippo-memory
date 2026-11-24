@@ -1,5 +1,3 @@
-// The checks every caller call shares: ids, project, the session's owner and the pilot arm, all
-// from the request, never the server's env or folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { ownerOrSubject, type Context, type ContextWith } from '../../api/types.js';
 import { MAX_ID_LEN } from '../../base/util/limits.js';
@@ -27,7 +25,6 @@ export async function bindCaller(
 ): Promise<ContinuityKey> {
   assertCallerIds(sessionId, project);
   if (sessionId.trim() === '') throw new BadRequestError('session id: required');
-  // A '' project would stamp user-global rows; a rewritten one would split a project.
   assertCallerProject(project);
   await bindSessionOwner(ctx, sessionId);
   return { owner: ownerOrSubject(ctx.actor), project: projectNames(project) };

@@ -1,5 +1,3 @@
-// What crosses between the server thread and a store worker, and which kind of worker runs each
-// store method.
 import { type HippoStore, STORE_EFFECTS } from '../../../base/ports/store.js';
 import type { WireError } from './error-codec.js';
 import type { TenantMark } from './tenant-wire.js';
@@ -16,14 +14,10 @@ export type OpRoute = OpMode | 'pinned-read';
 
 export type OpPlaces<G> = { readonly [M in keyof G]: OpRoute };
 
-/** Reads only the first reader runs, since that thread alone holds the store's vector graph. */
 const PINNED_READS: Placement = { vectors: ['nearestEntries'] };
 
-/** Methods the port calls reads that hippo.db runs on the one writer thread. */
 const ON_WRITER: Placement = {
-  // A snapshot load rewrites the active-task mirror file.
   sessions: ['loadSnapshot'],
-  // A session's lock token and staged vectors sit on the thread that opened it.
   embeddingIndex: ['open'],
 };
 
@@ -73,36 +67,20 @@ export type WorkerBase = Pick<HippoStore, keyof typeof WORKER_OPS.base>;
 export interface WorkerInit {
   readonly hippoRoot: string;
   readonly mode: OpMode;
-  /** Lock wait of the thread's connection. */
   readonly busyWaitMs: number;
-  /** Set on the first reader alone, which answers 'pinned-read' calls from the vector graph it
-   * holds. */
   readonly pinned?: boolean;
-  /** Stored vectors a store holds before the pinned reader builds its graph;
-   * VECTOR_GRAPH_THRESHOLD when omitted. */
   readonly vectorGraphThreshold?: number | undefined;
-  /** Stored vectors past which the pinned reader keeps no graph; the config default when
-   * omitted. */
   readonly vectorGraphMaxVectors?: number | undefined;
-  /** One shared integer the writer sets to a job's id before that job may commit; the server
-   * thread reads it when the job passes its deadline. */
   readonly commitFlag?: SharedArrayBuffer;
-  /** The strength model and fake clock the parent's root opened with, which the thread's store
-   * opens with. */
   readonly rules: StoreRules;
 }
 
 export interface Job {
   readonly id: number;
-  /** `<group>.<method>` of the synchronous store, `base.<method>` for a base one. */
   readonly op: string;
   readonly args: readonly unknown[];
-  /** Where ALL_TENANTS sat in the arguments, since a symbol cannot be copied to the thread. */
   readonly allTenants: readonly TenantMark[];
-  /** Of the request the call belongs to, so the thread's log lines carry it. */
   readonly requestId: string | undefined;
-  /** wal_autocheckpoint as the server thread has it: a worker cannot see the checkpointer start
-   * or stop. */
   readonly walPages: number;
 }
 

@@ -1,19 +1,13 @@
-/** Z0 sizing, part 1 of 2: family, sequence and noise spreads with chi-square bounds, the blind seed rule, and simulated power
- * of the analyzer's own tests. Repositories are fixed (Amendment 2): every run goes through the analyzer's family t tests
- * and verdict rules, so the power is the full analysis's (prereg 209). */
-
 import { combineCodings, holmAdjust, seededRandom, verdict } from '../../dist/domain/eval/eval-stats.js';
 import { incompleteBeta, lnGamma, pooledComponents } from '../../dist/domain/eval/repository-t.js';
 import { CODINGS, SPECS, byCoding, harmT, mean, repeatT, sum } from './z0-hypotheses.mjs';
 import { SEED_CAP } from './z0-records.mjs';
 
-// One number for the rule's cap and the record contract's.
 export { SEED_CAP };
 /** Seeds in the first wave; the seed rule may add more up to SEED_CAP. */
 export const SEEDS = 3;
 /** The seed rule aims for a standard error of at most the minimum effect over this. */
 export const TARGET_Z = 3.5;
-// Holm's strictest level over H1 and H2 (prereg 209): the share of true-zero runs below it is the test's level.
 const LEVEL = 0.025;
 
 /** Holm's first step over H1 and H2: the size must hold even when this hypothesis has the family's smallest p (prereg 209).
@@ -30,7 +24,6 @@ export function cellSeed(...parts) {
 
 export const normal = (rand) => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
 
-// The series alone converges for every x the bisection visits, as quantiles here stay far below the overflow range.
 function gammaP(s, x) {
   if (x <= 0) return 0;
   let term = 1 / s;
@@ -59,12 +52,10 @@ export function chiSquareQuantile(p, df) {
 const sd = Math.sqrt;
 const share = (xs, keep) => xs.filter(keep).length / xs.length;
 
-// The expected mean squares are E = noise, F = noise + s family and Q = noise + k sequence, so each spread is its excess over E.
 function pointSpreads({ F, Q, E, sBar, kBar }) {
   return { noise: E, family: Math.max(0, (F - E) / sBar), sequence: Math.max(0, (Q - E) / kBar) };
 }
 
-// One-sided upper bound of a mean square at `bound`; with no df there is nothing to widen.
 const upperOf = (ms, df, bound) => (df > 0 ? (df * ms) / chiSquareQuantile(1 - bound, df) : ms);
 
 /** Family, sequence and noise spreads from the analyzer's pooled mean squares, each also at a one-sided upper bound at
@@ -103,7 +94,6 @@ export function clopperPearsonUpper(d, n, level) {
   let [lo, hi] = [0, 1];
   for (let i = 0; i < 200; i++) {
     const mid = (lo + hi) / 2;
-    // P(X <= d) falls as p rises.
     if (incompleteBeta(1 - mid, n - d, d + 1) > 1 - level) lo = mid;
     else hi = mid;
   }
@@ -150,7 +140,6 @@ export function repeatRun(cal, design, delta, rand, rule = null) {
   return { units, seeds, stopped: false };
 }
 
-// A stopped run scores nothing, so it carries no estimates.
 const analysed = (run) => ({ seeds: run.seeds, stopped: run.stopped, est: run.stopped ? null : byCoding((c) => repeatT(run.units[c], {})) });
 
 const repeatSpec = (m) => ({ ...SPECS.H1, tieBand: [-m, m], minimumEffectAt: -m });
@@ -183,7 +172,6 @@ export function repeatSizer(cal, opts, label) {
   };
 }
 
-/** Log ratios centre at log(ratio) minus half their variance, so the ratio of expected cost sums is the true ratio. */
 function costPair(cal, mu, zf, zq, rand) {
   const c = Math.exp(cal.controlSd * normal(rand));
   return { c, t: c * Math.exp(mu + sd(cal.family) * zf + sd(cal.sequence) * zq + sd(cal.noise) * normal(rand)) };
@@ -226,7 +214,6 @@ export function harmSizer(cal, opts) {
   };
 }
 
-// Resolve-style 0/1 values: each unit is the difference of two Bernoulli draws at one p, so its true mean is zero.
 function binaryRun(cal, design, rand) {
   const units = byCoding(() => []);
   const zf = Array.from({ length: design.repos }, () => normals(design.families, rand));
@@ -264,7 +251,6 @@ export function levelCheck(calPoint, calUpper, design, m, opts) {
   const cells = cases.flatMap(([name, make]) => {
     const rand = seededRandom(cellSeed(opts.seed, 'level', opts.label ?? '', name, design.repos, design.families, m));
     const runs = Array.from({ length: opts.sims }, () => make(rand)).filter((r) => !r.stopped);
-    // The rule's cell keeps only the runs it let go, so its simulation error is from that count, not from sims.
     const ceiling = LEVEL + 2 * sd((LEVEL * (1 - LEVEL)) / runs.length);
     const stopShare = 1 - runs.length / opts.sims;
     return CODINGS.map((coding) => ({ name, coding, level: share(runs, (r) => r.est[coding].p < LEVEL), runs: runs.length, stopShare, ceiling }));

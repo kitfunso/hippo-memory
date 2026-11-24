@@ -1,5 +1,3 @@
-// Each sqliteStore recall method returns and writes what the hippo.db function behind it does on the golden seed, and a
-// recall over serve() opens no more hippo.db handles than today, since every open re-runs the PRAGMAs and migrations.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -78,14 +76,12 @@ interface Outcome<T> {
   rows: unknown;
   opens: number;
 }
-/** JSON.stringify throws a TypeError on it, so an audit row carrying it fails mid-write. */
 interface Cycle {
   self?: Cycle;
 }
 
 let templates: Templates;
 
-/** Every audit op in order: rowsOf keeps only the recall ones, and a stray predict_baserate row must show too. */
 function auditOps(root: string): unknown[] {
   const db = openHippoDb(root);
   try {
@@ -95,7 +91,6 @@ function auditOps(root: string): unknown[] {
   }
 }
 
-/** Runs `fn` on a fresh copy of a template store: what it returned, every row it left and the handles it opened. */
 async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<Outcome<T>> {
   const s = freshStore(templates, kind);
   try {
@@ -107,7 +102,6 @@ async function onCopy<T>(kind: Kind, fn: (s: Store) => T | Promise<T>): Promise<
   }
 }
 
-/** The direct hippo.db call on one copy and the store method on another must return the same value and leave the same rows. */
 async function parity<D, P>(
   direct: (s: Store) => D | Promise<D>,
   port: (store: ReturnType<typeof sqliteStore>) => Promise<P>,
@@ -124,14 +118,12 @@ function idsOf(entries: readonly MemoryEntry[]): string[] {
   return entries.map((e) => e.id);
 }
 
-/** A Map as sorted entries, since normalize's JSON round trip turns a Map into {}. */
 function entriesOf<V>(map: ReadonlyMap<string, V>): [string, V][] {
   return [...map].sort(([a], [b]) => (a < b ? -1 : 1));
 }
 
 const VECTOR_IDENTITY = embeddingIndexIdentity('openai:hashed-16');
 
-/** Vectors and particles for a current, a newer, a private and a superseded row, an 8-dim row, and a vector whose row is gone. */
 function seedVectors(root: string): void {
   const entries = loadEntriesByIds(root, ['mem_p_plain', 'mem_p_new', 'mem_p_private', 'mem_p_old', 'mem_p_noise']);
   const index = Object.fromEntries(
@@ -154,7 +146,6 @@ const TEAM = 'team';
 const ALICE_SCOPE = 'personal:private:alice';
 const ALICE_A: ContinuityKey = { owner: 'alice', project: ['proj-a'] };
 
-/** A second tenant where alice and bob share proj-a and alice also works in proj-b, so each narrowed read has rows to skip. */
 async function seedTeam(root: string): Promise<void> {
   const team = (content: string, id: string, created: string, extra: Partial<MemoryEntry>) =>
     seeded(content, id, created, { tenantId: TEAM, ...extra });
@@ -209,7 +200,6 @@ async function seedTeam(root: string): Promise<void> {
       content: `${owner} noted ${project}`,
     });
   }
-  // Newest on alice's session id, so only the key keeps bob's handoff out.
   saveSessionHandoff(
     root,
     TEAM,
@@ -218,12 +208,10 @@ async function seedTeam(root: string): Promise<void> {
   );
 }
 
-// Seeds recall-port-only-parity's branches plus a team, a goal and vectors into real stores, so the runner's disk sets its time.
 beforeAll(async () => {
   templates = await seedTemplates(async (root) => {
     await seedPortBranches(root);
     await seedTeam(root);
-    // A goal with a retrieval policy, so activeGoals has a policy row to read.
     await pushGoal(root, {
       sessionId: SESSION,
       tenantId: TENANT,
@@ -361,7 +349,6 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
       },
     ],
   ] as const)('continuity with %s', async (_name, tenantId, key, kind, block) => {
-    // The reads recall made before the port, ahead of its scope filter, on one handle as the port reads them.
     const { direct, port } = await parity(
       (s) =>
         handlesOf(s.root).on((db, files) => {
@@ -388,7 +375,6 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['tokens naming no class', ['lunch'], null],
     ['no tokens', [], null],
   ] as const)('planningFallacyEvidence for %s, with no audit row', async (_name, tokens, classTag) => {
-    // The planning-fallacy reads of a recall; its audit rows stay with the caller.
     const { direct, port } = await parity(
       (s) => onHandle(s.root, (db) => planningFallacyEvidence(db, TENANT, tokens), openStoreAt),
       (store) => store.planningFallacyEvidence(TENANT, tokens),
@@ -401,7 +387,6 @@ describe('sqliteStore reads equal the hippo.db functions they wrap and open no m
     ['vectors under a stored model', 'local', { storedModel: VECTOR_IDENTITY, hasVectors: true }],
     ['no vectors', 'wide', { storedModel: null, hasVectors: false }],
   ] as const)('embeddingIndexState with %s: the meta row and the EXISTS on one handle', async (_name, kind, state) => {
-    // Before the port the vector arm read these on two handles.
     const { direct, port } = await parity(
       (s) => {
         const db = openHippoDb(s.root);
@@ -599,7 +584,6 @@ describe('sqliteStore writes leave the rows the hippo.db functions leave, each o
       },
       (store) => store.finishRecall(finishWrites()),
     );
-    // The global row's memory lives in another store, so its log row is dropped.
     expect(direct.rows).toMatchObject({ goalRecallLog: [{ memory_id: 'mem_p_goal', score: 1.6 }] });
     expect(port.opens).toBe(1);
   });
@@ -697,7 +681,6 @@ async function recallOver(url: string, call: Recall): Promise<void> {
 }
 
 describe('hippo.db opens per recall over serve() on the in-process store', () => {
-  // Exact, so a second open fails here: the request scope hands every port call the one handle.
   const OPENS: readonly [string, number, Recall, boolean?][] = [
     ['http, no session', 1, { via: 'http', params: { q: 'deploy' } }],
     ['http, a session with active goals', 1, { via: 'http', params: { q: 'deploy', session_id: SESSION } }],
@@ -748,7 +731,6 @@ describe('hippo.db opens per recall over serve() on the in-process store', () =>
 });
 
 describe('a recall whose store read fails mid-way', () => {
-  // Continuity is read after the search, the goals and the fresh tail, so the earlier reads have run.
   it.each([
     ['http', `/v1/memories?q=deploy&session_id=${SESSION}&include_continuity=true`],
     ['mcp', '/mcp'],

@@ -1,6 +1,3 @@
-// `hippo dedup`: one pass over the whole store, outside a sleep, with the deletions under the
-// caller's name.
-
 import { deduplicateStore, type DedupResult } from '../../domain/consolidate/dedupe.js';
 import { requireHostAdmin, type ContextWith } from '../types.js';
 

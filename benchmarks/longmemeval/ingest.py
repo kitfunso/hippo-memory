@@ -1,9 +1,3 @@
-"""Ingest LongMemEval sessions into a fresh hippo memory store.
-
-Takes a LongMemEval JSON file and creates a .hippo/ store in a temp directory,
-ingesting each session as a memory entry via the hippo CLI.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -22,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_dataset(data_path: Path) -> list[dict[str, Any]]:
-    """Load LongMemEval dataset from a JSON file."""
     if not data_path.exists():
         raise FileNotFoundError(f"Dataset not found: {data_path}")
 
@@ -30,7 +23,6 @@ def load_dataset(data_path: Path) -> list[dict[str, Any]]:
         data = json.load(f)
 
     if isinstance(data, dict):
-        # Some LongMemEval files wrap entries in a top-level key
         for key in ("data", "questions", "entries"):
             if key in data:
                 data = data[key]
@@ -46,11 +38,6 @@ def load_dataset(data_path: Path) -> list[dict[str, Any]]:
 def collect_sessions(
     entries: list[dict[str, Any]],
 ) -> dict[str, tuple[str, list[list[dict[str, str]]]]]:
-    """Collect unique sessions across all entries.
-
-    Returns a mapping of session_id -> (date, turns) where turns is the
-    list of message dicts from the first occurrence of that session.
-    """
     sessions: dict[str, tuple[str, list[list[dict[str, str]]]]] = {}
 
     for entry in entries:
@@ -74,7 +61,6 @@ def format_session_text(
     date: str,
     turns: list[dict[str, str]],
 ) -> str:
-    """Concatenate session turns into a single text block for storage."""
     lines: list[str] = []
     if date:
         lines.append(f"[Date: {date}]")
@@ -96,7 +82,6 @@ def run_hippo_command(
     timeout: int = 30,
     stdin_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a hippo CLI command with error handling."""
     cmd = [hippo_bin] + args
     import os
     env = {**os.environ, "HIPPO_HOME": cwd, "HOME": cwd, "USERPROFILE": cwd}
@@ -135,24 +120,9 @@ def ingest_sessions(
     salience: bool = False,
     skip_sleep: bool = False,
 ) -> Path:
-    """Ingest all LongMemEval sessions into a fresh hippo store.
-
-    Args:
-        data_path: Path to the LongMemEval JSON dataset.
-        hippo_bin: Path to the hippo CLI binary.
-        store_dir: Directory to create .hippo/ store in. If None, uses a temp dir.
-        salience: If True, enable the pineal salience gate (write-time dedup
-            by lexical overlap). Default False — the 2026-04-24 LongMemEval run
-            with salience=true collapsed recall@10 from 81% to 14.6% because
-            same-session turns share phrasing and get dropped as duplicates.
-
-    Returns:
-        Path to the directory containing the .hippo/ store.
-    """
     entries = load_dataset(data_path)
     sessions = collect_sessions(entries)
 
-    # Create store directory
     if store_dir is None:
         store_dir = Path(tempfile.mkdtemp(prefix="hippo_longmemeval_"))
     else:
@@ -160,8 +130,6 @@ def ingest_sessions(
 
     logger.info("Using store directory: %s", store_dir)
 
-    # Initialize hippo store. Pass --no-learn / --no-hooks / --no-schedule so
-    # we don't pollute the benchmark store with MEMORY.md auto-learn or hooks.
     result = run_hippo_command(
         hippo_bin, ["init", "--no-hooks", "--no-schedule", "--no-learn"],
         cwd=str(store_dir),
@@ -180,15 +148,12 @@ def ingest_sessions(
     else:
         logger.info("Salience gate disabled (default)")
 
-    # Ingest each session
     failed = 0
     for sid, (date, turns) in tqdm(
         sessions.items(), desc="Ingesting sessions", unit="session"
     ):
         text = format_session_text(sid, date, turns)
 
-        # Use stdin via "hippo remember - --tag <session_id>" to avoid
-        # command-line length limits on Windows.
         args = ["remember", "-", "--tag", sid]
         if date:
             args.extend(["--tag", f"date:{date}"])
@@ -214,13 +179,9 @@ def ingest_sessions(
     if skip_sleep:
         logger.info("Skipping hippo sleep (--skip-sleep). Memories preserved as-ingested.")
     else:
-        # Run consolidation. 940 sessions without salience-skipping take
-        # several minutes; 120s was the previous default and crashed the
-        # harness on the first salience-off run.
         logger.info("Running hippo sleep for consolidation...")
         run_hippo_command(hippo_bin, ["sleep"], cwd=str(store_dir), timeout=900)
 
-    # Save metadata
     metadata = {
         "data_path": str(data_path),
         "store_dir": str(store_dir),

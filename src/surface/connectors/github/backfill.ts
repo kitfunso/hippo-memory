@@ -20,19 +20,13 @@ import { MINUTE_MS } from '../../../base/util/time.js';
 import type { CursorKey, GitHubStream } from '../../../base/ports/store/connectors.js';
 
 export interface BackfillOptions {
-  /** e.g. 'acme/repo'. */
   repoFullName: string;
   fetcher: GitHubFetcher;
   token: string;
-  /** Optional cap on items per stream. Useful for tests. */
   maxPerStream?: number;
-  /** First-run `--since`; seeds all three HWMs, keeping any HWM a stream already saved. */
   sinceIso?: string;
-  /** sleep ms — injectable so tests don't actually wait. */
   sleepMs?: (ms: number) => Promise<void>;
-  /** github.com unless the caller passes GITHUB_ENTERPRISE_URL's site. */
   site?: GitHubSite;
-  /** GitHub user ids GITHUB_TRUSTED_USER_IDS vouches for; the CLI reads it. */
   trustedUserIds?: ReadonlySet<number>;
 }
 
@@ -59,7 +53,6 @@ function syntheticRepository(repoFullName: string): GitHubRepository {
   };
 }
 
-/** Parse the trailing issue/PR number from a REST API URL, e.g. .../issues/42 -> 42. */
 function parseTrailingNumber(url: string | undefined): number | null {
   if (!url) return null;
   const m = url.match(/\/(\d+)(?:\?.*)?$/);
@@ -113,9 +106,6 @@ function isCommentItem(x: JsonValue): x is JsonValue & (IssueCommentItem | PrRev
   return isGitHubUser(x.user);
 }
 
-/** Drain one stream end-to-end, pausing on rate-limit and throwing on any other fetch error so
- * the caller leaves the HWM unchanged. Callers MUST NOT advance the HWM when drained=false, or a
- * capped run would skip the unfetched tail. */
 interface DrainStreamOptions {
   readonly toIngestEvent: (item: JsonValue) => IngestEvent | null;
   readonly fetcher: GitHubFetcher;
@@ -127,8 +117,6 @@ interface DrainStreamOptions {
   readonly trustedUserIds?: ReadonlySet<number>;
 }
 
-/** The next page's URL. A link to another origin or with credentials throws, so the token never
- * leaves the server the backfill started on and no link text is printed. */
 function sameOriginNext(next: string | null, origin: string): string | null {
   if (next === null) return null;
   const link = tryParseUrl(next);
@@ -171,7 +159,6 @@ async function drainStream(
       if (await ingestBackfillItem(ctx, item, evt, updatedAt, options)) ingested++;
 
       if (maxItems && ingested >= maxItems) {
-        // Capped mid-stream: caller MUST NOT advance the HWM (drained=false).
         return { ingested, pages, maxUpdatedAt, drained: false };
       }
     }
@@ -187,7 +174,6 @@ function itemUpdatedAt(item: JsonValue): string | null {
   return isJsonObject(item) ? ((item.updated_at as string | undefined) ?? null) : null;
 }
 
-/** True when the item counts toward the stream's ingested total. */
 async function ingestBackfillItem(
   ctx: ConnectorContext,
   item: JsonValue,
@@ -206,8 +192,6 @@ async function ingestBackfillItem(
   return r.status === 'ingested' || r.status === 'skipped';
 }
 
-// A reset hours away must fail the run for a later rerun; sleeping through it would hold the
-// process for the whole window.
 const MAX_RATE_LIMIT_ATTEMPTS = 5;
 const MAX_RATE_LIMIT_WAIT_MS = 10 * MINUTE_MS;
 
@@ -315,7 +299,6 @@ const hwmOf = (
   stream,
 });
 
-/** Each stream's HWM, after a first run's `--since` seeds the ones no run saved. */
 async function resumeFrom(
   ctx: ConnectorContext,
   opts: BackfillOptions,
@@ -336,7 +319,6 @@ async function resumeFrom(
   };
 }
 
-/** Drains one stream, then persists its HWM only when the stream ran to the end. */
 async function backfillStream(
   ctx: ConnectorContext,
   opts: BackfillOptions,
@@ -358,8 +340,6 @@ async function backfillStream(
     ownsBareRefs: site.ownsBareRefs,
     trustedUserIds: opts.trustedUserIds,
   });
-  // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
-  // unprocessed tail.
   if (res.drained && res.maxUpdatedAt) {
     await ctx.store.connectorEvents.saveCursor(
       hwmOf(ctx, opts, site, stream.name),

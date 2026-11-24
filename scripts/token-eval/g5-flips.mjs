@@ -1,8 +1,6 @@
-// Z0 G5 (prereg 166): the lessons and cells the regrade drops, shared by grading and the reader draw so both drop the same ones.
 import * as fs from 'node:fs';
 import { readRows, rowsFile } from './regrade.mjs';
 
-/** Rows of a pass whose cell has no grade.json: refused, since dropping that cell could hide a lesson's flip. */
 function assertNoOrphans(rows, entries, pass) {
   const keys = new Set(entries.map((e) => e.key));
   const orphan = [...rows.keys()].find((k) => !keys.has(k));

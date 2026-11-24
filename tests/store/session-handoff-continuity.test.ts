@@ -175,14 +175,12 @@ describe('loadHandoffById', () => {
   it('loads a specific handoff by row ID', () => {
     initTestStore(tmpDir);
 
-    // Save handoff and verify we can get it by ID from the DB
     saveSessionHandoff(tmpDir, 'default', {
       version: 1,
       sessionId: 'sess-byid',
       summary: 'Find me by ID',
     });
 
-    // Find the row ID by loading from DB directly
     const db = openHippoDb(tmpDir);
     try {
       // SAFETY: literal SELECT of the id column for the handoff row this
@@ -210,8 +208,6 @@ describe('loadHandoffById', () => {
 
 describe('fallback session ID generation', () => {
   it('getSessionIdentity produces fallback when all identifiers are missing', async () => {
-    // Dynamically import the plugin to test getSessionIdentity indirectly
-    // We test the pattern directly since the function is not exported
     const ctx = { sessionId: undefined, sessionKey: undefined, agentId: undefined };
     const identity = ctx.sessionId ?? ctx.sessionKey ?? ctx.agentId ?? `fallback-${Date.now()}-${process.pid}`;
 

@@ -1,7 +1,3 @@
-/**
- * MCP `hippo_assemble` tool — surface check for Phase 2 assemble API.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { Layer } from '../../src/base/memory/entry.js';

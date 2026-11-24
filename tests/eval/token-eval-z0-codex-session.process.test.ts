@@ -1,4 +1,3 @@
-// Z0 set X session driver: codex args and preflight, the rollout parser on fake-codex sessions, the wait, auth and launcher rules.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, copyFileSync, chmodSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -28,7 +27,6 @@ afterEach(() => {
 });
 const sha = (f: string) => createHash('sha256').update(readFileSync(f)).digest('hex');
 
-// The shell label a rollout with no environment_context gets on this platform.
 const SHELL = process.platform === 'win32' ? 'PowerShell' : 'Bash';
 const LOCK_CODE =process.platform === 'win32' ? 'EBUSY' : 'EACCES';
 
@@ -38,7 +36,6 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
     const ready = `${file}.held`;
     const script = `$h = [IO.File]::Open('${file}', 'Open', 'ReadWrite', 'None'); Set-Content '${ready}' x; Start-Sleep 300`;
     const child = spawn('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
-    // Taken at spawn, so a child that failed to start or already exited cannot leave the wait below hanging.
     const gone = new Promise((r) => {
       child.once('exit', r);
       child.once('error', r);
@@ -63,7 +60,6 @@ async function withUnreadable<T>(file: string, fn: () => T): Promise<T | null> {
   }
 }
 
-/** An isolated operator, ctx and X1 run; `out` is the run's out dir. */
 function setup(name: string, opts: CodexOptions = {}, extra: { sessionTimeoutMs?: number } = {}) {
   const { out, log } = isolate(name);
   vi.stubEnv('FAKE_CODEX_LOG', log);
@@ -159,7 +155,6 @@ describe('the rollout parser (test 5)', () => {
     expect(work2.toolCalls).toBe(6);
   });
 
-  /** A rollout in `dir` of `exec_command` calls; `shell` is what its environment_context names, null for no such item. */
   function shellRollout(dir: string, shell: string | null, calls: Array<{ cmd: string; workdir?: string }>) {
     const work = join(dir, 'work');
     const context = shell === null ? [] : [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: `<environment_context>\n  <cwd>${work}</cwd>\n  <shell>${shell}</shell>\n</environment_context>` }] }];
@@ -207,7 +202,6 @@ describe('the rollout parser (test 5)', () => {
 });
 
 describe('the memory wait and the memories switch (tests 13, 14)', () => {
-  // Three fake Codex sessions, two of them polling memories for a stable window of up to 10 s.
   it('waits until memories are stable, waits not at all under none, and says when it timed out', async () => {
     const polled = setup('wait', { codexMemoryWait: 'poll:1500:10000' });
     const s = await runCodexSession(polled.ctx, polled.run, xTask('MEMWRITE:800'), () => false);
@@ -221,7 +215,6 @@ describe('the memory wait and the memories switch (tests 13, 14)', () => {
     const short = setup('waitout', { codexMemoryWait: 'poll:5000:600' });
     const t = await runCodexSession(short.ctx, short.run, xTask('plain'), () => false);
     expect(t.wait.timedOut).toBe(true);
-    // timedOut is only set when the 600 ms timeout fires before the 5000 ms stable window, so the wait ended on the timeout.
     expect(t.wait.ms).toBeGreaterThanOrEqual(600);
   }, 51_000);
 

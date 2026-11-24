@@ -1,15 +1,3 @@
-"""E2 process first-class object - Python SDK Pydantic tests.
-
-Docs: docs/plans/2026-05-29-e2-process-object.md
-
-Covers:
-1. Process model round-trips wire camelCase <-> Python snake_case
-2. Defaults: status='active', version=1, optional fields None, steps=[]
-3. Back-compat: server response missing optional fields parses cleanly
-4. ON DELETE SET NULL: memory_id wire null parses to None
-5. SDK methods exist on Hippo + HippoSync (shape only; no server roundtrip)
-"""
-
 from __future__ import annotations
 
 from hippo_memory import (
@@ -20,7 +8,6 @@ from hippo_memory import (
 
 
 def _roundtrip(model_cls, payload: dict) -> None:
-    """Validate -> dump -> compare. Mirrors test_incidents.py pattern."""
     instance = model_cls.model_validate(payload)
     dumped = instance.model_dump(by_alias=True, exclude_unset=True)
     for key in payload:
@@ -28,8 +15,6 @@ def _roundtrip(model_cls, payload: dict) -> None:
 
 
 def test_process_roundtrip_full_shape():
-    """Server emits camelCase wire keys (processName etc.); Python sees
-    snake_case attribute names via _Base.alias_generator=to_camel."""
     payload = {
         "id": 42,
         "memoryId": "sem_abc123",
@@ -49,8 +34,6 @@ def test_process_roundtrip_full_shape():
 
 
 def test_process_defaults_active_v1_with_nulls():
-    """Hand-construct without optional fields; status defaults to 'active',
-    version to 1, nullable fields to None, steps to []."""
     proc = Process(
         id=1,
         tenant_id="default",
@@ -69,8 +52,6 @@ def test_process_defaults_active_v1_with_nulls():
 
 
 def test_process_back_compat_missing_optional_fields():
-    """Server response from a build that omits the new optional fields
-    still parses (e.g. a process with no description)."""
     payload = {
         "id": 7,
         "tenantId": "default",
@@ -87,8 +68,6 @@ def test_process_back_compat_missing_optional_fields():
 
 
 def test_process_orphaned_memory_id_parses():
-    """After ON DELETE SET NULL on the server, memory_id wire value is JSON
-    null. Pydantic must parse it as Python None, not reject."""
     payload = {
         "id": 9,
         "memoryId": None,
@@ -103,7 +82,6 @@ def test_process_orphaned_memory_id_parses():
 
 
 def test_hippo_async_has_process_methods():
-    """Shape-only check: Hippo (async) exposes the 5 process methods."""
     assert hasattr(Hippo, "new_process")
     assert hasattr(Hippo, "supersede_process")
     assert hasattr(Hippo, "close_process")
@@ -112,7 +90,6 @@ def test_hippo_async_has_process_methods():
 
 
 def test_hippo_sync_has_process_methods():
-    """Shape-only check: HippoSync exposes the same 5 process methods."""
     assert hasattr(HippoSync, "new_process")
     assert hasattr(HippoSync, "supersede_process")
     assert hasattr(HippoSync, "close_process")

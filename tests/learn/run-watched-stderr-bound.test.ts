@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runWatched, RunWatchedTimeoutError } from '../../src/surface/cli/run-watched.js';
 
-/** Runs argv under runWatched with stderr captured, so the child's stderr is the result and the terminal stays quiet. */
 async function stderrOf(argv: readonly string[]): Promise<{ exitCode: number; stderr: string }> {
   const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   try {
@@ -36,7 +35,6 @@ describe('runWatched', () => {
   });
 
   it('kills a command that passes its deadline and rejects with a typed error', async () => {
-    // A child that never exits on its own, so only the deadline can end it.
     const forever = 'setInterval(() => {}, 1 << 30)';
     const err = await runWatched([process.execPath, '-e', forever], 300).catch((e: Error) => e);
     expect(err).toBeInstanceOf(RunWatchedTimeoutError);

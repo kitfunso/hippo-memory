@@ -20,7 +20,6 @@
 <main>
 <doc-plan>
 
-<!-- ═════ 1 ═════ -->
 <doc-claim>
   <p>Recall finds a fact from any part of a long note.</p>
   <doc-mock frame="terminal" title="rows for one note" w="480" caption="Today the row stops at the cap. After the change, each part has its own row."><template><span class="dim">project_tbench_docker_disk_hang_2026_11_14.md · 4,070 bytes</span>
@@ -168,7 +167,6 @@ for (const shape of SHAPES) {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 2 ═════ -->
 <doc-claim>
   <p>Old claude-memory rows stop hiding notes in the global store.</p>
   <doc-mock frame="terminal" title="hippo import --agents --dry-run, from home" w="480" caption="Today the home notes are not listed. The after counts come from the read-only check on 19 Nov."><template><b>today</b>
@@ -252,7 +250,6 @@ for (const shape of SHAPES) {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 3 ═════ -->
 <doc-claim>
   <p>A note reaches hippo seconds after Claude Code writes it.</p>
   <doc-mock frame="terminal" title="~/.hippo/logs/note-written.log" w="480" caption="Sketch. One line for each memory note that Claude Code writes."><template><span class="dim">[hippo] 2026-11-20T09:12:04Z</span> note-written: Agent memories: <span class="g">1 replaced</span>.
@@ -332,7 +329,6 @@ const AFTER_TOOL = {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 4 ═════ -->
 <doc-claim>
   <p>The install text keeps one write path for each agent.</p>
   <doc-code src="src/surface/hooks-install/rules/hook-blocks.ts" lines="83-98" hl="96-97">
@@ -354,7 +350,6 @@ const AFTER_TOOL = {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ shared ═════ -->
 <doc-claim aux="shared">
   <p>Shared: one key shape for every imported row.</p>
   <doc-schema id="key-shape" lang="ts" diff title="MemoryItem key and source">
@@ -376,7 +371,6 @@ const AFTER_TOOL = {
   </doc-schema>
 </doc-claim>
 
-<!-- ═════ scope ═════ -->
 <doc-claim aux="scope">
   <p>Not changing: the cap, the secret rule, the copy rule, compaction memories.</p>
   <ul>

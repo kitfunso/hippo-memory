@@ -1,5 +1,3 @@
-// `hippo goal push|list|complete|suspend|resume` and its flag errors, run in process through runCli on a real
-// store with an isolated HIPPO_HOME, so dev memories don't leak in.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { runCli } from '../../src/cli.js';
 import { makeEnv, type TestEnv } from '../_helpers/cli-env.js';
@@ -15,7 +13,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_TENANT', 'default');
   vi.stubEnv('HIPPO_SESSION_ID', 's-cli-1');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-  // The CLI looks for the store in `.hippo` under the working directory.
   process.chdir(env.cwd);
 });
 
@@ -28,7 +25,6 @@ afterEach(() => {
 const goal = (...args: string[]): Promise<InProcessResult> =>
   runInProcess(() => runCli(['node', 'hippo', 'goal', ...args]));
 
-/** Stdout of a goal verb that must succeed. */
 async function ok(...args: string[]): Promise<string> {
   const res = await goal(...args);
   expect(res.status, res.stderr).toBe(0);

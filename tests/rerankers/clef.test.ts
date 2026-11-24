@@ -12,7 +12,6 @@ import type { JsonValue } from '../../src/base/util/json.js';
 
 const getReranker = realRerankers();
 
-/** `model` with the CLEF transport the environment names at each call, as a root reads it into RuntimeSettings. */
 function clefUnderEnv(model: ClefModel): RerankerFn {
   const rerank = createClefReranker(model, processHttp);
   return (query, results, options) => rerank(query, results, { ...options, clef: envClefSettings() });
@@ -323,7 +322,6 @@ describe('clef rerankers', () => {
     'uses the default 15000 ms timeout for HIPPO_CLEF_TIMEOUT_MS=%s',
     async (value) => {
       vi.stubEnv('HIPPO_CLEF_TIMEOUT_MS', value);
-      // An abort ends the call at once, and the fallback names the budget it ran under, so no reply races a clock.
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('aborted', 'AbortError'));
       const out = await clefUnderEnv('clef-flash')('q', inputs());
       expect(contents(out)).toEqual(NATIVE);

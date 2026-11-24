@@ -1,10 +1,3 @@
-"""Audit LoCoMo store parity without running the Claude judge.
-
-This cheap pre-scoring check builds fresh per-conversation stores, compares
-stored memory counts, and probes whether the configured recall budget caps
-top-k retrieval.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -58,13 +51,6 @@ def run_hippo(
         "USERPROFILE": hippo_home,
         "HIPPO_SKIP_AUTO_INTEGRATIONS": "1",
     }
-    # command is the explicit --hippo-cmd argv prefix for this profile; used
-    # verbatim so multi-build comparisons keep targeting the right binary.
-    # hippo_subproc.run_hippo_argv never uses shell=True -- the old
-    # `subprocess.list2cmdline` + shell=True win32 branch let cmd.exe
-    # truncate the command line at the first embedded newline in turn text,
-    # silently dropping every --tag argument after it (see
-    # ../LOCOMO_INVESTIGATION.md, "Correction 2026-07-05").
     return run_hippo_argv(
         args,
         command=command,

@@ -1,4 +1,3 @@
-// A captured Slack request stays signed for five minutes, so the route answers its second copy without acting on it.
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serve, type ServerHandle } from '../../src/server.js';
@@ -15,7 +14,6 @@ interface Reply {
 }
 
 const SECRET = 'replay-window-secret';
-// Not an event envelope, so each accepted copy parks one DLQ row under the default tenant.
 const BODY = '{"type":"not_an_envelope"}';
 
 let root: string;

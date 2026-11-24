@@ -1,4 +1,3 @@
-// A viewer reads and never writes: every /v1 row, add-on route and MCP write tool holds the level it declares.
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -17,7 +16,6 @@ import { ADMIN_LEVEL, READ_POSTS, V1_ROWS, VIEWER_WRITES } from '../_helpers/v1-
 import { routeLabel } from '../../src/surface/server/route-table.js';
 
 const TENANT = 't-roles';
-// A role outside the ladder is deliberately wrong, to prove the core reads it as a viewer.
 const OUTSIDE_LADDER = ['ext.owner', 'ext.cased', 'ext.editor-name', 'ext.none'];
 const TOKENS = new Map<string, string | undefined>([
   ['ext.viewer', 'viewer'],
@@ -40,7 +38,6 @@ function addon(path: string, level?: AddonRoute['level']): AddonRoute {
   return level === undefined ? { path, handler } : { path, handler, level };
 }
 
-// A viewer-level route that mints for the caller, so the role check inside authCreateSelf is the one under test.
 const MINT_OWN: AddonRoute = {
   path: '/v1/x-mint',
   level: 'viewer',
@@ -80,7 +77,6 @@ const rowCall = (token: string, key: string): Promise<Response> => {
 
 const ADMIN_ROWS = V1_ROWS.filter(({ key }) => ADMIN_LEVEL.has(key));
 const isWebhook = (auth: string): boolean => auth === 'webhook-signature';
-// Built from the method rule, so a row set to the wrong level shows up here as well as in the levels check.
 const EDITOR_ROWS = V1_ROWS.filter(
   ({ key, route }) =>
     !ADMIN_LEVEL.has(key) &&

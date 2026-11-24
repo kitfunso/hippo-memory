@@ -1,5 +1,3 @@
-// A typed object's mirror memory is stored as it was before the Objects store group took the save: on the flat half-life until the typed
-// migration has run and on the configured default after, with the strength the decay function gives the stored row.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveObject } from '../../src/domain/objects/lifecycle.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -31,7 +29,6 @@ afterEach(() => {
   for (const root of roots.splice(0)) removeDir(root);
 });
 
-/** A fresh store has the typed migration marked done; `migrated: false` takes the mark away, as a store made before the migration has it. */
 function storeWith(migrated: boolean): string {
   const root = makeRoot('mirror-half-life');
   roots.push(root);
@@ -96,7 +93,6 @@ async function saveOneOfEach(root: string): Promise<void> {
 
 type Column = string | number | null;
 
-/** Every column but id, which is random, and updated_at, which SQLite stamps from its own clock. */
 function mirrorRows(root: string): Record<string, Column>[] {
   const db = openHippoDb(root);
   try {
@@ -108,7 +104,6 @@ function mirrorRows(root: string): Record<string, Column>[] {
   }
 }
 
-// The rows below were read from a store written by the commit before the group, under the same frozen clock and the same seven saves.
 const SHARED = {
   created: '2026-03-01T12:00:00.000Z',
   last_retrieved: '2026-03-01T12:00:00.000Z',
@@ -147,7 +142,6 @@ const SHARED = {
   origin_project: '',
 } as const;
 
-/** What differs from row to row, in source order; `flat` is the half-life before the typed migration and `onDefault` the one after. */
 const OWN = [
   {
     source: 'customer_note',
@@ -207,7 +201,6 @@ const OWN = [
   },
 ] as const;
 
-// v61's duplicate_hash postdates that commit; it is listed as the hash of the row's own text, so the writer's value is checked.
 function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
   return OWN.map(({ flat, onDefault, ...own }) => ({
     ...SHARED,
@@ -217,14 +210,12 @@ function rowsBeforeTheGroup(migrated: boolean): Record<string, Column>[] {
   }));
 }
 
-/** A clock that moves one millisecond at every read, so no two reads inside a save agree; it returns the instants it handed out. */
 function stubTickingClock(): number[] {
   const ticks: number[] = [];
   const next = (): number => {
     ticks.push(FROZEN.getTime() + ticks.length);
     return ticks[ticks.length - 1];
   };
-  // The proxy reads `now` off the real Date, so the spy covers both ways of asking the time.
   vi.spyOn(Date, 'now').mockImplementation(next);
   const ticking = new Proxy(Date, {
     construct: (target, args: unknown[]): Date =>
@@ -236,7 +227,6 @@ function stubTickingClock(): number[] {
 
 interface TickedSave {
   readonly memoryId: string | null;
-  /** The instants the clock handed out while the save ran. */
   readonly reads: readonly number[];
 }
 
@@ -303,16 +293,13 @@ describe.each([
       saves[i].reads.filter((at) => calculateStrength(mirrors[i], new Date(at)) === mirrors[i].strength);
     for (const [i, stored] of mirrors.entries()) {
       expect(stored.halfLifeDays).toBe(deriveHalfLife(base, stored));
-      // The row's stamp is one of the save's own reads, so the exact counts below never pass on an empty list.
       expect(saves[i].reads).toContain(Date.parse(stored.created));
     }
     for (const i of [0, 1]) {
-      // One read, no earlier than the stamp: a passed `now` scores at the stamp, the store's own clock a tick later.
       expect(saves[i].reads.length).toBeGreaterThan(1);
       expect(readsGiving(i)).toHaveLength(1);
       expect(readsGiving(i)[0]).toBeGreaterThanOrEqual(Date.parse(mirrors[i].created));
     }
-    // An error tag lifts the strength over the cap of 1, so every read gives that mirror the same value.
     expect(readsGiving(2)).toEqual(saves[2].reads);
   });
 });

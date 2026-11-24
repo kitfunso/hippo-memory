@@ -37,7 +37,6 @@ function withFixture(
   }
 }
 
-/** A one-line statement of exactly `width` characters. */
 const lineOf = (width: number) => `const x = '${'a'.repeat(width - 13)}';\n`;
 
 describe('check-long-lines.mjs', () => {

@@ -1,5 +1,3 @@
-// Read-only: list-price cost of round 3's scored records, each record's usage at the price file's Claude Code row.
-// Usage: node docs/evals/z0-r4/r3-scored-cost.mjs --analyzer <checkout of 04835462b> [--report FILE] [--grading FILE] [--drop-list FILE]
 import { openRound3 } from './r3-open.mjs';
 
 const { f, prices, load } = await openRound3(['dist/eval/eval-stats.js']);

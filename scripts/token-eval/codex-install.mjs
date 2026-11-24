@@ -1,4 +1,3 @@
-// X2's hippo install for Codex, hermetic per run (E6 plan D7, R1, R5, R11): the install env, the lookup probe, the operator launcher guard.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -12,7 +11,6 @@ import { WRAPPER_MARK, resolveCodex, writeLauncher } from './codex.mjs';
 const WIN = process.platform === 'win32';
 const ENV_KEYS = new Set(['PATH', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA']);
 const WRAPPER_JS = path.join(REPO, 'dist', 'surface', 'hooks-install', 'codex-wrapper.js');
-// Hippo's own lookup and metadata path, run in the install's env, so the probe cannot drift from what the install will do.
 const PROBE = 'import(process.argv[1]).then((m) => console.log(JSON.stringify({ found: m.detectRealCodexPath(), meta: m.resolveCodexWrapperPaths().metadataPath })))';
 const HOOK_MARKS = { UserPromptSubmit: 'hippo context --pinned-only', SessionStart: 'hippo compact-resume' };
 const REFUSED = 'nothing was installed, and the run is abandoned';
@@ -52,7 +50,6 @@ function launcherState(dir) {
 
 const changedNames = (a, b) => [...new Set([...a.keys(), ...b.keys()])].filter((n) => a.get(n) !== b.get(n)).sort();
 
-/** The operator's launcher dir as it was: new `codex*` entries removed, changed or missing ones written back from the copies. */
 function restoreLaunchers(dir, before, copies) {
   for (const name of changedNames(before, launcherState(dir))) {
     const file = path.join(dir, name);
@@ -63,7 +60,6 @@ function restoreLaunchers(dir, before, copies) {
   }
 }
 
-/** Puts the dir back and says how that went; the copies stay when the restore did not hold, since they are then the only good bytes. */
 function putBack(dir, before, copies) {
   let failed = null;
   try {
@@ -83,7 +79,6 @@ function putBack(dir, before, copies) {
 export function guardLaunchers(ctx, where, fn) {
   const dir = ctx.codexLauncher.dir;
   const before = launcherState(dir);
-  // Beside the login vault, never inside it: closing the vault would delete the only good copies after a failed restore.
   const copies = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-codex-launchers-'));
   for (const [name, was] of before) if (!was.startsWith('link:')) fs.copyFileSync(path.join(dir, name), path.join(copies, name));
   let result;
@@ -110,7 +105,6 @@ export function assertWrapperRuns(launcher, where) {
   throw new Error(`${where}: hippo's wrapper at ${launcher} runs ${cli ?? 'a hippo CLI this runner cannot read'}, which does not exist, so no Codex session of this run could start; fix the CLI path hippo's wrapper writes, run \`npm run build\`, then start a new run`);
 }
 
-/** After the install: metadata under the run's home names the run launcher, the launcher is hippo's wrapper, hooks.json holds hippo's two groups. */
 function assertInstalled(run, where) {
   const launcher = run.codexLauncher;
   const metaFile = metaFileOf(run);

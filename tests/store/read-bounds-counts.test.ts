@@ -1,4 +1,3 @@
-// Session assembly and batch delete do work bounded by what the caller needs: counted in statements and rows, never timed.
 import { afterEach, describe, expect, it } from 'vitest';
 import { assemble } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -53,7 +52,6 @@ describe('assemble reads', () => {
   });
 
   it('applies the cap to the rows the caller may see', async () => {
-    // The hidden rows are the newest, so a cap taken before the scope rule would leave no visible row.
     const root = seeded(30, 0);
     writeEntriesTogether(
       root,
@@ -98,7 +96,6 @@ describe('batch delete', () => {
     const counts = [5, 120].map((n) => {
       const root = makeRoot('batch-delete-count');
       roots.push(root);
-      // A raw row is never deleted automatically, so the rows are distilled.
       const rows = Array.from({ length: n }, (_, i) => ({
         ...createMemory(`note number ${i} about topic ${i * 31}`),
         id: `note-${String(i).padStart(4, '0')}`,

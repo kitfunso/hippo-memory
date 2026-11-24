@@ -15,18 +15,10 @@ import type { ConflictSide, LoserFate } from '../../base/ports/store/conflicts.j
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
 
-// Gate contradictions on content overlap, not shared tags (`feedback`/`policy` are too coarse). The
-// Jaccard threshold on stopword-filtered tokens only applies after a polarity signal, so it filters
-// drive-by topic similarity, not semantic drift.
 const CONFLICT_OVERLAP_THRESHOLD = 0.5;
-// Minimum distinctive shared tokens before we trust an overlap score. Filters out cases where two
-// memories share only common English + a project name.
 const CONFLICT_MIN_RARE_SHARED = 2;
-// Polarity is detected on the first N words only. A stray "not" in the middle of a long memory
-// shouldn't flip the whole thing negative.
 const POLARITY_WINDOW_WORDS = 40;
 
-/** Reads back the rows for `ids`, a page at a time; an id gone since is skipped. */
 type PagesOf = (
   ids: readonly string[],
 ) => Iterable<readonly MemoryEntry[]> | AsyncIterable<readonly MemoryEntry[]>;
@@ -34,8 +26,6 @@ type PagesOf = (
 export interface DetectConflictsOptions {
   strength: StrengthModel;
   decayOpts?: DecayBasis;
-  // Ids this cycle's decay pass rescued: the survivor filter below is recomputed independently, so
-  // without this bypass rescued entries would be silently re-excluded from conflict detection.
   rescuedIds?: Set<string>;
   pagesOf?: PagesOf;
 }
@@ -55,9 +45,7 @@ export async function detectConflicts(
   for await (const entry of entries) {
     const live =
       entry.layer !== Layer.Semantic &&
-      // An unreviewed quarantined row must not taint a visible memory as conflicted.
       !isQuarantineScope(entry.scope ?? null) &&
-      // A message is a dated record of what the person said, not a claim kept true.
       !isUserMessage(entry) &&
       (rescuedIds.has(entry.id) ||
         calculateStrength(entry, now, strength, decayOpts) >= DECAY_THRESHOLD);
@@ -78,14 +66,11 @@ export async function detectConflicts(
   return found.sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , conflict]) => conflict);
 }
 
-/** What the pair checks read of one live row, and its place in survivor order. */
 interface ConflictRow {
   place: number;
   id: string;
   trace: boolean;
   superseded: boolean;
-  /** Extracted facts and session digests restate other rows, so they are never one side of a
-   * conflict. */
   restated: boolean;
   scope: MemoryEntry['scope'];
   tenantId: string;
@@ -120,7 +105,6 @@ async function readPlaces(
   return rows;
 }
 
-/** One tenant's conflicts, each with the survivor places of its two sides. */
 function tenantConflicts(
   rows: readonly ConflictRow[],
 ): Array<readonly [number, number, DetectedConflict]> {
@@ -132,9 +116,6 @@ function tenantConflicts(
   for (const [i, a] of rows.entries()) {
     for (const j of partnersOf(i)) {
       const b = rows[j];
-      // Traces are variants of each other, not contradictions: two strategies for the same task can
-      // both be valid, and conflict detection is for stated-rule disagreement, not strategy
-      // diversity.
       if (
         (a.trace && b.trace) ||
         a.superseded ||
@@ -155,10 +136,7 @@ function tenantConflicts(
 
 type RecallFields = Pick<MemoryEntry, 'scope' | 'tenantId' | 'originProject'>;
 
-/** One project's ambient context can show both: same tenant, and the same project or a
- * user-global row beside a project's. */
 function recalledTogether(a: RecallFields, b: RecallFields): boolean {
-  // A personal row pairs only inside its own scope; any other pair shows its id to someone else.
   if ((isPersonalScope(a.scope) || isPersonalScope(b.scope)) && a.scope !== b.scope) return false;
   if (a.tenantId !== b.tenantId) return false;
   const [x, y] = [a.originProject ?? null, b.originProject ?? null];
@@ -170,15 +148,11 @@ type ConflictPolarity = 'positive' | 'negative' | 'neutral';
 interface ConflictProfile {
   readonly distinct: Set<string>;
   readonly polarity: ConflictPolarity;
-  /** Lowercased opening window padded with spaces, as classifyConflictType matches it. */
   readonly window: string;
 }
 
 function conflictProfile(text: string): ConflictProfile {
   const opening = openingWindow(text);
-  // Polarity is measured only in the first POLARITY_WINDOW_WORDS, so a stray negation deep in a
-  // prose memory doesn't flip the intent. Pad with spaces so space-delimited patterns match words
-  // at the start/end.
   return {
     distinct: distinctiveTokens(text),
     polarity: inferConflictPolarity(opening),
@@ -190,12 +164,8 @@ function describeConflict(
   a: ConflictProfile,
   b: ConflictProfile,
 ): { reason: string; score: number } | null {
-  // Jaccard on stopword-stripped tokens. Defer the threshold check until we know whether an
-  // explicit polarity pair is present (lower bar for those).
   const overlapScore = jaccardSets(a.distinct, b.distinct);
 
-  // Require at least N shared distinctive tokens so two short memories sharing only "the project
-  // name" don't register.
   let shared = 0;
   for (const t of a.distinct) if (b.distinct.has(t)) shared++;
   if (shared < CONFLICT_MIN_RARE_SHARED) return null;
@@ -219,16 +189,12 @@ function openingWindow(text: string): string {
   return text.split(/\s+/).slice(0, POLARITY_WINDOW_WORDS).join(' ');
 }
 
-// Takes opening windows only, so " on " and " off " as prepositions deep in long prose don't read
-// as enabled/disabled.
 function classifyConflictType(
   a: string,
   b: string,
   aPolarity: ConflictPolarity,
   bPolarity: ConflictPolarity,
 ): string | null {
-  // Whole-word boundaries so " on " alone doesn't match "on/off"; pair only `enabled` <->
-  // `disabled` and explicit on/off in imperative context.
   const enabledDisabled =
     (containsAny(a, [' enabled ', ' enable ']) && containsAny(b, [' disabled ', ' disable '])) ||
     (containsAny(b, [' enabled ', ' enable ']) && containsAny(a, [' disabled ', ' disable ']));

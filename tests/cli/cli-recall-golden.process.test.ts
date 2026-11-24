@@ -1,6 +1,3 @@
-// Pins the published stdout, stderr and exit code of `hippo recall` and `hippo explain` over a flag matrix, and asserts
-// the rows a goal-stack recall writes. The cases in SPAWNED run the built CLI; the rest run it in process.
-
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
@@ -27,7 +24,6 @@ const DROP_ENV = [
   'HIPPO_HOME',
 ];
 
-// One case per verb pins that the built CLI prints the bytes the in-process run does.
 const SPAWNED = new Set(['recall default', 'explain default']);
 
 let template: string;
@@ -278,7 +274,6 @@ async function rowsAfter(c: Case): Promise<RowsAfter> {
 }
 
 const SHOWN = ['goal', 'plain', 'scoped', 'pinned', 'trace', 'new'].map((n) => `mem_golden_${n}`);
-// The seed's own writes, one audit row per seeded memory.
 const SEEDED = ['plain', 'pinned', 'scoped', 'private', 'old', 'new', 'goal', 'trace', 'noise'].map(
   (n) => `remember mem_golden_${n}`,
 );
@@ -323,7 +318,6 @@ describe('cli recall and explain golden output', () => {
       query_length: 6,
       results: 6,
     });
-    // The session goal doubles its row's score, which lifts it to the top; no other stage reranks.
     expect(rows.traceResults.map((t) => [t['result_rank'], t['memory_id']])).toEqual(SHOWN.map((id, i) => [i + 1, id]));
     const scores = rows.traceResults.map((t) => Number(t['score']));
     expect(scores.every((s, i) => s > 0 && (i === 0 || s < scores[i - 1]!))).toBe(true);
@@ -354,7 +348,6 @@ describe('cli recall and explain golden output', () => {
       { key: 'total_recalled', value: '6' },
       { key: 'total_remembered', value: '0' },
     ]);
-    // Each shown row counts one retrieval; the goal row's seed starts at 3.
     const counts = Object.fromEntries(rows.memories.map((m) => [m['id'], m['retrieval_count']]));
     expect(counts).toEqual({
       ...Object.fromEntries(['noise', 'old', 'private'].map((n) => [`mem_golden_${n}`, 0])),
@@ -370,7 +363,6 @@ describe('cli recall and explain golden output', () => {
       session: true,
     });
     expect(status).toBe(1);
-    // Stage flags are checked before ranking, so not even the goal stage logs a row.
     expect(rows.goalRecallLog).toEqual([]);
     expect(auditOps(rows)).toEqual(SEEDED);
     expect([rows.traces, rows.traceResults, rows.ledger]).toEqual([[], [], []]);

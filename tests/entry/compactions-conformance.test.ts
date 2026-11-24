@@ -1,5 +1,3 @@
-// Compactions answers: a caller's record, its snapshot mark, and items
-// that restate held rows, meet a tombstone or fail the gate, over two tenants.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { CallerItems, CallerItemsSaved, MemoryEntry } from '../../src/entry/store-kit.js';
@@ -150,7 +148,6 @@ describe('Compactions', () => {
     expect(outcomes[5]).toEqual({ error: 'ConflictError: request id belongs to another session' });
     expect(outcomes[6]).toEqual({ value: { written: 1, notes: [] } });
     expect(outcomes[7]).toEqual({ value: { written: 0, notes: ['skipped 1 item(s) the store already holds'] } });
-    // Restated twice, by sA and by sB2, each a session other than the row's own.
     expect(outcomes[8]).toEqual({ value: [{ retrievalCount: 2, lastRetrieved: NOW }] });
     expect(sqlite.audit.slice(-3).map((r) => r.op)).toEqual(['remember', 'remember', 'reject_refusal']);
   });

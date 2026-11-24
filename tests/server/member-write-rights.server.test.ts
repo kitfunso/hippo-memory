@@ -1,5 +1,3 @@
-// A member key forgets, archives, supersedes or resolves away a team memory only when the row's owner is its own, else
-// 403 naming the key that can; an admin key and the CLI operator keep every right. Real server, over HTTP and MCP.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -18,7 +16,6 @@ let root: string;
 let handle: ServerHandle;
 let stopped: boolean;
 
-/** The plaintext keys: two member keys with owners, and an admin key with none. */
 interface Keys {
   readonly bob: string;
   readonly carol: string;
@@ -56,7 +53,6 @@ async function call(key: string, method: string, path: string, body?: JsonValue)
   return [res.status, (await res.json()) as JsonValue];
 }
 
-/** A team write by `key`; `owner` records the person behind it, which a member key may set only to its own. */
 async function writes(key: string, content: string, extra: { [k: string]: JsonValue } = {}): Promise<string> {
   const [status, reply] = await call(key, 'POST', '/v1/memories', { content, force: true, ...extra });
   expect(status).toBe(200);
@@ -86,7 +82,6 @@ describe('write rights on a team memory over HTTP', () => {
       notTheirs(ownedRaw),
     );
     expect(await call(keys.carol, 'POST', `/v1/memories/${owned}/supersede`, supersede)).toEqual(notTheirs(owned));
-    // Bob wrote it, but nothing on the row records him.
     expect(await call(keys.bob, 'DELETE', `/v1/memories/${unowned}`)).toEqual(noWriter(unowned));
     expect(await call(keys.carol, 'DELETE', '/v1/memories/mem_missing')).toEqual(missing('mem_missing'));
     for (const id of [owned, ownedRaw, unowned]) expect(readEntry(root, id)?.supersededBy).toBeNull();
@@ -112,7 +107,6 @@ describe('write rights on a team memory over HTTP', () => {
   it('leaves the CLI operator every right on its own store', async () => {
     const owned = await writes(keys.bob, 'the staging cluster restarts at noon', { owner: BOB });
     const unowned = await writes(keys.carol, 'the release train leaves on thursdays');
-    // The CLI hands a write to a running server, so it runs as the operator only with the server down.
     await handle.stop();
     stopped = true;
     const saved = process.cwd();

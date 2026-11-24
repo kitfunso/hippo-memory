@@ -1,5 +1,3 @@
-// Memory reads by id, scope, page and tag: the lookups the API and the surfaces run on a handle.
-
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { type DatabaseSyncLike } from '../../../db/index.js';
 import {
@@ -114,20 +112,13 @@ export function readEntriesInIdOrder(
 
 const ORIGIN_IN = 'origin_project IN (SELECT value FROM json_each(?))';
 
-// One JSON param for the list keeps a cached statement's text the same however many origins a
-// caller names.
 export function originAnd(origins: readonly string[] | null | undefined): SqlFragment {
   if (origins == null) return { sql: '', params: [] };
   return { sql: ` AND (origin_project = '' OR ${ORIGIN_IN})`, params: [JSON.stringify(origins)] };
 }
 
-/** A session raw-row read as the port asks it, or across every tenant as the root forms read. */
 type SessionRows<Q extends SessionRawQuery> = Omit<Q, 'tenantId'> & { readonly tenantId: TenantId };
 
-/** The WHERE every session raw-row read shares: the session's live raw rows in the tenant and
- * origins, live as entriesWhere({ live: true }) reads it. */
-// The tenant term never picks the index: idx_memories_tenant_created would walk the whole tenant.
-// `seek` names what does: the session index, or the primary key of an id list.
 function sessionRawWhere(
   { sessionId, tenantId, origins }: SessionRows<SessionRawQuery>,
   seek: 'session' | 'ids' = 'session',
@@ -143,8 +134,6 @@ function sessionRawWhere(
   };
 }
 
-/** The scope rule `passesScopeFilterForRecall` applies, as SQL: an explicit scope matches
- * exactly, none admits what the default deny lets through and `ownScope`. */
 function sessionScopeAdmit({
   scope,
   ownScope,
@@ -338,7 +327,6 @@ export function iterateEveryTenantEntries(db: DatabaseSyncLike): Generator<Memor
   );
 }
 
-/** The columns a text match needs, for one row of a tenant. */
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface TenantText {
   readonly id: string;
@@ -348,7 +336,6 @@ interface TenantText {
   readonly scope: string | null;
 }
 
-/** One page of TenantText rows, and where the next page starts (null after the last). */
 interface TenantTextPage {
   readonly texts: TenantText[];
   readonly next: EntryCursor | null;
@@ -384,8 +371,6 @@ export function countByOrigin(
   tenantId: string,
   sourcePrefix: string,
 ): OriginTally[] {
-  // The unit separator sorts below every character of a time or an id, so the joined string orders
-  // as (created, id).
   return cachedStatement(
     db,
     `SELECT origin_project AS origin, COUNT(*) AS live, SUM(substr(source, 1, ?) = ?) AS prefixed, ` +
@@ -407,10 +392,6 @@ export function readTakenIds(db: DatabaseSyncLike, ids: readonly string[]): stri
   return taken;
 }
 
-// Content of every team-visible tenant row tagged `tag`, without reading the rest of the store;
-// `origins` keeps one project's rows and user-global ones. No owner: a personal or
-// connector-private row must never answer `duplicate` for, or stop, a team copy. `instr`
-// prefilters; `includes` re-checks.
 export function contentsWithTag(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -494,8 +475,6 @@ export function listEntriesWithSignals(
   tenantId: TenantId,
   page: EntryPageRequest,
 ): EntryPage {
-  // A backslash may hide an escaped tag from instr, so such rows always pass; LIKE folds case, so
-  // the prefix match is wider than startsWith.
   const anyOf = [
     'pinned != 0',
     'retrieval_count >= ?',

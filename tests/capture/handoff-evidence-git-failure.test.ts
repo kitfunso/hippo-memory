@@ -1,11 +1,9 @@
-// A cwd outside any repository reads as unknown quietly; a git that cannot run is logged once, still as unknown.
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { collectHandoffEvidence } from '../../src/surface/capture/handoff-evidence.js';
 
-// Far past a loaded box's slow git start, so only a real failure reaches the log.
 const GIT_WAIT_MS = 30_000;
 
 let dir: string;

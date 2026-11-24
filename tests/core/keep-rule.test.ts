@@ -1,5 +1,3 @@
-// An imported agent memory (a tool's tag and a source starting with that tool's prefix) is kept for good: never auto-deleted,
-// decayed away or made dormant. The tag alone is not enough, since merge copies source tags onto rows sourced 'consolidation'.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -33,7 +31,6 @@ import { DAY_MS } from '../../src/base/util/time.js';
 
 pinClock();
 
-/** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
@@ -177,7 +174,6 @@ describe('canAutoDelete and AUTO_DELETABLE agree, over pinned x kind x tags x so
         .map((r) => r.id)
         .sort(),
     );
-    // One unpinned distilled row for each of the 11 cases that are not kept.
     expect(fromFunction).toHaveLength(11);
     expect(fromFunction.length).toBeLessThan(table.length);
   });

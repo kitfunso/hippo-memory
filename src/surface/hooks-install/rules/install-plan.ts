@@ -1,11 +1,8 @@
-// What every hook installer shares: the hook timeouts, the empty result and the hooks-object guard.
-
 import { type JsonHookTarget } from './shared.js';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { hookArrayContains } from './hook-handlers.js';
 import type { InstallResult } from './json-hooks.js';
 
-// Hook timeouts by cost: a local read or write, a short store lookup, a pass that may compact.
 export const HOOK_SHORT_TIMEOUT_SECONDS = 5;
 
 export const HOOK_MEDIUM_TIMEOUT_SECONDS = 10;

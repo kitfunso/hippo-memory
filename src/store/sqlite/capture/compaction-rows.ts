@@ -1,5 +1,3 @@
-// The `compactions` table: one row per Claude Code compaction, and the reads project merge makes
-// over it.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { originInSql, scopeAdmitSql } from '../runtime/rule-sql.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
@@ -80,7 +78,6 @@ export function compactionRowsByRequest(
   return listRows(db, 'tenant_id = ? AND request_id = ?', tenantId, requestId);
 }
 
-/** A session's start window, both bounds ISO strings. */
 interface LatestStartedOptions {
   readonly tenantId: string;
   readonly sessionId: string;
@@ -119,7 +116,6 @@ export function stalledSummarizedRows(
   );
 }
 
-/** A tenant's open start window, both bounds ISO strings. */
 interface OpenTranscriptOptions {
   readonly tenantId: string;
   readonly startedBefore: string;
@@ -172,7 +168,6 @@ export function markCompactionSummarized(
   update: SummarizedUpdate,
 ): boolean {
   const { summary, itemsJson, summarizedAt, requestId } = update;
-  // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const result = cachedStatement(
     db,
@@ -190,7 +185,6 @@ export function insertSummarizedCompaction(
   row: SummarizedInsert,
 ): void {
   const { id, summary, itemsJson, summarizedAt, requestId } = row;
-  // Only a caller names the column, so a store from before it was added still takes local writes.
   const stamp = requestId === undefined ? [] : [requestId];
   const [col, mark] = stamp.length === 0 ? ['', ''] : [', request_id', ', ?'];
   cachedStatement(
@@ -263,7 +257,6 @@ export function closeStartedWithoutSummary(
   return Number(result.changes ?? 0);
 }
 
-/** A session and the ISO start its next compaction must follow. */
 interface NextCompactionOptions {
   readonly tenantId: string;
   readonly sessionId: string;

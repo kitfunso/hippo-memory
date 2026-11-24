@@ -1,5 +1,3 @@
-// The dashboard's route table and its dispatch: the /v1 rows' shape and lookup, behind the
-// dashboard session.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { RequestLimits } from '../../base/util/request-scope.js';
 import {
@@ -29,8 +27,6 @@ import { routeLookup } from './route-lookup.js';
 import { bindPath, routeLabel } from './route-table.js';
 
 const SESSION = 'dashboard-session';
-// Every path outside the JSON API is the app's: it routes in the browser, so any of them may be a
-// page load.
 const PAGE = /^\/(?!api\/).*$/;
 
 export const DASHBOARD_ROUTES: readonly DashboardRoute[] = [
@@ -58,8 +54,6 @@ export const DASHBOARD_ROUTES: readonly DashboardRoute[] = [
 export interface DashboardServing {
   readonly access: DashboardAccess;
   readonly reader: DashboardReader;
-  /** A fresh Context per request, so a config edit shows on the next one, on the request's
-   * deadline and signal. */
   readonly context: (limits: RequestLimits) => DashboardContext;
   readonly bodyDeadlineMs: number;
   readonly staticFiles: StaticFiles | null;
@@ -72,7 +66,6 @@ export interface DashboardExchange {
   readonly limits: RequestLimits;
 }
 
-/** A request before the gate. */
 interface DashboardCall extends DashboardExchange {
   readonly query: URLSearchParams;
   readonly serving: DashboardServing;
@@ -97,8 +90,6 @@ function admitted(call: DashboardCall, session: DashboardSession): DashboardRout
   };
 }
 
-/** The row's run, gate first, or null when method or path differ; the path matcher runs first,
- * as for a /v1 row. */
 function dashboardRouteMatches(
   route: DashboardRoute,
   method: string,

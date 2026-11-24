@@ -1,4 +1,3 @@
-// Store rules every typed object shares, one table row per kind; a rule only one kind has stays in its <kind>-store test.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Layer } from '../../src/base/memory/entry.js';
 import { closeHippoDb } from '../../src/db/index.js';
@@ -133,7 +132,6 @@ describe.each([
   });
 });
 
-/** A typed row reduced to what the shared lifecycle owns; `body` is the kind's own text field. */
 interface View {
   readonly id: number;
   readonly memoryId: string | null;
@@ -168,7 +166,6 @@ interface Revision {
 }
 
 interface Lineage {
-  /** Audit op prefix and the noun in the supersede trigger's message. */
   readonly kind: string;
   readonly table: string;
   readonly versioned: boolean;
@@ -422,7 +419,6 @@ describe.each(LINEAGES)('$kind supersede and close', (k) => {
   });
 });
 
-/** Casts a deliberately bad status past the type so the store's run-time check is what rejects it. */
 function unchecked<S extends string | undefined>(status: string): S {
   // SAFETY: only used to send an invalid status the store must refuse.
   return status as S;

@@ -1,5 +1,3 @@
-/** `hippo import --markdown` and `--vault` through the CLI entry: dedup on re-import, vault deletion sync, and the refusals. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,7 +27,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// A verb that sets process.exitCode instead of exiting reports it here, as the real process would on exit.
 async function runVerb(...args: string[]): Promise<{ status: number; stdout: string; stderr: string }> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
@@ -78,7 +75,6 @@ describe('hippo import embedding backfill', () => {
   const FILE = ['--markdown', 'notes.md'];
   const VAULT = ['--vault', 'vault', '--name', 'notes'];
 
-  /** Runs `hippo import <args>` against an embedding server and returns the warnings logged before the command returned. */
   async function importWithEmbeddings(
     status: number,
     args: readonly string[] = FILE,
@@ -105,7 +101,6 @@ describe('hippo import embedding backfill', () => {
     }
   }
 
-  // The command's store runtime closes as the command returns, so the backfill must settle by then.
   it('embeds the imported rows before the command returns', async () => {
     const { stdout, warnings } = await importWithEmbeddings(200);
     expect(stdout).toMatch(/Imported: +2/);
@@ -138,7 +133,6 @@ describe('hippo import embedding backfill', () => {
   });
 
   it('a backfill that fails still imports, and warns with the rows left without a vector and the command that finishes them', async () => {
-    // An API provider with no key makes the backfill reject after the rows are saved.
     writeFileSync(join(hippoRoot, 'config.json'), JSON.stringify({ embeddings: { provider: 'openai', model: 'm' } }));
     writeFileSync(join(cwd, 'notes.md'), notes);
     vi.stubEnv('OPENAI_API_KEY', '');

@@ -1,7 +1,3 @@
-// The root entry's memory model: the entry and its strength, session and card records, salience and
-// the ambient state. Each function keeps its optional `now` (HIPPO_FAKE_NOW, else the wall clock,
-// read here) and its DecayOptions, from which this entry builds the StrengthModel the base
-// functions take.
 import {
   createMemory as createMemoryAt,
   markRetrieved as markRetrievedAt,
@@ -53,7 +49,6 @@ export interface DecayOptions extends DecayBasis {
   lossAversionRatio?: number;
 }
 
-/** The StrengthModel `options` names: production, cut where an eval says, with the root's ratio. */
 function modelOf(options: Pick<DecayOptions, 'ablation' | 'lossAversionRatio'>): StrengthModel {
   const base = options.ablation ? strengthModelUnder(options.ablation) : PRODUCTION_STRENGTH;
   return withLossAversion(base, options.lossAversionRatio);

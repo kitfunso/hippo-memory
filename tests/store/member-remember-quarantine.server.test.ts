@@ -1,4 +1,3 @@
-/** A member key's flagged write is held for review over HTTP and MCP, and the operator's local key is not screened. Real HTTP server on port 0, real SQLite. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ResolvedBearer, type ServerHandle } from '../../src/server.js';
@@ -39,7 +38,6 @@ describe('a member key writes through a served store', () => {
       hippoRoot: home,
       host: '127.0.0.1',
       port: 0,
-      // A resolver that also claims the local key: the core must drop the claim.
       authResolver: (token) => (token === FORGED ? Object.assign({}, FORGED_BEARER, { localKey: true }) : null),
     });
   });

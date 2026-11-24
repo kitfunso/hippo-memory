@@ -1,4 +1,3 @@
-// remember tells its caller when the content looks like a secret: HTTP and MCP carry `warnings`, the CLI prints them to stderr.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -21,7 +20,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Built at runtime so no token-shaped literal lands in the repo.
 const GHP = 'ghp_' + 'x1Y2z3W4v5'.repeat(3) + 'Q6r7S8';
 const TYPED = `the ci token is ${GHP} for the nightly job`;
 const cli = path.resolve(__dirname, '..', '..', 'dist', 'cli.js');

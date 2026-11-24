@@ -1,5 +1,3 @@
-/** The types an integrator sees from `hippo-memory/json-hooks` (src/entry/json-hooks.ts). */
-
 import { typeOnly } from './_type-only.js';
 import { describe, it, expect, expectTypeOf } from 'vitest';
 import {

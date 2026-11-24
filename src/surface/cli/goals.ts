@@ -1,5 +1,3 @@
-// `hippo goal`: the per-session goal stack that recall boosts.
-
 import { envHippoSessionId } from '../../base/util/env.js';
 import { DEFAULT_TENANT_ID } from '../../base/util/tenant.js';
 import * as api from '../../api/index.js';
@@ -16,8 +14,6 @@ import {
 } from './flag-values.js';
 import { fail } from './exit.js';
 import type { PolicyType } from '../../base/ports/store/types.js';
-
-// `hippo goal <push|list|complete|suspend|resume>`
 
 const GOAL_POLICY_TYPES: ReadonlyArray<PolicyType> = [
   'schema-fit-biased',
@@ -72,8 +68,6 @@ async function pushGoal(
   flags: CliFlags,
 ): Promise<void> {
   const rawName = args.join(' ').trim();
-  // Sanitize at WRITE time so corrupt names never enter the DB, and before the empty check so a
-  // name of control characters alone is no name.
   const name = sanitizeLogMessage(rawName).trim();
   if (!name) {
     fail(
@@ -124,8 +118,6 @@ async function listGoals(
     return;
   }
 
-  // Four columns (id, status, goal_name, outcome); tests only check substrings, so the count is not
-  // asserted.
   const rows = goals.map((g) => ({
     id: g.id,
     status: g.status,

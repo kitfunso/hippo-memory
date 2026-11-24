@@ -1,6 +1,3 @@
-// A dashboard request that fails logs its route and status through the server's failure line, never its path or query,
-// so the access token in a URL stays out of the log. The committed-write case lives in tests/api/dashboard-detail.server.test.ts.
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serveDashboard } from '../../src/surface/server/dashboard-listener.js';
 import type { ServerHandle } from '../../src/surface/server/types.js';
@@ -11,7 +8,6 @@ let dash: ServerHandle;
 
 beforeEach(async () => {
   store = makeStore('hippo-dash-failure-log');
-  // A session id is no tenant, so every card read under it fails.
   dash = await serveDashboard({ hippoRoot: store.hippoRoot, port: 0, token: DASHBOARD_TOKEN, tenantId: 'sess_x' });
 });
 

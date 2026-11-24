@@ -1,5 +1,3 @@
-// src/domain/search/goal-boost.ts: the goal-stack boost over goals already read; it ranks rows and
-// touches no store.
 import { compareScoresDesc } from '../../base/rank/compare.js';
 import { DEFAULT_SCHEMA_FIT, ERROR_TAG, type MemoryEntry } from '../../base/memory/entry.js';
 import type { RerankStep } from '../../base/rank/search-types.js';
@@ -16,10 +14,6 @@ export interface GoalStackBoostOptions {
   tenantId: string;
   limit: number;
   now: Date;
-  /**
-   * Side-channel: one goal-boost `RerankStep` per boosted row, keyed by `entry.id` (a map because
-   * the helper re-spreads rows); only populated when passed.
-   */
   trace?: Map<string, RerankStep>;
 }
 
@@ -37,7 +31,6 @@ interface GoalBoostMultiplierOptions {
   readonly policiesByGoalId: ReadonlyMap<string, RetrievalPolicy>;
 }
 
-/** The capped boost for one row whose tags match `matches` active goals. */
 function goalBoostMultiplier({
   entry,
   tags,
@@ -45,13 +38,10 @@ function goalBoostMultiplier({
   goalsByTag,
   policiesByGoalId,
 }: GoalBoostMultiplierOptions): number {
-  // First match boosts by FIRST_MATCH_BOOST, each further one adds EXTRA_MATCH_BOOST, capped at
-  // MAX_FINAL_MULTIPLIER.
   let multiplier = Math.min(
     FIRST_MATCH_BOOST + EXTRA_MATCH_BOOST * (matches.length - 1),
     MAX_FINAL_MULTIPLIER,
   );
-  // Compose per-policy multipliers per matched tag.
   for (const tag of matches) {
     const goal = goalsByTag.get(tag)!;
     const policy = policiesByGoalId.get(goal.id);
@@ -59,8 +49,6 @@ function goalBoostMultiplier({
     if (policy.policyType === 'error-prioritized' && tags.includes(ERROR_TAG)) {
       multiplier *= policy.errorPriority;
     } else if (policy.policyType === 'schema-fit-biased') {
-      // Linearly weight schema_fit in [0,1] up to (weightSchemaFit)x.
-      // Default 1.0 is a no-op.
       multiplier *=
         1.0 + Math.max(0, policy.weightSchemaFit - 1.0) * (entry.schemaFit ?? DEFAULT_SCHEMA_FIT);
     } else if (policy.policyType === 'recency-first') {
@@ -69,11 +57,9 @@ function goalBoostMultiplier({
       multiplier *= policy.weightOutcome;
     }
   }
-  // Hard cap AFTER all composition.
   return Math.min(multiplier, MAX_FINAL_MULTIPLIER);
 }
 
-/** Log rows for the top `limit` boosted rows, one per matched goal. */
 function buildGoalRecallLog<R extends { entry: MemoryEntry; score: number }>(
   boosted: R[],
   matchesByEntryId: Map<string, string[]>,
@@ -119,8 +105,6 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
   const goalsByTag = new Map(active.goals.map((g) => [g.goalName, g]));
   const goals = { goalsByTag, policiesByGoalId: active.policies };
 
-  // Goal-tag matches per boosted row, keyed by entry id; a side table (not a spread-on marker
-  // property) so `boosted` stays exactly R[] with no cast-then-strip.
   const matchesByEntryId = new Map<string, string[]>();
 
   const boosted = results
@@ -129,8 +113,6 @@ export function boostByGoals<R extends { entry: MemoryEntry; score: number }>(
       const matches = tags.filter((t) => goalsByTag.has(t));
       if (matches.length === 0) return r;
       const multiplier = goalBoostMultiplier({ entry: r.entry, tags, matches, ...goals });
-      // Recall-trace side-channel: record the goal-boost step BEFORE the score is mutated, keyed by
-      // entry id; a pure read of r.score.
       if (trace) {
         trace.set(r.entry.id, {
           stage: 'goal-boost',

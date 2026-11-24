@@ -18,10 +18,6 @@ import { testInfra } from '../_helpers/infra.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { mcpContext } from '../_helpers/mcp-context.js';
 
-// ---------------------------------------------------------------------------
-// captureError
-// ---------------------------------------------------------------------------
-
 describe('captureError', () => {
   it('creates a memory entry with error tags', () => {
     const entry = captureError(
@@ -67,10 +63,6 @@ describe('captureError', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// extractLessons
-// ---------------------------------------------------------------------------
-
 describe('extractLessons', () => {
   it('extracts lessons from fix commits', () => {
     const log = [
@@ -113,7 +105,6 @@ describe('extractLessons', () => {
   });
 
   it('extracts lessons from multi-repo combined output', () => {
-    // Simulate concatenated git logs from multiple repos
     const repoALog = ['aaa1111 fix: broken auth flow in login page', 'bbb2222 feat: add search bar'].join('\n');
 
     const repoBLog = [
@@ -133,19 +124,12 @@ describe('extractLessons', () => {
     expect(lessonsB.some((l) => l.includes('bad migration'))).toBe(true);
     expect(lessonsB.some((l) => l.includes('bump dependencies'))).toBe(true);
 
-    // Combined set has no overlap
     const all = [...lessonsA, ...lessonsB];
     expect(new Set(all).size).toBe(all.length);
   });
 });
 
-// ---------------------------------------------------------------------------
-// partitionLessons (DF4)
-// ---------------------------------------------------------------------------
-
 describe('partitionLessons', () => {
-  // These are the six roadmap-named junk subjects: no path, number, flag or
-  // other specific detail, so isContentWorthStoring rejects them.
   const junkSubjects = [
     'fixed signals',
     'globe view on by default',
@@ -155,8 +139,6 @@ describe('partitionLessons', () => {
     'refactor stuff',
   ];
 
-  // These carry a path, number, or flag - specific enough to be worth
-  // storing as a memory.
   const detailedSubjects = [
     'fix CI flake in session-end-snapshot-close.test.ts',
     'bump pool timeout to 30s in src/db/index.ts',
@@ -186,15 +168,6 @@ describe('partitionLessons', () => {
     expect(partitionLessons([])).toEqual({ kept: [], dropped: [] });
   });
 
-  // Anti-coupling pin (the grill's objection from the DF4 plan): autolearn is
-  // now the FOURTH consumer of isContentWorthStoring, after the capture
-  // write gate, the DF3 include-recent floor, and auditMemory. A prior
-  // release widened that shared predicate and silently changed behaviour
-  // for a consumer nobody re-swept (v1.36.0 ship-gate incident). This test
-  // pins autolearn's OWN admission boundary against fixed inputs, so if a
-  // future change to isContentWorthStoring moves that boundary, it fails
-  // HERE - loud and attributable to autolearn - instead of quietly
-  // changing what git auto-learn ingests with no test noticing.
   it('pins the admission boundary against the shared predicate (anti-coupling)', () => {
     const { kept, dropped } = partitionLessons([...junkSubjects, ...detailedSubjects]);
     expect(dropped.sort()).toEqual([...junkSubjects].sort());
@@ -202,17 +175,8 @@ describe('partitionLessons', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// extractLessons stays a pure parser (DF4: filtering moved to the write
-// path, not into the parser - a junk subject the parser recognizes as a
-// "fix"-shaped commit is still RETURNED here; partitionLessons is what
-// drops it before storage).
-// ---------------------------------------------------------------------------
-
 describe('extractLessons is unchanged by the write-path gate', () => {
   it('still returns a low-information subject the parser recognizes', () => {
-    // "fixed signals" matches the loose \b(fixed|...)\b pattern - the parser
-    // has no quality predicate and never should; admission happens later.
     const lessons = extractLessons('abc1234 fixed signals');
     expect(lessons).toContain('fixed signals');
   });
@@ -222,13 +186,6 @@ describe('extractLessons is unchanged by the write-path gate', () => {
     expect(lessons).toContain('corrected entry prices');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Write-path wiring (DF4): both `hippo learn --git` (CLI) and the MCP
-// `hippo_learn` tool must run parsed lessons through partitionLessons
-// before they reach the store. A junk subject must not survive; a
-// detail-carrying one must.
-// ---------------------------------------------------------------------------
 
 const CLI = path.join(process.cwd(), 'dist', 'cli.js');
 
@@ -294,9 +251,6 @@ describe('a gated lesson still invalidates', () => {
   let env: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    // "replace webpack with vite" is a MIGRATION subject that FAILS the
-    // quality heuristic. Both facts matter: it must still supersede stale
-    // webpack memories even though it is not itself worth storing.
     repoDir = initGitRepoWithCommits(['refactor: replace webpack with vite']);
     globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-df4-inv-'));
     env = { ...process.env, HIPPO_HOME: globalRoot, HIPPO_SKIP_AUTO_INTEGRATIONS: '1' };
@@ -312,16 +266,6 @@ describe('a gated lesson still invalidates', () => {
   });
 
   it('does NOT invalidate when the subject is too thin to store (documented limit)', () => {
-    // PINS A DELIBERATE LIMITATION, not a fix. A subject too thin to store
-    // also does not invalidate, because the gate filters the loop input.
-    //
-    // Invalidation halves a memory's half-life once, so a rescan no longer
-    // compounds it. Letting dropped lessons invalidate is a separate change
-    // that is not made here: across 413 real auto-learn rows, ZERO gated
-    // lessons carry a migration target, so the limit costs nothing today.
-    //
-    // If this assertion ever flips, someone changed that decision - make it
-    // deliberate rather than incidental.
     const repoRoot = path.join(repoDir, '.hippo');
     const stale = createMemory('webpack config uses HtmlWebpackPlugin for output', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -345,7 +289,6 @@ describe('a gated lesson still invalidates', () => {
       stale.halfLifeDays,
     );
 
-    // ...and the thin subject itself is still not stored.
     const contents = loadAllEntries(repoRoot, 'default').map((e) => e.content);
     expect(contents.some((c) => c.includes('replace webpack with vite'))).toBe(false);
   });
@@ -399,10 +342,6 @@ describe('write-path gate: MCP hippo_learn tool', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// git repo detection
-// ---------------------------------------------------------------------------
-
 describe('git repo detection', () => {
   it('treats an empty recent history window as a real git repo, not a missing repo', () => {
     const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-gitlog-'));
@@ -441,10 +380,6 @@ describe('git repo detection', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Invalidation during git learning
-// ---------------------------------------------------------------------------
-
 describe('invalidation during git learning', () => {
   let tmpDir: string;
 
@@ -453,24 +388,20 @@ describe('invalidation during git learning', () => {
   });
 
   it('invalidates old memories when learning a migration commit', async () => {
-    // Setup: create an existing memory about webpack
     const mem = createMemory('webpack config uses HtmlWebpackPlugin for output', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['webpack', 'build'],
     });
     writeEntry(tmpDir, mem);
 
-    // Extract invalidation target from a migration commit message
     const target = extractInvalidationTarget('feat: migrate from webpack to vite');
     expect(target).not.toBeNull();
     expect(target!.from).toBe('webpack');
     expect(target!.to).toBe('vite');
 
-    // Invalidate matching memories
     const result = await invalidateMatching(sqliteStore(tmpDir), target!, 'default');
     expect(result.invalidated).toBe(1);
 
-    // Verify the old memory was weakened
     const updated = readEntry(tmpDir, mem.id);
     expect(updated).not.toBeNull();
     expect(updated!.tags).toContain('invalidated');
@@ -488,7 +419,6 @@ describe('invalidation during git learning', () => {
     const target = extractInvalidationTarget('fix: correct off-by-one in pagination');
     expect(target).toBeNull();
 
-    // Memory should remain unchanged
     const updated = readEntry(tmpDir, mem.id);
     expect(updated!.tags).not.toContain('invalidated');
     expect(updated!.halfLifeDays).toBe(mem.halfLifeDays);

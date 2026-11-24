@@ -72,7 +72,6 @@ function expectHashedOnly(row: AuditRow, query: string): void {
 
 function expectNoCanary(): void {
   const rows = [...auditRows(localRoot), ...auditRows(globalRoot)];
-  // remember, context and API recall one row each; CLI, MCP and HTTP a recall plus a no-session anchor skip each.
   expect(rows).toHaveLength(9);
   for (const row of rows) expect(row.text).not.toContain(CANARY);
 }

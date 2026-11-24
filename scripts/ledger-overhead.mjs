@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// The delivery ledger's own time per prompt-hook turn, measured inside one process, so Node start-up noise
-// cannot swamp a cost of a few ms. Run after `npm run build`:
-//   node scripts/ledger-overhead.mjs [--runs 200] [--memories 2000]
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -36,7 +33,6 @@ const { blockHash } = await load('base/util/token-text.js');
 const { realpathOrResolve } = await load('host/real-path.js');
 const { recordTokenUse } = await load('entry/testing.js');
 
-// Same seed, vocabulary and prompt as scripts/hook-latency.mjs, so the stores match.
 const WORDS = [
   'deploy', 'rollback', 'migration', 'postgres', 'timeout', 'kubernetes', 'cluster',
   'incident', 'latency', 'budget', 'token', 'schema', 'index', 'cache', 'retry',
@@ -71,7 +67,6 @@ function buildStore(config) {
   return { base, local, globalRoot };
 }
 
-// Holds the write lock 30 ms at a time, as in scripts/hook-latency.mjs.
 const CONTENDER = `const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(process.argv[1]);
 db.exec('PRAGMA busy_timeout = 5000');
@@ -79,7 +74,6 @@ const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 for (;;) { db.exec('BEGIN IMMEDIATE'); pause(30); db.exec('COMMIT'); pause(5); }`;
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-// Times every observer call; watchAdmit's wrapper is charged only for its own time, not the admit it wraps.
 function timedObserver(rec, acc) {
   const wrap = (name) => (...args) => {
     const t0 = performance.now();
@@ -143,8 +137,6 @@ async function turn(store, mode, i) {
   rec.delivered(emitted.length > 0 ? { state: 'sent', emittedText: `${emitted}\n` } : { state: 'empty' });
   const deliveredMs = performance.now() - d0;
 
-  // The token ledger's handle and its inject row exist with or without the ledger, so neither is charged; the
-  // event follows that row on the same handle, as in the CLI.
   const db = openHippoDb(store.local);
   let flushMs;
   let written = false;
@@ -163,7 +155,6 @@ async function turn(store, mode, i) {
   return { ledgerMs: createMs + acc.ms + deliveredMs + flushMs, observerMs: acc.ms, flushMs, contextMs, written };
 }
 
-// One `hippo capture-error` row as the hook builds it: recorder, failure link and the flush on an already open handle.
 function toolFailureTurn(store, mode, i) {
   const sessionId = mode === 'steady' ? 'steady-tf' : `${mode}-tf-${i}`;
   const stdinText = JSON.stringify({
@@ -198,7 +189,6 @@ async function cell(store, mode) {
   const rows = [];
   const tfRows = [];
   try {
-    // Turns run alone, so their bounds are measured as before; tool-failure writes follow under the same mode and contender.
     for (let i = 0; i < WARMUPS + RUNS; i++) {
       const r = await turn(store, mode, i);
       if (i >= WARMUPS) rows.push(r);

@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { collectVerbReads } from '../../scripts/cli-flag-reads.mjs';
 
-// The real ES2022 lib is slow to parse on a shared runner, and the walker needs no global types.
 const MINIMAL_LIB = [
   'interface Array<T> { length: number; [n: number]: T }',
   'interface Boolean {} interface Function {} interface CallableFunction {} interface NewableFunction {}',
@@ -25,7 +24,6 @@ export const ROWS = {
 };
 `;
 
-// One factory, three kind configs: what the walker finds per row is what case 14e compares to each row's declaration.
 const KINDS = `type Flags = Record<string, string | boolean | undefined>;
 interface Kind {
   readonly body: (flags: Flags) => string | undefined;
@@ -80,13 +78,11 @@ describe('cli-flag-reads', { timeout: 30_000 }, () => {
     file('src/surface/cli/verbs/rows.ts', ROWS);
     file('src/surface/cli/kinds.ts', KINDS);
     const found = collectVerbReads(dir);
-    // A flag declared on plain but read only by config is dead there; repo left off config is a missing read.
     expect(found.verbs).toEqual([
       { verb: 'plain', flags: { text: 'value' } },
       { verb: 'config', flags: { repo: 'value', since: 'value', summary: 'value' } },
       { verb: 'computed', flags: { text: 'value' } },
     ]);
-    // A config member that is no literal is reported, never dropped.
     expect(found.unfollowed).toEqual([expect.stringMatching(/^src\/surface\/cli\/kinds\.ts:\d+ +computed key: /)]);
   });
 });

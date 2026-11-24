@@ -1,13 +1,10 @@
 #!/usr/bin/env node
-// Fails when src names node:sqlite outside its two loaders, in any form a lint import rule misses (a renamed
-// createRequire, process.getBuiltinModule, a worker source string), or imports a module by a computed specifier.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import ts from 'typescript';
 
 const SQLITE = /^node:sqlite$/;
-// The two files that load SQLite, and the one whose worker source string loads it in its own thread.
 const LOADERS = new Set(['src/db/sqlite.ts', 'src/host/file-lock.ts']);
 const WORKER_SOURCE = 'src/db/wal-checkpointer.ts';
 // SHORTCUT: a computed import() is failed only in the data layer; elsewhere its target is known only at run time
@@ -25,7 +22,6 @@ function tsFiles(dir, out = []) {
 
 const isText = (n) => ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n);
 
-/** Each `file:line` that names node:sqlite or imports by a computed specifier. */
 function sitesIn(file) {
   const sf = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
   const sites = [];

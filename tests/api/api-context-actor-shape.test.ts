@@ -1,12 +1,3 @@
-/**
- * Runtime test for v1.12.0 A5 v2 sub-1: Context.actor is now an Actor object
- * (NOT a string). adminActor() helper constructs the common-case (process-local
- * admin) shape used by CLI / MCP / connector entry points.
- *
- * Real-DB per project convention. Verifies the shape via api.remember +
- * audit_log round-trip: the actor.subject is what shows up in the audit row.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -41,8 +32,6 @@ describe('Context.actor shape', () => {
     try {
       const rows = listAuditEvents(db, { tenantId: 'default', op: 'remember' });
       expect(rows.length).toBeGreaterThanOrEqual(1);
-      // audit_log.actor column is TEXT storing the subject string (not the
-      // full Actor object). v1.12.0 brainstorm decision #2.
       expect(rows[0]!.actor).toBe('cli');
     } finally {
       closeHippoDb(db);

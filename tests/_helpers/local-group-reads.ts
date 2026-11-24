@@ -1,4 +1,3 @@
-// The reads of the port groups that were hippo.db's local files, as the reader-thread parity test runs them, and the rows they need.
 import { inspect } from 'node:util';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { rejectionDigest } from '../../src/base/records/rejection-digest.js';
@@ -24,14 +23,12 @@ export function shown<T>(value: T): string {
     breakLength: Infinity,
     sorted: true,
   });
-  // A row from node:sqlite has no prototype and its copy from a thread has Object's; no caller reads the difference.
   return text.replaceAll('[Object: null prototype] ', '');
 }
 
 export interface Read {
   readonly name: string;
   readonly run: Call<string>;
-  /** In the answer, so a read that found nothing on both stores cannot pass. */
   readonly shows: string | RegExp;
 }
 
@@ -43,7 +40,6 @@ export const PLAIN = 'deploy pipeline uses blue green rollout for the api';
 export const REFUSED = 'never deploy on a friday afternoon';
 
 const IMPORTED = 'agent-memory:claude:seeded/';
-// Ids that sort after the shared seed's, so the reads that page by id keep their first rows.
 const NOTE = 'mem_z_note';
 const PROJECT = 'seeded-project';
 const CWD = 'C:/seeded/project';
@@ -66,13 +62,11 @@ export async function seedLocalGroups(root: string): Promise<void> {
     source: `${IMPORTED}note.md#h1`,
     originProject: PROJECT,
   });
-  // The two texts differ only by spacing, which is what the dedupe partitions on.
   const twins = [
     live('mem_z_twin1', 'the release train leaves at noon on thursday'),
     live('mem_z_twin2', 'the release  train leaves at noon on thursday'),
   ];
   for (const row of [note, ...twins]) writeEntry(root, row);
-  // A pending queue row, for the read of the tenants with graph work waiting.
   markGraphDirty(root, TENANT, 'mem_p_plain');
   onDb(root, (db) => {
     const gone = live('mem_d_agent', 'an imported note whose file was deleted', {
@@ -80,7 +74,6 @@ export async function seedLocalGroups(root: string): Promise<void> {
       originProject: PROJECT,
     });
     insertDormantRow(db, { entry: gone, strength: 0.01, reason: 'source-deleted', dormantAt: EVER });
-    // Started long enough ago to be past the replay window, the later one ending the earlier one's transcript window.
     const start = { sessionId: 'compact-session', originProject: 'stale-project', trigger: 'auto', cwd: CWD };
     startCompaction(db, TENANT, { ...start, transcriptPath: TRANSCRIPT }, new Date(Date.now() - 3 * HOUR_MS));
     startCompaction(db, TENANT, { ...start, transcriptPath: TRANSCRIPT }, new Date(Date.now() - 2 * HOUR_MS));
@@ -88,7 +81,6 @@ export async function seedLocalGroups(root: string): Promise<void> {
   const s = sqliteStore(root);
   await s.consolidation.noteEmptyExtractions!({ mark: [{ id: NOTE, digest: EMPTY_DIGEST, at: EVER }], clear: [] });
   await s.entryWrites.applyOutcome({ tenantId: TENANT, actor: ACTOR, ownScope: null, ids: [NOTE], good: true });
-  // Folds the compaction records' stale project name into the seeded one, which leaves the merge's audit row.
   await s.projectTags.merge(
     { tenantId: TENANT, actor: ACTOR },
     { from: 'stale-project', into: PROJECT, dryRun: false },

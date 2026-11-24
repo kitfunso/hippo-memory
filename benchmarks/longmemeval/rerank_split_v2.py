@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""Split a retrieval JSONL into per-batch input JSONs for sub-agent reranking.
-
-Each batch is 10 queries; each query carries up to N candidates (default 20)
-with content truncated to ~600 chars. Output: /tmp/rerank_batches_v2/batch_NNN.json.
-"""
 from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path

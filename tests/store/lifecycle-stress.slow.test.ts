@@ -1,18 +1,3 @@
-/**
- * Lifecycle stress eval — harness unit tests.
- *
- * Real SQLite store, NO mocks (project rule). Tiny corpora + low budget so the
- * suite stays fast. Each test isolates its own temp HIPPO_HOME under os.tmpdir()
- * (never cwd/.hippo or the global store), so tests/_real-store-guard.ts cannot
- * false-positive on a leak.
- *
- * Covers:
- *   1. injector determinism      — same seed => byte-identical stream
- *   2. value-based metric        — the by-fact-value scoring is correct
- *   3. merge fires + answer survives (mirrors scripts/lifecycle-stress/probe.mjs)
- *   4. G1 leak sanity            — noise-only store => fact answer absent at floor
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -31,10 +16,6 @@ import { writeEntriesTogether, loadAllEntries, loadEmbeddingIndex } from '../_he
 const PC = { ...DEFAULT_PHYSICS_CONFIG, enabled: true };
 const tok = (s: string): number => Math.ceil((s || '').length / 4);
 
-// Re-implements run.mjs scoreAssembled by-value logic so the test pins the
-// scoring contract independently of the harness module's internals. Out-rank is
-// by a STALE token of the SAME fact (pre-reg axis 1); the 4 main conditions have
-// no stale tokens, so presence is the metric there.
 function scoreAssembled(
   assembled: { entry: { content: string } }[],
   labels: { factKey: string; topic: string; answerToken: string; staleTokens?: string[] }[],
@@ -57,10 +38,8 @@ function scoreAssembled(
   return { answered, tokens };
 }
 
-// Xenova/all-MiniLM-L6-v2, the default local embedding model these stores use, emits 384 numbers.
 const MINILM_DIMENSIONS = 384;
 
-// Fails a run where embedMemory stored nothing, which would otherwise pass on BM25 alone.
 function expectVectorsStored(hippoRoot: string): void {
   const index = loadEmbeddingIndex(hippoRoot);
   for (const e of loadAllEntries(hippoRoot, 'default')) {
@@ -74,7 +53,6 @@ describe('lifecycle-stress injector', () => {
     const a = injectStream(opts);
     const b = injectStream(opts);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-    // different seed => different stream (answer tokens are seed-derived)
     const c = injectStream({ ...opts, seed: 8 });
     expect(JSON.stringify(c)).not.toBe(JSON.stringify(a));
   });
@@ -83,10 +61,7 @@ describe('lifecycle-stress injector', () => {
     const { memories, labels } = injectStream({ seed: 3, scaleMemories: 100, numFacts: 6, dupesPerFact: 3 });
     expect(memories.length).toBe(100);
     expect(labels.length).toBe(6);
-    // every fact member carries its answer token in the first 120 chars of line 1
     for (const lab of labels) {
-      // Fact membership is identified by the answer token in content (eval tags are
-      // not written to the store, to avoid an embedded oracle signal).
       const members = memories.filter((m: { content: string }) => m.content.includes(lab.answerToken));
       expect(members.length).toBe(3);
       for (const m of members) {
@@ -94,7 +69,6 @@ describe('lifecycle-stress injector', () => {
         expect(firstLine120).toContain(lab.answerToken);
       }
     }
-    // answer tokens are distinct across facts (no cross-fact collision)
     const toks = labels.map((l: { answerToken: string }) => l.answerToken);
     expect(new Set(toks).size).toBe(toks.length);
   });
@@ -111,8 +85,6 @@ describe('lifecycle-stress value-based metric', () => {
       { entry: { content: 'T0 is ANS1111. filler.' } },
       { entry: { content: 'T1 is ANS2222. filler.' } },
     ];
-    // coexisting correct tokens do NOT out-rank each other (out-rank is by a
-    // SAME-fact stale token, of which there are none in the main conditions)
     expect(scoreAssembled(assembled, labels).answered).toBe(2);
   });
 
@@ -120,13 +92,10 @@ describe('lifecycle-stress value-based metric', () => {
     const assembled = [
       { entry: { content: '[Consolidated from 3 related memories]\n- T0 is ANS1111\n- T0 equals ANS1111' } },
     ];
-    // fact0 present via the summary; fact1 absent
     expect(scoreAssembled(assembled, labels).answered).toBe(1);
   });
 
   it('does NOT credit a fact whose CURRENT token is out-ranked by its own STALE token', () => {
-    // supersession-arm contract: fact0 has a stale token ANS0000 that ranks
-    // ahead of its current token ANS1111 => fact0 not answered.
     const staleLabels = [
       { factKey: 'fact0', topic: 'T0', answerToken: 'ANS1111', staleTokens: ['ANS0000'] },
       { factKey: 'fact1', topic: 'T1', answerToken: 'ANS2222' },
@@ -136,13 +105,11 @@ describe('lifecycle-stress value-based metric', () => {
       { entry: { content: 'T0 is ANS1111 (current).' } }, // current, ranks second
       { entry: { content: 'T1 is ANS2222.' } },
     ];
-    // fact0: current present at rank 1 but stale ANS0000 at rank 0 (before) => not answered
-    // fact1: present, no stale => answered
     expect(scoreAssembled(assembled, staleLabels).answered).toBe(1);
   });
 
   it('sums active-context tokens via the len/4 estimator', () => {
-    const assembled = [{ entry: { content: 'x'.repeat(40) } }]; // 40 chars => 10 tokens
+    const assembled = [{ entry: { content: 'x'.repeat(40) } }];
     expect(scoreAssembled(assembled, labels).tokens).toBe(10);
   });
 });
@@ -165,7 +132,6 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     expectVectorsStored(root);
 
     const cons = await consolidate(root, {});
-    // merge must fire once per redundant fact cluster, and never on the distractors
     expect(cons.semanticCreated).toBe(labels.length);
 
     for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
@@ -173,7 +139,6 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     const summaries = after.filter((e) => (e.content || '').startsWith('[Consolidated'));
     expect(summaries).toHaveLength(labels.length);
 
-    // every redundant-cluster fact's answer token survives into SOME summary
     for (const lab of labels) {
       const carried = summaries.some((s) => (s.content || '').includes(lab.answerToken));
       expect(carried, `summary must carry ${lab.answerToken} for ${lab.factKey}`).toBe(true);
@@ -193,7 +158,6 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     for (const e of loadAllEntries(root, 'default')) await embedMemoryInto(localIndex(root), e);
     const after = loadAllEntries(root, 'default');
 
-    // at a generous budget every fact's token must be retrievable by its topic
     for (const lab of labels) {
       const res = await physicsSearch(lab.topic, after, {
         hippoRoot: root,
@@ -208,10 +172,7 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
 
   it('leak sanity: a noise-only store does not surface any fact answer token', async (ctx) => {
     skipWithoutEmbeddings(ctx, isEmbeddingAvailable());
-    // labels for facts that are NEVER injected (noise-only store)
     const { labels } = injectStream({ seed: 99, scaleMemories: 40, numFacts: 4, dupesPerFact: 3 });
-    // Noise-only: facts are injected first, so the distractors are everything after
-    // the fact members (numFacts*dupesPerFact = 2*2 = 4). No tag filter needed.
     const noise = injectStream({ seed: 99, scaleMemories: 40, numFacts: 2, dupesPerFact: 2 }).memories.slice(2 * 2);
     expect(noise).toHaveLength(40 - 2 * 2);
     writeEntriesTogether(
@@ -222,11 +183,9 @@ describe('lifecycle-stress mechanism (real DB, mirrors the probe)', () => {
     expectVectorsStored(root);
     const entries = loadAllEntries(root, 'default');
 
-    // no answer token from the (un-injected) fact labels may appear anywhere
     for (const lab of labels) {
       const leaked = entries.some((e) => (e.content || '').includes(lab.answerToken));
       expect(leaked, `noise store must not contain ${lab.answerToken}`).toBe(false);
-      // and a topic query must not retrieve it either (floor)
       const res = await physicsSearch(lab.topic, entries, {
         hippoRoot: root,
         physicsConfig: PC,

@@ -40,11 +40,9 @@ describe('SQLite busy_timeout', () => {
   it('concurrent readers do not get SQLITE_BUSY', () => {
     initTestStore(tmpDir);
 
-    // Write some data first
     const entry = createMemory('test concurrent access');
     writeEntry(tmpDir, entry);
 
-    // Open two connections simultaneously (simulates concurrent plugin calls)
     const db1 = openHippoDb(tmpDir);
     const db2 = openHippoDb(tmpDir);
     try {
@@ -63,13 +61,11 @@ describe('batchWriteAndDelete', () => {
   it('writes and deletes in a single transaction', () => {
     initTestStore(tmpDir);
 
-    // Create entries to later delete
     const toDelete1 = createMemory('will be deleted 1');
     const toDelete2 = createMemory('will be deleted 2');
     writeEntry(tmpDir, toDelete1);
     writeEntry(tmpDir, toDelete2);
 
-    // New entries to write
     const toWrite1 = createMemory('batch written 1');
     const toWrite2 = createMemory('batch written 2');
 
@@ -98,18 +94,14 @@ describe('batchWriteAndDelete', () => {
 
 describe('Plugin injection dedup guard', () => {
   it('injectedSessions set prevents double injection', async () => {
-    // This tests the dedup logic in isolation (the Set-based guard)
     const injectedSessions = new Set<string>();
     const sessionKey = 'test-session-123';
 
-    // First call: not in set, should inject
     expect(injectedSessions.has(sessionKey)).toBe(false);
     injectedSessions.add(sessionKey);
 
-    // Second call: already in set, should skip
     expect(injectedSessions.has(sessionKey)).toBe(true);
 
-    // After session_end: cleared, should inject again
     injectedSessions.delete(sessionKey);
     expect(injectedSessions.has(sessionKey)).toBe(false);
   });

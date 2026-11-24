@@ -1,8 +1,3 @@
-/**
- * TE5 task drafting from git history: candidate selection, the fail-at-base
- * and pass-at-fix check, and the needsReview gate the runner enforces.
- * Real git repository, real worktrees.
- */
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,16 +21,13 @@ function repoWithHistory(): string {
   writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a - b;\n');
   git('add', '.');
   git('commit', '-qm', 'initial');
-  // A real fix with a test that fails before it.
   writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a + b;\n');
   writeFileSync(join(repo, 'tests', 'add.test.js'), "if (require('../lib.js').add(2, 3) !== 5) process.exit(1);\n");
   git('add', '.');
   git('commit', '-qm', 'fix: add returned a difference');
-  // Docs only: not a candidate.
   writeFileSync(join(repo, 'README.md'), 'docs\n');
   git('add', '.');
   git('commit', '-qm', 'docs');
-  // Code plus a test that already passed before: a candidate that verify drops.
   writeFileSync(join(repo, 'lib.js'), 'module.exports.add = (a, b) => a + b;\nmodule.exports.one = 1;\n');
   writeFileSync(join(repo, 'tests', 'one.test.js'), "if (require('../lib.js').add(1, 1) !== 2) process.exit(1);\n");
   git('add', '.');
@@ -52,7 +44,6 @@ function initRepo(repo: string): (...a: string[]) => void {
   return git;
 }
 
-/** A commit that touches a code file, a hidden-test fixture and an e2e spec together. */
 function repoWithFixtureAndE2E(): string {
   const repo = mkdtempSync(join(tmpdir(), 'make-tasks-fixture-'));
   dirs.push(repo);
@@ -71,7 +62,6 @@ function repoWithFixtureAndE2E(): string {
   return repo;
 }
 
-/** A commit that only adds an e2e spec: not a candidate, since e2e counts as neither test nor code. */
 function repoWithE2EOnly(): string {
   const repo = mkdtempSync(join(tmpdir(), 'make-tasks-e2e-only-'));
   dirs.push(repo);
@@ -87,7 +77,6 @@ function repoWithE2EOnly(): string {
   return repo;
 }
 
-/** One bundle commit (5 test files) and one big-diff commit (1 test file, a large code change). */
 function repoWithScopeGateCandidates(): string {
   const repo = mkdtempSync(join(tmpdir(), 'make-tasks-scope-'));
   dirs.push(repo);

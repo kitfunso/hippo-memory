@@ -1,10 +1,6 @@
-// A request's log id, and the deadline type its Context carries. A leaf module, so the logger can
-// read the request id without importing the store layer.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-/** What the one ambient scope carries. */
 interface RequestScope {
-  /** Ties every log line written inside the scope to one request. */
   readonly requestId: string | undefined;
 }
 
@@ -21,7 +17,6 @@ export function requestDeadlineMs(configured?: number): number {
  * those soon after `at`, with the outcome only it knows.
  */
 export class RequestDeadline {
-  /** Epoch milliseconds. */
   readonly at: number;
   #storeCalls = 0;
   #whenIdle: (() => void)[] = [];
@@ -30,7 +25,6 @@ export class RequestDeadline {
     this.at = at;
   }
 
-  /** Counts `call` as one the request waits on until it settles. */
   track<T>(call: Promise<T>): Promise<T> {
     this.#storeCalls += 1;
     const done = (): void => {
@@ -42,10 +36,6 @@ export class RequestDeadline {
     return call;
   }
 
-  /**
-   * Runs `fn` now, or once the last store call the request waits on has settled; every function
-   * registered meanwhile runs, in order.
-   */
   onceIdle(fn: () => void): void {
     if (this.#storeCalls === 0) fn();
     else this.#whenIdle.push(fn);
@@ -59,8 +49,6 @@ export interface RequestLimits {
   readonly signal?: AbortSignal | undefined;
 }
 
-// Only the log request id lives in AsyncLocalStorage; a request's deadline and signal ride on its
-// Context.
 export const requestScopes = new AsyncLocalStorage<RequestScope>();
 
 /** The id of the request this code runs for, if any. */

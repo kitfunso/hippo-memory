@@ -1,4 +1,3 @@
-// git as a child process: the one GitRunner that starts a process; the roots hand it down.
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
 import type { GitCall, GitRunner } from '../base/ports/git.js';
 import { errorMessage } from '../base/util/log.js';
@@ -15,8 +14,6 @@ function optionalOptions(call: GitCall): ExecFileSyncOptions {
   return options;
 }
 
-/** execFileSync puts git's exit code on the error it throws; a kill or a failed start leaves
- * none. */
 function exitStatus(error: Error): number | null {
   if (!('status' in error)) return null;
   const { status } = error;

@@ -1,7 +1,3 @@
-// benchmarks/sequential-learning/aggregate.mjs
-// v1.7.5 -- pure aggregation helpers for multi-seed runs. Zero npm deps; only
-// Node 22+ built-ins. Keep this file dependency-free so the benchmark runs on
-// a vanilla Node install with `node run.mjs`.
 import { mulberry32 } from '../../scripts/lib/prng.mjs';
 
 /**
@@ -26,8 +22,6 @@ export function stdDev(xs) {
   return Math.sqrt(sumSq / (xs.length - 1));
 }
 
-// t-distribution critical values for 95% two-sided, df = n - 1.
-// Hardcoded for n in [5..30]; falls back to 1.960 (z) for n > 30.
 const T_CRIT_95 = {
   5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262,
   11: 2.228, 12: 2.201, 13: 2.179, 14: 2.160, 15: 2.145, 16: 2.131,

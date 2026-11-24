@@ -1,6 +1,3 @@
-// Regression bar: every
-// /v1 and /mcp route must 401 without a valid Bearer. The route list is derived from
-// the route table so a new route missing buildContextWithAuth/requireAuth fails here.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';
 import { serve } from '../_helpers/store-switch.js';
@@ -12,19 +9,14 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// The /v1 rows come from the live table; the routes outside it come from HOST_ROUTES, which boot.ts dispatches.
 const INLINE_ROUTES: readonly string[] = Object.values(HOST_ROUTES).map(({ method, path }) => `${method} ${path}`);
 
-// Rows the old source-text parse found in the table.
 const OLD_PARSED_V1_COUNT = 62;
 
-// The rows that skip the key check because their own signature check is the proof.
 const PUBLIC = V1_ROWS.filter(({ route }) => route.auth === 'webhook-signature').map(({ key }) => key);
 
 const derivedRoutes = (): Set<string> => new Set([...V1_ROWS.map((row) => row.key), ...INLINE_ROUTES]);
 
-// Every authed route with a request shape that clears pre-auth validation, so a
-// 401 (not 400) proves the Bearer check ran. :param segments become '1'.
 const AUTHED_ROUTES: ReadonlyArray<{
   method: string;
   pattern: string;
@@ -105,9 +97,7 @@ const AUTHED_ROUTES: ReadonlyArray<{
   { method: 'GET', pattern: '/mcp/stream' },
 ];
 
-// Every method a client can send; an undeclared pair answering anything but 404 is a route outside the table.
 const METHODS = ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const;
-// Paths no row declares, so a route added outside the table on a new path shows too.
 const UNDECLARED_PATHS = [
   '/',
   '/v1',
@@ -137,8 +127,6 @@ describe('server Bearer lockdown', () => {
 
   beforeEach(async () => {
     root = makeRoot('lockdown');
-    // '0' disables the default limiter (20 rps/burst 40), which would
-    // 429 the ~120 /v1 requests this file sends.
     vi.stubEnv('HIPPO_V1_RPS', '0');
     handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
   });

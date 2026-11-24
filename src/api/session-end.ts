@@ -1,7 +1,3 @@
-// A session's end: which store it writes to, when it sleeps, which turns it captures, and the store
-// writes after them (handoff, snapshot close, re-read count); plus the compact-resume read. The
-// hook verbs keep stdin, spawning and the log file.
-
 import * as path from 'node:path';
 import type { HandoffEvidence } from '../base/session/handoff.js';
 import type { ProjectRef } from '../base/scope/project-identity.js';
@@ -24,15 +20,9 @@ import type { Ledger } from '../base/ports/store.js';
  * is written. */
 export interface SessionClose {
   sessionId: string | null;
-  /**
-   * A reply's end, not the session's: the handoff is updated in place and the snapshot stays for
-   * the next compaction.
-   */
   turn: boolean;
-  /** The transcript's working state, or null with no readable transcript. */
   workingState: () => WorkingState | null;
   evidence: () => HandoffEvidence;
-  /** One line to the session-end log. */
   log: LineLog;
 }
 
@@ -60,8 +50,6 @@ async function writeEndHandoff(
   try {
     const ownSnapshot =
       (await sessions.loadSnapshot(ctx.tenantId, {}, null))?.sessionId === sessionId;
-    // A never-compacted session has no snapshot; read even when it has one, as another session's
-    // PreCompact can take the slot before the write.
     const state = close.workingState();
     const derived = state === null ? null : snapshotFields(state);
     if (!ownSnapshot && !derived) {
@@ -81,8 +69,6 @@ async function writeEndHandoff(
   }
 }
 
-// If session-end never fires (crash, kill -9), the freshness bound of an ambient snapshot load is
-// the backstop.
 async function closeSnapshot(
   ctx: ContextWith<'sessions'>,
   sessionId: string | null,
@@ -102,10 +88,8 @@ async function closeSnapshot(
   }
 }
 
-/** The caller's store and the global one, each once; a store that keeps no ledger is left out. */
 function rereadLedgers(ctx: Context): Ledger[] {
   const local = ctx.reach?.hasLocal === false ? undefined : ctx.reach?.ledger?.ledger;
-  // A call on the global store reaches it twice, as itself and as the global store beside it.
   const global = ctx.reach?.isGlobal === true ? undefined : ctx.reach?.global?.store.ledger;
   return [local, global].filter((ledger) => ledger !== undefined);
 }
@@ -156,8 +140,6 @@ export async function compactResumeBlock(
   const { sessions } = ctx.store;
   const ambient = { maxAgeMs: COMPACT_RESUME_MAX_AGE_MS };
   const snapshot = await sessions.loadSnapshot(ctx.tenantId, { ambient }, null);
-  // Concurrent sessions must not cross-restore: only when both ids are present and differ, so a
-  // manual run with no payload id still prints.
   if (!snapshot) return null;
   if (
     payloadSessionId !== null &&
@@ -166,7 +148,6 @@ export async function compactResumeBlock(
   ) {
     return null;
   }
-  // A bad trail row costs the trail, not the snapshot; stderr stays out of the model's context.
   let events: SessionEvent[] = [];
   try {
     if (snapshot.sessionId) {
@@ -209,27 +190,16 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   mode: 'turn' | 'full';
   sessionId: string | null;
   transcriptPath: string | undefined;
-  /** One line to the session-end log; `startFresh` restarts the file. */
   log: (line: string, opts?: { startFresh?: boolean; fields?: LogFields }) => void;
-  /** Where the re-read count's lines wait for sleep. */
   held: HeldLog;
-  /** Sleeps the folder's own store; reports its own failure. True when another sleep held the
-   * store's claim, so this one consolidated nothing. */
   sleep: () => Promise<boolean | void>;
-  /** Imports the session's agent notes into the global store, for a folder that does not sleep
-   * here. */
   importAgentNotes: () => Promise<void>;
   readScan: (log: LineLog) => Scan | null;
-  /** This session's saved place in its transcript: the turns after it, and moving it past
-   * `turns`. */
   cursor: {
     after: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => readonly Turn[];
     save: (sessionId: string, transcriptPath: string, turns: readonly Turn[]) => void;
   };
-  /** The project the session ran in. */
   currentProject: () => ProjectRef;
-  /** Captures `turns`, or the whole transcript when undefined, into `into`; false when it
-   * failed, having said why. */
   capture: (
     into: Context,
     turns: readonly Turn[] | undefined,
@@ -241,13 +211,10 @@ export interface SessionEndWork<Turn, Scan extends { readonly turns: readonly Tu
   evidence: () => HandoffEvidence;
 }
 
-/** A store that is not hippo.db is its own; hippo.db's reach says whether the folder has one. */
 function hasOwnStore(ctx: Context): boolean {
   return ctx.reach?.hasLocal ?? true;
 }
 
-/** The store a session's end writes to: the folder's own, else the global one; null when neither
- * exists. */
 function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null {
   if (hasOwnStore(ctx)) return ctx;
   const global = ctx.reach?.global;
@@ -262,14 +229,10 @@ function endStore(ctx: ContextWith<'sessions'>): ContextWith<'sessions'> | null 
   };
 }
 
-/** Sleeps the folder's own store: a reply's close only at the auto-sleep threshold, a session's
- * end always. */
 async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: ContextWith<'sessions' | 'reports'>,
   w: SessionEndWork<Turn, Scan>,
 ): Promise<void> {
-  // Sleeping the global store from here would learn this folder's git commits into it; it has its
-  // own daily sleep.
   if (!hasOwnStore(ctx)) {
     w.log('skip sleep: this folder has no store of its own', { startFresh: true });
     await w.importAgentNotes();
@@ -279,7 +242,6 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
     await w.sleep();
     return;
   }
-  // Each line starts the log afresh, as a sleep does.
   const prefix = `turn close, session ${w.sessionId}`;
   try {
     const { enabled, count, threshold, due } = await autoSleepDue(
@@ -307,8 +269,6 @@ async function sleepStep<Turn, Scan extends { readonly turns: readonly Turn[] }>
   }
 }
 
-/** Captures the session into `into`; a reply's close takes only the turns after the session's
- * cursor, then moves it, so each reply is extracted once. */
 async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] }>(
   ctx: Context,
   into: Context,
@@ -319,13 +279,10 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
     turns: readonly Turn[] | undefined,
     fromStart = true,
   ): Promise<boolean> => {
-    // With no transcript of its own, capture would read this as a manual run and scan every
-    // project.
     if (!w.transcriptPath) {
       w.log('skip capture: no transcript for this session');
       return false;
     }
-    // In the global store, rows would otherwise read as user-global and show up in every project.
     return w.capture(into, turns, hasOwnStore(ctx) ? undefined : w.currentProject(), fromStart);
   };
   if (w.mode !== 'turn') {
@@ -341,7 +298,6 @@ async function captureStep<Turn, Scan extends { readonly turns: readonly Turn[] 
     w.log('skip capture: no new turns since the last reply');
     return;
   }
-  // A slice that starts after the first turn holds only replies to the agent.
   const fromStart = fresh.length === scan.turns.length;
   if (await capture(fresh, fromStart)) w.cursor.save(w.sessionId, w.transcriptPath, scan.turns);
 }
@@ -356,9 +312,7 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
     log.warn(`session-end: re-read count failed: ${errorMessage(err)}`, errorFields(err));
     return [`re-read count failed: ${errorMessage(err)}`];
   });
-  // Sleep starts the log file afresh, so the lines go in after it.
   w.held.hold(rereadLog);
-  // A folder with neither a project nor a global store must not get one made.
   const into = endStore(ctx);
   try {
     if (into === null) {
@@ -376,7 +330,6 @@ export async function sessionEndWork<Turn, Scan extends { readonly turns: readon
     w.sessionId || path.basename(w.transcriptPath ?? '', '.jsonl'),
     (line, opts) => w.log(line, opts),
   );
-  // Only this session's snapshot, and only after sleep and capture.
   const closeLog: LineLog = (line, opts) => w.log(line, opts);
   await closeEndedSession(into, {
     sessionId: w.sessionId,

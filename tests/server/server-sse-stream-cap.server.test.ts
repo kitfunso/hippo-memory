@@ -1,6 +1,3 @@
-// GET /mcp/stream holds a socket and a timer per stream, so each API key
-// gets a bounded number of concurrent streams; a closed stream frees its slot.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -31,7 +28,6 @@ describe('/mcp/stream concurrent stream cap', () => {
       signal: ac.signal,
     });
     if (res.status === 200) {
-      // Read the first ping so the stream is known to be registered server-side.
       await res.body!.getReader().read();
     } else {
       await res.text();

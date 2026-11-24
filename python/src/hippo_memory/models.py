@@ -1,21 +1,3 @@
-"""Pydantic v2 models for hippo-memory HTTP request/response shapes.
-
-All models inherit from a private ``_Base`` with these conventions:
-
-- ``populate_by_name=True`` + ``alias_generator=to_camel`` -> server returns
-  camelCase JSON (e.g. ``tenantId``) while Python users see snake_case
-  attribute names (``tenant_id``).
-- ``extra="allow"`` -> server adding new fields in a future release doesn't
-  break the SDK. The trade-off: a typo in test JSON (e.g. ``tneant_id``)
-  silently ends up in ``model_extra`` rather than raising ValidationError.
-  Forward-compat is worth more than typo-strictness for an evolving server.
-
-Author judgment call: v0.1 types every documented response shape. Less-used
-shapes (drill, archive, supersede, promote, forget) use ``dict[str, Any]``
-on their inner data fields when the precise structure is implementation-
-detail; tighter types can land in v0.2 once usage patterns surface.
-"""
-
 from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
@@ -58,8 +40,6 @@ __all__ = [
 
 
 class _Base(BaseModel):
-    """Shared model config: camelCase wire / snake_case Python; forward-compat extra fields."""
-
     model_config = ConfigDict(
         populate_by_name=True,
         alias_generator=to_camel,
@@ -67,21 +47,11 @@ class _Base(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# /health
-# ---------------------------------------------------------------------------
-
-
 class HealthInfo(_Base):
     ok: bool
     version: str
     started_at: str
     pid: int
-
-
-# ---------------------------------------------------------------------------
-# /v1/memories (POST = remember, GET = recall)
-# ---------------------------------------------------------------------------
 
 
 class MemoryEnvelope(_Base):
@@ -167,9 +137,6 @@ class AnchoringHint(_Base):
     setting ``HIPPO_ANCHORING=off``.
     """
 
-    # 'query_repeat' | 'memory_dominance'; widened to str for forward-compat
-    # (same lesson as PlanningFallacyHint.source — never dispatch on this
-    # field for control flow; future server may emit new reasons).
     reason: str
     """The memory id that is anchoring the agent's reasoning."""
     memory_id: str
@@ -178,9 +145,6 @@ class AnchoringHint(_Base):
     query_count: int | None = None
     """Human-readable summary surfaced to the agent."""
     summary: str
-    # Discriminator for hint origin. Current v1 server emits 'j1-recurrence';
-    # future variants accepted as plain strings (same forward-compat lesson
-    # as PlanningFallacyHint.source).
     source: str = "j1-recurrence"
 
 
@@ -196,24 +160,13 @@ class AvailabilityHint(_Base):
     ``HIPPO_AVAILABILITY=off``.
     """
 
-    # Count of returned top-K entries created within the recency window.
     recent_count: int
-    # Total returned top-K size considered (after dropping unparseable rows).
     returned_count: int
-    # recent_count / returned_count, in [0, 1].
     recent_fraction: float
-    # Median age in days of the returned top-K.
     top_k_median_age_days: float
-    # Median age in days of the matched candidate pool it was drawn from.
     pool_median_age_days: float
-    # Count of pool entries older than the top-K median age that were NOT
-    # returned (older relevant matches passed over).
     older_candidates_passed_over: int
-    # Human-readable summary surfaced to the agent.
     summary: str
-    # Discriminator for hint origin. Current v1 server emits 'j2-recency';
-    # future variants accepted as plain strings (same forward-compat lesson
-    # as PlanningFallacyHint.source / AnchoringHint.source).
     source: str = "j2-recency"
 
 
@@ -231,15 +184,6 @@ class PlanningFallacyHint(_Base):
     """Verbatim PredictionBaserate.summary, e.g.
     'Last 5 estimates in class migration-effort averaged 2.10x actual (MAE 1.40).'"""
     baserate_summary: str
-    # Discriminator for hint origin. Current v1 server emits 'j3.2-auto';
-    # future variants (e.g. 'j3.2-auto-v2', 'j3.3-auto' once embedding
-    # fallback ships) are accepted as plain strings to honour the SDK's
-    # forward-compat promise (see _Base docstring: "server adding new
-    # fields in a future release doesn't break the SDK"). Pydantic
-    # ``extra='allow'`` relaxes unknown FIELDS but does NOT relax Literal
-    # validation, so typing this as Literal would raise ValidationError
-    # mid-recall when a future server tightens the enum. Independent-
-    # review-critic round 1 catch.
     source: str
     """Regex match snippet that triggered detection. Lets the calling agent
     see WHY the hint appeared and self-correct if detection misfires."""
@@ -270,10 +214,6 @@ class PlanningFallacyWatching(_Base):
 
     """The forward-claim phrase the detector matched (verbatim regex match)."""
     detected_phrase: str
-    # 'no_class_match' | 'tiebreak'; widened to str for forward-compat
-    # (same lesson as PlanningFallacyHint.source — never dispatch on this
-    # field for control flow; future server may emit new reasons such as
-    # 'embedding_fallback_failed' once J3.3 ships).
     reason: str
     """One-line agent-facing suggestion for how the user can give hippo
     enough signal to produce a baserate next time (e.g. tag a class)."""
@@ -284,41 +224,11 @@ class RecallResult(_Base):
     results: list[RecallEntry]
     total: int | None = None
     tokens: int | None = None
-    # v1.12.13 / C5 — WYSIATI cutoff transparency. Optional for back-compat
-    # with pre-v1.12.13 server payloads (field omitted is fine). When
-    # present, gives the calling agent a per-pipeline breakdown of what was
-    # excluded from results[] and why. Wire alias `suppressionSummary` is
-    # generated automatically by _Base.alias_generator=to_camel.
     suppression_summary: RecallSuppressionSummary | None = None
-    # v0.32 / J3.2 — auto-injected reference-class baserate hint when the
-    # query carries a forward-prediction phrase. Absent (None) when env
-    # disabled (HIPPO_AUTODEBIAS=off), no forward-claim detected, no class
-    # resolved, ambiguous tiebreak, or no closed data in resolved class.
     planning_fallacy_hint: PlanningFallacyHint | None = None
-    # v1.13.4 / J3.2 follow-up — "watching" variant surfaced when the
-    # forward-claim regex matched but no PlanningFallacyHint could be
-    # produced (no class match, or tiebreak). Mutually exclusive with
-    # planning_fallacy_hint above. Closes the v1.13.4-era silent-failure
-    # path where natural-language forward-claims without overlapping
-    # class tokens emitted nothing despite the regex match.
     planning_fallacy_watching: PlanningFallacyWatching | None = None
-    # v0.33 / J1 — recall-recurrence anchoring hint. Absent (None) when
-    # env disabled (HIPPO_ANCHORING=off), no sessionId, no R1/R2 pattern
-    # detected, or pipeline does not run J1 detection. On CLI-routed
-    # call paths this is always None (CLI computes its own hint
-    # separately); non-None on direct SDK / HTTP-routed invocations.
     anchoring_hint: AnchoringHint | None = None
-    # v1.13.x / J2 — availability/recency-bias hint. Absent (None) when env
-    # disabled (HIPPO_AVAILABILITY=off), the returned slice is not
-    # recency-dominated, the pool is not older than the returned slice, or
-    # fewer than the threshold of older candidates were passed over. Per-
-    # pipeline: each pipeline computes its own hint against its own top-K.
     availability_hint: AvailabilityHint | None = None
-
-
-# ---------------------------------------------------------------------------
-# /v1/context (Episode B)
-# ---------------------------------------------------------------------------
 
 
 class ContextEntry(_Base):
@@ -373,16 +283,9 @@ class ContextEntry(_Base):
 class ContextResult(_Base):
     entries: list[ContextEntry]
     tokens: int
-    # Snapshot / handoff / events are CLI-side concepts mirrored on the wire.
-    # Typed as dict[str, Any] to avoid a deep model for these v0.1; tighten in v0.2.
     active_snapshot: dict[str, Any] | None = None
     session_handoff: dict[str, Any] | None = None
     recent_events: list[dict[str, Any]] | None = None
-
-
-# ---------------------------------------------------------------------------
-# /v1/outcome (Episode B)
-# ---------------------------------------------------------------------------
 
 
 class OutcomeResult(_Base):
@@ -395,11 +298,6 @@ class OutcomeResult(_Base):
 
     applied: int
     ids: list[str] | None = None
-
-
-# ---------------------------------------------------------------------------
-# /v1/sleep (Episode B) - loopback-only on server side
-# ---------------------------------------------------------------------------
 
 
 class SleepResult(_Base):
@@ -415,11 +313,6 @@ class SleepResult(_Base):
     details: list[str] | None = None
 
 
-# ---------------------------------------------------------------------------
-# /v1/recall/drill/:id
-# ---------------------------------------------------------------------------
-
-
 class DrillResult(_Base):
     """Drill into a memory's DAG children.
 
@@ -431,11 +324,6 @@ class DrillResult(_Base):
     children: list[dict[str, Any]] = Field(default_factory=list)
     total_children: int | None = None
     truncated: bool | None = None
-
-
-# ---------------------------------------------------------------------------
-# /v1/memories/:id/archive | supersede | promote, DELETE /v1/memories/:id
-# ---------------------------------------------------------------------------
 
 
 class ArchiveResult(_Base):
@@ -462,11 +350,6 @@ class ForgetResult(_Base):
     id: str
 
 
-# ---------------------------------------------------------------------------
-# /v1/sessions/:id/assemble (Phase 2 context engine)
-# ---------------------------------------------------------------------------
-
-
 class AssembleResult(_Base):
     """Phase 2 context-engine assembly.
 
@@ -477,11 +360,6 @@ class AssembleResult(_Base):
     session_id: str | None = None
     items: list[dict[str, Any]] = Field(default_factory=list)
     tokens: int | None = None
-
-
-# ---------------------------------------------------------------------------
-# /v1/auth/keys
-# ---------------------------------------------------------------------------
 
 
 class AuthCreated(_Base):
@@ -497,12 +375,12 @@ class AuthCreated(_Base):
     """
 
     key_id: str
-    plaintext: str  # plaintext key, displayed once on mint
+    plaintext: str
     tenant_id: str | None = None
     label: str | None = None
     created_at: str | None = None
     role: str | None = None
-    expires_at: str | None = None  # None from a server that predates it, or for a key that never expires
+    expires_at: str | None = None
 
 
 class AuthKey(_Base):
@@ -527,11 +405,6 @@ class AuthRevoked(_Base):
     revoked_at: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# /v1/audit
-# ---------------------------------------------------------------------------
-
-
 class AuditEvent(_Base):
     id: int | None = None
     tenant_id: str
@@ -540,17 +413,6 @@ class AuditEvent(_Base):
     target_id: str | None = None
     metadata: dict[str, Any] | None = None
     created_at: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Errors
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# v0.31 / E2 — prediction first-class object
-# (docs/plans/2026-05-26-e2-prediction-object.md)
-# ---------------------------------------------------------------------------
 
 
 class Prediction(_Base):
@@ -582,12 +444,6 @@ class Prediction(_Base):
     closed_at: str | None = None
     closure_note: str | None = None
     created_at: str
-
-
-# ---------------------------------------------------------------------------
-# v0.31 / J3 — reference-class / planning-fallacy detector
-# (docs/plans/2026-05-26-j3-baserate-detector.md)
-# ---------------------------------------------------------------------------
 
 
 class PredictionBaserate(_Base):

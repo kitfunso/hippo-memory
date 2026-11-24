@@ -1,5 +1,3 @@
-// authRevoke with a store revokes through its keyAudit group and never opens hippo.db, and DELETE /v1/auth/keys/:keyId
-// runs under another store only when that store has the group.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,7 +21,6 @@ function copyOf(): string {
   return root;
 }
 
-/** A folder whose marker names another store, so a hippo.db open in it throws and creates nothing. */
 function markedFolder(): string {
   const root = join(home, `marked-${++n}`);
   mkdirSync(root);
@@ -106,7 +103,6 @@ describe('DELETE /v1/auth/keys/:keyId under another store', () => {
     const root = copyOf();
     const side = portOnlySide(root);
     handle = await serve({ hippoRoot: root, port: 0, store: side.store });
-    // The audit read verifies the key before its admin check refuses a member, which puts the key in the verified-key cache.
     const { url } = handle;
     const auditAs = async (token: string): Promise<number> =>
       (await fetch(`${url}/v1/audit`, { headers: bearer(token) })).status;

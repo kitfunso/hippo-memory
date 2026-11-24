@@ -1,11 +1,8 @@
-// The MS-MARCO MiniLM cross-encoder from Transformers.js, behind the cross-encoder port the
-// reranker scores through.
 import type { CrossEncoderFn, CrossEncoderLoad } from '../base/ports/cross-encoder.js';
 import { createModelLoads, importTransformers, MODEL_LOAD_POLICY } from './transformers.js';
 
 const MODEL_NAME = 'Xenova/ms-marco-MiniLM-L-6-v2';
 
-// Opaque here: the tokenizer output goes straight into the model.
 interface Tokenized {
   readonly input_ids: object;
   readonly attention_mask: object;
@@ -63,8 +60,6 @@ async function buildPipeline(importModule: ImportModule): Promise<CrossEncoderFn
     });
     const { logits } = await model(inputs);
     const score = 1 / (1 + Math.exp(-Number(logits.data[0])));
-    // NaN would make the sort comparator a no-op; throwing hands this candidate to the
-    // per-candidate fallback instead.
     if (!Number.isFinite(score)) throw new Error('cross-encoder returned a non-finite score');
     return score;
   };

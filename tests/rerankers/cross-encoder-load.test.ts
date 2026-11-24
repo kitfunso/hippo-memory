@@ -1,4 +1,3 @@
-// The cross-encoder's model load is bounded, a failure is fetched again once per backoff window, and the warning carries the real error.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { MODEL_LOAD_POLICY } from '../../src/infra/transformers.js';
 import { createCrossEncoderReranker } from '../../src/domain/rerankers/cross-encoder.js';
@@ -7,7 +6,6 @@ import type { RerankerFn } from '../../src/base/ports/reranker.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import type { SearchResult } from '../../src/base/rank/search-types.js';
 
-/** A reranker over a stand-in for the optional package, which these tests never install; `fetch` decides how each from_pretrained ends. */
 function rerankerFetching(fetch: () => Promise<void>): RerankerFn {
   const pairs = new WeakMap<object, string>();
   const tokenizer = async (
@@ -18,7 +16,6 @@ function rerankerFetching(fetch: () => Promise<void>): RerankerFn {
     pairs.set(ids, opts.text_pair);
     return { input_ids: ids, attention_mask: {} };
   };
-  // A higher logit for "beta" puts it first, so identity ordering cannot pass for a loaded model.
   const model = async (inputs: { input_ids: object }): Promise<{ logits: { data: number[] } }> => ({
     logits: { data: [pairs.get(inputs.input_ids) === 'beta' ? 3 : -3] },
   });
@@ -102,7 +99,7 @@ describe('the cross-encoder model load', () => {
     const rerank = rerankerFetching(fetch);
 
     for (let i = 0; i < 3; i++) await rerank('q', INPUTS);
-    expect(fetch).toHaveBeenCalledTimes(2); // tokenizer and model, one attempt
+    expect(fetch).toHaveBeenCalledTimes(2);
     expect(warnings()).toEqual([expect.stringMatching(/\(fetch failed: connect ECONNREFUSED\).*errorClass=TypeError/)]);
 
     await vi.advanceTimersByTimeAsync(MODEL_LOAD_POLICY.backoffMs);

@@ -1,4 +1,3 @@
-// The boundary hooks through the built CLI, compaction and session end: which delivery_events row each one leaves.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -41,7 +40,6 @@ afterEach(() => {
 });
 
 describe('what one boundary hook call records', () => {
-  // B1, B3 and E1 stay spawned: each pins one hook verb end to end in a real child; the rest run in process.
   it('a Claude Code PreCompact payload leaves one sent row priced on the summariser text', () => {
     const r = hippo(p, ['pre-compact'], { input: preCompactPayload('b1') });
     expect(r.status, r.stderr).toBe(0);
@@ -173,7 +171,6 @@ describe('what one boundary hook call records', () => {
       [PROMPT_HOOK, promptPayload('b7', 'third question about the release')],
     ];
     for (const [args, input] of steps) expect((await hippoIn(p, args, { input })).status).toBe(0);
-    // An agent's own `hippo context` run takes the session from the environment Claude Code gives its shell.
     expect((await hippoIn(p, ['context', 'rollback', 'plan'], { env: { CLAUDE_CODE_SESSION_ID: 'b7' } })).status).toBe(
       0,
     );
@@ -202,7 +199,6 @@ describe('the ledger changes nothing session-end prints or exits with', () => {
     dispose(off);
   });
 
-  // B9 in delivery-ledger-boundary-faults.process.test.ts holds the same off-and-on check for pre-compact and compact-resume.
   it('session-end gives the same stdout and status off and on', async () => {
     const on = await hippoInNoWorker(p, ['session-end'], { input: sessionEndPayload('i3') });
     const plain = await hippoInNoWorker(off, ['session-end'], { input: sessionEndPayload('i3') });
@@ -268,7 +264,6 @@ describe('what one session-end hook call records', () => {
   it('a manual run, a malformed payload, a turn end and a ledger switched off leave no row', async () => {
     expect((await hippoInNoWorker(p, ['session-end'])).status).toBe(0);
     expect((await hippoInNoWorker(p, ['session-end'], { input: 'not json' })).status).toBe(0);
-    // A VS Code Stop payload, the one turn mode accepts, so the call reaches the recorder's turn check.
     expect(
       (
         await hippoInNoWorker(p, ['session-end', '--turn'], {

@@ -6,7 +6,6 @@ import { saveObject, type ObjectSaveSite } from '../../src/domain/objects/lifecy
 import { objectsAt } from './objects-at.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 
-/** Where a CLI save on `root` records an object: that root's half-life, under the CLI actor. */
 function cliSaveSite(root: string, tenantId: string): ObjectSaveSite {
   return { now: evalNow(), baseHalfLifeDays: loadConfig(root).defaultHalfLifeDays, tenantId, actor: CLI_ACTOR };
 }

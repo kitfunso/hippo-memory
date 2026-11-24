@@ -1,5 +1,3 @@
-// A connection outside a server checkpoints inside its own commit at SQLite's default of 1,000 WAL pages, so a long
-// write pays the checkpoint's two disk flushes once per 1,000 pages, not once per 100.
 import { readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';

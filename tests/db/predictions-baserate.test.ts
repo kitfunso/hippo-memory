@@ -1,18 +1,3 @@
-/**
- * J3 reference-class / planning-fallacy detector — store-layer tests.
- * Docs: docs/plans/2026-05-26-j3-baserate-detector.md
- *
- * Covers:
- * 1. Empty class returns nClosed=0 + null stats + empty summary
- * 2. Single closed prediction returns n=1 with correct stats
- * 3. Multiple closed predictions compute mean/median/MAE correctly
- * 4. Open + closed mixed only counts closed
- * 5. closed-unknown excluded (no actual_value)
- * 6. estimate_value=0 row counts in nClosed + MAE but NOT in ratio calc
- * 7. Cross-tenant scoping: empty result
- * 8. predict_baserate audit emitted on every call (including n=0)
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { savePrediction } from '../_helpers/save-prediction.js';
@@ -62,9 +47,6 @@ describe('computePredictionBaserate (baserate detector)', () => {
   });
 
   it('multiple closed predictions compute mean/median/MAE correctly', async () => {
-    // Estimates [2, 4, 6]; Actuals [4, 6, 6]
-    // Ratios: 2.0, 1.5, 1.0; mean=1.5, median=1.5
-    // MAE: |4-2| + |6-4| + |6-6| / 3 = 4/3
     const ids: number[] = [];
     const estimateVsActual: Array<[number, number]> = [
       [2, 4],
@@ -117,7 +99,7 @@ describe('computePredictionBaserate (baserate detector)', () => {
     await closePrediction(home, 'default', b.id, { closureState: 'closed', actualValue: 4 });
 
     const br = computePredictionBaserate(home, 'default', 'unk');
-    expect(br.nClosed).toBe(1); // only the closed-with-actual row
+    expect(br.nClosed).toBe(1);
     expect(br.meanEstimate).toBe(2);
     expect(br.meanActual).toBe(4);
   });
@@ -138,10 +120,9 @@ describe('computePredictionBaserate (baserate detector)', () => {
 
     const br = computePredictionBaserate(home, 'default', 'zero');
     expect(br.nClosed).toBe(2);
-    expect(br.nRatioEligible).toBe(1); // only the non-zero estimate
-    expect(br.meanRatio).toBeCloseTo(2, 6); // 4 / 2
+    expect(br.nRatioEligible).toBe(1);
+    expect(br.meanRatio).toBeCloseTo(2, 6);
     expect(br.p50Ratio).toBeCloseTo(2, 6);
-    // MAE: |3-0| + |4-2| / 2 = 5/2 = 2.5
     expect(br.mae).toBe(2.5);
   });
 
@@ -162,10 +143,8 @@ describe('computePredictionBaserate (baserate detector)', () => {
   });
 
   it('predict_baserate audit emitted on every call (including n=0)', async () => {
-    // n=0 call
     computePredictionBaserate(home, 'default', 'audit-test');
 
-    // Add data + non-zero call
     const p = await savePrediction(home, 'default', {
       classTag: 'audit-test',
       claimText: 'audit data',

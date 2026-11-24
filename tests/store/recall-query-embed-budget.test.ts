@@ -1,4 +1,3 @@
-// A recall waits a bounded time for its query vector: a stalled API provider costs one budget, then BM25 ranks alone and one line says why.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +27,6 @@ const TENANT = 'default';
 const QUERY = 'deploy';
 const BUDGET_MS = 300;
 const LEXICAL = 'deploy pipeline uses blue green rollout';
-// Shares no word with the query, so only the vector arm can return it.
 const VECTOR_ONLY = 'ship to production with zero downtime';
 
 let embeddings: HashedEmbeddings;
@@ -56,7 +54,6 @@ function seedStore(): string {
   return root;
 }
 
-// The budget a root hands down from HIPPO_QUERY_EMBED_TIMEOUT_MS; unset means the default.
 async function recall(root: string, queryEmbedTimeoutMs?: number): Promise<string[]> {
   const ctx = apiCtx(root, TENANT, { subject: 'cli', role: 'admin' });
   const reply = await retrieve(
@@ -111,7 +108,6 @@ describe("a recall's query embedding", () => {
 
     const before = embeddings.requests();
 
-    // The provider never answers, so a recall that returns at all returned at its deadline.
     const shown = await recall(root, BUDGET_MS);
     const sent = embeddings.requests() - before;
     await recall(root, BUDGET_MS);
@@ -140,7 +136,6 @@ describe("a recall's query embedding", () => {
 
   it('ends within the budget when it runs out during the wait a 503 asked for', async () => {
     const root = seedStore();
-    // Two seconds is the longest wait the provider accepts under a deadline, far past the budget.
     embeddings.setStatus(503, 2);
     const before = embeddings.requests();
     const fetched = vi.spyOn(globalThis, 'fetch');
@@ -148,7 +143,6 @@ describe("a recall's query embedding", () => {
     const shown = await recall(root, BUDGET_MS);
 
     expect(shown).toEqual([LEXICAL]);
-    // A wait that outlasted the deadline would go on to a second attempt, which the dead signal ends before it reaches the server.
     expect(fetched).toHaveBeenCalledTimes(1);
     expect(embeddings.requests() - before).toBe(1);
     expect(fallbackLines()).toHaveLength(1);

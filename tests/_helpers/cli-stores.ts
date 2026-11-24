@@ -1,4 +1,3 @@
-// The stores the CLI root hands its capture, digest and doctor code, for tests that call that code directly.
 import type { CaptureTarget } from '../../src/surface/capture/command.js';
 import type { CompactionFolder } from '../../src/surface/capture/compaction-record.js';
 import { cliStore } from '../../src/surface/cli/api-context.js';

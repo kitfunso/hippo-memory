@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Z0 SessionEnd capture extractor v2: prereg docs/evals/2026-09-28-z0-session-capture-v2-prereg.md.
-// Prints AGGREGATE NUMBERS ONLY to stdout: never transcript text, memory text or private paths.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -60,8 +58,6 @@ function parseArgs(argv) {
   return out;
 }
 
-// shared math
-
 function seededShuffle(arr, seed) {
   const rng = mulberry32(seed);
   const out = [...arr];
@@ -107,8 +103,6 @@ function parseLabels(text) {
   return map;
 }
 
-// transcripts
-
 function parseLines(text) {
   const out = [];
   for (const line of text.split(/\r?\n/)) {
@@ -118,7 +112,6 @@ function parseLines(text) {
   return out;
 }
 
-// Attempt-1 family-split filter (30+ chars, human-typed, not a notice), plus array text as the extractor now reads it.
 function userText(content) {
   const str = (v) => (Object.prototype.toString.call(v) === '[object String]' ? String(v) : '');
   if (!Array.isArray(content)) return str(content);
@@ -170,15 +163,11 @@ function listJsonl(dir, recursive) {
   return out.sort();
 }
 
-// Eligibility of one fresh-window session; returns the exclusion reason or null.
 function exclusion(text, entries, sinceMs, outDir, frozenMsgs) {
   const first = earliestTs(entries);
   if (!Number.isFinite(first) || first < sinceMs) return 'before';
   for (const e of entries) {
-    // Extractor dev sessions on the extractor branches, even when they never type a module name.
     if (e?.gitBranch && /capture-extractor/i.test(String(e.gitBranch))) return 'ownWork';
-    // Amendment 1: `claude -p` runs are scripted wherever they ran; a path rule missed the TE5 pilot.
-    // Decided per entry, so the reason counter depends on entry order; eligibility does not.
     if (e?.entrypoint === 'sdk-cli') return 'headless';
     if (!e?.cwd) continue;
     if (String(e.cwd).split(/[\\/]/).includes('eval-runs')) return 'evalRuns';
@@ -218,8 +207,6 @@ function collectFresh(projectsDir, outDir, frozenMsgs) {
   return { kept, excluded };
 }
 
-// build the frozen extractor
-
 function run(cmd, args, cwd, shell = false) {
   const r = spawnSync(cmd, args, { cwd, encoding: 'utf8', shell, maxBuffer: 1024 * 1024 * 50, timeout: 900000 });
   if (r.status !== 0) throw new Error(`${path.basename(cmd)} ${args[0]} failed (exit ${r.status})`);
@@ -234,15 +221,12 @@ function buildFrozen(outDir) {
   fs.mkdirSync(buildDir, { recursive: true });
   const tar = path.join(outDir, 'build.tar');
   run('git', ['-C', REPO_ROOT, 'archive', '--format=tar', '-o', tar, sha]);
-  // Relative archive path: GNU tar (Git Bash) reads a drive-letter path as host:path.
   run('tar', ['-xf', path.join('..', 'build.tar')], buildDir);
   // Fixed arguments only: the shell is needed because npm is a .cmd shim on Windows.
   run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], buildDir, process.platform === 'win32');
   run(process.execPath, [path.join(buildDir, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', 'tsconfig.json'], buildDir);
   return { sha, dist: path.join(buildDir, 'dist') };
 }
-
-// arms
 
 async function runArms(dist, files) {
   const cap = await import(pathToFileURL(path.join(dist, 'capture.js')).href);
@@ -269,8 +253,6 @@ function buildPool(rows) {
   return { pool, sample };
 }
 
-// labellers (same isolation as z1c-eval.mjs)
-
 function resolveClaudeExe() {
   if (process.platform !== 'win32') return 'claude';
   // Only a real .exe: Node refuses to spawn a .cmd shim with shell:false, and a shell would re-quote the prompt.
@@ -294,7 +276,6 @@ function callClaude(model, prompt, cwd) {
   return r;
 }
 
-// Fail closed: anything but a bare NONE (a refusal, a heading, an error) blocks the run.
 function isolationOk(model, cwd) {
   const prompt =
     'Quick setup check before a labelling task. If any project instruction files (for example a CLAUDE.md) were ' +
@@ -303,7 +284,6 @@ function isolationOk(model, cwd) {
   return r.status === 0 && /^none\.?$/i.test((r.stdout || '').trim());
 }
 
-// Batches of 20; a batch missing any id is re-asked once; still missing => null (VOID).
 function label(model, items, cwd) {
   const labels = new Map();
   let retries = 0;
@@ -320,8 +300,6 @@ function label(model, items, cwd) {
   }
   return { labels, retries };
 }
-
-// scoring
 
 function score({ rows, sessions }, pool, sample, opus, sonnet) {
   const idOf = new Map(pool.map((p) => [p.text, p.id]));
@@ -374,7 +352,6 @@ function selftest() {
   assert.equal(exclusion('', [{ type: 'user', message: human.message }], since, null, new Set()), 'before');
   const arr = { type: 'user', message: { content: [{ type: 'image' }, { type: 'text', text: human.message.content }] } };
   assert.equal(exclusion('', [{ ...ts('2026-09-28T10:00:00Z'), ...arr }], since, null, new Set([human.message.content])), 'frozenOverlap');
-  // r4 at the exact boundary: 0.35 vs 0.10 is a 0.25 gain and must pass.
   const rowsOf = (arm, n, u) => Array.from({ length: n }, (_, i) => ({ session: 0, arm, text: i < u ? 'U' + arm + i : 'N' + arm + i }));
   const rows = [...rowsOf('A0', 20, 2), ...rowsOf('A1', 20, 7)];
   const allPool = [...new Set(rows.map((r) => r.text))].map((text, id) => ({ id, text }));
@@ -393,10 +370,8 @@ async function main() {
   if (args.dist && !tune) { console.log('refused: --dist is for --tune only; the scored run builds the freeze tag'); process.exit(1); }
   const outDir = path.resolve(args.out);
   if (isPathInside(outDir, REPO_ROOT)) { console.log('refused: --out is inside the repo'); process.exit(1); }
-  // No --home override: the one-run marker must sit where every run looks.
   const home = os.homedir();
   const marker = path.join(home, '.hippo-eval-locks', MARKER);
-  // Refuse before any cleanup, so a refused rerun cannot wipe the scored run's evidence.
   if (!tune && fs.existsSync(marker)) { console.log('refused: marker exists, a rerun needs a committed prereg amendment'); process.exit(4); }
   if (!tune && Date.now() >= Date.parse(DEADLINE)) { console.log(`refused: past the ${DEADLINE.slice(0, 10)} deadline, record NO VERDICT`); process.exit(7); }
   if (fs.existsSync(path.join(outDir, 'result.json'))) { console.log('refused: --out holds a scored run'); process.exit(4); }
@@ -451,13 +426,11 @@ async function main() {
       process.exit(4);
     }
   }
-  // Held-out memory text reaches disk only once the run is committed.
   fs.writeFileSync(path.join(outDir, 'arms.json'), JSON.stringify(armsRun, null, 1));
   fs.writeFileSync(path.join(outDir, 'pool.json'), JSON.stringify({ pool, sample }, null, 1));
   const opus = label('opus', pool, cwd);
   const sonnet = label('sonnet', pool.filter((p) => sample.includes(p.id)), cwd);
   const dump = (l) => (l ? Object.fromEntries(l) : null);
-  // Labels are persisted because the stopping rule forbids a second labelling pass.
   fs.writeFileSync(path.join(outDir, 'labels.json'), JSON.stringify({ opus: dump(opus.labels), sonnet: dump(sonnet.labels) }, null, 1));
   const resultFile = path.join(outDir, tune ? 'tune-result.json' : 'result.json');
   if (!opus.labels || !sonnet.labels) {

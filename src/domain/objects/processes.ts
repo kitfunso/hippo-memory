@@ -1,9 +1,3 @@
-/**
- * Process object: a named, ordered list of `steps` that evolves by supersession, each version
- * recording `change_summary` and a server-derived `version`. The `processes` table is the source
- * of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for recall. Structural
- * step-diffing is a deferred read-side feature; the version chain is the changelog. */
-
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { type JsonValue, isJsonString } from '../../base/util/json.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -27,11 +21,8 @@ export interface SaveProcessOptions {
   processName: string;
   steps: string[];
   description?: string;
-  /** The delta note for a supersession; ignored (stored NULL) on a fresh create. */
   changeSummary?: string;
-  /** Table id of an ACTIVE process this new version supersedes. */
   supersedesProcessId?: number;
-  /** Extra memory tags merged after ['process']. */
   extraTags?: string[];
 }
 
@@ -55,8 +46,6 @@ export function validateProcessSteps(steps: JsonValue): string[] {
   return out;
 }
 
-/** The recall-surface content for the memory mirror: name + numbered steps + optional description, so `hippo recall`
- *  shows the process body. */
 function buildProcessContent(processName: string, steps: string[], description?: string): string {
   const numbered = steps.map((s, i) => `${i + 1}. ${s}`).join('\n');
   let content = processName;

@@ -1,5 +1,3 @@
-// Memory reads for the CLI verbs: one row by id, the tenant's rows, or with a host admin every
-// tenant's.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type { RequiredStore } from '../../base/ports/store.js';
 import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
@@ -23,7 +21,6 @@ function tenantFilter(ctx: Context, reach: TenantReach): TenantId {
   return ALL_TENANTS;
 }
 
-/** Rows a listing reads per query by default; the verbs still receive every row. */
 const LIST_PAGE_SIZE = 1000;
 
 /** The tenant's memory rows, oldest first, `pageSize` per query, so a pass can hold one page. */

@@ -1,5 +1,3 @@
-// pinnedInject.excludeTags: the hook block leaves out a row carrying a listed tag, on every read it makes.
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -34,7 +32,6 @@ const WINDOW = 100;
 let local: string;
 let ctx: FullContext;
 
-// A root loads config once per command, so a test that writes config.json reloads ctx.config as the next command would.
 function writeConfig(pinnedInject: Partial<HippoConfig['pinnedInject']>): void {
   fs.writeFileSync(path.join(local, 'config.json'), JSON.stringify({ pinnedInject }));
   ctx = { ...ctx, config: loadConfig(local) };
@@ -52,7 +49,6 @@ beforeEach(() => {
   ctx = apiCtx(local, 'default', adminActor('hook-exclude-tags-test'));
 });
 
-/** A row filed under the project, `day` days into 2026 so a higher day is newer. */
 function row(content: string, day: number, extra: Partial<MemoryEntry> = {}): MemoryEntry {
   const created = new Date(Date.UTC(2026, 0, 1 + day)).toISOString();
   return { ...createMemory(content), originProject: PROJECT.name, created, ...extra };
@@ -153,7 +149,6 @@ describe('prompt recall with excludeTags', () => {
   const admit: AmbientAdmission = { currentProject: PROJECT, includeCrossProject: false };
   const recallConfig = { promptRecall: true, promptRecallThreshold: 0.01, promptRecallMinShared: 1 };
 
-  /** The prompt-recall pool the store hands core, as the hook's read asks for it. */
   async function pool(prompt: string, excludeTags?: readonly string[]): Promise<MemoryEntry[]> {
     const got = await ctx.store.contextReads.ambientCandidates(ctx.tenantId, {
       recentNeeded: 0,

@@ -1,5 +1,3 @@
-// The SessionStart(compact) hook: re-prints the task snapshot and session trail that compaction
-// dropped.
 import { estimateTokens } from '../../../base/util/token-text.js';
 import { errorFields, errorMessage, log } from '../../../base/util/log.js';
 import { isInitialized } from '../../../host/project-identity.js';
@@ -30,9 +28,6 @@ export async function handleCompactResume({ hippoRoot, tenantId }: CommandContex
   });
 }
 
-/** Prints the snapshot and trail, but no pinned memories (UserPromptSubmit re-injects them). A
- * malformed payload or a store read failure degrades to empty stdout, never a failed
- * SessionStart. */
 async function resumeAfterCompact(
   hippoRoot: string,
   tenantId: string,
@@ -41,9 +36,6 @@ async function resumeAfterCompact(
 ): Promise<void> {
   let rec: DeliveryRecorder | null = null;
   try {
-    // Gate on the non-exiting isInitialized check first: the store reads below call initStore,
-    // which would silently create a store in a project that never ran `hippo init`, and this hook
-    // fires globally.
     if (!isInitialized(hippoRoot)) return;
 
     const payloadState = readCompactResumePayload(stdinText, stdinTimedOut);
@@ -59,7 +51,6 @@ async function resumeAfterCompact(
       });
     }
 
-    // A compaction follows a prompt or SessionStart that booked the arm, so this only reads it.
     if (
       !suppressOutput &&
       payloadSessionId !== null &&
@@ -75,7 +66,6 @@ async function resumeAfterCompact(
     // which the model never sees.
     log.warn(`hippo compact-resume: skipped: ${errorMessage(err)}`, errorFields(err));
   }
-  // A no-op when the token ledger's handle already wrote the row.
   await flushDeliveryRecorder(rec);
 }
 
@@ -87,7 +77,6 @@ async function restoreCompactSnapshot(
 ): Promise<void> {
   const text = await compactResumeBlock(cliApiContext(hippoRoot, tenantId), payloadSessionId);
   if (text === null) return;
-  // Printed in one write so the ledger books exactly the text the model is handed.
   console.log(text);
   rec?.delivered({ state: 'sent', emittedText: `${text}\n` });
   await bookLedgerTurn(

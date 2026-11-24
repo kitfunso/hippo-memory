@@ -1,4 +1,3 @@
-// killTree on a process that is already gone, and the warnings its failures raise, with the OS calls stubbed.
 import { ChildProcess } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { log } from '../../src/base/util/log.js';
@@ -6,7 +5,6 @@ import { killTree } from '../../src/host/kill-tree.js';
 
 const WIN32 = process.platform === 'win32';
 
-/** A taskkill stand-in that closes with `code` at once. */
 const fakeKiller = (code: number) => (): ChildProcess => {
   const killer = new ChildProcess();
   setImmediate(() => killer.emit('close', code));
@@ -43,7 +41,6 @@ describe.runIf(WIN32)('killTree when taskkill hangs', () => {
   it('warns once on the timeout, and not again when the stopped taskkill closes', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
-    // A bare ChildProcess has no handle, so its kill() would emit an unrelated EBADF error.
     const killer = new HungKiller();
     const done = killTree(4_000_000, () => killer);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -69,7 +66,6 @@ describe.skipIf(WIN32)('killTree through signals', () => {
     vi.spyOn(process, 'kill').mockImplementation(() => true);
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     let round = 0;
-    // Each snapshot shows one more child of the root, so no round ever settles.
     const snapshot = async (): Promise<Map<number, number>> => {
       round++;
       const children = new Map<number, number>();

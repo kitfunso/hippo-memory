@@ -1,4 +1,3 @@
-// KeyWrites answers: the same values, the same errors and the same audit rows.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { mintApiKey } from '../../src/base/scope/api-key.js';
@@ -20,7 +19,6 @@ import { OWNED_SCOPE, OWNER, seedOwnedKeys, type OwnedKeys } from '../_helpers/o
 const NOW = '2026-03-01T12:00:05.000Z';
 const EXPIRES = '2026-04-01T12:00:05.000Z';
 
-/** Every value a call below resolves to: nothing, revoked ids, listed rows, a key record or revoked_at read back, or whether a write was refused. */
 type KeyWritesValue = void | string[] | ApiKeyListRow[] | ApiKeyRecord | string | null | undefined;
 type Call = GroupCall<'keyWrites', KeyWritesValue>;
 type Side = SideResult<KeyWritesValue>;
@@ -81,7 +79,6 @@ const revokedAtOf =
   (keyId: string): Call =>
   async (_g, store) =>
     (await store.findApiKey(keyId))?.revokedAt;
-/** Stores word a refused write differently, so only whether it was refused is compared. */
 const settled =
   (call: Call): Call =>
   (g, store) =>

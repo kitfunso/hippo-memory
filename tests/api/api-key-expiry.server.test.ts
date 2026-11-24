@@ -1,4 +1,3 @@
-// Schema v53 gives API keys an owner and an expiry; an expired key fails everywhere, cached or not, and the first expiring key raises the binary floor.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb, getSchemaVersion, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -25,7 +24,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import type { ApiKeyRecord } from '../../src/base/ports/store/types.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 afterEach(() => {
@@ -238,7 +236,6 @@ describe('key lists', () => {
       });
       return keyId;
     });
-    // Minted last, so it sits first in a newest-first page.
     const expired = mint(new Date(Date.now() - 1000).toISOString()).keyId;
     return { expired, live, liveExpiry, plain };
   }
@@ -308,7 +305,6 @@ describe('expired keys over MCP and the stream', () => {
       signal: ac.signal,
     });
     expect(res.status).toBe(200);
-    // Expire the key only once the stream is open, so a slow runner cannot reach the open after a wall-clock expiry.
     withDb((db) =>
       db
         .prepare(`UPDATE api_keys SET expires_at = ? WHERE key_id = ?`)
@@ -317,7 +313,6 @@ describe('expired keys over MCP and the stream', () => {
     const reader = res.body!.getReader();
     const decoder = new TextDecoder();
     let buf = '';
-    // The 100 ms heartbeat wakes each read, and the server ends the stream after auth_revoked, so the loop waits on events, not a clock.
     for (let r = await reader.read(); !r.done; r = await reader.read()) {
       buf += decoder.decode(r.value);
       if (buf.includes('auth_revoked')) break;

@@ -1,36 +1,3 @@
-/**
- * LC2-E1 memory-value eval harness — deterministic mechanism tests.
- *
- * A tiny, fully hand-specified synthetic fixture (2 questions x 3 sessions x
- * ~10 turns, known gold flags — NOT the generic seeded generateSmokeFixture()
- * that run.mjs --smoke uses, because this test needs EXACT, hand-computable
- * retention numbers). Runs the real mechanism (ingest -> simulate -> extract
- * -> evaluate) against real SQLite scratch stores (house rule: no mocks).
- * Fixture definitions live in memory-value-fixtures.ts, shared with
- * memory-value-determinism.test.ts (codex confirmation-pass P1-B fix,
- * 2026-08-09: the file was split so neither Vitest worker's per-file
- * wallclock crosses the ~60s Windows worker-RPC "onTaskUpdate" timeout).
- * This file's pipeline tests run simulate.mjs at TEST_SIM_ROUNDS (8), not
- * the pinned CONFIG.SIM_ROUNDS (30) — they only need enough usage variance
- * to exercise retrieval_count, outcome counters, half_life_days, not the full
- * protocol depth. memory-value-determinism.test.ts keeps ONE full-30-round
- * test, where the pinned protocol itself is under test.
- *
- * Hand-computable retention design note: memory ids come from
- * crypto.randomUUID() inside the real createMemory() path (by design — this
- * harness must not fork production's id generation just to make a test
- * easier). That makes any retention number that depends on a BM25/score TIE
- * being broken by memory_id non-reproducible byte-for-byte across runs. The
- * `recency` scorer sidesteps this: it scores purely by age_days, which is a
- * pure function of each turn's SESSION DATE (fully controlled by this
- * fixture) and is untouched by simulate.mjs (which only ever mutates
- * retrieval_count, outcome counters, half_life_days, last_retrieved). Both
- * questions below are constructed so the answer/gold session is the NEWEST
- * session and the primary-budget keep count exactly covers (Q_A) or is a
- * subset of entirely-gold (Q_B) that session's tied group — so `recency`
- * retention is exact and reproducible regardless of which random ids win a
- * tie.
- */
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -72,7 +39,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// mkdtemp per process (two worktrees at once must not share a root); re-set in a LATER beforeEach because clearAblationEnv deletes it.
 const HARNESS_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-harness-test-scratch-'));
 
 beforeEach(clearAblationEnv);
@@ -84,10 +50,6 @@ afterEach(clearAblationEnv);
 afterAll(() => {
   fs.rmSync(HARNESS_SCRATCH_ROOT, { recursive: true, force: true });
 });
-
-// Typed seams over the untyped .mjs harness surface (CONFIG / readJsonl /
-// readJson / scratchRootDir import with weak inferred types from the .mjs files above). Each helper below owns the ONE cast for its shape so every
-// call site downstream is fully typed without repeating the justification.
 
 // SAFETY: config.mjs's FEATURES is a fixed array of feature-name strings,
 // read once at module load and reused by every test below.
@@ -113,10 +75,6 @@ function pairedRecordsOf(result: { pairedRecords: unknown }): PairedRecord[] {
   return result.pairedRecords as PairedRecord[];
 }
 
-// ---------------------------------------------------------------------------
-// (a) split determinism
-// ---------------------------------------------------------------------------
-
 describe('split determinism', () => {
   it('same seed produces byte-identical split', () => {
     const qs = [
@@ -131,16 +89,9 @@ describe('split determinism', () => {
     expect(JSON.stringify(s1)).toBe(JSON.stringify(s2));
 
     const s3 = computeSplit(qs, { seed: 7 });
-    // Different seed is allowed to (but is not guaranteed to) differ; the
-    // real assertion is same-seed determinism above. Just confirm both
-    // partitions are internally consistent (train+heldout = all ids).
     expect([...s3.train, ...s3.heldout].sort()).toEqual(qs.map((q) => q.question_id).sort());
   });
 });
-
-// ---------------------------------------------------------------------------
-// Full-mechanism tests (real SQLite scratch stores)
-// ---------------------------------------------------------------------------
 
 type PipelineRun = Awaited<ReturnType<typeof runPipeline>>;
 
@@ -152,7 +103,6 @@ async function runEachQuestion(): Promise<Map<string, PipelineRun>> {
 }
 
 describe('memory-value harness (real stores)', () => {
-  // (b) to (d) only read what the pipeline wrote, so the first of them to run makes one run per question for all.
   let shared: Promise<Map<string, PipelineRun>> | undefined;
   async function runOf(q: (typeof QUESTIONS)[number]): Promise<PipelineRun> {
     shared ??= runEachQuestion();
@@ -163,7 +113,7 @@ describe('memory-value harness (real stores)', () => {
     for (const q of QUESTIONS) {
       const { ingestResult, extractResult } = await runOf(q);
       expect(extractResult.rows).toBe(ingestResult.memoryCount);
-      expect(ingestResult.memoryCount).toBe(10); // fixture is exactly 10 turns/question, none empty
+      expect(ingestResult.memoryCount).toBe(10);
 
       const rows = jsonlRows<{ features: Record<string, number> }>(featuresPathFor(q.question_id));
       const nonConstant = FEATURE_NAMES.filter((f) => {
@@ -175,20 +125,6 @@ describe('memory-value harness (real stores)', () => {
   });
 
   it('schema_fit is wired to the REAL computeSchemaFit(text, [], entriesSoFar) path — verified by independent replay', async () => {
-    // Coordinator's fix-round ask was "assert schema_fit varies". Measured
-    // reality: computeSchemaFit returns the neutral 0.5 before ever reaching
-    // the content-overlap branch — via the empty-store guard (src/base/memory/entry.ts)
-    // for each store's FIRST entry, and via the tag-overlap guard
-    // (src/base/memory/entry.ts:311, `tags.length === 0 && tagFreq.size === 0`) for every
-    // entry after it, since ingest.mjs always passes `tags: []` (no invented
-    // tags, per the leakage-rule design) so tagFreq stays empty for every
-    // store. One of the two guards fires unconditionally and schema_fit is
-    // provably dataset-wide constant on THIS substrate, correct wiring
-    // notwithstanding. This test proves
-    // CORRECTNESS of the wiring (the stored value matches an independent
-    // replay of the real function against the real accumulated-so-far
-    // store), which is the property that actually matters — a false
-    // "it varies" assertion would not have been true and is not asserted.
     for (const q of QUESTIONS) {
       await runOf(q);
       const rows = jsonlRows<{ memory_id: string; features: { schema_fit: number } }>(featuresPathFor(q.question_id));
@@ -201,7 +137,7 @@ describe('memory-value harness (real stores)', () => {
       for (const t of turns) {
         // SAFETY: computeGold pushes `content: t.content` on every turn (common.mjs:285); the inferred element type drops it.
         const content = ((t as { content?: string }).content ?? '').trim();
-        if (content.length < 3) continue; // mirrors ingest.mjs MIN_CONTENT_LEN
+        if (content.length < 3) continue;
         const expectedFit = computeSchemaFit(content, [], entriesSoFar);
         const memId = gold.memories[memIdx].id;
         const row = rowById.get(memId);
@@ -210,10 +146,6 @@ describe('memory-value harness (real stores)', () => {
         memIdx++;
       }
 
-      // Documented empirical finding, locked in as a test assertion: given
-      // tags=[] always, schema_fit really is constant 0.5 across the whole
-      // fixture — not because it's unwired, but because the real function
-      // computes exactly that for untagged content every time.
       const schemaFits = new Set(rows.map((r) => r.features.schema_fit));
       expect(schemaFits).toEqual(new Set([0.5]));
     }
@@ -232,13 +164,7 @@ describe('memory-value harness (real stores)', () => {
         .filter((r) => r.scorer === 'recency')
         .map((r) => [r.questionId, r.retention]),
     );
-    // Q_A: N=10, keepN=ceil(0.3*10)=3, newest session (day 6) has exactly 3
-    // turns and exactly 1 is gold -> the whole newest session is kept
-    // regardless of tie-break order -> retention = 1/1 = 1.0 exactly.
     expect(recencyByQuestion.get('fixture_q_a')).toBe(1);
-    // Q_B: N=10, keepN=ceil(0.3*10)=3, newest session (day 6) has 4 turns,
-    // ALL gold (answer-session-all fallback) -> any 3-of-4 tied selection
-    // still yields keptGold=3 -> retention = 3/4 = 0.75 exactly.
     expect(recencyByQuestion.get('fixture_q_b')).toBe(0.75);
   });
 
@@ -277,7 +203,6 @@ describe('memory-value harness (real stores)', () => {
       return { rowCounts, goldCounts, recency };
     }
 
-    // (e) starts from an empty scratch root, which also drops the run (b) to (d) shared.
     cleanupScratch();
     shared = undefined;
     const run1 = await runOnceAndScore();
@@ -303,8 +228,6 @@ describe('causal clock clamp', () => {
       const ingestResult = ingestQuestion(QUESTION_C);
       const meta = jsonFile<{ questionDate: string; tEval: string }>(metaPathFor(QUESTION_C.question_id));
 
-      // question_date (day 7) predates session s1 (day 10) -> T_eval must
-      // clamp FORWARD to day 10, not stay at question_date.
       const day10Iso = new Date(Date.UTC(2024, 0, 1, 9, 0, 0) + 10 * 86_400_000).toISOString();
       expect(meta.tEval).toBe(day10Iso);
       expect(meta.tEval).not.toBe(meta.questionDate);
@@ -320,19 +243,13 @@ describe('causal clock clamp', () => {
         features: { age_days: number };
       }>(featuresPathFor(QUESTION_C.question_id));
       expect(rows.length).toBe(ingestResult.memoryCount);
-      expect(rows.length).toBe(6); // 3 + 3 turns, none empty
-
-      // No negative age anywhere — the bug this fix eliminates (codex
-      // measured 15,162 such rows across the real 500-question dataset).
+      expect(rows.length).toBe(6);
       for (const row of rows) {
         expect(row.features.age_days, `session ${row.sessionIndex} turn ${row.turnIdx}`).toBeGreaterThanOrEqual(0);
       }
-      // s1 (day 10) IS T_eval -> its memories' age is exactly 0 (created ===
-      // T_eval, untouched by simulation, which never mutates `created`).
       const s1Rows = rows.filter((r) => r.sessionIndex === 1);
       expect(s1Rows.length).toBe(3);
       for (const row of s1Rows) expect(row.features.age_days).toBe(0);
-      // s0 (day 0) is exactly 10 days before T_eval (day 10).
       const s0Rows = rows.filter((r) => r.sessionIndex === 0);
       expect(s0Rows.length).toBe(3);
       for (const row of s0Rows) expect(row.features.age_days).toBe(10);
@@ -346,7 +263,7 @@ describe('--skip-simulate variance-gate exemption', () => {
   it('a real (non-smoke) run without simulation passes at threshold 3 but would fail at the default threshold 6', async () => {
     for (const q of QUESTIONS) {
       fs.rmSync(questionDir(q.question_id), { recursive: true, force: true });
-      ingestQuestion(q); // no simulateQuestion call — mirrors --skip-simulate
+      ingestQuestion(q);
       const meta = jsonFile<{ tEval: string }>(metaPathFor(q.question_id));
       extractQuestion(q.question_id, meta.tEval);
     }
@@ -356,18 +273,14 @@ describe('--skip-simulate variance-gate exemption', () => {
       );
       const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
 
-      // Usage-derived dims are constant BY DESIGN without simulation.
       for (const f of ['retrieval_count', 'outcome_positive', 'outcome_negative', 'outcome_ratio', 'half_life_days']) {
         expect(dead, f).toContain(f);
       }
-      // The naturally-surviving set (age varies by session date regardless
-      // of simulation; strength's decay term is a pure function of age;
-      // content_length is turn-text length, simulation-independent).
       for (const f of ['age_days', 'strength', 'content_length']) {
         expect(varying, f).toContain(f);
       }
 
-      const defaultGate = evaluateVarianceGate(varying, dead); // minVarying defaults to 6
+      const defaultGate = evaluateVarianceGate(varying, dead);
       expect(defaultGate.passed).toBe(false);
       const skipSimulateGate = evaluateVarianceGate(varying, dead, {
         minVarying: CONFIG.MIN_VARYING_FEATURES_SKIP_SIMULATE,
@@ -385,10 +298,10 @@ describe('variance gate (pure logic, no I/O)', () => {
     const featureNames = FEATURE_NAMES;
     const rows = Array.from({ length: 5 }, () => {
       const features: Record<string, number> = {};
-      for (const f of featureNames) features[f] = 0; // every dim frozen — the exact failure mode this gate exists for
+      for (const f of featureNames) features[f] = 0;
       return { features };
     });
-    const { varying, dead } = computeDatasetVariance([rows], featureNames); // one store
+    const { varying, dead } = computeDatasetVariance([rows], featureNames);
     expect(varying.length).toBe(0);
     expect(dead.length).toBe(featureNames.length);
     const gate = evaluateVarianceGate(varying, dead);
@@ -402,11 +315,11 @@ describe('variance gate (pure logic, no I/O)', () => {
     const rows = Array.from({ length: 5 }, (_, i) => {
       const features: Record<string, number> = {};
       featureNames.forEach((f, fi) => {
-        features[f] = fi < 6 ? i : 0; // first 6 dims vary row-to-row WITHIN this one store, rest constant
+        features[f] = fi < 6 ? i : 0;
       });
       return { features };
     });
-    const { varying, dead } = computeDatasetVariance([rows], featureNames); // one store
+    const { varying, dead } = computeDatasetVariance([rows], featureNames);
     expect(varying.length).toBe(6);
     expect(dead.length).toBe(featureNames.length - 6);
     const gate = evaluateVarianceGate(varying, dead);
@@ -415,11 +328,6 @@ describe('variance gate (pure logic, no I/O)', () => {
   });
 
   it('a feature constant WITHIN every store but differing ACROSS stores is DEAD, not varying (cross-store-constant liveness)', () => {
-    // codex review fix round #3 P2 fix: pooled/cross-store variance would
-    // wrongly call this "varying" (pooled sees {0.3, 0.7, ...}); every
-    // scorer normalizes min-max PER STORE, so a feature constant within
-    // each individual store normalizes to 0 everywhere regardless of the
-    // cross-store spread — provably inert, must classify as dead.
     const featureNames = FEATURE_NAMES;
     const constantRowsAt = (value: number, n: number) =>
       Array.from({ length: n }, () => {
@@ -427,16 +335,16 @@ describe('variance gate (pure logic, no I/O)', () => {
         for (const f of featureNames) features[f] = value;
         return { features };
       });
-    const storeA = constantRowsAt(0.3, 4); // constant 0.3 within store A
-    const storeB = constantRowsAt(0.7, 4); // constant 0.7 within store B — DIFFERENT constant
-    const storeC = constantRowsAt(1.5, 4); // a third distinct constant, for good measure
+    const storeA = constantRowsAt(0.3, 4);
+    const storeB = constantRowsAt(0.7, 4);
+    const storeC = constantRowsAt(1.5, 4);
 
     const { varying, dead, detail } = computeDatasetVariance([storeA, storeB, storeC], featureNames);
     expect(varying.length).toBe(0);
     expect(dead.length).toBe(featureNames.length);
     for (const f of featureNames) {
-      expect(detail[f].pooledVaries, `${f} pooledVaries`).toBe(true); // diagnostic: pooled DOES see the spread
-      expect(detail[f].varies, `${f} varies`).toBe(false); // liveness: correctly dead
+      expect(detail[f].pooledVaries, `${f} pooledVaries`).toBe(true);
+      expect(detail[f].varies, `${f} varies`).toBe(false);
       expect(detail[f].min).toBe(0.3);
       expect(detail[f].max).toBe(1.5);
     }
@@ -454,7 +362,6 @@ describe('variance gate (pure logic, no I/O)', () => {
     const { varying, dead } = computeDatasetVariance(storesRows, FEATURE_NAMES);
     const gate = evaluateVarianceGate(varying, dead);
     expect(gate.passed).toBe(true);
-    // schema_fit is proven constant above; it must land in `dead`, not `varying`.
     expect(dead).toContain('schema_fit');
   });
 });
@@ -464,14 +371,14 @@ describe('scratch-cleanup containment guard', () => {
     expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('/');
     expect(sanitizeQuestionId('../../etc/passwd')).not.toContain('..');
     expect(sanitizeQuestionId('a/b\\c')).toBe('a_b_c');
-    expect(sanitizeQuestionId('fixture_q_a')).toBe('fixture_q_a'); // already-safe ids pass through unchanged
+    expect(sanitizeQuestionId('fixture_q_a')).toBe('fixture_q_a');
   });
 
   it('safeRemoveScratchDir refuses a target outside the scratch root', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-outside-root-'));
     try {
       expect(() => safeRemoveScratchDir(outside)).toThrow(/refusing/i);
-      expect(fs.existsSync(outside)).toBe(true); // must survive the refused delete
+      expect(fs.existsSync(outside)).toBe(true);
     } finally {
       fs.rmSync(outside, { recursive: true, force: true });
     }
@@ -487,13 +394,12 @@ describe('scratch-cleanup containment guard', () => {
 
 describe('scratch-store hygiene', () => {
   it('scratch stores live under the OS temp dir, never under the repo', () => {
-    // Drop this file's override so the production default path is what gets checked.
     vi.stubEnv('HIPPO_MV_SCRATCH_ROOT', undefined);
     // SAFETY: scratchRootDir() (common.mjs) always returns the scratch-root
     // path as a string; it never returns a filesystem handle or undefined.
     const root = scratchRootDir() as string;
     expect(path.relative(os.tmpdir(), root).startsWith('..')).toBe(false);
     expect(root.toLowerCase()).not.toContain('hippo-wt-lc2e1');
-    expect(fs.existsSync(root) || true).toBe(true); // root need not exist yet; just checking the path shape
+    expect(fs.existsSync(root) || true).toBe(true);
   });
 });

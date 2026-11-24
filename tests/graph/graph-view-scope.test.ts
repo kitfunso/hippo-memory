@@ -1,4 +1,3 @@
-// E10 lane A: buildGraphModel hides graph rows whose source memory the caller may not read. Real SQLite, no mocks.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -44,7 +43,6 @@ describe('graph-view personal scope', () => {
     const priv = mem(home, 'alice private note about deploy windows', OWN_A);
     const eTeam = insertEntityAt(home, T, { entityType: 'decision', name: 'TEAM', memoryId: team.id }).id;
     const ePriv = insertEntityAt(home, T, { entityType: 'decision', name: 'PRIV-A', memoryId: priv.id }).id;
-    // A team-sourced edge into A's entity must still go when its endpoint goes.
     insertRelationAt(home, T, { fromEntityId: eTeam, toEntityId: ePriv, relType: 'references', memoryId: team.id });
     const policy = await savePolicy(objectsAt(home), loadConfig(home).defaultHalfLifeDays, T, {
       policyName: 'Anchored',

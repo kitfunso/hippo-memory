@@ -1,5 +1,3 @@
-// The `hippo doctor` checks that read the database and the compaction spool.
-
 import * as path from 'node:path';
 import type { StoreHealth } from '../../base/ports/store/diagnostics.js';
 import { needsNewerHippo } from '../../base/errors/store-open.js';
@@ -16,10 +14,8 @@ import { DAY_MS } from '../../base/util/time.js';
 import { plural } from '../../base/util/format.js';
 import type { DoctorCheck, DoctorStore } from './doctor.js';
 
-// Migration 46 creates failure_log; a read-only open no longer creates it on an older store.
 const FAILURE_LOG_SCHEMA = 46;
 
-/** The failed-tool-call count over the last 7 days, or why it could not be read. */
 function failuresCheck(failures: StoreHealth['failures'], schemaVersion: number): DoctorCheck {
   if (failures.ok) {
     return {
@@ -48,7 +44,6 @@ function failuresCheck(failures: StoreHealth['failures'], schemaVersion: number)
       };
 }
 
-/** How long ago the store last slept (consolidated), or why that history could not be read. */
 function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck {
   if (!lastSleep.ok) {
     return {
@@ -84,12 +79,9 @@ function sleepCheck(lastSleep: StoreHealth['lastSleep'], now: Date): DoctorCheck
 
 interface SpoolRead {
   counts: SpoolCounts;
-  /** The detail's `; spool not read: <msg>` tail, empty when the spool was read. */
   unread: string;
 }
 
-/** Spool counts in their own try, so a spool that cannot be read never hides the database
- * counts. */
 function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   try {
     return { counts: spoolCounts(store, now, REPLAY_AFTER_MS, spoolFs), unread: '' };
@@ -101,10 +93,6 @@ function readSpool(store: string, now: Date, spoolFs?: SpoolFs): SpoolRead {
   }
 }
 
-/**
- * Compaction records the PostCompact hook left unfinished and spool files a replay has not
- * finished, which `hippo sleep` replays.
- */
 function compactionsCheck(
   compactions: StoreHealth['compactions'],
   store: string,
@@ -231,10 +219,6 @@ function memoriesCheck(memories: number | null, dormant: number | null): DoctorC
   return memoryCheck;
 }
 
-/**
- * Whether the full-text index still matches `memories`; opening a current store no longer checks,
- * so doctor reports and sleep repairs.
- */
 function ftsCheck(fts: StoreHealth['fts']): DoctorCheck {
   if (!fts.ok) {
     return { id: 'fts', status: 'warn', detail: `cannot read the full-text index: ${fts.message}` };

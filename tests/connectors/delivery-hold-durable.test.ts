@@ -1,4 +1,3 @@
-// A hold on a signed delivery lives in hippo.db, so it survives a restart and a second handle, and expired holds do not pile up.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
@@ -18,7 +17,6 @@ afterEach(() => {
 
 const claimOn = async (store: ReturnType<typeof sqliteStore>, key: string, nowMs: number) =>
   await store.connectorEvents.claimDelivery({ connector: 'slack', key, nowMs, ttlMs: TTL });
-/** Each call builds a store of its own, as a restarted server would. */
 const claim = async (key: string, nowMs: number) => await claimOn(sqliteStore(root), key, nowMs);
 
 function holdRows(): number {

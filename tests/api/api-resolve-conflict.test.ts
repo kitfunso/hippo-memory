@@ -1,4 +1,3 @@
-// MCP and the CLI resolve a conflict through one api function, so each refuses the same bad input the dashboard refuses.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { adminActor, ConflictError, NotFoundError, conflictResolve } from '../../src/api/index.js';
 import { handleResolve } from '../../src/surface/cli/conflicts.js';
@@ -50,7 +49,6 @@ async function seedPair(): Promise<Pair> {
   return { a, b, conflictId: conflict.id };
 }
 
-/** `b` superseded by a fresh row, so the pair no longer holds two live memories. */
 function supersedeB({ b }: Pair): void {
   const successor = createMemory('deploys run from a release branch', {
     baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

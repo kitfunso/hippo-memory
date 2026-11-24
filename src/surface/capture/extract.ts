@@ -11,7 +11,6 @@ export interface ExtractedItem {
   content: string;
   category: string;
   tags: string[];
-  /** A person said it, not the agent: capture pins a rule that carries this. */
   fromUser?: boolean;
 }
 
@@ -52,10 +51,8 @@ const RULE_PATTERNS = [
   RULE_LABEL,
   /\b(?:make sure|ensure)\s/i,
 ];
-// The lead words sit in a lookbehind so the match starts on the keyword, where the bracket check reads.
 const HELPER_VERB = String.raw`(?:has|have|had|was|were|been|is|are|did|does|got)\b`;
 const NEVER_WORD = String.raw`(?:never|always|do(?:n't| not)\s+ever)\s+(?!${HELPER_VERB})`;
-// After "you" or "we" the next word is the verb, and a past one reports: "we never worked on it".
 const IRREGULAR_PAST =
   'said|told|saw|knew|went|made|thought|took|gave|came|wrote|ran|found|heard|meant|felt|sent|built';
 const PAST_VERB = String.raw`(?:(?!(?:embed|shred)\b)\w+[a-df-z]ed|${IRREGULAR_PAST})\b`;
@@ -64,8 +61,6 @@ const DIRECTING_NEVER = new RegExp(
     String.raw`|(?<=\b(?:you|we)\s+)${NEVER_WORD}(?!${PAST_VERB})`,
   'i',
 );
-// A person's rule pins into every later session, so it needs words that outlast the task: "must" or
-// "make sure" alone orders the work at hand, and "she has never used it" describes.
 const PERSON_RULE_PATTERNS = [
   DIRECTING_NEVER,
   RULE_LABEL,
@@ -109,10 +104,8 @@ const SPEC_HEADING_PATTERNS = [
 const FENCE_OPEN = /^(?:(?:[-*+]|\d+[.)])\s+)?(`{3,}|~{3,})(.*)$/;
 const INDENTED_CODE = /^(?: {4}|\t)(?!\s*(?:[-*+]|\d+[.)])\s)/;
 const FENCE_CLOSE = /^(`{3,}|~{3,})\s*$/;
-// Inline code and abbreviation dots never end a sentence; "etc." does when a capital follows.
 const NO_BREAK = /(`+)[^`\n]+\1|\b(?:[Ee]\.g|[Ii]\.e|[Vv]s|[Cc]f)\.|\betc\.(?=\s+[a-z])/g;
 
-// Pasted text is not the speaker's own; an unclosed block runs to the end.
 const PASTED_BLOCK = /<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)/g;
 
 /** Whether a line is program output, not the speaker's words. */
@@ -142,9 +135,6 @@ export function proseOnly(text: string, isNoise: NoiseCheck = () => false): stri
         afterProse = false;
         return '';
       }
-      // Quotes, table rows and indented code are not the speaker's own; indented code cannot
-      // interrupt a paragraph or list item.
-      // A colon introduces what follows, so output shown after one stays noise.
       const sentenceOpen =
         afterProse &&
         previous !== undefined &&
@@ -170,24 +160,18 @@ export function leftOpen(previous: string, next: string): boolean {
   return !SENTENCE_END.test(masked(`${previous} ${next}`).slice(0, previous.length));
 }
 
-/** A lowercase or bracketed line, but not an enumerator like "(1)", continues the line above
- * only when that line left its sentence open. */
 function continues(line: string, previous: string | undefined): boolean {
   if (previous === undefined || !CONTINUED_LEAD.test(line) || LABEL.test(line)) return false;
   return leftOpen(previous, line);
 }
 
-/** The sorted offsets of the `**` markers a reading of a line removes. */
 type Cutter = (line: string) => number[];
 
-/** What capture read before it removed bold markers. */
 const keepAll: Cutter = () => [];
 
-/** Offsets of each `**` that pairs with the nearest opener before it. */
 function pairedBold(line: string): number[] {
   const paired: number[] = [];
   const openers: number[] = [];
-  // Blanked code spans keep every offset, so the markers found here are cut from the source.
   for (const marker of strongMarkers(blankCodeSpans(line, '`'))) {
     if (marker.inWord) continue;
     const opener = marker.close ? openers.pop() : undefined;
@@ -209,7 +193,6 @@ export function withoutBold(text: string): string {
     .join('\n');
 }
 
-/** `line` without the two characters at each of the sorted `cuts`, built in one pass. */
 function cutOut(line: string, cuts: readonly number[]): string {
   let out = '';
   let kept = 0;
@@ -220,7 +203,6 @@ function cutOut(line: string, cuts: readonly number[]): string {
   return out + line.slice(kept);
 }
 
-/** How many of the sorted `values` are at most `limit`. */
 function countUpTo(values: readonly number[], limit: number): number {
   let low = 0;
   let high = values.length;
@@ -232,14 +214,11 @@ function countUpTo(values: readonly number[], limit: number): number {
   return low;
 }
 
-/** A line of text and where it starts in the prose. */
 interface Piece {
   text: string;
   at: number;
 }
 
-/** The text of a prose block with its markers cut, where each sentence of it starts, and where a
- * range of it came from. */
 interface Block {
   readonly text: string;
   readonly sentenceStarts: readonly number[];
@@ -255,7 +234,6 @@ function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
   const sentenceStarts = [
     ...new Intl.Segmenter('en', { granularity: 'sentence' }).segment(masked(raw)),
   ].map(({ index }) => index - 2 * countUpTo(cutEnds, index));
-  // Where each cut sits in the cut text, and where each piece starts in the raw text.
   const shifted = cutAt.map((at, k) => at - 2 * k);
   const starts: number[] = [];
   let sum = 0;
@@ -280,7 +258,6 @@ function blockOf(pieces: readonly Piece[], cuts: Cutter): Block {
 function proseBlocks(prose: string, cuts: Cutter): Block[] {
   const blocks: Block[] = [];
   let pending: Piece[] = [];
-  // Cut once the lines are joined, as a spec bullet is, so a bold pair that wraps a line goes whole.
   const flush = (): void => {
     if (pending.length > 0) blocks.push(blockOf(pending, cuts));
     pending = [];
@@ -303,7 +280,6 @@ function proseBlocks(prose: string, cuts: Cutter): Block[] {
   return blocks;
 }
 
-/** Each sentence of a block, trimmed, with where it starts in the block text. */
 function completeSentences({
   text,
   sentenceStarts,
@@ -314,15 +290,12 @@ function completeSentences({
   });
 }
 
-// A "(" after ":" or ";" is an emoticon, and one with a quote mark on both sides is quoted text.
 function opensAside(text: string, at: number): boolean {
   const before = text[at - 1] ?? '';
   const quoted = QUOTE_MARK.test(before) && QUOTE_MARK.test(text[at + 1] ?? '');
   return text[at] === '(' && !/[:;]/.test(before) && !quoted;
 }
 
-// A sentence starts inside a cut aside: an unclosed "(" before it, an aside-closing ")" in it, and
-// a word after that ")".
 function asideCutter(block: string): (sentence: string, at: number) => boolean {
   const blanked = blankCodeSpans(block);
   let depth = 0;
@@ -348,8 +321,6 @@ function extractFromPatterns(
   patterns: readonly RegExp[],
   category: string,
 ): ExtractedItem | null {
-  // A keyword inside brackets does not support a detached assertion; a later one outside them still
-  // does.
   const keyed = patterns.some((pattern) =>
     [...sentence.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].some(
       (match) => !insideBrackets(sentence.slice(0, match.index)),
@@ -394,7 +365,6 @@ export function pickedText(sentences: readonly string[]): string | null {
   return content.length <= MAX_CHARS && assessAutomaticMemory(content).accepted ? content : null;
 }
 
-/** An item and the range of the prose it came from. */
 interface Sourced {
   readonly item: ExtractedItem;
   readonly from: number;
@@ -433,7 +403,6 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }
     open = inSpecSection && (bullet !== null || wrapped);
   }
-  // Cut once the lines are joined, so a pair that wraps a line goes whole.
   return bullets
     .map(({ text, at, to }) => ({ content: cutOut(text, cuts(text)), from: at, to }))
     .filter(({ content }) => content.length <= MAX_CHARS && !content.endsWith('?'))
@@ -444,19 +413,14 @@ function extractSpecSections(prose: string, cuts: Cutter): Sourced[] {
     }));
 }
 
-// A reply can state how the person wants the work done with no rule word, so it is kept for recall.
 const ANY_STATEMENT = [/\S/];
-// A kept reply names code or limits a choice; a thanks or a pasted test count does neither.
 const CODE_CUE = /`|\w[\\/]\w|\w\.[A-Za-z]|\w_\w|\w\(|[<>{}[\]=]|(?:^|\s)--?[A-Za-z]/;
 const LIMIT_CUE =
   /n't\b|\b(?:not|no longer|instead|rather|only|stop|unless|before|after|until|without|except)\b/i;
-// Praise names code too ("Thanks, `src/cache.ts` looks good"); a thanks that goes on to direct is kept.
 // SHORTCUT: word shapes, not meaning; the opt-in model capture is the upgrade path.
 const ACK_LEAD = /^(?:thanks|thank you|ok(?:ay)?|great|nice|perfect|cool|lgtm)\b[\s,.!:-]*/i;
 const NOT_A_DIRECTIVE = /^(?:for|on|to|so|the|a|an|this|that|it|its|you|your|i|we|all|really)\b/i;
 const APPROVAL = /^(?:\S+\s+){0,3}(?:looks?|works?|worked)\s+(?:good|great|fine|right|now)\b/i;
-// Pasted output opens on a file:line, a stack frame or an error word, or holds a file:line:col
-// (a compiler arrow line) or an assertion message.
 const LOG_CUE = new RegExp(
   [
     String.raw`^#\d+\s|^\S*\w\.[A-Za-z]+:\d+|\w\.[A-Za-z]+:\d+:\d+`,
@@ -465,7 +429,6 @@ const LOG_CUE = new RegExp(
   ].join('|'),
 );
 
-/** A thanks with no directive after it, or a short "X looks good". */
 function isPraise(content: string): boolean {
   const lead = ACK_LEAD.exec(content);
   const rest = lead ? content.slice(lead[0].length) : content;
@@ -474,7 +437,6 @@ function isPraise(content: string): boolean {
   return rest.split(/\s+/).filter(Boolean).length <= 3 || NOT_A_DIRECTIVE.test(rest);
 }
 
-/** A statement in a reply worth keeping: 2 words when it names code, 4 with a limiting word. */
 function followUpItem(sentence: string, category: string): ExtractedItem | null {
   const item = extractFromPatterns(sentence, ANY_STATEMENT, category);
   if (!item) return null;
@@ -486,8 +448,6 @@ function followUpItem(sentence: string, category: string): ExtractedItem | null 
   return kept ? { ...item, tags: [...item.tags, 'follow-up'] } : null;
 }
 
-/** What a sentence holds; in a reply a preference that names code or limits a choice is a rule. A
- *  statement with no such word stays a note: most replies are one-off orders, and a rule pins. */
 function sentenceItem(
   sentence: string,
   followUp: boolean,
@@ -501,20 +461,17 @@ function sentenceItem(
     !followUp || (hit !== null && hit.category !== 'preference')
       ? hit
       : (followUpItem(sentence, hit === null ? CAPTURED_NOTE_TAG : 'rule') ?? hit);
-  // A person's rule word that does not outlast the task stays a note, which a matching prompt recalls.
   return (
     item ?? (fromUser ? extractFromPatterns(sentence, RULE_PATTERNS, CAPTURED_NOTE_TAG) : null)
   );
 }
 
-// The items of the spec bullets first, then those of each prose block.
 function extractSourced(text: string, cuts: Cutter, followUp = false, fromUser = false): Sourced[] {
   const prose = proseOnly(text);
   const found = extractSpecSections(prose, cuts);
   for (const block of proseBlocks(prose, cuts)) {
     const cutByAside = asideCutter(block.text);
     for (const { sentence, at } of completeSentences(block)) {
-      // A question asks rather than states; far over the bound, skip before any pattern runs.
       if (sentence.endsWith('?') || sentence.length > 2 * MAX_CHARS) continue;
       if (cutByAside(sentence, at)) continue;
       const item = sentenceItem(sentence, followUp, fromUser);
@@ -551,7 +508,6 @@ export interface BoldTwin {
   readonly clean: string;
 }
 
-/** The items of one kind, in text order and so sorted by where they end. */
 interface Track {
   readonly items: readonly Sourced[];
   readonly ends: readonly number[];
@@ -561,7 +517,6 @@ function trackOf(items: readonly Sourced[]): Track {
   return { items, ends: items.map(({ to }) => to) };
 }
 
-/** The items of `track` whose range overlaps [from, to). */
 function overlapping(track: Track, from: number, to: number): Sourced[] {
   const found: Sourced[] = [];
   for (
@@ -574,7 +529,6 @@ function overlapping(track: Track, from: number, to: number): Sourced[] {
   return found;
 }
 
-/** Whether each range covers the other, but for markers, spaces and sentence marks at the edges. */
 function sameSpan(prose: string, a: Sourced, b: Sourced): boolean {
   const gap = (x: number, y: number): string => prose.slice(Math.min(x, y), Math.max(x, y));
   return /^[\s*.!?]*$/.test(gap(a.from, b.from)) && /^[\s*.!?]*$/.test(gap(a.to, b.to));
@@ -588,7 +542,6 @@ export function boldTwins(texts: readonly string[], scrub: (text: string) => str
   for (const text of texts.filter((t) => t.includes('**'))) {
     const prose = proseOnly(text);
     const fresh = extractSourced(text, boldPairs);
-    // Spec bullets and prose sentences overlap each other, so each kind keeps its own order.
     const tracks = [trackOf(fresh.filter(({ item }) => item.category === 'spec'))];
     tracks.push(trackOf(fresh.filter(({ item }) => item.category !== 'spec')));
     const taken = new Set<Sourced>();

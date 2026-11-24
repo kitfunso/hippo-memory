@@ -1,4 +1,3 @@
-// The OAuth protected-resource metadata and the /mcp 401 challenge, both frozen at boot.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { HttpError } from '../../base/errors/http-errors.js';
 import { isCallable, isObjectLike } from '../../base/session/capture-contract.js';
@@ -11,8 +10,6 @@ const WELL_KNOWN = '/.well-known/oauth-protected-resource';
 // RFC 6749 scope token: printable ASCII but space, quote and backslash.
 const SCOPE_TOKEN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
 const ENCODED_SLASH = /%2f/i;
-// An issuer is compared byte for byte. The form check would refuse a space, a control character or a
-// non-ASCII character too; this check exists to say so in clear words.
 const ISSUER_TEXT = /^[\x21-\x7e]+$/;
 
 /** What boot serves for the oauth setting: the document by path, and the frozen challenge. */
@@ -35,7 +32,6 @@ function checkResource(raw: string): URL {
   if (!url.pathname.endsWith('/mcp')) {
     throw new Error('oauth.resource must be the public URL of /mcp, so its path ends in /mcp');
   }
-  // rejectEncodedSlash would answer 400 at the metadata path built from it.
   if (ENCODED_SLASH.test(url.pathname)) {
     throw new Error('oauth.resource must not encode a slash in its path');
   }

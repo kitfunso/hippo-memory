@@ -3,7 +3,6 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-/** `hippo <args>` run in this process from `home` as tenant `tenant`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(home: string, tenant: string, ...args: string[]): Promise<string> {
   vi.stubEnv('HIPPO_TENANT', tenant);
   const saved = process.cwd();

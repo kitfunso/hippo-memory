@@ -1,15 +1,3 @@
-/**
- * v39 memory scope isolation - the cross-project leak tests (plan S2/S3,
- * docs/plans/2026-07-01-memory-scope-isolation.md).
- *
- * Reproduces the 2026-07-01 bug shape: a project-A session whose global
- * store carries rows owned by OTHER projects. Before v39, every mode of
- * contextGet injected them; the existing api-context tests could not catch
- * this because they isolate the global store away entirely.
- *
- * Real-DB per project convention.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -140,8 +128,6 @@ describe('contextGet origin partition (project A session)', () => {
   });
 
   it('query mode: an excluded high-token cross-project row cannot starve admitted rows out of the budget', async () => {
-    // A large cross-project row that matches the query strongly; the small
-    // in-scope rows must still fill the (tiny) budget after it is excluded.
     writeEntry(globalStore, {
       ...createMemory('deploykey deploykey deploykey ' + 'filler text for bulk '.repeat(40), {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
@@ -150,7 +136,6 @@ describe('contextGet origin partition (project A session)', () => {
     });
     const result = await contextGet(ctx, { currentProject: 'proj-a', q: 'deploykey', budget: 60 });
     const got = contents(result.entries);
-    // The two admitted rows cost 12 and 13 tokens, so both fit the 60-token budget once the bulk row is out.
     expect([...got].sort()).toEqual([ALPHA, GLOBAL_PREF]);
     expect(got.join('\n')).not.toContain('filler text for bulk');
   });
@@ -159,8 +144,8 @@ describe('contextGet origin partition (project A session)', () => {
     const DUP = 'deploykey duplicated fact shared to global';
     writeEntry(projA, {
       ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS, scope: 'github:private:x' }),
-    }); // excluded (private scope)
-    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: '' }); // admitted (user-global)
+    });
+    writeEntry(globalStore, { ...createMemory(DUP, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }), originProject: '' });
     const result = await contextGet(ctx, { currentProject: 'proj-a', q: 'deploykey duplicated' });
     expect(contents(result.entries)).toContain(DUP);
   });

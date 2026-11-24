@@ -1,5 +1,3 @@
-// A batch call clears the full-text rows it replaces with one delete, re-indexes only rows whose text changed,
-// and never indexes an id twice, even when the index refuses the delete.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { DatabaseSync } from '../../src/db/sqlite.js';
 import { getHippoDbPath } from '../../src/db/index.js';
@@ -30,7 +28,6 @@ function seedRows(n: number, label = 'seed'): MemoryEntry[] {
   return rows;
 }
 
-/** Ids on a raw handle, so no store open re-checks or repairs the index first. */
 function idsOf(sql: string): string[] {
   const db = new DatabaseSync(getHippoDbPath(root));
   try {
@@ -41,7 +38,6 @@ function idsOf(sql: string): string[] {
   }
 }
 
-/** The same plain stand-in as tests/store/store-fts-failure-logging.test.ts: it refuses every delete while the store still reports FTS on. */
 function breakFtsIndex(): void {
   const db = new DatabaseSync(getHippoDbPath(root));
   db.exec(`

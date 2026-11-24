@@ -1,5 +1,3 @@
-// Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
-
 /** @typedef {import('@oxlint/plugins').ESTree.Node} Node */
 
 /**
@@ -33,7 +31,6 @@ export function isNamed(node, name) {
  * @returns {string | undefined}
  */
 export function textOf(node) {
-  // A string literal keeps its quote in `raw`; a number, boolean, null or regex does not.
   if (node?.type === 'Literal' && node.raw !== null && /^['"]/.test(node.raw)) return String(node.value);
   if (node?.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis[0]?.value.cooked ?? undefined;
   return undefined;

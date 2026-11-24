@@ -1,4 +1,3 @@
-// A model change reindexes inline at 256 rows and leaves the rebuild to `hippo embed` at 257, on a real SQLite store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -45,7 +44,6 @@ afterEach(() => {
 });
 
 function seed(rows: number): MemoryEntry {
-  // One transaction: a write per row timed out on the Windows runner at 257 rows.
   const entries = Array.from({ length: rows }, (_row, i) =>
     createMemory(`inline reindex boundary row ${i}`, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }),
   );

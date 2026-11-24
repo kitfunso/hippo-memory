@@ -1,4 +1,3 @@
-// A session that ends without compacting still gets a handoff, read from its own transcript.
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -17,7 +16,6 @@ import { initTestStore } from '../_helpers/store-template.js';
 import { removeDir } from '../_helpers/remove-dir.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-// AWS's documented example key, a placeholder that is safe to embed.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 const state = {
   task: 'add rate limiting to the webhook',
@@ -295,7 +293,6 @@ describe('writeSessionEndHandoff from transcript state', () => {
     });
     const db = openHippoDb(root);
     try {
-      // The rewrite finds the hand-written row newest and changes nothing, as when `hippo handoff create` wins the race.
       db.exec(`CREATE TRIGGER hand_written_lands BEFORE UPDATE ON session_handoffs BEGIN
         INSERT INTO session_handoffs(session_id, summary, artifacts_json, tenant_id, created_at)
           VALUES (OLD.session_id, 'written by hand', '[]', OLD.tenant_id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

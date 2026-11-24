@@ -1,4 +1,3 @@
-// Plain JS with JSDoc types so the plugin loads on the package's Node floor, which cannot strip types.
 import { eslintCompatPlugin } from '@oxlint/plugins';
 
 import { maxSignatureParamsRule } from './max-signature-params.mjs';
@@ -11,8 +10,6 @@ import { noRecallLedgerLabelRule } from './no-recall-ledger-label.mjs';
 import { noStoreBranchRule } from './no-store-branch.mjs';
 import { noTwinFunctionRule } from './no-twin-function.mjs';
 
-/** Rules that read a node's shape, which no built-in oxlint rule does; .dependency-cruiser.cjs holds
- * the import rules, and .oxlintrc.json scopes each rule to its folders. */
 const boundariesPlugin = eslintCompatPlugin({
   meta: { name: 'boundaries' },
   rules: {

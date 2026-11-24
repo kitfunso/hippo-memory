@@ -1,5 +1,3 @@
-// A rule the person states is pinned at capture, so the prompt hook injects it on a later prompt that shares none of its words.
-// Real SQLite stores in tmp dirs, no mocks.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -108,7 +106,6 @@ describe('capture pins the rules a person states', () => {
     expect(collectSessionTurns(jsonl)).toEqual([{ role: 'user', text: 'Never edit CHANGELOG.md by hand.' }]);
   });
 
-  // A wrapper such as Cline's Claude Code provider sends its system prompt as a `claude -p` user turn.
   describe('a session a program drives', () => {
     const WRAPPER_PROMPT =
       'You are Cline, an AI coding agent. Always gather all the necessary context before starting to work on a task. Always use absolute paths when referring to files.';
@@ -175,7 +172,6 @@ describe('capture pins the rules a person states', () => {
     });
   });
 
-  // A pin reaches every later session, so only words that outlast the task make the person's rule.
   describe('scope', () => {
     const REQUEST = 'Add a retry with backoff to fetchJson in src/net.ts.';
     const done: SessionTurn = { role: 'assistant', text: 'Added the retry and its test.' };

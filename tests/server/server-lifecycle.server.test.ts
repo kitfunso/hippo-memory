@@ -11,7 +11,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Not initStore'd on purpose: these tests start from an empty `.hippo` dir.
 function makeRoot(): string {
   const home = mkdtempSync(join(tmpdir(), 'hippo-srv-'));
   mkdirSync(join(home, '.hippo'), PRIVATE_DIR);
@@ -43,7 +42,6 @@ interface UploadReply {
   closed: Promise<void>;
 }
 
-// Unpaced and never ended, as a large upload is, so only the server can close the connection.
 function uploadUnpaced(port: number, path: string, headers: Record<string, string> = {}): Promise<UploadReply> {
   const chunk = Buffer.alloc(64 * 1024, 'x');
   return new Promise<UploadReply>((resolve, reject) => {
@@ -69,7 +67,6 @@ function uploadUnpaced(port: number, path: string, headers: Record<string, strin
       );
       res.on('error', reject);
     });
-    // A reset before the reply is read is the bug this guards: the server closed with request bytes unread.
     req.on('error', (err) => {
       if (!answered) reject(err);
     });
@@ -87,7 +84,6 @@ describe('server lifecycle', () => {
     const home = makeRoot();
     const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
-      // Port 0 asks the OS for any free port, so only the TCP range is fixed.
       expect(handle.port).toBeGreaterThan(0);
       expect(handle.port).toBeLessThanOrEqual(65_535);
       expect(handle.url).toBe(`http://127.0.0.1:${handle.port}`);
@@ -109,7 +105,6 @@ describe('server lifecycle', () => {
       expect(body.version).toEqual(expect.any(String));
       expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(body.started_at).toEqual(expect.any(String));
-      // ISO 8601 sanity check
       expect(Number.isFinite(Date.parse(body.started_at))).toBe(true);
       expect(body.pid).toBe(process.pid);
       expect(body.audit_write_failures).toEqual(expect.any(Number));
@@ -130,7 +125,6 @@ describe('server lifecycle', () => {
 
     expect(existsSync(pidfile)).toBe(false);
 
-    // Listener is closed: a fetch to the old url must fail to connect.
     let connected = false;
     try {
       await fetch(`http://127.0.0.1:${port}/health`);
@@ -193,11 +187,8 @@ describe('server lifecycle', () => {
     const home = makeRoot();
     const first = await serveKeyed({ hippoRoot: home, port: 0 });
     try {
-      // A concurrent `hippo serve` on the same root must be rejected before it
-      // can listen or clobber the pidfile.
       await expect(serveKeyed({ hippoRoot: home, port: 0 })).rejects.toThrow(/already running/i);
 
-      // The pidfile must still describe the first (real) server, uncorrupted.
       const info = JSON.parse(readFileSync(join(home, 'server.pid'), 'utf8'));
       expect(info.port).toBe(first.port);
       expect(info.pid).toBe(process.pid);
@@ -211,10 +202,7 @@ describe('server lifecycle', () => {
     const home = makeRoot();
     const handle = await serveKeyed({ hippoRoot: home, port: 0, keep: CONNECTOR_GROUPS });
     try {
-      // The cap lives in readBody, shared by every route: the generic /v1 route reads a keyed caller's body, and a
-      // webhook route reads one once a secret and a signature header are there.
       vi.stubEnv('SLACK_SIGNING_SECRET', 'test-only-webhook-signing-material');
-      // Well formed, as the checks made before the body demand: a v0= digest and a timestamp inside the skew window.
       const signed = {
         'x-slack-signature': `v0=${'0'.repeat(64)}`,
         'x-slack-request-timestamp': String(Math.floor(Date.now() / 1000)),
@@ -228,7 +216,6 @@ describe('server lifecycle', () => {
         expect(JSON.parse(reply.body)).toEqual({ error: 'request body exceeds 1MB' });
         await reply.closed;
       }
-      // The server shed the oversized requests without wedging — still serving.
       const health = await fetch(`${handle.url}/health`);
       expect(health.status).toBe(200);
     } finally {
@@ -243,10 +230,6 @@ describe('server lifecycle', () => {
     const handle = await serveKeyed({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
     try {
-      // A is live and owns the pidfile. Simulate a newer server B taking over
-      // this hippoRoot: overwrite the pidfile with a foreign identity (a
-      // different pid AND a different started_at). The forged pid value is
-      // arbitrary — removePidfileIfOwned compares it, never probes liveness.
       const forged = {
         schema: 1,
         pid: process.pid + 12345,
@@ -256,7 +239,6 @@ describe('server lifecycle', () => {
       };
       writeFileSync(pidfile, JSON.stringify(forged));
 
-      // A shuts down. Its stop() must NOT delete B's pidfile.
       await handle.stop();
 
       expect(existsSync(pidfile)).toBe(true);
@@ -272,7 +254,7 @@ describe('server lifecycle', () => {
 describe('/v1 rate limiting', () => {
   it('throttles /mcp and /mcp/stream from the same per-IP bucket', async () => {
     const home = makeRoot();
-    vi.stubEnv('HIPPO_V1_RPS', '1'); // rate 1/s, burst 2
+    vi.stubEnv('HIPPO_V1_RPS', '1');
     const ac = new AbortController();
     try {
       const handle = await serveKeyed({ hippoRoot: home, port: 0 });

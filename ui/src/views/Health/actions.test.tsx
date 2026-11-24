@@ -156,7 +156,6 @@ describe("actions: forget", () => {
   });
 });
 
-/** Mark wrong on m1 has been sent and its answer is held; Forget on m2 is pending with a fresh 6 s window. */
 async function wrongInFlightThenForget() {
   const forget = counted(() => ({ ok: true, id: "m2" }));
   let release: (r: Response) => void = () => {};
@@ -217,7 +216,6 @@ describe("actions: a late result from an earlier action", () => {
   });
 });
 
-/** The server moves to snapshot 2 on the action; the next GET of m1 is held until `answerGet` is called. */
 function afterActionDetailHeld(actionPath: string, answer: Response, m1At: (snap: number) => Response) {
   let snap = 1;
   let hold = false;

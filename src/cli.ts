@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Hippo CLI entry point: parses argv and dispatches each verb through the table in
-// surface/cli/verbs.ts. `hippo help` prints the verb list from that table, so no list is kept here.
 
 import { envReadOnly, envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import { READ_ONLY_REFUSAL } from './base/errors/read-only.js';
@@ -33,7 +31,6 @@ import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { runCliCommand } from './surface/cli/cli-runtime.js';
 
-// A command that does not honour --dry-run would ignore it and run for real.
 function dryRunRefusal(
   command: string,
   spec: VerbSpec | undefined,
@@ -61,8 +58,6 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its own branch here instead of
-  // the swallow-avoidance short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {
@@ -72,7 +67,6 @@ function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKin
   }
 }
 
-/** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
 function setSeparatedFlag(
   flags: CliFlags,
   key: string,
@@ -80,7 +74,6 @@ function setSeparatedFlag(
   kind: FlagKind,
 ): number {
   if (kind === 'switch' && (next === 'true' || next === 'false')) {
-    // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
     flags[key] = next;
     return 2;
   }
@@ -116,8 +109,6 @@ export function parseArgs(argv: string[]) {
         i += setSeparatedFlag(flags, key, rest[i + 1], flagKind(declared, key));
       }
     } else if (part === '-h') {
-      // Running a verb when help was asked costs more than losing a literal -h; `-- -h` still
-      // passes one.
       flags['help'] = true;
       i++;
     } else {
@@ -136,8 +127,6 @@ export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliF
   return true;
 }
 
-// Repair-only: never first-installs, because silently swapping the codex binary on routine commands
-// is a consent violation and reads as binary hijacking to supply-chain scanners.
 function maybeRepairCodexWrapper(currentCommand: string, flags: CliFlags): void {
   if (!shouldAutoRepairCodexWrapper(currentCommand, flags)) return;
   try {
@@ -174,7 +163,6 @@ export function verbUsage(verb: string): string | null {
   return usage.length > 0 ? usage.join('').slice(1) : null;
 }
 
-// These sub-commands have fuller usage text than their lines in usageText().
 const SUBCOMMAND_USAGE: ReadonlyMap<string, () => void> = new Map([
   ['audit prune', printAuditPruneUsage],
   ['slack backfill', printSlackBackfillUsage],
@@ -193,16 +181,12 @@ function printVersion(): never {
   throw new CliExit(0);
 }
 
-/** A value-less --scope parses as boolean true, which consumers coerced to the scope 'true' or dropped; reject it once
- *  here so every command, thin-client relays included, sees only a non-empty string. */
 function rejectEmptyScope(flags: CliFlags): void {
   if ('scope' in flags && (!isStringFlag(flags['scope']) || !flags['scope'].trim())) {
     fail('--scope requires a non-empty value (e.g. --scope slack:private:C1).');
   }
 }
 
-// parseArgs stores a value-less flag as boolean true, and NaN then survives every downstream guard
-// because each comparison against it is false.
 function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) !== 'number') continue;
@@ -212,8 +196,6 @@ function rejectNonNumericFlags(flags: CliFlags, declared: VerbFlags | undefined)
   }
 }
 
-// Reject rather than coerce: consumers read --dry-run both as Boolean() and === true, so no single
-// coercion of an inline value would be correct for every one of them.
 function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined): void {
   for (const [key, raw] of Object.entries(flags)) {
     if (flagKind(declared, key) === 'switch' && !isBooleanFlag(raw)) {
@@ -224,7 +206,6 @@ function rejectValuedSwitches(flags: CliFlags, declared: VerbFlags | undefined):
 
 function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | undefined): void {
   const declared = spec?.flags;
-  // card checks its flags per subcommand, with a stricter message.
   if (command === 'card') return;
   for (const [name, advice] of Object.entries(spec?.removedFlags ?? {})) {
     if (Object.hasOwn(flags, name)) {
@@ -237,8 +218,6 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
     printError(`Unknown flag ${flagNames(unknown)} for hippo ${command}. Nothing was changed.`);
     throw new CliExit(2);
   }
-  // main() refuses --dry-run by name on a verb without one, so that flag is not also called
-  // ignored.
   const ignored = declared
     ? undeclaredFlags(declared, Object.keys(flags)).filter((key) => key !== 'dry-run')
     : unknown;
@@ -249,7 +228,6 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
 }
 
-// Before the verb reads stdin or opens a store, so a hook leaves no row, mirror file or worker.
 function stopReadOnly(command: string, mode: 'refuse' | 'skip'): void {
   if (mode === 'skip') {
     log.warn(`hippo ${command}: skipped under HIPPO_READ_ONLY=1`);
@@ -269,7 +247,6 @@ async function main(
     printUsage();
     return;
   }
-  // Before every other step, so help never opens a store, installs a hook or starts a server.
   if (Object.hasOwn(flags, 'help')) {
     printHelp(command, args);
     return;
@@ -302,8 +279,6 @@ async function main(
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
 }
 
-/** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe
- * side. */
 function warnUnknownFlagValues(): void {
   for (const entry of validateFlags()) {
     log.warn(`${entry} is not 1, true, on, 0, false or off; the flag takes its safe side`);
@@ -326,7 +301,6 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
       'Error:',
       isStoreBusy(err) ? STORE_BUSY_MESSAGE : err instanceof Error ? err.message : err,
     );
-    // The message alone rarely says where it came from; debug is the level that asks for the rest.
     if (isLevelEnabled('debug')) {
       const fields = errorFields(err);
       const stack = fields.stack ? `\n${fields.stack}` : '';
@@ -337,15 +311,12 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
   }
 }
 
-// bin/hippo.js calls runCli(); this keeps `node dist/cli.js` working while an import runs nothing.
 const entryPath = process.argv[1];
 if (
   entryPath &&
   fs.existsSync(entryPath) &&
   fs.realpathSync(entryPath) === fileURLToPath(import.meta.url)
 ) {
-  // runCli reports a verb's failure itself; a throw from before its try (argument parsing, the
-  // store root) lands here.
   runCli().catch((err) => {
     log.error('hippo: the command could not start', errorFields(err));
     process.exitCode = 1;

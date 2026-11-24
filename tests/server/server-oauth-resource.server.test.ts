@@ -1,4 +1,3 @@
-// serve({ oauth }): /mcp as an OAuth protected resource: the path-suffixed metadata and the POST /mcp 401 challenge.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -53,7 +52,6 @@ afterEach(async () => {
 type Overrides = Partial<Parameters<typeof serve>[0]>;
 
 async function boot(oauth: OAuthResource | undefined, extra: Overrides = {}): Promise<void> {
-  // hippo_status needs the reports group, which the port-only store drops unless kept.
   handle = await serve({
     hippoRoot: root,
     host: '127.0.0.1',
@@ -97,7 +95,6 @@ function jsonOf(text: string): JsonObject {
 
 const callMcp = (authorization?: string): Promise<Reply> => send('POST', '/mcp', authorization, CALL);
 
-/** The error serve() throws for this setting, or null when it started; a started server is stopped. */
 async function bootError(
   oauth: OAuthResource | undefined,
   extra: Overrides = { authResolver: resolver },

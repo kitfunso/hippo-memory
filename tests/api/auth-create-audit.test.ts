@@ -1,9 +1,3 @@
-/**
- * v1.12.4: tests for the auth_create audit emit.
- *
- * Closes the v1.12.3 CHANGELOG-flagged deferral. Mirrors auth_revoke audit
- * coverage (already locked in tests/db/audit.test.ts and the M1 fix history).
- */
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -24,9 +18,6 @@ function newCtx(tenantId = 'default') {
   };
 }
 
-// auth_create / auth_revoke audit metadata is always the flat {label, role} /
-// {} scalar object built at the appendAuditEvent call sites in src/api/index.ts for
-// these two ops -- never nested objects or arrays.
 type AuditMetadataValue = string | number | boolean | null;
 
 function getAuditRows(
@@ -112,10 +103,8 @@ describe('auth_create audit emit', () => {
       const result = await authCreate(t.ctx, { label: 'security-check' });
       const rows = getAuditRows(t.ctx.hippoRoot, t.ctx.tenantId, 'auth_create');
       expect(rows.length).toBe(1);
-      // The full JSON-stringified metadata must not contain the plaintext
       const stringified = JSON.stringify(rows[0].metadata);
       expect(stringified).not.toContain(result.plaintext);
-      // Sanity: the plaintext starts with 'hk_' + 24 chars + '.' + body
       expect(result.plaintext).toMatch(/^hk_[a-z2-7]{24}\.[a-z2-7]+$/);
     } finally {
       t.cleanup();

@@ -16,20 +16,15 @@ import {
 } from '../../base/ports/llm.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
 
-// Bounds the LLM calls one sleep spends on extraction.
 const EXTRACTION_BATCH_LIMIT = 20;
-// The ceiling keeps a misconfigured env from burning unbounded LLM cost.
 const MAX_DAG_REBUILD_CAP = 1000;
 const DEFAULT_DAG_REBUILD_CAP = 20;
 
-/** The model, its options and the once-per-line error reporter every LLM phase shares. */
 interface SleepLlm {
   readonly llmError: (phase: string) => (msg: string, failure?: LlmFailure) => void;
   readonly llmOpts: { readonly llm: Llm; readonly model?: string };
 }
 
-/** Null when no phase may call a model: none was handed in, or extraction.enabled=false opts
- * every LLM phase out. */
 function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   const { config, result } = run;
   if (llm === undefined || config.extraction.enabled === false) return null;
@@ -46,14 +41,11 @@ function sleepLlm(run: SleepRun, llm: Llm | undefined): SleepLlm | null {
   return { llmError, llmOpts: { llm, model: config.extraction.model } };
 }
 
-/** A source's empty extraction mark: the hash of its text the model found nothing in, and when. */
 interface EmptyMark {
   readonly digest: string;
   readonly at: string;
 }
 
-/** Every empty extraction mark the store holds, by source id; none when the store keeps none or
- * the read fails, since a failed read only costs the sleep the calls the marks would have saved. */
 async function readEmptyMarks({ store }: SleepRun): Promise<Map<string, EmptyMark>> {
   const read = store.consolidation.emptyExtractions?.bind(store.consolidation);
   const marks = new Map<string, EmptyMark>();
@@ -71,8 +63,6 @@ async function readEmptyMarks({ store }: SleepRun): Promise<Map<string, EmptyMar
   return marks;
 }
 
-/** Whether sleep could extract facts from `e`: a live episodic memory the model has not been asked
- * about and nothing keeps as written. */
 function extractable(e: MemoryEntry, extractedFromIds: ReadonlySet<string>): boolean {
   return (
     e.layer === Layer.Episodic &&
@@ -85,9 +75,6 @@ function extractable(e: MemoryEntry, extractedFromIds: ReadonlySet<string>): boo
   );
 }
 
-/** Counts the survivors extraction could read and returns the first `limit` of them, holding no
- * others. A source with a standing empty mark is counted in `extractionHeld` instead, and only
- * when a model may run (`limit` above 0), so a sleep with no model reads no marks. */
 async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntry[]> {
   const extractedFromIds = new Set<string>();
   for await (const e of run.survivors.rows()) {
@@ -112,14 +99,10 @@ async function extractionBatch(run: SleepRun, limit: number): Promise<MemoryEntr
 
 export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<void> {
   const llm = sleepLlm(run, model);
-  // 1.6. Batch extraction: extract facts from episodic memories missing them
   const batch = await extractionBatch(run, llm && !run.dryRun ? EXTRACTION_BATCH_LIMIT : 0);
-  // Every sleep counts the candidates; only one that may call a model goes on.
   if (llm === null || run.dryRun) return;
   if (batch.length > 0) {
     const stopped = await extractionPass(run, llm, batch);
-    // The DAG passes call the same API with the same key and model, so they would fail the same
-    // way.
     if (stopped) return;
   }
 
@@ -128,7 +111,6 @@ export async function llmPasses(run: SleepRun, model: Llm | undefined): Promise<
   await entityProfilePass(run, llm);
 }
 
-// A local model serves a few calls at once; more only queues them at the provider.
 const EXTRACTION_CONCURRENCY = 4;
 
 interface Extraction {
@@ -138,8 +120,6 @@ interface Extraction {
   threw?: unknown;
 }
 
-/** Runs `call` for every index with at most `width` in flight, launching nothing once
- * `canLaunch` says no; a result sits at its input index, undefined where nothing launched. */
 async function pooled<T>(
   count: number,
   width: number,
@@ -158,7 +138,6 @@ async function pooled<T>(
   return results;
 }
 
-/** Stores one source's extracted facts as semantic memories stamped at the run's instant. */
 function keepFacts(
   run: SleepRun,
   source: MemoryEntry,
@@ -172,20 +151,15 @@ function keepFacts(
   });
 }
 
-/** What the pass tells the store about its sources: marks to keep and the ids whose mark goes. */
 interface EmptyNote {
   mark: Array<{ id: string; digest: string; at: string }>;
   clear: string[];
 }
 
-/** Whether nothing was stored only because rejected values refused every fact: none has a quality
- * defect, which would be bad model output worth a retry. */
 function refusedByRejectedValue(facts: Extraction['facts']): boolean {
   return facts.length > 0 && facts.every((fact) => certainDefect(fact.content) === null);
 }
 
-/** A stored child clears the source's mark. An explicit empty array, or facts that all passed the
- * quality check and were all refused by a rejected value, marks it; any other reply leaves it. */
 function noteOutcome(
   run: SleepRun,
   note: EmptyNote,
@@ -204,8 +178,6 @@ function noteOutcome(
   }
 }
 
-/** Hands the store the pass's marks in one call; a failure is logged and the sources are offered
- * again next sleep. */
 async function saveEmptyNote(run: SleepRun, note: EmptyNote): Promise<void> {
   if (note.mark.length === 0 && note.clear.length === 0) return;
   try {
@@ -215,11 +187,6 @@ async function saveEmptyNote(run: SleepRun, note: EmptyNote): Promise<void> {
   }
 }
 
-/**
- * Extracts facts from each candidate, up to four model calls at once; every write, count and report
- * then runs in input order. True when it stopped on a failure every later call would repeat (bad
- * key, no credit, unknown model).
- */
 async function extractionPass(
   run: SleepRun,
   llm: SleepLlm,
@@ -258,7 +225,6 @@ async function extractionPass(
   return stop.at !== Number.POSITIVE_INFINITY;
 }
 
-/** The lowest input index a permanent failure was seen at; infinity while none was. */
 interface StopIndex {
   at: number;
 }
@@ -292,10 +258,7 @@ function reportStop(report: ReturnType<SleepLlm['llmError']>, index: number, tot
   );
 }
 
-// 1.7. DAG summarization — cluster extracted facts and generate summaries
 async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
-  // buildDag clusters only unparented facts, so only those are held; the gate counts every fact as
-  // it always did.
   const extractedFacts: MemoryEntry[] = [];
   let facts = 0;
   for await (const e of run.survivors.rows()) {
@@ -335,9 +298,6 @@ async function dagBuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Pro
   }
 }
 
-// 1.8. DAG summary rebuild: drain the summary_dirty queue set by child-write hooks; same
-// model/dryRun gate as buildDag. Cap HIPPO_DAG_REBUILD_CAP, as the root read it (default 20, hard
-// ceiling 1000), prevents runaway LLM cost.
 async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   const { result } = run;
   try {
@@ -379,8 +339,6 @@ async function dagRebuildPass(run: SleepRun, { llmError, llmOpts }: SleepLlm): P
   }
 }
 
-/** Every unprofiled L2 summary, one keyset page per store call: clustering needs them all, a
- * statement need not. */
 async function allUnprofiledTopicSummaries(
   store: SleepRun['store']['consolidation'],
 ): Promise<MemoryEntry[]> {
@@ -393,9 +351,6 @@ async function allUnprofiledTopicSummaries(
   }
 }
 
-// 1.9. DAG entity profiles: cluster L2 summaries into per-entity L3 profiles; runs even when 1.7
-// was skipped (re-clusters existing L2s every sleep). Reads the stored L2s, not `survivors`: phase
-// 1.7 wrote new L2s via writeEntry without pushing them into survivors.
 async function entityProfilePass(run: SleepRun, { llmError, llmOpts }: SleepLlm): Promise<void> {
   try {
     const l2Summaries = await allUnprofiledTopicSummaries(run.store.consolidation);

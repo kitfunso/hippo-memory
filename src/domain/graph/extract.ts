@@ -1,7 +1,3 @@
-/** Deterministic entity extraction: the graph is a pure function of the consolidated object tables (decisions,
- *  policies, customer_notes, project_briefs). Writes go through the sqlite/graph/graph-writes.ts consolidated-source
- *  guard. Pass 3 adds `references` edges by a conservative name-match heuristic. */
-
 import { MAX_ENTITY_NAME_LEN } from '../../base/records/entity-name.js';
 import type {
   DesiredEntity,
@@ -25,11 +21,8 @@ import { escapeRegex } from '../../base/util/escape.js';
  *  that. */
 export const MAX_EXTRACT_PER_TYPE = 10000;
 
-/** A target entity name must be in [MIN, MAX] chars to be matched: MIN skips short, generic words; MAX skips prose (a
- *  decision's prose name is never a target, only a source). */
 const MIN_REF_NAME_LEN = 4;
 const MAX_REF_NAME_LEN = 80;
-/** Per-source cap so one object cannot explode the graph with references edges. */
 const MAX_REFERENCES_PER_OBJECT = 25;
 /** Regex-size bound: at most this many distinct target names enter the combined alternation, keeping the scan regex
  *  sane on a huge store. */
@@ -38,39 +31,26 @@ export const MAX_TARGET_NAMES = 5000;
 export interface ExtractResult {
   entities: number;
   relations: number;
-  /** Of `relations`, how many are cross-object `references` edges (the rest are `supersedes`). Surfaced so the
-   *  heuristic's output volume is observable. */
   references: number;
-  /** Entity count per extracted type. */
   byType: Record<string, number>;
-  /** Entity types whose active or superseded load hit MAX_EXTRACT_PER_TYPE (the graph is
-   * under-extracted for those). */
   truncated: string[];
-  /** Writes left out because a writer changed their row or object after the diff; set only when
-   * above 0. */
   skipped?: number;
 }
 
 /** A consolidated object row normalized to the fields extraction needs. */
 export interface ExtractRow {
   entityType: EntityType;
-  /** The object table id (unique only WITHIN its table, hence keyed with entityType). */
   e2Id: number;
   name: string;
-  /** The object's full text searched for OTHER entities' names in Pass 3. */
   searchText: string;
   memoryId: string | null;
-  /** The successor's object id (Y) when this row (X) is superseded; null otherwise. */
   supersededBy: number | null;
 }
 
-/** Stable map key: entity types share an id space across tables, so key by both. */
 function keyOf(entityType: EntityType, e2Id: number): string {
   return `${entityType}:${e2Id}`;
 }
 
-/** The four object-derived extraction entity types map 1:1 to source_object_type; the other two EntityType members
- *  ('person', 'system') have no object table and stay unmapped. */
 const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   decision: 'decision',
   policy: 'policy',
@@ -80,8 +60,6 @@ const ENTITY_TYPE_TO_SOURCE_OBJECT = {
   system: undefined,
 } satisfies Record<EntityType, SourceObjectType | undefined>;
 
-/** The source-object ref for an extraction row (always set: every extracted row is a first-class object). Throws on an
- *  unmappable entityType (a graph invariant violation). */
 function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   const type = ENTITY_TYPE_TO_SOURCE_OBJECT[entityType];
   if (!type) {
@@ -90,19 +68,16 @@ function sourceObjectOf(entityType: EntityType, e2Id: number): SourceObjectRef {
   return { type, id: e2Id };
 }
 
-/** Unordered entity-key pair, so a relation between a,b is found in either direction. */
 function pairKey(a: string, b: string): string {
   return a < b ? `${a}:${b}` : `${b}:${a}`;
 }
 
-/** The row fields extraction reads; every object loader's row type declares them. */
 interface SourceRow {
   id: number;
   memoryId: string | null;
   supersededBy: number | null;
 }
 
-/** The slice of each loader's options extraction uses, assignable to every loader's own. */
 interface SourceLoadOptions {
   status: 'active' | 'superseded';
   limit: number;
@@ -112,13 +87,9 @@ interface SourceLoadOptions {
 export interface LoadedType {
   entityType: EntityType;
   rows: ExtractRow[];
-  /** True when either status load filled MAX_EXTRACT_PER_TYPE. */
   hitCap: boolean;
 }
 
-/** Close over one loader's row type so the table below holds uniform functions. Loads ACTIVE and SUPERSEDED rows (not
- *  `closed`), one call per status, so MAX_EXTRACT_PER_TYPE is a per-status budget; `hitCap` is set when either load is
- *  full. */
 function source<T extends SourceRow>(
   entityType: EntityType,
   load: (objects: Objects, tenant: string, opts: SourceLoadOptions) => Promise<T[]>,
@@ -186,12 +157,9 @@ export interface DerivedGraph extends DesiredGraph {
   references: number;
 }
 
-/** A derived entity with what Pass 3 needs; `key` stands in for the entity id the rebuild no
- * longer has. */
 interface DerivedEntity extends DesiredEntity {
   key: string;
   searchText: string;
-  /** References are among active entities only; an edge to or from a superseded row is stale. */
   superseded: boolean;
 }
 
@@ -200,7 +168,6 @@ interface DerivedEntities {
   truncated: string[];
   allRows: ExtractRow[];
   byKey: Map<string, DerivedEntity>;
-  /** In load order, which fixes insert order on a first build. */
   created: DerivedEntity[];
 }
 
@@ -229,8 +196,6 @@ const naturalKeyOf = (e: DerivedEntity): NaturalKey => ({
   sourceObject: e.sourceObject,
 });
 
-// Pass 1: every active or superseded object row becomes an entity anchored to its object, so it
-// survives a forgotten mirror; the mirror memory rides along only while it exists.
 function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
   const pass: DerivedEntities = {
     byType: {},
@@ -244,11 +209,8 @@ function deriveEntities(loaded: readonly LoadedType[]): DerivedEntities {
     pass.byType[entityType] = 0;
     for (const row of rows) {
       pass.allRows.push(row);
-      // Names are uncapped at source; trimming on both sides of the cap gives the exact name
-      // insertEntityRow stores.
       const name = (row.name ?? '').trim().slice(0, MAX_ENTITY_NAME_LEN).trim();
       const key = keyOf(row.entityType, row.e2Id);
-      // A row seen twice was superseded between the two status loads; its first sighting stands.
       if (name.length === 0 || pass.byKey.has(key)) continue;
       const entity: DerivedEntity = {
         entityType: row.entityType,
@@ -272,12 +234,8 @@ interface SupersedesPass {
   readonly supersededPairs: Set<string>;
 }
 
-// Pass 2: "Y supersedes X" when both were derived (Y may be closed and absent). The edge is
-// anchored to the successor's object and carries its mirror memory only while that lives.
 function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   const relations: DesiredRelation[] = [];
-  // Pass 3 skips these pairs: "Adopt X (managed)" containing "Adopt X" is a version, not a
-  // cross-reference.
   const supersededPairs = new Set<string>();
   for (const row of pass.allRows) {
     if (row.supersededBy === null) continue;
@@ -296,14 +254,11 @@ function deriveSupersedes(pass: DerivedEntities): SupersedesPass {
   return { relations, supersededPairs };
 }
 
-/** Normalized name to its single target; a name two entities share is ambiguous and dropped. */
 function referenceTargets(created: readonly DerivedEntity[]): Map<string, DerivedEntity> {
   const byName = new Map<string, DerivedEntity>();
   const ambiguous = new Set<string>();
   for (const e of created) {
     if (e.superseded) continue;
-    // Decisions are sources only: their name is their prose, which would self-match and shadow
-    // embedded targets.
     if (e.entityType === 'decision') continue;
     const norm = e.name.trim().toLowerCase();
     if (norm.length < MIN_REF_NAME_LEN || norm.length > MAX_REF_NAME_LEN) continue;
@@ -318,9 +273,6 @@ function referenceTargets(created: readonly DerivedEntity[]): Map<string, Derive
   return byName;
 }
 
-// Pass 3: a `references` edge when one object's text names another entity, matched on word
-// boundaries, self-skipped, deduped and capped per source; the edge is anchored to the source
-// object.
 function deriveReferences(
   created: readonly DerivedEntity[],
   supersededPairs: ReadonlySet<string>,
@@ -329,8 +281,6 @@ function deriveReferences(
   const byName = referenceTargets(created);
   if (byName.size === 0) return [];
   if (byName.size > MAX_TARGET_NAMES) truncated.push('references-targets');
-  // Longest first, then alphabetical: regex alternation is leftmost-first, so `postgres pro` beats
-  // `postgres`.
   const targetNames = [...byName.keys()]
     .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0))
     .slice(0, MAX_TARGET_NAMES);
@@ -379,8 +329,6 @@ export async function extractGraph(
   tenantId: string,
 ): Promise<ExtractResult> {
   assertTenantId('extractGraph', tenantId);
-  // No hold limit, so every op lands in one apply; it re-checks each insert, so a rebuild that
-  // committed since this one's read adds no second row.
   return rebuildGraph(store, tenantId, { ...WRITE_BUDGET, holdMs: Infinity });
 }
 

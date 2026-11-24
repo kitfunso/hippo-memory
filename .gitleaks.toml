@@ -3,7 +3,6 @@ title = "hippo-memory gitleaks config"
 [extend]
 useDefault = true
 
-# Two shapes that are never keys, for any file: a file name as the value, and a pinned file digest.
 [[allowlists]]
 description = "a file name as the value, such as 'token-eval', 'z0-regrade.mjs' in a path join"
 regexTarget = "secret"
@@ -15,9 +14,6 @@ description = "a pinned file digest: a file name mapped to a SHA-1 or SHA-256 he
 regexTarget = "line"
 regexes = ['''^\s*["'][\w./-]+\.\w+["']\s*:\s*["'](?:[0-9a-f]{40}|[0-9a-f]{64})["'],?\s*$''']
 targetRules = ["generic-api-key"]
-
-# Each entry below names one test file and the one rule that fires on its fake fixture.
-# Paths match any tests/ subfolder and split parts, since a manual --all sweep reads every branch, where these files moved.
 
 [[allowlists]]
 description = "capture-session test: 32-char placeholder token"

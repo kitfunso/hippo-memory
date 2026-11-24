@@ -12,7 +12,6 @@ export default defineConfig({
     target: "es2022",
     rolldownOptions: {
       output: {
-        // react in its own chunk so the app chunk caches across releases.
         codeSplitting: {
           groups: [
             { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },

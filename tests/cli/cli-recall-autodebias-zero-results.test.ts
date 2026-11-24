@@ -1,5 +1,3 @@
-// `hippo recall` keeps the planning-fallacy hint when no memory matches, as HTTP and MCP do.
-// A prediction outlives its mirror memory, so forgetting the mirrors leaves the class resolvable with nothing to recall.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
@@ -22,10 +20,8 @@ interface ZeroRecallJson {
 }
 
 let root: string;
-// makeRoot removes each folder after the file, once this session has closed its handles.
 const { apiCtx } = sessionPerTest();
 
-/** Three closed migration-effort predictions (actual twice the estimate), then every memory they wrote forgotten. */
 async function seedBaserateWithNoMemories(): Promise<void> {
   for (const [estimate, actual] of [
     [2, 4],
@@ -60,7 +56,6 @@ async function recallJson(): Promise<ZeroRecallJson> {
 describe('hippo recall with no matching memory keeps the planning-fallacy hint', () => {
   beforeEach(() => {
     root = makeRoot('cli-zero-plan');
-    // A global store that does not exist keeps the recall on the local store alone.
     vi.stubEnv('HIPPO_HOME', join(root, 'no-global'));
     for (const name of ['HIPPO_TENANT', 'HIPPO_AUTODEBIAS']) vi.stubEnv(name, '');
   });

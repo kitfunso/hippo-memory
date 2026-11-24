@@ -1,5 +1,3 @@
-// Root-keyed entries forms tests call; production code goes through the port or the handle-first forms.
-
 import type { MemoryEntry } from '../../../src/base/memory/entry.js';
 import type { WriteBudget } from '../../../src/base/util/write-budget.js';
 import * as candidatesSql from '../../../src/store/sqlite/recall/candidates.js';

@@ -1,36 +1,3 @@
-/**
- * 24h soak harness — A1 ROADMAP success criterion.
- *
- * v0.39: scaffold for 24h soak runs. NOT a release gate. Operators can run
- * manually; no CI integration. Real-soak-as-evidence is a v0.40+ effort.
- *
- * Drives the server with a steady-state mixed workload (recall/remember/forget)
- * for N hours and tracks RSS, heap, FD count, SQLite WAL size, and request
- * latency in 60s windows. The actual 24h run is manual / scheduled; this
- * harness delivers the skeleton and a smoke run.
- *
- * Run:
- *   npm run build
- *   node --experimental-strip-types benchmarks/a1/soak.ts \
- *     --hours 24 --concurrency 4 --rps 20
- *
- * Smoke (~36s):
- *   node --experimental-strip-types benchmarks/a1/soak.ts \
- *     --hours 0.01 --concurrency 2 --rps 5
- *
- * Output:
- *   benchmarks/a1/results/soak-<timestamp>.jsonl  (one sample per minute)
- *
- * Workload mix:
- *   80% recalls   (GET  /v1/memories?q=...)
- *   18% remembers (POST /v1/memories)
- *    2% forgets   (DELETE /v1/memories/:id)
- *
- * SIGINT shuts down gracefully and prints a final summary. On Linux/Mac the
- * FD count is read from /proc/self/fd; on Windows it is logged as null
- * (no equivalent without WinAPI bindings).
- */
-
 import {
   mkdtempSync, rmSync, mkdirSync, statSync, readdirSync, appendFileSync,
 } from 'node:fs';
@@ -45,7 +12,6 @@ import { remember as apiRemember } from '../../dist/entry/eval-scripts.js';
 import { serve, type ServerHandle } from '../../dist/server.js';
 import { readLocalKey } from '../../dist/surface/server/local-key.js';
 
-// The key serve wrote for this machine, set once the server is up.
 let authHeader = { authorization: '' };
 
 interface CliArgs {
@@ -116,11 +82,6 @@ function readFdCount(): number | null {
 }
 
 function readWalSizeMb(home: string): number | null {
-  // db.ts puts hippo.db at the hippoRoot top level (`<home>/hippo.db`). The
-  // SQLite WAL file is `<dbpath>-wal`. The current server architecture opens
-  // and closes the DB per request, which auto-checkpoints and removes the WAL
-  // between requests, so this often returns null. Kept for forward-compat
-  // (long-lived connection mode would surface real WAL growth here).
   for (const candidate of [join(home, 'hippo.db-wal'), join(home, '.hippo', 'hippo.db-wal')]) {
     try {
       const s = statSync(candidate);
@@ -208,7 +169,6 @@ async function doRequest(
     } else {
       const id = takeRecent(recent);
       if (!id) {
-        // Fall back to a recall if we have nothing to forget yet.
         const res = await fetch(`${url}/v1/memories?q=anything&limit=1`, { headers: authHeader });
         await res.text();
         return { ok: res.ok, latencyMs: performance.now() - t0 };
@@ -273,12 +233,10 @@ async function main(): Promise<void> {
   seedStore(home, 1000);
   console.log(`[soak] seed done in ${Date.now() - seedStart}ms`);
 
-  // One key sends every request, so the per-caller limiter would measure itself rather than the workload.
   const server: ServerHandle = await serve({ hippoRoot: home, port: args.port, rateLimits: { perCaller: 'off' } });
   authHeader = { authorization: `Bearer ${readLocalKey(home)}` };
   console.log(`[soak] server listening on ${server.url}`);
 
-  // Output file
   const here = dirname(fileURLToPath(import.meta.url));
   const resultsDir = resolve(here, 'results');
   mkdirSync(resultsDir, { recursive: true });
@@ -286,9 +244,6 @@ async function main(): Promise<void> {
   const outPath = join(resultsDir, `soak-${stamp}.jsonl`);
   console.log(`[soak] writing samples to ${outPath}`);
 
-  // RSS baseline taken AFTER seed + server start. Growth is measured against
-  // this steady-state baseline; seed allocations are excluded from the leak
-  // signal. Forces a GC pass first if --expose-gc was set.
   // SAFETY: globalThis.gc only exists when Node is launched with
   // --expose-gc; this just gives TS a name for that optional runtime
   // extension — the isCallableGc check below is the real guard.
@@ -304,7 +259,6 @@ async function main(): Promise<void> {
   const startedAt = Date.now();
   const stopAt = startedAt + totalSeconds * 1000;
 
-  // Window state, swapped on each sample tick.
   const windowRef = { current: newWindow() };
   let lastSampleAt = startedAt;
   const recent: RecentIds = { buf: [], cap: 200 };
@@ -325,7 +279,6 @@ async function main(): Promise<void> {
     workers.push(workerLoop(i, server.url, perWorkerRps, stopAt, shouldStop, windowRef, recent));
   }
 
-  // Sample at 60s windows (or earlier on stop).
   const sampleEveryMs = 60_000;
   let nextSampleAt = startedAt + sampleEveryMs;
 
@@ -371,8 +324,6 @@ async function main(): Promise<void> {
     );
   };
 
-  // Sampling tick loop runs concurrently with workers. Polls on a 1s tick so
-  // a SIGINT or short --hours run exits without burning the rest of a minute.
   const sampler = (async (): Promise<void> => {
     while (!stopRequested && Date.now() < stopAt) {
       await new Promise((r) => setTimeout(r, 1000));
@@ -387,7 +338,6 @@ async function main(): Promise<void> {
   await Promise.all(workers);
   await sampler;
 
-  // Final partial-window sample if anything ran since the last tick.
   if (windowRef.current.totalRequests > 0) {
     writeSample(true);
   }

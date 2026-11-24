@@ -1,20 +1,3 @@
-/**
- * LC1 wiring tests (docs/plans/2026-08-02-lc1-recall-trace-persistence.md).
- *
- * Covers the three wired recall paths: api.recall, api.contextGet, CLI
- * printRecall — one trace row per recall, pinnedOnly writes nothing, the
- * v1.11.5 no-side-effects contract (api.recall must NOT write last_trace_id),
- * the F1 atomic last_trace_id/last_retrieval_ids lockstep (via loadLastRecall,
- * since readLastTraceId was deleted), F2 (suppressRecallTrace), and F5
- * (contextGet's bare empty-result early return also traces).
- *
- * This is a NEW file beside the locked tests/api/api-recall-no-side-effects.test.ts
- * — that file is never edited (v1.11.5 lock); this file extends the
- * invariant to the new last_trace_id meta key.
- *
- * Real-DB per project convention. Scratch HIPPO_HOME, never a repo checkout.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi, onTestFinished } from 'vitest';
 import { writeFileSync } from 'node:fs';
@@ -38,7 +21,6 @@ afterEach(() => {
 
 const INIT = ['init', '--no-hooks', '--no-schedule', '--no-learn'];
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test as execFileSync threw. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -51,7 +33,6 @@ async function hippo(cwd: string, ...args: string[]): Promise<string> {
   }
 }
 
-// Zero-result tests must not depend on an optional embedder being installed.
 function disableEmbeddings(storeDir: string) {
   writeFileSync(join(storeDir, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
 }
@@ -65,7 +46,6 @@ function tmpHome() {
   };
 }
 
-/** Concrete SQLite column value: what node:sqlite can actually return. */
 type SqliteValue = string | number | bigint | null | Uint8Array;
 type SqliteRow = Record<string, SqliteValue>;
 
@@ -94,10 +74,6 @@ function resultRowsFor(home: string, traceId: number): SqliteRow[] {
   }
 }
 
-// readLastTraceId was deleted (F1(e) structural fix) — last_trace_id is now
-// read the same way production reads it: via loadLastRecall, which strict-parses
-// the meta value (store.ts's parseLastTraceId). Returns a number for easy
-// comparison against sqlite row ids, mirroring the deleted helper's shape.
 function lastTraceId(home: string): number | null {
   const raw = loadLastRecall(home).last_trace_id;
   return raw !== null ? Number(raw) : null;
@@ -143,10 +119,7 @@ describe('api.recall — trace wiring', () => {
       const result = await retrieve(ctx, { query: 'recall-trace-no-side-effect-target', window: { limit: 5 } });
       expect(result.results).toHaveLength(1);
 
-      // A trace row WAS written (previous test), but last_trace_id stays null.
       expect(lastTraceId(home)).toBeNull();
-      // last_retrieval_ids is also untouched (locked invariant, restated here
-      // for context — the authoritative lock lives in api-recall-no-side-effects.test.ts).
       expect(loadLastRecall(home).last_retrieval_ids ?? []).toEqual([]);
     } finally {
       restore();
@@ -207,7 +180,6 @@ describe('api.contextGet - trace wiring', () => {
 
       const idx = loadLastRecall(home);
       expect(idx.last_trace_id).toBe(String(traces[0].id));
-      // F1 lockstep: last_retrieval_ids advanced in the SAME saveIndex call.
       expect(idx.last_retrieval_ids).toEqual([result.entries[0].entry.id]);
     } finally {
       restore();
@@ -234,10 +206,6 @@ describe('api.contextGet - trace wiring', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      // A memory exists, but the query matches nothing, and there is no
-      // active task snapshot / handoff / recent session events — this is
-      // the bare `return { entries: [], tokens: 0 }` early-return path
-      // (api.ts, the check right after the origin/category annotation).
       disableEmbeddings(home);
       await remember(ctx, { content: 'context-empty-baseline unrelated content' });
 
@@ -259,8 +227,6 @@ describe('api.contextGet - trace wiring', () => {
       // returns it as a JS number for values within safe-integer range.
       expect(resultRowsFor(home, traces[0].id as number)).toHaveLength(0);
 
-      // Deliberately untouched — this path never advances last_retrieval_ids,
-      // so last_trace_id must not advance either (lockstep invariant).
       const after = loadLastRecall(home);
       expect(after.last_trace_id).toBeNull();
       expect(after.last_retrieval_ids ?? []).toEqual([]);
@@ -330,8 +296,6 @@ describe('CLI printRecall — trace wiring', () => {
     const out = await hippo(hippoRoot, 'recall', 'cli-trace-target');
     expect(out).toContain('cli-trace-target');
 
-    // The CLI's local store lives at `<cwd>/.hippo` (getHippoRoot,
-    // store/open.ts) — HIPPO_HOME only governs the separate global store.
     const localStore = join(hippoRoot, '.hippo');
     const traces = traceRows(localStore, 'cli');
     expect(traces).toHaveLength(1);
@@ -341,19 +305,15 @@ describe('CLI printRecall — trace wiring', () => {
   });
 
   it('a zero-result recall writes an empty trace row (result_count 0, no result rows) but leaves last_trace_id UNCHANGED', async () => {
-    // The zero-result branch once returned before the trace write; it must trace without touching localIndex,
-    // since it never advances last_retrieval_ids and last_trace_id moves in lockstep with it.
     await hippo(hippoRoot, ...INIT);
     disableEmbeddings(join(hippoRoot, '.hippo'));
     await hippo(hippoRoot, 'remember', 'zero-result-baseline eta fact');
-    // First recall: populates last_trace_id with a real trace id.
     await hippo(hippoRoot, 'recall', 'zero-result-baseline');
 
     const localStore = join(hippoRoot, '.hippo');
     const baselineTraceId = lastTraceId(localStore);
     expect(baselineTraceId).not.toBeNull();
 
-    // Second recall: a query that matches nothing.
     const out = await hippo(hippoRoot, 'recall', 'zzz-query-matches-absolutely-nothing-xyzzy');
     expect(out).toContain('No memories found');
 
@@ -367,7 +327,6 @@ describe('CLI printRecall — trace wiring', () => {
     const results = resultRowsFor(localStore, zeroTrace!.id as number);
     expect(results).toHaveLength(0);
 
-    // last_trace_id must still point at the FIRST (non-empty) trace.
     expect(lastTraceId(localStore)).toBe(baselineTraceId);
   });
 
@@ -411,7 +370,6 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
   it('boosts under --session-id but not under a bare CLAUDE_CODE_SESSION_ID host var', async () => {
     await hippo(hippoRoot, ...INIT);
     disableEmbeddings(join(hippoRoot, '.hippo'));
-    // Tag shares no substring with the query, so any ranking gap is the goal boost, not a tag/query match.
     await hippo(hippoRoot, 'remember', 'zzgoalboostquery bug fix details', '--tag', 'sprintx');
     await hippo(hippoRoot, 'remember', 'zzgoalboostquery UI polish', '--tag', 'ui');
     await hippo(hippoRoot, 'goal', 'push', 'sprintx', '--session-id', 'S');
@@ -423,14 +381,11 @@ describe('CLI goal-stack boost — ignores the CLAUDE_CODE_SESSION_ID host var',
 
     const noSession = await recall();
 
-    // Control: --session-id S makes the boost visible at all (order flips).
     const control = await recall('--session-id', 'S');
     expect(control.results.map((r) => r.id)).not.toEqual(noSession.results.map((r) => r.id));
 
-    // Test arm: CLAUDE_CODE_SESSION_ID=S only -- must match the no-session run, not the control.
     vi.stubEnv('CLAUDE_CODE_SESSION_ID', 'S');
     const host = await recall();
-    // Score has a real-time decay term, so re-running moments apart drifts ~1e-8; toBeCloseTo tolerates that, not a real boost's ~2x jump.
     expect(host.results.map((r) => r.id)).toEqual(noSession.results.map((r) => r.id));
     host.results.forEach((r, i) => expect(r.score).toBeCloseTo(noSession.results[i].score, 4));
   });

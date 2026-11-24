@@ -1,9 +1,3 @@
-/** Pluggable embedding providers; local `@huggingface/transformers` is the zero-dependency
- * default, OpenAI / Voyage / Cohere are opt-in via native `fetch`. Local `id` is the bare model
- * string, API `id` is `${kind}:${model}`; the stored identity adds `#t<N>`
- * (`embeddingIndexIdentity`), so changes reindex. `embed()` MAY throw on hard transport/auth
- * failure so a reindex aborts atomically; hot paths wrap it and fall back to BM25. */
-
 import { DEFAULT_EMBEDDING_MODEL, resolveEmbeddingModel } from '../base/embeddings/local.js';
 import type {
   EmbedCallOptions,
@@ -29,9 +23,7 @@ import {
 } from './local-embedder.js';
 
 const ERROR_DETAIL_CHARS = 300;
-// An error body is read for its first lines only; 4x leaves room for multi-byte text.
 const ERROR_BODY_MAX_BYTES = ERROR_DETAIL_CHARS * 4;
-// 16,384 dimensions at 32 bytes a number: four times a 4,096-dimension model.
 const EMBED_REPLY_BYTES_PER_INPUT = 512 * 1024;
 const EMBED_REPLY_BASE_BYTES = 64 * 1024;
 
@@ -42,11 +34,7 @@ function isApiProviderKind(x: string): x is 'openai' | 'voyage' | 'cohere' {
 }
 
 const DEFAULT_API_BATCH_SIZE = 64;
-/** Per-request timeout for API embedding calls. A provider/proxy that accepts the connection but never responds must
- *  not hang embed/recall indefinitely. */
 const REQUEST_TIMEOUT_MS = 30_000;
-// Under a caller's deadline a longer Retry-After hands the reply back at once; the remote rerankers
-// use the same cap.
 const DEADLINE_RETRY_WAIT_CAP_MS = 2_000;
 
 class LocalEmbeddingProvider implements EmbeddingProvider {
@@ -67,8 +55,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
     role?: EmbeddingRole,
     call: EmbedCallOptions = {},
   ): Promise<number[][]> {
-    // A model that cannot load fails the call, as an API outage does; items then run one at a time
-    // on the shared pipeline.
     if (texts.length > 0) await this.embedder.requirePipeline(this.model, call.signal);
     const out: number[][] = [];
     for (const text of texts) {
@@ -78,8 +64,6 @@ class LocalEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/** POST body for an embeddings request. Each provider's `buildBody` populates only the fields its API expects; the rest
- *  stay unset. */
 interface EmbeddingRequestBody {
   model: string;
   input?: string[];
@@ -88,12 +72,10 @@ interface EmbeddingRequestBody {
   embedding_types?: string[];
 }
 
-/** OpenAI and Voyage both respond `{ data: [{ embedding: number[] }] }`. */
 interface VectorArrayResponse {
   data?: Array<{ embedding?: number[] }>;
 }
 
-/** Cohere v2: `{ embeddings: { float: number[][] } }`. */
 interface CohereEmbeddingsResponse {
   embeddings?: { float?: number[][] };
 }
@@ -101,13 +83,9 @@ interface CohereEmbeddingsResponse {
 interface ApiProviderSpec {
   keyEnv: string;
   defaultBaseUrl: string;
-  /** Endpoint path appended to baseUrl ('embeddings' for OpenAI/Voyage, 'embed' for Cohere). */
   path: string;
-  /** Provider flagship model, used when config selects the provider but no API model. */
   defaultModel: string;
-  /** Build the POST body for a batch of texts. */
   buildBody(model: string, texts: string[], role?: EmbeddingRole): EmbeddingRequestBody;
-  /** Extract the ordered vectors from the parsed JSON response. */
   extractVectors(json: JsonValue): number[][];
 }
 
@@ -155,7 +133,6 @@ const API_PROVIDER_SPECS = {
       embedding_types: ['float'],
     }),
     extractVectors: (json) => {
-      // Cohere v2 shape: { embeddings: { float: number[][] } }
       // SAFETY: documented v2 envelope; embedChunk validates the vectors afterward, so a malformed response degrades to
       // [] here and throws there.
       const emb = (json as CohereEmbeddingsResponse).embeddings;
@@ -164,14 +141,11 @@ const API_PROVIDER_SPECS = {
   },
 } satisfies Record<'openai' | 'voyage' | 'cohere', ApiProviderSpec>;
 
-/** Remove a secret substring from any string before it surfaces in an error. */
 function redact(text: string, secret: string | undefined): string {
   if (!secret) return text;
   return text.split(secret).join('***');
 }
 
-/** A cause with the key cut out: the caught error's own text or cause chain can echo the
- * Authorization header. */
 function redactedCause<E>(err: E, key: string | undefined): Error {
   const copy = new Error(redact(errorMessage(err), key));
   if (err instanceof Error) copy.name = err.name;
@@ -221,7 +195,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     if (texts.length === 0) return [];
     const key = envByName(this.keyEnv)?.trim();
     if (!key) {
-      // Hard, actionable failure — never includes a key value (there is none).
       throw new Error(
         `Embedding provider '${this.kind}' is configured but ${this.keyEnv} is not set. ` +
           `Export ${this.keyEnv} or set config.embeddings.provider back to 'local'.`,
@@ -248,9 +221,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     const json = await this.responseJson(resp, key, chunk.length);
 
     const vectors = spec.extractVectors(json);
-    // A 200 with the wrong vector count (or any empty/malformed vector) is a provider contract
-    // violation, not a per-item miss: throw so a reindex aborts atomically and the explicit
-    // backfill surfaces it, instead of saving []-padded rows.
     if (vectors.length !== chunk.length) {
       throw new Error(
         redact(
@@ -291,8 +261,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
         },
         {
           timeoutMs: REQUEST_TIMEOUT_MS,
-          // Embedding the same text twice changes nothing on the far side, so a dropped connection
-          // or a stalled attempt is replayed.
           retryTransport: true,
           maxDelayMs: signal ? DEADLINE_RETRY_WAIT_CAP_MS : undefined,
         },
@@ -305,15 +273,12 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
     }
   }
 
-  /** The body of an OK reply; any other status, or a body that is not JSON, throws with the key
-   * cut out. */
   private async responseJson(resp: Response, key: string, inputs: number): Promise<JsonValue> {
     if (!resp.ok) {
       let detail = '';
       try {
         detail = await readCappedText(resp, ERROR_BODY_MAX_BYTES);
       } catch (err) {
-        // The error thrown below already carries the status; the body is only extra detail.
         log.debug(
           `${this.kind} embeddings error body unreadable: ${errorMessage(err)}`,
           errorFields(err),
@@ -341,7 +306,6 @@ class ApiEmbeddingProvider implements EmbeddingProvider {
   }
 }
 
-/** A user-supplied API base URL, under the outbound rule every key-carrying endpoint shares. */
 function validateBaseUrl(url: string | undefined, fallback: string): string {
   const candidate = url?.trim();
   if (!candidate) return fallback;
@@ -350,12 +314,8 @@ function validateBaseUrl(url: string | undefined, fallback: string): string {
 }
 
 export interface ResolveProviderOptions {
-  /** Explicit model override (mirrors resolveEmbeddingModel's explicitModel). */
   model?: string;
-  /** Explicit provider override (mainly for tests). */
   provider?: EmbeddingProviderKind;
-  /** The Transformers.js package a local provider loads from, with its own models; the process's
-   * shared embedder when unset. */
   transformers?: LocalTransformers;
 }
 
@@ -367,8 +327,6 @@ export function resolveEmbeddingProvider(
   opts: ResolveProviderOptions = {},
 ): EmbeddingProvider {
   const requested = opts.provider ?? cfg.provider ?? 'local';
-  // An explicit embeddings.enabled=false hard-disables embedding for BOTH local and API providers;
-  // for API this prevents unwanted paid off-box calls.
   const enabled = cfg.enabled !== false;
 
   if (requested === 'local') {
@@ -378,8 +336,6 @@ export function resolveEmbeddingProvider(
     return new LocalEmbeddingProvider(resolveEmbeddingModel(cfg, opts.model), enabled, embedder);
   }
   if (!isApiProviderKind(requested)) {
-    // Fail loud on a typo'd provider rather than silently using local (which would reindex with the
-    // local model and clobber the intended identity).
     throw new Error(
       `Unknown embeddings.provider '${requested}'. Valid values: local, ` +
         `${API_PROVIDER_KINDS.filter((k) => k !== 'local').join(', ')}.`,
@@ -388,8 +344,6 @@ export function resolveEmbeddingProvider(
 
   const kind = requested;
   const spec = API_PROVIDER_SPECS[kind];
-  // If no API model was chosen (config left the local default in place), fall back to the
-  // provider's flagship model rather than POSTing a local model id.
   const requestedModel = (opts.model ?? cfg.model)?.trim();
   const model =
     requestedModel && requestedModel !== DEFAULT_EMBEDDING_MODEL

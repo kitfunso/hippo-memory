@@ -1,11 +1,6 @@
-// The model calls of a Claude Code transcript, as the re-read count and the session digest see them;
-// src/infra/transcript-calls.ts reads the file.
-
 /** One model API call in a host transcript, for `recordRereads`. */
 export interface ApiCall {
-  /** Epoch milliseconds of the call's first transcript line. */
   at: number;
-  /** Compactions before the call, in file order. */
   compactions: number;
 }
 
@@ -24,7 +19,6 @@ export function isSyntheticMessage(message: ModelTagged): boolean {
 /** What `readApiCalls` found in a transcript. */
 export interface TranscriptCalls {
   calls: ApiCall[];
-  /** Candidate lines that were not valid JSON, skipped. */
   malformed: number;
 }
 

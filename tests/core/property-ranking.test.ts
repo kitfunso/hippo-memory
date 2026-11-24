@@ -1,9 +1,7 @@
-// The order recall gives scored candidates must come from the candidates alone: never from the order they arrived in, and a higher score never moves one down.
 import { describe, it, expect } from 'vitest';
 import { comparePhysicsResultsBy, compareScoredResults, type ScoredEntryLike } from '../../src/base/rank/compare.js';
 import { arr, both, forAll, int, map, pick, type Gen } from '../_helpers/property.js';
 
-// Few distinct values, so most draws tie on score and many tie on every key before the id; the last three have no difference to subtract.
 const SCORES = [0, 0.5, 0.5, 1, 1, -1, 1e-9, 0.3, 0.1 + 0.2, Infinity, -Infinity, Number.NaN];
 const CONTENTS = ['a', 'a', 'b', 'A', ''];
 const LAYERS = [null, null, 'semantic', 'episodic', 'buffer', 'unlisted', ''];
@@ -12,7 +10,6 @@ const SOURCES = [null, null, 'cli', 'slack'];
 
 type Draft = Omit<ScoredEntryLike['entry'], 'id'>;
 
-/** A candidate that carries only the keys it drew: a missing layer, tag list or source is a tie key of its own. */
 const DRAFT: Gen<Draft> = map(
   both(both(pick(CONTENTS), pick(LAYERS)), both(pick(TAGS), pick(SOURCES))),
   ([[content, layer], [tags, source]]) => {
@@ -24,7 +21,6 @@ const DRAFT: Gen<Draft> = map(
   },
 );
 
-/** Candidates with ids unique within the list, as rows of one store are, each paired with a number that places it in a second arrival order. */
 const ARRIVALS: Gen<{ scored: ScoredEntryLike; turn: number }[]> = map(
   arr(both(both(pick(SCORES), DRAFT), int(0, 99)), 0, 12),
   (drawn) =>

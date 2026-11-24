@@ -1,14 +1,3 @@
-/**
- * v1.11.0 tenant-isolation residue: CLI tenant-scoping via HIPPO_TENANT.
- *
- * Runs `hippo trace <id>` under different HIPPO_TENANT values and asserts
- * cross-tenant memories are not found. Covers both the local-store read
- * (printTrace at cli.ts:1799) and the cross-store global path (cli.ts:1803 + the
- * parent walk at cli.ts:1829). The cross-store case is the deliberate
- * behaviour change documented in the plan's Risks section: a memory promoted
- * to global under tenant_a returns "not found" when traced under
- * HIPPO_TENANT=tenant_b.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,7 +17,6 @@ interface CliRunResult {
   status: number;
 }
 
-// Mirrors the old spawned helper: stdout alone on success, stdout and stderr together on failure.
 async function runCli(tenant: string, ...args: string[]): Promise<CliRunResult> {
   vi.stubEnv('HIPPO_TENANT', tenant);
   const res = await runInProcess(() => runCliEntry(['node', 'hippo', ...args]));
@@ -48,7 +36,6 @@ describe('CLI tenant-scoping', () => {
     mkdirSync(globalRoot, { recursive: true });
     initTestStore(hippoRoot);
     initTestStore(globalRoot);
-    // Isolate the CLI's global store from the developer's real ~/.hippo by pointing HIPPO_HOME at a per-test temp.
     vi.stubEnv('HIPPO_HOME', globalRoot);
     process.chdir(home);
   });
@@ -72,20 +59,16 @@ describe('CLI tenant-scoping', () => {
     writeEntry(hippoRoot, a);
     writeEntry(hippoRoot, b);
 
-    // Under HIPPO_TENANT=tenant_b, tracing tenant_a's memory returns "not found".
     const aTrace = await runCli('tenant_b', 'trace', a.id);
     expect(aTrace.status).not.toBe(0);
     expect(aTrace.out).toMatch(/not found/i);
 
-    // Tracing tenant_b's own memory under HIPPO_TENANT=tenant_b still works.
     const bTrace = await runCli('tenant_b', 'trace', b.id);
     expect(bTrace.status, bTrace.out).toBe(0);
     expect(bTrace.out).toMatch(/B content/);
   });
 
   it('printTrace global store: HIPPO_TENANT=tenant_b hides a tenant_a-promoted global memory', async () => {
-    // Seed a g_* memory directly into the isolated global store with
-    // tenant_id=tenant_a — simulates an entry promoted by another tenant.
     const db = openHippoDb(globalRoot);
     try {
       const cols =
@@ -101,8 +84,6 @@ describe('CLI tenant-scoping', () => {
       closeHippoDb(db);
     }
 
-    // Under HIPPO_TENANT=tenant_b the cross-tenant global trace returns
-    // "not found" — the cross-store tightening behaviour change.
     const trace = await runCli('tenant_b', 'trace', 'g_taPromoted');
     expect(trace.status).not.toBe(0);
     expect(trace.out).toMatch(/not found/i);

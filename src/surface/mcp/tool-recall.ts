@@ -1,6 +1,3 @@
-// The recall an agent's tool prints: the ranked list cut to the caller's token budget, with the
-// hints and the Cutoff block that describe that list.
-
 import type { SearchResult } from '../../base/rank/search-types.js';
 import {
   dropHeldCopies,
@@ -43,21 +40,15 @@ import type {
   StoreRanking,
 } from '../../api/recall/types.js';
 
-/**
- * Builds the presenter that renders the list the tool shows, parks the render in `out` and hands
- * back its hints.
- */
 interface RecallPresenterOptions {
   readonly config: HintConfig;
   readonly includeContinuity: boolean;
   readonly anchorRing: RingBuffer | null;
   readonly queryHash: number;
   readonly out: RenderSlot;
-  /** The instant each confidence label prints at. */
   readonly now: Date;
 }
 
-// Candidate pool the tool ranks before the token budget trims what is shown.
 const TOOL_RECALL_LIMIT = 50;
 
 function biasHintSections(
@@ -100,8 +91,6 @@ function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   };
 }
 
-/** The window band's fresh-tail and summary rows that the shown list holds neither by id nor by
- * text. */
 function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): RecallResultItem[] {
   const shownIds = new Set(list.map((r) => r.entry.id));
   const shownKeys = storedTextKeys(list.map((r) => r.entry));
@@ -111,12 +100,10 @@ function unshownTail(list: SearchResult[], tailRows: RecallResultItem[]): Recall
   return dropHeldCopies(unshown, (r) => r);
 }
 
-/** The sections the purse paid for ahead of the memories: '' or null for one that did not fit. */
 interface PaidSections {
   readonly plan: string;
   readonly tailRows: RecallResultItem[] | null;
   readonly continuity: string;
-  /** What the purse has left for the memories. */
   readonly room: number;
 }
 
@@ -125,8 +112,6 @@ function paySections(
   apiResult: RecallResult,
   includeContinuity: boolean,
 ): PaidSections {
-  // Sections are paid in print order, ahead of the memories and after the heading; one that does
-  // not fit is dropped whole.
   const purse = tokenPurse(budget - memoriesReserve(budget));
   const pays = (piece: string): boolean => purse.pays(estimateTokens(piece));
   const planPiece = planningSection(apiResult);
@@ -155,9 +140,7 @@ interface ShownListView {
   readonly now: Date;
 }
 
-// The hints and Cutoff block describe the list the tool shows, not the window band in apiResult.
 function renderShownList(cut: SearchResult[], v: ShownListView): RenderedRecall {
-  // After every cut, so a merged row cut here never hides its sources.
   const list = dropHeldCopies(cut, (r) => r.entry);
   const { anchoring, availability } = detectRecallHints({
     list,
@@ -169,13 +152,9 @@ function renderShownList(cut: SearchResult[], v: ShownListView): RenderedRecall 
   const { pool, droppedByScope } = v.ranking;
   const counts = suppressionCounts({ poolSize: pool.length, droppedByScope, cut, list, tail });
   const s = suppressionSummary(counts, anchoring);
-  // Anchoring is the stronger pull, so it prints first; the Cutoff block sits above the list,
-  // where the agent reads it.
   let text = biasHintSections(anchoring, availability);
   text += v.paid.plan;
   text += cutoffSection(s, list.length);
-  // The window band's fresh-tail and summary rows follow the ranked list, or the tool's fields
-  // go unanswered.
   text += formatMemories(list, v.now) + tailSection(tail) + v.paid.continuity;
   return { anchoring, availability, text, list };
 }
@@ -200,10 +179,7 @@ function recallPresenter(budget: number, options: RecallPresenterOptions): ShowR
 
 export interface ToolRecallRequest {
   readonly opts: SharedRecallOptions;
-  /** The caller's token budget; the store's defaultBudget when absent. */
   readonly budget: number | undefined;
-  /** The caller's project on a shared store, which keeps the list to its rows and user-global
-   * ones. */
   readonly project: CallerProject | undefined;
 }
 
@@ -244,8 +220,6 @@ function toolRecallOptions(ctx: Context, { opts, project }: ToolRecallRequest): 
     window: { ...opts.window, limit: TOOL_RECALL_LIMIT },
     mode: ctx.config.physics?.enabled !== false ? 'physics' : 'hybrid',
     filter: { ...opts.filter, keepHeldCopies: true, project },
-    // The hint is computed below over the list the tool shows; the window's copy would emit its
-    // audit row twice.
     hints: { suppressAvailabilityHint: true },
     trace: { recordAs: RECALL_RECORDING.mcp },
   };

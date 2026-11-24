@@ -1,5 +1,3 @@
-"""qa/harness.py on a synthetic benchmark: answers resume from the call log, scores read only the log, smoke items stay
-out of the primary, the interval resamples the store-owning user, and a short search list is a real result."""
 from __future__ import annotations
 
 import argparse
@@ -28,7 +26,7 @@ QS = [{"qid": f"q{i}", "user_id": f"u{i // 2}", "question": f"question {i}", "go
 def fake_loader() -> types.ModuleType:
     mod = types.ModuleType("loaders.fakebench")
     mod.NAME, mod.TOPK, mod.LICENCE, mod.DATA_FILES = "Fake", 5, "none", []
-    mod.__file__ = __file__  # setup hashes the loader file into config.json
+    mod.__file__ = __file__
     mod.questions = lambda: [dict(q) for q in QS]
     mod.answer_prompt = lambda q, mems: (f"system for {q['qid']}", f"{q['question']} with {len(mems)} memories")
     mod.judge = lambda q, answer: ("match", answer.strip() == q["gold"])
@@ -39,7 +37,6 @@ def fake_loader() -> types.ModuleType:
 
 @pytest.fixture
 def bench(tmp_path, monkeypatch):
-    """An out folder after retrieval: questions, config, predicted files and their manifest; q5 is a smoke item."""
     monkeypatch.setitem(sys.modules, "loaders.fakebench", fake_loader())
     monkeypatch.setattr(ledger, "SMOKE", tmp_path / "smoke.json")
     (tmp_path / "smoke.json").write_text('{"fakebench": ["q5"]}', encoding="utf-8")
@@ -66,7 +63,6 @@ def answer(arm: str, qid: str, **kw) -> dict:
 
 
 def full_log(out, hippo: dict, bm25: dict) -> None:
-    """One valid reply per (arm, qid) with the given text."""
     write_log(out / "calls-answer.jsonl", [answer(arm, qid, text=t) for arm, plan in (("hippo365", hippo), ("bm25", bm25))
                                            for qid, t in plan.items()])
 
@@ -75,14 +71,14 @@ def test_score_reads_the_log_leaves_smoke_out_and_lists_exhausted(bench):
     a, mod, qs = bench
     full_log(a.out, {"q0": "yes", "q1": "yes", "q2": "yes", "q3": "no", "q4": "yes", "q5": "yes"},
              {"q0": "no", "q3": "yes", "q4": "yes", "q5": "no"})
-    with (a.out / "calls-answer.jsonl").open("a", encoding="utf-8") as f:  # q1 exhausted; q2 valid at its 2nd ask
+    with (a.out / "calls-answer.jsonl").open("a", encoding="utf-8") as f:
         for r in [answer("bm25", "q1", cli="2.1.400 (Claude Code)")] * 3 + [
                 answer("bm25", "q2", model="claude-opus-5", text="no"), answer("bm25", "q2")]:
             f.write(json.dumps(r) + "\n")
     (a.out / "answers.jsonl").write_text(json.dumps({"arm": "bm25", "qid": "q0", "answer": "yes"}) + "\n", encoding="utf-8")
     harness.stage_score(a, mod, qs)
     text = (a.out / "score.txt").read_text(encoding="utf-8")
-    assert "hippo365  accuracy  80.0" in text and "bm25  accuracy  60.0" in text  # answers.jsonl is never read
+    assert "hippo365  accuracy  80.0" in text and "bm25  accuracy  60.0" in text
     assert "PRIMARY hippo365 - bm25 all: +20.0 pp" in text and "n=5 over 3 units" in text
     assert "secondary, all items with the smoke items: +33.3 pp" in text and "n=6 over 3 units" in text
     assert "Bonferroni k=4, 98.75% interval: +20.0 pp" in text
@@ -140,7 +136,7 @@ def test_a_short_search_list_is_a_real_result_and_a_long_one_fails(tmp_path):
     assert len(harness.search_for(Srv(7), QS[0], 20, 30)) == 7
     with pytest.raises(RuntimeError, match="at most 20 expected"):
         harness.search_for(Srv(21), QS[0], 20, 30)
-    with pytest.raises(RuntimeError, match="at most 7 expected"):  # memories from turns not yet stored
+    with pytest.raises(RuntimeError, match="at most 7 expected"):
         harness.search_for(Srv(8), QS[0], 20, 7)
     harness.write_pred(tmp_path, "hippo365", QS[0], harness.search_for(Srv(7), QS[0], 20, 12), 20, 12)
     assert json.loads(harness.pred_path(tmp_path, "hippo365", "q0").read_text(encoding="utf-8"))["returned"] == 7
@@ -174,7 +170,7 @@ def test_full_context_shows_the_whole_chat_and_scores_paired_with_the_registered
     mod, qs = harness.setup(f)
     harness.stage_ingest_retrieve(f, mod, qs)
     pred = json.loads(harness.pred_path(f.out, "full", "q2").read_text(encoding="utf-8"))
-    assert [r["memory"] for r in pred["results"]] == ["Speaker 1: turn 1a", "Speaker 2: turn 1b"]  # oldest first, blank dropped
+    assert [r["memory"] for r in pred["results"]] == ["Speaker 1: turn 1a", "Speaker 2: turn 1b"]
     assert (pred["returned"], pred["turns_visible"]) == (2, 3)
     assert json.loads((f.out / "config.json").read_text(encoding="utf-8"))["pairs_with"] == [str(a.out)]
     write_log(f.out / "calls-answer.jsonl", [rec(f"answer full {q['qid']}", f"{q['question']} with 2 memories",
@@ -253,7 +249,7 @@ def test_shards_split_the_users_and_record_each_once(tmp_path, monkeypatch):
     harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")
     done = [json.loads(line)["user"] for line in (tmp_path / "ingest" / "hippo365" / "done.jsonl").read_text().splitlines()]
     assert sorted(done) == sorted(users) and sorted(ports) == [9000, 9001, 9002]
-    harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")  # all done: no server starts
+    harness.run_arm(a, None, "hippo365", 9000, users, {u: [{}] for u in users}, "ingest")
     assert len(ports) == 3
 
 
@@ -267,8 +263,6 @@ def test_the_hippo_best_arm_adds_the_reranker_and_rank_score_to_the_embeddings()
 
 
 class Fixed:
-    """A server that returns the same results for every search; write= a file it writes into the user's store."""
-
     def __init__(self, arm: str, results: list[dict], data: Path | None = None, write: str = "") -> None:
         self.arm, self.results, self.data, self.write = arm, results, data, write
 
@@ -279,7 +273,6 @@ class Fixed:
 
 
 def old_store(data: Path, user: str) -> None:
-    """A store whose one file is older than any search."""
     root = harness.store_dir(data, user)
     root.mkdir(parents=True)
     (root / "hippo.db").write_text("rows", encoding="utf-8")
@@ -311,7 +304,7 @@ def test_a_replay_stops_on_a_store_newer_than_the_search_or_one_the_replay_write
     harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data, "x-shm"), src)
     with pytest.raises(RuntimeError, match="replay changed"):
         harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data, "new.db"), src)
-    with pytest.raises(RuntimeError, match="changed after"):  # new.db is newer than the hippo-emb search
+    with pytest.raises(RuntimeError, match="changed after"):
         harness.run_unit(best, mod, out, "u0", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data), src)
     with pytest.raises(RuntimeError, match="missing"):
         harness.run_unit(best, mod, out, "u1", turns, [QS[0]], "retrieve", Fixed("hippo-emb", saved, data), src)

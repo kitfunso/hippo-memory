@@ -11,24 +11,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// MCP-over-HTTP/SSE transport (Task 11 of A1 plan).
-//
-// Both routes — POST /mcp and GET /mcp/stream — dispatch through the same
-// transport-agnostic handler that backs the stdio MCP loop. The stdio path is
-// covered by tests/mcp/mcp-stdio.process.test.ts; this file pins the HTTP transport
-// surface: synchronous JSON-RPC responses on POST, keepalive-only SSE on GET,
-// and the auth middleware reuse.
-
 describe('MCP-over-HTTP transport', () => {
   let home: string;
   let handle: ServerHandle;
 
   beforeEach(async () => {
     home = makeRoot('mcp-http');
-    // The HTTP transport now threads hippoRoot + auth-resolved tenant
-    // through handleMcpRequest, so executeTool no longer walks cwd via
-    // findHippoRoot() or reads HIPPO_TENANT from the env. No env hacks
-    // needed — the per-test temp root is the source of truth end-to-end.
     handle = await serveKeyed({ hippoRoot: home, port: 0 });
   });
 
@@ -61,7 +49,6 @@ describe('MCP-over-HTTP transport', () => {
   it.skipIf(needsHippoDb('team'))(
     'POST /mcp tools/call hippo_remember stores a memory recoverable via recall',
     async () => {
-      // A token unique enough that a stray hit in the global store is implausible.
       const sentinel = `mcp-http-sentinel-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       const rememberRes = await fetch(`${handle.url}/mcp`, {
@@ -83,9 +70,6 @@ describe('MCP-over-HTTP transport', () => {
       const rememberText = rememberBody.result?.content?.[0]?.text ?? '';
       expect(rememberText).toMatch(/Remembered/i);
 
-      // Round-trip: recall the same sentinel through the same HTTP transport.
-      // This proves the dispatcher lands in a single coherent store across
-      // back-to-back calls without leaning on any specific filesystem layout.
       const recallRes = await fetch(`${handle.url}/mcp`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -140,7 +124,6 @@ describe('MCP-over-HTTP transport', () => {
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/event-stream');
       const reader = res.body!.getReader();
-      // The ping goes out as the stream opens; a stream that never sends it hangs to the test timeout.
       const { value, done } = await reader.read();
       expect(done).toBe(false);
       const text = new TextDecoder().decode(value);
@@ -159,7 +142,6 @@ describe('MCP-over-HTTP transport', () => {
     presentConnectionsAsRemote(handle.server!);
     const res = await fetch(`${handle.url}/mcp`, {
       method: 'POST',
-      // An empty Authorization is named, so the keyed fetch adds no key.
       headers: { 'content-type': 'application/json', authorization: '' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 99, method: 'tools/list' }),
     });

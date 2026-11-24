@@ -1,12 +1,3 @@
-/**
- * v1.3.1 hotfix regression tests. Covers the bugs that codex round 2 + claude
- * /review caught in the v1.3.0 release:
- *   - P0: rollback guard never enforced (no read-side check on min_compatible_binary).
- *   - P0: comment-deletion partial-archive leaves private bodies recoverable.
- *   - P1: backfill HWM advanced after a maxPerStream cap, skipping the tail.
- *   - P1: backfill issues HWM ignored skipped PR items, looping on PR-only pages.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
@@ -45,16 +36,13 @@ describe('rollback guard', () => {
   afterEach(() => safeRmSync(home));
 
   it('refuses to open a DB stamped with min_compatible_binary newer than this binary', () => {
-    // First open: succeeds, schema migrates, stamps min='1.2.1' (real value).
     const db = openHippoDb(home);
     closeHippoDb(db);
 
-    // Simulate a future-version stamp by overwriting meta.min_compatible_binary.
     const db2 = openHippoDb(home);
     setMeta(db2, 'min_compatible_binary', '99.0.0');
     closeHippoDb(db2);
 
-    // Now the next open should refuse: this binary is 1.3.1 < 99.0.0.
     expect(() => openHippoDb(home)).toThrow(/requires hippo-memory >= 99\.0\.0/);
   });
 
@@ -67,7 +55,6 @@ describe('rollback guard', () => {
     const db3 = openHippoDb(home);
     try {
       expect(getMeta(db3, 'schema_version')).toBe(LATEST_SCHEMA_VERSION_STR);
-      // The floor never drops below the stamp the test wrote, and never passes this binary.
       const floor = getMeta(db3, 'min_compatible_binary');
       expect(compareSemver(floor, '0.1.0')).toBeGreaterThanOrEqual(0);
       expect(compareSemver(floor, PACKAGE_VERSION)).toBeLessThanOrEqual(0);
@@ -108,7 +95,6 @@ describe('deletion atomicity', () => {
   afterEach(() => safeRmSync(home));
 
   it('multi-row deletion: when one archive throws, ALL roll back AND idempotency stays unset for retry', async () => {
-    // Three raw rows with the same artifact_ref (edit history).
     const ref = 'github://acme/secret-repo/issue/42/comment/123';
     const ids = ['mem-edit1', 'mem-edit2', 'mem-edit3'];
     for (const id of ids) {
@@ -122,7 +108,6 @@ describe('deletion atomicity', () => {
         tags: ['source:github'],
         tenantId: 'default',
       });
-      // Override the auto-generated id so we can inject a sentinel later.
       const db = openHippoDb(home);
       try {
         writeEntry(home, { ...e, id });
@@ -131,7 +116,6 @@ describe('deletion atomicity', () => {
       }
     }
 
-    // Sanity: 3 rows in DB with kind='raw'.
     const dbCheck = openHippoDb(home);
     try {
       // SAFETY: `SELECT id` names exactly this one text column.
@@ -143,18 +127,6 @@ describe('deletion atomicity', () => {
       closeHippoDb(dbCheck);
     }
 
-    // Inject a fault: the third row's archive should fail because the row
-    // was tampered to look like a non-raw memory mid-archive. Easiest fault
-    // injection without poking archiveRawMemory internals: manually delete
-    // the second row's memories table entry between archives. But that
-    // happens INSIDE the SAVEPOINT — so to simulate it, we use the simpler
-    // approach: archiveRawMemory throws when a row is missing, so we just
-    // delete the third row from memories before calling handleCommentDeleted.
-    // The fix being tested is: outer SAVEPOINT rolls back rows 1+2 when row 3
-    // fails, AND idempotency stays unset.
-    //
-    // Instead of mid-flight injection, simulate the failure shape: delete the
-    // third row's `kind` value so archiveRawMemory's "is not raw" check throws.
     const dbMutate = openHippoDb(home);
     try {
       // archiveRawMemory does:
@@ -189,7 +161,6 @@ describe('deletion atomicity', () => {
       closeHippoDb(dbMutate);
     }
 
-    // Success path: archives all 3 rows, marks idempotency.
     const r = await handleCommentDeleted(ctx(home), {
       artifactRef: ref,
       idempotencyKey: 'test-key-multi-archive',
@@ -199,7 +170,6 @@ describe('deletion atomicity', () => {
     expect(r.status).toBe('archived');
     expect(r.archivedCount).toBe(3);
 
-    // All 3 rows gone from memories.
     const dbAfter = openHippoDb(home);
     try {
       // SAFETY: `SELECT id` names exactly this one text column.
@@ -208,7 +178,6 @@ describe('deletion atomicity', () => {
         .all(ref) as Array<{ id: string }>;
       expect(surviving).toHaveLength(0);
 
-      // Idempotency mark committed.
       // SAFETY: the SELECT list above names exactly these two columns; the
       // row may be absent (undefined) if no matching idempotency key was
       // written.
@@ -220,7 +189,6 @@ describe('deletion atomicity', () => {
       closeHippoDb(dbAfter);
     }
 
-    // Retry returns duplicate, no double-archive.
     const r2 = await handleCommentDeleted(ctx(home), {
       artifactRef: ref,
       idempotencyKey: 'test-key-multi-archive',
@@ -240,9 +208,6 @@ describe('backfill HWM stays put on capped streams', () => {
   afterEach(() => safeRmSync(home));
 
   it('--max cap does NOT advance issues_hwm so the next run picks up the tail', async () => {
-    // Three issues across one page (no rel="next"), but maxPerStream=1.
-    // After v1.3.0: HWM advanced to issue 1's updated_at, skipping issues 2-3.
-    // After v1.3.1: drained=false, HWM unchanged.
     const items = [
       {
         number: 1,
@@ -279,7 +244,6 @@ describe('backfill HWM stays put on capped streams', () => {
         issuesPageServed = true;
         return { items, next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
       }
-      // Other streams (issues/comments, pulls/comments) return empty.
       return { items: [], next: null, rateLimit: { sleepSeconds: 0, reason: 'none' } } satisfies GitHubBackfillPage;
     };
 
@@ -297,7 +261,6 @@ describe('backfill HWM stays put on capped streams', () => {
       const row = db
         .prepare(`SELECT issues_hwm FROM github_cursors WHERE tenant_id=? AND repo_full_name=?`)
         .get('default', 'acme/demo') as { issues_hwm: string | null } | undefined;
-      // HWM did NOT advance (capped run, drained=false).
       expect(row?.issues_hwm ?? null).toBeNull();
     } finally {
       closeHippoDb(db);
@@ -313,11 +276,6 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
   afterEach(() => safeRmSync(home));
 
   it('a page consisting entirely of PRs (skipped) still advances issues_hwm', async () => {
-    // /issues returns 3 items, ALL of them PRs (have pull_request field).
-    // v1.3.0: maxUpdatedAt only tracked post-toIngestEvent items, so this
-    //         page didn't advance issues_hwm. Repo loops forever on PR-only pages.
-    // v1.3.1: track updated_at on every item BEFORE toIngestEvent skip, so
-    //         PR-only pages advance the HWM.
     const items = [
       {
         number: 1,
@@ -361,7 +319,7 @@ describe('backfill issues_hwm advances past skipped PRs', () => {
       token: 'fake-token',
     });
 
-    expect(result.ingested.issues).toBe(0); // all skipped (PRs)
+    expect(result.ingested.issues).toBe(0);
 
     const db = openHippoDb(home);
     try {

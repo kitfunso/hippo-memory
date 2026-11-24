@@ -1,4 +1,3 @@
-// Design 4, 5, 8 and 11: tool switches, busy stores, dry runs, the summary line and the item's own time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { unlinkSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,7 +38,6 @@ const A = 'Run the schema check before this service deploys.';
 const B = 'The staging database moved to the eu-central region.';
 const USER_NOTE = 'Prefers short replies with the command first.';
 const BULLET = '- Prefers tabs over spaces in Go files.';
-// AWS's documented example access key: a public placeholder, not a credential.
 const FAKE_KEY = 'AKIAIOSFODNN7EXAMPLE';
 const ISO_Z = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 

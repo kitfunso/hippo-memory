@@ -1,4 +1,3 @@
-// memoryGet replaces readEntry in CLI verbs, so it must answer exactly what readEntry answers for every kind of row an id can name.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { memoryGet } from '../../src/api/memories/memories.js';

@@ -1,5 +1,3 @@
-// serve({ autoSleep: false }): a host-tenant remember over POST /mcp or POST /v1/memories never starts consolidation;
-// unset, it runs in a child, never in the server process.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -13,7 +11,6 @@ const roots: string[] = [];
 const handles: ServerHandle[] = [];
 
 beforeEach(() => {
-  // No fact extraction call, and the host tenant is 'default' whatever the shell exports.
   vi.stubEnv('ANTHROPIC_API_KEY', '');
   vi.stubEnv('HIPPO_TENANT', '');
 });
@@ -24,7 +21,6 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-/** Starts a server over a fresh root with auto-sleep at threshold 2, and mints a host-tenant key. */
 async function startServer(autoSleep: ServeOptions['autoSleep']): Promise<{ root: string; url: string; key: string }> {
   const root = makeRoot('serve-autosleep', { config: { autoSleep: { enabled: true, threshold: 2 } } });
   roots.push(root);
@@ -54,7 +50,6 @@ async function remember(url: string, key: string, text: string): Promise<void> {
   expect(res.status).toBe(200);
 }
 
-/** POST /v1/memories, which api remember serves as it serves hippo_remember. */
 async function rememberRest(url: string, key: string, text: string): Promise<void> {
   const res = await fetch(`${url}/v1/memories`, {
     method: 'POST',
@@ -70,8 +65,6 @@ describe('serve autoSleep option', () => {
   it('autoSleep: false adds no consolidation run past the threshold', async () => {
     const { root, url, key } = await startServer(false);
     for (const note of NOTES) await remember(url, key, note);
-    // Zero is final because the blank API key leaves llmPasses nothing real to await, and the trigger fires on note 2 of 3,
-    // so a full round trip passes before the check; a threshold of 3 or an unconditional await would make this pass vacuously.
     expect(sleepRuns(root)).toBe(0);
   });
 
@@ -109,7 +102,6 @@ describe('serve autoSleep option', () => {
   it.skipIf(needsHippoDb('sleep'))(
     'runs the consolidation in a child process under the sleep deadline, not on the server event loop',
     async () => {
-      // Only the child runner has a deadline, so a 1 ms one stops the run before it commits; in process it would finish.
       vi.stubEnv('HIPPO_SLEEP_TIMEOUT_MS', '1');
       const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       try {

@@ -1,4 +1,3 @@
-// Reads that once took a whole tenant or backlog at a time now come a page at a time and answer the same. Real store.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { tallyAmbientEntries } from '../../src/base/memory/ambient.js';

@@ -1,11 +1,9 @@
-// What one sync does to one container's rows: a pure function of the items read and the rows found.
 import { headingOfKey } from './keys.js';
 import { fileOfKey, isPartKey } from './source.js';
 
 export interface PlanItem {
   readonly key: string;
   readonly hash: string;
-  /** Read but not storable: under 10 characters, a secret, or a rejected value. */
   readonly refused: boolean;
 }
 
@@ -13,7 +11,6 @@ export interface LiveRow {
   readonly id: string;
   readonly key: string;
   readonly hash: string;
-  /** Carries the tool's tag; an untagged row is one the user restored, or a pin whose note went. */
   readonly tagged: boolean;
   readonly created: string;
 }
@@ -30,11 +27,8 @@ export interface PlanInput {
   readonly items: readonly PlanItem[];
   readonly skipped: readonly string[];
   readonly live: readonly LiveRow[];
-  /** Snapshots that are readable and not superseded. */
   readonly dormant: readonly DormantRow[];
-  /** Legacy rows a new row of the key replaces. */
   readonly legacy?: ReadonlyMap<string, readonly string[]>;
-  /** Asked only when a row would be written: the text is already stored live by another path. */
   readonly isDuplicate: (item: PlanItem) => boolean;
 }
 
@@ -42,15 +36,12 @@ export interface PlannedWrite {
   readonly key: string;
   readonly hash: string;
   readonly supersedes: readonly string[];
-  /** Rows whose recall and outcome counts the new row takes: a note that crossed the cap. */
   readonly carry?: readonly string[];
 }
 
 export interface ContainerPlan {
   readonly unchanged: number;
-  /** Untagged rows whose tag goes back on. */
   readonly retag: readonly string[];
-  /** Tagged rows superseded by the row kept for their key. */
   readonly collapse: readonly { readonly id: string; readonly by: string }[];
   readonly writes: readonly PlannedWrite[];
   readonly restores: readonly { readonly key: string; readonly dormantId: string }[];
@@ -96,7 +87,6 @@ export function planContainer(input: PlanInput): ContainerPlan {
   }
 
   const read = new Set(input.items.map((i) => i.key));
-  // Skipped holds file keys, so the parts of a note that was not read stay too.
   const unread = new Set(input.skipped);
   const gone = new Map<string, string[]>();
   for (const [key, rows] of live) {
@@ -133,7 +123,6 @@ function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
     if (!kept.tagged) draft.retag.push(kept.id);
     const others = tagged.filter((r) => r.id !== kept.id);
     draft.collapse.push(...others.map((r) => ({ id: r.id, by: kept.id })));
-    // An unchanged note retires its old Claude import's copy too.
     const stale = input.legacy?.get(item.key) ?? [];
     draft.collapse.push(...stale.map((id) => ({ id, by: kept.id })));
     if (kept.tagged && others.length === 0) draft.unchanged++;
@@ -159,8 +148,6 @@ function planItem({ input, item, rows, snaps, draft }: PlanItemOptions): void {
   else draft.fresh.push({ key: item.key, hash: item.hash, supersedes: legacy });
 }
 
-/** A note that crossed the cap either way: its first new row, whole or part, supersedes every
- * row of the other shape and takes their history, so nothing goes dormant. */
 function pairCapCrossings(gone: Map<string, string[]>, fresh: PlannedWrite[]): void {
   for (const [file, keys] of groupBy([...gone.keys()], fileOfKey)) {
     const i = fresh.findIndex((w) => fileOfKey(w.key) === file);
@@ -171,8 +158,6 @@ function pairCapCrossings(gone: Map<string, string[]>, fresh: PlannedWrite[]): v
   }
 }
 
-/** Text keys, a single-file store's or a long note's parts, read an edit as one key gone and one
- * new under the same heading. */
 function pairEdits(
   gone: Map<string, string[]>,
   fresh: PlannedWrite[],
@@ -192,7 +177,6 @@ function pairEdits(
   }
 }
 
-// Byte order, as memory.ts's timestamp note asks: localeCompare may skip the ISO punctuation.
 const byteOrder = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 function newestRow(rows: readonly LiveRow[]): LiveRow | undefined {
@@ -220,27 +204,19 @@ function groupBy<T>(values: readonly T[], keyOf: (value: T) => string): Map<stri
 
 export interface LegacyRow {
   readonly id: string;
-  /** The file name its `claude-memory:<file>` source names. */
   readonly file: string;
-  /** duplicateKey of its content. */
   readonly textKey: string;
 }
 
 export interface LegacyTarget {
-  /** Opaque to this function: the sync's handle on one container's item. */
   readonly ref: string;
   readonly file: string;
-  /** The note it is, or a part of: the parts of one long note share it. */
   readonly note: string;
   readonly textKey: string;
 }
 
 export interface LegacyMatch {
-  /** Legacy row id to the target whose key it takes, keeping its id and history (same text: a
-   * renamed note too). */
   readonly adopt: ReadonlyMap<string, string>;
-  /** Target ref to the legacy rows a new row of that target replaces (different text, a file name
-   * only one note has). */
   readonly replace: ReadonlyMap<string, readonly string[]>;
 }
 
@@ -269,7 +245,6 @@ export function matchLegacy(
   const replace = new Map<string, string[]>();
   for (const [file, left] of leftByFile) {
     const matches = targetsByFile.get(file) ?? [];
-    // Two notes of one name match none: the old row could be either.
     if (new Set(matches.map((t) => t.note)).size !== 1) continue;
     replace.set(
       matches[0].ref,

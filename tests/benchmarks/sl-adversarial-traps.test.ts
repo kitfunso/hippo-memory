@@ -1,8 +1,3 @@
-// tests/benchmarks/sl-adversarial-traps.test.ts
-//
-// v1.8.0 — Schema invariants + uniform-distribution invariants for the
-// adversarial-categories release. Tightened per outside voice B2/B3/E3.
-
 import { describe, it, expect } from 'vitest';
 import type { TrapCategory, TrapPlacement, TrapTask } from '../_helpers/trap-types.js';
 import {
@@ -57,9 +52,6 @@ describe('adversarial traps schema', () => {
 });
 
 describe('adversarial position assignment (uniform across early/mid/late)', () => {
-  // Per outside voice B2: uniform distribution = ~2 per region of the 62-task sequence.
-  // Late-clustering would optimise for magnitude visibility, which RETRACTION.md forbids.
-
   it('new categories have EXACTLY 6 trap positions', () => {
     const newPositions = TRAP_PLACEMENTS.filter((p) => NEW_IDS.includes(p.category)).flatMap((p) => p.positions);
     expect(newPositions.length).toBe(6);
@@ -126,22 +118,19 @@ describe('generateTasks correctness', () => {
   });
 
   it('adversarial categories are at FIXED positions across all seeds (no shape-group shuffle)', () => {
-    // timezone_naive at [11, 41]; idempotency_retry at [21, 51]; float_accumulation at [33, 59]
     for (const seed of [0, 1, 5, 19, 42, 99]) {
       const tasks = generateTasks(seed);
-      expect(tasks[10].trapCategory).toBe('timezone_naive'); // pos 11 = index 10
-      expect(tasks[40].trapCategory).toBe('timezone_naive'); // pos 41
-      expect(tasks[20].trapCategory).toBe('idempotency_retry'); // pos 21
-      expect(tasks[50].trapCategory).toBe('idempotency_retry'); // pos 51
-      expect(tasks[32].trapCategory).toBe('float_accumulation'); // pos 33
-      expect(tasks[58].trapCategory).toBe('float_accumulation'); // pos 59
+      expect(tasks[10].trapCategory).toBe('timezone_naive');
+      expect(tasks[40].trapCategory).toBe('timezone_naive');
+      expect(tasks[20].trapCategory).toBe('idempotency_retry');
+      expect(tasks[50].trapCategory).toBe('idempotency_retry');
+      expect(tasks[32].trapCategory).toBe('float_accumulation');
+      expect(tasks[58].trapCategory).toBe('float_accumulation');
     }
   });
 });
 
 describe('existing-10 categories PRNG-stability vs earlier positions', () => {
-  // The existing-10 categories' positions are unchanged from v1.7.x.
-  // This test asserts the canonical (non-seeded) placement matches v1.7.x.
   it('existing-10 categories occupy exactly positions {2, 4, ..., 50} (all even, 25 positions)', () => {
     const existingIds = TRAP_CATEGORIES.filter((c) => !NEW_IDS.includes(c.id)).map((c) => c.id);
     const existingPlacements = TRAP_PLACEMENTS.filter((p) => existingIds.includes(p.category));

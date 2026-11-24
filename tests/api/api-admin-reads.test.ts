@@ -1,4 +1,3 @@
-// The api reads behind the MCP admin tools: status counts, open conflicts and the personal-row guard.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';

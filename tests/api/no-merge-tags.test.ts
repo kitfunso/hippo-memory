@@ -1,4 +1,3 @@
-// Sleep keeps a row tagged with a NO_MERGE_TAGS member as written: the merge pass and LLM extraction both read the set.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { consolidate } from '../../src/index.js';
 import { Layer } from '../../src/base/memory/entry.js';
@@ -34,7 +33,6 @@ describe('NO_MERGE_TAGS', () => {
   it('control: untagged rows are extraction candidates and merge', async () => {
     const result = await sleepOver([]);
     expect(result.extractionCandidates).toBe(3);
-    // Each pair overlaps well past the 0.35 Jaccard bar, so the first row's cluster takes all three.
     expect(result.merged).toBe(3);
   });
 

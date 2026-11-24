@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 21 of docs/EXPERIMENT-PROTOCOL.md: one extra `present` noul, in the same
- *  batched request, vs. the free base/cross-encoder abstention signal. Setup is
- *  copied from Lane 15 (rerank-3arm-ab.mjs) so the pool and label match. */
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -13,11 +10,11 @@ import { loadAllEntries } from '../dist/entry/testing.js';
 import { getReranker } from '../dist/entry/eval-scripts.js';
 import { mulberry32 } from './lib/prng.mjs';
 
-const NOW = new Date('2026-09-18T14:31:52.073Z'); // same clock as Lane 15, see rerank-3arm-ab.mjs:15
+const NOW = new Date('2026-09-18T14:31:52.073Z');
 const CANDIDATE_TOPK = 40;
-const TRUNCATE_CHARS = 1200; // matches src/domain/rerankers/jev.ts TRUNCATE_CHARS
+const TRUNCATE_CHARS = 1200;
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
-const MODEL = 'jev-1.13.0'; // pinned: a threshold gets tuned on this run, per protocol
+const MODEL = 'jev-1.13.0';
 const TIMEOUT_MS = 30_000;
 const RETRY_STATUS = new Set([429, 529]);
 const CONCURRENCY = 4;
@@ -30,7 +27,6 @@ const LANE15_PATH = join('results', 'rerank-3arm-2026-09-18.json');
 const DEV_FILES = new Set(['queries1.json', 'queries2.json']);
 const JUDGE_FILES = new Set(['queries3.json', 'queries4.json']);
 
-// Frozen wording, copied verbatim from docs/EXPERIMENT-PROTOCOL.md LANE 21 section.
 const PRESENT_QUESTION = {
   type: 'noul',
   instructions: {
@@ -86,7 +82,6 @@ function redact(s) {
 const quantile = (sortedAsc, p) =>
   sortedAsc[Math.min(sortedAsc.length - 1, Math.max(0, Math.floor(sortedAsc.length * p)))];
 
-// Mid-rank Mann-Whitney: mathematically equivalent to counting a tie as half a win.
 function auc(scores, labels) {
   const n = scores.length;
   const order = [...scores.keys()].sort((a, b) => scores[a] - scores[b]);
@@ -133,7 +128,6 @@ async function runPool(items, worker, concurrency) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ---------- Load queries (Lane 15 setup), tagged with source file for the dev/judge split ----------
 const hippoRoot = join(homedir(), '.hippo');
 const dir = 'evals/paraphrase';
 const queries = [];
@@ -166,12 +160,10 @@ console.warn = (...a) => {
 await ceReranker('warm up query', warmup, { topK: 1 });
 console.warn = realWarn;
 if (fallbackWarning) {
-  // A silent identity-order fallback would make F2 just the base score in disguise.
   console.error('CROSS-ENCODER UNAVAILABLE, aborting:', fallbackWarning);
   process.exit(1);
 }
 
-// ---------- Phase 1: hybridSearch + cross-encoder, one pass per query ----------
 const rows = [];
 for (let i = 0; i < cases.length; i++) {
   const c = cases[i];
@@ -186,7 +178,6 @@ for (let i = 0; i < cases.length; i++) {
 }
 console.error('phase 1 done\n');
 
-// ---------- Phase 2: one Jev call per query, cached, capped ----------
 mkdirSync(CACHE_DIR, { recursive: true });
 const jevHttp = { calls: 0, ok: 0, failed: 0, code422: 0, retried: 0 };
 let lintedOnce = false;
@@ -277,7 +268,6 @@ async function getJevRaw(row) {
   if (result.ok) jevHttp.ok++;
   else jevHttp.failed++;
   const record = { id: row.id, query: row.query, request: body, response: result };
-  // Only a success is cached: a failed shape must stay retryable on the next pilot round.
   if (result.ok) writeFileSync(cp, JSON.stringify(record, null, 2));
   return { ...record, fromCache: false };
 }
@@ -340,7 +330,6 @@ if (PILOT_N) {
   process.exit(allOk ? 0 : 2);
 }
 
-// ---------- Analysis (full run only) ----------
 const usable = rows.filter((r) => r.F1 != null && r.F2 != null && r.J1 != null && r.J2 != null);
 const excludedIncomplete = rows.length - usable.length;
 const labels = usable.map((r) => r.answerable);
@@ -353,7 +342,7 @@ const arms = {
 const aucTable = Object.fromEntries(Object.entries(arms).map(([k, s]) => [k, auc(s, labels)]));
 const bestFreeArm = (aucTable.F1 ?? -1) >= (aucTable.F2 ?? -1) ? 'F1' : 'F2';
 
-const bootRng = mulberry32(21); // pinned per protocol
+const bootRng = mulberry32(21);
 const nU = usable.length;
 const draws = Array.from({ length: 2000 }, () => Array.from({ length: nU }, () => Math.floor(bootRng() * nU)));
 function bootstrapDeltas(paidKey) {
@@ -389,7 +378,7 @@ const contrasts = {
   },
 };
 
-const nullRng = mulberry32(2021); // separate stream from the bootstrap's seed 21
+const nullRng = mulberry32(2021);
 const nullStats = [];
 for (let t = 0; t < 1000; t++) {
   const shuffled = labels.slice();
@@ -406,7 +395,6 @@ for (let t = 0; t < 1000; t++) {
 nullStats.sort((a, b) => a - b);
 const nullP95 = quantile(nullStats, 0.95);
 
-// ---------- Operating point: dev picks the cut, judge reports it ----------
 function pickThreshold(devScores, devLabels, wrongCap = 0.02) {
   const answerableScores = devScores
     .filter((_, i) => devLabels[i])
@@ -452,7 +440,6 @@ for (const armKey of ['F1', 'F2', 'J1', 'J2']) {
 }
 const underpowered = devNotAnswerable < 25 || judgeNotAnswerable < 25;
 
-// ---------- Integrity ----------
 function armStats(vals) {
   const finite = vals.filter((v) => Number.isFinite(v));
   return {

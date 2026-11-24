@@ -1,5 +1,3 @@
-// The dormant_memories rows: the snapshot sleep keeps of a faded memory, read and written on the
-// caller's handle.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import type { MemoryEntry } from '../../../base/memory/entry.js';
 import { fromWire, toWire, type MemoryWire } from '../../../base/memory/memory-wire.js';
@@ -63,8 +61,6 @@ export function insertDormantRow(db: DatabaseSyncLike, move: DormantMove): void 
   );
 }
 
-/** What entry_json may hold: the wire keys, whose tenant is `tenant_id`, or a 1.x snapshot,
- * whose tenant is `tenantId`; a 1.x `summary_dirty` is 0|1. */
 type StoredSnapshot = Omit<MemoryWire, 'tenant_id' | 'summary_dirty'> & {
   summary_dirty?: boolean | 0 | 1;
 } & ({ tenant_id: string } | { tenantId: string });
@@ -82,11 +78,8 @@ function toCurrentEntry(snapshot: StoredSnapshot): MemoryEntry {
   });
 }
 
-/** Parse a stored snapshot back into a MemoryEntry, or null when the row no longer matches it
- * (edited by hand, or truncated). */
 function parseSnapshot(row: DormantRow): MemoryEntry | null {
   const site = { table: 'dormant_memories', id: row.id, column: 'entry_json' };
-  // A row that will not parse, or parses to another shape or identity, is not restorable.
   const parsed = parseStoredJson(site, row.entry_json);
   if (parsed === undefined) return null;
   const entry = isStoredSnapshot(parsed) ? toCurrentEntry(parsed) : undefined;
@@ -102,8 +95,6 @@ function parseSnapshot(row: DormantRow): MemoryEntry | null {
   return entry;
 }
 
-/** The part of a parsed entry_json that toCurrentEntry reads without a guard; the row's tenant
- * is compared after. */
 function isStoredSnapshot(value: JsonValue): value is JsonValue & StoredSnapshot {
   return (
     isObjectLike(value) &&
@@ -127,12 +118,9 @@ function rowToDormantMemory(row: DormantRow): DormantMemory {
   };
 }
 
-/** A field of the snapshot JSON, NULL when the stored text is not valid JSON. */
 const entryField = (field: string): string =>
   `CASE WHEN json_valid(entry_json) THEN json_extract(entry_json, '$.${field}') END`;
 
-// The snapshot's scope as a `scope` column, so recall-scope's SQL fragments read it as they read
-// memories.scope.
 const DORMANT_WITH_SCOPE = `(SELECT *, ${entryField('scope')} AS scope FROM dormant_memories)`;
 
 /** A tenant's dormant memories whose scope `admit` passes, newest first, optionally filtered by
@@ -177,8 +165,6 @@ export function readDormantSnapshot(
   return row ? toSnapshot(row) : null;
 }
 
-/** A snapshot's field for each filter column: the row's own id, else its entry's wire field of
- * the same name. */
 const snapshotColumn = (column: FilterColumn): string =>
   column === 'id' ? 'id' : entryField(column === 'tags_json' ? 'tags' : column);
 
@@ -245,10 +231,6 @@ export function deleteDormantRow(db: DatabaseSyncLike, tenantId: string, id: str
   return Number(result.changes ?? 0) > 0;
 }
 
-/**
- * The columns a text match reads from one dormant memory; source and scope are null when its
- * snapshot will not parse.
- */
 // SAFETY: every read cast to this row selects DORMANT_TEXT_COLUMNS; scripts/checks/check-row-casts.mjs
 // proves it.
 interface DormantText {

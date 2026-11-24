@@ -1,5 +1,3 @@
-// planContainer and matchLegacy against plan design 6 and 10 (docs/plans/2026-09-29-import-agent-memories.md).
-// Every expected value is read off the spec, not off plan.ts.
 import { describe, expect, it, vi } from 'vitest';
 import {
   planContainer,
@@ -57,7 +55,6 @@ interface Setup {
   readonly live?: readonly LiveRow[];
   readonly dormant?: readonly DormantRow[];
   readonly legacy?: ReadonlyMap<string, readonly string[]>;
-  /** Keys whose text another path already stores live. */
   readonly dupes?: readonly string[];
 }
 
@@ -70,11 +67,9 @@ interface PlanCase {
   readonly name: string;
   readonly setup: Setup;
   readonly want?: Partial<ContainerPlan>;
-  /** Keys isDuplicate may be asked about: only those that would get a written row. */
   readonly asked?: readonly string[];
 }
 
-// The spec fixes no order inside a plan, so both sides are compared sorted.
 function unordered(plan: ContainerPlan): ContainerPlan {
   return {
     ...plan,
@@ -427,7 +422,6 @@ const editCases: readonly PlanCase[] = [
   },
 ];
 
-// A long note's parts: `<file>::<heading slug>/<text hash>`.
 const PART_A = 'n.md::top/aaaaaaaaaaaa';
 const PART_B = 'n.md::top/bbbbbbbbbbbb';
 const PART_C = 'n.md::state/cccccccccccc';
@@ -545,7 +539,6 @@ describe('planContainer: one key across syncs', () => {
     expect(first.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hA', supersedes: [] }] });
     const second = run({ items: [note('k', 'hB')], live: [tagged('w1', 'k', 'hA', DAY1)] });
     expect(second.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hB', supersedes: ['w1'] }] });
-    // w1 was superseded by the second write, so only w2 is live for the third call.
     const third = run({ items: [note('k', 'hA')], live: [tagged('w2', 'k', 'hB', DAY2)] });
     expect(third.plan).toEqual({ ...EMPTY, writes: [{ key: 'k', hash: 'hA', supersedes: ['w2'] }] });
     expect([first.asked, second.asked, third.asked]).toEqual([['k'], ['k'], ['k']]);
@@ -576,9 +569,7 @@ interface LegacyCase {
   readonly name: string;
   readonly rows: readonly LegacyRow[];
   readonly targets: readonly LegacyTarget[];
-  /** [legacy id, target ref] pairs. */
   readonly adopt?: readonly (readonly [string, string])[];
-  /** [target ref, legacy id] pairs. */
   readonly replace?: readonly (readonly [string, string])[];
 }
 

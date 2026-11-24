@@ -1,10 +1,3 @@
-/**
- * MCP `hippo_drill` tool — surface check for the v1.5.0 drillDown API.
- *
- * Verifies: tool is in the catalogue, returns formatted output for a real
- * summary, errors cleanly on a leaf id, errors cleanly on a cross-tenant id.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';

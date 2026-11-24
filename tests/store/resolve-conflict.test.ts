@@ -1,7 +1,3 @@
-/**
- * Tests for conflict resolution: hippo resolve <id> --keep <memory_id>
- */
-
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -12,7 +8,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { replaceDetectedConflicts, listMemoryConflicts } from '../_helpers/root-forms.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-/** Sleep and decay here run on the pre-1.46 7-day base, so memories fade within the test's horizon. */
 const createMemory7 = (content: string, options: Parameters<typeof createMemory>[1] = {}) =>
   createMemory(content, { baseHalfLifeDays: 7, ...options });
 
@@ -60,11 +55,9 @@ describe('resolveConflict', () => {
     const result = await resolve(conflictId, aId);
     expect(result.loserId).toBe(bId);
 
-    // Loser's half-life should be halved
     const after = readEntry(tmpDir, bId)!;
     expect(after.halfLifeDays).toBe(Math.max(1, before.halfLifeDays / 2));
 
-    // Conflict should be resolved
     const openConflicts = await listMemoryConflicts(tmpDir, 'open');
     expect(openConflicts.length).toBe(0);
 
@@ -77,11 +70,9 @@ describe('resolveConflict', () => {
 
     expect((await resolve(conflictId, aId, { forget: true })).loserId).toBe(bId);
 
-    // Loser should be deleted
     const deleted = readEntry(tmpDir, bId);
     expect(deleted).toBeNull();
 
-    // Winner should still exist
     const winner = readEntry(tmpDir, aId);
     expect(winner).not.toBeNull();
   });
@@ -89,13 +80,11 @@ describe('resolveConflict', () => {
   it('cleans up conflicts_with references on both memories', async () => {
     const { aId, bId, conflictId } = await seedConflict();
 
-    // Before resolve, both should have conflicts_with set
     const aBefore = readEntry(tmpDir, aId)!;
     expect(aBefore.conflictsWith).toContain(bId);
 
     await resolve(conflictId, aId);
 
-    // After resolve, winner should not reference the loser
     const aAfter = readEntry(tmpDir, aId)!;
     expect(aAfter.conflictsWith).not.toContain(bId);
   });
@@ -208,9 +197,8 @@ describe('resolveConflict', () => {
 
     expect((await resolve(conflictId, bId)).loserId).toBe(aId);
 
-    // A should be weakened
     const aAfter = readEntry(tmpDir, aId)!;
-    expect(aAfter.halfLifeDays).toBeLessThan(7); // default is 7
+    expect(aAfter.halfLifeDays).toBeLessThan(7);
   });
 });
 
@@ -234,9 +222,6 @@ describe('conflict tenant isolation', () => {
   }
 
   it('listMemoryConflicts with tenantId returns only that tenant; omitted returns all', async () => {
-    // Both tenants' conflicts must be seeded in ONE replaceDetectedConflicts
-    // call — it is a global replace and resolves any open conflict absent
-    // from the detected set.
     const a1 = createMemory7('tenant-a rule one', { tenantId: 'tenant-a', tags: ['x'] });
     const a2 = createMemory7('tenant-a rule two', { tenantId: 'tenant-a', tags: ['x'] });
     const b1 = createMemory7('tenant-b rule one', { tenantId: 'tenant-b', tags: ['x'] });
@@ -250,7 +235,6 @@ describe('conflict tenant isolation', () => {
 
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-b')).length).toBe(1);
-    // Omitted tenantId = legacy unscoped behaviour: every tenant's conflicts.
     expect((await listMemoryConflicts(tmpDir, 'open')).length).toBe(2);
   });
 
@@ -259,20 +243,16 @@ describe('conflict tenant isolation', () => {
 
     await expect(resolve(conflictId, aId, { tenantId: 'tenant-b' })).rejects.toBeInstanceOf(NotFoundError);
 
-    // The conflict is untouched — still open for its real owner.
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
   });
 
   it('auto-resolves an existing open cross-tenant row when the pair is re-detected', async () => {
-    // Seed two memories under different tenants.
     const a = createMemory7('tenant-a content', { tenantId: 'tenant-a', tags: ['x'] });
     const b = createMemory7('tenant-b content', { tenantId: 'tenant-b', tags: ['x'] });
     writeEntry(tmpDir, a);
     writeEntry(tmpDir, b);
     const [memA, memB] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
 
-    // Manually insert a pre-fix open cross-tenant conflict row (the kind that
-    // could exist from before E2's tenant guard).
     const db = openHippoDb(tmpDir);
     try {
       db.prepare(
@@ -287,22 +267,16 @@ describe('conflict tenant isolation', () => {
       (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB)?.reason,
     ).toBe('pre-fix cross-tenant');
 
-    // Simulate an unscoped detector re-detecting the cross-tenant pair. Before
-    // the fix, the resolve-stale loop saw the key in detectedKeys and skipped
-    // resolution; the insert loop skipped re-inserting (cross-tenant); the
-    // refMap rebuild skipped it. The row lingered status='open' forever.
     replaceDetectedConflicts(
       tmpDir,
       [{ memoryAId: a.id, memoryBId: b.id, reason: 're-detected cross-tenant', score: 0.9 }],
       '2026-05-22T12:00:00.000Z',
     );
 
-    // The cross-tenant row is now resolved.
     const resolved = await listMemoryConflicts(tmpDir, 'resolved');
     const ours = resolved.find((c) => c.memoryAId === memA && c.memoryBId === memB);
     expect(ours?.updatedAt).toBe('2026-05-22T12:00:00.000Z');
 
-    // No open cross-tenant row remains.
     expect(
       (await listMemoryConflicts(tmpDir, 'open')).find((c) => c.memoryAId === memA && c.memoryBId === memB),
     ).toBeUndefined();
@@ -315,7 +289,6 @@ describe('conflict tenant isolation', () => {
       NotFoundError,
     );
 
-    // The cross-tenant DELETE never fires — both memories survive.
     expect(readEntry(tmpDir, aId)).not.toBeNull();
     expect(readEntry(tmpDir, bId)).not.toBeNull();
   });
@@ -340,15 +313,11 @@ describe('conflict tenant isolation', () => {
       { memoryAId: a.id, memoryBId: c.id, reason: 'within-tenant', score: 0.9 },
     ]);
 
-    // Only the within-tenant (a, c) conflict is persisted.
     expect((await listMemoryConflicts(tmpDir, 'open')).length).toBe(1);
     expect((await listMemoryConflicts(tmpDir, 'open', 'tenant-a')).length).toBe(1);
   });
 
   it('replaceDetectedConflicts does not seed a foreign id into conflicts_with for a stale cross-tenant row', () => {
-    // Seed a within-tenant conflict, then re-home one member to another tenant
-    // so the existing conflict row becomes cross-tenant — simulating a row
-    // persisted before this fix.
     const a = createMemory7('stale-row memory a', { tenantId: 'tenant-a', tags: ['x'] });
     const b = createMemory7('stale-row memory b', { tenantId: 'tenant-a', tags: ['x'] });
     writeEntry(tmpDir, a);
@@ -358,7 +327,6 @@ describe('conflict tenant isolation', () => {
     ]);
     expect(readEntry(tmpDir, a.id)!.conflictsWith).toContain(b.id);
 
-    // Re-home b to tenant-b — the (a, b) conflict row is now cross-tenant.
     const db = openHippoDb(tmpDir);
     try {
       db.prepare(`UPDATE memories SET tenant_id = 'tenant-b' WHERE id = ?`).run(b.id);
@@ -366,11 +334,8 @@ describe('conflict tenant isolation', () => {
       closeHippoDb(db);
     }
 
-    // Re-run detection passing the same pair, so the row stays open and the
-    // refMap rebuild — not the resolve-stale path — is what must exclude it.
     replaceDetectedConflicts(tmpDir, [{ memoryAId: a.id, memoryBId: b.id, reason: 'now cross-tenant', score: 0.8 }]);
 
-    // a's conflicts_with must no longer carry b's id.
     expect(readEntry(tmpDir, a.id)!.conflictsWith).not.toContain(b.id);
   });
 });

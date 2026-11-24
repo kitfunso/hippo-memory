@@ -83,7 +83,6 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
     writeFileSync(p, body, 'utf8');
   }
 
-  /** The names of one src file that the gate still counts as test-only. */
   function counted(srcFile: string): string[] {
     return judgeExports(dir)
       .filter((r: { key: string; counted: boolean }) => r.counted && r.key.startsWith(`src/${srcFile}:`))

@@ -1,5 +1,3 @@
-// Outcome mirrors leave the job: marks commit with the rows, a pass after the job rewrites them, and a store opened
-// after a crash rewrites whatever its marks still name.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,7 +31,6 @@ function mirrorText(root: string, entry: MemoryEntry): string | null {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
 }
 
-/** Each mirror as its row now stands. */
 function rowTexts(db: DatabaseSyncLike, entries: readonly MemoryEntry[]): string[] {
   const rows = readEntriesByIds(
     db,
@@ -81,7 +78,6 @@ describe('outcome mirrors', () => {
   it('a crash left due are rewritten when the store next opens, and a mark whose row is gone is cleared', () => {
     const root = makeRoot('due-mirror-crash', { init: false });
     const entry = memory(3, Layer.Episodic);
-    // A process that committed the outcome and died before its pass: the row and its mark, with no mirror.
     const crashed = openHippoDb(root);
     try {
       withWriteScope(crashed, 'crashed_outcome', () => {

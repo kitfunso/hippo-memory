@@ -1,5 +1,3 @@
-// Shared setup for the dashboard server tests: a tmp store, seeded memories on a fixed clock, a loopback server and a tiny HTTP client.
-
 import { createHmac } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -115,7 +113,6 @@ export async function startDashboard(
   now: () => number = () => NOW,
   opts: { bodyDeadlineMs?: number } = {},
 ): Promise<RunningDashboard> {
-  // One test clock drives both the projections and the cache age; the tenant is read as the CLI root reads it.
   const handle = await serveDashboard({
     hippoRoot,
     port: 0,

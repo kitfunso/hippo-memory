@@ -1,4 +1,3 @@
-// Each helper absorbs the one failure it names and throws every other error on, so no catch swallows an unnamed one.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

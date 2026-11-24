@@ -1,4 +1,3 @@
-// The Codex apply_patch reader the session digest uses for its Changed line.
 import { describe, expect, it } from 'vitest';
 import { patchPaths, shellPatch } from '../../src/surface/capture/codex-patch.js';
 

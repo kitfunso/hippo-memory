@@ -1,5 +1,3 @@
-// hippo.db's LastRecall group: the last recall sits in its meta table, and a traced outcome links
-// on the outcome's own handle.
 import { type DatabaseSyncLike, withWriteScope } from '../../../db/index.js';
 import { appendAuditEvents } from '../audit/audit.js';
 import {
@@ -17,8 +15,6 @@ import { openStore } from '../runtime/handles.js';
 import type { LastRecall, RecallWrites } from '../../../base/ports/store.js';
 import { writeRecallTrace } from './recall-trace.js';
 
-/** What a finished recall wrote after its audit rows: the trace's id, null when none was asked
- * or its write failed, and the ids strengthened. */
 interface RecallFinish {
   readonly traceId: number | null;
   readonly strengthened: ReadonlySet<string>;
@@ -36,11 +32,7 @@ export function finishRecall(
       ? strengthenRetrievedInOwnTx(db, writes.strengthen.ids, writes.strengthen.opts, rules)
       : new Set<string>(),
   });
-  // Alone, the fail-soft trace and strengthen keep their own scopes so a busy lock loses them,
-  // never the read.
   if (writes.goalLog.length === 0 && writes.audit.length === 0) return traceAndStrengthen();
-  // Inside this scope both run as savepoints, so one recall commits once and a failed trace or
-  // strengthen still unwinds alone.
   return withWriteScope(db, 'finish_recall', () => {
     writeGoalRecallLog(db, localGoalRecallRows(db, writes.goalLog));
     appendAuditEvents(db, writes.audit);
@@ -48,7 +40,6 @@ export function finishRecall(
   });
 }
 
-/** The outcome for the last recall's ids, linked to its trace; `[]` when no recall has run. */
 function applyOutcomeToLast(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -85,8 +76,6 @@ export function sqliteLastRecall({ on, files }: Handles): LastRecall {
             files.opens.grant,
           );
         }
-        // One write for both keys, so an outcome never pairs these ids with an older trace; a lost
-        // trace saves null.
         const index = {
           last_retrieval_ids: [...ids],
           last_trace_id: traceId === null ? null : String(traceId),

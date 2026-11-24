@@ -1,4 +1,3 @@
-// Every stored version of a fact survives until one is retired: sleep never drops a value's text, and the paths below never skip a new value as a copy of an old one.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
@@ -56,9 +55,8 @@ function tmp(): string {
 }
 
 function newRoot(): string {
-  const root = join(tmp(), '.hippo'); // the CLI finds its store at <cwd>/.hippo
+  const root = join(tmp(), '.hippo');
   initTestStore(root);
-  // Replay would refresh the sources whose fade these tests watch.
   writeFileSync(join(root, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
   return root;
 }
@@ -75,7 +73,6 @@ function write(root: string, text: string, extra: Partial<MemoryEntry> = {}): Me
   return entry;
 }
 
-// A child process that cannot reach the real stores, the real launchers or a provider key.
 function hermeticEnv(): NodeJS.ProcessEnv {
   const home = tmp();
   const env: NodeJS.ProcessEnv = {
@@ -94,7 +91,6 @@ function hermeticEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-// In process, throwing on a non-zero exit as hippoOut did, so coverage sees each verb.
 async function hippo(root: string, ...args: string[]): Promise<string> {
   const r = await runCliAs(args, { cwd: dirname(root), env: hermeticEnv() });
   if (r.status !== 0) throw new Error(`hippo ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
@@ -153,7 +149,6 @@ function reject(root: string, contents: string[]): void {
   }
 }
 
-// The merge and dedup phases of api.sleep, run daily for a week and once more after demoted sources have faded.
 async function sleepMany(root: string): Promise<void> {
   const start = Date.now();
   for (const day of [1, 2, 3, 4, 5, 6, 7, 600]) {
@@ -176,12 +171,10 @@ describe('sleep keeps both versions', () => {
   it('a correction pair keeps the current value', async () => {
     const root = newRoot();
     const corrections = [
-      // The old text is longer, so a merge that kept only the longest text kept the old value.
       [
         'The web app dev server runs on port 3000 for local development work.',
         'The web app dev server now runs on port 5173.',
       ],
-      // Same wording, so dedup saw a duplicate and kept the old value by content order.
       ['The public API rate limit is 100 requests', 'The public API rate limit is 250 requests'],
     ];
     for (const text of corrections.flat()) write(root, text);
@@ -218,7 +211,6 @@ describe('sleep keeps both versions', () => {
     const root = newRoot();
     const pairs = [
       ['The dev server port is 3000', 'The dev server port is 5173'],
-      // The overlap tokenizer drops 1-char tokens, so these two score as identical.
       ['Retry the flaky upload step 3 times', 'Retry the flaky upload step 5 times'],
       [
         'The team uses npm to install packages in the monorepo',
@@ -269,7 +261,7 @@ describe('merge caps', () => {
       .repeat(9)
       .trim();
     const sources = ['alpha', 'bravo', 'charlie'].map((name) => write(root, `${name}: ${body}`));
-    for (const e of sources) expect(e.content.length).toBeGreaterThan(700); // two fit under the cap, three do not
+    for (const e of sources) expect(e.content.length).toBeGreaterThan(700);
     for (const e of sources) expect(e.content.length).toBeLessThan(1000);
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(1);
@@ -286,7 +278,7 @@ describe('merge caps', () => {
     const root = newRoot();
     const checklist =
       'Deploy checklist: build the image, run the migrations, warm the cache, flip the traffic, watch the error rate. ';
-    const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY_MS).toISOString() }); // oldest, so it seeds first
+    const seed = write(root, checklist.repeat(20).trim(), { created: new Date(Date.now() - DAY_MS).toISOString() });
     const steps = [
       'Deploy step: build the image and run the migrations.',
       'Deploy step: warm the cache, flip the traffic and watch the error rate.',
@@ -304,7 +296,6 @@ describe('merge caps', () => {
     halfLifeKept(root, rows);
   });
 
-  // Seven look-alikes, oldest first, so the first five form the capped merge.
   function sevenLookAlikes(root: string): MemoryEntry[] {
     const start = Date.now() - DAY_MS;
     return ['alpha', 'bravo', 'delta', 'gamma', 'kappa', 'omega', 'sigma'].map((name, i) =>
@@ -346,7 +337,7 @@ describe('merge caps', () => {
   it('a merge rejected before this release still covers the rows past the cap', async () => {
     const root = newRoot();
     const rows = sevenLookAlikes(root);
-    reject(root, [`[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`]); // the old format merged every look-alike
+    reject(root, [`[Consolidated pattern from 7 related memories]\n\n${rows.map((e) => `- ${e.content}`).join('\n')}`]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     expect((await consolidate(root, { now: FIXED_NOW })).semanticCreated).toBe(0);
@@ -371,7 +362,6 @@ describe('merged row', () => {
   });
 
   it('lists its texts newest first, and a rejection of the old format still matches', async () => {
-    // The oldest text is also the longest and first by text, so a length or text sort would lead with the old value.
     const texts = [
       'Deploy note: the staging service listens on port 4400 for the internal dashboard traffic.',
       'Deploy note: the staging service listens on port 4401 for the internal dashboard.',
@@ -394,7 +384,7 @@ describe('merged row', () => {
 
     const again = newRoot();
     writeAll(again);
-    reject(again, [`[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`]); // the old format: longest first
+    reject(again, [`[Consolidated pattern from 3 related memories]\n\n${texts.map((t) => `- ${t}`).join('\n')}`]);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect((await consolidate(again, { now: FIXED_NOW })).semanticCreated).toBe(0);
   });
@@ -406,7 +396,6 @@ describe('merged row', () => {
       (db) => `Nightly backups of the ${db} database run at 02:00 UTC.`,
     );
     const sources = [...pair, ...triple].map((text) => write(root, text));
-    // The rows the previous release wrote for these clusters: the longest text alone for two sources, first lines for more.
     reject(root, [
       `[Consolidated from 2 related memories]\n\n${pair[1]}`,
       `[Consolidated pattern from 3 related memories]\n\n${triple.map((t) => `- ${t}`).join('\n')}`,
@@ -453,7 +442,7 @@ describe('a retired version leaves the merged row', () => {
 
   it('reject takes the value out of every merged row that holds it, in the same call', async () => {
     const { root, old, next, row } = await mergedPair();
-    await api.forget(ctx(root), next.id); // as if the demoted source had faded, so only the merged row still holds the new value
+    await api.forget(ctx(root), next.id);
 
     const out = await hippo(root, 'reject', old.id, '--reason', 'the port moved');
 
@@ -475,7 +464,7 @@ describe('a retired version leaves the merged row', () => {
     } finally {
       closeHippoDb(db);
     }
-    await api.forget(ctx(root), row.id); // sleep's decay pass moves a row this way: dormant copy in, live row out
+    await api.forget(ctx(root), row.id);
 
     const out = await hippo(root, 'reject', old.id, '--reason', 'the port moved');
     const [dormant] = await api.dormantList(ctx(root));
@@ -507,7 +496,7 @@ describe('a retired version leaves the merged row', () => {
       layer: Layer.Semantic,
       source: 'consolidation',
     });
-    reject(root, [OLD]); // a rejection whose sweep missed the merged rows, as resolve --reject-loser leaves it
+    reject(root, [OLD]);
 
     await consolidate(root, { now: new Date(Date.now() + DAY_MS) });
 
@@ -533,7 +522,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     vi.stubEnv('HIPPO_HOME', join(tmp(), 'global'));
     vi.stubEnv('HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL', '');
     const root = newRoot();
-    for (const text of FACTS) write(root, text, { kind: 'raw' }); // raw, so the fresh tail offers them too
+    for (const text of FACTS) write(root, text, { kind: 'raw' });
     await consolidate(root, { now: FIXED_NOW });
     const [row] = merged(root);
     return { root, row };
@@ -569,7 +558,6 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 
   it('CLI recall whose budget cuts the merged row still shows the sources it holds', async () => {
     const { root } = await mergedStore();
-    // 140 tokens print both source lines but not the merged row ranked after them.
     const shown = json(
       await hippo(root, 'recall', QUERY, '--json', '--budget', '140', '--min-results', '0'),
     ).results.map((r) => r.content);
@@ -591,7 +579,7 @@ describe('recall and context show a merged row, not the sources it holds', () =>
     expect(copies(recalled)).toBe(1);
 
     const cwd = process.cwd();
-    process.chdir(tmp()); // outside a git repo hippo_context has no query and lists by strength
+    process.chdir(tmp());
     try {
       const context = await mcp(root, 'hippo_context', {});
       expect(context).toContain(row.content);
@@ -646,7 +634,6 @@ describe('recall and context show a merged row, not the sources it holds', () =>
 describe('a new value is never skipped as a copy of an old one', () => {
   const OLD = 'the dev server port is 3000 in the vite config for local work';
   const NEW = OLD.replace('3000', '5173');
-  // Equal for their first 200 characters, all that the old share and search keys compared.
   const LONG_OLD = `${'The deploy runbook covers build, migrate, warm the cache and flip traffic. '.repeat(3)}The dev server port is 3000.`;
   const LONG_NEW = LONG_OLD.replace('3000', '5173');
   const texts = (root: string): string[] => loadAllEntries(root, 'default').map((e) => e.content);
@@ -680,7 +667,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     write(root, OLD);
     commit(dirname(root), `fix: ${NEW}`);
     const cwd = process.cwd();
-    process.chdir(dirname(root)); // hippo_learn reads the git log of its working directory
+    process.chdir(dirname(root));
     try {
       expect(await mcp(root, 'hippo_learn', { days: 30 })).toContain('1 new, 0 duplicates skipped');
       expect(await mcp(root, 'hippo_learn', { days: 30 })).toContain('0 new, 1 duplicates skipped');
@@ -693,7 +680,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     const root = newRoot();
     write(root, OLD);
     const home = tmp();
-    const project = realpathSync.native(dirname(root)).replace(/[^a-zA-Z0-9]/g, '-'); // the import reads only this project's folder
+    const project = realpathSync.native(dirname(root)).replace(/[^a-zA-Z0-9]/g, '-');
     const memDir = join(home, '.claude', 'projects', project, 'memory');
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'port.md'), `---\nname: port\n---\n${NEW}\n`);
@@ -723,7 +710,7 @@ describe('a new value is never skipped as a copy of an old one', () => {
     const root = newRoot();
     const note = 'decision: cap the connection pool at 15k';
     const [item] = extractFromTexts([note]);
-    write(root, item.content.replace('15k', '1.5k')); // the old check dropped punctuation, so 1.5k and 15k read as one text
+    write(root, item.content.replace('15k', '1.5k'));
     const file = join(tmp(), 'session.txt');
     writeFileSync(file, `${note}\n`);
     vi.spyOn(console, 'log').mockImplementation(() => {});

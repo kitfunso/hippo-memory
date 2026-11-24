@@ -1,4 +1,3 @@
-// The connector groups of the store port and the rows they read and write.
 import type { EntryWrite, RawArchive, SupersedeWrite } from './entry-writes.js';
 import type { MethodEffects } from './effects.js';
 
@@ -6,48 +5,26 @@ import type { MethodEffects } from './effects.js';
  * concept: the event log, delivery holds, tenant routing, dead letters, backfill cursors and the
  * Slack workspace registry. */
 export interface ConnectorEvents {
-  /** The log row of the event's key, in its connector's own key space. With `artifact`, an event
-   * not logged yet also names the raw row the tenant holds for the artifact, read on the same
-   * handle; never another tenant's row. */
   eventRecord(event: ConnectorEvent, artifact?: ArtifactLookup): Promise<ConnectorEventRecord>;
-  /** A logged event answers `duplicate` and changes nothing; else the event is logged with no
-   * memory. With `deleted`, one transaction first archives every raw row of the artifact
-   * (archive_raw row each, under `actor`) and the log row names the first; one failed archive
-   * undoes all and the log row. No reach check. */
   markEventSeen(event: ConnectorEvent, deleted?: ArtifactDeletion): Promise<EventMarked>;
-  /** Holds a signed delivery's key from `nowMs` for `ttlMs`; false when a hold on it has not run
-   * out. A hold outlives a restart and covers every process on the store. */
   claimDelivery(claim: DeliveryClaim): Promise<boolean>;
-  /** Frees a hold whose delivery failed, so the sender's retry gets through. */
   releaseDelivery(connector: ConnectorEvent['connector'], key: string): Promise<void>;
-  /** The tenant the connector's routing rows name for the query, else how many rows a match
-   * could have come from. */
   route(query: RouteQuery): Promise<TenantRoute>;
-  /** Appends the row and answers its id. */
   parkDeadLetter(letter: ConnectorDeadLetter): Promise<number>;
-  /** The tenant's rows in one queue, oldest first, up to `limit`; with `id`, that row alone.
-   * Another tenant's row reads as absent. */
   deadLetters<C extends DeadLetterConnector>(
     connector: C,
     tenantId: string,
     which: DeadLetterQuery,
   ): Promise<DeadLetterRows[C][]>;
-  /** Adds one to the tenant's row retry count and stamps its retry time; another tenant's row is
-   * left alone. */
   markDeadLetterRetried(
     connector: DeadLetterConnector,
     tenantId: string,
     id: number,
   ): Promise<void>;
-  /** The backfill position saved under the key, or null before the first save. */
   cursor(key: CursorKey): Promise<string | null>;
-  /** With `keepSaved`, a position already saved stays, so a first run's `--since` seeds only
-   * what no run saved. */
   saveCursor(key: CursorKey, value: string, opts?: { readonly keepSaved?: boolean }): Promise<void>;
   slackWorkspaces(): Promise<SlackWorkspace[]>;
-  /** Maps the team to the tenant, replacing any mapping it had. */
   registerSlackWorkspace(teamId: string, tenantId: string): Promise<SlackWorkspace>;
-  /** False when the team had no mapping. */
   removeSlackWorkspace(teamId: string): Promise<boolean>;
 }
 
@@ -98,7 +75,6 @@ export type ConnectorEventRecord =
 /** The artifact a deletion event names, in the tenant whose rows it may archive. */
 export interface ArtifactLookup {
   readonly artifactRef: string;
-  /** The github.com-form ref a GHES item was stored under before refs carried the host; also matched. */
   readonly legacyArtifactRef?: string;
   readonly tenantId: string;
 }
@@ -113,8 +89,6 @@ export interface EventMarked {
   readonly duplicate: boolean;
   readonly archived: number;
 }
-
-// Tenant routing
 
 /** A webhook's routing key: a Slack team, or a GitHub installation, else its repository. */
 export type RouteQuery =
@@ -148,8 +122,6 @@ export interface SlackDlqInsert {
   signature: string | null;
   slackTimestamp?: string | null;
 }
-
-// Dead-letter queue
 
 export type SlackDlqBucket = 'parse_error' | 'unroutable' | 'signature_fail';
 
@@ -214,8 +186,6 @@ export interface GitHubDlqItem {
   bucket: GitHubDlqBucket | string;
 }
 
-// Backfill cursors
-
 /** The three GitHub streams a backfill drains, each with its own high-water mark. */
 export type GitHubStream = 'issues' | 'issueComments' | 'prReviewComments';
 
@@ -233,26 +203,14 @@ export type CursorKey =
 export interface SlackWorkspace {
   teamId: string;
   tenantId: string;
-  addedAt: string; // ISO timestamp
+  addedAt: string;
 }
 
 /** Writes with the rows that must commit with them: the event log row that turns a redelivery into a no-op, and
  * the review record of a held row. */
 export interface ConnectorWrites {
-  /** entryWrites.writeEntry plus, in its transaction: with `quarantine`, one pending record and
-   * quarantine row; with `event`, one log row. All commit or none. A key logged before resolves
-   * 'duplicate' and stores nothing (never a rejection); every other refusal is writeEntry's own,
-   * decided first. */
   writeConnectorEntry(write: ConnectorWrite): Promise<ConnectorWriteOutcome>;
-  /** entryWrites.archiveRaw plus, in its transaction, one log row for `event` naming the
-   * archived id, so a redelivery finds it logged; a failed log write undoes the archive. A key
-   * logged before keeps its row and does not stop the archive. Reach and every rejection are
-   * archiveRaw's own. */
   archiveConnectorEntry(archive: ConnectorArchive): Promise<string>;
-  /** entryWrites.supersede with the successor held: in its transaction, one pending record and quarantine row
-   * for the successor, whose entry already carries its quarantine scope. Reach, the old row's checks and every
-   * refusal are supersede's own; a refusal writes no record. Optional: a store without it keeps a flagged
-   * supersede framed, tagged and in its scope, as a store with no review queue does. */
   supersedeHeld?(write: HeldSupersede): Promise<void>;
 }
 

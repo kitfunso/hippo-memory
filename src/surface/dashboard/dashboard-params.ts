@@ -1,6 +1,3 @@
-// One shared parser for every dashboard query and path field, so no route trusts `parseInt` or an
-// unchecked id.
-
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import { LAYERS, type Chip } from '../../api/dashboard/live.js';
 import { SORT_KEYS, type MemoryQuery } from '../../api/dashboard/queries.js';
@@ -73,8 +70,6 @@ function rangeParam(params: URLSearchParams, lo: string, hi: string): [number, n
   return [min ?? Number.NEGATIVE_INFINITY, max ?? Number.POSITIVE_INFINITY];
 }
 
-/** Search text for the memories route: shorter than the minimum means no filter; longer than the
- * maximum is a 400. */
 function optionalSearch(params: URLSearchParams): string | null {
   const raw = params.get('q');
   if (raw === null) return null;
@@ -92,7 +87,6 @@ export function parseMemoryQuery(params: URLSearchParams): MemoryQuery {
     offset: integerParam(params, 'offset', { fallback: 0, min: 0, max: Number.MAX_SAFE_INTEGER }),
     limit: integerParam(params, 'limit', { fallback: LIMIT_DEFAULT, min: 1, max: LIMIT_MAX }),
     sort,
-    // Weakest first by default, like the mockup; retrievals starts with the most.
     dir: choiceParam(params, 'dir', ['asc', 'desc'], sort === 'retrievals' ? 'desc' : 'asc'),
     chip: choiceParam(params, 'chip', CHIPS, 'all'),
     layers: layersParam(params),

@@ -1,4 +1,3 @@
-// tools/call arguments are checked against the tool's inputSchema before the tool runs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { handleMcpRequest, type McpResponse } from '../../src/surface/mcp/server.js';
@@ -131,7 +130,6 @@ describe('MCP tool argument validation', () => {
   });
 
   it('refuses a string past the HTTP route cap, so a too-long tag writes nothing', async () => {
-    // The transport answers a thrown BadRequestError with its text, as it does for the api's own refusals.
     await expect(call('hippo_remember', { text: 'kept out', tag: 'x'.repeat(MAX_ID_LEN + 1) })).rejects.toThrow(
       `tag exceeds ${MAX_ID_LEN}-character cap`,
     );

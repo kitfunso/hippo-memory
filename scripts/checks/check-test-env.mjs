@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Fails a vi.stubEnv an afterEach unstub wipes after the first test, an unstub that runs before a teardown, a test whose
-// name puts it in another vitest project than what it starts needs, and a secret env.ts reads that vitest leaves set.
-// A hand-written process.env write in a test is the boundaries/no-env-write lint rule.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -149,11 +146,9 @@ function findEnvLeaks(dir) {
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Whether a source starts what `starts` matches, itself or through a tests/_helpers module that does. */
 function startsVia(helpers, starts) {
   const starters = new Set(helpers.filter((h) => starts.test(h.source)).map((h) => h.name));
   let importsStarter = () => false;
-  // A helper that imports a starter is one too, so this repeats until a pass adds none.
   for (let known = -1; known !== starters.size;) {
     known = starters.size;
     if (known === 0) break;
@@ -191,14 +186,12 @@ export function misnamedTests(dir) {
   const startsChild = startsVia(helpers, STARTS_A_CHILD);
   const startsServer = startsVia(helpers, STARTS_A_SERVER);
   const skipped = new Set(EVAL_TESTS);
-  // The token-eval harness belongs to another owner and keeps its names.
   const hits = [];
   for (const path of filesUnder(dir, (n) => /\.test\.(ts|mjs)$/.test(n))) {
     const file = relative(dirname(dir), path).replaceAll('\\', '/');
     if (skipped.has(file) || file.startsWith('tests/eval/token-eval-')) continue;
     const source = readFileSync(path, 'utf8');
     const has = projectOfName(file);
-    // A test that spawns inside src never names child_process, so the import graph decides when it lifts its own budget.
     const waitsOnChild = startsChild(source) || (RAISES_OWN_TIMEOUT.test(source) && reachesChildProcess(path));
     const started =
       waitsOnChild || (has === 'process' && reachesChildProcess(path))
@@ -206,7 +199,6 @@ export function misnamedTests(dir) {
         : startsServer(source)
           ? 'server'
           : 'unit';
-    // A slow test starts nothing, so its name is the only mark; a unit test that asks for a long budget of its own earns it.
     const want =
       started === 'unit' && (has === 'slow' || longestOwnTimeoutMs(source) > UNIT_OWN_TIMEOUT_CEILING_MS)
         ? 'slow'
@@ -216,9 +208,7 @@ export function misnamedTests(dir) {
   return hits.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
 }
 
-/** The variable names a reader in env.ts is built from. */
 const READER = /\b(?:raw|text|trimmedText|posInt|nonNegInt|strictPosInt)\('([A-Z][A-Z0-9_]*)'/g;
-// HIPPO_HOME, HOME and USERPROFILE get isolated directories in vitest.config.ts rather than a blank.
 const SET_BY_VITEST = new Set(['HIPPO_HOME', 'HOME', 'USERPROFILE']);
 const SENSITIVE = /KEY|TOKEN|SECRET|PASSWORD|ENDPOINT|ACCOUNT_ID|_URL$|_CERT$|_CACHE$|_HOME$/;
 
@@ -263,7 +253,6 @@ function report(dir, hits, misnamed, unscrubbed) {
   }
 }
 
-// Guarded so the test can import the functions without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dir = process.argv[2] ?? 'tests';
   const hits = findEnvLeaks(dir);

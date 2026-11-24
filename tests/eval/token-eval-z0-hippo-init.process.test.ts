@@ -1,4 +1,3 @@
-// Z0's `hippo init` keeps off the operator's Copilot and VS Code folders, now that init installs Copilot.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -21,8 +20,6 @@ describe('Z0 hippoInit', () => {
     const fakeHome = path.join(root, 'fake-home');
     const work = path.join(root, 'work');
     for (const dir of [copilotHome, vscodeUser, fakeHome, work]) fs.mkdirSync(dir, { recursive: true });
-    // The Copilot CLI's folder as the CLI leaves it, in the operator's home and in the fake home, so init's machine
-    // check picks either: the Copilot install then runs inside the fake home when hippoInit blanks COPILOT_HOME.
     fs.writeFileSync(path.join(copilotHome, 'config.json'), '{}\n');
     fs.mkdirSync(path.join(fakeHome, '.copilot'), { recursive: true });
     fs.writeFileSync(path.join(fakeHome, '.copilot', 'config.json'), '{}\n');

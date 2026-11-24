@@ -1,5 +1,3 @@
-// The scans sleep runs over every memory: object-backed rows and duplicate candidates.
-
 import { CURRENT_DISTILLED } from '../../../db/sql-predicates.js';
 import { duplicateHash, identityText } from '../../../base/util/same-text.js';
 import { withReadSnapshot, type DatabaseSyncLike } from '../../../db/index.js';
@@ -14,7 +12,6 @@ import type {
   ObjectLink,
 } from '../../../base/ports/store/consolidation.js';
 
-/** The typed-object tables whose rows name a backing memory in `memory_id`. */
 const OBJECT_TABLES = Object.values(KINDS).map((kind) => kind.table);
 
 const backsObject = (statuses: string): string =>
@@ -22,7 +19,6 @@ const backsObject = (statuses: string): string =>
     (t) => `EXISTS (SELECT 1 FROM ${t} WHERE ${t}.memory_id = memories.id${statuses})`,
   ).join(' OR ');
 
-// Each table's partial memory_id index answers the EXISTS, so no object table is read whole.
 const OBJECT_LINK_SQL =
   `CASE WHEN ${backsObject(" AND status IN ('superseded', 'closed')")} THEN 'retired' ` +
   `WHEN ${backsObject('')} THEN 'live' END`;
@@ -40,17 +36,12 @@ export function* iterateRowsWithObjects(db: DatabaseSyncLike): Generator<HalfLif
   for (const row of rows) yield { entry: rowToEntry(row), object: row.object_link };
 }
 
-// Hashes per page of the duplicate read; each page reads its hashes' rows by
-// idx_memories_duplicate_hash.
 const DUPLICATE_KEYS_PAGE = 500;
 
 /** The current distilled rows that may be another's duplicate, and the partitions in the order
  * they first appear. */
 export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidates {
-  // One read transaction, so the partition keys describe the rows read.
   return withReadSnapshot(db, () => {
-    // An older binary's rows carry no hash: hash them here, and read the hashed rows that share
-    // one. The caller regroups by duplicateKey, so a hash two different texts share costs only a
     // row read. SAFETY: MEMORY_SELECT_COLUMNS selects every MemoryRow key.
     const rows = cachedStatement(
       db,
@@ -79,8 +70,6 @@ export function listDuplicateCandidates(db: DatabaseSyncLike): DuplicateCandidat
     for (const hashes of chunked([...unread], DUPLICATE_KEYS_PAGE)) {
       rows.push(...rowsWithHashes(db, hashes));
     }
-    // Pages come in hash order; the port's order is created then id, as SQLite compares the ASCII
-    // stamps and ids.
     rows.sort(byCreatedThenId);
     return { rows: rows.map(rowToEntry), firstSeen: firstSeenPartitions(db) };
   });
@@ -99,8 +88,6 @@ function rowsWithHashes(db: DatabaseSyncLike, hashes: readonly number[]): Memory
 const byCreatedThenId = (a: MemoryRow, b: MemoryRow): number =>
   a.created === b.created ? (a.id < b.id ? -1 : 1) : a.created < b.created ? -1 : 1;
 
-/** Each (tenant, scope, origin) of a current distilled row, in the order its first row appears
- * by created then id. */
 function firstSeenPartitions(db: DatabaseSyncLike): DuplicateCandidates['firstSeen'] {
   // SAFETY: every read cast to this row selects all its keys. The ORDER BY ranks in SQL, the order
   // the rows sort in.

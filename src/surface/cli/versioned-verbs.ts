@@ -1,6 +1,3 @@
-// One handler set for the kinds that evolve by supersession (brief, note, policy, process, skill),
-// each driven by its kind's api calls.
-
 import { errorMessage } from '../../base/util/log.js';
 import type { ObjectByKind } from '../../base/records/object-types.js';
 import type { ContextWith } from '../../api/types.js';
@@ -47,24 +44,16 @@ export interface VersionedKind<K extends VersionedKindName, B> {
   readonly kind: K;
   readonly names: ObjectNames;
   readonly plural: string;
-  /** Printed when `new` lacks its key or its body. */
   readonly usage: readonly string[];
   readonly supersedeUsage: string;
-  /** Named in the refusal of a supersede without a body: `requires <this> for the new version`. */
   readonly bodyRequired: string;
-  /** The body of a new version, or undefined when its required flag is missing or blank. */
   readonly body: (flags: CliFlags, verb: 'new' | 'supersede') => B | undefined;
-  /** What a new version keeps from the one it supersedes: the repo, customer or name. */
   readonly keyOf: (o: ObjectByKind[K]) => string;
   readonly write: (key: string, body: B, from?: Succession) => ObjectWrites[K];
-  /** The first line `new` prints. */
   readonly recorded: (o: ObjectByKind[K]) => string;
-  /** The `list` flag whose value the kind's filter column must equal. */
   readonly filterFlag?: string;
   readonly printRow: (o: ObjectByKind[K]) => void;
-  /** The `get` lines between the header and the lifecycle tail. */
   readonly printDetail: (o: ObjectByKind[K]) => void;
-  /** A subcommand only this kind has. */
   readonly extra?: {
     readonly sub: string;
     readonly run: (ctx: ContextWith<'objects'>, args: string[], flags: CliFlags) => Promise<void>;
@@ -101,7 +90,6 @@ export function versionedVerbs<K extends VersionedKindName, B>(
     if (sub === 'close') {
       return closeObjectVerb(args, kind.names, (id) => objectClose(ctx, kind.kind, id));
     }
-    // Both `<cmd> new "<key>"` and the bare `<cmd> "<key>"` create.
     await createVersion(ctx, kind, sub === 'new' ? (args[1] ?? '') : sub, flags);
   };
 }
@@ -148,8 +136,6 @@ async function supersedeVersion<K extends VersionedKindName, B>(
   }
   const existing = foundOrExit(await objectGet(ctx, kind.kind, id), kind.names.noun, id);
   const from = { id, changeSummary: nonEmptyStringFlag(flags, 'change') };
-  // The lookup stays outside refusalExits so a store error reaches runCli;
-  // the save's own check is the active-state one.
   const created = await refusalExits(() =>
     objectCreate(ctx, kind.kind, kind.write(kind.keyOf(existing), body, from), shellFolder()),
   );
@@ -164,8 +150,6 @@ export function shellFolder(): WriteOrigin {
   return { folder: process.cwd() };
 }
 
-/** Every save goes through here, so a refused write always prints the store's message and exits
- * 1. */
 async function refusalExits<T>(save: () => Promise<T>): Promise<T> {
   try {
     return await save();

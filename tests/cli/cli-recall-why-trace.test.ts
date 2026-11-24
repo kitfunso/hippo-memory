@@ -1,6 +1,3 @@
-// A7 recall-trace: CLI `recall --why` on a hero memory that fires every CLI-drivable rerank stage, so its trace is the
-// full ordered chain. No-trace default output and the `--goal` stage are pinned in tests/cli/cli-recall-golden.process.test.ts.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +8,6 @@ import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 import { pushGoal, writeEntry } from '../_helpers/root-forms.js';
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -50,8 +46,6 @@ describe('recall --why rerankTrace', () => {
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
     await hippo(home, 'init', '--no-hooks', '--no-schedule', '--no-learn');
 
-    // peer: matches the query and is referenced by the hero's conflicts_with,
-    // so --filter-conflicts fires the interference stage on the hero.
     const peer = createMemory('auth token refresh peer', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['ui'],
@@ -60,9 +54,6 @@ describe('recall --why rerankTrace', () => {
     writeEntry(localRoot, peer);
     peerId = peer.id;
 
-    // hero: qualifies for value (outcomes set), utility (always), goal-boost
-    // (goal-tagged + active goal), retrieval-count-downweight (low count), and
-    // interference (conflicts_with references the peer, also in results).
     const hero = createMemory('auth token refresh hero details', {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       tags: ['fix-auth'],
@@ -71,7 +62,7 @@ describe('recall --why rerankTrace', () => {
     hero.conflictsWith = [peer.id];
     hero.outcomePositive = 3;
     hero.outcomeNegative = 0;
-    hero.retrievalCount = 1; // below the --salience-threshold below
+    hero.retrievalCount = 1;
     heroId = hero.id;
     writeEntry(localRoot, hero);
 
@@ -90,7 +81,6 @@ describe('recall --why rerankTrace', () => {
     const rankingLine = lines.find((l) => l.trim().startsWith('ranking:'));
     expect(rankingLine?.trim(), `no ranking line in output:\n${out}`).toMatch(/^ranking:/);
 
-    // Fired stages must appear in pipeline order within the chain.
     const order = ['interference', 'value', 'utility', 'goal-boost', 'retrieval-count-downweight'];
     const positions = order.map((stage) => rankingLine!.indexOf(stage));
     for (const p of positions) expect(p).toBeGreaterThan(-1);
@@ -116,7 +106,6 @@ describe('recall --why rerankTrace', () => {
       'goal-boost',
       'retrieval-count-downweight',
     ]);
-    // Contiguous chain: each step's scoreBefore == prior step's scoreAfter.
     for (let i = 1; i < trace.length; i++) {
       expect(trace[i].scoreBefore).toBe(trace[i - 1].scoreAfter);
     }

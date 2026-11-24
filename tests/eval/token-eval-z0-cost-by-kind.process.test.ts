@@ -1,4 +1,3 @@
-/** Z0 cost by kind end to end over a stub analyzer tree and a stub report: the hash gates, the self-check, the agreement and partition stops, and the print. */
 import { describe, it, expect, afterAll } from 'vitest';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -26,11 +25,9 @@ const SOURCES = [
 ];
 
 const sha = (text: string): string => createHash('sha256').update(text).digest('hex');
-// The stub's ratioT and harmT return a pure function of the unit count, so the test pins counts, not a statistic.
 const est = (n: number) => ({ estimate: n / 10, low: n / 20, high: n / 5, se: 0.5, df: 7, p: 0.25 });
 const RESOLVE = { ...est(0), estimate: 0.125 };
 
-/** Three seeds of four positions per arm: a teach, two R applies (the second from a template) and one set N task. */
 function records(arms: Arm[]): Rec[] {
   const slots = [['R', 'teach', null], ['R', 'apply', 1], ['R', 'apply', 2], ['N', 'apply', null]] as const;
   return arms.flatMap((arm) => [1, 2, 3].flatMap((seed) => slots.map(([set, kind, applyIndex], position) => ({
@@ -38,7 +35,6 @@ function records(arms: Arm[]): Rec[] {
   }))));
 }
 
-// A rate other than 1, so a read that passes the wrong prices block gets NaN dollars and a read that drops the rate gets the wrong ones.
 const RATE = 2;
 const ANALYZE = `import * as fs from 'node:fs';
 export const loadInputs = (args, cwd) => {
@@ -51,7 +47,6 @@ export const pairTasks = (scored, armT, armC) => scored.filter((t) => t.arm === 
   .map((t) => ({ t, c: scored.find((c) => c.arm === armC && c.seed === t.seed && c.position === t.position) }))
   .filter((pair) => pair.c !== undefined);
 `;
-// With `drift`, harmT moves the cost ratio of a 12-unit cell (sets R+N) by 1e-9 while ratioT stays put, as a rowOf that strays from the analyzer would.
 const hypotheses = (drift: boolean) => `import { pairTasks } from './z0-filters.mjs';
 const est = (n) => ({ estimate: n / 10, low: n / 20, high: n / 5, se: 0.5, df: 7, p: 0.25 });
 export const inSets = (...sets) => (r) => sets.includes(r.set);
@@ -71,7 +66,6 @@ describe('Z0 cost by kind CLI', () => {
     fs.writeFileSync(file, text);
   };
 
-  /** One tree per case: Node caches a module by URL, so a stub that changes needs a new folder. */
   function build(over: { scored?: Rec[]; drift?: boolean; report?: (r: StubReport) => void } = {}): Tree {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-kind-cli-'));
     dirs.push(base);
@@ -213,7 +207,6 @@ describe('Z0 cost by kind CLI', () => {
   });
 
   describe('the analyzer label', () => {
-    /** Commits the stub tree; seen.json is ignored so a read leaves the tree clean. */
     function commit(dir: string): string {
       const run = (...args: string[]): string => {
         const r = spawnSync('git', ['-C', dir, ...args], { encoding: 'utf8' });

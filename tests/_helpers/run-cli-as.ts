@@ -1,5 +1,3 @@
-// Runs `hippo <args>` through runCli in this process with the cwd, env and stdin a spawned child would get,
-// so a test that checks rows and bytes skips the node start-up and module load each spawn pays.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { vi } from 'vitest';
@@ -10,18 +8,15 @@ import { HIPPO_BIN } from './hippo-bin.js';
 
 export interface CliAsOptions {
   readonly cwd?: string;
-  /** The whole env the verb sees, as a spawned child's would be; omitted keeps this process's env. */
   readonly env?: NodeJS.ProcessEnv;
   readonly input?: string;
 }
 
 function replaceEnv(next: NodeJS.ProcessEnv): void {
-  // Mutated in place: a module that kept a reference to process.env must see the swap too.
   for (const key of Object.keys(process.env)) delete process.env[key];
   for (const [key, value] of Object.entries(next)) if (value !== undefined) process.env[key] = value;
 }
 
-/** A hook that writes fd 1 or 2 with writeSync, past the stream buffer, lands in the streams runInProcess reads. */
 function routeStdFdWrites(): () => void {
   // SAFETY: one signature that covers both writeSync overloads, so a passed-through call keeps its arguments as given.
   const write = fs.writeSync.bind(fs) as (fd: number, ...rest: unknown[]) => number;
@@ -43,7 +38,6 @@ export async function runCliAs(args: readonly string[], opts: CliAsOptions = {})
   const savedArgv = process.argv;
   const savedCwd = process.cwd();
   const savedEnv = { ...process.env };
-  // A verb that starts a worker re-runs process.argv[1], which must be the bin a spawned hippo was started from.
   const argv = [process.execPath, HIPPO_BIN, ...args];
   process.argv = argv;
   if (opts.cwd) process.chdir(opts.cwd);

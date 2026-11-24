@@ -17,8 +17,6 @@ let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = makeRoot('confidence-tier', { init: false });
-  // replay picking this test's own fixtures would confound the assertions
-  // on stored confidence, so disable it via the store's own config file.
   fs.writeFileSync(path.join(tmpDir, 'config.json'), JSON.stringify({ replay: { count: 0 } }), 'utf8');
 });
 

@@ -1,4 +1,3 @@
-// What doctor reports about the spool folder, read only.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorCode } from '../base/util/log.js';
@@ -25,8 +24,6 @@ function mtimeOf(fsx: SpoolFs, file: string): number | null {
     return fsx.statSync(file).mtimeMs;
   } catch (err) {
     const code = errorCode(err);
-    // Moved by a replay after the listing, or held by another program: left out of this count
-    // rather than failing it.
     if (code === 'ENOENT' || BUSY_CODES.has(code)) return null;
     throw err;
   }

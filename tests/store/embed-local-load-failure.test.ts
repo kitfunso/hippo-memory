@@ -1,4 +1,3 @@
-// A local model that cannot load must fail `hippo embed`, not report "Done. 0 new embeddings" with exit 0.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -17,7 +16,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A local provider that answers every text with `vector`, or fails the whole call as an unloadable model does. */
 function localProvider(opts: { available?: boolean; loadError?: string; vector?: number[] }): EmbeddingProvider {
   return {
     kind: 'local',
@@ -62,7 +60,6 @@ afterEach(() => {
 
 describe('the local provider with a model that cannot load', () => {
   it('rejects with the reason instead of returning empty vectors', async () => {
-    // An empty offline cache cannot hold the model, whether or not a transformers package is installed.
     vi.stubEnv('HIPPO_MODEL_CACHE', emptyCache);
     await expect(resolveEmbeddingProvider(loadConfig(root).embeddings).embed(['a memory'], 'passage')).rejects.toThrow(
       /did not load: \S/,

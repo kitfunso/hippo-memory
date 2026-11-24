@@ -1,5 +1,3 @@
-// The root entry's sleep and consolidation: each opens one handle per store and fills the outside
-// services that a caller's Context or options leave out.
 import { defaultStore, inStoreSession, withSharedStoreHandles } from '../surface/open-store.js';
 import type { SleepStore } from '../base/ports/store.js';
 import {
@@ -22,16 +20,12 @@ export { ConsolidationResult } from '../domain/consolidate/run.js';
 export type { SleepOptions, SleepResult } from '../api/sleep/sleep.js';
 export type { SleepEvent } from '../api/sleep/events.js';
 export type { RescueRank } from '../domain/consolidate/events.js';
-// Named in the signatures of sleep and consolidate, so a caller needs them to type its own
-// variable.
 export type { SleepContext, SleepStore };
 export type { DetachedWork } from '../domain/search/detached-work.js';
 export { llmRoute, type LlmRoute } from '../infra/llm-route.js';
 
 /** Sleeps the whole store under `ctx`, whose store sets the groups a sleep pass works on. */
 export async function sleep(ctx: SleepContext, opts?: SleepOptions): Promise<SleepResult> {
-  // One handle per store, as `hippo sleep` has: a pass that opened its own would make each close
-  // hippo.db's last, which checkpoints and deletes the WAL.
   return withSharedStoreHandles((session) =>
     sleepWholeStore(withEntryInfra({ ...ctx, store: inStoreSession(ctx.store, session) }), opts),
   );
@@ -52,7 +46,6 @@ export async function consolidate(
   const config = options.config ?? loadConfig(root);
   const tenantId = options.tenantId ?? DEFAULT_TENANT_ID;
   const llm = llmFromEnv(fetcher);
-  // One handle per store, for the reason `sleep` gives.
   return withSharedStoreHandles((session) =>
     runConsolidation(inStoreSession(store, session), {
       ...rest,
@@ -68,11 +61,8 @@ function isFolder(target: string | SleepStore): target is string {
   return typeof target === 'string';
 }
 
-// The one dedupe.js export that is public; the rest of dedupe.js stays internal.
 export { strengthTieKey as strengthBucket } from '../domain/consolidate/dedupe.js';
 
-/** The entry's sleep clock and model: the caller's `now`, else HIPPO_FAKE_NOW or the wall clock;
- * the eval switches' model at the config's loss-aversion ratio. */
 function sleepRules(now: Date | undefined, config: HippoConfig): SleepRules {
   return { now: now ?? evalNow(), strength: strengthModelFor(evalSwitches(), config.runtime) };
 }

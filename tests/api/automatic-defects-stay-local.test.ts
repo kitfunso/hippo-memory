@@ -1,4 +1,3 @@
-// Sleep may reuse a person's text and hippo's own sound text; hippo's text with a certain defect never feeds a summary or the global store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1,5 +1,3 @@
-// Audit log queries and retention, and the memory-quality audit with its repair passes.
-
 import {
   auditMemories,
   PROTECTED_ROWS,
@@ -17,10 +15,8 @@ import type { QualityRepairResult } from '../../base/ports/store/audit.js';
 
 export interface AuditListOptions {
   op?: AuditOp;
-  /** ISO timestamp lower bound. */
   since?: string;
   limit?: number;
-  /** Resume after this row: the (ts, id) position the previous page ended on. */
   after?: KeysetPosition;
 }
 
@@ -92,18 +88,13 @@ export async function memoryQualityRepairOnce(
 }
 
 export interface PruneAuditOptions {
-  /** Cutoff in days. Rows with `ts < (now - N days)` are deleted. */
   olderThanDays: number;
-  /** When true, count matching rows but do NOT delete. Default false. */
   dryRun?: boolean;
 }
 
 export interface PruneAuditResult {
-  /** ISO timestamp of the cutoff. Rows with ts strictly less than this were deleted. */
   cutoff: string;
-  /** Number of audit_log rows deleted (or that would be deleted, if dryRun). */
   count: number;
-  /** Echo back whether this was a dry run. */
   dryRun: boolean;
 }
 

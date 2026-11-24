@@ -1,4 +1,3 @@
-// Scratch folders, pins, config patches and log waits the Copilot hook CLI tests share.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { expect, beforeEach, vi } from 'vitest';
@@ -20,7 +19,6 @@ export const PROJ_PIN = 'The proj auth client keeps its retry budget in src/auth
 export const GLOBAL_PIN = 'Global pin: prefer small pull requests over large ones';
 export const SESSION = 'copilot-sess-1';
 export const WORKER_DONE = `active snapshot(s) for session ${SESSION}`;
-// Forward slashes, since NODE_OPTIONS reads a backslash as an escape.
 export const RECORD_SPAWN = path.resolve(__dirname, '..', '_helpers', 'record-spawn.cjs').split(path.sep).join('/');
 export const CURSOR_SAVE_FAULT = path
   .resolve(__dirname, '..', '_helpers', 'cursor-save-fault.cjs')
@@ -31,7 +29,6 @@ export let s: CopilotScratch;
 export const hippo = (args: string[], cwd: string, env: NodeJS.ProcessEnv, input?: string) =>
   runCliAs(args, { cwd, env, input });
 
-// Seeding runs the CLI entry in process: remember is setup here, and only the hook runs need a real process.
 export async function pin(text: string, global: boolean): Promise<void> {
   const { HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME } = s.env;
   for (const [k, v] of Object.entries({ HIPPO_HOME, HOME, USERPROFILE, COPILOT_HOME, APPDATA, XDG_CONFIG_HOME })) {
@@ -99,7 +96,6 @@ export function initStoreIn(dir: string): string {
   return path.join(dir, '.hippo');
 }
 
-// The detached workers are real processes, so a wait gets a generous bound under load.
 export const WORKER_WAIT_MS = 25_000;
 
 export const readLog = (logFile: string): string => (fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '');

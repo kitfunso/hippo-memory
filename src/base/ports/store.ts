@@ -1,6 +1,3 @@
-// The async store interface and its groups: every method answers a Promise and takes only data, so
-// any backend can serve it from any thread, and hippo.db is one adapter. Type-only apart from the
-// group probes and the store errors.
 import { StoreNotPortedError } from '../util/store-blocked.js';
 import type { ConnectorGroups, RecordGroups, ReviewGroups } from './store-groups.js';
 import type { MemoryEntry } from '../memory/entry.js';
@@ -311,7 +308,6 @@ export interface ContinuityBlock {
   recentSessionEvents: SessionEvent[];
 }
 
-// The groups' own request and row shapes, for the api and store-kit to name.
 export type {
   ConnectorEvent,
   ConnectorWrite,
@@ -422,5 +418,4 @@ export type { EntryFilter, PageRequest } from './store/reports.js';
 export type { TextsHoldingOptions } from './store/capture.js';
 export type { FolderFiles, StoreHome } from './store/folder-files.js';
 
-// Value exports of the effect tables, kept in a port file of their own.
 export { BASE_EFFECTS, STORE_EFFECTS } from './store/store-effects.js';

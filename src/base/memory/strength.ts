@@ -1,28 +1,15 @@
-// How strong a memory is at an instant: decay, the reward factor, the retrieval boost, the
-// emotional weight and the confidence facets, all under one StrengthModel the caller passes with
-// the time.
 import type { ConfidenceLevel, EmotionalValence, MemoryEntry } from './entry.js';
 import { DAY_MS } from '../util/time.js';
 
 /** The slopes, bases and channels strength scoring runs on; an eval builds another value at its
  * root. */
 export interface StrengthModel {
-  /** Strength left after one half-life; also what each wrong mark multiplies by. */
   readonly decayBase: number;
-  /** Half-life stretch at a fully good outcome record (shrink at a fully bad one). */
   readonly rewardSlope: number;
-  /** Strength each doubling of the retrieval count adds. */
   readonly retrievalBoostSlope: number;
-  /** The most halvings bad outcome marks apply; bad marks alone never push a memory under
-   * sleep's 0.05 retire line. */
   readonly maxWrongHalvings: number;
-  /** Multiplies the `negative` valence weight, after parseLossAversionRatio's floor. */
   readonly lossAversionRatio: number;
-  /** Strength fades with time since the decay anchor; off, it holds at the boost and emotional
-   * weight. */
   readonly decays: boolean;
-  /** A recall boosts strength, moves the decay anchor and lengthens the half-life; off, the
-   * anchor is `created`. */
   readonly recallStrengthens: boolean;
 }
 
@@ -48,8 +35,6 @@ export const DEFAULT_HALF_LIFE_DAYS = 365;
 /** The flat half-life the object writers gave their memories before they took the default. */
 export const LEGACY_TYPED_HALF_LIFE = 90;
 
-// Losses weigh ~2x gains (Lovallo-Kahneman), so negative is 2.0; HIPPO_LOSS_AVERSION_RATIO scales
-// it per process.
 export const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
   positive: 1.0,
@@ -57,8 +42,6 @@ export const EMOTIONAL_MULTIPLIERS = {
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 
-// A lower ratio can drop an error-tagged memory under sleep's DECAY_THRESHOLD
-// (src/domain/consolidate/decay.ts), so values below it fall back to 1.0.
 const LOSS_AVERSION_RATIO_MIN = 0.5;
 
 /** HIPPO_LOSS_AVERSION_RATIO as scoring reads it: unset, unparseable or below the floor is 1.0. */
@@ -144,7 +127,6 @@ export function calculateStrength(
   model: StrengthModel,
   basis: DecayBasis = {},
 ): number {
-  // Being marked wrong outranks every shield: pinning, error tags, heavy recall.
   const wrong = netWrong(entry, model);
   const wrongPenalty = Math.pow(model.decayBase, wrong);
   if (entry.pinned) return wrongPenalty;
@@ -153,10 +135,8 @@ export function calculateStrength(
   const daysSince = (now.getTime() - anchor.getTime()) / DAY_MS;
   const effectiveHalfLife = entry.halfLifeDays * calculateRewardFactor(entry, model);
 
-  // Guard: zero half-life causes 0/0 = NaN in the exponent
   if (effectiveHalfLife <= 0) return 0.0;
 
-  // Without decay the [0,1] clamp below caps the boost at baseline.
   const decay = model.decays
     ? Math.pow(model.decayBase, decayExponentFor(basis, daysSince, effectiveHalfLife))
     : 1.0;
@@ -182,14 +162,11 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
   let effectiveHalfLife = halfLifeDays;
   const mode = basis.decayBasis ?? 'clock';
   if (mode === 'session') {
-    // Each sleep cycle counts as one "day"; sessions since last retrieval are estimated from the
-    // average interval.
     const avgInterval = basis.avgSessionIntervalDays ?? 1;
     const sessionsSince = avgInterval > 0 ? Math.max(0, daysSince / avgInterval) : daysSince;
     return sessionsSince / effectiveHalfLife;
   }
   if (mode === 'adaptive') {
-    // Scale half-life by session frequency: infrequent agents get longer half-lives
     const avgInterval = basis.avgSessionIntervalDays ?? 0;
     if (avgInterval > 1) {
       effectiveHalfLife *= avgInterval;
@@ -203,7 +180,6 @@ function decayExponentFor(basis: DecayBasis, daysSince: number, halfLifeDays: nu
  * part. */
 export type ConfidenceInputs = Pick<MemoryEntry, 'pinned' | 'confidence' | 'lastRetrieved'>;
 
-// Days without a retrieval before trust lapses; pinned and verified rows are exempt by policy.
 const AGED_OUT_AFTER_DAYS = 30;
 
 function isAgedOut(entry: ConfidenceInputs, now: Date): boolean {
@@ -213,7 +189,6 @@ function isAgedOut(entry: ConfidenceInputs, now: Date): boolean {
 }
 
 export interface ConfidenceFacets {
-  // Stored: why we believe the entry. Derived: nobody retrieved it lately.
   tier: ConfidenceLevel;
   agedOut: boolean;
 }
@@ -222,7 +197,6 @@ export function confidenceFacets(entry: ConfidenceInputs, now: Date): Confidence
   return { tier: entry.confidence, agedOut: isAgedOut(entry, now) };
 }
 
-// An aged-out row warns on its own, since its stored tier alone would hide it.
 export function confidenceLabel(entry: ConfidenceInputs, now: Date) {
   const { tier, agedOut } = confidenceFacets(entry, now);
   return {

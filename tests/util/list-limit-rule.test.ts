@@ -1,4 +1,3 @@
-// The list-limit rule lives once in base/util/limits.ts; the CLI and HTTP parsers are thin adapters over it.
 import { describe, it, expect, vi } from 'vitest';
 import { resolveListLimit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from '../../src/base/util/limits.js';
 import { pct } from '../../src/base/util/format.js';

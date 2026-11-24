@@ -10,7 +10,6 @@ import { recordStatements, countMatching } from '../_helpers/count-statements.js
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-/** Query a single row from the hippo SQLite handle. */
 function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T | undefined {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -18,10 +17,8 @@ function queryOne<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-/** Concrete SQLite column value: what node:sqlite can actually return. */
 type SqliteValue = string | number | bigint | null | Uint8Array;
 
-/** Query all rows from the hippo SQLite handle. */
 function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T[] {
   // SAFETY: sql is a literal SELECT against known hippo schema columns; the
   // row shape is declared by the generic type argument at each call site and
@@ -29,39 +26,14 @@ function queryAll<T>(db: DatabaseSyncLike, sql: string, ...params: unknown[]): T
   return db.prepare(sql).all(...params) as T[];
 }
 
-/**
- * v0.39 GDPR Path A completeness regression suite.
- *
- * Closes the three holes flagged by the pre-landing /review:
- *   1. Markdown mirror reaper after migration v20 (RTBF on historical archives)
- *   2. Recall audit stores sha256(query) hash instead of original query text
- *   3. rawArchive mirror cleanup wrapped in try/catch; reaper handles retry
- *
- * Codex round 3 update: the reaper now tracks completion per-row via
- * raw_archive.mirror_cleaned_at (v21), not via a global meta flag. Tests
- * assert the per-row contract: cleaned rows get a timestamp; failed unlinks
- * leave the column NULL so the next openHippoDb retries.
- *
- * The full-DB canary scan (test 4) is the load-bearing assertion: after the
- * archive + redact + hash flow, the original content must not exist in any
- * persistent table.
- */
 describe('GDPR Path A completeness fixes', () => {
   let root: string;
 
-  // A copy of the run's migrated store: every case here is about the reaper and the audit rows, not a first migration.
   beforeEach(() => {
     root = makeRoot('v039-completeness');
   });
 
-  // ---------------------------------------------------------------------------
-  // Fix 1: post-migration mirror reaper for legacy archives
-  // ---------------------------------------------------------------------------
-
   it('1. mirror reaper deletes markdown files for raw_archive rows on first open', () => {
-    // Bootstrap a fresh DB so we can hand-craft a "v18-style" raw_archive row
-    // (mirror_cleaned_at NULL) and matching markdown mirror that would have
-    // existed pre-70180b5.
     const db1 = openHippoDb(root);
     try {
       db1
@@ -79,14 +51,12 @@ describe('GDPR Path A completeness fixes', () => {
       closeHippoDb(db1);
     }
 
-    // Plant the orphan markdown file containing the original content.
     const episodicDir = join(root, 'episodic');
     mkdirSync(episodicDir, { recursive: true });
     const orphanPath = join(episodicDir, 'mem_legacy_canary_1.md');
     writeFileSync(orphanPath, '# legacy memory\n\noriginal-content-canary-FORGET-ME-quaxle', 'utf8');
     expect(existsSync(orphanPath)).toBe(true);
 
-    // Re-open: reaper runs, file disappears, per-row timestamp set.
     const db2 = openHippoDb(root);
     try {
       expect(existsSync(orphanPath)).toBe(false);
@@ -100,7 +70,6 @@ describe('GDPR Path A completeness fixes', () => {
       closeHippoDb(db2);
     }
 
-    // Re-open again: idempotent — reaper SELECT returns empty, no errors.
     const db3 = openHippoDb(root);
     try {
       const stillCleaned = queryOne<{ mirror_cleaned_at?: string | null }>(
@@ -109,7 +78,6 @@ describe('GDPR Path A completeness fixes', () => {
         'mem_legacy_canary_1',
       )?.mirror_cleaned_at;
       expect(stillCleaned).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-      // Confirm zero pending rows.
       const pending = queryOne<{ c?: number }>(
         db3,
         `SELECT COUNT(*) AS c FROM raw_archive WHERE mirror_cleaned_at IS NULL`,
@@ -121,7 +89,6 @@ describe('GDPR Path A completeness fixes', () => {
   });
 
   it('2. mirror reaper is idempotent on a DB with zero raw_archive rows', () => {
-    // Fresh open — no raw_archive rows. Reaper should exit cleanly.
     const db = openHippoDb(root);
     try {
       const count = queryOne<{ c?: number }>(db, `SELECT COUNT(*) AS c FROM raw_archive`)?.c;
@@ -132,8 +99,6 @@ describe('GDPR Path A completeness fixes', () => {
   });
 
   it('2b. mirror reaper does NOT delete mirrors of non-archived (live) memories', async () => {
-    // Plant a raw_archive row + a UNRELATED live memory with a mirror; reaper
-    // must only touch files whose id appears in raw_archive.
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const live = await remember(ctx, { content: 'i-am-still-alive-content' });
 
@@ -154,7 +119,6 @@ describe('GDPR Path A completeness fixes', () => {
       closeHippoDb(db1);
     }
 
-    // Re-open: reaper runs. Live memory's mirror must survive.
     const db2 = openHippoDb(root);
     try {
       const cleanedAt = queryOne<{ mirror_cleaned_at?: string | null }>(
@@ -167,8 +131,6 @@ describe('GDPR Path A completeness fixes', () => {
       closeHippoDb(db2);
     }
 
-    // The live memory's markdown file should still exist somewhere under the
-    // layer dirs (writeEntry mirrors it on remember).
     const layers = ['episodic', 'buffer', 'semantic'];
     const liveStillPresent = layers.some((layer) => existsSync(join(root, layer, `${live.id}.md`)));
     expect(liveStillPresent).toBe(true);
@@ -208,7 +170,6 @@ describe('GDPR Path A completeness fixes', () => {
       closeHippoDb(db1);
     }
 
-    // A directory where the mirror file belongs: unlink fails on every platform.
     const mirrorPath = join(root, 'episodic', `${memId}.md`);
     mkdirSync(mirrorPath, { recursive: true });
     expect(opensThatSweep(3)).toBe(3);
@@ -220,13 +181,8 @@ describe('GDPR Path A completeness fixes', () => {
     expect(existsSync(mirrorPath)).toBe(false);
     expect(pending()).toBe(0);
 
-    // A clean archive is not scanned again: the scan has no index, so it costs time on every open.
     expect(opensThatSweep(5)).toBe(0);
   });
-
-  // ---------------------------------------------------------------------------
-  // Fix 2: recall audit stores query_hash, not query text
-  // ---------------------------------------------------------------------------
 
   it('3. recall audit_log row stores query_hash + query_length, no query field', async () => {
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
@@ -249,35 +205,25 @@ describe('GDPR Path A completeness fixes', () => {
     }
   });
 
-  // ---------------------------------------------------------------------------
-  // Fix 3 verification (also full RTBF): canary scan across all tables
-  // ---------------------------------------------------------------------------
-
   it('4. full RTBF: original content + query text appear in zero persistent tables after archive', async () => {
     const ctx: FullContext = apiCtx(root, 'default', { subject: 'cli', role: 'admin' });
     const canary = 'gdpr-canary-99-special-token-xyz';
 
-    // Seed: kind='raw' so it can be archived. Content embeds the canary.
     const { id } = await remember(ctx, {
       content: `payload contains ${canary} as a secret`,
       kind: 'raw',
     });
 
-    // Archive (RTBF). Mirror cleanup must NOT throw.
     await rawArchive(ctx, id, 'GDPR right-to-be-forgotten');
 
-    // Recall using the canary as the query — must not bring back the archived row.
     await retrieve(ctx, { query: canary });
 
-    // Markdown mirrors gone.
     const layers = ['episodic', 'buffer', 'semantic'];
     for (const layer of layers) {
       const file = join(root, layer, `${id}.md`);
       expect(existsSync(file)).toBe(false);
     }
 
-    // Full-DB scan: enumerate every user table, dump every TEXT/BLOB column,
-    // assert the canary appears nowhere.
     const db = openHippoDb(root);
     try {
       const tables = queryAll<{ name: string }>(
@@ -295,8 +241,6 @@ describe('GDPR Path A completeness fixes', () => {
           }
         }
       }
-      // FTS5 is intentionally excluded above (its shadow tables can hold pre-
-      // delete tokens for a moment). The persistent record tables must be clean.
       expect(hits).toEqual([]);
     } finally {
       closeHippoDb(db);
@@ -311,14 +255,11 @@ describe('GDPR Path A completeness fixes', () => {
       kind: 'raw',
     });
 
-    // Recall #1: matches.
     const r1 = await retrieve(ctx, { query: queryText });
     expect(r1.results.length).toBeGreaterThanOrEqual(1);
 
-    // Archive.
     await rawArchive(ctx, id, 'GDPR purge');
 
-    // Recall #2: same query text, no match.
     const r2 = await retrieve(ctx, { query: queryText });
     expect(r2.results.length).toBe(0);
 
@@ -334,7 +275,6 @@ describe('GDPR Path A completeness fixes', () => {
         expect(meta.query_length).toBe(queryText.length);
       }
 
-      // Belt-and-braces: query text appears nowhere in audit_log raw json.
       const rawAudit = queryAll<{ metadata_json: string }>(db, `SELECT metadata_json FROM audit_log`);
       for (const r of rawAudit) {
         expect(r.metadata_json).not.toContain(queryText);

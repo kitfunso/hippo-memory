@@ -1,6 +1,3 @@
-// Owner lookups by id: the tenant and scope checks in src/api and the CLI's key-tenant lookup share
-// these queries.
-
 import { type DatabaseSyncLike } from '../../../db/index.js';
 import type { ApiKeyOwner } from '../../../base/ports/store/types.js';
 import { cachedStatement } from '../../../db/statement-cache.js';

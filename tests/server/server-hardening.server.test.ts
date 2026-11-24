@@ -13,23 +13,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// v0.39 commit 5 — Server hardening regressions:
-//   - Fix 5.3: /mcp/stream heartbeat re-validates bearer; MCP_SSE_MAX_AGE_SEC
-//     caps stream age. MCP_SSE_HEARTBEAT_MS makes the interval testable.
-//   - Fix 5.4: graceful shutdown awaits server.stop() before process.exit.
-//     Tested by directly exercising stop() while a request is in flight; we
-//     do NOT raise SIGTERM because vitest skips signal handlers (VITEST=1)
-//     and a real signal would also kill the test runner.
-//   - Fix 5.5: PUBLIC_ROUTES bypass attempts (trailing slash, wrong method,
-//     query string).
-
 const SLACK_SECRET = 'shhh-v039-hardening';
 
 function signSlack(ts: string, body: string): string {
   return `v0=${createHmac('sha256', SLACK_SECRET).update(`v0:${ts}:${body}`).digest('hex')}`;
 }
 
-/** The reason of the stream's "event: closed" frame; a stream that never sends one hangs to the test timeout. */
 async function closedReasonOf(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   seen: string,
@@ -72,10 +61,9 @@ describe('server hardening', () => {
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', undefined);
   });
 
-  // ---- Fix 5.3: SSE max-age closes stream ------------------------------
   it('SSE max-age closes stream with reason=max_age_exceeded', async () => {
     vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '1');
-    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200'); // poll fast
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
     handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
@@ -98,14 +86,11 @@ describe('server hardening', () => {
     }
   });
 
-  // ---- Fix 5.3: SSE auth-revoked closes stream -------------------------
   it.skipIf(needsHippoDb('db'))('SSE heartbeat closes stream with reason=auth_revoked when key revoked', async () => {
     vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '200');
-    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60'); // far enough out of the way
+    vi.stubEnv('MCP_SSE_MAX_AGE_SEC', '60');
     handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
-    // Mint a key, open stream with it, then revoke and wait for the
-    // heartbeat to detect.
     const db = openHippoDb(root);
     let keyId: string;
     let plaintext: string;
@@ -126,11 +111,9 @@ describe('server hardening', () => {
       expect(res.status).toBe(200);
       const reader = res.body!.getReader();
 
-      // Read initial ping to confirm stream live.
       const first = await reader.read();
       expect(first.done).toBe(false);
 
-      // Now revoke the key. Next heartbeat should close the stream.
       const db2 = openHippoDb(root);
       try {
         revokeApiKey(db2, keyId);
@@ -146,26 +129,14 @@ describe('server hardening', () => {
         /* no-op */
       }
       expect(closedReason).toBe('auth_revoked');
-      // The revoked key's next server-sent message is the close frame, never another ping.
       expect(afterRevoke.join('')).not.toContain(': ping');
     } finally {
       ac.abort();
     }
   });
 
-  // ---- Fix 5.4: graceful shutdown awaits stop() ------------------------
-  //
-  // We exercise the async stop() path directly (vitest skips signal
-  // handlers, so a real SIGTERM here would kill the runner). The contract
-  // we care about: stop() resolves only after server.close() resolves,
-  // which can only happen after in-flight requests finish.
-  //
-  // Strategy: open a long-lived SSE stream, then call stop(). Pre-fix,
-  // stop() either hung (SSE keepalive blocks server.close) or returned
-  // before the connection was force-closed. Post-fix, stop() calls
-  // closeAllConnections() and resolves cleanly.
   it('graceful shutdown: stop() resolves while SSE stream is open', async () => {
-    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '60000'); // keep stream sleepy
+    vi.stubEnv('MCP_SSE_HEARTBEAT_MS', '60000');
     handle = await serveKeyed({ hippoRoot: root, host: '127.0.0.1', port: 0 });
 
     const ac = new AbortController();
@@ -179,18 +150,13 @@ describe('server hardening', () => {
 
     const warn = vi.spyOn(log, 'warn');
     await handle.stop();
-    // stop() ends the stream itself, so the close never has to wait out the drain window and force the socket shut.
     expect(warn.mock.calls.filter(([line]) => String(line).startsWith('shutdown:'))).toEqual([]);
     warn.mockRestore();
-    // Re-running stop is safe (idempotent).
     await handle.stop();
     ac.abort();
-    // Mark handle stopped so afterEach doesn't double-stop. ServerHandle.stop
-    // is a plain (non-readonly) field, so this is a direct reassignment.
     handle.stop = async () => {};
   });
 
-  // ---- Fix 5.5: PUBLIC_ROUTES bypass attempts --------------------------
   describe('PUBLIC_ROUTES bypass attempts', () => {
     beforeEach(async () => {
       vi.stubEnv('SLACK_SIGNING_SECRET', SLACK_SECRET);
@@ -199,21 +165,16 @@ describe('server hardening', () => {
 
     it('trailing slash on slack events does NOT bypass auth (still HMAC-required)', async () => {
       const body = JSON.stringify({ type: 'url_verification', challenge: 'x' });
-      // Trailing slash → path !== exact match in PUBLIC_ROUTES, so route
-      // falls through. The bearer check fires
-      // and returns 401. Critically: NOT 200.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events/`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body,
       });
       expect(res.status).not.toBe(200);
-      // 401 (auth required) or 404 (no such route) both prove no bypass.
       expect([401, 404]).toContain(res.status);
     });
 
     it('wrong method (GET) on slack events route requires auth', async () => {
-      // Only POST is in PUBLIC_ROUTES. GET should 401 without bearer.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events`, {
         method: 'GET',
       });
@@ -222,14 +183,11 @@ describe('server hardening', () => {
     });
 
     it('query string on public route does not change routing (still HMAC-verified)', async () => {
-      // Adding ?bypass=1 must not affect routing — pathname is matched,
-      // search is ignored. A request without a valid signature still 401s.
       const res = await fetch(`http://127.0.0.1:${handle.port}/v1/connectors/slack/events?bypass=1`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: '{}',
       });
-      // No x-slack-signature header → HMAC verify fails → 401.
       expect(res.status).toBe(401);
     });
 

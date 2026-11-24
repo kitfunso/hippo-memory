@@ -1,5 +1,3 @@
-// The effect of a store method, stated once beside its port signature.
-
 /** 'write' changes the store; 'read' leaves it as it was. */
 export type MethodEffect = 'read' | 'write';
 

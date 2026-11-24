@@ -1,6 +1,5 @@
 import type { JsonValue } from './json.js';
 
-// The timeout bounds time, not bytes: a hostile endpoint could stream a huge 2xx body into memory.
 /** Reads a reply body as JSON and stops with an error as soon as it passes `maxBytes`. */
 export async function readCappedJson(resp: Response, maxBytes: number): Promise<JsonValue> {
   if (!resp.body) throw new Error('reply has no body');

@@ -1,11 +1,9 @@
-// Z0 lesson families: tasks-file rules (prereg 32-46, 62-68, 111), the per-seed task order (117-119), roles and teach text.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { checkerFiles } from './checker-identity.mjs';
 
 export const KINDS = ['teach', 'apply', 'no-lesson'];
 const SOURCES = ['maintainer', 'template'];
-// The plain word "memory" stays legal: a maintainer rule can be about memory allocation.
 const MEMORY_WORDS = /\bremember|\bhippo\b|\bauto[ -]?memory\b|MEMORY\.md|CLAUDE\.md|AGENTS\.md|CLAUDE\.local\.md|\.claude\/rules/i;
 const SCREEN_FIELDS = ['id', 'baseRef', 'fixRef', 'prompt', 'test'];
 const MAX_RESTARTS = 10_000;
@@ -18,7 +16,6 @@ export function lessonIndex(families) {
 }
 
 function checkTaskRole(t, families, index, sequence) {
-  // The tool is fixed per kind in set X, so a task-level set could make records the contract refuses.
   if ('set' in t) throw new Error(`task ${t.id}: set belongs on the sequence ("set": "X"), never on a task`);
   if (!KINDS.includes(t.kind)) throw new Error(`task ${t.id}: kind must be one of ${KINDS.join(', ')} (got ${t.kind ?? 'none'})`);
   if (t.kind === 'no-lesson') {
@@ -130,7 +127,6 @@ function mulberry32(seed) {
   };
 }
 
-/** What drawOrder needs to know about a sequence's lessons. */
 function orderContext(sequence, families) {
   const index = lessonIndex(families);
   const taughtHere = new Set(sequence.tasks.filter((t) => t.kind === 'teach').map((t) => t.lessonId));
@@ -145,10 +141,8 @@ function orderContext(sequence, families) {
   return { index, applyIds, reversalOf, keyed };
 }
 
-// keyPhraseAllowed lets a task name its own lesson only; every other untaught lesson is still checked.
 export const ownsPhrase = (t, l) => t.lessonId === l.id && (t.kind === 'teach' || Boolean(t.keyPhraseAllowed));
 
-/** The lesson whose key phrase task t would leak at the next position (G3), or null. */
 function leakedLesson(t, state, ctx) {
   if (!ctx.keyed.length) return null;
   const prompt = t.prompt.toLowerCase();
@@ -161,7 +155,6 @@ function leakReason(t, state, ctx) {
   return l ? `task ${t.id} prompt holds the key phrase of lesson ${l.id} before its teach task` : null;
 }
 
-/** Why task t cannot go at the next position, or null. A leak is checked first so it names the task that leaks. */
 function blockReason(t, state, ctx) {
   const leak = leakReason(t, state, ctx);
   if (leak) return leak;
@@ -193,7 +186,6 @@ function place(t, state) {
   state.placedIds.add(t.id);
 }
 
-/** One randomized greedy pass: the order, or the reason the first stuck task gives. */
 function greedyPass(tasks, ctx, rand) {
   const state = newState();
   let left = tasks.slice();

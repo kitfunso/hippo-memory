@@ -1,24 +1,3 @@
-/**
- * Snapshot tests for the CLI render helpers exported from src/surface/cli/context.ts and src/surface/cli/sleep.ts.
- *
- * Locks the byte-identical output of printContextMarkdown + renderSleepResult
- * across all render branches. Without these, refactors to the render layer
- * silently change agent-visible markdown (the format Claude Code etc. read
- * from `hippo context`). Drift caught at CI rather than by users.
- *
- * Determinism mechanism (per plan-eng-critic round-2 HIGH D):
- *   - vi.useFakeTimers({ now: '2026-05-23T20:00:00Z' }) in beforeEach so
- *     `new Date()` inside printContextMarkdown is stable across runs.
- *     resolveConfidence(e, now) drives the [verified]/[stale]/[inferred]
- *     tag — without fake timers, snapshots churn nondeterministically.
- *   - Fixed memory ids + ISO timestamps in the seed data (no ULID gen).
- *   - vi.useRealTimers() in afterEach restores the clock.
- *
- * Note: renderSleepResult output is unaffected by the v1.11.5 consolidate
- * audit emission — that metadata lives in audit_log, not in SleepResult.
- * The renderSleepResult snapshots exercise the existing render output only.
- */
-
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { contextBlockLines } from '../../src/api/context/context-render.js';
 import { sleepResultLines } from '../../src/surface/cli/sleep-render.js';
@@ -67,7 +46,6 @@ function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
 
-// The same bytes the old console.log loop produced: one log per line, joined by a newline.
 function printContextMarkdown(
   items: Array<{ entry: MemoryEntry; score: number; tokens: number; isGlobal: boolean }>,
   total: number,
@@ -100,10 +78,6 @@ describe('printContextMarkdown snapshots', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-  // v1.11.5 follow-up (LOW #5 from independent-review-critic): a test that
-  // throws before reaching afterEach would leak fake timers into the next
-  // describe block. afterAll(useRealTimers) is defence-in-depth so the
-  // file's timer state is always restored at suite end.
   afterAll(() => {
     vi.useRealTimers();
   });
@@ -215,7 +189,6 @@ describe('renderSleepResult snapshots', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-  // Belt-and-braces (same rationale as printContextMarkdown block above).
   afterAll(() => {
     vi.useRealTimers();
   });

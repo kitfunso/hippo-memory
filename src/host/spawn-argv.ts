@@ -1,5 +1,3 @@
-// Starting a command from an argv list with no shell, Windows .cmd and .bat shims included, so no
-// argument is ever parsed as shell syntax.
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -51,8 +49,6 @@ export function npmShimEntry(shimPath: string): string | null {
     log.warn(`cannot read the shim ${shimPath}: ${errorMessage(err)}`, errorFields(err));
     return null;
   }
-  // Split on either slash, so the shim parses the same on every platform, not only where `\` is a
-  // separator.
   const segments = NPM_SHIM_ENTRY.exec(text)?.[1]?.split(/[\\/]/);
   if (segments === undefined) return null;
   const dir = path.dirname(shimPath);

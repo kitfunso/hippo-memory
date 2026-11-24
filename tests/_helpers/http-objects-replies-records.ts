@@ -1,4 +1,3 @@
-// Expected error replies of the decision, customer note, incident and policy routes.
 import { type Body } from './http-objects-server.js';
 
 export type Reply = readonly [
@@ -17,8 +16,6 @@ export const BAD_STATUS = 'status must be one of: active | superseded | closed |
 const DEC = '/v1/decisions';
 const DEC_MISSING = '/v1/decisions/99999/supersede';
 const DEC_NO_TARGET = 'decision 99999 to supersede not found for tenant default';
-// Each row also sends every later field invalid, and every superseded id is missing,
-// so a row pins which check answers first as well as the reply text.
 export const DECISION_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${DEC}?status=retired`, undefined, 400, BAD_STATUS],
   [
@@ -125,8 +122,6 @@ export const DECISION_REPLIES: readonly Reply[] = [
 
 const NOTE = '/v1/customer-notes';
 const NOTE_MISSING = '/v1/customer-notes/99999/supersede';
-// Each row also sends every later field invalid, and the supersede target does not exist,
-// so a row pins which check answers first as well as the reply text.
 export const NOTE_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${NOTE}?status=retired`, undefined, 400, BAD_STATUS],
   ['create: blank customer', 'POST', NOTE, { customer: '  ', note: 7 }, 400, 'customer is required (non-empty string)'],
@@ -200,8 +195,6 @@ export const NOTE_REPLIES: readonly Reply[] = [
 const INC = '/v1/incidents';
 const INC_MISSING = '/v1/incidents/99999/resolve';
 const INC_NO_MEMORY = 'linked memory mem_missing not found for tenant default';
-// Each row also sends every later field invalid, and every linked memory or resolved id is missing,
-// so a row pins which check answers first as well as the reply text.
 export const INCIDENT_REPLIES: readonly Reply[] = [
   [
     'list: an unknown status',
@@ -313,8 +306,6 @@ export const INCIDENT_REPLIES: readonly Reply[] = [
 
 const POL = '/v1/policies';
 const POL_MISSING = '/v1/policies/99999/supersede';
-// Each row also sends every later field invalid, and the supersede target does not exist,
-// so a row pins which check answers first as well as the reply text.
 export const POLICY_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${POL}?status=retired`, undefined, 400, BAD_STATUS],
   [

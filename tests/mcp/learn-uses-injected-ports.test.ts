@@ -1,5 +1,3 @@
-// MCP learn, MCP context and the CLI's learn run git through the git runner and the folder the
-// context's machine carries, not the process's own.
 import { describe, expect, it } from 'vitest';
 import { runLearnTool } from '../../src/surface/mcp/memory-tools.js';
 import { runContextTool } from '../../src/surface/mcp/recall-tools.js';

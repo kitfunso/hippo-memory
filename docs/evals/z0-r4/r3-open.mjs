@@ -1,4 +1,3 @@
-// Shared start of every round 3 re-read script, so none prints before the report's hashes and 04835462b's blobs match.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -15,7 +14,6 @@ export const arg = (name, fallback) => {
   return i === -1 ? fallback : process.argv[i + 1];
 };
 
-// Walks imports too: a module the report hashes can pull in one it does not (z0-gates.mjs imports arms.mjs).
 function reach(root, entries) {
   const seen = new Set();
   const queue = [...entries];
@@ -55,7 +53,6 @@ function checkBlobs(root, files) {
   }
 }
 
-// loads lists every extra analyzer module the script will load(), so each one is gated before any figure prints.
 export async function openRound3(loads = []) {
   const analyzer = arg('--analyzer', null);
   if (analyzer === null) throw new Error('--analyzer <checkout of 04835462b> is required');
@@ -79,7 +76,6 @@ export async function openRound3(loads = []) {
       }
       return import(pathToFileURL(path.join(frozen.analyzer, file)).href);
     },
-    // The round 3 sizing scripts read every scored record with the drop list off; the gate above ran with it on.
     scoredNoDrop: () => api.filterRecords(inputs.records, inputs.planCells, { grading: inputs.grading, dropList: null }).scored,
   };
 }

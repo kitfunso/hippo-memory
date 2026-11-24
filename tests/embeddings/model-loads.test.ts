@@ -1,4 +1,3 @@
-// A model load is bounded and backed off, and a recall stops waiting on a local model only while it downloads.
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,7 +20,6 @@ const tempDir = (): string => {
 };
 const MODEL = 'test/model';
 
-/** A local provider over a stand-in for the optional package, which these tests never install; each gets its own loads. */
 function localProvider(pipeline: PipelineFn, cacheDir: string): EmbeddingProvider {
   const transformers = {
     installed: () => true,
@@ -35,7 +33,6 @@ interface Deferred<T> {
   readonly resolve: (v: T) => void;
 }
 
-/** A promise the test settles by hand. */
 function deferred<T>(): Deferred<T> {
   let resolve!: (v: T) => void;
   const promise = new Promise<T>((r) => {
@@ -81,7 +78,6 @@ describe('createModelLoads', () => {
     expect(failures).toHaveLength(1);
 
     await vi.advanceTimersByTimeAsync(1);
-    // Left pending: the fake clock goes with the test, so its timeout never fires.
     void loads.load('m', start);
     await vi.advanceTimersByTimeAsync(0);
     expect(start).toHaveBeenCalledTimes(2);
@@ -176,7 +172,6 @@ describe('the local embedding model under a recall deadline', () => {
 });
 
 describe('local embedder availability', () => {
-  /** An embedder over a stand-in package whose installed answer the test flips by hand. */
   function embedderOver(initiallyInstalled: boolean) {
     const state = { installed: initiallyInstalled };
     const installed = vi.fn(() => state.installed);

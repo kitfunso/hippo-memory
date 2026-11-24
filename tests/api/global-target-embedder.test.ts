@@ -1,4 +1,3 @@
-// A host-built reach.globalTarget of { store, config } embeds the global copy through the context's embedder.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';
@@ -17,7 +16,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-// Type-level: this host-built reach fails to compile when `embedderFor` is required on globalTarget.
 export const hostReach = (reach: ContextReach): ContextReach => ({
   ...reach,
   globalTarget: reach.globalTarget && {

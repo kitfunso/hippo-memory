@@ -1,4 +1,3 @@
-// Process helpers shared by the token-eval runner modules. A leaf: it imports nothing local, so any module can take it.
 import * as path from 'node:path';
 import { execFile, execFileSync, spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -18,13 +17,11 @@ export function pathKey(env) {
 
 export function sh(cmd, cwd, env, timeoutMs = 30 * 60_000, input = undefined) {
   const r = spawnSync(cmd, { cwd, env, shell: true, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 1 << 28, input });
-  // status ?? 1 hides a spawn error or a kill, so the raw signal and error code go back too.
   return { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '', timedOut: r.error?.code === 'ETIMEDOUT', signal: r.signal ?? null, errorCode: r.error?.code ?? null };
 }
 
 const MAX_OUTPUT = 1 << 28;
 
-/** Kill `pid` and everything under it; a kill that fails is said in the returned text, never thrown. */
 async function killTree(child) {
   if (process.platform !== 'win32') {
     try {
@@ -88,12 +85,9 @@ export async function spawnTree(cmd, cwd, env, timeoutMs, input = undefined) {
 // Git for Windows opens /dev/null as the null device but joins hook names onto it as <drive>:\dev\null, which any user can create; Win32 refuses '|' in a name.
 const NO_HOOKS = process.platform === 'win32' ? '/|no-hooks|' : '/dev/null';
 
-/** Args and env for a git that reads no system or global config, no global attributes and runs no hooks or fsmonitor. */
 function runnerGit(args, extraEnv) {
-  // The agent shares the operator's HOME, so anything git reads from there (config, ~/.config/git/attributes) is agent-writable.
   // Git for Windows reads /dev/null as the null device; os.devNull (\\.\nul) it refuses.
   const env = { ...process.env, ...extraEnv, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' };
-  // The cache repo's local config is still read, and core.fsmonitor there names a program git runs on checkout and update-index.
   return [['-c', `core.hooksPath=${NO_HOOKS}`, '-c', 'core.attributesFile=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', ...args], env];
 }
 

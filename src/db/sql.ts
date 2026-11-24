@@ -1,4 +1,3 @@
-// SQL text for an IN list or VALUES rows, for the data layer and the SQLite adapter that bind them.
 import type { KeysetPosition } from '../base/util/keyset.js';
 
 /** `n` bound-parameter marks joined for an IN list or VALUES row, e.g. 3 -> "?, ?, ?". */

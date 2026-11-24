@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// CI lint gate. The repo carries hundreds of older oxlint hits, so a plain `oxlint` exit code would fail
 // every PR; instead each rule's hit count may fall but never rise above .oxlint-baseline.json.
 // After fixing hits, `node scripts/checks/check-lint-ratchet.mjs --update` lowers the baseline.
 

@@ -1,5 +1,3 @@
-// Claude Code's auto memory: frontmatter `.md` notes in a per-project folder, plus the
-// `autoMemoryDirectory` user folder.
 import path from 'node:path';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
@@ -20,13 +18,8 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
 const NAME_SLUG_MAX_CHARS = 200;
 
-// Keeps a pinned name from carrying a separator or `..` out of the projects folder.
 const PROJECT_DIR_NAME = /^[A-Za-z0-9_-]{1,64}$/;
 
-/**
- * Claude Code's auto memory folder names for a project: its checkout, which subfolders share, or
- * the folder itself outside a repository.
- */
 function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<string> {
   const roots = [projectRoot, ctx.files.realPath(projectRoot)];
   const layout = gitLayout(ctx.git, projectRoot);
@@ -35,9 +28,6 @@ function claudeMemoryFolderNames(ctx: AdapterContext, projectRoot: string): Set<
   return new Set(roots.map((root) => fold(claudeFolderName(root))));
 }
 
-/** Claude Code's rule: a linked worktree shares its main checkout's folder, or the git folder's
- * when that sits outside a checkout (a bare repository, or --separate-git-dir); any other
- * checkout, a submodule included, keeps its own. */
 function claudeCheckoutRoot(files: AgentFiles, { top, gitDir, common }: GitLayout): string {
   if (gitDir === common) return top;
   if (path.basename(common) === '.git') return path.dirname(common);
@@ -126,7 +116,6 @@ export function transcriptNotesProject(
   const start = transcriptStartCwd(machine.files, transcriptPath);
   const pinned = pinnedProjectDirName(machine.env);
   if (pinned !== null && fold(pinned) === folder) {
-    // A pinned name stands for whatever project the session ran in, so its start folder decides.
     const from = start ?? cwd;
     return from !== null && machine.files.exists(from) ? machine.projectIdentity(from) : null;
   }
@@ -136,8 +125,6 @@ export function transcriptNotesProject(
       dir !== null;
       dir = path.dirname(dir) === dir ? null : path.dirname(dir)
     ) {
-      // A folder gone from disk resolves to its bare name, never the project it was in, so it
-      // decides nothing.
       if ([dir, machine.files.realPath(dir)].some((d) => fold(claudeFolderName(d)) === folder)) {
         return machine.files.exists(dir) ? machine.projectIdentity(dir) : null;
       }
@@ -146,23 +133,14 @@ export function transcriptNotesProject(
   return null;
 }
 
-// Claude writes the cwd on each message line after a few header lines; 64 KB holds the first with
-// room to spare.
 const START_SCAN_BYTES = 64 * 1024;
 
-/**
- * The cwd on the transcript's first line that has one: the folder Claude named the session folder
- * for, which a folder name alone cannot give back.
- */
 function transcriptStartCwd(files: AgentFiles, transcriptPath: string): string | null {
-  // A transcript that is not there names no start folder; any other failure is the caller's to see.
   const head = files.readHead(transcriptPath, START_SCAN_BYTES);
   if (head === null) return null;
   for (const line of head.split('\n')) {
     const cwd = /"cwd":"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
     if (cwd === undefined) continue;
-    // The match is the body of one JSON string, so parsing it in quotes yields a string; a bad
-    // escape skips the line.
     const decoded = tryParseJson(`"${cwd}"`);
     if (isJsonString(decoded)) return decoded;
   }
@@ -180,7 +158,6 @@ function projectFolders(ctx: AdapterContext, config: string): string[] {
 
 function pinnedProjectDirName(env: AdapterContext['env']): string | null {
   const pinned = env.CLAUDE_CODE_PROJECT_DIR_NAME;
-  // Claude reads the pinned name only alongside a pinned config folder.
   return env.CLAUDE_CONFIG_DIR && pinned !== undefined && PROJECT_DIR_NAME.test(pinned)
     ? pinned
     : null;
@@ -191,8 +168,6 @@ function userFolders(ctx: AdapterContext, config: string, warnings: string[]): s
   return dir === null ? [] : [dir];
 }
 
-// User settings only: a cloned repository's own settings must not point the import at another
-// project's notes.
 function autoMemoryDirectory(
   ctx: AdapterContext,
   settings: string,
@@ -222,7 +197,6 @@ function autoMemoryDirectory(
   return null;
 }
 
-// Claude counts a note only when it carries frontmatter; `modified` there beats the file time.
 const NOTES: FolderRules = {
   recursive: false,
   include: markdownNotes,

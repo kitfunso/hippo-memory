@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// A blind Z0 author (stage 2 plan D3): one claude -p session with a fresh config, no hooks, no MCP and no hippo, logged through the request proxy.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,11 +6,8 @@ import { armEnv } from './arms.mjs';
 import { spawnTree } from './exec.mjs';
 import { startLogProxy, requestBodies } from './proxy.mjs';
 
-// What a blind author must never see; the hippo-repository author uses a narrower set, since hippo's name is its subject (D3).
-// z0 skips the regex class a-z0-9 and a base64 run after "+", which nearly every codebase holds.
 const Z0 = '(?<![a-z0-9+])z0(?![0-9]|-[0-9])';
 export const DEFAULT_FORBID = `(?<![a-z])hippo(?![a-z])|${Z0}|token-eval`;
-// The CLI picks a set by name, so no pattern is ever built from a command-line argument.
 export const FORBID_SETS = Object.freeze({ default: DEFAULT_FORBID, 'hippo-repo': `${Z0}|token-eval` });
 const AUTHOR_UNSET = ['HIPPO_HOME', 'HIPPO_AGENT_MEMORY_TOOLS', 'HIPPO_CAPTURE_SCRIPTED', 'CODEX_HOME', 'EVAL_SEED'];
 const USAGE = `usage: node scripts/token-eval/z0-author.mjs --work DIR --prompt-file FILE --out DIR [--model M] [--claude-bin PATH] [--forbid-set ${Object.keys(FORBID_SETS).join('|')}] [--timeout-min N]`;
@@ -28,7 +24,6 @@ export function readableBody(body) {
   try {
     parsed = JSON.parse(body);
   } catch {
-    // A body that is not JSON has no opaque fields, so it is scanned whole.
     return body;
   }
   return JSON.stringify(parsed, function (key, value) {
@@ -48,12 +43,10 @@ export async function runAuthor({ work, prompt, out, model = null, claudeBin = '
   if (named.length) throw new Error(`the author's own paths hold a forbidden term: ${named.map((h) => `${h.where} has "${h.match}"`).join('; ')}`);
   const dirs = { claudeConfig: path.join(out, 'claude-config'), codexHome: '', hippoHome: '', bin: path.join(out, 'bin'), seed: 0 };
   if (fs.existsSync(dirs.claudeConfig)) throw new Error(`${dirs.claudeConfig} exists; an author starts from an empty config`);
-  // The box's temp folder holds hippo test folders, and an author checking for its own leftovers lists it, so its temp lives in its work dir.
   const tmp = path.join(work, '.tmp');
   for (const dir of [work, tmp, dirs.claudeConfig]) fs.mkdirSync(dir, { recursive: true });
   const settings = path.join(out, 'settings.json');
   fs.writeFileSync(settings, JSON.stringify({ autoMemoryEnabled: false }));
-  // A0's env (no provider keys but the plan login, no hippo on PATH, auto memory off) minus the arm keys an author has no use for, which name hippo.
   const env = Object.fromEntries(Object.entries(armEnv('A0', dirs, baseEnv)).filter(([k]) => !AUTHOR_UNSET.includes(k)));
   const log = path.join(out, 'requests.jsonl');
   const args = ['-p', '--output-format', 'json', '--setting-sources', 'project', '--strict-mcp-config', '--settings', `"${settings}"`, '--permission-mode', 'bypassPermissions', ...(model ? ['--model', model] : [])];

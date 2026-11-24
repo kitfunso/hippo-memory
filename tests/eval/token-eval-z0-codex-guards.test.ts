@@ -1,4 +1,3 @@
-// Z0 set X gates through runAll: G1 reads and hook text, G3 in Codex state, the X2 chain, and the rollout classes (E6 plan tests 17-19, 25).
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -116,7 +115,6 @@ describe('rollout classes through the runner (test 25)', () => {
     const stray = find(recs, 'X1', 'a-xb');
     expect([stray.void, classes(stray), stray.codexStrayRollouts]).toEqual(['read', ['past-rollout'], 1]);
     expect(find(recs, 'X1', 'b-xb').void).toBe('operator-canary');
-    // X1 has no wrapper log and no hippo store.
     expect(recs.filter((r) => r.tool === 'codex').map((r) => [r.codexWrapperCaptured, r.codexHooksFired])).toEqual(Array(6).fill([false, null]));
   }, xLimit());
 

@@ -1,5 +1,3 @@
-// Z1b latency fix: rarest-term FTS pre-select (docs/plans/2026-09-26-z1b-tool-recall.md).
-// Real SQLite store in a tmp dir, no mocks.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { listRecallEntries, pickRarestFtsQuery } from '../../src/store/sqlite/recall/search-rows.js';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';

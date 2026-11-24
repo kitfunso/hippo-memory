@@ -1,4 +1,3 @@
-// Sleep keeps no deep copy of the store: the "as loaded" copy of a row is rebuilt from the row that was read.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
@@ -15,8 +14,6 @@ import { PRODUCTION_STRENGTH } from '../../src/base/memory/strength.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
 import { sessionPerTest } from '../_helpers/session-per-test.js';
 
-/** loadAllEntries' statement with no tenant: every full row of the store. */
-// An every-tenant page is one statement that picks each tenant's rows off its own index; `(1)` is no filter.
 const HOST_WIDE_READ = new RegExp(
   `^${escapeRegex(`SELECT ${MEMORY_SELECT_COLUMNS} FROM memories WHERE rowid IN (WITH RECURSIVE`)}.* AND \\(1\\)`,
 );
@@ -79,7 +76,6 @@ describe('sleep after consolidation', () => {
       return countMatching(statements, HOST_WIDE_READ);
     };
     const withoutShare = await wholeReads(true);
-    // The first page of dedup, the audit and ambient: three rows fit one page each, and consolidation reads by id.
     expect(withoutShare).toBe(3);
     expect(await wholeReads(false)).toBe(withoutShare);
   });

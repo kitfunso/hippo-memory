@@ -1,5 +1,3 @@
-// Pins the typed-object behaviour no other test owns, so one shared lifecycle core cannot change it unseen.
-// Remove this file in the change that lands that core.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -39,7 +37,6 @@ const idsIn = (reply: Reply): string => [...reply.text.matchAll(/\{"id":(\d+),/g
 const fieldIn = (reply: Reply, key: string): string | undefined =>
   new RegExp(`"${key}":"([^"]+)"`).exec(reply.text)?.[1];
 
-/** One live server on a fresh store, called with a real key so the audit actor is the key and never the default. */
 class ObjectApi {
   private constructor(
     private readonly handle: ServerHandle,
@@ -57,7 +54,6 @@ class ObjectApi {
     } finally {
       closeHippoDb(db);
     }
-    // The limiter reads its rate once at boot; zero switches it off so a case table is never throttled.
     vi.stubEnv('HIPPO_V1_RPS', '0');
     const handle = await serve({ hippoRoot: root, port: 0 });
     vi.unstubAllEnvs();
@@ -76,7 +72,6 @@ class ObjectApi {
     return { status: res.status, text: await res.text() };
   }
 
-  /** Every audit row in write order, with the key id and the memory ids swapped for fixed marks. */
   auditLines(): string[] {
     const db = openHippoDb(this.root);
     try {
@@ -93,7 +88,6 @@ class ObjectApi {
     }
   }
 
-  /** The object ids that still own a graph entity, for one object type. */
   graphOwners(type: SourceObjectType): number[] {
     const db = openHippoDb(this.root);
     try {
@@ -111,17 +105,13 @@ class ObjectApi {
 interface TypeRow {
   readonly type: string;
   readonly path: string;
-  /** A valid create body whose name-like field carries two spaces on each side. */
   readonly create: Body;
-  /** That field as the create reply returns it, trimmed. */
   readonly stored: string;
-  /** The step after create: a supersede makes row 2, a resolve keeps row 1. */
   readonly next: 'supersede' | 'resolve';
   readonly nextBody: Body;
   readonly nextAgain: string;
   readonly nextMissing: string;
   readonly closeAgain: string;
-  /** Audit rows of create, the next step and close, as `op actor target metadata`. */
   readonly audit: readonly string[];
 }
 
@@ -321,7 +311,6 @@ describe('typed objects over HTTP, one shared store', () => {
     await api.stop();
   });
 
-  // The dispatch gate runs before any handler, so a caller with no key learns nothing about which parameters are bad.
   const NO_KEY: readonly (readonly [string, number, string])[] = [
     ...TYPES.flatMap((row): (readonly [string, number, string])[] => [
       [`${row.path}?limit=0`, 401, KEY_REQUIRED_MESSAGE],
@@ -383,14 +372,10 @@ describe('typed objects over HTTP, one shared store', () => {
 
 interface NounRow {
   readonly noun: string;
-  /** Arguments that write row 1. */
   readonly seed: readonly string[];
-  /** The verb that prints one row by id. */
   readonly read: string;
   readonly refuses: (raw: string) => string;
-  /** What an id with a tail or a fraction gets. */
   readonly loose: (raw: string) => string;
-  /** Flags of a valid supersede and what a second supersede of row 1 prints; absent where the noun has no such verb. */
   readonly revise?: readonly string[];
   readonly reviseAgain?: string;
 }
@@ -475,7 +460,6 @@ describe('typed-object CLI verbs', () => {
   const savedCwd = process.cwd();
   let root: string;
 
-  /** Exit code and the first line printed: stderr on a refusal, stdout otherwise. */
   async function hippo(...args: string[]): Promise<string> {
     const res = await runInProcess(() => runCli(['node', 'hippo', ...args]));
     return `exit ${res.status}: ${(res.stderr || res.stdout).split('\n')[0]}`;
@@ -483,10 +467,8 @@ describe('typed-object CLI verbs', () => {
 
   beforeAll(async () => {
     root = makeRoot('typed-object-cli');
-    // The CLI looks for the store in `.hippo` under the working directory.
     initTestStore(join(root, '.hippo'));
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    // An empty tenant falls through to `default`, whatever the shell running the suite has set.
     vi.stubEnv('HIPPO_TENANT', '');
     process.chdir(root);
     for (const row of NOUNS) expect(await hippo(...row.seed)).toMatch(/^exit 0: /);
@@ -499,7 +481,6 @@ describe('typed-object CLI verbs', () => {
 
   it.each(NOUNS)('hippo $noun $read: how each id form is read', async (row) => {
     for (const raw of ['0', '-1']) expect(await hippo(row.noun, row.read, raw)).toBe(row.refuses(raw));
-    // Documents current behaviour: predict and decide read these as 1 and act on row 1; every other noun refuses them.
     for (const raw of ['1.5', '1abc']) expect(await hippo(row.noun, row.read, raw)).toBe(row.loose(raw));
   });
 

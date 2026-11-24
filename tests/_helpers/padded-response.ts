@@ -1,5 +1,3 @@
-// A real Response whose JSON body is valid but padded with whitespace, streamed so a body of tens of MiB costs one chunk of memory.
-
 const CHUNK_BYTES = 1024 * 1024;
 
 /** `head`, then at least `paddingBytes` of spaces, then `tail`: JSON that parses to `head + tail` and is longer than a byte cap. */

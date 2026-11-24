@@ -1,4 +1,3 @@
-// A tool description that states a default must state the value the code reads, and hippo_outcome states no fixed half-life delta.
 import { describe, expect, it } from 'vitest';
 import { TOOLS } from '../../src/surface/mcp/tools.js';
 import { DEFAULT_CONFIG } from '../../src/base/config/config.js';

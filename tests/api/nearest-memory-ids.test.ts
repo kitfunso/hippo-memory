@@ -1,5 +1,3 @@
-// The nearest-row read a CLI asks of its server answers ids nearest first, and refuses what the caller's own recall
-// would refuse: another tenant, a scope it may not read, and a shared store's read that names no project.
 import { describe, expect, it } from 'vitest';
 import { nearestMemoryIds } from '../../src/api/recall/nearest.js';
 import { BadRequestError, ForbiddenError } from '../../src/base/errors/api-errors.js';
@@ -9,7 +7,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { seedVectorRows } from '../_helpers/vector-rows.js';
 
-// A restricted scope: a member reads it only with a grant.
 const TEAM_B = 'team:private:b';
 
 const ROWS = [

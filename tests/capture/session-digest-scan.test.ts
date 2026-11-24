@@ -1,4 +1,3 @@
-// Reading a Claude Code transcript or a Codex rollout for the digest: turns, closing message, edits that landed.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -98,7 +97,6 @@ describe('Claude Code transcripts', () => {
 
 const item = <T>(payload: T) => ({ type: 'response_item', payload });
 const codexUser = (t: string) => item({ type: 'message', role: 'user', content: [{ type: 'input_text', text: t }] });
-// JSON.stringify drops an undefined phase, which is how an unphased message looks on disk.
 const codexSays = (t: string, phase?: string) =>
   item({ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: t }], phase });
 const patch = (...headers: string[]): string => ['*** Begin Patch', ...headers, '*** End Patch'].join('\n');

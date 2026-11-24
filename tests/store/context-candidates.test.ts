@@ -55,7 +55,6 @@ describe('loadContextCandidates over the cap', () => {
 
   it('keeps pins, then the rows decay has worn least, and returns them oldest first', () => {
     const got = loadContextCandidates(root, 'default', { project: ['proj'], cap: 5, now: NOW });
-    // Past the pin: k-team, b-fresh, h-global, then d-rewarded, whose reward outlasts e-mid's shorter age.
     expect(got.map((e) => e.id)).toEqual(['a-old-pin', 'd-rewarded', 'h-global', 'b-fresh', 'k-team']);
     const strengths = got.filter((e) => !e.pinned).map((e) => calculateStrength(e, NOW));
     expect(Math.min(...strengths)).toBeGreaterThan(calculateStrength(row('e-mid', 20), NOW));
@@ -115,7 +114,6 @@ describe('loadContextCandidates reward factor', () => {
     root = makeStore('ctx-reward').root;
   });
 
-  // One row survives a cap of 1; the pair is chosen so a slope other than REWARD_SLOPE flips the winner.
   async function survivor(rows: MemoryEntry[]): Promise<{ id: string; strongest: string }> {
     for (const e of rows) writeEntry(root, e);
 
@@ -126,7 +124,6 @@ describe('loadContextCandidates reward factor', () => {
   }
 
   it('ranks asymmetric outcomes the way calculateStrength does', async () => {
-    // 20 days old: rewarded x8 at slope 0.5 is 13.75 days against plain y's 14.5; a slope of 0.7 would give 15.25 and flip them.
     const { id, strongest } = await survivor([
       row('x-rewarded', 20, { outcomePositive: 3 }),
       row('y-plain', 20, { halfLifeDays: 14.5 }),

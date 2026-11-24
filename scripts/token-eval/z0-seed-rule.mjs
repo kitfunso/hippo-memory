@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/** Z0 Amendment 2 item 5, the blind seed rule: how many seeds the rule arms run after wave 1. It reads wave 1 only (seeds 1 to 3)
- * and prints seed counts, never a mean, estimate, sign or spread, so it cannot see the effect. Exit 0 on a result (a stop too), 1 on bad input. */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -59,8 +57,6 @@ export function parseArgs(argv) {
   return args;
 }
 
-/** H1 or H2 seeds: the larger of the two codings' counts, null when the cap misses. A coding with no fitted repository is bad
- * input, told apart from a cap miss by the pooled fit alone, so no figure reaches the message. */
 function repeatSeeds(name, scored, [armT, armC], keep, opts) {
   const counts = CODINGS.map((coding) => {
     const { units } = repeatMistakeUnits(scored, armT, armC, coding, keep);
@@ -70,7 +66,6 @@ function repeatSeeds(name, scored, [armT, armC], keep, opts) {
   return counts.includes(null) ? null : Math.max(...counts);
 }
 
-/** Set N's design from the units: the repositories present, and the mean distinct tasks per repository (units repeat per seed). */
 function harmDesign(units) {
   const tasks = new Map();
   for (const u of units) tasks.set(u.repo, (tasks.get(u.repo) ?? new Set()).add(u.family));
@@ -78,7 +73,6 @@ function harmDesign(units) {
   return { repos: tasks.size, tasks: Math.round(counts.reduce((a, b) => a + b, 0) / counts.length) };
 }
 
-/** H4 seeds: the fewest from SEEDS to the cap at which the harm gate passes with `power`, on the sizer's own calibration. */
 function harmSeeds(filtered, prices, opts) {
   const cal = calibrate(filtered, prices, opts.bound).H4;
   if (cal.sim === undefined) throw new Error(`H4: ${cal.reason}`);

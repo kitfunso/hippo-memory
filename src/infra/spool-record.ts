@@ -1,4 +1,3 @@
-// A spooled compaction on disk, both directions: writing a record (spoolBody) and reading one back (parseSpooled).
 import {
   isObjectLike,
   isStringValue,
@@ -12,7 +11,6 @@ export interface SpooledCompaction {
   payload: PostCompactPayload;
   text: CompactionText;
   at: Date;
-  /** The spool file's stem, which a put-back keeps, so the store can tell two imports of one file. */
   importKey: string;
 }
 
@@ -50,7 +48,6 @@ export function parseSpooled(
   text: string,
   fallbackTenantId: string,
 ): Omit<SpooledCompaction, 'importKey'> | null {
-  // A half-written spool file holds no compaction; the caller treats null as unreadable.
   const raw: unknown = tryParseJson(text);
   if (
     !isObjectLike(raw) ||

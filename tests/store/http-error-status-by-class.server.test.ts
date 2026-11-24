@@ -1,4 +1,3 @@
-// The HTTP status of a failed request follows the error's class, never its message, and an untyped error never shows its text.
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -105,7 +104,6 @@ describe('typed errors from real domain paths keep their status and message', ()
   it('ConflictError -> 409: superseding a row that is already superseded', async () => {
     const old = createMemory('the build runs on node 20', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
     writeEntry(home, old);
-    // The local key is a member, which may not supersede a row it does not own, so this sends an admin key.
     const db = openHippoDb(home);
     let adminKey: string;
     try {
@@ -158,7 +156,6 @@ describe('an untyped error is a 500 that hides its text', () => {
     // before serve starts because a running server holds the file open, and Windows refuses to delete an open file.
     home = makeRoot('error-class', { init: false });
     mkdirSync(join(home, 'hippo.db'));
-    // No key can be minted in a store that will not open, so a resolver vouches for an admin on the admin-only audit route.
     handle = await serveKeyed(
       {
         hippoRoot: home,

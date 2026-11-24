@@ -1,7 +1,3 @@
-// The one module outside the SQLite adapter that names it: each composition root opens the default
-// store, its request sessions, its store runtime and its server runtime here, so a second adapter
-// changes this file and no root (.dependency-cruiser.cjs). The exit hooks live here too, since the
-// store layers install none.
 import type { StoreRules } from '../base/ports/infra.js';
 import type { HippoStore, StoreGroups } from '../base/ports/store-index.js';
 import {
@@ -36,7 +32,6 @@ export {
   type SqliteStoreOptions as StoreOptions,
   type StoreRuntime,
 } from '../store/sqlite/index.js';
-// The vector rules ./store-kit publishes under the names they have here.
 export {
   decodeVector,
   EMBEDDING_MODEL_META_KEY,

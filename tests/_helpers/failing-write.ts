@@ -1,5 +1,3 @@
-// Writes `entry` through the promote path with a trigger that aborts the promote audit row, so a failure after the INSERT
-// reaches the production entry's SAVEPOINT the way a real audit failure would.
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import { writePromotedEntry } from './root-forms.js';

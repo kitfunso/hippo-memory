@@ -1,16 +1,3 @@
-"""E2 customer_note first-class object (entity-scoped) - Python SDK tests.
-
-Docs: docs/plans/2026-06-01-e2-customer-note-object.md
-
-Covers:
-1. CustomerNote model round-trips wire camelCase <-> Python snake_case
-2. Defaults: status='active', version=1, optionals None
-3. Back-compat: response missing optional fields parses
-4. ON DELETE SET NULL: memory_id wire null -> None
-5. SDK methods exist on Hippo + HippoSync (5 each)
-6. models.__all__ AND package __all__ contain CustomerNote (codex P3 carry-forward)
-"""
-
 from __future__ import annotations
 
 import hippo_memory

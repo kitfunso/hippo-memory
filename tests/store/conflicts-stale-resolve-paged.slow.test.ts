@@ -1,4 +1,3 @@
-// A refresh that resolves stale open conflicts reads them in pages and writes one UPDATE per page, not one per row.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -31,7 +30,6 @@ describe('resolving stale open conflicts', () => {
     }));
     replaceDetectedConflicts(root, pairs);
     const { statements } = recordStatements(() => replaceDetectedConflicts(root, []));
-    // The status move binds its target, so the statement carries a placeholder where the literal was.
     expect(countMatching(statements, /^UPDATE memory_conflicts SET status = \?/)).toBe(2);
     const db = openHippoDb(root);
     try {

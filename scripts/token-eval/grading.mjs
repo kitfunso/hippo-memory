@@ -1,4 +1,3 @@
-// G5 (prereg 166): each graded cell's trees, verdicts and reader diffs, saved before the next checkout rebuilds the workspace .git.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { agentGit } from './checks.mjs';
@@ -32,7 +31,6 @@ export function saveGrading(ctx, run, step, stage, turns, record) {
   const dir = path.join(ctx.outDir, 'grading', run.runName, run.arm, `seed${run.seed}`);
   fs.mkdirSync(dir, { recursive: true });
   const commits = { pre: stage.pre, first: turns?.firstPost ?? stage.finalPost, final: stage.finalPost };
-  // The commits the final and stale checks graded (R2); null when that check never ran, and then not bundled (R24).
   const held = { finalCheck: turns?.finalCheckPost ?? null, stale: turns?.stalePost ?? null };
   const bundled = { ...commits, ...Object.fromEntries(Object.entries(held).filter(([, sha]) => sha !== null)) };
   const finalChecked = turns?.finalChecked ?? false;

@@ -24,9 +24,7 @@ export const QUALITY_GATE_VERSION = 2;
 
 /** Text shorter than this holds no fact worth keeping. */
 export const MIN_MEMORY_CHARS = 10;
-/** Text shorter than this must name a path, number, name or code to be kept. */
 const SPECIFIC_DETAIL_CHARS = 40;
-/** A line that opens on to, for or and and stays shorter than this is a cut-off clause. */
 const FRAGMENT_MAX_CHARS = 50;
 /** Fewer substantive words than this leave a memory too vague to act on. */
 export const MIN_SUBSTANTIVE_WORDS = 2;
@@ -38,7 +36,6 @@ export interface AutomaticMemoryAssessment {
   readonly reason: AutomaticMemoryDefect | null;
 }
 
-// Without ー, which alone says nothing, and the Han script's radicals, which are not letters.
 const CJK_LETTER = new RegExp(String.raw`(?=\p{L})[${CJK_SCRIPTS}]`, 'gu');
 const CHAT_ACRONYMS = /^(?:TODO|FYI|LGTM|IIRC|IMO|IMHO|FWIW|TBD|BTW|ASAP|AFAIK|WIP|NB|PS)$/;
 
@@ -73,7 +70,6 @@ const ALWAYS_NEVER_TARGET = new RegExp(
   'i',
 );
 
-/** Short preferences and rules carry a useful relationship even without a path or number. */
 function hasNoSpecificity(text: string): boolean {
   const domainAcronyms = (text.match(/\b[A-Z]{2,6}\b/g) ?? []).filter(
     (a) => !CHAT_ACRONYMS.test(a),
@@ -101,7 +97,6 @@ const DEPLOY_ACTION = new RegExp(
 
 function isRoutineReleaseActivity(text: string): boolean {
   if (isReleaseCommitNoise(text)) return true;
-  // "Deploy only after the migration has run" is a rule about releases, not a log line.
   if (RELATION_WORD.test(text) || RULE_WORD.test(text)) return false;
   const subject = text.replace(/^(?:chore|ci|build)(?:\([^)]*\))?:\s*/i, '');
   if (VERSION_BUMP.test(subject)) return true;
@@ -119,20 +114,16 @@ function bareText(text: string): string {
   while (end > 0 && TRAILING_MARK.test(text[end - 1])) end--;
   return text.slice(0, end);
 }
-// These endings close whole sentences too ("the branch you push to"), so they are only a possible
-// cut.
 const POSSIBLE_CUT_ENDING = new RegExp(
   String.raw`\b(?:needs to|depends on|requires|while|with|without|into|for|of|by|to|is|are|was|were|` +
     String.raw`must|should|could|would|might)$`,
   'i',
 );
 
-/** A short leading condition with no rule word, comma or "then": "If the build fails". */
 function isBareCondition(bare: string): boolean {
   return !/[,;]|\bthen\b/i.test(bare) && !RULE_WORD.test(bare) && bare.split(/\s+/).length <= 6;
 }
 
-// A blanked code span reads as a letter that is no roman numeral, so it is never a list marker.
 const CODE_AS_LETTER = 'q';
 const LIST_MARKER_START = /[\s(,;:]/;
 const ROMAN_NUMERAL = /^m{0,3}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/i;
@@ -145,18 +136,14 @@ const DASH_OR_SPACE = /[\s—–]/;
 const CLOSING_QUOTE = /['"’”]/;
 export const QUOTE_MARK = /['"‘’“”]/;
 
-// A "**" that only closes (not after a word), a dual-role one after a sentence mark with no closer,
-// or a bare one opening the text shows the text began inside a bold span.
 function opensInsideBold(text: string): boolean {
   const [first, ...later] = strongMarkers(blankCodeSpans(text, '`'));
   if (first === undefined) return false;
   const next = text[first.index + 2] ?? ' ';
   if (first.close && !first.open) {
-    // After a word, code span or closing bracket, "2** (n + 1)" and "(n + 1)** 2" are too often literal to be certain.
     if (WORD_CODE_OR_CLOSER.test(text[first.index - 1] ?? '')) return false;
     return BOLD_CLOSE_NEXT.test(next);
   }
-  // A quoted "**", "(**.env**)" and "foo**bar**" can open too: only "done.**— then" with no closer is a cut.
   if (first.close) {
     const closerFollows = later.some((marker) => marker.close);
     return SENTENCE_MARK.test(text[first.index - 1]) && DASH_OR_SPACE.test(next) && !closerFollows;
@@ -164,7 +151,6 @@ function opensInsideBold(text: string): boolean {
   return text.slice(0, first.index).trim() === '' && /^\s/.test(text.slice(first.index + 2));
 }
 
-/** "1)", "a)" and "ii)" mark list items; so does a longer valid roman numeral in a label place. */
 function isListMarker(text: string, close: number): boolean {
   let start = close;
   while (start > 0 && /[A-Za-z0-9]/.test(text[start - 1])) start--;
@@ -179,7 +165,6 @@ function isListMarker(text: string, close: number): boolean {
   );
 }
 
-// A ")" after a letter, a closing quote or "letter." closes an aside; a quoted ")" does not.
 function closesAside(text: string, i: number): boolean {
   const before = text[i - 1] ?? '';
   if (/[A-Za-z]/.test(before)) return !isListMarker(text, i);
@@ -209,10 +194,7 @@ export function startsInsideCut(text: string): boolean {
 
 function isDanglingAssertion(text: string): boolean {
   const bare = bareText(text);
-  // Only a lowercase start is a cut: "To rebuild the index, run ..." opens an instruction.
   if (/^(?:to|and|for)\s/.test(bare) && bare.length < FRAGMENT_MAX_CHARS) return true;
-  // Prepositions, modals and "is" can end a whole sentence ("the branch it merges into"), so only
-  // cut-off endings count.
   if (
     /\b(?:to be|has been|will be|instead of|rather than|such as|than|because|if|unless|when|until|and|or|but)$/i.test(
       bare,
@@ -224,8 +206,6 @@ function isDanglingAssertion(text: string): boolean {
   return /^(?:if|unless|when|while|until)\b/.test(bare) && isBareCondition(bare);
 }
 
-/** A capitalised short condition may carry its rule with no comma: "When CI fails we retry
- * once". */
 function isPossibleFragment(text: string): boolean {
   const bare = bareText(text);
   return (
@@ -245,14 +225,11 @@ const OUTCOME_DETAIL = new RegExp(
   'i',
 );
 
-/** Each "(...)" up to the first ")" becomes one space, as text.replace(/\([^)]*\)/g, ' ') does,
- * in one pass. */
 function blankAsides(text: string): string {
   let out = '';
   let from = 0;
   for (;;) {
     const open = text.indexOf('(', from);
-    // No ")" after this "(" means none after any later "(" either, so the scan ends here.
     const close = open < 0 ? -1 : text.indexOf(')', open + 1);
     if (close < 0) return out + text.slice(from);
     out += `${text.slice(from, open)} `;
@@ -263,8 +240,6 @@ function blankAsides(text: string): string {
 function isSubjectlessOutcome(text: string): boolean {
   const lead = OUTCOME_LEAD.exec(text);
   if (lead === null || RELATION_WORD.test(text)) return false;
-  // "Returns 404 for unknown ids" and "Deleted rows must stay deleted" say when or what; "returned
-  // 3 matching rows" does not.
   return !OUTCOME_DETAIL.test(blankAsides(text.slice(lead[0].length)));
 }
 
@@ -277,15 +252,12 @@ const OUTPUT_LINE = new RegExp(
 );
 const STACK_FRAME = /^at\s+\S.*:\d+(?::\d+)?\)?$/;
 const ERROR_LEAD = /^(?:[\w.$]+Error|[\w.$]+Exception):\s/;
-// Log lines say "after" and "while" too, so only a rule word frees a timestamp or level lead: a
-// dated freeze saying never merge.
 const LOG_LEADS = [
   /^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-][\d:]+)?\s+(?:\[?\w+\]?\s+)?/,
   /^\[(?:info|warn|error|debug)\]/i,
 ];
 const DATA_LEADS = [/^\{\s*["']?[\w$-]+["']?\s*:/, /^\[\s*(?:[{["]|-?\d[\d.]*\s*[,\]])/];
 
-/** Prose after the last closing bracket: "{ retries: 3 } is the default policy". */
 function hasProseAfterData(text: string): boolean {
   const tail = text.slice(Math.max(text.lastIndexOf('}'), text.lastIndexOf(']')) + 1);
   return (tail.match(/\p{L}{2,}/gu) ?? []).length >= 2;
@@ -313,8 +285,6 @@ export function assessAutomaticMemory(content: string): AutomaticMemoryAssessmen
   return { accepted: reason === null || reason === 'possible-fragment', reason };
 }
 
-/** Reasons the heuristics can get wrong: repair only lists them for review and derivation still
- * admits them. */
 const UNCERTAIN_REASONS: ReadonlySet<AutomaticMemoryDefect> = new Set([
   'too-short',
   'possible-fragment',
@@ -340,11 +310,7 @@ export function storedDefect(text: string): AutomaticMemoryDefect | null {
   return !isCertainReason(reason) && startsInsideCut(text.trim()) ? 'sentence-fragment' : reason;
 }
 
-// Watch failures ('autolearn') and tool failures keep a fixed "Command 'x' failed" format by
-// design, so they are not judged.
 const AUTOMATIC_SOURCES = new Set(['capture', 'git-learn', 'git', 'consolidation']);
-// Promote and share rewrite the source but keep the tags, so the writer's tag still marks a copy;
-// elsewhere a person may set it.
 const AUTOMATIC_TAGS = new Set(['captured', COMPACTION_MEMORY_TAG, 'git-learned']);
 const COPY_SOURCE = /^(?:promoted|shared):/;
 export const BUNDLE_HEADER =
@@ -371,10 +337,6 @@ export function isAutomaticEntry(entry: Provenance): boolean {
   );
 }
 
-/**
- * A bundle's parts are other rows' words, possibly a person's, so a bundle is sure to be junk only
- * when every part is.
- */
 function bundleParts(entry: Pick<MemoryEntry, 'content'>): string[] {
   return BUNDLE_HEADER.test(entry.content)
     ? heldTexts({ content: entry.content, source: 'consolidation' })

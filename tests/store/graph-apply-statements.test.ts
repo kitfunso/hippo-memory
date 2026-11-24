@@ -1,4 +1,3 @@
-// A graph rebuild prepares a fixed set of statements however many ops it applies, and checks each endpoint once.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
@@ -13,7 +12,6 @@ const require = createRequire(import.meta.url);
 // SAFETY: node:sqlite has no bundled types; prepare takes SQL text and returns a statement.
 const { DatabaseSync } = require('node:sqlite') as { DatabaseSync: { prototype: { prepare(sql: string): object } } };
 
-/** Two entities and one relation per decision: the ops a rebuild of `count` new decisions applies. */
 function rebuildOps(decisionIds: readonly number[]): GraphOp[] {
   const keyOf = (id: number, entityType: NaturalKey['entityType']): NaturalKey => ({
     entityType,
@@ -37,7 +35,6 @@ function rebuildOps(decisionIds: readonly number[]): GraphOp[] {
   ];
 }
 
-/** Applies a rebuild of `count` decisions on a fresh store and handle; returns the prepares and statements it ran. */
 async function applyFresh(count: number) {
   const root = makeRoot(`graph-apply-${count}`);
   const db = openHippoDb(root);

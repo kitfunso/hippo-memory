@@ -1,13 +1,9 @@
-// What a ranking runs under as plain values: the strength model and the rank switches. A root reads
-// them (src/infra/eval-switches.ts) and hands them down, so production code paths never read an env
-// var to rank.
 import type { RuntimeSettings } from '../config/config.js';
 import { PRODUCTION_STRENGTH, withLossAversion, type StrengthModel } from './strength.js';
 
 /** The switches recall's rank boosts honour. */
 export interface RankAblation {
   readonly recency: boolean;
-  /** HIPPO_EVAL_RECENCY_DAYS when it is a positive number, else null (the 30-day scale stays). */
   readonly recencyDays: number | null;
   readonly outcomeFast: boolean;
 }

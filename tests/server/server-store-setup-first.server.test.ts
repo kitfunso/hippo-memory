@@ -1,4 +1,3 @@
-// The store's open-time setup runs on the writer thread before any reader thread is sent a job, since a reader's connection refuses the writes setup makes.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,7 +35,6 @@ const bareRoot = (): string => removeLater(mkdtempSync(join(tmpdir(), 'hippo-set
 
 const halfLifeBase = (root: string): string => onDb(root, (db) => getMeta(db, META_KEY.halfLifeBase, ''));
 
-/** A memory as a store kept it before hippo.db: one markdown file, which setup imports while the store has no memory row. */
 function legacyMarkdown(root: string, content: string): void {
   const entry = createMemory(content, { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS });
   mkdirSync(join(root, 'episodic'), { recursive: true });
@@ -61,10 +59,8 @@ describe('a root with no hippo.db', () => {
       const graph = await get(server, '/v1/graph');
 
       expect(graph.status).toBe(200);
-      // The graph read writes nothing, so only the setup can have recorded this.
       expect(halfLifeBase(root)).toBe(String(DEFAULT_HALF_LIFE_DAYS));
       const rest = [
-        // GET /v1/quarantine is an admin route, and the key can be minted only once the first read made the db.
         await get(server, '/v1/quarantine', mintAdminKey(root)),
         await get(server, '/v1/memories?q=deploy'),
         await get(server, '/v1/sessions/sess-1/assemble'),
@@ -107,18 +103,14 @@ describe('markdown that appears on a still empty store after the setup', () => {
 describe('a setup still waiting for the write lock', () => {
   it('holds the read sent with it, so the read fails with the busy error of the setup and the next call runs it', async () => {
     const root = newRoot('setup-first');
-    // An empty store with no recorded base: the setup has one row to write, and the lock below makes it wait.
     execOn(root, `DELETE FROM meta WHERE key = '${META_KEY.halfLifeBase}'`);
-    // A short wait ends the setup in its busy error. A read that was not held would answer from a reader meanwhile.
     const executor = createSqliteExecutor(root, { busyWaitMs: 100 });
     cleanups.push(() => executor.close());
     const read = (): Promise<void> => executor.call('readiness.ping', [], { mode: 'read', requestId: undefined });
-    // Taken after the executor, so a failed run gives the lock up before it waits for the threads to exit.
     const lock = holdWriteLock(root);
 
     const busy = read();
     await expect(busy).rejects.toThrow(/database is locked/);
-    // The executor hands the worker's driver error to the server as the port's own.
     await expect(busy).rejects.toBeInstanceOf(StoreBusyError);
     lock.release();
 
@@ -130,7 +122,6 @@ describe('a setup still waiting for the write lock', () => {
 describe('a setup that fails', () => {
   it('fails the read that waited for it with its own error, and the next call runs it again', async () => {
     const root = bareRoot();
-    // A folder where the file belongs: no connection can open it.
     mkdirSync(getHippoDbPath(root));
     const executor = createSqliteExecutor(root);
     cleanups.push(() => executor.close());

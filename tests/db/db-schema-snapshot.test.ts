@@ -8,7 +8,6 @@ import { makeRoot } from '../_helpers/make-root.js';
 
 let root: string | undefined;
 
-/** Migrates a new store under `label` from nothing, runs `lose` on it, and returns the schema it had before. */
 function migratedThenLost(label: string, lose: (db: DatabaseSyncLike) => void): SchemaDump {
   root = makeRoot(label, { init: false });
   const db = openHippoDb(root);
@@ -35,13 +34,10 @@ afterEach(() => {
   root = undefined;
 });
 
-// Pins the DDL a fresh store ends with, less its comments and layout, so moving migration code cannot change the schema.
 describe('fresh store schema', () => {
-  // First in the file: the chain's result is kept per process, so a heal before this would hide a build here.
   it('a reopen that heals no table or index never runs the migration chain on its own', () => {
     const up = vi.spyOn(MIGRATIONS[0]!, 'up');
     try {
-      // A missing meta default sends the reopen down the repair path, past the probe that skips it.
       migratedThenLost('schema-lazy', (db) => db.exec(`DELETE FROM meta WHERE key = 'last_trace_id'`));
       expect(reopenedSchema().objects.length).toBeGreaterThan(0);
       expect(up).toHaveBeenCalledTimes(1);

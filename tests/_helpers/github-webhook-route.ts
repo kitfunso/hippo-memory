@@ -1,4 +1,3 @@
-// The signed requests and event bodies the GitHub webhook route tests post.
 import { createHmac } from 'node:crypto';
 import type { DatabaseSyncLike } from '../../src/db/index.js';
 

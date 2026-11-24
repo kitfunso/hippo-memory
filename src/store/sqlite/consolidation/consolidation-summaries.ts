@@ -1,5 +1,3 @@
-// hippo.db's DAG summary reads and the one write that settles a dirty summary; what a summary
-// settles to is decided in src/domain/consolidate/dag.ts.
 import { DAG_LEVEL, type MemoryEntry } from '../../../base/memory/entry.js';
 import { type DatabaseSyncLike, withReadSnapshot, withWriteScope } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
@@ -103,8 +101,6 @@ export function dirtySummaries(db: DatabaseSyncLike, limit: number, at?: string)
   });
 }
 
-/** The live children of each summary in one IN query per tenant chunk: one list per summary in
- * the order given, each by created then id; tenant-scoped as defence in depth. */
 function childrenOfSummaries(
   db: DatabaseSyncLike,
   summaries: ReadonlyArray<{ id: string; tenantId: string }>,
@@ -146,8 +142,6 @@ function childrenKey(tenantId: string, summaryId: string): string {
   return `${tenantId}\u0000${summaryId}`;
 }
 
-// `summary_dirty = 1` makes a concurrent sleep's second write a no-op; RETURNING feeds the
-// full-text row.
 const STILL_DIRTY = `WHERE id = ?
               AND tenant_id = ?
               AND dag_level IN (${DAG_LEVEL.topic}, ${DAG_LEVEL.entity})
@@ -205,8 +199,6 @@ function settleFields(
 ): SummarySettled {
   const { id, tenantId } = settle;
   const { content, descendantCount, earliestAt, latestAt } = fields;
-  // This UPDATE bypasses the write guard, so the tombstone check runs here, inside the same
-  // transaction.
   const tombstone = content ? readRejectedValue(db, tenantId, rejectionDigest(content.text)) : null;
   const at = [descendantCount, earliestAt, latestAt] as const;
   const row =
@@ -220,7 +212,6 @@ function settleFields(
         ) as SettledRow | undefined)
       : (cachedStatement(db, SETTLE_FIELDS_SQL).get(...at, id, tenantId) as SettledRow | undefined);
   if (!row) return { changed: false, refused: false };
-  // A bare UPDATE leaves memories_fts behind, so the row's text is indexed again.
   syncFtsRow(db, {
     id,
     content: row.content,

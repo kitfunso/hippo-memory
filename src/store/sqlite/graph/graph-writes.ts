@@ -1,5 +1,3 @@
-// The writer of the entities and relations tables. Every row resolves a consolidated source first, never a raw memory;
-// the schema triggers are the backstop for a write that skips this module.
 import { withWriteScope, type DatabaseSyncLike } from '../../../db/index.js';
 import { assertTenantId } from '../../../base/scope/tenant-id.js';
 import { MAX_ENTITY_NAME_LEN } from '../../../base/records/entity-name.js';
@@ -29,8 +27,6 @@ import type {
 import { handleStamp } from '../runtime/handle-clock.js';
 import type { SqlFragment } from '../../../db/sql.js';
 
-/** source_object_type -> its object table, for the object-path validation 4-way branch.
- *  SQLite cannot parametrize a table name, so the SQL trigger mirrors this explicitly. */
 interface SourceObjectTableMap {
   decision: string;
   policy: string;
@@ -44,9 +40,6 @@ const SOURCE_OBJECT_TABLE: SourceObjectTableMap = {
   project: 'project_briefs',
 };
 
-/** Resolve `source_kind` for a graph row from AT LEAST ONE valid provenance path, mirroring the
- * DB trigger guard; raw is rejected. MEMORY path: exists, same-tenant, consolidated. OBJECT path
- * (`memoryId` null): same-tenant, active|superseded, yields 'distilled'. All-null is rejected. */
 interface ResolvedGraphSource {
   sourceKind: SourceKind;
   memoryId: string | null;
@@ -70,8 +63,6 @@ export function resolveConsolidatedSource(
   });
   assertSourceObjectUsable(db, tenantId, sourceObject, label);
 
-  // source_kind is the memory's kind when a memory is present, else 'distilled' for an object-only
-  // row (objects are consolidated by construction). All-null is rejected.
   if (memKind != null) return { sourceKind: memKind, memoryId: effectiveMemoryId };
   if (sourceObject != null) return { sourceKind: 'distilled', memoryId: null };
   throw new Error(`${label}: graph row needs a memory or a source object`);
@@ -100,9 +91,6 @@ function checkSourceMemory(
       memoryId,
     ) as { kind: string; tenant_id: string } | undefined;
     if (!row) {
-      // Stale/forgotten mirror: tolerate it IFF a valid source object gives provenance, so a mirror
-      // pruned mid graph-extract does not roll back the tenant rebuild; anchor to the object and
-      // drop the dead memory pointer.
       if (sourceObject == null) {
         throw new Error(`${label}: source memory ${memoryId} not found`);
       }
@@ -128,15 +116,11 @@ function assertSourceObjectUsable(
   sourceObject: SourceObjectRef | null,
   label: string,
 ): void {
-  // Validate the object pointer WHENEVER provided: a dual-set row with a bad object would become
-  // the provenance after ON DELETE SET NULL and could block the memory delete.
   if (sourceObject != null) {
     const table = SOURCE_OBJECT_TABLE[sourceObject.type];
     if (!table) {
       throw new Error(`${label}: unsupported source_object_type '${sourceObject.type}'`);
     }
-    // `table` is a fixed SOURCE_OBJECT_TABLE value (never user-supplied), so interpolation is safe;
-    // `id`/`tenant_id` stay parametrized.
     const row = cachedStatement(
       db,
       `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`,
@@ -356,7 +340,6 @@ export function objectInForce(
   tenantId: string,
   ref: SourceObjectRef,
 ): boolean {
-  // `table` comes from the fixed SOURCE_OBJECT_TABLE map, never from input.
   const table = SOURCE_OBJECT_TABLE[ref.type];
   const row = cachedStatement(db, `SELECT status FROM ${table} WHERE id = ? AND tenant_id = ?`).get(
     ref.id,

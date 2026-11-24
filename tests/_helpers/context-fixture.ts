@@ -1,5 +1,3 @@
-// The rows contextGet reads, added to the two-tenant conformance fixture: pins, a recent window one project crowds, every
-// scope and supersede edge, secret tags, a drifted date, and task state with keys, ties, private rows and stale rows.
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -16,7 +14,6 @@ export const PROJECT = 'proj';
 export const OWNER = 'alice';
 export const OWN_SCOPE = `personal:private:${OWNER}`;
 
-/** A zoneless stamp an old importer wrote, which no writer stores now. */
 const DRIFTED = '2026-03-05 10:00:00';
 
 export const ago = (hours: number): string => new Date(Date.parse(CONTEXT_NOW) - hours * 3_600_000).toISOString();
@@ -120,7 +117,6 @@ function memoryRows(): MemoryEntry[] {
 
 type Row = readonly (string | number | null)[];
 
-// tenant, task, status, session, scope, hours since the update, owner, origin
 const SNAPSHOTS: readonly Row[] = [
   [TENANT_A, 'superseded unkeyed task', 'superseded', SESSION, null, 1, null, null],
   [TENANT_A, 'unkeyed task for session a', 'active', SESSION, null, 3, null, null],
@@ -131,7 +127,6 @@ const SNAPSHOTS: readonly Row[] = [
   [TENANT_B, 'globex task gone stale', 'active', SESSION, null, 100, null, null],
 ];
 
-// tenant, session, summary, outcome, scope, hours since it was written, owner, origin
 const HANDOFFS: readonly Row[] = [
   [TENANT_A, SESSION, 'first handoff for session a', null, null, 2.5, null, null],
   [TENANT_A, SESSION, 'second handoff for session a', 'success', null, 1, null, null],
@@ -144,7 +139,6 @@ const HANDOFFS: readonly Row[] = [
   [TENANT_B, SESSION, 'globex handoff', null, null, 1, null, null],
 ];
 
-// tenant, session, content, scope, hours since it happened, metadata
 const EVENTS: readonly Row[] = [
   [TENANT_A, SESSION, 'opened the rollout ticket', null, 7, '{}'],
   [TENANT_A, SESSION, 'ran the canary', null, 6, '{"step":2}'],
@@ -160,7 +154,6 @@ const EVENTS: readonly Row[] = [
 
 const hours = (v: string | number | null): number => Number(v);
 
-// Inserted by hand, since the save functions stamp the real clock and supersede the tenant's other active rows.
 function insertTaskState(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -217,7 +210,6 @@ function insertTaskState(dir: string): void {
   }
 }
 
-// writeEntry stamps updated_at from SQLite's real clock and search breaks ties on it, so a golden needs one fixed stamp.
 function pinUpdatedAt(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -227,7 +219,6 @@ function pinUpdatedAt(dir: string): void {
   }
 }
 
-// The row writer stores toISOString stamps, so the row an old importer wrote is put back by hand.
 function plantLegacyStamp(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -239,7 +230,6 @@ function plantLegacyStamp(dir: string): void {
   }
 }
 
-// The row writer stores NULL for a blank link, so the blank is planted by SQL.
 function plantBlankLink(dir: string): void {
   const db = openHippoDb(dir);
   try {
@@ -275,7 +265,6 @@ export function contextRowsOf(root: string) {
   const db = openHippoDb(root);
   try {
     const rows = rowsOf(root);
-    // The audit row is written by the store, and a worker-thread store stamps the real clock, not the faked Date.
     // SAFETY: rowsOf selects ts, tenant_id, actor, op, target_id and metadata_json for the audit rows.
     const audit = (rows.audit as Array<{ ts: string; op: string }>).map((row) => ({ ...row, ts: 'stamped' }));
     return {

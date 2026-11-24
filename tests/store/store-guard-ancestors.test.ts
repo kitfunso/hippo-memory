@@ -1,5 +1,3 @@
-// Test-isolation guard ancestor coverage (episode 01M31DR9BAD95WQ5DJTX03Z1FC). Real filesystem in a
-// mkdtemp sandbox; exercises watchedStoreDirs() directly, not the globalSetup leak check itself.
 import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

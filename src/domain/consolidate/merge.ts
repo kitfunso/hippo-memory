@@ -16,40 +16,28 @@ import { keptAsWritten, type SleepRun } from './run.js';
 import { isReusable } from '../../base/memory/memory-quality.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
 
-const MERGE_OVERLAP_THRESHOLD = 0.35; // Jaccard similarity for "related"
-const MERGE_MIN_CLUSTER = 2; // minimum cluster size to merge
-// with MERGE_MAX_CHARS, keeps a merged row near 500 tokens, a third of the 1,500-token context
-// budget
+const MERGE_OVERLAP_THRESHOLD = 0.35;
+const MERGE_MIN_CLUSTER = 2;
 const MERGE_MAX_SOURCES = 5;
-/** Characters of merged text the detail line quotes. */
 const MERGE_DETAIL_PREVIEW_CHARS = 60;
-/** Characters of each source line the legacy merge format kept as a bullet. */
 const LEGACY_BULLET_CHARS = 120;
-const MERGE_MAX_CHARS = 2000; // total source text; sources past either cap stay unmerged and keep their half-life
-// Half-life scale for merged source episodics. Demote via half_life_days: calculateStrength()
-// recomputes live strength and never reads the stored field, so a stored-strength write is inert
-// for ranking and overwritten by the next decay pass.
+const MERGE_MAX_CHARS = 2000;
 const MERGE_SOURCE_HALF_LIFE_FACTOR = 0.3;
-// deriveHalfLife grants its high-fit bonus only above 0.7, so a rollup at 0.7 gets none.
 const MERGED_SCHEMA_FIT = 0.7;
 
 export async function retireHeldTexts(run: SleepRun): Promise<void> {
   const { survivors } = run;
-  // Only a merged row can hold a retired text, so only those are kept, by place, while the rest
-  // page past.
   const held: Array<readonly [number, string]> = [];
   for await (const [index, row] of survivors.indexed()) {
     if (row.source === 'consolidation' && !isSuperseded(row) && run.retirable(row)) {
       held.push([index, row.id]);
     }
   }
-  // From the last place back, so dropping a survivor never moves one still to come.
   for (let end = held.length; end > 0; end -= run.rows.pageRows) {
     const page = held.slice(Math.max(0, end - run.rows.pageRows), end);
     const rows = new Map(
       (await survivors.get(page.map(([, id]) => id))).map((row) => [row.id, row]),
     );
-    // Sources come from the store, as the loaded rows did, never from a pass's pending changes.
     const parentIds = [...new Set([...rows.values()].flatMap((r) => r.parents))];
     const sources = new Map((await run.rows.read(parentIds)).map((s) => [s.id, s]));
     const rejected = await rejectedAmongPage(run, [...rows.values()], sources);
@@ -88,7 +76,6 @@ function retireHeldText({ run, index, row, sources, rejected }: RetireHeldTextOp
   run.survivors.replaceAt(index, successor);
 }
 
-/** The texts the retirement check asks about, the row's own and its live sources'. */
 function askedTexts(row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>): string[] {
   if (row.source !== 'consolidation' || isSuperseded(row)) return [];
   const live = row.parents.flatMap((id) => {
@@ -98,8 +85,6 @@ function askedTexts(row: MemoryEntry, sources: ReadonlyMap<string, MemoryEntry>)
   return [...new Set([...live, ...heldTexts(row)])];
 }
 
-/** Per tenant, the digests of the page's asked texts that tenant rejected: one read per tenant,
- * not one per text. */
 async function rejectedAmongPage(
   run: SleepRun,
   rows: readonly MemoryEntry[],
@@ -118,15 +103,12 @@ async function rejectedAmongPage(
   return rejected;
 }
 
-/** The tenant, scope and origin every row merged out of one partition inherits. */
 interface MergePartition {
   tenantId: string;
   scope: ReturnType<typeof derivationScope>;
   origin: MemoryEntry['originProject'];
 }
 
-/** One partition's merge candidates, with the token set and length of each: all the overlap join
- * reads. */
 interface MergeBucket {
   partition: MergePartition;
   ids: string[];
@@ -134,15 +116,10 @@ interface MergeBucket {
   sets: Set<string>[];
 }
 
-/** The episodic survivors a merge may consume, grouped by the partition their merged row would
- * land in. */
 async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, MergeBucket>> {
   const alreadyMergedIds = new Set<string>();
   for await (const e of run.survivors.rows()) for (const id of e.parents) alreadyMergedIds.add(id);
 
-  // Partition BEFORE the overlap loop so a cluster can never span tenants and merge cross-tenant
-  // content. Map keeps insertion order, so a single-tenant store gets one partition in the original
-  // order.
   const buckets = new Map<string, MergeBucket>();
   for await (const e of run.survivors.rows()) {
     const candidate =
@@ -150,11 +127,10 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
       !isSuperseded(e) &&
       !keptAsWritten(e) &&
       !alreadyMergedIds.has(e.id) &&
-      !e.pinned && // a pin merged with a look-alike would read as one of two values
-      !e.leadIn && // a merged row holds content only, so merging would drop the lead-in
+      !e.pinned &&
+      !e.leadIn &&
       isReusable(e);
     const tokens = candidate ? tokenize(e.content) : [];
-    // Two empty token sets overlap 1, so tokenless text would merge with any other.
     if (tokens.length === 0) continue;
     const key = derivationPartitionKey(e.tenantId, e.scope, e.originProject);
     let bucket = buckets.get(key);
@@ -176,8 +152,6 @@ async function partitionMergeCandidates(run: SleepRun): Promise<Map<string, Merg
 /** Returns how many clusters were skipped because their merged text matches a rejected value. */
 export async function mergePass(run: SleepRun): Promise<number> {
   const used = new Set<string>();
-  // The rejection guard reuses the run's tombstone checks; a dry run reads them too, so it counts a
-  // refused cluster as refused though it never reaches batchWriteAndDelete's guard bypass.
   let mergesSkippedRejected = 0;
   for (const bucket of (await partitionMergeCandidates(run)).values()) {
     const { ids, lengths } = bucket;
@@ -224,8 +198,6 @@ interface MergeClusterOptions {
   readonly used: Set<string>;
 }
 
-/** Merges one cluster into a semantic row; returns false when a tombstone refuses the merged
- * text. */
 async function mergeCluster({
   run,
   partition,
@@ -236,9 +208,6 @@ async function mergeCluster({
   const { result, dryRun } = run;
   const mergedContent = mergeContents(cluster);
 
-  // Build the semantic entry FIRST (createMemory is cheap and pure) so the tombstone check below
-  // runs under the partition's tenant, the one every cluster member shares and the row will land
-  // in. A dry run builds it too, so it refuses the cluster a real run would.
   const semantic = semanticSummary(mergedContent, cluster, partition, run);
 
   if (await mergeRejected({ run, semantic, cluster, related, used })) return false;
@@ -257,8 +226,6 @@ async function mergeCluster({
     run.units.push([semantic.id, ...cluster.map((e) => e.id)]);
     result.semanticCreated++;
 
-    // Scale half_life_days so merged sources decay sooner but stay recoverable; ranking is
-    // unchanged on purpose (demoting children regresses QA).
     await demoteMergedSources(run, cluster);
   }
   return true;
@@ -293,8 +260,6 @@ function semanticSummary(
   };
 }
 
-/** The sources' tags, plus the frame mark when the merged text is flagged; a personal scope is not screened, as a
- * personal write is not. */
 function mergedTags(
   mergedContent: string,
   cluster: readonly MemoryEntry[],
@@ -302,13 +267,11 @@ function mergedTags(
 ): string[] {
   const tags = Array.from(new Set(cluster.flatMap((e) => e.tags))).sort();
   if (isPersonalScope(scope) || tags.includes(INSTRUCTION_LIKE_TAG)) return tags;
-  // The merged tags and contents can form a pattern no source row holds.
   return instructionIn({ content: mergedContent }, tags).flagged
     ? [...tags, INSTRUCTION_LIKE_TAG].sort()
     : tags;
 }
 
-/** The later conflict check reads the survivors, so it sees the post-demotion half-life. */
 async function demoteMergedSources(run: SleepRun, cluster: MemoryEntry[]): Promise<void> {
   const demoted = cluster.map((e) => {
     const row = {
@@ -329,9 +292,6 @@ interface MergeRejectedOptions {
   readonly used: Set<string>;
 }
 
-// mergeContents is deterministic, so a rollup a human already rejected would regenerate each cycle
-// and batchWriteAndDelete's guard bypass would re-assert it; this producer-side check makes that
-// bypass safe. A hit skips the whole cluster (no demote, no delete) so a later sleep can retry.
 async function mergeRejected({
   run,
   semantic,
@@ -341,15 +301,11 @@ async function mergeRejected({
 }: MergeRejectedOptions): Promise<boolean> {
   const { tombstones } = run;
   const newDigest = rejectionDigest(semantic.content);
-  // tombstones from older releases hold this format's digest
   const oldDigest = rejectionDigest(legacyMergeContents(related));
   const newHit = await tombstones.find(semantic.tenantId, newDigest);
   const tombstone = newHit ?? (await tombstones.find(semantic.tenantId, oldDigest));
   const mergeDigest = newHit ? newDigest : oldDigest;
   if (!tombstone) return false;
-  // Still mark used: these members are not re-tried against a different cluster in this pass; the
-  // next sleep re-clusters them fresh. the old format digested the uncapped list, so rows past the
-  // cap were rejected too
   const rejected = newHit ? cluster : related;
   for (const e of rejected) used.add(e.id);
   await tombstones.auditOrCount({
@@ -366,10 +322,6 @@ async function mergeRejected({
 }
 
 function mergeContents(entries: MemoryEntry[]): string {
-  // Each distinct text goes in once and in full (the merge demotes every source), one bullet with
-  // its lines indented, so heldTextKeys can read it back. Newest first says which version is
-  // current; compareEntryIdentity settles ties, so the row and its rejection digest depend only on
-  // the sources.
   const sorted = [...entries].sort(
     (a, b) => Date.parse(b.created) - Date.parse(a.created) || compareEntryIdentity(a, b),
   );
@@ -385,8 +337,6 @@ function mergeContents(entries: MemoryEntry[]): string {
 }
 
 function legacyMergeContents(entries: MemoryEntry[]): string {
-  // The old format dropped text, so it is only ever digested to match rejections recorded against
-  // it, never written.
   const sorted = [...entries].sort(
     (a, b) => b.content.length - a.content.length || compareEntryIdentity(a, b),
   );

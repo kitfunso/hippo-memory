@@ -1,4 +1,3 @@
-// Session assemble reads its window's content under the same session, scope and live-row rule it chose the window by.
 import { afterEach, describe, expect, it } from 'vitest';
 import { assemble } from '../../src/api/index.js';
 import { Layer, type MemoryEntry } from '../../src/base/memory/entry.js';
@@ -76,11 +75,9 @@ describe('assemble admission', () => {
     sql(root, `UPDATE memories SET superseded_by = '' WHERE id = ?`, 'raw-001');
     const whole = await assemble(member(root), 's1', { budget: 100000 });
     expect(whole.items.map((it) => it.id)).toEqual(['raw-000', 'raw-002', 'raw-003']);
-    // A capped window reports the uncapped count, read by sessionRawCount.
     const capped = await assemble(member(root), 's1', { budget: 100000, rowCap: 2 });
     expect(capped.truncated).toBe(true);
     expect(capped.totalRaw).toBe(3);
-    // The recall fresh tail reads the same session's raw rows by the same rule.
     expect(loadFreshRawMemories(root, 10, 'default', 's1').map((r) => r.id)).not.toContain('raw-001');
   });
 });

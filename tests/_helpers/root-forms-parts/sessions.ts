@@ -1,5 +1,3 @@
-// Root-keyed sessions forms tests call; production code goes through the port or the handle-first forms.
-
 import type { HandoffOutcome, SessionHandoff } from '../../../src/base/session/handoff.js';
 import { resolveTenantId } from '../../../src/surface/server/boot.js';
 import type {

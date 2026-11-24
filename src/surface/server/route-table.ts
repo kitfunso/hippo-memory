@@ -138,8 +138,6 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'editor',
-    // No group: a shared store promotes in place through base methods; elsewhere the copy needs
-    // folderFiles.
     handler: handlePromoteMemory,
   },
   {
@@ -189,8 +187,6 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
-    // authRevoke lets a resolver caller revoke only the keys it minted, so a demoted viewer can
-    // still revoke its own.
     auth: 'viewer',
     handler: handleRevokeAuthKey,
   },
@@ -282,9 +278,6 @@ export function routeServes(route: Route, method: string, path: string): boolean
   return bindPath<never>(route, path) !== null && method === route.method;
 }
 
-/** The route's run for this request, gate first, or null when method or path differ. The matcher
- * runs before the method check, as the inline route blocks did, so a malformed `%` escape still
- * throws from matchPath on any method. */
 function routeMatches(
   route: BoundRoute,
   method: string,
@@ -299,16 +292,11 @@ function routeMatches(
   return async (r) => run({ ...r, ctx: await passAuthGate(route, r) });
 }
 
-/** The one caller check a gated route passes: sleep refuses a caller off this host before any
- * key work, then one charged auth, then 501 for an unported route, so a bad key is still a 401
- * there, and the row's role last. */
 async function passAuthGate(
   route: Exclude<BoundRoute, { auth: 'webhook-signature' }>,
   { req, opts }: RouteRequest,
 ): Promise<Context> {
   const label = routeLabel(route);
-  // Defence in depth, not the boundary: a proxy or a browser page on this host connects from
-  // loopback too.
   if (route.auth === 'host-admin-local' && !isLocalCaller(req)) {
     throw new HttpError(
       403,
@@ -322,8 +310,6 @@ async function passAuthGate(
   return ctx;
 }
 
-/** Refuses a caller below the route's level: an admin row needs admin, an editor row needs a role
- * that can write. */
 function assertLevel(level: RoleLevel, ctx: Context, label: string): void {
   if (level === 'admin' && ctx.actor.role !== 'admin') {
     throw new HttpError(403, `${label} requires admin role`);
@@ -339,23 +325,16 @@ export function routeLabel(route: RouteEndpoint<never>): string {
   return route.regex.source.replace(/^\^|\$$/g, '').replaceAll('\\/', '/');
 }
 
-/** The one 501 of a route whose store lacks what it needs, thrown by the gate before the role
- * check. */
 async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
- * request checks a group. */
 function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
   if (route.storeReady !== undefined) return boundGroupRoute(route, store);
-  // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
   return route.hippoDbOnly === undefined || onHippoDb ? route : { ...route, unported: true };
 }
 
-/** A group row's handler gets the request's context on the store boot proved, bound to the
- * request's session and deadline; without the group it answers 501. */
 function boundGroupRoute<G extends OptionalGroup>(
   route: GroupRouteOf<G>,
   store: HippoStore,
@@ -377,8 +356,6 @@ function boundGroupRoute<G extends OptionalGroup>(
   return { method, auth, pattern, handler: (r, params) => handler(onProved(r), params) };
 }
 
-/** A webhook is handed the connector store; it skips the gate, so without the groups its handler
- * is the 501 itself. */
 function boundWebhook(route: WebhookRoute, store: HippoStore): BoundRoute {
   const { method, auth } = route;
   if (!hasGroups(store, CONNECTOR_GROUPS)) {
@@ -402,14 +379,11 @@ function boundWebhook(route: WebhookRoute, store: HippoStore): BoundRoute {
   };
 }
 
-/** A webhook's 501 drops the body it never reads, as its 404 and 401 do, so no caller holds the
- * socket open. */
 async function webhookNotPorted(request: RouteRequest): Promise<void> {
   closeIfBodyUnread(request);
   await notPorted();
 }
 
-/** The row's path or pattern alone, for a row whose handler is replaced. */
 function endpointOf(route: PathEndpoint<never>): { path: string } | { pattern: string } {
   return 'path' in route ? { path: route.path } : { pattern: route.pattern };
 }

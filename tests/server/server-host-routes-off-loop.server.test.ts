@@ -1,5 +1,3 @@
-// Drill, outcome, context, promote, sleep, both webhooks, POST /mcp, GET /mcp/stream, /health and /ready answer from
-// store workers as they do on the in-process store, and fail when a handler opens hippo.db on the server thread.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHmac, randomBytes } from 'node:crypto';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -30,7 +28,6 @@ type InProcess = HippoStore & StoreGroups;
 type Send = (server: ServerHandle) => Promise<Response>;
 type Step = readonly [label: string, send: Send, status: number];
 
-// Generated per run, so no signing secret is ever written down.
 const SECRETS = { slack: randomBytes(24).toString('hex'), github: randomBytes(24).toString('hex') };
 const FORGED = randomBytes(24).toString('hex');
 const MISSING = 'mem_000000000000';
@@ -64,8 +61,6 @@ const tool =
   (s) =>
     post(s, '/mcp', rpc('tools/call', { name, arguments: args }), as(who));
 
-// One signing second for the file: a wall-clock second per request let a redelivery in the same second hit the
-// replay window and one in the next second reach the stored-event check, so the two servers could answer differently.
 const SLACK_SECOND = Math.floor(Date.now() / 1000);
 
 function slack(payload: JsonValue, { secret = SECRETS.slack, second = SLACK_SECOND } = {}): Send {
@@ -96,7 +91,6 @@ function github(deliveryId: string, payload: JsonValue, secret = SECRETS.github)
   };
 }
 
-/** The stream's status, headers and first chunk; the stream itself never ends, so the test hangs up after one read. */
 function stream(who?: keyof Callers): Send {
   return async (s) => {
     const hangUp = new AbortController();
@@ -183,7 +177,6 @@ const HOST_STEPS: readonly Step[] = [
   ['mcp tool list', (s) => post(s, '/mcp', rpc('tools/list'), as()), 200],
   ['mcp recall', tool('hippo_recall', { query: 'deploy' }), 200],
   ['mcp drill', tool('hippo_drill', { summary_id: 'mem_x_summary' }), 200],
-  // A host admin's context query comes from the server's own git state, which a slow `git diff` can time out of.
   ['mcp context as a member', tool('hippo_context', {}, 'member'), 200],
   ['mcp outcome', tool('hippo_outcome', { good: true }), 200],
   ['mcp remember', tool('hippo_remember', { text: 'the canary needs ten minutes of traffic' }), 200],
@@ -210,7 +203,6 @@ const STEPS = [...V1_STEPS, ...WEBHOOK_STEPS, ...HOST_STEPS];
 const CONFLICT = `INSERT INTO memory_conflicts (memory_a_id, memory_b_id, reason, score, status, detected_at, updated_at, tenant_id)
   VALUES (?, ?, 'seeded contradiction', 0.9, 'open', ?, ?, ?)`;
 
-/** A fresh copy of the seed with two open conflicts, whose Slack team T_ACME and GitHub installation 101 route to the default tenant. */
 async function copy() {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
@@ -228,12 +220,10 @@ async function copy() {
       db.prepare(CONFLICT).run(a, b, FAKE_NOW, FAKE_NOW, TENANT);
     }
   });
-  // A promote or share embeds its copy after the reply, so a provider would race the server's stop.
   writeFileSync(join(made.globalRoot, 'config.json'), JSON.stringify({ embeddings: { enabled: false } }));
   return made;
 }
 
-/** `use` against a server on `root`, on the worker-backed store when `store` is absent; it resolves once the server stopped. */
 async function onServer<T>(
   root: string,
   store: HippoStore | undefined,
@@ -249,11 +239,9 @@ async function onServer<T>(
   }
 }
 
-/** A global copy's id and its source's folder label are minted per run. */
 const runFree = (text: string): string =>
   text.replace(/g_[0-9a-f]+/g, '<global>').replace(/hippo-parity-[\w-]+/gi, '<home>');
 
-/** Connector writes mint random memory ids, so rows are compared by content, in sorted order. */
 const rowsAt = (root: string): string[] =>
   leftBehind(root)
     .map((row) => runFree(scrub(row)))
@@ -327,7 +315,6 @@ describe('the routes moved off the server thread, on store workers against the i
       expect(bodyOf['mcp resolve, rejecting the loser']).toContain('rejected (tombstoned) and removed');
       expect(bodyOf['promote']).toBe('{"ok":true,"sourceId":"mem_p_noise","globalId":"<global>"}');
       expect(bodyOf['mcp share']).toContain('Shared [<global>] to global store');
-      // The promoted and the shared copy both name the project folder.
       expect(bodyOf['mcp peers']).toContain('<home>: 2 memories');
       expect(onWorkers.global.filter((row) => row.startsWith('memories '))).toHaveLength(3);
     },
@@ -386,7 +373,6 @@ describe('the server-thread block of the routes this file covers', () => {
     async (_route, swapped, send, status) => {
       const { root } = await copy();
       const info = vi.spyOn(log, 'trail');
-      // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
       const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
 
       const res = await onServer(root, store, async (server) => seen('blocked', await send(server)));

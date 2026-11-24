@@ -1,4 +1,3 @@
-// Hands an in-process hook verb the stdin a hook host would pipe, so a test drives the real handler instead of its inner function.
 import { PassThrough } from 'node:stream';
 
 /** Runs `fn` with process.stdin replaced by a stream that carries `text` (nothing when undefined) and then ends. */

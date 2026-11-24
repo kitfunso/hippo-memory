@@ -1,6 +1,3 @@
-// B3 Task 9: the full loop, CLI recall in process -> goal_recall_log -> completeGoal moves memories.strength once.
-// remember() writes strength 1.0, the ceiling the 1.10x boost clamps to, so the positive case knocks the seed to 0.5
-// after the recall; the decay case starts from 1.0 and is visible as-is.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { remember } from '../../src/api/index.js';
@@ -14,7 +11,6 @@ import { removeDir } from '../_helpers/remove-dir.js';
 
 const savedCwd = process.cwd();
 
-/** `hippo recall <query> --json` in this process, with the empty recall rings a fresh `hippo` starts with. */
 async function runRecall(query: string, sessionId: string): Promise<void> {
   vi.stubEnv('HIPPO_SESSION_ID', sessionId);
   const res = await runInProcess(() => runCli(['node', 'hippo', 'recall', query, '--json', '--budget', '2000']));
@@ -51,13 +47,10 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
   let env: TestEnv;
 
   beforeEach(() => {
-    // An initialised global store, as the idempotency case had before it merged here, so a recall also finishes on a
-    // store that holds none of its results.
     env = makeEnv('b3-e2e', { initGlobal: true });
     vi.stubEnv('HIPPO_HOME', env.globalRoot);
     vi.stubEnv('HIPPO_TENANT', 'default');
     vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-    // The CLI looks for the store in `.hippo` under the working directory.
     process.chdir(env.cwd);
   });
 
@@ -77,7 +70,6 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
 
     await runRecall('good lesson', 's-e2e-1');
 
-    // Recall itself touches strength, so the knock-down below the ceiling has to come after it.
     setStrength(env.hippoRoot, m.id, 0.5);
 
     const before = readStrength(env.hippoRoot, m.id);
@@ -85,7 +77,6 @@ describe('outcome propagation E2E (recall -> log -> completeGoal)', () => {
     const boosted = readStrength(env.hippoRoot, m.id);
     expect(boosted).toBeGreaterThan(before);
 
-    // A second completeGoal must not re-apply propagation.
     await completeGoal(env.hippoRoot, g.id, { outcomeScore: 0.9 });
     expect(readStrength(env.hippoRoot, m.id)).toBe(boosted);
   });

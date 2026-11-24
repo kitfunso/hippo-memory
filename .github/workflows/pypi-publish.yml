@@ -1,8 +1,5 @@
 name: Publish Python SDK to PyPI
 
-# Trigger: tag push matching python-v*.*.* (e.g., python-v0.1.0).
-# Distinct from v*.*.* which is the npm release tag scheme — keeps the two
-# publish surfaces independent.
 on:
   push:
     tags:

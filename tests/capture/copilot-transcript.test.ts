@@ -1,4 +1,3 @@
-// Copilot event logs read line by line: turns and working state from a tail, sub-agent and injected lines skipped, the CLI log found by id.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -28,7 +27,6 @@ afterEach(() => {
 });
 
 describe('a Copilot events.jsonl tail with no first line', () => {
-  // events.jsonl: VS Code's sessionTranscriptService.ts line format (scratchpad copilot-details 1a), plus copilot-sdk streaming-events.md's agentId.
   it('gives the human and main-agent turns from a tail that starts mid-line', () => {
     expect(collectSessionTurns(copilotEventsTail())).toEqual([
       { role: 'user', text: TASK },

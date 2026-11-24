@@ -1,5 +1,3 @@
-/** EI2 T3/T6/T7: derived memories keep the source scope; briefs never quote a restricted receipt. */
-
 import { describe, it, expect, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { writeFileSync } from 'node:fs';

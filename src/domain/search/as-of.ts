@@ -2,9 +2,7 @@ import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isSuperseded } from '../../base/memory/liveness.js';
 
 export interface CurrentnessOptions {
-  /** Keep only rows current at this ISO date string. */
   asOf?: string;
-  /** Keep superseded rows when no `asOf` is given. */
   includeSuperseded?: boolean;
 }
 
@@ -15,7 +13,6 @@ export function currentEntries(entries: MemoryEntry[], options: CurrentnessOptio
 }
 
 function entriesAsOf(entries: MemoryEntry[], asOfDate: Date): MemoryEntry[] {
-  // A merged pool can repeat an id; the first row wins, as a scan from the front would pick.
   const byId = new Map<string, MemoryEntry>();
   for (const e of entries) if (!byId.has(e.id)) byId.set(e.id, e);
   return entries.filter((e) => {

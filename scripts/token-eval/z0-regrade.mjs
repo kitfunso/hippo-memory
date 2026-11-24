@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/** Z0 G5 (prereg 166): regrade every saved check and test, then write the grading file z0-analyze.mjs reads.
- * Usage and readings: benchmarks/token-eval/README.md, "G5 regrade". Exit 0 on success, 1 on bad input or a refusal. */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,7 +80,6 @@ function regradeMode(args, out, cwd, log) {
   const runsFile = args.runs ? path.resolve(cwd, args.runs) : path.join(out, 'runs.jsonl');
   const { records } = parseZ0Records(fs.readFileSync(runsFile, 'utf8'), runsFile);
   const pass = args.postFix ? 'postfix' : 'repro';
-  // Passed in, since reader-sample.mjs imports regrade.mjs and the regrade must not import it back.
   const assertCheckers = (pairs) => assertCheckersJudged(out, pairs);
   const tally = runRegrade({ out, spec, records, runsFile, pass, cells: args.cell, baseEnv: process.env, log, assertCheckers });
   const wrote = tally.regraded ? `; wrote ${tally.regraded}` : '';
@@ -99,7 +96,6 @@ export function buildGrading(out, { flipErrors = false } = {}) {
     pass: f.pass, cells: entries.length, unreproducible: { cells: f.unrepro.cells.size, lessons: [...f.unrepro.lessons].sort() }, ...reader.g5, extraEnvKeys: [...f.extra].sort(),
   };
   const grading = { flippedLessons: [...f.flipped].sort(), acceptanceFlips: f.accepted.size, readerSample: reader.readerSample, g5 };
-  // Present only once scored, so an unscored stored sample leaves E7's file shape unchanged.
   const storedSample = storedSummary(out);
   if (storedSample) grading.storedSample = storedSample;
   return sortKeys(grading);
@@ -111,7 +107,6 @@ const count = (v, flag, min) => {
   return Number(v);
 };
 
-/** A draw needs --tasks and --seed (no default, so the seed is always a recorded choice); scoring takes only --labels. */
 function sampleArgs(args, cwd, drawFlags) {
   if (args.labels !== undefined) {
     const extra = drawFlags.filter((f) => args[camel(f)] !== undefined);
@@ -136,7 +131,6 @@ function storedMode(args, out, cwd) {
 
 function gradingMode(args, out) {
   const file = path.join(out, 'grading.json');
-  // Removed first, so a refused grading leaves no older file for the analyzer to read as this one's.
   fs.rmSync(file, { force: true });
   const grading = buildGrading(out, { flipErrors: args.flipErrors === true });
   fs.writeFileSync(file, `${JSON.stringify(grading, null, 2)}\n`);
@@ -152,7 +146,6 @@ export function runCli(argv, cwd = process.cwd()) {
     const args = parseArgs(argv);
     const given = path.resolve(cwd, args.out);
     if (!fs.existsSync(given)) throw new Error(`--out ${args.out}: no such folder`);
-    // One realpath for every alias of the out dir (a junction, another case), so rows and the lock are shared (test 31).
     const out = fs.realpathSync.native(given);
     // The spelling given too, since the run wrote its paths in that one and a realpath may differ (macOS /var).
     const stdout = withLock(out, () => RUN[args.mode]({ ...args, given }, out, cwd, (m) => notes.push(m)));

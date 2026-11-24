@@ -1,4 +1,3 @@
-// Two serve() boots on one store started together: the pidfile claim lets exactly one listen.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

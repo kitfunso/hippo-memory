@@ -105,7 +105,6 @@ describe('github DLQ', () => {
       rawPayload: '{"i":1}',
       error: 'first',
     });
-    // A later clock makes received_at differ without a sleep.
     vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'));
     await parkInDlq(githubDlq, sqliteStore(root), {
       tenantId: 'default',

@@ -1,8 +1,3 @@
-/** Project_brief object: the living, repo-scoped `summary` of a repository, evolving via supersession.
- *  `refreshedBrief` assembles recent `path:<repo>` receipts with a deterministic (no-LLM) assembler; an LLM pipeline is
- *  deferred. The `project_briefs` table is the source of truth; the memory mirror (memory_id NULLABLE, ON DELETE SET
- *  NULL) is for recall. */
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
@@ -25,10 +20,7 @@ export const VALID_BRIEF_STATES: ReadonlySet<BriefStatus> = new Set<BriefStatus>
  *  convention. */
 export const MAX_REPO_LEN = 256;
 export const MAX_BRIEF_SUMMARY_LEN = 8192;
-/** Bound the receipts gathered per refresh (a refresh reads memories; cap the scan
- *  + the rendered body). Realistic repos have far fewer recent receipts than this. */
 const MAX_BRIEF_RECEIPTS = 50;
-/** Truncate each receipt's headline in the assembled digest. */
 const MAX_RECEIPT_HEADLINE_LEN = 200;
 
 export interface SaveProjectBriefOptions {
@@ -47,10 +39,8 @@ export interface SaveProjectBriefOptions {
 
 export interface ListProjectBriefsOptions {
   status?: BriefStatus;
-  /** Filter to a single repo. */
   repo?: string;
   limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 
@@ -61,8 +51,6 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
   states: VALID_BRIEF_STATES,
   closableFrom: ['active'],
   draft(opts, now) {
-    // The repo becomes a path tag on the refresh match and a heading in the digest, so it must be
-    // one line.
     const repo = requireLine(opts.repo, MAX_REPO_LEN, 'repo');
     const summary = requireText(opts.summary, MAX_BRIEF_SUMMARY_LEN, 'summary');
     capText(opts.changeSummary, MAX_SHORT_FIELD_LEN, 'changeSummary');
@@ -77,8 +65,6 @@ export const PROJECT_BRIEF: SavableDescriptor<'project_brief', SaveProjectBriefO
   },
 };
 
-/** Recall-surface content for the memory mirror: repo + summary. Named (mirrors buildSkillContent) so the recall
- *  surface is deterministic + unit-testable. */
 function buildBriefContent(repo: string, summary: string): string {
   return `${repo}\n\n${summary}`;
 }
@@ -96,37 +82,26 @@ export function loadProjectBriefs(
   });
 }
 
-/** An empty filter lists every repo, so the callers refuse an empty repo first. */
 function newestActive(repo: string): ObjectListQuery<'project_brief'> {
   return { status: 'active', filter: repo, limit: 1 };
 }
 
-/** Single-line headline for a receipt: first non-empty line, newline-stripped, truncated. Deterministic + safe for the
- *  markdown bullet list. */
 function receiptHeadline(content: string): string {
   const firstLine = (content ?? '').split(/\r?\n/).find((l) => l.trim().length > 0) ?? '';
   const trimmed = firstLine.trim();
   return truncateWithEllipsis(trimmed, MAX_RECEIPT_HEADLINE_LEN);
 }
 
-/** The tag a memory of the repo carries; the store matches it whole, so `path:hip` never matches
- * `path:hippo`. */
 function receiptTag(normalizedRepo: string): string {
   return `path:${normalizedRepo.toLowerCase()}`;
 }
 
-// `id DESC` is a lexical tiebreak on a random-ish id, so same-`created` order is stable but
-// arbitrary; `created DESC` is the recency order. Receipt lines go newest-first only while they fit
-// MAX_BRIEF_SUMMARY_LEN (reserving slack for header and omission footer), else the store rejects
-// the body.
 function fitReceiptLines(receipts: readonly BriefReceipt[]): string[] {
   const buildReceiptLine = (r: BriefReceipt): string =>
     `- ${(r.created ?? '').slice(0, 10)} [${r.source}] ${receiptHeadline(r.content)}`;
 
   const receiptLines: string[] = [];
   if (receipts.length > 0) {
-    // Header + "## Recent receipts" + a worst-case omission footer cost; keep slack so the joined
-    // markdown stays <= MAX_BRIEF_SUMMARY_LEN even after the footer.
     const SLACK = 400;
     let bodyBudget = MAX_BRIEF_SUMMARY_LEN - SLACK;
     for (const r of receipts) {
@@ -165,8 +140,6 @@ function renderBriefDigest(
       lines.push(`_... ${omitted} more receipt(s) omitted (summary cap)._`);
     }
   }
-  // Belt-and-suspenders: hard-clamp so the store's NOT-NULL/<=cap contract holds even for a single
-  // oversized line.
   let markdown = lines.join('\n');
   if (markdown.length > MAX_BRIEF_SUMMARY_LEN) {
     markdown = markdown.slice(0, MAX_BRIEF_SUMMARY_LEN);
@@ -211,8 +184,6 @@ function briefDigest(normalizedRepo: string, receipts: readonly BriefReceipt[]):
   };
 }
 
-/** The version a refresh saves: a successor of the repo's active brief when it has one, else a
- * first version. */
 function refreshWrite(
   normalizedRepo: string,
   digest: BriefDigest,
@@ -224,8 +195,6 @@ function refreshWrite(
     changeSummary: active ? `auto-refresh from ${digest.receiptCount} receipt(s)` : undefined,
     supersedesBriefId: active ? active.id : undefined,
     refreshReceiptCount: digest.receiptCount,
-    // The path tag lets path-aware recall boost the brief; it cannot become its own receipt,
-    // because receipts leave out source project_brief.
     extraTags: [receiptTag(normalizedRepo)],
   };
 }

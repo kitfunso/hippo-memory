@@ -1,13 +1,4 @@
 #!/bin/sh
-# First-boot init for the AML evaluation deployment.
-#
-# The store root is /data/.hippo (the .hippo directory IS the root). On a
-# fresh volume, initialize it; on restarts the existing store persists.
-#
-# API keys are minted OUT OF BAND by the operator:
-#   fly ssh console -a hippo-aml -C "node /app/dist/cli.js auth create --label aml-eval --role member --json"
-# The plaintext is shown exactly once; hippo stores only a scrypt hash.
-# Nothing here prints or stores a key.
 set -eu
 
 # Privilege drop: the Fly volume mounts root-owned, so first boot must chown
@@ -32,5 +23,4 @@ if [ ! -f /data/.hippo/index.json ] && [ ! -f /data/.hippo/hippo.db ]; then
 fi
 
 echo "[aml] starting hippo serve (auth required, port ${HIPPO_PORT:-8080})"
-# TLS ends at Cloudflare and hippo is reachable only on the compose network, so cleartext here is allowed on purpose.
 exec node /app/dist/cli.js serve --host 0.0.0.0 --allow-cleartext --port "${HIPPO_PORT:-8080}"

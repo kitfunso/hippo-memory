@@ -1,5 +1,3 @@
-/** `hippo decide` and `hippo predict` through runCli: each record's full life on a real store, and the refusals. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,7 +16,6 @@ beforeEach(() => {
   vi.stubEnv('HIPPO_HOME', join(cwd, 'global-hippo'));
   vi.stubEnv('HIPPO_TENANT', 'default');
   vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '1');
-  // The CLI looks for the store in `.hippo` under the working directory.
   process.chdir(cwd);
 });
 afterEach(() => {

@@ -1,4 +1,3 @@
-// The blind author launcher (stage 2 plan D3): a fresh config, no hippo env, every request through the log proxy, and a discard on any forbidden term.
 import { describe, it, expect, afterEach } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -7,10 +6,8 @@ import { join } from 'node:path';
 import { DEFAULT_FORBID, FORBID_SETS, leakHits, readableBody, runAuthor } from '../../scripts/token-eval/z0-author.mjs';
 import { cleanup, tmp } from '../fixtures/z0-harness.js';
 
-// The temp root can itself name hippo (CI's is hippo-test-tmp-*), so the end-to-end runs forbid a sentinel instead.
 const SENTINEL = 'SENTINEL-AUTHOR-LEAK';
 
-// Stands in for claude: posts its prompt through ANTHROPIC_BASE_URL, dumps what it was started with, and echoes the prompt on ECHO.
 const AUTHOR_BIN = `import * as fs from 'node:fs';
 const prompt = fs.readFileSync(0, 'utf8');
 await fetch(process.env.ANTHROPIC_BASE_URL + '/v1/messages', { method: 'POST', body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }) });
@@ -19,7 +16,6 @@ fs.writeFileSync(process.env.AUTHOR_DUMP, JSON.stringify({ cwd: process.cwd(), a
 console.log(JSON.stringify({ type: 'result', result: prompt.includes('ECHO') ? prompt : 'done' }));
 `;
 
-/** A local upstream that answers 200 and keeps each body, so no test reaches the real API. */
 async function upstream() {
   const bodies: string[] = [];
   const server = createServer((req, res) => {

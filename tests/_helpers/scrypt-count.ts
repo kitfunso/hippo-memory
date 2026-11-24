@@ -1,5 +1,3 @@
-// Counts scrypt jobs handed to the thread pool, from Node's own async-resource record. A key check derives there;
-// scryptSync makes no job, so minting a key adds nothing.
 import { createHook } from 'node:async_hooks';
 
 let runs = 0;

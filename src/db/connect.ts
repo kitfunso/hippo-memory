@@ -40,11 +40,8 @@ export function oncePerStore(
   runtime?.markRun(key, name);
 }
 
-// Owner-only on create; SQLite gives the WAL and SHM files the db's mode. Existing paths keep
-// theirs, with one warning.
 function createStoreFilesOwnerOnly(at: StoreAt): void {
   const { hippoRoot } = at;
-  // A stat, not a failed exclusive open, is what an existing store costs on every connection.
   if (fs.existsSync(getHippoDbPath(hippoRoot))) {
     oncePerStore(at, 'mode-check', () => warnWideModes(hippoRoot));
     return;
@@ -59,7 +56,6 @@ function createStoreFilesOwnerOnly(at: StoreAt): void {
   }
 }
 
-// Windows reports no owner-only bits, so only a POSIX mode can be too wide.
 function warnWideModes(hippoRoot: string): void {
   if (process.platform === 'win32') return;
   const wide = [
@@ -76,8 +72,6 @@ function warnWideModes(hippoRoot: string): void {
   }
 }
 
-// The probe read whether an archived row's mirror waits for cleanup, so a clean archive costs no
-// scan; a failed unlink leaves its row uncleaned, and the next open retries it.
 function sweepArchivedMirrorsIfDue(
   hippoRoot: string,
   db: DatabaseSyncLike,
@@ -88,7 +82,6 @@ function sweepArchivedMirrorsIfDue(
 
 const SCHEMA_STEP = 'schema';
 
-// Connections behind the read-only gate, so a read can still make the temp tables it needs.
 const gated = new WeakSet<DatabaseSyncLike>();
 
 /** Whether `db` is behind the write gate, so it refuses every write. */
@@ -113,15 +106,11 @@ export function reproveStoreSchema({ hippoRoot, runtime }: StoreAt): void {
   runtime?.forget(storeKey(hippoRoot), SCHEMA_STEP);
 }
 
-// Once the runtime has proven a store's schema, a new connection re-reads only the two version
-// stamps and the binary floor: a migration by another process moves a stamp and sends the open down
-// the full path.
 function settleSchema(db: DatabaseSyncLike, at: StoreAt, busyWaitMs: number): OpenFacts | null {
   const { hippoRoot, runtime } = at;
   if (runtime?.hasRun(storeKey(hippoRoot), SCHEMA_STEP)) {
     const settled = settledStoreFacts(db);
     if (settled) {
-      // An older binary can still write embeddings.json beside a store this process has proven.
       importLegacyVectors(db, hippoRoot);
       return settled;
     }
@@ -137,13 +126,11 @@ export function shutWriteGate(db: DatabaseSyncLike): void {
   gated.add(db);
 }
 
-// Shut after the schema step.
 function closeGate(db: DatabaseSyncLike, facts: OpenFacts | null): OpenedDb {
   shutWriteGate(db);
   return { db, facts };
 }
 
-// A read-only open never makes a store, so a missing one reads as an empty one held in memory.
 function emptyReadOnlyStore(busyWaitMs: number): OpenedDb {
   const db = new DatabaseSync(':memory:');
   try {
@@ -154,8 +141,6 @@ function emptyReadOnlyStore(busyWaitMs: number): OpenedDb {
   }
 }
 
-// A store with a WAL opens read-only, whose close folds no frame into hippo.db; null sends a store
-// with no WAL, or one behind the schema, down the read-write path.
 function walReadOnlyStore(hippoRoot: string, busyWaitMs: number): OpenedDb | null {
   const file = getHippoDbPath(hippoRoot);
   if (!fs.existsSync(`${file}-wal`)) return null;
@@ -176,8 +161,6 @@ function walReadOnlyStore(hippoRoot: string, busyWaitMs: number): OpenedDb | nul
 
 const READ_WRITE_GATE = 'read-only-via-read-write';
 
-// A missing store reads as empty and one mid-WAL without a checkpoint at close. The first open picks
-// for the runtime, since its read-write connection makes the WAL a later open would find.
 function readOnlyStore(at: StoreAt, busyWaitMs: number): OpenedDb | null {
   const { hippoRoot, runtime } = at;
   if (!fs.existsSync(getHippoDbPath(hippoRoot))) return emptyReadOnlyStore(busyWaitMs);
@@ -194,7 +177,6 @@ function readOnlyStore(at: StoreAt, busyWaitMs: number): OpenedDb | null {
 export interface OpenedDb {
   readonly db: DatabaseSyncLike;
   readonly facts: OpenFacts | null;
-  /** The request's own handle again: its first open already ran the once-per-open steps. */
   readonly reused?: boolean;
 }
 
@@ -219,9 +201,7 @@ export function connectWithFacts(at: StoreAt, busyWaitMs: number = DEFAULT_BUSY_
     );
     db.exec('PRAGMA foreign_keys = ON');
     const facts = settleSchema(db, at, busyWaitMs);
-    // After the schema step, so an older store still migrates; the mirror sweep below writes too.
     if (readOnly) return closeGate(db, facts);
-    // Orphan mirrors of archived raw rows go here; a filesystem failure must not block the open.
     try {
       sweepArchivedMirrorsIfDue(hippoRoot, db, facts?.archivePending);
     } catch (cleanupErr) {

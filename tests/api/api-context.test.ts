@@ -36,14 +36,10 @@ const { apiCtx } = sessionPerTest();
 
 function tmpHome() {
   const home = makeRoot('api-ctx');
-  // Per-test HIPPO_HOME override pointing to a separate UNINITIALIZED dir
-  // so hasGlobal=false inside api.contextGet. Keeps the test local-only and
-  // prevents any global writes from leaking into the shared baseline.
   const globalTmp = makeRoot('api-ctx-global', { init: false });
   vi.stubEnv('HIPPO_HOME', globalTmp);
   return {
     home,
-    // Removed once the test is done, after its session has closed its handles.
     restore: () => onTestFinished(() => removeDir(home)),
   };
 }
@@ -76,11 +72,9 @@ describe('api.contextGet', () => {
 
       const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 1500 });
 
-      // All five fit the budget; estimateTokens is ceil(chars / 4), so each 25-character text costs 7.
       expect(result.entries).toHaveLength(5);
       expect(result.tokens).toBe(35);
       expect(result.tokens).toBe(result.entries.reduce((sum, e) => sum + e.tokens, 0));
-      // Strongest first ordering
       for (let i = 1; i < result.entries.length; i++) {
         expect(result.entries[i - 1].score).toBeGreaterThanOrEqual(result.entries[i].score);
       }
@@ -107,7 +101,6 @@ describe('api.contextGet', () => {
     const { home, restore } = tmpHome();
     try {
       const ctx: FullContext = apiCtx(home, 'default', { subject: 'cli', role: 'admin' });
-      // Seed 10 longish memories so total tokens >> tight budget
       for (let i = 0; i < 10; i++) {
         await remember(ctx, {
           content: `padding ${'x'.repeat(200)} content number ${i}`,
@@ -118,7 +111,6 @@ describe('api.contextGet', () => {
       const result = await contextGet(ctx, { currentProject: cwdProject(), budget: 50 });
 
       expect(result.tokens).toBeLessThanOrEqual(50);
-      // At a 50-token budget, only the smallest-or-fewest memories fit
       expect(result.entries.length).toBeLessThan(10);
     } finally {
       restore();

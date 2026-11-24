@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Mechanism audit (docs/evals/2026-09-23-mechanism-audit-prereg.md): one ingest, a never-slept and a slept copy,
-# then hybrid and physics retrieval on each. Usage: HIPPO_MODEL_CACHE=<dir> bash build_mech_stores.sh <run-dir> <data.json>
 set -euo pipefail
 R="$1"; DATA="$2"
 W="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -8,7 +6,6 @@ W="$(cd "$(dirname "$0")/../.." && pwd)"
 unset ANTHROPIC_API_KEY OPENAI_API_KEY VOYAGE_API_KEY COHERE_API_KEY HIPPO_LLM_RERANKER_KEY TYPESAFE_API_KEY HIPPO_LLM_BASE_URL HIPPO_LLM_API_KEY HIPPO_LLM_MODEL HIPPO_LLM_ALLOW_HTTP
 mkdir -p "$R"
 
-# ingest.py runs a hippo binary once per session; point it at this checkout, not a global install.
 if command -v cygpath > /dev/null; then
   printf '@node "%s" %%*\r\n' "$(cygpath -w "$W/bin/hippo.js")" > "$R/hippo.cmd"; HIPPO_BIN="$(cygpath -w "$R/hippo.cmd")"
 else

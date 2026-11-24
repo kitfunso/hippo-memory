@@ -1,5 +1,3 @@
-// One page of a project's memories and the cross-project search, each one bounded store read at the
-// stamp's instant.
 import { round1 } from '../../base/util/format.js';
 import type {
   DashboardReads,
@@ -37,10 +35,8 @@ export interface MemoryQuery {
   sort: SortKey;
   dir: SortDir;
   chip: Chip;
-  /** Layer indices in wire order, ascending, no duplicates. */
   layers: number[];
   brush: Brush;
-  /** Lowercased search text, or null when none or shorter than the minimum. */
   q: string | null;
 }
 

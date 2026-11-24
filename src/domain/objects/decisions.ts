@@ -1,9 +1,3 @@
-/**
- * Decision object: the `decisions` table is the source of truth, so an in-force decision stays
- * `active` despite memory decay. The memory mirror (memory_id NULLABLE, ON DELETE SET NULL) is for
- * recall only; saveDecision commits both in one `objects` transaction.
- */
-
 import { assertTenantId } from '../../base/scope/tenant-id.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { MAX_SHORT_FIELD_LEN } from '../../base/util/limits.js';
@@ -38,7 +32,6 @@ export interface SaveDecisionOptions {
 export interface ListDecisionsOptions {
   status?: DecisionStatus;
   limit?: number;
-  /** Resume after this row: the position the previous page ended on. */
   after?: KeysetPosition;
 }
 

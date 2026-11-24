@@ -67,9 +67,6 @@ describe('pathOverlapScore', () => {
     expect(pathOverlapScore(['path:src'], [])).toBe(0);
   });
 
-  // C2 contract: normalize by the more specific (larger) side. A single
-  // memory tag matching one of three current-path tags scores 1/3, not 1/1
-  // (the old memory-count normalization would have scored this 1.0).
   it('normalizes by the more specific side (C2 contract)', () => {
     const score = pathOverlapScore(['path:g'], ['path:g', 'path:a', 'path:b']);
     expect(score).toBeCloseTo(1 / 3, 10);
@@ -86,8 +83,6 @@ describe('pathBoostMultiplier', () => {
   });
 
   it('ignores non-path tags mixed in when computing overlap', () => {
-    // Naive implementations that don't filter memoryTags before dividing would
-    // use length 2 (score 0.5, boost 1.15) instead of the filtered length 1.
     const boost = pathBoostMultiplier(['note', 'path:src'], ['path:src']);
     expect(boost).toBe(1.3);
   });
@@ -98,9 +93,6 @@ describe('pathBoostMultiplier', () => {
     expect(pathBoostMultiplier(tags, tags)).toBe(1.3);
   });
 
-  // DEFECT PIN: fixed by the C2 max-normalization (was 1.3x under the old
-  // memory-count normalization); see
-  // docs/plans/2026-07-18-s5-path-overlap-tuning.md T3
   it('DEFECT PIN: a single generic path tag no longer scores the full 1.3x boost from a deeper cwd', () => {
     const boost = pathBoostMultiplier(['path:skf-user'], ['path:skf-user', 'path:proj-nova', 'path:lib']);
     expect(boost).toBeCloseTo(1.1, 10);
@@ -114,16 +106,6 @@ describe('pathBoostMultiplier', () => {
     expect(boost).toBe(1.15);
   });
 
-  // Same-project depth gradient under the max-side normalization: a memory
-  // written at a project root, recalled from deeper cwds of the SAME project,
-  // now sheds boost one level earlier than the old memory-count normalization
-  // (which held 1.3x until the project segment left the slice(-4) window).
-  // INTENDED semantics, not collateral: the subset relation cannot distinguish
-  // "generic home-root memory vs project cwd" from "project-root memory vs
-  // subdir cwd" (path tags carry no project boundary), and the gradient gives
-  // strictly better relative ordering - an exactly-located memory OUTRANKS a
-  // root-located one (1.3x vs 1.2x) where the old normalization tied them.
-  // See docs/plans/2026-07-18-s5-path-overlap-tuning.md Risks.
   it('same-project depth gradient: root memory softens from deeper own-project cwds', () => {
     const mem = ['path:skf-user', 'path:proj'];
     expect(pathBoostMultiplier(mem, ['path:skf-user', 'path:proj'])).toBe(1.3);

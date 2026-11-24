@@ -1,20 +1,3 @@
-/**
- * v1.25.0 (v39 post-ship tail #1) — direct CLI recall/explain scope default-deny.
- *
- * Before this release the direct CLI paths (printRecall / explainQuery) loaded
- * candidates via unscoped listSearchEntries: `<source>:private:*` and
- * `unknown:legacy` rows reached output for no-scope callers, while
- * api.recall (HTTP/MCP) denied them. These tests lock the parity:
- *   - no --scope        → default-deny (private + quarantine excluded)
- *   - explicit --scope  → exact envelope-column match (deliberate access)
- *   - hasGlobal path    → searchBothHybrid recallScope plumb equally filtered
- *   - suppression stats → JS-half drops counted in droppedPreRank
- *   - hippo explain     → same rule + honest [note] when candidates hidden
- *
- * Runs the CLI entry in process against a real store; global-store rows are
- * seeded against the same SQLite.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { listRecallEntriesInFolder } from '../../src/store/sqlite/fixtures.js';
@@ -35,7 +18,6 @@ const PRIV_SLACK = 'private slack deploykey fact';
 const PRIV_GITHUB = 'private github deploykey fact';
 const LEGACY = 'legacy quarantined deploykey fact';
 
-/** `hippo <args>` run in this process from `cwd`, the call bin/hippo.js makes; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);
@@ -78,13 +60,8 @@ describe('cli recall scope default-deny', () => {
 
   it('explicit --scope UNLOCKS the named scope on top of the default set (additive CLI semantics)', async () => {
     const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:C1', '--limit', '10');
-    // Deliberate access to the requested private scope is preserved...
     expect(out).toContain(PRIV_SLACK);
-    // ...the default-admitted set stays (the CLI flag is historically a
-    // tag-boost hint; narrowing to the envelope column would empty every
-    // tag-scoped recall — see tests/store/scope-boost.test.ts)...
     expect(out).toContain(CLEAN);
-    // ...and OTHER private scopes + quarantine buckets stay denied.
     expect(out).not.toContain(PRIV_GITHUB);
     expect(out).not.toContain(LEGACY);
   });
@@ -101,10 +78,6 @@ describe('cli recall scope default-deny', () => {
     expect(text).not.toContain(PRIV_SLACK);
     expect(text).not.toContain(PRIV_GITHUB);
     expect(text).not.toContain(LEGACY);
-    // v1.12.13 accounting convention: SQL-excluded rows (quarantine + the
-    // v1.25.0 pre-window ':private:' exclusion) are pre-candidate — they
-    // never appear in totalCandidates and are not counted as drops. Of the
-    // four seeded rows matching 'deploykey', only CLEAN is a candidate.
     expect(parsed.suppressionSummary.totalCandidates).toBe(1);
     expect(parsed.suppressionSummary.droppedPreRank).toBe(0);
   });
@@ -127,8 +100,6 @@ describe('cli recall scope default-deny', () => {
   });
 
   it('hasGlobal path: explicit --scope additively unlocks the requested private scope on the GLOBAL store too', async () => {
-    // independent-review-critic round 1 med: the additive unlock was only
-    // covered on the local-only path.
     initTestStore(globalDir);
     writeEntry(globalDir, createMemory('global clean deploykey note', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     writeEntry(
@@ -142,16 +113,11 @@ describe('cli recall scope default-deny', () => {
     const out = await hippo(home, 'recall', 'deploykey', '--scope', 'slack:private:CG', '--limit', '10');
     expect(out).toContain('global private deploykey note');
     expect(out).toContain('global clean deploykey note');
-    // Non-requested private scopes stay denied on both stores.
     expect(out).not.toContain(PRIV_SLACK);
     expect(out).not.toContain(PRIV_GITHUB);
   });
 
   it('private rows cannot starve admitted rows out of the SQL candidate window', async () => {
-    // 220 matching private rows > the 200-row default window. Pre-fix, the
-    // window filled with private rows in SQL and the JS filter then emptied
-    // it, so the one admitted row never surfaced. The SQL pre-window
-    // NOT LIKE '%:private:%' exclusion keeps the window for admitted rows.
     const hippoDir = join(home, '.hippo');
     const filler = Array.from({ length: 220 }, (_, i) =>
       createMemory(`windowstarve private filler row number ${i}`, {
@@ -169,7 +135,6 @@ describe('cli recall scope default-deny', () => {
     expect(contents).toContain('windowstarve admitted public row');
     expect(contents.some((c) => c.includes('private filler'))).toBe(false);
 
-    // End-to-end through the CLI for belt and braces.
     const out = await hippo(home, 'recall', 'windowstarve', '--limit', '10');
     expect(out).toContain('windowstarve admitted public row');
     expect(out).not.toContain('private filler');

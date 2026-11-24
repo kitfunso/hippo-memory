@@ -1,11 +1,3 @@
-/**
- * D2 v1.12.10 — api.sleep emits consolidate audit row tagged with __host__
- * synthetic tenant (not ctx.tenantId).
- *
- * Closes the v1.11.4 Episode B independent-review-critic MED #3 and the
- * v1.12.0 sub-2 TODOS "Consolidate audit row tenant tag" item.
- */
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { sleepWholeStore, adminActor } from '../../src/api/index.js';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -31,10 +23,10 @@ describe('api.sleep audit row tenant tag', () => {
         .prepare(`SELECT tenant_id, actor, op, metadata_json FROM audit_log WHERE op = 'consolidate'`)
         .all() as Array<{ tenant_id: string; actor: string; op: string; metadata_json: string }>;
       expect(rows).toHaveLength(1);
-      expect(rows[0]!.tenant_id).toBe('__host__'); // D2 pick: host-wide tag
-      expect(rows[0]!.actor).toBe('cli:operator-alice'); // operator still traceable
+      expect(rows[0]!.tenant_id).toBe('__host__');
+      expect(rows[0]!.actor).toBe('cli:operator-alice');
       const meta = JSON.parse(rows[0]!.metadata_json);
-      expect(meta.triggeredByTenant).toBe('acme'); // forensics: which tenant called it
+      expect(meta.triggeredByTenant).toBe('acme');
       expect(meta.dryRun).toBe(true);
       expect(meta.partial).toBe(false);
     } finally {
@@ -54,10 +46,8 @@ describe('api.sleep audit row tenant tag', () => {
         .prepare(`SELECT tenant_id, actor, metadata_json FROM audit_log WHERE op = 'consolidate' ORDER BY id`)
         .all() as Array<{ tenant_id: string; actor: string; metadata_json: string }>;
       expect(rows).toHaveLength(2);
-      // BOTH rows tagged __host__ (host-wide work, not the caller's tenant).
       expect(rows[0]!.tenant_id).toBe('__host__');
       expect(rows[1]!.tenant_id).toBe('__host__');
-      // But triggeredByTenant + actor preserve the forensic trail.
       expect(JSON.parse(rows[0]!.metadata_json).triggeredByTenant).toBe('acme');
       expect(rows[0]!.actor).toBe('cli:alice');
       expect(JSON.parse(rows[1]!.metadata_json).triggeredByTenant).toBe('globex');

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 5 pre-check: if Jev tagged these rows as errors, how much would the
- *  retrieval ranking actually move? Uses hippo's own calculateStrength, so the
- *  numbers are the real ones, not a reimplementation. No API calls, no cost. */
 
 import { DatabaseSync } from 'node:sqlite';
 import { homedir } from 'node:os';
@@ -40,8 +37,6 @@ for (const x of lane4.rows) {
     emotional_valence: e.emotional_valence,
   };
   const sBase = calculateStrength(base, now);
-  // The Jev arm: error tag doubles half-life (memory.ts:394) and the tag is
-  // written with negative valence, which also feeds the emotional multiplier.
   const sTag = calculateStrength({ ...base, half_life_days: e.half_life_days * 2, emotional_valence: 'negative' }, now);
   rows.push({ id: x.id, p: x.jev.p, label: x.label_error, sBase, sTag, mBase: mult(sBase), mTag: mult(sTag) });
 }
@@ -56,8 +51,6 @@ console.log(
   `strength baseline: min ${f(Math.min(...rows.map((r) => r.sBase)))} max ${f(Math.max(...rows.map((r) => r.sBase)))}`,
 );
 
-// Selective arm: tag the top-K by Jev p, K = the store's own error base rate,
-// declared in advance rather than tuned. Uniform tagging cannot change ranking.
 const baseRate = rows.filter((r) => r.label).length / rows.length;
 const K = Math.round(baseRate * rows.length);
 const ranked = [...rows].sort((a, b) => b.p - a.p);

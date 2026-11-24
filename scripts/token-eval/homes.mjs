@@ -1,4 +1,3 @@
-// Per-run directories for every surface that could hold memory, and the checks that they start empty and stay the run's own.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -20,7 +19,6 @@ export function runDirs(outDir, seq, arm, seed) {
     codexHome: path.join(root, 'codex-home'),
     hippoHome: path.join(root, 'hippo-home'),
     bin: path.join(root, 'bin'),
-    // HOME and APPDATA for Codex sessions and the X2 install, so hippo's wrapper metadata is per run (E6 plan R11).
     home: path.join(root, 'home'),
   };
 }
@@ -118,18 +116,15 @@ export function shellHippoCheck(arm, dirs, env, shell, name) {
   return last;
 }
 
-/** One run's homes check on fresh dirs: what hippo's importer would read, and what `hippo` the agent's shell finds. */
 function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, install }) {
   const dirs = runDirs(outDir, seq, arm, seed);
   const name = `${seq}/${arm}/seed${seed}`;
   freshRunDirs(dirs);
-  // Reaching here proves the three homes existed and were empty.
   const report = { name, root: dirs.root, imports: [], shell: 'none', after: null };
   try {
     git(['init', '--quiet'], dirs.work);
     const env = armEnv(arm, dirs, baseEnv, { passEnv });
     if (HIPPO_ARMS.has(arm)) writeHippoShim(dirs.bin, outDir, arm === 'A5' ? 'sham' : 'real');
-    // X2's Codex install adds hooks.json and a wrapper home, and hippo runs under that home too, so the importer is checked from both.
     const x2 = arm === 'X2' && install;
     if (x2) install({ s: { id: seq }, arm, seed, dirs, env });
     for (const home of x2 ? [outDir, dirs.home] : [outDir]) {
@@ -152,7 +147,6 @@ function checkRunHomes({ outDir, seq, arm, seed }, { baseEnv, passEnv, shell, in
  * @param {{outDir: string, runs: {seq: string, arm: string, seed: number}[], passEnv?: string[], baseEnv?: NodeJS.ProcessEnv, install?: ((run: any) => void) | null}} options */
 export function checkHomes({ outDir, runs, passEnv = [], baseEnv = process.env, install = null }) {
   if (!fs.existsSync(path.join(REPO, 'dist', 'cli.js'))) throw new Error('run `npm run build` first: the homes check runs the built hippo CLI');
-  // The check recreates and removes each run dir, so it refuses any that already holds data rather than delete it.
   const occupied = runs.map((r) => runDirs(outDir, r.seq, r.arm, r.seed).root).filter((d) => fs.existsSync(d) && fs.readdirSync(d).length > 0);
   if (occupied.length > 0) throw new Error(`${occupied[0]} already holds run data${occupied.length > 1 ? ` (and ${occupied.length - 1} more run dirs)` : ''}; the homes check never deletes it. Pick a new --out, or move that run away first.`);
   fs.mkdirSync(outDir, { recursive: true });

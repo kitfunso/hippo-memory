@@ -1,16 +1,3 @@
-/**
- * E2 prediction first-class object — HTTP route parity test.
- * Docs: docs/plans/2026-05-26-e2-prediction-object.md
- *
- * Covers:
- * 1. POST /v1/predictions creates a row (201 + Prediction body)
- * 2. GET /v1/predictions filters by class + status
- * 3. GET /v1/predictions/:id returns single + 404 on missing
- * 4. POST /v1/predictions/:id/close updates the row
- * 5. Bearer auth required (no Authorization → 401)
- * 6. status filter validation (invalid → 400)
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -29,7 +16,6 @@ let apiKey: CreateApiKeyResult;
 
 beforeEach(async () => {
   home = makeRoot('http-pred');
-  // Provision an admin API key for the test tenant
   const db = openHippoDb(home);
   try {
     apiKey = createApiKey(db, { tenantId: 'default', label: 'test-pred', role: 'admin' });
@@ -65,12 +51,10 @@ describe('HTTP /v1/predictions (prediction first-class object)', () => {
     expect(body.prediction.estimateUnit).toBe('days');
     expect(body.prediction.targetDate).toBe('2026-06-15');
     expect(body.prediction.closureState).toBe('open');
-    // The first row in a fresh store's AUTOINCREMENT table.
     expect(body.prediction.id).toBe(1);
   });
 
   it('GET /v1/predictions filters by class and returns list', async () => {
-    // Seed
     for (const claim of ['first claim text', 'second claim text']) {
       await fetch(`${handle.url}/v1/predictions`, {
         method: 'POST',

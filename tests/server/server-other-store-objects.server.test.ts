@@ -1,4 +1,3 @@
-// serve() under a store that has the objects group runs every route ported to it on that store.
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -13,12 +12,10 @@ describe('serve() under a store that has the objects group', () => {
   let fixture: TwoTenantFixture;
   let side: PortOnlySide<'objects'>;
   let handle: ServerHandle;
-  // One handle for the file's requests, as an add-on store would hold; each fresh hippo.db open costs a WAL checkpoint.
   const session = new RequestStores();
 
   type RouteBody = Readonly<Record<string, string | boolean | readonly string[]>>;
 
-  /** One savable kind's routes: its reply fields, a create body, a successor body and the status its supersede answers. */
   interface SavedKind {
     readonly path: string;
     readonly one: string;

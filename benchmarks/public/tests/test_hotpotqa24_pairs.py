@@ -1,5 +1,3 @@
-"""qa/loaders/hotpotqa24.py score (dated notes 9): a paired run is scored with its own arms, so hippo-best pairs with
-the hippo-emb run as well as with the registered one."""
 from __future__ import annotations
 
 import json

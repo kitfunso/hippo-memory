@@ -1,6 +1,3 @@
-// The `hippo recall` verb: run the recall, then print or serialise what it found; main() loads it
-// lazily from the command table.
-
 import type { CallerState } from '../../api/callers.js';
 import { type SearchResult } from '../../base/rank/search-types.js';
 import { estimateTokens } from '../../base/util/token-text.js';
@@ -31,8 +28,6 @@ import {
 } from './recall-block.js';
 import { parseRecallFlags, type ParsedRecallFlags } from './recall-flags.js';
 
-/** Runs `hippo recall`: the flags name the ranking core and this verb's presenter,
- * `retrieveWithCliCore` ranks and records, then the block prints. */
 interface PrintRecallOptions {
   readonly hippoRoot: string;
   readonly tenantId: string;
@@ -59,8 +54,6 @@ async function printRecall({
     { query, boost: { goalTag: parsed.goalTag, sessionId: parsed.sessionId } },
     {
       rank: rankOptions(query, flags, parsed, priced),
-      // The global store is a second source for this surface alone, and never when it is the store
-      // being searched.
       sources: globalRoot !== hippoRoot && priced.globalOn ? cliSecondStore(globalRoot) : undefined,
       note: (line) => printError(line),
       hostSessionId: hostSessionId(),
@@ -80,15 +73,12 @@ async function printRecall({
   console.log(slot.presented.text);
 }
 
-/** The ranking core's options, from flags already checked. */
 function rankOptions(
   query: string,
   flags: CliFlags,
   parsed: ParsedRecallFlags,
   priced: PricedEntries,
 ): api.CliCoreRecall['rank'] {
-  // Engines spend the budget on the text each result prints as, less the header, so selection and
-  // print agree.
   const entryBudget = Math.max(
     0,
     parsed.budget - printedTokens(recallHeading(parsed.budget, parsed.budget, query)),
@@ -132,14 +122,10 @@ interface PresentRecallOptions {
   readonly planning: PlanningFallacyOutput;
 }
 
-/** The presenter `retrieveWithCliCore` calls once ranking ends: fits and renders the block, and
- * names the rows shown and the hints over them. */
 async function presentRecall(
   ctx: api.Context,
   { query, parsed, ranked, planning }: PresentRecallOptions,
 ): Promise<PresentedRecall> {
-  // Loaded before the zero-result branch, so a no-match query with live continuity still returns a
-  // resume packet.
   const loaded = await loadScopedContinuity(ctx, parsed.setting, parsed.includeContinuity);
   const fit = fitRecallBlock({ ctx, query, parsed, ranked, loaded, planning });
   const { results, hints } = fit;
@@ -150,13 +136,9 @@ async function presentRecall(
     isGlobal: ranked.isGlobal,
     now: ctx.infra.clock(),
   });
-  // The token ledger books the text this recall prints, on whichever exit it takes; the ring keeps
-  // the hint the final detect made.
   return { text, shown: { results, hints, tokens: estimateTokens(text) } };
 }
 
-/** Where the presenter parks what it built; a `let` it assigned would read as never-assigned
- * after the await. */
 interface PresentedSlot {
   presented?: PresentedRecall;
 }
@@ -169,12 +151,10 @@ interface RecallOutputOptions {
   readonly now: Date;
 }
 
-/** What this recall prints: the JSON object, or the fitted block. */
 function recallOutput({ query, parsed, fit, isGlobal, now }: RecallOutputOptions): string {
   const { asJson, includeContinuity } = parsed;
   const { results, recallText } = fit;
   if (results.length === 0) {
-    // HTTP and MCP surface the hint whatever matched, so the zero-result JSON keeps it for parity.
     return asJson
       ? JSON.stringify({ query, results: [], total: 0, ...recallJsonTail(fit, includeContinuity) })
       : recallText;
@@ -192,7 +172,6 @@ function recallOutput({ query, parsed, fit, isGlobal, now }: RecallOutputOptions
   });
 }
 
-/** The keys are set in the order the JSON prints them. */
 interface RecallJsonTail {
   suppressionSummary: api.RecallSuppressionSummary;
   planningFallacyHint?: PlanningFallacyHint;
@@ -203,8 +182,6 @@ interface RecallJsonTail {
   continuityTokens?: number;
 }
 
-/** The JSON keys after the result list: suppression summary, any bias hints, then continuity
- * when asked for. */
 function recallJsonTail(fit: FittedRecall, includeContinuity: boolean | undefined): RecallJsonTail {
   const { planningFallacyHint, planningFallacyWatching, continuityTokens } = fit;
   const { anchoring, availability, summary } = fit.hints;

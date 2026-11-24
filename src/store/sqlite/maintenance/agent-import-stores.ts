@@ -1,6 +1,3 @@
-// The agent-memories import's stores on hippo.db: each scores by the caller's rules, its container
-// writes wait the caller's lock wait, and a dry run's stand-in lives in a scratch folder deleted at
-// close.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -32,8 +29,6 @@ export function sqliteImportStores(opts: SqliteStoreOptions): SqliteImportStores
     }),
     exists: isInitialized,
     create: async (root) => inPortTerms(() => initStore(root, opts)),
-    // Its folder is deleted at close, so no session of the caller's may keep one of its handles
-    // open past that.
     standIn: () => standIn({ ...opts, session: undefined }),
     isBusy: isStoreBusy,
   };

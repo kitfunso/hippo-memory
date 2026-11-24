@@ -14,12 +14,10 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { scryptRuns } from '../_helpers/scrypt-count.js';
 
-// One server's key checks, as boot makes them.
 const keys = new KeyVerifier();
 
 let lookups = 0;
 
-/** `store` with each key-row read counted. */
 function countingLookups(store: HippoStore): HippoStore {
   return {
     ...store,
@@ -30,7 +28,6 @@ function countingLookups(store: HippoStore): HippoStore {
   };
 }
 
-/** Scrypt runs and store lookups made by `fn` alone. */
 async function counted<T>(fn: () => Promise<T>) {
   const scryptBefore = scryptRuns();
   const lookupsBefore = lookups;
@@ -38,7 +35,6 @@ async function counted<T>(fn: () => Promise<T>) {
   return { value, scrypt: scryptRuns() - scryptBefore, dbOpen: lookups - lookupsBefore };
 }
 
-/** Runs `work` on the store's file directly, as the CLI in another process would: nothing in this process hears of it. */
 function onDb<T>(root: string, work: (db: DatabaseSyncLike) => T): T {
   const db = openHippoDb(root);
   try {
@@ -91,7 +87,6 @@ describe('verified API key cache', () => {
     await authRevoke(adminCtx(), key.keyId);
     const after = await counted(() => verify(key.plaintext));
     expect(after.value).toBeNull();
-    // The row proves the key revoked, so no scrypt is spent on it.
     expect(after.scrypt).toBe(0);
   });
 
@@ -194,7 +189,6 @@ describe('verified API key cache', () => {
       expect(res.value).toBeNull();
       expect(res.scrypt).toBe(1);
     }
-    // A cached good key does not let a wrong secret through either.
     await verify(key.plaintext);
     const afterHit = await counted(() => verify(wrong));
     expect(afterHit.value).toBeNull();
@@ -252,7 +246,6 @@ describe('VerifiedKeyCache', () => {
     const cache = new VerifiedKeyCache(2);
     cache.add('hash-a', 'hk_a.s');
     cache.add('hash-b', 'hk_b.s');
-    // Touching hash-a makes hash-b the least recent, so hash-c evicts hash-b.
     expect(cache.has('hash-a', 'hk_a.s')).toBe(true);
     cache.add('hash-c', 'hk_c.s');
     expect(cache.size).toBe(2);

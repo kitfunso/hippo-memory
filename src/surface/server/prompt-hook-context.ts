@@ -1,5 +1,3 @@
-// The ./server entry's prompt hook: an add-on's Context gets the reach a root probes for its
-// store's folder and the entry's real ports, so the add-on renders what the hippo server would.
 import { contextReach, type ContextReach, type EntryContext } from '../../api/index.js';
 import {
   buildPromptHookContext as renderPromptHook,
@@ -23,8 +21,6 @@ export async function promptHookContext(
   return renderPromptHook({ ...withInfra, reach }, req, opts);
 }
 
-/** The reach every root probes for a store kept in a folder, from the folder its port names; a
- * store without folderFiles keeps the Context's default, one project and no global store. */
 async function folderReach(
   store: HippoStore,
   embedderFor: EmbedderFor,

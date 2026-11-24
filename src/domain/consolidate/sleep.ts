@@ -1,8 +1,3 @@
-/**
- * Consolidation engine ("Sleep"): decay pass (drop entries below the strength threshold), merge
- * pass (semantic summaries of overlapping episodics), stats.
- */
-
 import { MemoryEntry } from '../../base/memory/entry.js';
 import { canAutoDelete } from '../../base/memory/keep-rules.js';
 import {
@@ -82,8 +77,6 @@ export async function runConsolidation(
   );
   reportFtsDrift(start.fts, result);
 
-  // One run for every tenant: physics, the run log and the sleep count are host-wide; rows are read
-  // a page at a time.
   const preview = dryRun ? halfLives : new Map<string, number>();
   const rows = new SleepRows(store, preview, options.pageRows ?? READ_PAGE_ROWS);
   const run = newSleepRun(store, options, { start, result, rows });
@@ -105,8 +98,6 @@ function newSleepRun(
   const { tenantId, now, config } = options;
   const dryRun = options.dryRun ?? false;
   const { start, result, rows } = parts;
-  // Retirable: auto-deletable (never pinned, raw or kept for good) and not backing a first-class
-  // object.
   const retirable = (entry: MemoryEntry): boolean =>
     canAutoDelete(entry) && !rows.backsObject(entry.id);
   return {
@@ -122,7 +113,6 @@ function newSleepRun(
     retirable,
     tombstones: tombstoneChecks(store, dryRun),
     survivors: new Survivors(rows),
-    // Collect all writes/deletes and batch them at the end
     pendingRefreshes: [],
     pendingWrites: [],
     pendingDeletes: [],
@@ -145,7 +135,6 @@ async function runAndFlush(
   if (!run.dryRun) await logRun(run, decay);
 }
 
-/** A store open that is already current no longer counts the two. */
 function reportFtsDrift(fts: SleepStart['fts'], result: ConsolidationResult): void {
   if (fts === null) return;
   result.events.push({ kind: 'ftsResynced', indexedRows: fts.fts, memories: fts.memories });
@@ -179,8 +168,6 @@ async function runPassesAfterDecay(
   }
 }
 
-// A changed default half-life moves memories still on the old base first, so this pass decays them
-// at the new one (src/domain/consolidate/half-life-migration.ts).
 async function migrateHalfLives(
   store: ConsolidationStore,
   to: number,
@@ -207,7 +194,6 @@ async function migrateHalfLives(
   return halfLife;
 }
 
-/** The pending ops as the flush commits them, each unit whole in one transaction. */
 function flushComponents(run: SleepRun): FlushComponent[] {
   const ops = {
     refreshes: run.pendingRefreshes,
@@ -219,19 +205,14 @@ function flushComponents(run: SleepRun): FlushComponent[] {
   return groupFlush(ops, units);
 }
 
-// Dormant retention: a dormant memory nobody restored within dormant.retentionDays is deleted for
-// good (0 keeps forever); runs even when dormant.enabled is off, so turning it off still ages out
-// what earlier sleeps kept.
 function dormantCutoff({ config, now }: SleepRun): string | null {
   if (!(config.dormant.retentionDays > 0)) return null;
   return new Date(now.getTime() - config.dormant.retentionDays * DAY_MS).toISOString();
 }
 
-/** The flush (none under dryRun), then the dormant expiry, in one store call. */
 async function commitPending(run: SleepRun, holdMs: number): Promise<void> {
   const { result, dryRun } = run;
   result.removedIds = run.pendingDeletes;
-  // The snapshot keeps what the DAG passes and other writers changed while sleep ran.
   const flush = dryRun ? null : { components: flushComponents(run), snapshot: run.survivors.bases };
   const expireBefore = dormantCutoff(run);
   const committed = await run.store.consolidation.commit({ flush, expireBefore, dryRun, holdMs });
@@ -284,8 +265,6 @@ async function logRun(run: SleepRun, decay: DecayOutcome): Promise<void> {
   if (decay.rescuedEntries.length > 0) await auditRescues(run, decay);
 }
 
-// One audit row per rescue, written only after the last flush chunk commits, so a run stopped
-// mid-flush asserts no rescue.
 async function auditRescues(
   run: SleepRun,
   { rescuedEntries, rankById }: DecayOutcome,
@@ -309,7 +288,6 @@ async function auditRescues(
     };
   };
   try {
-    // Row by row: one failed audit write must not silently drop every remaining row.
     const auditFailures = await run.store.consolidation.auditEachRow(
       rescuedEntries.map(rescueEvent),
     );
@@ -317,7 +295,6 @@ async function auditRescues(
       result.events.push({ kind: 'rescueAuditFailed', failures: auditFailures });
     }
   } catch (err) {
-    // An audit store that will not open must never crash the mutation it records.
     log.warn(`mv_rescue audit unavailable: ${errorMessage(err)}`, errorFields(err));
     result.events.push({ kind: 'rescueAuditUnavailable', rescues: rescuedEntries.length });
   }

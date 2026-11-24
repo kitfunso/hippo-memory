@@ -1,4 +1,3 @@
-// A sleep with HIPPO_LLM_BASE_URL set sends every LLM pass to that endpoint and to no other host, whatever else is in the env.
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -31,7 +30,6 @@ function classify(prompt: string): Asked['kind'] {
   return prompt.includes('Topic:') ? 'summary' : 'other';
 }
 
-/** A loopback chat endpoint; `globalThis.fetch` still reaches it, and throws for any other host. */
 async function startEndpoint(extractContent: string): Promise<Endpoint> {
   const asked: Asked[] = [];
   const server = http.createServer((req, res) => {
@@ -63,7 +61,6 @@ async function startEndpoint(extractContent: string): Promise<Endpoint> {
   });
   vi.stubEnv('HIPPO_LLM_BASE_URL', `http://127.0.0.1:${port}/v1`);
   vi.stubEnv('HIPPO_LLM_MODEL', 'local-model');
-  // A stale key must lose to the endpoint.
   vi.stubEnv('ANTHROPIC_API_KEY', 'stale-not-a-key');
   return {
     asked,

@@ -1,5 +1,3 @@
-// First-class object verbs for incidents: open one, resolve it, close it.
-
 import type { ContextWith } from '../../api/types.js';
 import { incidentOpen, incidentResolve } from '../../api/objects/object-kinds.js';
 import { objectClose, objectGet, objectList, objectStates } from '../../api/objects/objects.js';
@@ -98,8 +96,6 @@ export async function handleIncident({
   if (subcommand === 'resolve') return resolveIncident(ctx, args, flags);
   if (subcommand === 'close') return incidentClose(ctx, args);
 
-  // Default subcommand is open (create): accept both `incident open "<text>"` and bare `incident
-  // "<text>"`; for the `open` keyword the text is args[1], otherwise args[0] is the text.
   await incidentCreate(ctx, subcommand === 'open' ? (args[1] ?? '') : subcommand, flags);
 }
 

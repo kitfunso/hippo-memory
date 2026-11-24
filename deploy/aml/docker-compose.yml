@@ -1,11 +1,3 @@
-# AML evaluation stack: hippo + the protocol adapter in front of it.
-#
-#   docker compose -f deploy/aml/docker-compose.yml up -d --build   (from repo root)
-#
-# Only the adapter is reachable from the host, and only on loopback; the
-# Cloudflare Tunnel points at it. hippo itself has no published ports - the
-# adapter reaches it over the compose network, and operators use docker exec.
-
 services:
   hippo:
     build:
@@ -17,10 +9,7 @@ services:
       - hippo-aml-data:/data
     networks: [aml]
     environment:
-      # The adapter forwards Cloudflare's cf-connecting-ip on every call, so
-      # the /v1 rate limiter keys per real client.
       HIPPO_CLIENT_IP_HEADER: cf-connecting-ip
-      # The adapter is the only container on this pinned subnet that sends the header.
       HIPPO_TRUSTED_PROXIES: 172.30.77.0/24
       # AML drives up to 256 concurrent searches; the default 20 rps bucket
       # would 429 the evaluation. hippo is only reachable through the

@@ -1,4 +1,3 @@
-// A store worker whose reply cannot be posted ends itself, closing its stores and its port, so the server rejects the call still waiting; it logs the failure.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
@@ -28,7 +27,6 @@ describe('store worker after a reply that cannot be posted', () => {
     process.on('unhandledRejection', onUnhandled);
     const closeStores = vi.spyOn(RequestStores.prototype, 'close');
     const logged = vi.spyOn(log, 'error').mockImplementation(() => {});
-    // Both the reply and the error reply that follows it fail, as when the server thread is already gone.
     const post = vi.spyOn(port1, 'postMessage').mockImplementation(() => {
       throw new Error('port is gone');
     });
@@ -51,7 +49,6 @@ describe('store worker after a reply that cannot be posted', () => {
       const closed = new Promise((resolve) => port2.once('close', resolve));
       port2.postMessage(job);
       await closed;
-      // Let a rejection that nothing handled reach the process event.
       await new Promise((resolve) => setImmediate(resolve));
 
       expect(post).toHaveBeenCalledTimes(2);

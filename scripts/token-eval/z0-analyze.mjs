@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-/** Z0 analyzer, part 6 of 6: `analyzeZ0` composes contract, filters, gates and hypotheses; the CLI reads files and reports.
- * Usage and readings: docs/evals/2026-10-03-z0-analyzer.md. Exit 0 on a report (invalid runs too), 1 on bad input, 2 on a refused unblind. */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -98,7 +96,6 @@ const isPrices = (p) => p !== undefined && p !== null && PRICE_FIELDS.every((f) 
 
 /** Reads every input file and rejects a malformed one by name; records keep their file and line. */
 export function loadInputs(args, cwd) {
-  // Checked before the blind key is written, so a bad --out leaves nothing behind.
   const outDir = args.out === null ? null : path.dirname(path.resolve(cwd, args.out));
   if (outDir !== null && !fs.existsSync(outDir)) throw new Error(`--out ${args.out}: folder ${outDir} does not exist`);
   const records = [];
@@ -149,7 +146,6 @@ export function buildReport(analysis, inputs, args, codes, hashes) {
 
 const f3 = (x) => (Number.isFinite(x) ? x.toFixed(3) : 'n/a');
 const pct = (x) => `${(100 * x).toFixed(1)}%`;
-// A t result names its df, and its bootstrap twin prints beside it for comparison only.
 const est = (e) => {
   if (isString(e)) return e;
   const twin = e.bootstrap ? `, bootstrap [${f3(e.bootstrap.low)}, ${f3(e.bootstrap.high)}]` : '';
@@ -178,7 +174,6 @@ const secondaryLines = (h3) => [
 function hypothesisLines(h) {
   const family = Object.keys(h.verdicts);
   const lines = [`primary family: ${family.join(', ')} (Holm, 0.05 over ${family.length})`];
-  // H3 prints right after the family, wherever a failed H4 or a loss moved the family in the order.
   const lastFamily = Math.max(...family.map((n) => h.order.indexOf(n)));
   h.order.forEach((name, i) => {
     if (name === 'H4') {
@@ -237,7 +232,6 @@ export function renderText(r) {
   }
   lines.push(`void reasons: ${JSON.stringify(r.voids)}`);
   if (r.gates !== null) lines.push(...gateLines(r));
-  // Holds no arm, so it prints in blind mode too; reported only, prereg 179 sets no gate on it.
   const s = r.storedSample;
   if (s) lines.push(`stored sample (179): agreement ${f3(s.agreement)} [${f3(s.ci95?.[0])}, ${f3(s.ci95?.[1])}], kappa ${f3(s.kappa)}, n ${s.n}`);
   if (r.gates !== null) lines.push(r.invalid.length === 0 ? 'valid: every gate passes' : `invalid: ${r.invalid.join(', ')}`);

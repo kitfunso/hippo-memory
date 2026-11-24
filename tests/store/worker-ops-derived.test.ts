@@ -1,4 +1,3 @@
-// WORKER_OPS comes from the effect tables beside the port's signatures, and names exactly what hippo.db's store sets.
 import { describe, expect, it } from 'vitest';
 import { STORE_EFFECTS } from '../../src/base/ports/store.js';
 import { WORKER_OPS } from '../../src/store/sqlite/runtime/worker-ops.js';
@@ -20,7 +19,6 @@ describe('WORKER_OPS', () => {
         if (place !== effect) moved.push(`${group}.${method}: ${effect} -> ${place}`);
       }
     }
-    // The adapter's own placements, each with its reason in worker-ops.ts.
     expect(moved.sort()).toEqual([
       'embeddingIndex.open: read -> write',
       'sessions.loadSnapshot: read -> write',

@@ -13,9 +13,6 @@ import {
 import { serve } from '../_helpers/store-switch.js';
 import { boundPort } from '../_helpers/listen.js';
 
-// hippoRoot is the directory the pidfile sits directly inside, matching the
-// api.ts / store.ts convention. serve() and detectServer take it as-is.
-// Bare tmp dir on purpose: no `.hippo` and no store, detectServer takes the dir as-is.
 function makeRoot(): string {
   return mkdtempSync(join(tmpdir(), 'hippo-pidf-'));
 }
@@ -45,7 +42,6 @@ describe('server-detect', () => {
         }),
       );
       expect(await detectServer(home)).toBeNull();
-      // Stale pidfile should have been deleted.
       expect(existsSync(pidfile)).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -128,9 +124,6 @@ describe('server-detect', () => {
     const handle = await serve({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
     try {
-      // The server is genuinely live, but rewrite the pidfile's started_at to
-      // a value /health will never report — simulates the pid + port being
-      // held by a different process than the one named in the pidfile.
       const info = JSON.parse(readFileSync(pidfile, 'utf8'));
       info.started_at = '1999-01-01T00:00:00.000Z';
       writeFileSync(pidfile, JSON.stringify(info));
@@ -147,8 +140,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      // pid is alive (this very test process) but nothing listens on the url,
-      // so the probe gets connection-refused — the pidfile is stale.
       writeFileSync(
         pidfile,
         JSON.stringify({
@@ -244,7 +235,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const warn = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      // A directory in the pidfile's place cannot be read as JSON and cannot be unlinked either.
       mkdirSync(join(home, 'server.pid'));
       expect(await detectServer(home)).toBeNull();
       expect(warn.mock.calls.map((c) => String(c[0])).join('')).toMatch(
@@ -259,8 +249,6 @@ describe('server-detect', () => {
   it('throws ServerUnresponsiveError and keeps the pidfile when /health times out, and serve() refuses to start beside it', async () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
-    // A stub server that accepts the connection but never answers, so the
-    // AbortSignal.timeout inside detectServer fires.
     const stub: Server = createServer(() => {
       /* deliberately never responds */
     });
@@ -285,7 +273,6 @@ describe('server-detect', () => {
           started_at: new Date().toISOString(),
         }),
       );
-      // A busy server misses the probe too, so a timeout must stop the caller from opening the store as a second writer.
       await expect(detectServer(home)).rejects.toThrow(ServerUnresponsiveError);
       expect(existsSync(pidfile)).toBe(true);
       await expect(serve({ hippoRoot: home, port: 0 })).rejects.toThrow(
@@ -321,8 +308,6 @@ describe('server-detect', () => {
     const handle = await serve({ hippoRoot: home, port: 0 });
     const pidfile = join(home, 'server.pid');
     try {
-      // Strip `schema` to mimic a pidfile written before L3. A missing schema
-      // is legacy, not invalid — detectServer must still accept it.
       const info = JSON.parse(readFileSync(pidfile, 'utf8'));
       delete info.schema;
       writeFileSync(pidfile, JSON.stringify(info));
@@ -340,9 +325,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      // pid is alive (this test process), but the url points off-box. A real
-      // hippo server only binds loopback, so detectServer must treat this as a
-      // forged or malformed pidfile and never probe the off-box host.
       writeFileSync(
         pidfile,
         JSON.stringify({
@@ -386,8 +368,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      // Same pid (a second server could share this process), different
-      // started_at. The (pid, started_at) tuple must treat this as not-ours.
       writeFileSync(
         pidfile,
         JSON.stringify({
@@ -415,8 +395,6 @@ describe('server-detect', () => {
     const pidfile = join(home, 'server.pid');
     try {
       const startedAt = new Date().toISOString();
-      // started_at matches but the pid is a different process. The pid value
-      // is arbitrary — removePidfileIfOwned compares it, never probes it.
       writeFileSync(
         pidfile,
         JSON.stringify({
@@ -459,8 +437,6 @@ describe('server-detect', () => {
           startedAt: new Date().toISOString(),
         }),
       ).toBe(false);
-      // Not provably ours, so left alone; detectServer unlinks malformed
-      // pidfiles on its next probe.
       expect(existsSync(pidfile)).toBe(true);
     } finally {
       rmSync(home, { recursive: true, force: true });
@@ -471,8 +447,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      // Parses as JSON but carries no pid/started_at — info.pid is undefined,
-      // so the identity check fails closed and the file is left in place.
       writeFileSync(pidfile, JSON.stringify({ schema: 1, port: 6789 }));
       expect(
         removePidfileIfOwned(home, {
@@ -490,8 +464,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     try {
-      // `null` parses cleanly but is not an object — property access on it
-      // throws. removePidfileIfOwned must absorb that, not propagate it.
       writeFileSync(pidfile, 'null');
       expect(
         removePidfileIfOwned(home, {

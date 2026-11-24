@@ -222,7 +222,6 @@ const STORE_KIT_TYPES = [
   'VectorWrite',
   'VectorWriteResult',
   'VectorWrites',
-  // The session and admin groups (store-groups.ts).
   'Card',
   'CardComment',
   'CardCreate',
@@ -290,7 +289,6 @@ const STORE_KIT_TYPES = [
 
 const sorted = (names: readonly string[]): string[] => [...names].sort();
 
-/** Runtime names of each built subpath, imported by package name from a child so the exports map is what resolves. */
 function runtimeNames(): Record<string, string[]> {
   const script = [
     'const names = {};',
@@ -300,7 +298,6 @@ function runtimeNames(): Record<string, string[]> {
   return runModuleScript<Record<string, string[]>>(script);
 }
 
-/** Every name the built .d.ts file exports, type-only ones included. */
 function declaredNames(dtsPath: string): string[] {
   const text = readFileSync(resolve(root, dtsPath), 'utf-8');
   const names: string[] = [];

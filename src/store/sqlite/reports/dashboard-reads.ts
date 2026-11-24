@@ -1,6 +1,3 @@
-// hippo.db's dashboard reads: aggregates, one sorted page and a capped scatter, scored by the
-// dashboard's SQL functions, so the rows a read hands to JavaScript never grow with the tenant. The
-// commit signal uses one held connection.
 import * as fs from 'node:fs';
 import {
   closeHippoDb,
@@ -48,7 +45,6 @@ import { handlesOf, openStore } from '../runtime/handles.js';
 import { answered, bound } from '../runtime/bound.js';
 
 const EMBEDDED = 'EXISTS (SELECT 1 FROM memory_vectors v WHERE v.memory_id = memories.id)';
-// First-seen order: the project whose first live row comes first by created, then id.
 const SEEN = `MIN(created || char(1) || id) AS seen`;
 
 const noneExcluded = (): ExcludedCounts => ({
@@ -125,7 +121,6 @@ function totals(db: DatabaseSyncLike, tenantId: string, nowMs: number): Dashboar
   });
 }
 
-/** The named binds of one project's reads. */
 interface ProjectBinds {
   readonly tenant: string;
   readonly origin: Origin;
@@ -226,8 +221,6 @@ function search(db: DatabaseSyncLike, tenantId: string, needle: string): SearchT
   }));
 }
 
-/** Whether `id` has a stored vector; false on a store that has never held one. Runs on the held
- * reader, so its statement is prepared once. */
 function hasVector(db: DatabaseSyncLike, id: string): boolean {
   if (!tableExists(db, 'memory_vectors')) return false;
   return (
@@ -235,7 +228,6 @@ function hasVector(db: DatabaseSyncLike, id: string): boolean {
   );
 }
 
-/** Opens the store writable with the dashboard's functions scored by `rules`. */
 function dashboardOpener(rules: StoreModel): HandleOpener {
   return (root, opens) => {
     const db = openStore(root, opens);
@@ -250,7 +242,6 @@ interface HeldReader {
   close(): void;
 }
 
-/** One read-only connection, opened once hippo.db exists, and the sorted lists kept on it. */
 function heldReader(hippoRoot: string, files: StoreFiles, migrate: () => void): HeldReader {
   let held: DatabaseSyncLike | null = null;
   let lists: MemoryLists | null = null;
@@ -261,8 +252,6 @@ function heldReader(hippoRoot: string, files: StoreFiles, migrate: () => void): 
       }
       return held;
     },
-    // The first list runs the open the other reads run, so a pending migration lands before it
-    // sorts.
     listsOn: (db) => {
       if (lists !== null) return lists;
       migrate();

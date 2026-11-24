@@ -1,5 +1,3 @@
-// Recall's vector arm through the port alone: a port-only store must give the replies, ids and rows
-// hippo.db gives, over GET /v1/memories and MCP hippo_recall, with a local hashed-embedding server as the provider.
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,7 +45,6 @@ const NEAR = hashedVector(QUERY);
 const TIE = hashedVector('redeploy cadence');
 const ORPHAN = 'mem_x_orphan';
 const VECTOR_ONLY = 'mem_v_redeploy';
-// A shared store refuses an MCP recall that names no project; the seeded rows are user-global, so any project reaches them.
 const PROJECT = 'golden';
 
 type PartsRead = { readonly [P in StoredPart]: (ids: readonly string[]) => Promise<Map<string, StoredParts[P]>> };
@@ -66,7 +63,6 @@ const seedRow = (
 ): SeedRow => ({ entry: seeded(content, id, `2026-01-${String(day).padStart(2, '0')}T00:00:00.000Z`, extra), vector });
 const ownRow = (id: string, content: string, day: number): SeedRow => seedRow(id, content, day, hashedVector(content));
 
-// No 'deploy' token in the mem_v_ rows, so only the vector arm can bring them in.
 const ADMITTED: readonly SeedRow[] = [
   ownRow('mem_l_api', 'deploy the api with a blue green rollout', 2),
   ownRow('mem_l_freeze', 'deploy freeze on fridays for billing', 3),
@@ -87,7 +83,6 @@ const ADMITTED: readonly SeedRow[] = [
   seedRow('mem_v_tie_b', 'gateway cadence two', 8, TIE),
   ownRow('mem_v_noise', 'lunch menu near the office', 9),
 ];
-// Each sits at cosine 1 from the query; 50 rows of another tenant fill the top 50 unless the filter runs before the cut.
 const HIDDEN: readonly SeedRow[] = [
   seedRow('mem_x_archived', 'archived rollout plan', 10, NEAR, { kind: 'archived' }),
   seedRow('mem_x_superseded', 'old rollout plan', 11, NEAR, { supersededBy: 'mem_l_api' }),
@@ -124,7 +119,6 @@ function seedVectorStore(root: string): void {
       index,
       { now: new Date(FAKE_NOW) },
     );
-    // A row with a vector and no particle ranks in physics' classic pool, as the 8-dim particle does.
     db.prepare('DELETE FROM memory_physics WHERE memory_id = ?').run('mem_l_zero');
     db.prepare('UPDATE memories SET updated_at = ?').run('2026-02-01 00:00:00');
   });
@@ -151,7 +145,6 @@ const MCP: Call = { via: 'mcp', args: { query: QUERY } };
 
 const send = (url: string, call: Call): Promise<Reply> => sendRecall(url, call.via, call.args, PROJECT);
 
-/** The ids the replies list, and for an MCP recall, whose text names no id, the rows it strengthened. */
 function shownIds(pass: Pass): string[] {
   // SAFETY: a GET /v1/memories reply is a serialised RecallResult; an MCP reply has no results field.
   const http = pass.replies.flatMap((r) => (r.body as { results?: { id: string }[] }).results?.map((x) => x.id) ?? []);
@@ -163,10 +156,8 @@ function shownIds(pass: Pass): string[] {
 let templates: Templates;
 let embeddings: HashedEmbeddings;
 
-/** hippo.db on store workers, as serve() runs it by default, hippo.db in process, or the port alone. */
 type Backing = 'workers' | 'in process' | 'port';
 
-/** One recall run on a fresh copy, with every module-level ring, cache and once-key cleared. */
 async function runPass(
   calls: readonly Call[],
   physics: boolean,
@@ -182,7 +173,6 @@ async function runPass(
       JSON.stringify({ embeddings: embeddingsConfig, physics: { enabled: physics } }),
     );
     prepare?.(s.root);
-    // serve() reads a port store as shared, so the hippo.db pass must be shared too to compare like with like.
     shareRoot(s.root);
     const port = backing === 'port' ? portOnlySide(s.root, ['vectors', 'graphReads']) : undefined;
     const store = port?.store ?? (backing === 'in process' ? sqliteStore(s.root) : undefined);
@@ -191,7 +181,6 @@ async function runPass(
       lines.push(String(chunk));
       return true;
     });
-    // A once-only or sampled warning reaches stderr at warn once per process, so each pass keeps the ones it asked for.
     const once = vi.spyOn(hippoLog, 'once').mockImplementation((_key, _level, message) => {
       lines.push(`${message}\n`);
     });
@@ -268,11 +257,8 @@ describe.skipIf(needsHippoDb('parity'))('recall through the vector reads of a po
       expect(onPort.rows).toEqual(onHippoDb.rows);
       expect(onPort.requests).toBe(onHippoDb.requests);
       expect(onPort.calls).toContain(read);
-      // hippo.db's own reply shows the vector arm ran: a row no query word matches is in it, and no filtered row is.
       const shown = shownIds(onHippoDb);
       expect(onHippoDb.replies.every((r) => r.status === 200)).toBe(true);
-      // Hybrid embeds the query once; physics embeds it, then its classic pool (the seeded rows with no usable particle)
-      // goes through hybrid, which embeds it again.
       expect(onHippoDb.requests).toBe(physics ? 2 : 1);
       expect(shown).toContain(VECTOR_ONLY);
       expect(shown.filter((id) => HIDDEN_IDS.includes(id))).toEqual([]);
@@ -288,7 +274,6 @@ describe.skipIf(needsHippoDb('parity'))(
     const staleModel = (root: string): void =>
       withDb(root, (db) => setMeta(db, EMBEDDING_MODEL_META_KEY, embeddingIndexIdentity('openai:old-model')));
 
-    // Physics embeds the query before it reads the index, so an empty index still costs it one call; hybrid spends none.
     it.each([
       ['an empty index under a stored model', emptyIndex, 200, 'hybrid', 0],
       ['an empty index under a stored model', emptyIndex, 200, 'physics', 1],
@@ -341,7 +326,6 @@ describe('the vector reads of sqliteStore', () => {
       join(root, 'config.json'),
       JSON.stringify({ embeddings: { provider: 'openai', model: MODEL, apiBaseUrl: embeddings.url } }),
     );
-    // Every row has the same three-token text and day, so BM25 and strength tie and the vectors alone order the result.
     const rows = Array.from({ length: 2000 }, (_, i) => {
       const id = `mem_n_${String(i).padStart(4, '0')}`;
       return seedRow(
@@ -364,7 +348,6 @@ describe('the vector reads of sqliteStore', () => {
     });
     const entries = rows.map((r) => r.entry);
     const views = sqliteStore(root);
-    // A store may answer number[] vectors where it holds no Float32 bytes.
     const copied: PartsRead = {
       vectors: async (ids) =>
         new Map([...(await views.vectors.stored('vectors', ids))].map(([id, v]) => [id, Array.from(v)])),

@@ -1,9 +1,6 @@
-// Which MCP tools run on a shared store, and which need the caller's project first.
 import { sharedStoreOf } from '../../api/types.js';
 import type { McpCaller } from './protocol.js';
 
-// A shared store holds many repos' rows, so a memory tool needs the caller's project and four tools
-// never run.
 const OFF_ON_SHARED: ReadonlyMap<string, string> = new Map([
   ['hippo_learn', "reads the server's git history"],
   ['hippo_share', "copies into the server's global store"],

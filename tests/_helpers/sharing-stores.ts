@@ -1,4 +1,3 @@
-// The two sides a sharing call takes, built from folders as the CLI builds them, and the copy a share wrote.
 import { getGlobalRoot } from '../../src/host/global-store.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';

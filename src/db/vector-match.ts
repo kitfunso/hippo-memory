@@ -1,5 +1,3 @@
-/** The nearest-row scan over `memory_vectors`: ranking, the top-k heap and the paged scan. */
-
 import type { DatabaseSyncLike } from './sqlite.js';
 import { ZERO_NORM, cosineToQuery, norm } from '../base/rank/cosine.js';
 import { cachedStatement } from './statement-cache.js';
@@ -33,18 +31,12 @@ export function rankVectorRows(
 }
 
 interface BestMatches {
-  /** The kept matches, best first. */
   top(): VectorMatch[];
-  /** Scores `v` at once, so the caller may overwrite it for the next row. */
   offer(id: string, v: Float32Array): void;
-  /** Keeps a match an index already scored with the same arithmetic. */
   seed(match: VectorMatch): void;
-  /** From now on one match per id, the latest read replacing the one before. */
   oneEachId(): void;
 }
 
-// One scoring loop for rows in memory and rows paged from the store, so the two can never rank
-// apart.
 function bestMatches(query: readonly number[], k: number): BestMatches | null {
   if (k <= 0 || query.length === 0) return null;
   const q = Float32Array.from(query);
@@ -63,12 +55,9 @@ function bestMatches(query: readonly number[], k: number): BestMatches | null {
   };
 }
 
-/** At most `k` matches with the worst at the root, so a row that makes the cut costs one log k
- * sift. */
 class MatchHeap {
   readonly #k: number;
   readonly #heap: VectorMatch[] = [];
-  // Where each id sits, once oneEachId is on: a plain scan reads each id once and skips the lookup.
   #at: Map<string, number> | undefined;
 
   constructor(k: number) {
@@ -114,7 +103,6 @@ class MatchHeap {
     this.#at?.set(heap[j].id, j);
   }
 
-  /** Answers where the match at `i` came to rest. */
   #siftUp(i: number): number {
     for (
       let parent = (i - 1) >> 1;
@@ -139,8 +127,6 @@ class MatchHeap {
   }
 }
 
-/** Rows the nearest-vector scan reads in one statement and scores before it yields a turn of the
- * event loop. */
 const VECTOR_SCAN_PAGE = 1024;
 
 function nextTurn(): Promise<void> {
@@ -195,19 +181,13 @@ export async function topVectorMatches(
   const { query, k, where, params, index } = options;
   const best = bestMatches(query, k);
   if (!best) return [];
-  // A graph answers for the rows it covers and the rows above them are scored exactly; with no
-  // graph every admitted vector is scored, a page at a time.
   const proposed = index?.matches(db, { query, k, where, params });
   if (proposed === undefined) return offerPages(db, best, options, { key: 'memory_id', after: '' });
   for (const match of proposed.matches) best.seed(match);
-  // A re-embed moves a row to a new rowid, so a row may come back above the covered one or on a
-  // later page.
   best.oneEachId();
   return offerPages(db, best, options, { key: 'rowid', after: proposed.coveredRowid });
 }
 
-// Keyed on memory_id for a whole scan: a vector re-embedded between two pages keeps its id, so no
-// page returns a row twice.
 async function offerPages(
   db: DatabaseSyncLike,
   best: BestMatches,
@@ -243,7 +223,6 @@ async function offerPages(
   }
 }
 
-// Ties break on id so the cut is the same on every run.
 function beats(score: number, id: string, other: VectorMatch): boolean {
   return score > other.score || (score === other.score && id < other.id);
 }

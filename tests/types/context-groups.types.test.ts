@@ -1,5 +1,3 @@
-/** A Context's store is the required store; an api or entry that reads an optional group names it in its type. */
-
 import { describe, expectTypeOf, it } from 'vitest';
 import type { Context, ContextWith, EntryContext } from '../../src/api/types.js';
 import type { OptionalGroup, RequiredStore } from '../../src/base/ports/store.js';

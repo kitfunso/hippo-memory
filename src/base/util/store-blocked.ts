@@ -1,6 +1,3 @@
-// The store errors every layer may name: a path the serving store has no port for answers 501 on
-// every surface, whichever adapter refused it, and a held lock answers 503.
-
 /** A code path not ported to the store that serves the call; an adapter's refusal of its own
  * files subclasses it. */
 export class StoreBlockedError extends Error {

@@ -1,20 +1,3 @@
-"""Async httpx client for hippo-memory HTTP API.
-
-The main public class is :class:`Hippo`. Construct it pointing at a running
-``hippo serve`` instance (loopback by default), then call any of the 14
-endpoint methods. All methods are async.
-
-Example::
-
-    from hippo_memory import Hippo
-
-    async with Hippo(base_url="http://127.0.0.1:6789") as client:
-        mem = await client.remember(content="bug fix lesson", tags=["error"])
-        results = await client.recall(q="bug fix")
-        ctx = await client.get_context(budget=1500)
-        await client.outcome(good=True)  # last-recall path
-"""
-
 from __future__ import annotations
 from typing import Any, Literal
 
@@ -99,22 +82,12 @@ class Hippo:
         await self._client.aclose()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Internal HTTP wrapper. Raises HippoError on non-2xx; returns parsed JSON on success.
-
-        Returns None for 204 / empty-body 200 responses. Callers that expect
-        a payload should treat None defensively (today every Hippo method
-        passes the response straight to ``Model.model_validate`` which would
-        raise on None; in practice no server route returns 204, so this code
-        path is dead today. v0.2 should add either a typed empty-result
-        sentinel here or a per-caller is-None check before model_validate).
-        """
         response = await self._send(method, path, **kwargs)
         if response.status_code == 204 or not response.content:
             return None
         return response.json()
 
     async def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
-        """Send one request and raise HippoError on non-2xx; callers that read headers use this."""
         response = await self._client.request(method, path, **kwargs)
         if response.status_code >= 400:
             body: dict[str, Any] | None = None
@@ -126,18 +99,10 @@ class Hippo:
             raise HippoError(response.status_code, message or response.text, body)
         return response
 
-    # -------------------------------------------------------------------
-    # Health
-    # -------------------------------------------------------------------
-
     async def health(self) -> HealthInfo:
         """GET /health. Returns server version + pid + boot timestamp."""
         data = await self._request("GET", "/health")
         return HealthInfo.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Memory CRUD
-    # -------------------------------------------------------------------
 
     async def remember(
         self,
@@ -247,10 +212,6 @@ class Hippo:
         data = await self._request("POST", f"/v1/memories/{memory_id}/promote")
         return PromoteResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Outcome (Episode B)
-    # -------------------------------------------------------------------
-
     async def outcome(
         self,
         good: bool,
@@ -267,10 +228,6 @@ class Hippo:
             body["ids"] = ids
         data = await self._request("POST", "/v1/outcome", json=body)
         return OutcomeResult.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Context (Episode B)
-    # -------------------------------------------------------------------
 
     async def get_context(
         self,
@@ -299,10 +256,6 @@ class Hippo:
         data = await self._request("GET", "/v1/context", params=params)
         return ContextResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Sleep (Episode B) - loopback-only on the server side
-    # -------------------------------------------------------------------
-
     async def sleep(
         self,
         *,
@@ -324,18 +277,10 @@ class Hippo:
         data = await self._request("POST", "/v1/sleep", json=body)
         return SleepResult.model_validate(data)
 
-    # -------------------------------------------------------------------
-    # Assemble (Phase 2 context engine)
-    # -------------------------------------------------------------------
-
     async def assemble(self, session_id: str) -> AssembleResult:
         """GET /v1/sessions/:id/assemble. Phase 2 context-engine assembly."""
         data = await self._request("GET", f"/v1/sessions/{session_id}/assemble")
         return AssembleResult.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Auth keys
-    # -------------------------------------------------------------------
 
     async def auth_create(
         self,
@@ -377,7 +322,6 @@ class Hippo:
         while True:
             response = await self._send("GET", "/v1/auth/keys", params=params)
             data = response.json()
-            # Server returns either a list directly or {keys: [...]}; handle both.
             items.extend(data if isinstance(data, list) else data.get("keys", []))
             cursor = response.headers.get("x-next-cursor")
             if not cursor:
@@ -388,10 +332,6 @@ class Hippo:
         """DELETE /v1/auth/keys/:keyId. Revoke a key."""
         data = await self._request("DELETE", f"/v1/auth/keys/{key_id}")
         return AuthRevoked.model_validate(data)
-
-    # -------------------------------------------------------------------
-    # Audit
-    # -------------------------------------------------------------------
 
     async def audit(
         self,
@@ -409,14 +349,8 @@ class Hippo:
         if limit is not None:
             params["limit"] = limit
         data = await self._request("GET", "/v1/audit", params=params)
-        # Server may return a list directly or {events: [...]}.
         items = data if isinstance(data, list) else data.get("events", [])
         return [AuditEvent.model_validate(item) for item in items]
-
-    # -------------------------------------------------------------------
-    # E2 prediction first-class object (v0.31)
-    # docs/plans/2026-05-26-e2-prediction-object.md
-    # -------------------------------------------------------------------
 
     async def predict(
         self,
@@ -516,8 +450,6 @@ class Hippo:
         data = await self._request("GET", "/v1/predictions/stats", params=params)
         return PredictionBaserate.model_validate(data["baserate"])
 
-    # ── decisions (E2 first-class object) ──────────────────────────────
-
     async def decide(
         self,
         text: str,
@@ -578,8 +510,6 @@ class Hippo:
         """GET /v1/decisions/:id. Fetch a single decision by id."""
         data = await self._request("GET", f"/v1/decisions/{decision_id}")
         return Decision.model_validate(data["decision"])
-
-    # ── incidents (E2 first-class object) ──────────────────────────────
 
     async def open_incident(
         self,

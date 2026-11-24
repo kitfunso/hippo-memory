@@ -1,5 +1,3 @@
-// The lines `hippo hook` and `hippo setup` print when they install or remove Copilot's files.
-
 import * as path from 'node:path';
 import {
   copilotHookEvents,
@@ -121,7 +119,6 @@ export function printCopilotInstall(result: CopilotInstallResult, indent: string
   console.log(`${indent}VS Code Copilot runs new hooks in a new chat session.`);
 }
 
-/** The lines for one MCP config file; empty when hippo's server was not there. */
 function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string[] {
   if (isMcpFailure(mcp)) {
     return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];

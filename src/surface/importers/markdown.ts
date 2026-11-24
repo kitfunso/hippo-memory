@@ -3,8 +3,6 @@ import { type ImportResult, type TargetedImport, importEntriesInto } from './cor
 
 const SLUG_MAX_CHARS = 50;
 
-/** Slugify a heading for use as a tag.
- *  "Data Pipeline & Cache" -> "data-pipeline-cache" */
 function slugify(heading: string): string {
   return heading
     .toLowerCase()
@@ -15,10 +13,6 @@ function slugify(heading: string): string {
     .slice(0, SLUG_MAX_CHARS);
 }
 
-/**
- * Parse structured markdown into {content, sectionSlug} pairs: each heading starts a section whose
- * bullets or numbered items become memories.
- */
 function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionSlug: string }> {
   const results: Array<{ content: string; sectionSlug: string }> = [];
   const lines = raw.split('\n');
@@ -47,7 +41,6 @@ function parseStructuredMarkdown(raw: string): Array<{ content: string; sectionS
   return results.filter((r) => r.content.length > 0);
 }
 
-/** One trimmed markdown line as the parser reads it. */
 type MarkdownLine =
   | { readonly kind: 'heading'; readonly slug: string }
   | { readonly kind: 'item'; readonly text: string }
@@ -73,7 +66,6 @@ export function importMarkdownInto(filePath: string, options: TargetedImport): I
   const raw = fs.readFileSync(filePath, 'utf8');
   const parsed = parseStructuredMarkdown(raw);
 
-  // importEntries takes one tag set per call, so each section's chunks go in as one call.
   const bySlug = new Map<string, string[]>();
   for (const { content, sectionSlug } of parsed) {
     const list = bySlug.get(sectionSlug) ?? [];
@@ -90,7 +82,6 @@ export function importMarkdownInto(filePath: string, options: TargetedImport): I
       total: totalResult.total + result.total,
       imported: totalResult.imported + result.imported,
       skipped: totalResult.skipped + result.skipped,
-      // rejected and redacted are optional on ImportResult, so either side may be undefined.
       rejected: (totalResult.rejected ?? 0) + (result.rejected ?? 0),
       redacted: (totalResult.redacted ?? 0) + (result.redacted ?? 0),
       entries: [...totalResult.entries, ...result.entries],

@@ -5,7 +5,6 @@ import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { envTenant } from '../../src/base/util/env.js';
 
-// The webhook root's fallback, read at each call so a stubbed HIPPO_TENANT applies.
 const fallback = (allowUnknown = false): RouteFallback => ({
   hostTenant: envTenant(),
   allowUnknown,
@@ -42,11 +41,8 @@ describe('resolveTenant', () => {
         'tenant-short',
         new Date().toISOString(),
       );
-      // Prefix-extended id must NOT match — fail closed (workspaces non-empty).
       expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAMX' }, fallback())).toBeNull();
-      // Substring must NOT match — fail closed.
       expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEA' }, fallback())).toBeNull();
-      // Exact still works.
       expect(await resolveTenant(sqliteStore(root), { connector: 'slack', teamId: 'TTEAM' }, fallback())).toBe(
         'tenant-short',
       );

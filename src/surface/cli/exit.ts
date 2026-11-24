@@ -1,6 +1,3 @@
-// The one error a CLI verb throws to stop its command; runCli is the one place that turns it into
-// the process exit code.
-
 import { printError } from './output.js';
 
 /**

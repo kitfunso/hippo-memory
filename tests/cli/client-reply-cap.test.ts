@@ -1,4 +1,3 @@
-// The thin client reads every server reply under a cap: the port its pidfile names may now belong to another process.
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -8,7 +7,6 @@ const OVER_CAP = 'x'.repeat(1024 * 1024 + 1);
 
 let server: Server | undefined;
 
-/** A server that answers every request with `status` and `body`. */
 async function startFake(status: number, body: string): Promise<string> {
   server = createServer((req, res) => {
     req.resume();

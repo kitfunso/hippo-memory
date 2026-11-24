@@ -28,10 +28,8 @@ export interface ObjectListQuery<K extends ObjectKind = ObjectKind> {
 }
 
 export interface ObjectClose<K extends ObjectKind = ObjectKind> {
-  /** The statuses a close may start from; core owns the rule and its refusal text. */
   readonly from: readonly ObjectByKind[K]['status'][];
   readonly actor: string;
-  /** The row's closedAt: core's clock, as `toISOString` gives it. */
   readonly at: string;
 }
 
@@ -40,16 +38,10 @@ export interface ObjectClose<K extends ObjectKind = ObjectKind> {
 export interface ObjectSave<K extends SavableKind = SavableKind> {
   readonly mirror: MemoryEntry;
   readonly fields: ObjectFields[K];
-  /** The tenant's active row this one replaces. */
   readonly supersedesId?: number;
-  /** Stored on a successor of a versioned kind only; a first version and a decision keep none. */
   readonly changeSummary?: string;
-  /** A decision only: a memory of the tenant the save also weakens, beside the one the replaced
-   * row mirrors; the save is refused when the tenant holds none. */
   readonly weakensMemoryId?: string;
   readonly actor: string;
-  /** The new row's createdAt and the replaced row's supersededAt: core's clock, as `toISOString`
-   * gives it, since the list orders createdAt as text. */
   readonly at: string;
 }
 
@@ -58,7 +50,6 @@ export interface IncidentOpen {
   readonly mirror: MemoryEntry;
   readonly fields: IncidentFields;
   readonly actor: string;
-  /** The row's createdAt: core's clock, as `toISOString` gives it. */
   readonly at: string;
 }
 
@@ -75,10 +66,8 @@ export type SaveRefusal =
   | { readonly refused: 'memory_missing'; readonly memoryId: string };
 
 export interface IncidentResolve {
-  /** The row's resolutionText; core has checked it is not blank. */
   readonly text: string;
   readonly actor: string;
-  /** The row's resolvedAt: core's clock, as `toISOString` gives it. */
   readonly at: string;
 }
 
@@ -103,97 +92,54 @@ export interface SkillsByNameQuery {
  * incident_id, prediction_id, ...). A row belongs to one tenant: another tenant's id reads as
  * missing in every method. */
 export interface Objects {
-  /** At most `limit` rows of the kind, newest first: by createdAt compared as text in byte
-   * order, then by id, both descending, so the order is total. `after` keeps only the rows below
-   * its (createdAt, id) pair in that order; `memoryId` only the rows that memory mirrors. No
-   * audit row. */
   listObjects<K extends ObjectKind>(
     tenantId: string,
     kind: K,
     query: ObjectListQuery<K>,
   ): Promise<ObjectByKind[K][]>;
-  /** Policies in force at `asOf` (max `limit`): not closed, validFrom <= asOf < validTo (or
-   * unset), and active or superseded by a row whose validFrom is after asOf. Newest validFrom
-   * first, compared as text in byte order, then larger id. No audit row. */
   listObjects(tenantId: string, kind: 'policy', query: PoliciesInForceQuery): Promise<Policy[]>;
-  /** At most `limit` of the tenant's skills in `status`, in the query's by-name order. No audit
-   * row. */
   listObjects(tenantId: string, kind: 'skill', query: SkillsByNameQuery): Promise<Skill[]>;
-  /** At most `limit` predictions, in the newest-first order of the typed objects. No audit row. */
   listObjects(
     tenantId: string,
     kind: 'prediction',
     query: PredictionListQuery,
   ): Promise<Prediction[]>;
-  /** The tenant's row; null for a missing id or another tenant's. No audit row. */
   objectById<K extends ObjectKind>(
     tenantId: string,
     kind: K,
     id: number,
   ): Promise<ObjectByKind[K] | null>;
   objectById(tenantId: string, kind: 'prediction', id: number): Promise<Prediction | null>;
-  /** In one transaction: moves the tenant's row from a `close.from` status to closed at
-   * `close.at` and appends one <kind>_close row; a refusal writes nothing. After the commit a
-   * kind the graph reads has its graph rows dropped and its mirror queued for a rebuild; a
-   * failure there is logged, never thrown. */
   closeObject<K extends ObjectKind>(
     tenantId: string,
     kind: K,
     id: number,
     close: ObjectClose<K>,
   ): Promise<ObjectByKind[K] | ObjectRefusal>;
-  /** In one transaction: moves the tenant's incident from open to resolved with `resolve.text`
-   * and `resolve.at`, then appends one incident_resolve row. A refusal (`missing`, `status`, or
-   * `vanished`) writes nothing. */
   closeObject(
     tenantId: string,
     kind: 'incident',
     id: number,
     resolve: IncidentResolve,
   ): Promise<Incident | ObjectRefusal>;
-  /** Closes the tenant's open prediction and appends one predict_close row ({prediction_id,
-   * closure_state, has_actual}) in one transaction; the mirror stays as saved. A missing or
-   * other-tenant id rejects with NotFoundError, an already-closed row with BadRequestError;
-   * neither writes anything. */
   closeObject(
     tenantId: string,
     kind: 'prediction',
     id: number,
     close: PredictionClose,
   ): Promise<Prediction>;
-  /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; inserts the
-   * row active (version 1, or the replaced row's plus one); with `supersedesId`, supersedes that
-   * row; appends the supersede and create rows and the mirror's remember row. A decision then
-   * weakens the memory the replaced row mirrors, if it still has one, and the one
-   * `weakensMemoryId` names, each marked stale as `markStale` does and followed by its remember
-   * row. A refusal (`missing`, `status`, `raced`, `vanished`, `memory_missing`) writes nothing. */
   saveObject<K extends SavableKind>(
     tenantId: string,
     kind: K,
     save: ObjectSave<K>,
   ): Promise<ObjectByKind[K] | SaveRefusal>;
-  /** In one transaction, in order: writes `mirror` as `EntryWrites.writeEntry` does; checks each
-   * linked id is a memory of the tenant; inserts the row open under the next id; appends the
-   * incident_open row, then the mirror's remember row. A refusal leaves no mirror, row or audit
-   * row. */
   saveObject(
     tenantId: string,
     kind: 'incident',
     open: IncidentOpen,
   ): Promise<Incident | IncidentOpenRefusal>;
-  /** In one transaction: writes `mirror` as `EntryWrites.writeEntry` does, inserts the open row
-   * under the next id, and appends one predict_create row ({prediction_id, class_tag,
-   * has_estimate, target_date}) ahead of the mirror's remember row. Resolves to the row saved. */
   saveObject(tenantId: string, kind: 'prediction', save: PredictionSave): Promise<Prediction>;
-  /** At most `limit` of the tenant's memories carrying `tag` (tag list as JSON, matched between
-   * double quotes, unescaped, ASCII case-folded) whose source is not project_brief and whose
-   * scope recall admits with no scope asked, newest first by created (text, byte order) then id.
-   * No audit row. It reads memories, not object rows. */
   briefReceipts(tenantId: string, tag: string, limit: number): Promise<BriefReceipt[]>;
-  /** `predictionBaserateOf` over the tenant's closed (not closed-unknown) rows of the class with
-   * an estimate and an actual, in ascending id order (its float sums depend on it). Then appends
-   * one predict_baserate row ({class_tag, n_closed}), also for a class with no such row. One
-   * aggregate statement, so it is not a list of rows. */
   predictionBaserate(
     tenantId: string,
     classTag: string,
@@ -275,8 +221,6 @@ export type PredictionListQuery = PredictionFilter & {
 
 export interface Prediction {
   id: number;
-  /** Nullable: a memory may be deleted (forget / consolidate / archive) without breaking the
-   * prediction row. */
   memoryId: string | null;
   tenantId: string;
   classTag: string;

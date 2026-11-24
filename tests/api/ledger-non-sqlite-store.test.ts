@@ -1,4 +1,3 @@
-// A hook on a store that is not hippo.db never creates one under hippoRoot; the store's own groups decide if it books.
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,7 +20,6 @@ beforeEach(() => {
   tmp = makeRoot('ledger-nonsqlite', { init: false });
 });
 
-/** A pinned row in a fresh store folder, the add-on stores' rows. */
 function donorStore(): string {
   const donor = path.join(tmp, 'donor');
   fs.mkdirSync(donor);
@@ -61,7 +59,6 @@ describe('promptHookContext on a store that is not SQLite', () => {
     const root = path.join(tmp, 'bare');
     fs.mkdirSync(root);
     const { folderFiles, ledger } = sqliteStore(donor);
-    // String keys only, so the copy is not marked as hippo.db: the port groups alone decide its reach.
     const store = { ...withoutFolderGroups(sqliteStore(donor)), kind: 'other', folderFiles, ledger };
     const ctx = { hippoRoot: root, tenantId: 'default', actor: adminActor('test'), store, config: loadConfig(root) };
     const out = await promptHookContext(ctx, REQUEST);

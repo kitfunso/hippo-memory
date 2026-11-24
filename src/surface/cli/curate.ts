@@ -1,5 +1,3 @@
-// Verbs that change one memory's standing: outcome, forget, invalidate.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { isGitRepo } from '../../base/ports/git.js';
@@ -33,7 +31,6 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
     fail('Specify --good or --bad');
   }
 
-  // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
   const ctx = cliApiContext(hippoRoot, tenantId);
   const specificId = stringFlagOrExit(flags, 'id') || null;
 
@@ -66,8 +63,6 @@ interface PreviewForgetOptions {
   readonly archive: boolean;
 }
 
-// Refuses exactly where the real run would, with its words, so "Would forget" is a promise, not a
-// guess.
 async function previewForget({
   hippoRoot,
   tenantId,
@@ -171,8 +166,6 @@ export async function handleInvalidate({
   if (boolFlag(flags, 'churn')) return invalidateChurn(hippoRoot, tenantId, args, flags);
   const target = args[0];
   if (flagValueless(flags, 'id')) {
-    // Value-less --id must never silently fall through to pattern mode (pattern mode writes
-    // broadly; an ignored --id reverses user intent).
     fail('--id requires a memory id');
   }
   const onlyId = stringFlag(flags, 'id');

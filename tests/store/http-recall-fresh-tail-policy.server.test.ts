@@ -1,17 +1,3 @@
-/**
- * F5 (v1.6.5) — HTTP render path for RecallContractError.
- *
- * /v1/memories?fresh_tail_count=N is the HTTP entry point that exercises
- * api.recall's fresh-tail policy. With HIPPO_REQUIRE_SESSION_SCOPED_FRESH_TAIL=1
- * AND fresh_tail_count > 0 AND no fresh_tail_session_id, the typed error
- * should surface as HTTP 400 with body { error: <code>, message: <string> }.
- *
- * The structured body is what distinguishes F5's response from the existing
- * `sendError` path (which returns just `{ error: <message> }`). Callers can
- * branch on `error === 'fresh_tail_requires_session_id'` without parsing
- * prose.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { createMemory } from '../../src/entry/memory.js';
@@ -71,9 +57,6 @@ describe('GET /v1/memories fresh-tail policy', () => {
     }
     const res = await fetch(`${handle.url}/v1/memories?q=event&fresh_tail_count=3`);
     expect(res.status).toBe(400);
-    // Body shape (v1.7.0 api-contract review): `error` is the human message
-    // (matches sendError shape across v1/*), `code` is the typed
-    // discriminator. Clients branch on `body.code`, render `body.error`.
     const body = await jsonAs<{ error: string; code: string }>(res);
     expect(body.code).toBe('fresh_tail_requires_session_id');
     expect(body.error).toBeTypeOf('string');

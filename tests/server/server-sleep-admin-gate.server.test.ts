@@ -1,15 +1,3 @@
-/**
- * Runtime test for v1.12.0 A5 v2 sub-1: admin-role gate on POST /v1/sleep.
- *
- * The local key is always a member, and member-role Bearer tokens are
- * 403'd at the route boundary BEFORE any host-wide consolidation runs.
- *
- * Member keys are constructed via direct DB insert per brainstorm decision #3
- * (no `hippo auth create-key --role` CLI flag in this episode).
- *
- * Real HTTP server (serve port:0), per-test isolated local + global stores.
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';

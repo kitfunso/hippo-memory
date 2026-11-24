@@ -1,5 +1,3 @@
-// bin/hippo.js drops Node's SQLite ExperimentalWarning so an agent does not read it on each call, and drops no other warning.
-// Spawned without --no-warnings, since that flag would hide the warning this file looks for.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,9 +8,7 @@ import { hippoRun } from '../_helpers/spawn-hippo.js';
 
 const DIST_CLI = resolve(__dirname, '..', '..', 'dist', 'cli.js');
 const SQLITE_WARNING = /ExperimentalWarning: SQLite/;
-// The CLI rejects text under 3 characters before it opens the store.
 const REMEMBER = ['remember', 'sqlite warning probe', '--error'];
-// Fires in a microtask right after the bin assigns process.emitWarning; a timer would not run before the CLI exits.
 const PROBE = `let current = process.emitWarning;
 Object.defineProperty(process, 'emitWarning', {
   configurable: true,
@@ -31,7 +27,6 @@ const cleanEnv = (): NodeJS.ProcessEnv => {
   return env;
 };
 
-// A Node that no longer warns about node:sqlite has nothing for the filter to drop.
 const nodeWarnsOnSqlite = SQLITE_WARNING.test(
   spawnSync(process.execPath, ['-e', "require('node:sqlite')"], { encoding: 'utf8', env: cleanEnv() }).stderr,
 );
@@ -51,7 +46,6 @@ beforeAll(() => {
     HIPPO_HOME: join(root, 'global'),
     HIPPO_SKIP_AUTO_INTEGRATIONS: '1',
   };
-  // The CLI exits before it loads node:sqlite when no store exists, so the cases below would prove nothing.
   const init = hippoRun(['init', '--no-hooks', '--no-schedule', '--no-learn'], { cwd: proj, env });
   expect(init.status, init.stderr).toBe(0);
 });

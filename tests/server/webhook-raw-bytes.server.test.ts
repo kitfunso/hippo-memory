@@ -1,5 +1,3 @@
-// The webhook HMAC covers the bytes the sender signed, so a body that is not valid UTF-8 verifies on its own bytes and
-// on no other text.
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ServerHandle } from '../../src/server.js';

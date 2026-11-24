@@ -1,4 +1,3 @@
-// Project ids in real stores: two `api` repos sharing a global store, the upgrade re-sync, folds the sync follows, and the repairs.
 import { storeFilesOf } from '../../src/store/sqlite/runtime/handles.js';
 import { diskAgentFiles } from '../../src/infra/agent-files.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +37,6 @@ import { TEST_RUN } from '../_helpers/test-run.js';
 const T = 'default';
 let w: World;
 
-/** The repair's plan, as a dry run reads it. */
 const planAt = (root: string) => projectNameRepair(cliApiContext(root, T), { dryRun: true });
 
 beforeEach(() => {
@@ -49,7 +47,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** A checkout under the world with `url` as its origin, written as git writes `.git/config`. */
 function checkout(url: string, ...segments: string[]): string {
   const root = join(w.dir, ...segments);
   mkdirSync(join(root, '.git'), { recursive: true });
@@ -93,7 +90,6 @@ const sync = (cwd: string) =>
     stores: sqliteImportStores({}),
     machine: w.machine,
   });
-/** The sync and merge a next process runs, over a fresh module graph that has resolved no project yet. */
 async function nextProcess() {
   vi.resetModules();
   const [syncMod, projects, roots, importStores, config] = await Promise.all([

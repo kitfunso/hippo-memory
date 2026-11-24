@@ -1,4 +1,3 @@
-// Fixed-size store seeds and statement patterns the per-row query count tests share; useQueryCountRoots removes their scratch roots.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, vi } from 'vitest';

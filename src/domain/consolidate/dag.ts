@@ -20,10 +20,8 @@ import { applyRebuild, settleFreshSummary } from './summary-settle.js';
 
 const SUMMARY_FALLBACK_CHARS = 40;
 const DEFAULT_REBUILD_CAP = 20;
-// Facts join a cluster when their tag sets overlap at least this much.
 const CLUSTER_JACCARD_MIN = 0.5;
 
-/** Sleep's store: the summary reads and writes, and the row writes every store has. */
 type DagStore = StoreWith<'consolidation' | 'lessonWrites'>;
 
 /** The summary options plus the config's default half-life, which new summaries start on. */
@@ -43,8 +41,6 @@ export function clusterFacts(facts: MemoryEntry[]): FactCluster[] {
   );
 
   const tagSets = entityTags.map((tags) => new Set(tags));
-  // Every tag indexed, not a prefix: a repeated tag counts twice in `shared`, so the prefix-filter
-  // bound would not hold.
   const partnersOf = overlapPartners(tagSets, () => 1);
   const assigned = new Set<number>();
   const clusters: FactCluster[] = [];
@@ -82,14 +78,9 @@ export interface DagBuildResult {
   candidateClusters: number;
   summariesCreated: number;
   factsLinked: number;
-  /** Clusters skipped because the summary matched a rejected value. Re-parenting writes are guard-exempt (same id +
-   *  content), so only summary-creation refusals count. */
   rejected: number;
 }
 
-// Partition before clustering so one LLM summary never mixes tenants; Map keeps insertion order, so
-// a single-tenant store iterates as before. buildEntityProfiles partitions its L2s with this same
-// key.
 function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEntry[]> {
   const unparentedByTenant = new Map<string, MemoryEntry[]>();
   for (const fact of unparented) {
@@ -101,7 +92,6 @@ function partitionFactsByTenant(unparented: MemoryEntry[]): Map<string, MemoryEn
   return unparentedByTenant;
 }
 
-/** Where one partition's derived rows land: its members' own tenant, scope and project. */
 interface PartitionHome {
   tenantId: string;
   scope: string | null;
@@ -110,15 +100,12 @@ interface PartitionHome {
   now: Date;
 }
 
-/** The L2 summary entry for one cluster, landing in the facts' own tenant and scope. */
 function createClusterSummaryEntry(
   summary: string,
   cluster: FactCluster,
   home: PartitionHome,
 ): MemoryEntry {
   const memberCreatedAts = cluster.members.map((m) => m.created).sort();
-  // Every cluster member shares home.tenantId (tenant partition above), so the summary lands in the
-  // facts' tenant, not 'default'.
   const summaryEntry = createMemory(
     summary,
     {
@@ -133,8 +120,6 @@ function createClusterSummaryEntry(
     home.now,
   );
   summaryEntry.originProject = home.originProject;
-  // Cache descendant_count + earliest/latest_at on the summary row so DAG-aware recall can reason
-  // about scope without walking the children.
   summaryEntry.descendantCount = cluster.members.length;
   summaryEntry.earliestAt = memberCreatedAts[0];
   summaryEntry.latestAt = memberCreatedAts[memberCreatedAts.length - 1];
@@ -148,7 +133,6 @@ interface SummarizeClusterOptions {
   readonly result: DagBuildResult;
 }
 
-/** Summarize one eligible cluster, write the summary, then re-parent its members under it. */
 async function summarizeCluster(
   store: DagStore,
   { cluster, home, opts, result }: SummarizeClusterOptions,
@@ -161,8 +145,6 @@ async function summarizeCluster(
   if (!summary) return;
 
   const summaryEntry = createClusterSummaryEntry(summary, cluster, home);
-  // A refused summary skips only this cluster. writeEntry's guard reads tenantId off the entry
-  // (home.tenantId), so it already checks this tenant's tombstones: no separate check here.
   try {
     await store.entryWrites.writeEntry({ entry: summaryEntry, actor: CLI_ACTOR });
   } catch (err) {
@@ -222,40 +204,30 @@ export async function buildDag(
 }
 
 export interface DagRebuildResult {
-  attempted: number; // summaries we tried (<= cap)
-  rebuilt: number; // successful regenerations
-  refused: number; // tombstone-hit refusals: dirty cleared, content NOT written
-  zeroChildSkipped: number; // dirty-cleared without LLM (descendants all gone)
-  failed: number; // LLM null, fetch error, or applyRebuildResult throw
-  capped: boolean; // true if queue had more than cap entries
-  /** Dirty summaries left out of this pass because their hold had not ended; none of them was
-   * attempted, so none is in `attempted` or `failed`. */
+  attempted: number;
+  rebuilt: number;
+  refused: number;
+  zeroChildSkipped: number;
+  failed: number;
+  capped: boolean;
   held: number;
 }
 
-/** One failed rebuild of this pass, as the store keeps it toward the summary's hold. */
 type CountedFailure = Parameters<NonNullable<Consolidation['noteRebuildFailures']>>[0][number];
 
-/** Regenerate one dirty summary from its children and tally the outcome; throws reach the
- * caller's isolation. */
 interface RebuildOneSummaryOptions {
   store: DagStore;
   summary: MemoryEntry;
   opts: DagSummaryOptions & { now: Date };
   result: DagRebuildResult;
   preloaded: readonly MemoryEntry[];
-  /** The new content of each summary rebuilt earlier in this drain, by id. */
   rebuiltContent: Map<string, string>;
-  /** The failures in a row stored for this summary before this attempt. */
   failures: number;
-  /** The failures of this pass that count toward a hold, noted once when the pass ends. */
   counted: CountedFailure[];
 }
 
 async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<void> {
   const { store, summary, opts, result, preloaded, rebuiltContent, counted } = options;
-  // A child rebuilt earlier in this drain was loaded before its rebuild, so it takes the content
-  // that rebuild wrote.
   const children = preloaded.map((c) => {
     const content = rebuiltContent.get(c.id);
     return content === undefined ? c : { ...c, content };
@@ -269,8 +241,6 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   const { text: newContent, providerFailed } = await regenerate(summary, children, opts);
 
   if (!newContent) {
-    // Left dirty for the next cycle. A provider failure says nothing about this summary, so only
-    // a content failure counts toward its hold.
     result.failed++;
     if (!providerFailed) counted.push(nextFailure(options));
     return;
@@ -296,7 +266,6 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
   // changed=false (refused also false) → race lost; not failure, not success, silently skip
 }
 
-/** The model's new text for a summary, and whether the model call itself failed. */
 async function regenerate(
   summary: MemoryEntry,
   children: readonly MemoryEntry[],
@@ -317,7 +286,6 @@ async function regenerate(
   return { text, providerFailed };
 }
 
-/** The summary's failure count after one more content failure, with the hold that count earns. */
 function nextFailure({ summary, failures, opts }: RebuildOneSummaryOptions): CountedFailure {
   return {
     id: summary.id,
@@ -328,7 +296,6 @@ function nextFailure({ summary, failures, opts }: RebuildOneSummaryOptions): Cou
   };
 }
 
-/** Zero-child case: clear dirty + zero counts, no LLM call, no rebuild_count bump. */
 async function clearZeroChildSummary(
   store: DagStore,
   summary: MemoryEntry,
@@ -350,7 +317,6 @@ async function clearZeroChildSummary(
   // is checked against the tombstones.
 }
 
-// Derive label from summary's existing entity tags (mirrors clusterFacts)
 function summaryLabel(summary: MemoryEntry): string {
   const entityTags = summary.tags.filter((t) => t.startsWith('speaker:') || t.startsWith('topic:'));
   return entityTags.length > 0
@@ -385,9 +351,6 @@ export async function rebuildDirtySummaries(
   const rebuiltContent = new Map<string, string>();
   const counted: CountedFailure[] = [];
   for (const [index, { summary, children, failures }] of queue.entries()) {
-    // Yield the macrotask queue every 25 summaries: each iteration is synchronous store work, so a
-    // batch of up to 1000 would starve timers and IPC (server keep-alives, Vitest's birpc
-    // heartbeat).
     if (index > 0 && index % 25 === 0) {
       await new Promise((resolve) => setImmediate(resolve));
     }
@@ -407,8 +370,6 @@ export async function rebuildDirtySummaries(
   return result;
 }
 
-/** Stores the pass's counted failures in one call. A store without the method keeps no holds,
- * and a note that fails only leaves them uncounted: the next failure counts. */
 async function noteFailedRebuilds(
   store: DagStore,
   counted: readonly CountedFailure[],
@@ -429,8 +390,6 @@ async function rebuildIsolated(options: RebuildOneSummaryOptions): Promise<void>
   try {
     await rebuildOneSummary(options);
   } catch (err) {
-    // A throw counts toward the hold: it mostly follows a paid model call, and one that repeats on
-    // this row would otherwise cost a call every sleep.
     result.failed++;
     counted.push(nextFailure(options));
     log.error(
@@ -444,14 +403,10 @@ export interface EntityProfilesBuildResult {
   candidateClusters: number;
   profilesCreated: number;
   l2sLinked: number;
-  // Lets operators see LLM null / rate-limit / 401 failures (parity with DagRebuildResult.failed).
   failed: number;
-  /** Clusters skipped because the profile matched a rejected value. Kept apart from `failed`: a tombstone hit is a
-   *  deliberate refusal, not an error. */
   rejected: number;
 }
 
-/** The L3 profile entry for one cluster of L2 summaries. */
 function createProfileEntry(
   summary: string,
   cluster: FactCluster,
@@ -487,7 +442,6 @@ interface ProfileClusterOptions {
   readonly result: EntityProfilesBuildResult;
 }
 
-/** Profile one eligible cluster of L2s, write it, then re-link the L2s under it. */
 async function profileCluster(
   store: DagStore,
   { cluster, home, opts, result }: ProfileClusterOptions,
@@ -503,7 +457,6 @@ async function profileCluster(
   }
 
   const profileEntry = createProfileEntry(summary, cluster, home);
-  // A refused profile skips only this cluster; the re-linking below never runs for it.
   try {
     await store.entryWrites.writeEntry({ entry: profileEntry, actor: CLI_ACTOR });
   } catch (err) {
@@ -541,7 +494,6 @@ export async function buildEntityProfiles(
   };
   const { baseHalfLifeDays, now } = opts;
 
-  // Only L2 with no L3 parent yet (avoid re-clustering already-profiled L2s).
   const unparented = l2Summaries.filter((s) => s.dagLevel === DAG_LEVEL.topic && !s.dagParentId);
 
   for (const [, tenantL2s] of partitionFactsByTenant(unparented)) {

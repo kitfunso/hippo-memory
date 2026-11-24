@@ -12,11 +12,8 @@ type ConfigKey = Exclude<keyof HippoConfig, 'runtime'>;
 interface KeyCase {
   key: ConfigKey;
   good: JsonValue;
-  /** What loadConfig must return for `good`. */
   read: JsonValue;
-  /** A value the key must refuse. */
   bad: JsonValue;
-  /** For a block: one field that holds a bad value, and what that field reads as. */
   badField?: { name: string; value: JsonValue; reads?: JsonValue };
 }
 
@@ -50,7 +47,6 @@ const CASES: KeyCase[] = [
   },
   { ...block('global', { enabled: false }), bad: true, badField: enabledField },
   { ...scalar('gitLearnPatterns', ['fix']), bad: 'fix' },
-  // A config file keeps the snake_case physics keys; each reads into its camelCase field.
   {
     key: 'physics',
     good: { G_query: 3 },

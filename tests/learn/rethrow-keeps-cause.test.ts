@@ -1,4 +1,3 @@
-// A rethrown failure keeps the original error as `cause`, so a log or debugger can reach the real fault.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';

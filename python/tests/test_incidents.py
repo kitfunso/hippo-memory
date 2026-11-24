@@ -1,15 +1,3 @@
-"""E2 incident first-class object - Python SDK Pydantic tests.
-
-Docs: docs/plans/2026-05-29-e2-incident-object.md
-
-Covers:
-1. Incident model round-trips wire camelCase <-> Python snake_case
-2. Defaults: status='open', optional fields default to None, linked_memory_ids=[]
-3. Back-compat: server response missing optional fields parses cleanly
-4. ON DELETE SET NULL: memory_id wire null parses to None
-5. SDK methods exist on Hippo + HippoSync (shape only; no server roundtrip)
-"""
-
 from __future__ import annotations
 
 from hippo_memory import (
@@ -20,7 +8,6 @@ from hippo_memory import (
 
 
 def _roundtrip(model_cls, payload: dict) -> None:
-    """Validate -> dump -> compare. Mirrors test_decisions.py pattern."""
     instance = model_cls.model_validate(payload)
     dumped = instance.model_dump(by_alias=True, exclude_unset=True)
     for key in payload:
@@ -28,8 +15,6 @@ def _roundtrip(model_cls, payload: dict) -> None:
 
 
 def test_incident_roundtrip_full_shape():
-    """Server emits camelCase wire keys (incidentText etc.); Python sees
-    snake_case attribute names via _Base.alias_generator=to_camel."""
     payload = {
         "id": 42,
         "memoryId": "sem_abc123",
@@ -47,8 +32,6 @@ def test_incident_roundtrip_full_shape():
 
 
 def test_incident_defaults_open_with_nulls():
-    """Hand-construct without optional fields; status defaults to 'open',
-    nullable fields default to None, linked_memory_ids defaults to []."""
     inc = Incident(
         id=1,
         tenant_id="default",
@@ -65,8 +48,6 @@ def test_incident_defaults_open_with_nulls():
 
 
 def test_incident_back_compat_missing_optional_fields():
-    """Server response from a build that omits the new optional fields
-    still parses (e.g. an incident with no context)."""
     payload = {
         "id": 7,
         "tenantId": "default",
@@ -83,8 +64,6 @@ def test_incident_back_compat_missing_optional_fields():
 
 
 def test_incident_orphaned_memory_id_parses():
-    """After ON DELETE SET NULL on the server, memory_id wire value is JSON
-    null. Pydantic must parse it as Python None, not reject."""
     payload = {
         "id": 9,
         "memoryId": None,
@@ -99,7 +78,6 @@ def test_incident_orphaned_memory_id_parses():
 
 
 def test_hippo_async_has_incident_methods():
-    """Shape-only check: Hippo (async) exposes the 5 incident methods."""
     assert hasattr(Hippo, "open_incident")
     assert hasattr(Hippo, "resolve_incident")
     assert hasattr(Hippo, "close_incident")
@@ -108,7 +86,6 @@ def test_hippo_async_has_incident_methods():
 
 
 def test_hippo_sync_has_incident_methods():
-    """Shape-only check: HippoSync exposes the same 5 incident methods."""
     assert hasattr(HippoSync, "open_incident")
     assert hasattr(HippoSync, "resolve_incident")
     assert hasattr(HippoSync, "close_incident")

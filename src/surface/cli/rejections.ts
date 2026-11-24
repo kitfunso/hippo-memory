@@ -1,5 +1,3 @@
-// `hippo reject`, `hippo rejections` and `hippo unreject`: the rejected-value list and its changes.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import * as api from '../../api/index.js';
 import { cliApiContext } from './api-context.js';
@@ -18,12 +16,8 @@ export async function handleReject({
   args,
   flags,
 }: CommandContext): Promise<void> {
-  // Store resolution mirrors `hippo remember`: --global writes to the global store, otherwise the
-  // local store (requireInit'd via resolveAuthRoot).
   const root = resolveAuthRoot(hippoRoot, flags);
 
-  // --reason is REQUIRED: the tombstone stores no content, so reason is its only human-readable
-  // identity.
   const reason = (stringFlag(flags, 'reason') ?? '').trim();
   if (!reason) {
     fail(
@@ -39,7 +33,6 @@ export async function handleReject({
     fail('   or: hippo reject --value "<text>" --reason "<why>"');
   }
   if (memoryId && valueFlag !== undefined) {
-    // Ambiguous ask: silently preferring one form would ignore the other without feedback.
     fail('hippo reject takes EITHER a memory id OR --value, not both.');
   }
 

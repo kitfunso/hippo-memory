@@ -1,6 +1,3 @@
-// Request context (caller identity and tenant) shared by every API module, plus the recall contract
-// error.
-
 import { BadRequestError, ForbiddenError } from '../base/errors/api-errors.js';
 import type {
   FolderFiles,
@@ -45,7 +42,7 @@ export interface Actor {
   /** The operator's own CLI, signed with server.key. Server auth sets it; an embedder that builds its own Context can
    * too, and gains nothing it could not pick (it picks the role too). */
   localKey?: true;
-  owner?: string; // the person behind the key; task state keys on it
+  owner?: string;
 }
 
 /** The operator's global store in reach, with the config.json that ranks its rows and governs
@@ -151,7 +148,6 @@ export function contextReach(
   ledger?: LedgerHome,
 ): ContextReach {
   const { global, globalTarget, ...rest } = reach;
-  // Both name the operator's global store, so one load serves both.
   let last: { readonly root: string; readonly config: HippoConfig } | undefined;
   const at = (root: string): HippoConfig => {
     if (last?.root !== root) last = { root, config: configAt(root) };

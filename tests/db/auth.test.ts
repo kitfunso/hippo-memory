@@ -13,7 +13,6 @@ describe('auth', () => {
       const { keyId, plaintext } = createApiKey(db, { tenantId: 'default', label: 'cli' });
       expect(keyId).toMatch(/^hk_[a-z2-7]{24}$/);
       expect(plaintext).toMatch(/^hk_[a-z2-7]{24}\.[a-z2-7]+$/);
-      // Stored row exists, hash != plaintext
       // SAFETY: db.prepare().get() is typed `unknown` (node:sqlite has no
       // generic overload); this SELECT names exactly one column (key_hash)
       // against the row created by createApiKey above, so the row shape is

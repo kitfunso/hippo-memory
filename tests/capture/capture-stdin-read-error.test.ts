@@ -1,4 +1,3 @@
-// A failed stdin read keeps its cause in the log; the printed advice and the exit code stay as they were.
 import fs from 'node:fs';
 import { syncBuiltinESMExports } from 'node:module';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +19,6 @@ describe('runCapture reading stdin', () => {
   it('logs the error that stopped the read, then prints the usual advice and sets exit code 1', async () => {
     const root = makeRoot('capture-stdin');
     const target = captureTarget(root);
-    // The stdin read is the first readFileSync runCapture makes, so the one failure lands on it.
     const read = vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => {
       throw Object.assign(new Error('EAGAIN: resource temporarily unavailable, read'), { code: 'EAGAIN' });
     });

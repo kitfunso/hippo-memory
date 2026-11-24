@@ -20,11 +20,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/**
- * Each test gets its own fake $HOME so we never touch the real
- * ~/.claude/settings.json or ~/.config/opencode/opencode.json on the machine
- * running the tests. Delegates to the shared helper extracted 2026-05-23.
- */
 function withFakeHome(): { cleanup: () => void; home: string } {
   return withFakeHomeShared('hippo-hooks-test-');
 }
@@ -65,8 +60,6 @@ describe('JSON hook installer', () => {
 
       const settings = JSON.parse(fs.readFileSync(result.settingsPath, 'utf8'));
       expect(settings.hooks.SessionEnd).toHaveLength(1);
-      // SessionStart carries three entries: the un-matched last-sleep entry (index 0, asserted
-      // below), the un-matched session-rules entry and the matcher:'compact' compact-resume entry.
       expect(settings.hooks.SessionStart).toHaveLength(3);
 
       const sessionEndCmd = settings.hooks.SessionEnd[0].hooks[0].command;
@@ -97,8 +90,6 @@ describe('JSON hook installer', () => {
       expect(preCompactCmd).toContain('hippo pre-compact --log-file');
       expect(preCompactCmd).toContain(defaultPreCompactLogPath(processHomes()));
 
-      // SessionStart carries the un-matched last-sleep and session-rules entries and the
-      // matcher:'compact' compact-resume entry.
       expect(settings.hooks.SessionStart).toHaveLength(3);
       const compactEntry = settings.hooks.SessionStart.find((e: { hooks: Array<{ command: string }> }) =>
         e.hooks[0].command.includes('hippo compact-resume'),
@@ -127,9 +118,6 @@ describe('JSON hook installer', () => {
     });
 
     it('migrates 0.22.x split sleep+capture SessionEnd entries into the single session-end entry', () => {
-      // 0.22.x installed `hippo sleep --log-file` and `hippo capture --last-session --log-file`
-      // as two separate SessionEnd entries. They ran in parallel and were
-      // SIGTERM'd by TUI teardown before completion.
       const { settings: settingsPath, logFile } = resolveJsonHookPaths('claude-code');
       fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
       fs.writeFileSync(
@@ -154,7 +142,7 @@ describe('JSON hook installer', () => {
       const result = installJsonHooks('claude-code');
 
       expect(result.migratedSplitSessionEnd).toBe(true);
-      expect(result.migratedLegacySessionEnd).toBe(true); // it was a multi-entry migration
+      expect(result.migratedLegacySessionEnd).toBe(true);
       expect(result.installedSessionEnd).toBe(true);
 
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
@@ -269,17 +257,11 @@ describe('JSON hook installer', () => {
     });
   });
 
-  // The former 'installJsonHooks(opencode)' describe block was removed
-  // 2026-05-23 when opencode flipped from JSON-hook integration to a TS plugin.
-  // Coverage for the new plugin installer lives in
-  // tests/hooks/opencode-plugin-install.test.ts.
-
   describe('uninstallJsonHooks', () => {
     it('removes SessionEnd, SessionStart, and legacy Stop entries', () => {
       installJsonHooks('claude-code');
       const { settings: settingsPath } = resolveJsonHookPaths('claude-code');
 
-      // Add a legacy Stop entry alongside the current ones.
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       settings.hooks.Stop = [{ hooks: [{ type: 'command', command: 'hippo sleep 2>/dev/null', timeout: 30 }] }];
       fs.writeFileSync(settingsPath, JSON.stringify(settings), 'utf8');
@@ -298,9 +280,6 @@ describe('JSON hook installer', () => {
       installJsonHooks('claude-code');
       const { settings: settingsPath } = resolveJsonHookPaths('claude-code');
 
-      // Sanity on the fixture: a fresh install left last-sleep (no matcher)
-      // and compact-resume (matcher: 'compact') coexisting, unmodified, in
-      // the same SessionStart array before uninstall runs.
       const before = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(before.hooks.SessionStart).toHaveLength(3);
       const lastSleepBefore = before.hooks.SessionStart.find((e: { matcher?: string }) => e.matcher === undefined);
@@ -310,10 +289,6 @@ describe('JSON hook installer', () => {
       const removed = uninstallJsonHooks('claude-code');
       expect(removed).toBe(true);
 
-      // Full uninstall tears down every hippo-owned entry — including
-      // last-sleep — regardless of which entries carry a matcher field, so
-      // the matcher-carrying compact-resume entry doesn't corrupt removal
-      // of its un-matched sibling.
       const after = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
       expect(after.hooks?.PreCompact).toBeUndefined();
       expect(after.hooks?.SessionStart).toBeUndefined();
@@ -657,7 +632,6 @@ describe('JSON hook installer', () => {
       else uninstallJsonHooks('claude-code');
     };
 
-    // A new file number means the write swapped a finished file in instead of truncating the old one.
     it.each(['install', 'uninstall'])('%s replaces the file whole, so a crash mid-write cannot truncate it', (step) => {
       const file = seedForStep(step);
       const before = fs.readFileSync(file, 'utf8');
@@ -701,7 +675,6 @@ describe('JSON hook installer', () => {
       expect(readSettings(real).hooks.SessionEnd).toHaveLength(1);
     });
 
-    // The link points into a folder that does not exist yet, as a dotfile manager leaves it before its first checkout.
     it('writes through a dangling symlink, creating the folder it points into', (ctx) => {
       const real = path.join(env.home, 'dotfiles', 'claude', 'settings.json');
       const { settings: link } = resolveJsonHookPaths('claude-code');

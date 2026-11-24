@@ -1,5 +1,3 @@
-// PostToolUseFailure for a caller on another machine: the lesson and its log row carry the caller's
-// owner and project, and a retried request id gets the first answer.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { ContextWith, EntryContext } from '../../api/types.js';
 import { storeLesson } from './capture-error.js';
@@ -53,8 +51,6 @@ type CheckedFailure =
   | { readonly skip: FailureSkip; readonly text: string | null }
   | { readonly skip: null; readonly text: string };
 
-/** The shapes lessonFromFailure gives: text for a lesson or a routine skip, none for an interrupt or an unreadable
- *  payload, a rule only on a routine skip. */
 function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   assertRequestId(req.requestId);
   if (req.detailHash !== null && !/^[0-9a-f]{16}$/.test(req.detailHash)) {
@@ -82,8 +78,6 @@ function checkedFailure(req: CallerFailureRequest): CheckedFailure {
   if (text.length > FAILURE_TEXT_MAX_CHARS) {
     throw new BadRequestError(`text: at most ${FAILURE_TEXT_MAX_CHARS} characters`);
   }
-  // Scrubbed again, as the caller's scrub is not trusted, and cut after it, as a mask can be longer
-  // than what it hides.
   return { skip, text: truncateCodePointSafe(scrubForSharing(text), FAILURE_TEXT_MAX_CHARS) };
 }
 
@@ -99,19 +93,15 @@ export async function captureFailureForCaller(
     req.requestId,
     req.sessionId,
   );
-  // A retry after a lost reply gets the first answer and writes nothing; one whose store failed
-  // tries the store again.
   if (earlier !== null && earlier !== 'store-failed') return { outcome: earlier };
   let logged: FailureOutcome = 'store-failed';
   try {
     const caller = { actor: key.owner, originProject: req.project.name, origins: key.project };
-    // No embed: a server process keeps the model off its request path, as lean capture does.
     const outcome =
       failure.skip === null ? await storeLesson(ctx, failure.text, caller) : failure.skip;
     logged = outcome;
     return { outcome };
   } finally {
-    // The hash is of the text as stored, so a repeat counts against the lesson it repeats.
     await logOutcome(ctx, {
       req: { ...req, text: failure.text },
       key,
@@ -128,14 +118,11 @@ interface LogOutcomeOptions {
   readonly retried: boolean;
 }
 
-/** Runs after the outcome in its own try, so a log error never hides the store's error or its
- * outcome. */
 async function logOutcome(
   ctx: ContextWith<'failureLog'>,
   { req, key, outcome, retried }: LogOutcomeOptions,
 ): Promise<void> {
   try {
-    // The request id allows one row, so a retry rewrites the first try's outcome.
     if (retried) {
       await ctx.store.failureLog.settleOutcome(ctx.tenantId, req.requestId, outcome);
       return;

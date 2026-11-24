@@ -1,4 +1,3 @@
-// A Windows npm launcher as npm writes it: a .ps1 beside `node_modules/<name>/bin/<name>.js`, the script it runs.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 

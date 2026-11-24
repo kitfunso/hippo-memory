@@ -1,4 +1,3 @@
-// A race test's other writer runs at the loser's first write, after its reads, so no timer decides which comes first.
 import type { ConnectorContext } from '../../src/surface/connectors/ingest.js';
 
 /** `write` with `gate` run once before the first call goes through; later calls wait on the same gate. */

@@ -1,6 +1,3 @@
-// Loopback rules for a URL hostname and a socket remote address, the outbound URL rule built on
-// the first, and the header rule for a credential.
-
 const IPV4_LOOPBACK = /^127(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const MAPPED_PREFIX = '::ffff:';
 
@@ -47,8 +44,6 @@ export function parseOutboundUrl(
       `${setting} must not embed credentials${keySetting ? `; set ${keySetting}` : ''}`,
     );
   }
-  // Plain http would put the key and the memory text on the wire, so only the local machine may use
-  // it.
   if (parsed.protocol === 'http:' && !allowHttp && !isLoopbackHost(parsed.hostname)) {
     const hint = allowHttpSetting ? `, or set ${allowHttpSetting}=1` : '';
     throw new Error(`${setting} must use https unless it is on this machine${hint}`);

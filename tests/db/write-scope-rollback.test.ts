@@ -1,4 +1,3 @@
-// A failure in the middle of a write scope leaves nothing behind. Real SQLite; a trigger makes the second write refuse.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { createPhysicsTable, savePhysicsState } from '../../src/db/physics-state.js';

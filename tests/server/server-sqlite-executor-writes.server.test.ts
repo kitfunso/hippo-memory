@@ -1,4 +1,3 @@
-// The memory write, key, audit and session assemble routes run their SQLite work on worker threads, and so does the key row read of every request.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { copyFileSync, mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -67,7 +66,6 @@ function contents(root: string): string[] {
   return rows.map((row) => row.content);
 }
 
-/** Raw rows of one session, written in process before the server starts; returns their ids. */
 function seedSession(root: string, tenantId: string, sessionId: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => {
     const entry = createMemory(`${tenantId} ${sessionId} message ${i}`, {
@@ -105,7 +103,6 @@ interface Caller {
   readonly member: string;
   readonly revoked: string;
   readonly expired: string;
-  /** Well formed, and in no store. */
   readonly unknown: string;
 }
 
@@ -130,7 +127,6 @@ function seedCallers(root: string) {
 interface Run {
   readonly server: ServerHandle;
   readonly keys: Caller;
-  /** `<step label>.<field>` of every id an earlier reply named. */
   readonly made: Map<string, string>;
 }
 
@@ -288,7 +284,6 @@ function storedRows(root: string, keyIds: readonly string[]): string[] {
   );
 }
 
-/** Every step against a fresh store, plus what the steps left in the audit log, the tables and the mirror files. */
 async function runSteps(root: string, store?: HippoStore) {
   const { keys, keyIds } = seedCallers(root);
   seedSession(root, 'default', 'sess-1', 3);
@@ -303,7 +298,6 @@ async function runSteps(root: string, store?: HippoStore) {
     }
     replies.push(await seen(label, res, keyIds));
   }
-  // stats.json is throttled to one write a second and flushed on close, so the mirrors are read after the stop.
   await run.server.stop();
   await store?.close();
   return { replies, audit: auditRows(root, keyIds), stored: storedRows(root, keyIds), mirrors: mirrorFiles(root) };
@@ -428,7 +422,6 @@ describe("a memory write still behind the write lock at its request's deadline",
     const key = keyFor(root, 'default');
     const left = () => [auditRows(root, [key.keyId]), storedRows(root, [key.keyId]), mirrorFiles(root)];
     vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '0');
-    // A grace far past the test's own timeout, so the reply can only be the stopped thread's own word.
     const { store } = patientStore(root, { writeGraceMs: 60_000 });
     const server = await start(root, store);
     expect((await post(server, '/v1/memories', { content: 'warms the writer' }, key.plaintext)).status).toBe(200);
@@ -535,7 +528,6 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
     const spare = keyFor(root, 'default');
     const before = [auditRows(root, []), storedRows(root, [])];
     const info = vi.spyOn(log, 'trail');
-    // The worker-backed store with one group or method run on its server-thread part, as a method the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), swapped(serverThreadPart(root)));
     const server = await start(root, store);
 
@@ -551,7 +543,6 @@ describe("the server-thread block of a moved `loop: 'off'` route", () => {
   });
 });
 
-/** `inner`, with each key row read answered only once `count` of them wait, so every check reaches the bounds before any derivation can end. */
 function keyReadsTogether(inner: SqliteExecutor, count: number): SqliteExecutor {
   const held: Array<() => void> = [];
   let open = false;
@@ -610,7 +601,6 @@ describe('a 429 and the store workers', () => {
   });
 
   it('refuses the key checks past two running and eight waiting after their key row reads and no other worker call', async () => {
-    // One address per key, since one address holds only two slots of the queue.
     vi.stubEnv('HIPPO_CLIENT_IP_HEADER', 'x-forwarded-for');
     vi.stubEnv('HIPPO_TRUSTED_PROXIES', '127.0.0.1');
     const root = newRoot();
@@ -656,7 +646,6 @@ describe('an audit write failure counted on a worker thread', () => {
   );
 });
 
-/** Predictions in hippo.db's main file alone, which holds only what a checkpoint has copied out of the WAL. */
 function checkpointedPredictions(root: string): number {
   const copy = removeLater(mkdtempSync(join(tmpdir(), 'hippo-sqlite-executor-main-file-')));
   copyFileSync(getHippoDbPath(root), getHippoDbPath(copy));
@@ -667,7 +656,6 @@ describe("a store worker's wal_autocheckpoint", () => {
   it('follows the server thread: no checkpoint inside a commit while the checkpointer runs, and one in the next commit after it stops', async () => {
     const root = newRoot();
     const inlineLimit = autoCheckpointPages(getHippoDbPath(root), undefined);
-    // The checkpointer and the store share one runtime, as a server's do.
     const runtime = new StoreRuntime();
     const checkpointer = startWalCheckpointer(getHippoDbPath(root), runtime);
     cleanups.push(() => checkpointer.stop());
@@ -683,7 +671,6 @@ describe("a store worker's wal_autocheckpoint", () => {
     };
 
     for (let n = 0; n < 60; n++) await save(n);
-    // Past the pages at which a connection of this thread's own would have checkpointed inside its commit.
     expect(statSync(`${getHippoDbPath(root)}-wal`).size).toBeGreaterThan(inlineLimit * 4096);
     expect(checkpointedPredictions(root)).toBe(0);
 

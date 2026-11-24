@@ -1,4 +1,3 @@
-// The predictions routes run their SQLite work on worker threads: the server answers through a held write lock, and a client sees what the in-process store gave.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import { closeHippoDb, getHippoDbPath, openHippoDb } from '../../src/db/index.js';
@@ -137,7 +136,6 @@ const STEPS: readonly Step[] = [
   ['stats with an unknown key', (s) => get(s, '/v1/predictions/stats?class=release', 'hk_unknown')],
 ];
 
-/** Every step against a fresh store, plus the audit rows the steps left. */
 async function runSteps(root: string, store?: HippoStore) {
   const main = keyFor(root, 'default');
   const other = keyFor(root, 'acme');
@@ -258,7 +256,6 @@ describe("the server-thread block of a `loop: 'off'` route", () => {
   it.each(ROUTES)('%s fails when its handler opens hippo.db on the server thread', async (_route, send) => {
     const root = newRoot();
     const info = vi.spyOn(log, 'trail');
-    // The worker-backed store with one group run on its server-thread part, as a group the op table missed runs: the defect the grant exists to catch.
     const store = Object.assign(workerSqliteStore(root), {
       objects: serverThreadPart(root).objects,
     });

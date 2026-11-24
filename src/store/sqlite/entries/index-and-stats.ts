@@ -41,8 +41,6 @@ function addDelta(a: StatsDelta, b: StatsDelta): Required<StatsDelta> {
 
 /** updateStats on the caller's open store, so a loop of writes opens the store once. */
 export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: StatsDelta): void {
-  // Increments a busy store refused, held by the runtime and folded into the next update that
-  // lands.
   const { runtime } = files;
   const total = addDelta(runtime?.takeStats(files.hippoRoot) ?? {}, delta);
   try {
@@ -54,8 +52,6 @@ export function updateStats(db: DatabaseSyncLike, files: StoreFiles, delta: Stat
 }
 
 export function updateStatsOn(db: DatabaseSyncLike, at: StoreAt, delta: StatsDelta): void {
-  // One atomic statement per named counter: a read-modify-write loses concurrent increments and
-  // stamps stale values over the untouched two.
   const increments: ReadonlyArray<readonly [string, number]> = [
     [META_KEY.totalRemembered, delta.remembered ?? 0],
     [META_KEY.totalRecalled, delta.recalled ?? 0],

@@ -1,4 +1,3 @@
-// Promote and share refuse a granted member without a trace and answer an unreachable row as a missing id.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { createMemory } from '../../src/entry/memory.js';

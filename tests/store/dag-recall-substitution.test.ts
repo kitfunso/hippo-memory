@@ -1,12 +1,3 @@
-/**
- * v1.5.0 DAG-aware recall — Task 2.
- *
- * When a query overflows the result `limit` and ≥2 of the dropped leaves
- * share a level-2 parent summary, recall appends that summary so the user
- * gets a compact pointer to the missing detail. Capped at ceil(limit * 0.3)
- * substitutions, scope/tenant filtered, and reversible via Task 3 drillDown.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../../src/entry/memory.js';
@@ -58,7 +49,6 @@ describe('DAG-aware recall substitution', () => {
   });
 
   it('1. no DAG, no substitution', async () => {
-    // 30 leaves, no parent summary. limit=10 should return 10 with no isSummary marker.
     writeEntriesTogether(
       root,
       Array.from({ length: 30 }, (_, i) => makeLeaf(`alpha bravo charlie ${i}`)),
@@ -69,8 +59,6 @@ describe('DAG-aware recall substitution', () => {
   });
 
   it('2. limit tight, summary substitutes for overflow', async () => {
-    // 1 summary + 12 children. limit=5 means 7 children overflow; summary
-    // should be appended.
     const summary = makeSummary('topic alpha rollup', { tags: ['dag-summary', 'topic:alpha'] });
     summary.descendantCount = 12;
     writeEntry(root, summary);
@@ -105,8 +93,6 @@ describe('DAG-aware recall substitution', () => {
         }),
       );
     }
-    // No scope passed; default-deny should drop the leaves AND prevent
-    // the summary from being substituted in.
     const r = await retrieve(ctxFor(root), { query: 'secret payroll detail', window: { limit: 3 } });
     expect(r.results.every((it) => !it.isSummary)).toBe(true);
   });
@@ -124,15 +110,11 @@ describe('DAG-aware recall substitution', () => {
         }),
       );
     }
-    // Recall as default tenant: nothing should match (entries belong to other),
-    // and even if readEntriesInIdOrder saw the parent ID, tenant filter blocks it.
     const r = await retrieve(ctxFor(root, 'default'), { query: 'alpha cross tenant', window: { limit: 3 } });
     expect(r.results).toHaveLength(0);
   });
 
   it('5. substitution count capped at ceil(limit * 0.3)', async () => {
-    // 5 separate summaries, each with 3 overflowing children. limit=10.
-    // ceil(10 * 0.3) = 3. Only 3 summaries should be substituted.
     for (let s = 0; s < 5; s++) {
       const summary = makeSummary(`topic ${s} summary`, { tags: ['dag-summary', `topic:${s}`] });
       writeEntry(root, summary);
@@ -146,8 +128,6 @@ describe('DAG-aware recall substitution', () => {
         );
       }
     }
-    // Pad with 10 unrelated leaves so limit=10 gets fully consumed and
-    // every summary's children overflow.
     for (let i = 0; i < 10; i++) {
       writeEntry(root, makeLeaf(`alpha unrelated padding ${i}`));
     }
@@ -176,8 +156,6 @@ describe('DAG-aware recall substitution', () => {
   });
 
   it('7. parent already in baseSlice is not duplicated as a substitution', async () => {
-    // Parent summary itself matches the query strongly and ranks in the top
-    // limit. Substitution must NOT add it again.
     const summary = makeSummary('shared keyword summary marker', { tags: ['dag-summary', 'topic:shared'] });
     summary.descendantCount = 4;
     writeEntry(root, summary);

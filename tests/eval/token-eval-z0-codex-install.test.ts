@@ -1,4 +1,3 @@
-// Z0 X2's hippo install for Codex: the install env and probe, the operator launcher guard, the trust seam and the homes check (E6 plan tests 10, 11, 12, 20).
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join, dirname, delimiter } from 'node:path';
@@ -22,12 +21,10 @@ const WHERE = 'seqX X2 seed1';
 const MARK = 'hippo codex wrapper';
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const text = (f: string) => readFileSync(f, 'utf8');
-/** Every file in `dir` with its hash, so a changed, new or missing operator file shows. */
 const dirState = (dir: string) => Object.fromEntries(readdirSync(dir).sort().map((n) => [n, createHash('sha256').update(readFileSync(join(dir, n))).digest('hex')]));
 const metaFile = (run: { dirs: { home: string } }) => join(run.dirs.home, '.hippo', 'integrations', 'codex.json');
 const hooksFile = (run: { dirs: { codexHome: string } }) => join(run.dirs.codexHome, 'hooks.json');
 
-/** An isolated operator and ctx; `x2(seed)` is a fresh X2 run with its launcher, under one out dir. */
 function setup(name: string, opts: CodexOptions = {}) {
   const { out } = isolate(name);
   const op = operator(name);
@@ -36,7 +33,6 @@ function setup(name: string, opts: CodexOptions = {}) {
   return { out, op, ctx, x2: (seed = 1) => codexRun(ctx, out, 'X2', seed) };
 }
 
-/** The install env with the operator's dir put first on PATH: the env a wrong build would give the install. */
 function operatorFirst<E extends Record<string, string | undefined>>(env: E, operatorBin: string): E {
   const key = pathKey(env);
   return { ...env, [key]: `${operatorBin}${delimiter}${env[key]}` };
@@ -136,7 +132,6 @@ describe('the wrapper the install leaves (test 10)', () => {
     for (const seed of [1, 2]) {
       const run = x2(seed);
       installHippoCodex(ctx, run);
-      // A HOME shared by the seeds would hold seed 1's metadata, and hippo would skip wrapping seed 2.
       const wrapper = text(run.codexLauncher);
       expect(wrapper, `seed${seed}`).toContain(MARK);
       expect(wrapper, `seed${seed}`).toContain(HIPPO_JS);
@@ -153,7 +148,6 @@ describe('the wrapper the install leaves (test 10)', () => {
 
 describe('the hook trust seam (test 12)', () => {
   const TRUST = "[hooks.state.'{hooksJson}:user_prompt_submit:0:0']\nenabled = true\ntrusted_hash = \"sha256:z0-test\"\n";
-  // The apply prompt shares words with the stored teach message: given a prompt, hippo's hook recalls by it and not by recency.
   const teachStored = { 't-xa': 'LESSON_BAD\nCAPTURE_TEACH', 'a-xa': 'the checker reads a rule' };
   const trustFile = () => {
     const f = join(tmp('z0-trust-'), 'trust.toml');
@@ -197,7 +191,6 @@ describe('the hook trust seam (test 12)', () => {
     expect([a.invalid, a.void, a.codexHookTrust]).toEqual([null, null, 'flag']);
     expect(a.codexHooksFired?.injections).toBeGreaterThanOrEqual(1);
     const seen = fakeSeen(codexLog);
-    // Teaches run in Claude and a Codex apply gets no correction, so each of the six applies is one Codex session.
     expect(seen).toHaveLength(6);
     expect(seen.every((s) => s.argv.includes('--dangerously-bypass-hook-trust'))).toBe(true);
   }, xLimit());

@@ -1,4 +1,3 @@
-"""The five arms' score multipliers, applied on top of a BM25 base score."""
 import random
 
 from detector import fires
@@ -21,7 +20,6 @@ def apply_decay_arm(bm25_scores: dict, created: dict, t: float, half_life: float
 
 
 def apply_ad(bm25_scores: dict, created: dict, t: float, detector_idx: dict) -> tuple[dict, set]:
-    """Smart decay: D365, times 0.1 where the detector fires by t."""
     out = {}
     fired = set()
     for doc_id, s in bm25_scores.items():
@@ -35,7 +33,6 @@ def apply_ad(bm25_scores: dict, created: dict, t: float, detector_idx: dict) -> 
 
 
 def apply_placebo(bm25_scores: dict, created: dict, t: float, n_penalize: int, seed: int) -> dict:
-    """D365, times 0.1 on n_penalize randomly chosen candidates (not detector-chosen)."""
     out = apply_decay_arm(bm25_scores, created, t, 365.0)
     if n_penalize <= 0 or not out:
         return out

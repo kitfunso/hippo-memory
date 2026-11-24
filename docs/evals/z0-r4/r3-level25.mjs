@@ -1,6 +1,3 @@
-// Read-only: T1 (A2/A1 H1 spreads, real 28-repo layout, both codings) under the seed rule, null and effect -0.15, 20,000 draws.
-// Prints size by level, per-coding power, the both-codings Frechet bound, and the level the prereg's z-SE bar and a point bar give.
-// Usage: node docs/evals/z0-r4/r3-level25.mjs --analyzer <checkout of 04835462b> [--sims 20000] [--mode rule|fixed] [--levels 0.025,...,0.019] [--eff] [--report FILE] [--grading FILE] [--drop-list FILE]
 import { arg, openRound3 } from './r3-open.mjs';
 
 const { load, scoredNoDrop } = await openRound3(['scripts/token-eval/z0-hypotheses.mjs', 'scripts/token-eval/z0-size-sim.mjs', 'dist/eval/eval-stats.js']);

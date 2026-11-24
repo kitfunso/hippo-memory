@@ -1,5 +1,3 @@
-// The write verbs: `hippo remember` and `hippo supersede`.
-
 import { envActiveScope } from '../../base/util/env.js';
 import * as fs from 'node:fs';
 import { ERROR_TAG, Layer, ConfidenceLevel, type MemoryEntry } from '../../base/memory/entry.js';
@@ -34,14 +32,11 @@ import {
 } from './flag-values.js';
 import { CliExit, fail } from './exit.js';
 
-// `requested` is what the caller typed; `all` adds path and scope tags from this process's cwd and
-// env.
 interface RememberTags {
   requested: string[];
   all: string[];
 }
 
-// The routed write sends the same tags, so a row's tags do not depend on whether a server took it.
 function rememberTags(flags: CliFlags, cwd: string): RememberTags {
   const requested = [...repeatedFlag(flags, 'tag')];
   if (boolFlag(flags, 'error')) requested.push(ERROR_TAG);
@@ -73,9 +68,6 @@ type UserVisibleKind = (typeof USER_VISIBLE_KINDS)[number];
 function parseKindFlag(flags: CliFlags): UserVisibleKind | undefined {
   const kindFlagRaw = stringFlag(flags, 'kind');
   const kindFlag = kindFlagRaw === undefined ? undefined : kindFlagRaw.toLowerCase();
-  // 'raw' is reserved for ingestion connectors (deletions go through archiveRawMemory); the
-  // append-only trigger aborts forget/consolidate on raw rows, so exposing --kind raw would create
-  // unforgettable memories. 'archived' is an internal sentinel set only in that transaction.
   if (kindFlag !== undefined && !isOneOf(USER_VISIBLE_KINDS, kindFlag)) {
     printError(
       `Invalid --kind: "${kindFlagRaw}". Must be one of: ${USER_VISIBLE_KINDS.join(', ')}`,
@@ -125,8 +117,6 @@ function rememberRequest(content: string, flags: CliFlags, useGlobal: boolean): 
   };
 }
 
-/** The switches only a write on the store honours (with --layer), so a command that sets one
- * never goes to a server. */
 const STORE_ONLY_SWITCHES = [
   'pin',
   'extract',
@@ -206,8 +196,6 @@ interface SupersedeTarget {
   readonly oldId: string;
 }
 
-/** The api's conflict text differs by which writer lost; the row itself names its successor
- * either way. */
 async function alreadySupersededLine(
   { hippoRoot, tenantId, oldId }: SupersedeTarget,
   conflict: ConflictError,
@@ -245,7 +233,6 @@ async function supersedeMemory({
   const overrides = {
     layer: parseLayerFlag(flags),
     tags: supersedeTags(flags),
-    // Without --pin the successor keeps the old row's pin.
     pinned: boolFlag(flags, 'pin') ? true : undefined,
   };
 

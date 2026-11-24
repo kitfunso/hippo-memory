@@ -1,14 +1,3 @@
-/**
- * Slack provenance parity. Mirrors tests/store/github-provenance-parity.test.ts.
- *
- * After ingesting a representative batch of Slack messages, every kind='raw'
- * row must satisfy the v0.40.0 envelope contract: owner + artifact_ref
- * populated, coverage 1.0. Pre-v1.4.0 the Slack transform shipped
- * `owner: undefined` for userless `bot_message` events (transform.ts:38),
- * which would have failed `hippo provenance --strict`. v1.4.0 derives
- * `bot:<bot_id>` instead. This test is the regression guard.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ingestMessage } from '../../src/surface/connectors/slack/ingest.js';
@@ -75,11 +64,6 @@ describe('Slack connector — provenance coverage parity', () => {
   });
 
   it('userless bot message gets bot:<bot_id> owner, never coverage gap', async () => {
-    // Slack edge case: subtype='bot_message' carries text + bot_id but no user.
-    // Production must keep ingesting these. Codex round 1 P1: skipping them
-    // would silently drop existing bot ingestion (ingest.ts:54-65 treats
-    // null-transform as "skipped but seen"). The v0.40.0 strict gate requires
-    // a non-null owner, so transform.ts derives `bot:<bot_id>`.
     const ctx = ctxFor(root);
     const userless: SlackMessageEvent = {
       type: 'message',

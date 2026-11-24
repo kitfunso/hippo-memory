@@ -14,7 +14,6 @@ beforeEach(() => {
   tmpDir = makeRoot('context-continuity', { init: false });
   hippoDir = path.join(tmpDir, '.hippo');
   vi.stubEnv('HIPPO_HOME', path.join(tmpDir, 'global'));
-  // The caller's session comes from the payload alone, never from the host running this suite.
   vi.stubEnv('HIPPO_SESSION_ID', '');
   vi.stubEnv('CLAUDE_CODE_SESSION_ID', '');
 });
@@ -23,7 +22,6 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-/** `hippo context` run in this process against the temp store; a non-zero exit fails the test as a spawn would. */
 async function runHippo(flags: Record<string, string>, sessionId?: string): Promise<string> {
   const stdin = sessionId === undefined ? undefined : JSON.stringify({ session_id: sessionId });
   const r = await runInProcess(() =>
@@ -83,7 +81,6 @@ describe('hippo context continuity assembly', () => {
     expect(parsed.tokens).toBe(0);
   });
 
-  // The caller is the session that saved the state, so markdown prints it whole.
   it('prints the matching handoff in full in markdown context and excludes the stale one', async () => {
     await seedContinuityState();
 
@@ -98,7 +95,6 @@ describe('hippo context continuity assembly', () => {
     expect(out).not.toContain('hippo handoff latest');
   });
 
-  // Any other caller, or none, gets one line per section naming the session whose state the line points at.
   it.each([
     ['another session', 'sess-other'],
     ['an unknown caller', undefined],

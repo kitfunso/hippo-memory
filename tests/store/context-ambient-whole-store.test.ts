@@ -1,4 +1,3 @@
-// The ambient summary describes the whole visible store, not the rows a query or the no-query cap happened to load.
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
@@ -30,7 +29,6 @@ let ctx: FullContext;
 beforeEach(() => {
   root = makeRoot('ambient-whole', { init: false });
   store = join(root, 'local');
-  // An uninitialised global store, so a query reads the local FTS window alone.
   vi.stubEnv('HIPPO_HOME', join(root, 'global'));
   vi.stubEnv('HIPPO_TENANT', '');
   initTestStore(store);
@@ -60,7 +58,6 @@ describe('ambient summary over the whole store', () => {
     expect(line).not.toContain('narrow focus');
   });
 
-  // Seeds more rows than the 2000-row cap in a real store, and a runner's disk sets how long that takes.
   it('a no-query read of a store past the candidate cap reports its true total', { timeout: 30_000 }, async () => {
     const CAP = 2000;
     const total = CAP + 25;
@@ -126,7 +123,6 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
     );
     const db = openHippoDb(store);
     try {
-      // A corrupt list must read as empty, as rowToEntry reads it, not fail the aggregate.
       db.prepare(
         `UPDATE memories SET tags_json = '{bad', conflicts_with_json = '{"a":1}' WHERE content = 'parity row 1'`,
       ).run();
@@ -134,7 +130,6 @@ describe('SQL ambient tallies match the JS tallies over the same rows', () => {
       closeHippoDb(db);
     }
 
-    // Both sides score by the ratio the CLI root reads from the environment.
     const sql = await cliStore(store).contextReads.ambientTallies('default', { currentProject: [], now: NOW });
     const js = tallyAmbientEntries([], NOW, evalSwitches().strength);
     const live = loadAllEntries(store, 'default').filter((e) => !e.supersededBy);

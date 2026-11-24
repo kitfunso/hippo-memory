@@ -57,7 +57,6 @@ describe('hippo supersede', () => {
 
   it('keeps the old row origin project and session on the new row', async () => {
     const hippoRoot = join(home, '.hippo');
-    // The origin differs from the one this store would stamp, as a project row held in the global store does.
     const old = {
       ...createMemory('the billing service retries a failed charge three times', {
         baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,

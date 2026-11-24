@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Smoke lesson checker: pass when the session added a new file under the folder given as the first arg, else fail.
 import { spawnSync } from 'node:child_process';
 
 const prefix = process.argv[2];

@@ -1,5 +1,3 @@
-// Mulberry32: a small seeded PRNG, same seed and same stream on every platform, with no dependency.
-
 export interface Mulberry32Step {
   state: number;
   value: number;

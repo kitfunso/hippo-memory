@@ -1,6 +1,3 @@
-// Read-only report verbs: status, inspect, tokens, failures, provenance, correction latency, doctor
-// and support bundle.
-
 import { envHomeDir } from '../../base/util/env.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -120,13 +117,9 @@ async function printEmbeddingStatus(
       `Embeddings:        ${embedProvider.kind} configured but ${embedProvider.keyEnv} not set (BM25 only)`,
     );
   }
-  // Show cached counts whenever vectors exist on disk (even when disabled or the key was removed),
-  // so the user still sees what is already indexed.
   const summary = await vectorSummary(ctx);
   if (!embAvail && summary.vectors === 0) return;
   console.log(embeddedLine(counts, summary));
-  // No index argument: the check then asks hippo.db whether any vector exists instead of loading
-  // them.
   if (await embeddingReindexNeeded(ctx, embedProvider.id)) {
     console.log(`                   model changed, run \`hippo embed\` to reindex`);
   }
@@ -136,7 +129,6 @@ function statusEmbedProvider(ctx: CliContext): EmbeddingProvider | null {
   try {
     return ctx.infra.embedderFor(ctx.config.embeddings);
   } catch (err) {
-    // Status reports a bad provider config as "misconfigured" below instead of failing.
     log.warn('status: the embedding provider config is not usable', errorFields(err));
     return null;
   }
@@ -153,7 +145,6 @@ function embeddedLine(
   return line;
 }
 
-// The all-pairs energy sum is quadratic, so a large particle set skips it.
 const PHYSICS_ENERGY_STATUS_MAX = 2000;
 
 async function printPhysicsStatus(ctx: CliContext): Promise<void> {
@@ -167,7 +158,6 @@ async function printPhysicsStatus(ctx: CliContext): Promise<void> {
       );
     }
   } catch (err) {
-    // The physics table may not exist yet, so status prints without that line.
     log.debug(`physics status skipped: ${errorMessage(err)}`, errorFields(err));
   }
 }
@@ -306,7 +296,6 @@ export async function handleFailures({
   tenantId,
   flags,
 }: CommandContext): Promise<void> {
-  // The store the capture-error hook writes to; a report never creates one.
   const root = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(hippoRoot);
   requireInit(root);
   const ctx = cliApiContext(root, tenantId);
@@ -345,7 +334,6 @@ function printFailureReport(summary: api.FailureSummary, heading: string): void 
   for (const [label, count, note] of rows) {
     console.log(`  ${label.padEnd(13)}${String(count).padStart(6)}  ${note}`.trimEnd());
   }
-  // Counts, not a rate: a share means little without a holdout arm to compare against.
   if (summary.rated > 0) {
     const noSession = errors - summary.rated;
     const unrated = noSession > 0 ? ` ${noSession} more had no session id.` : '';

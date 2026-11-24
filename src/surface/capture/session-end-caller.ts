@@ -1,5 +1,3 @@
-// SessionEnd for a caller on another machine: the owner's handoff, then the owner's snapshot for
-// the session closed, both under its tenant and project.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { ContextWith, EntryContext } from '../../api/types.js';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
@@ -28,7 +26,6 @@ export interface CallerSessionEndResult {
 
 const TEST_STATUSES: ReadonlySet<string> = new Set(['pass', 'fail', 'unknown']);
 
-/** Only the three fields a caller may send: `derivedFrom` is the handoff writer's to set. */
 function checkedEvidence(evidence: CallerEvidence | null): CallerEvidence | null {
   if (evidence === null) return null;
   const { gitRef = null, dirtyTree = null, testStatus = null } = evidence;

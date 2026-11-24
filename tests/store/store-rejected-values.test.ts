@@ -1,5 +1,3 @@
-// The rejections group on hippo.db: what each writes, and what a refusal leaves unwritten.
-
 import { beforeEach, describe, expect, it } from 'vitest';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { listAuditEvents } from '../../src/store/sqlite/audit/audit.js';
@@ -14,7 +12,6 @@ import { sessionPerTest } from '../_helpers/session-per-test.js';
 const { writeEntry, readEntry, sqliteStore } = sessionPerTest();
 
 let root: string;
-// Another person's personal scope, which a rejection with no personal scope of its own leaves alone.
 const ELSEWHERE = 'personal:private:someone-else';
 const rejections = (): ReturnType<typeof sqliteStore>['rejections'] => sqliteStore(root).rejections;
 

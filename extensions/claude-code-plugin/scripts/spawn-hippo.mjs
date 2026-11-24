@@ -1,5 +1,3 @@
-// Starts the hippo CLI from PATH with no shell parsing. A copy of src/host/spawn-argv.ts, because this folder ships alone;
-// tests/hooks/claude-code-plugin-spawn-parity.test.ts runs both on the same cases.
 import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { extname, join } from 'node:path';
@@ -20,7 +18,6 @@ export function windowsPathDirs(value) {
   return dirs.filter((entry) => entry.length > 0);
 }
 
-// PATH only, never the working folder, where a file in the user's project could stand in for hippo.
 function findOnPath(name) {
   const exts = (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
   for (const dir of windowsPathDirs(process.env.PATH ?? '')) {

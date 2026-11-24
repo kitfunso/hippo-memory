@@ -1,6 +1,3 @@
-// The Codex wrapper forwards user arguments through cmd.exe to a .cmd shim; cmd expands
-// %VAR% even inside double quotes, so an argument must reach the program byte for byte.
-
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

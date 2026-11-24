@@ -1,10 +1,6 @@
-// The CLI command's store runtime, apart from api-context.ts so cli.ts can end a command without
-// loading the verbs' store wiring.
 import { withStoreRuntime, type StoreRuntime } from '../open-store.js';
 import { envReadOnly } from '../../base/util/env.js';
 
-// One command per process, so its runtime is root state as its session is; between commands a store
-// pools nothing.
 let commandRuntime: StoreRuntime | undefined;
 
 /** The running command's runtime, which every store it builds holds; undefined outside a

@@ -1,4 +1,3 @@
-// Generated ids, cursors and argv through the CLI and server parsers: what was written comes back, and a bad input ends in the parser's own refusal and nothing else.
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseArgs } from '../../src/cli.js';
 import { flagKind, type VerbFlags } from '../../src/surface/cli/flags.js';
@@ -11,7 +10,6 @@ import { parseCursor } from '../../src/api/cursor.js';
 import { pageOf } from '../../src/surface/server/cursor.js';
 import { arr, both, forAll, int, just, map, oneOf, pick, str, type Gen } from '../_helpers/property.js';
 
-/** The id the parser returned, or the exit code its refusal carries. */
 function idOrExit(raw: string) {
   try {
     return { id: parsePositiveId(raw, 'brief') };
@@ -45,7 +43,6 @@ describe('typed-object id parser properties', () => {
     });
   });
 
-  // Digits past 2^53 would come back as the nearest number a double holds, which is not the id that was typed.
   it('an id too long to be held exactly is refused', async () => {
     const digits = map(both(str('123456789', 1, 1), str('0123456789', 16, 24)), ([lead, rest]) => lead + rest);
     await forAll(0x1d03, 200, digits, (raw) => {
@@ -69,12 +66,10 @@ function fits(value: string | number, part: Part): boolean {
   return part === 'string' ? partOf(value) === 'string' && value !== '' : Number.isInteger(value);
 }
 
-/** The cursor the server mints for `pos`: the next-page cursor of a page that ends on it. */
 function minted(pos: KeysetPosition): string {
   return pageOf([pos, pos], 1, (row) => row).nextCursor ?? '';
 }
 
-/** The position the parser returned, or the status of the ApiError it refused with; any other throw escapes. */
 function positionOrStatus(raw: string, key: Part, id: Part) {
   try {
     return { pos: parseCursor(raw, key, id) };
@@ -85,7 +80,6 @@ function positionOrStatus(raw: string, key: Part, id: Part) {
 }
 
 const B64URL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-// JSON a cursor could decode to: right pairs, wrong lengths, wrong part types, fractions, nesting and broken text.
 const JSON_TEXT = [
   '[1,2]',
   '["a",1]',
@@ -137,7 +131,6 @@ describe('keyset cursor properties', () => {
   });
 });
 
-/** One flag or positional as typed, with what it must leave in the parse. */
 interface Item {
   readonly tokens: readonly string[];
   readonly positional?: string;
@@ -145,11 +138,9 @@ interface Item {
   readonly push?: readonly [string, string];
 }
 
-// parseArgs reads a number flag like a value flag: the entry point refuses a bad number later.
 type Family = 'switch' | 'list' | 'plain';
 type Form = 'bare' | 'separated' | 'glued';
 
-/** One flag as drawn, before its verb says which name it is: `index` picks among the verb's names of the family, its own ones when `own`. */
 interface FlagDraw {
   readonly family: Family;
   readonly own: boolean;
@@ -161,7 +152,6 @@ interface FlagDraw {
 const VERBS: ReadonlyMap<string, VerbFlags> = new Map(Object.entries(COMMANDS).map(([verb, row]) => [verb, row.flags]));
 const declaredBy = (verb: VerbFlags): string[] =>
   [verb.switches, verb.values, verb.numbers, verb.lists].flatMap((names) => names ?? []);
-// A flag no verb declares parses as a value flag, and `help` belongs to the entry point.
 const NAMES = [...new Set([...[...VERBS.values()].flatMap(declaredBy), 'help', 'zz-unlisted'])];
 
 function familyOn(verb: VerbFlags | undefined, name: string): Family {
@@ -169,15 +159,12 @@ function familyOn(verb: VerbFlags | undefined, name: string): Family {
   return kind === 'switch' || kind === 'list' ? kind : 'plain';
 }
 
-// A verb that reads one of its flags unlike the other verbs with that name: a parse that ignored the verb would get it wrong.
 const OWN_KIND_VERBS = [...VERBS]
   .filter(([, verb]) => declaredBy(verb).some((name) => familyOn(verb, name) !== familyOn(undefined, name)))
   .map(([name]) => name);
-// A command the table lacks parses each flag by the kind its declaring verbs agree on.
 const UNLISTED_COMMANDS = ['', 'no-such-verb'];
 const COMMAND = oneOf([pick([...VERBS.keys(), ...UNLISTED_COMMANDS]), pick([...OWN_KIND_VERBS, ...UNLISTED_COMMANDS])]);
 
-/** The flag names of `family` on `command`: the ones the verb declares when `own` and it has any, else every name any verb declares. */
 function namesOn(command: string, family: Family, own: boolean): string[] {
   const verb = VERBS.get(command);
   const inFamily = (names: readonly string[]) => names.filter((name) => familyOn(verb, name) === family);
@@ -202,13 +189,10 @@ function drawn(family: Family, form: Form, value: Gen<string>): Gen<FlagDraw> {
   }));
 }
 
-// A positional is never the literal a switch would take as its value, and neither it nor a separated value opens with two dashes.
 const WORD = pick(['list', 'show', 'x', 'a=b', '-5', '-x', '42', 'two words', 'café', '']);
 const VALUE = pick(['v', 'a=b', '-5', '0', 'true', 'false', 'two words', 'café']);
-// A glued value may be empty: a value flag then counts as set with no value, and a list takes nothing.
 const GLUED = pick(['v', 'a=b', '-5', 'true', 'false', '--x', '=', 'two words', '']);
 
-// Only a switch stands bare mid-argv: any other flag would take the next token as its value.
 const DRAW: Gen<Item | FlagDraw> = oneOf<Item | FlagDraw>([
   map(WORD, (word) => ({ tokens: [word], positional: word })),
   just({ tokens: ['-h'], set: ['help', true] }),
@@ -221,12 +205,10 @@ const DRAW: Gen<Item | FlagDraw> = oneOf<Item | FlagDraw>([
   drawn('list', 'glued', GLUED),
 ]);
 
-// After a bare `--` every token is a positional, whatever it looks like.
 const TAIL: Gen<string[] | null> = oneOf<string[] | null>([
   just(null),
   arr(pick(['--pin', '-h', '--', 'x', '--tag=a', '']), 0, 4),
 ]);
-// A value flag with nothing after it, or with a flag after it, is set with no value.
 const BARE_LAST: Gen<FlagDraw[]> = oneOf<FlagDraw[]>([
   just([]),
   map(drawn('plain', 'bare', just('')), (draw) => [draw]),

@@ -1,5 +1,3 @@
-// Last-resort process handlers shared by the long-running entry points (`hippo mcp`, `hippo
-// serve`).
 import { errorFields, errorMessage, log } from './log.js';
 
 /** What an entry point runs before it exits, and how long that may take before the process is
@@ -9,12 +7,10 @@ export interface Shutdown {
   readonly boundMs: number;
 }
 
-/** A stream that never drains must not hold the exit open. */
 const FLUSH_CAP_MS = 1000;
 
 function afterFlush(leave: () => void): void {
   let pending = 2;
-  // The cap is cleared once both streams drain, so `leave` runs once.
   const cap = setTimeout(leave, FLUSH_CAP_MS);
   cap.unref();
   const done = (): void => {
@@ -41,14 +37,8 @@ function killSelf(): void {
   process.kill(process.pid, 'SIGKILL');
 }
 
-/**
- * Runs `shutdown` for `cause`, then exits with `code`, or 1 when it threw. One still running after
- * its bound is logged and the process ended without it.
- */
 function exitAfterShutdown(name: string, cause: string, shutdown: Shutdown, code: number): void {
   let ended = false;
-  // Referenced on purpose: a shutdown that never settles must end at the bound, not when the loop
-  // happens to empty.
   const bound = setTimeout(() => {
     ended = true;
     log.error(
@@ -93,7 +83,6 @@ export function installCrashHandlers(name: string, shutdown?: Shutdown): void {
   let crashing = false;
   const crash = <E>(kind: string, err: E): void => {
     log.error(`${name} ${kind}: ${errorMessage(err)}`, errorFields(err));
-    // A throw while shutdown runs is logged above and must not start it again.
     if (crashing) return;
     crashing = true;
     if (shutdown) exitAfterShutdown(name, kind, shutdown, 1);

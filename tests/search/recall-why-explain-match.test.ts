@@ -1,10 +1,3 @@
-/**
- * PR4: Recall UX Polish tests.
- *
- * Tests the --why explainability layer and source annotations.
- * Validates at the search/explain level since CLI testing is brittle.
- */
-
 import { describe, it, expect } from 'vitest';
 import { rankBm25 } from '../../src/domain/search/bm25-search.js';
 import { hybridSearch } from '../../src/entry/folder-search.js';
@@ -15,10 +8,6 @@ import { resolveConfidence } from '../../src/entry/memory.js';
 import { Layer } from '../../src/base/memory/entry.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { evalNow } from '../../src/infra/eval-switches.js';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeEntries() {
   return [
@@ -37,10 +26,6 @@ function makeEntries() {
   ];
 }
 
-// ---------------------------------------------------------------------------
-// tokenize (newly exported)
-// ---------------------------------------------------------------------------
-
 describe('tokenize export', () => {
   it('lowercases and splits on whitespace', () => {
     const tokens = tokenize('FRED Cache Error');
@@ -58,16 +43,11 @@ describe('tokenize export', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// explainMatch: BM25-only results
-// ---------------------------------------------------------------------------
-
 describe('explainMatch', () => {
   it('identifies matched BM25 terms for a keyword query', () => {
     const entries = makeEntries();
     const results = rankBm25('FRED cache failure', entries, { now: evalNow(), budget: 10000 });
 
-    // No stemming, so 'failure' misses 'failures'; the FRED row also holds the rarer term and ranks first.
     expect(results.map((r) => r.entry.id)).toEqual([entries[0].id, entries[2].id]);
 
     const explanation = explainMatch('FRED cache failure', results[0]);
@@ -81,7 +61,6 @@ describe('explainMatch', () => {
     const entries = makeEntries();
     const results = rankBm25('cache refresh', entries, { now: evalNow(), budget: 10000 });
 
-    // Both rows hold both terms; the shorter one ranks first.
     expect(results.map((r) => r.entry.id)).toEqual([entries[2].id, entries[0].id]);
 
     const explanation = explainMatch('cache refresh', results[0]);
@@ -102,7 +81,6 @@ describe('explainMatch', () => {
     const entries = makeEntries();
     const results = rankBm25('error pipeline', entries, { now: evalNow(), budget: 10000 });
 
-    // 'pipeline' comes only from the FRED row's data-pipeline tag; 'error' is a tag on two rows.
     expect(results.map((r) => explainMatch('error pipeline', r).reason)).toEqual([
       'BM25: matched terms [error, pipeline]',
       'BM25: matched terms [error]',
@@ -110,7 +88,6 @@ describe('explainMatch', () => {
   });
 
   it('handles a result with no BM25 and no embedding match gracefully', () => {
-    // Construct a synthetic SearchResult with zero scores
     const entry = createMemory('something completely unrelated');
     const fakeResult: SearchResult = {
       entry,
@@ -145,10 +122,6 @@ describe('explainMatch', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// --why JSON output shape
-// ---------------------------------------------------------------------------
-
 describe('--why JSON output fields', () => {
   it('search results contain all fields needed for --why annotation', () => {
     const entries = makeEntries();
@@ -156,7 +129,6 @@ describe('--why JSON output fields', () => {
     expect(results).toHaveLength(2);
 
     const r = results[0];
-    // Verify all fields exist on SearchResult that --why needs
     expect(r.score).toBeTypeOf('number');
     expect(r.bm25).toBeTypeOf('number');
     expect(r.cosine).toBeTypeOf('number');
@@ -165,7 +137,6 @@ describe('--why JSON output fields', () => {
     expect(r.entry.id).toBeTypeOf('string');
     expect(r.entry.strength).toBeTypeOf('number');
 
-    // explainMatch produces the reason field
     const explanation = explainMatch('FRED cache', r);
     expect(explanation.reason).toBeTypeOf('string');
     expect(explanation.reason).toBe('BM25: matched terms [fred, cache]');
@@ -177,10 +148,6 @@ describe('--why JSON output fields', () => {
     expect(['verified', 'observed', 'inferred', 'stale']).toContain(conf);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Source bucket annotation
-// ---------------------------------------------------------------------------
 
 describe('source bucket annotation', () => {
   it('entry.layer maps to valid bucket names', () => {
@@ -204,10 +171,6 @@ describe('source bucket annotation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// hybridSearch --why compatibility
-// ---------------------------------------------------------------------------
-
 describe('hybridSearch results carry explainMatch data', () => {
   it('hybridSearch results include bm25 and cosine fields', async () => {
     const entries = makeEntries();
@@ -217,7 +180,6 @@ describe('hybridSearch results carry explainMatch data', () => {
       expect(r.bm25).toBeTypeOf('number');
       expect(r.cosine).toBeTypeOf('number');
     }
-    // No hippoRoot means no stored vectors, so hybrid ranks by BM25 alone, as search does.
     expect(results.map((r) => explainMatch('FRED cache failure', r).reason)).toEqual([
       'BM25: matched terms [fred, cache]',
       'BM25: matched terms [cache]',

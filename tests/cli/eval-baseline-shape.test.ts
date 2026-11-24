@@ -1,4 +1,3 @@
-// The eval baseline file is checked for its shape before the suite compares against it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

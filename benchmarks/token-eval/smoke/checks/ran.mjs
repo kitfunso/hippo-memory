@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Smoke lesson checker: pass when any shell command the agent ran holds the first arg, else fail.
 import * as fs from 'node:fs';
 
 const needle = process.argv[2];

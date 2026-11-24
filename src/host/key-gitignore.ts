@@ -1,5 +1,3 @@
-// A store folder can sit inside a user's repo, so the file holding the live server key must never be
-// committable.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { errorCode } from '../base/util/log.js';
@@ -21,7 +19,6 @@ function keyIgnored(text: string): boolean {
   return false;
 }
 
-/** The file's text, or '' when it does not exist yet. */
 function readIfPresent(file: string): string {
   try {
     return fs.readFileSync(file, 'utf8');
@@ -36,9 +33,7 @@ function readIfPresent(file: string): string {
 export function ensureKeyGitignored(hippoRoot: string): void {
   const file = path.join(hippoRoot, IGNORE_FILE);
   fs.mkdirSync(hippoRoot, { recursive: true });
-  // A file that already ignores the key needs only read access, so a read-only one still serves.
   if (keyIgnored(readIfPresent(file))) return;
-  // One open serves the read and the append, so the file cannot be swapped between the two.
   const fd = fs.openSync(file, 'a+');
   try {
     const bytes = Buffer.alloc(fs.fstatSync(fd).size);

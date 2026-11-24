@@ -1,4 +1,3 @@
-// Each sleep event renders as the exact line the display text built before events existed.
 import { describe, expect, it } from 'vitest';
 import type { SleepEvent } from '../../src/api/sleep/events.js';
 import { sleepEventLine } from '../../src/surface/render/sleep-events.js';

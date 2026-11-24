@@ -1,6 +1,5 @@
 // openHippoDb leaned on `PRAGMA busy_timeout` alone, which SQLite ignores for
 // `PRAGMA journal_mode` and for a write upgrading a deferred read snapshot, so
-// concurrent opens of a cold store died with errcode 5 / 517 (db.ts:2389,2435).
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,12 +19,9 @@ afterEach(() => {
   }
 });
 
-// The race only exists across processes, so the workers import the build output.
 const DIST_DB = join(import.meta.dirname, '..', '..', 'dist', 'db/index.js');
 const DB_URL = pathToFileURL(DIST_DB).href;
 
-// Spawn latency alone staggers the workers too far apart to collide, so each one
-// reports ready, spins on a barrier file, and the parent releases them all at once.
 function workerScript(hippoRoot: string, barrier: string, ready: string): string {
   return `
     import { existsSync, writeFileSync } from 'node:fs';

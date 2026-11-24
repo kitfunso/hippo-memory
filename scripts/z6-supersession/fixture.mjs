@@ -1,4 +1,3 @@
-// The Z6 fixture contract: content-hash scenario ids, the tune and held-out split, the shape checks and their marker matching.
 import crypto from 'node:crypto';
 import { mulberry32 } from '../lib/prng.mjs';
 
@@ -7,7 +6,6 @@ const hasWord = (text, marker) => new RegExp(`(^|[^\\p{L}\\p{N}_])${esc(marker)}
 const norm = (s) => s.toLowerCase().replace(/\s+/g, ' ').trim();
 const sentences = (t) => t.split(/(?<=[.!?])\s+|\n+/).filter(Boolean);
 
-// Tune count per category/domain cell; the key order is part of the split (cell index seeds the shuffle).
 const TUNE = {
   'move/personal': 3, 'move/coding': 2, 'flip/personal': 2, 'flip/coding': 3,
   'correction/personal': 3, 'correction/coding': 2, 'reversal/personal': 2, 'reversal/coding': 3,
@@ -15,7 +13,6 @@ const TUNE = {
   'control-lookalike/personal': 1, 'control-lookalike/coding': 1,
 };
 const SPLIT_SEED = 20260928;
-// The fixture's split, recomputed from its content ids: per cell, ids sorted, shuffled, first TUNE[cell] are tune.
 function assignSplit(scenarios) {
   const split = new Map();
   Object.keys(TUNE).forEach((cell, ci) => {
@@ -36,10 +33,8 @@ const CELLS = {
 };
 const fixtureBody = (s) => JSON.stringify({ category: s.category, domain: s.domain, statements: s.statements, question: s.question, answer: s.answer });
 const fixtureId = (s) => `z6-${crypto.createHash('sha256').update(fixtureBody(s)).digest('hex').slice(0, 8)}`;
-// Checker's own approximate tokenizer (R17); kept apart from the real dist/search.js one used for question reach (R8).
 const simpleTokenize = (t) => t.toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter((w) => w.length > 1);
 const PATH_WORDS = new Set(['path', 'qa', 'qb', 'qc', 'proj']);
-// One stopword list for both the checker-port and real-tokenizer content-sharing checks, so they cannot drift apart.
 const STOP = new Set(('a an the and or but of to in on at for with from by as is are was were be been being am do does did done ' +
   'i we you he she it they me us him her them my our your his its their this that these those what which who whom whose where when ' +
   'how why there here now then so if not no yes can could should would will shall may might must have has had any some all just ' +
@@ -47,8 +42,6 @@ const STOP = new Set(('a an the and or but of to in on at for with from by as is
   'anymore thing things one get got go going make made let lets like need want know think please thanks im its ive were youre').split(' '));
 const simpleContent = (t) => new Set(simpleTokenize(t).filter((w) => !STOP.has(w)));
 const simpleShares = (a, b) => { const B = simpleContent(b); return [...simpleContent(a)].some((w) => B.has(w)); };
-
-// --- fixture validator, ported from scratchpad/z6-fixture-check.mjs ---
 
 function fixtureProblems(fx) {
   const problems = [];
@@ -86,7 +79,6 @@ function fixtureProblems(fx) {
       if (hasWord(markers[a] ?? '', markers[b] ?? '') || hasWord(markers[b] ?? '', markers[a] ?? '')) bad(`${tag}: marker "${markers[a]}" and "${markers[b]}" overlap as whole words`);
     }
     if (!s.question || markers.some((m) => hasWord(s.question, m))) bad(`${tag}: question missing or contains a marker`);
-    // remember tags every row path:qa/qb/qc/proj and BM25 indexes tags, so these words would match every remembered row.
     if (simpleTokenize(s.question ?? '').some((w) => PATH_WORDS.has(w))) bad(`${tag}: question contains a path-tag word`);
     const last = markers[markers.length - 1];
     const expected = s.category === 'control-lookalike' ? markers[0] : last;

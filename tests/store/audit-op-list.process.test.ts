@@ -1,5 +1,3 @@
-/** `hippo audit list --op` and GET /v1/audit?op= accept a real op and reject an unknown one. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -22,7 +20,6 @@ describe('audit op filter', () => {
   beforeEach(() => {
     ({ base: home, root: hippoRoot } = makeStore('audit-op'));
     globalHome = makeRoot('audit-op-global', { init: false });
-    // writeEntry appends a 'remember' audit row, so an accepted op has a row to return.
     writeEntry(hippoRoot, createMemory('audit op filter seed', { baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS }));
     vi.stubEnv('HIPPO_HOME', globalHome);
   });

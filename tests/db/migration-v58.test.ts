@@ -1,4 +1,3 @@
-// Schema v58 adds the predictions page index and the memories project index; the real reads must plan onto them.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';

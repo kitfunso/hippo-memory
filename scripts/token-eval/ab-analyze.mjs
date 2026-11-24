@@ -1,35 +1,4 @@
 #!/usr/bin/env node
-/**
- * Paired agent A/B analyzer (ROADMAP Part IX, TE5).
- *
- * Reads run records from the task-sequence eval and reports, for every arm
- * against the control arm (`no-memory` by default), with bootstrap CIs:
- *   - dollars (or uncached-equivalent tokens) per resolved task, the headline;
- *   - resolve-rate difference, clustered by repository;
- *   - pass@1 and pass^k;
- *   - work avoided: turns, file reads, tool calls, repeated errors per task.
- *
- * Protocol and pre-registered thresholds:
- * docs/evals/2026-09-23-te5-token-ab-preregistration.md.
- *
- * Input: JSONL, one record per (task, arm, seed):
- *   { taskId, cluster, arm, seed, resolved,
- *     usage: { inputTokens, cacheWriteTokens, cacheReadTokens, outputTokens },
- *     turns?, fileReads?, toolCalls?, repeatedErrors? }
- * usage comes from the provider's usage fields summed over the task. A
- * record whose usage is missing is rejected, never zero-filled. Records from
- * scripts/token-eval/ab-run.mjs also carry `scored` (false for the first
- * task of a sequence) and `invalid` (a reason, e.g. 'no-result' or 'leak');
- * both are excluded from scoring and counted in the output.
- *
- * Prices: --prices FILE with {inputPerMTok, cacheWritePerMTok,
- * cacheReadPerMTok, outputPerMTok} from the provider's current price page.
- * Without it, cost is input in uncached-equivalent tokens plus output tokens
- * weighted by --output-ratio (default 5).
- *
- * Run: npm run build && node scripts/token-eval/ab-analyze.mjs --runs FILE
- *      [--prices FILE] [--control no-memory] [--k 3] [--out FILE]
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,7 +18,6 @@ const REPO = path.resolve(HERE, '..', '..');
 const WORK_FIELDS = ['turns', 'fileReads', 'toolCalls', 'repeatedErrors'];
 const USAGE_FIELDS = ['inputTokens', 'cacheWriteTokens', 'cacheReadTokens', 'outputTokens'];
 
-/** JSON string check without `typeof` (anti-slop rule). */
 function isString(v) {
   return v !== undefined && v !== null && v.constructor === String;
 }
@@ -66,9 +34,6 @@ export function parseRuns(text) {
     }
     if (!Number.isInteger(r.seed)) throw new Error(`${where}: seed must be an integer`);
     if (r.resolved !== true && r.resolved !== false) throw new Error(`${where}: resolved must be true or false`);
-    // Unscored (first task of a sequence) and invalid runs (no result,
-    // memory leak of the gold patch) are kept so analyze() can report them,
-    // but they are never scored.
     if (r.scored === false || r.invalid) {
       records.push(r);
       return;

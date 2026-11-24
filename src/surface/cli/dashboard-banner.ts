@@ -1,4 +1,3 @@
-// What `hippo dashboard` prints at start, and the one line a port that will not open gets.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { hippoHomeDir } from '../../host/agent-homes.js';
@@ -34,13 +33,11 @@ export function printDashboardBanner({
 }: PrintDashboardBannerOptions): void {
   const file = dashboardUrlFile(hippoRoot, platform);
   fs.mkdirSync(path.dirname(file), PRIVATE_DIR);
-  // Created fresh, so its mode holds even where an older file had a wider one.
   fs.rmSync(file, { force: true });
   fs.writeFileSync(file, `http://localhost:${port}/?token=${ticket}\n`, {
     flag: 'wx',
     mode: 0o600,
   });
-  // The banner is the command's printed result, so it stays on stdout.
   console.log(
     `Hippo Dashboard running at http://localhost:${port}/ (open the URL with its token from ${file})`,
   );

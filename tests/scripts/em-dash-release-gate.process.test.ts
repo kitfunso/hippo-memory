@@ -4,9 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-// The section regex ended on `\z`, which JS reads as a literal "z": the gate cut
-// the entry at its first "z" and passed any em dash after it.
-
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-em-dashes-in-release-notes.mjs');
 const EM_DASH = String.fromCharCode(0x2014);
 

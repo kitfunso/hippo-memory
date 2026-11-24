@@ -22,7 +22,6 @@ export interface SlackMessageEvent {
    * bot:<bot_id>` from it.
    */
   bot_id?: string;
-  /** Present on subtype='message_deleted'. */
   deleted_ts?: string;
 }
 

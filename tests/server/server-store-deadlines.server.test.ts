@@ -1,4 +1,3 @@
-// The store workers' queue cap, a request's deadline in the queue, on a reader and on the writer, and the handler deadline, each held open by a real lock.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
@@ -29,9 +28,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as {
 };
 
 const SAVE = 'objects.saveObject';
-// Far past any test's own timeout, so a call behind a held lock can only end when the test releases the lock or the executor stops the thread.
 const LONG_WAIT_MS = 60_000;
-// Long enough that the request is on its worker before it expires; the tests wait for the expiry and never for a clock.
 const SHORT_DEADLINE_MS = '400';
 const PAST_DEADLINE = "past its request's deadline";
 
@@ -46,7 +43,6 @@ afterEach(async () => {
 
 const newRoot = (): string => makeRoot('store-deadlines');
 
-/** The deadline of every request that arrives from now on; '0' turns it off. */
 function deadline(ms: string): void {
   vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', ms);
 }
@@ -61,7 +57,6 @@ async function start(root: string, opts: Partial<ServeOptions> = {}): Promise<Se
   return server;
 }
 
-/** The real executor, plus a promise that settles once an op has been handed to it a given number of times. */
 function watched(inner: SqliteExecutor) {
   const seen: string[] = [];
   const checks: Array<() => void> = [];
@@ -87,13 +82,11 @@ function watched(inner: SqliteExecutor) {
   return { executor, sent };
 }
 
-/** A worker-backed store whose threads wait on a lock for as long as the test holds it. */
 function patientStore(root: string, opts: ExecutorOptions = {}) {
   const { executor, sent } = watched(createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS, ...opts }));
   return { sent, store: workerSqliteStore(root, executor) };
 }
 
-/** A second connection, as another process would hold, with the write lock taken until `release`. */
 function holdWriteLock(root: string) {
   const other = new DatabaseSync(getHippoDbPath(root));
   cleanups.push(() => {
@@ -103,7 +96,6 @@ function holdWriteLock(root: string) {
   return { release: () => other.exec('COMMIT') };
 }
 
-/** Settles when a line holding `text` is logged at `level`; set before the request that causes it. */
 function logged(level: 'warn' | 'error', text: string): Promise<void> {
   return new Promise((resolve) => {
     vi.spyOn(log, level).mockImplementation((message) => {
@@ -114,7 +106,6 @@ function logged(level: 'warn' | 'error', text: string): Promise<void> {
 
 const LATE = 'after its deadline reply';
 
-/** Settles with the fields of the first line holding `text` logged at `level`; set before the request that causes it. */
 function loggedFields(level: 'warn' | 'trail', text: string): Promise<LogFields | undefined> {
   return new Promise((resolve) => {
     vi.spyOn(log, level).mockImplementation((message, fields) => {
@@ -157,7 +148,6 @@ async function counts(server: ServerHandle): Promise<Counts> {
   return (await (await get(server, '/health')).json()) as Counts;
 }
 
-/** What a 504 of the deadline must carry: the code, the request's own id, and the sentence that says what became of the work. */
 async function expectDeadlineReply(res: Response, sentence: string): Promise<void> {
   expect(res.status).toBe(504);
   expect(await res.json()).toEqual({
@@ -192,7 +182,6 @@ if (workerData.during === 'statement') {
 `;
 
 describe('a writer thread killed inside an open transaction on a WAL database', () => {
-  // A worker thread starts, writes until it is killed, and the file is reopened and checked; CI runners take tens of seconds.
   it.each(['between statements', 'statement'])(
     'leaves the file consistent with none of its rows, and the next write lands (killed during: %s)',
     async (during) => {
@@ -295,14 +284,12 @@ describe("a store thread's queue", () => {
 
 describe("a read still running at its request's deadline", () => {
   it('answers 504 while the lock is still held, then serves the next read on a fresh thread', async () => {
-    // No hippo.db at boot, so the server holds no connection and another one can lock the whole file.
     const root = makeRoot('store-deadlines-bare', { init: false });
     const executor = createSqliteExecutor(root, { busyWaitMs: LONG_WAIT_MS });
     const server = await start(root, { store: workerSqliteStore(root, executor) });
     const before = await counts(server);
     mkdirSync(join(root, '.hippo'), PRIVATE_DIR);
     initTestStore(root);
-    // The setup runs on the writer before any read. It is asked of the executor, since after any response the server would hold a connection, as the idle writer would.
     await executor.call('readiness.ping', [], { mode: 'write', requestId: undefined });
     executor.terminateWriter();
     while (executor.liveThreads() > 0) await new Promise((resolve) => setImmediate(resolve));
@@ -321,7 +308,6 @@ describe("a read still running at its request's deadline", () => {
     other.exec('COMMIT');
     other.close();
     expect((await get(server, '/v1/predictions')).status).toBe(200);
-    // The stopped thread exits once its statement has met the freed lock; each look is a round trip, never a pause.
     let after = await counts(server);
     while (after.store_workers_replaced === before.store_workers_replaced) after = await counts(server);
     expect([after.store_workers_replaced, after.store_jobs_expired]).toEqual([
@@ -441,7 +427,6 @@ describe('the handler deadline', () => {
       deadline('0');
       release();
       await handlerDone;
-      // A write that ends late did run, so one info line says so under the id and the route of the 504's access line.
       expect(await finished).toEqual({
         requestId: late.headers.get('x-request-id'),
         method: 'POST',
@@ -575,7 +560,6 @@ describe('the handler deadline', () => {
       await gate;
       return { tenantId: 'default', subject: 'user-1', role: 'member' };
     };
-    // The in-process store, since the workers refuse a call that arrives past its request's deadline and the read would fail.
     const server = await start(root, { store: sqliteStore(root), authResolver, authResolverTimeoutMs: LONG_WAIT_MS });
     vi.spyOn(log, 'error').mockImplementation(() => {});
     const infos = vi.spyOn(log, 'trail').mockImplementation(() => {});
@@ -589,7 +573,6 @@ describe('the handler deadline', () => {
     await expectDeadlineReply(late, 'did not finish by its deadline');
     deadline('0');
     release();
-    // Two round trips give the late handler the turns it needs to end.
     expect((await get(server, '/v1/predictions')).status).toBe(200);
     await counts(server);
     expect([...infos.mock.calls, ...warns.mock.calls].filter(([message]) => message.includes(LATE))).toEqual([]);
@@ -632,7 +615,6 @@ const STEPS: readonly Step[] = [
 
 const PER_REQUEST_HEADERS = new Set(['date', 'x-request-id', 'content-length']);
 
-/** Every step's status, headers and body, less what differs between two stores by construction: generated ids and clock readings. */
 async function replies(root: string, opts: Partial<ServeOptions> = {}) {
   const server = await start(root, opts);
   const seen = [];

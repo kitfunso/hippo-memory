@@ -1,5 +1,3 @@
-// The conflict list is one JOIN read per page: pages join up to the whole list, statements do not grow with
-// conflicts, and a pair holding a row the caller cannot touch never shows on any page.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import {
@@ -32,7 +30,6 @@ afterEach(() => {
 
 const conflictOf = (a: string, b: string) => ({ memoryAId: a, memoryBId: b, reason: 'contradiction', score: 0.9 });
 
-/** `n` open conflicts between team rows, plus `extra`, all detected at one instant so the pages must break ties on id. */
 function seedTeamConflicts(n: number, tenantId = 'default', extra: ReturnType<typeof conflictOf>[] = []): void {
   const rows = Array.from({ length: 2 * n }, (_, i) =>
     createMemory(`deploy rule number ${i} for tenant ${tenantId}`, {
@@ -95,7 +92,6 @@ describe('conflict list pages', () => {
     const fifty = await count(50);
     expect(countMatching(fifty, 'FROM memory_conflicts')).toBe(1);
     expect(countMatching(fifty, /FROM memories WHERE/)).toBe(0);
-    // The store open's pragmas and schema probe, then the one JOIN.
     expect(fifty).toHaveLength(five.length);
     expect(fifty.filter((sql) => !sql.startsWith('PRAGMA'))).toHaveLength(2);
   });

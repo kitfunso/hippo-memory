@@ -1,5 +1,3 @@
-// Gemini CLI: the "Gemini Added Memories" section of GEMINI.md, and the auto-memory folder that
-// projects.json names.
 import path from 'node:path';
 import { isStringValue } from '../../base/session/capture-contract.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';
@@ -101,7 +99,6 @@ function projectSlug(
     warnings.push(`${index}: ${errorMessage(err)}`);
     return null;
   }
-  // The git top level is only asked for when the folder itself has no entry, since it spawns git.
   const entry =
     findEntry(projects, projectRoot, ctx.platform) ?? topEntry(ctx, projects, projectRoot);
   if (entry === undefined) return null;
@@ -129,7 +126,6 @@ function fold(p: string, platform: NodeJS.Platform): string {
   return platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
-// A relative key would resolve against the working folder, which no adapter may read.
 function findEntry(
   projects: JsonObject,
   target: string,

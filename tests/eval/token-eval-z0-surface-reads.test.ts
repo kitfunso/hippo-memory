@@ -1,4 +1,3 @@
-// Z0 readers of what the runner recorded: screen verdicts over void sessions, leak scans through directory links, injected bullets with blank lines.
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,7 +59,6 @@ describe('leak scan through a directory link', () => {
     expect(storedAt({ id: 'l2', keyPhrase: 'zq-absent' }, at)).toBe(false);
   });
 
-  /** claude-config/rules linked to a dir; `inner(target)` adds more under it and returns false when this box refuses the link. */
   const linkedRules = (kind: 'junction' | 'file', inner: (target: string) => void) => {
     const root = tmp('z0-leak-root-');
     const target = tmp('z0-leak-target-');

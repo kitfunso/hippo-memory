@@ -1,4 +1,3 @@
-// A corrupt workspace registry is warned about and kept aside, so the next registration cannot silently erase its entries.
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

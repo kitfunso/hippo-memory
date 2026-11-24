@@ -2,16 +2,10 @@ import type { ConnectorContext } from '../ingest.js';
 import { legacyGitHubRef } from './ref.js';
 
 export interface DeletionInput {
-  /** artifact_ref of the comment, e.g. 'github://acme/repo/issue/42/comment/123' or
-   *  'github://acme/repo/pull/7/review_comment/456'. */
   artifactRef: string;
-  /** Source idempotency key for this delete event (sha256 of artifact_ref + ':' + updated_at). */
   idempotencyKey: string;
-  /** X-GitHub-Delivery header for audit log. */
   deliveryId: string;
-  /** X-GitHub-Event header value: 'issue_comment' or 'pull_request_review_comment'. */
   eventName: string;
-  /** The site's ownsBareRefs: only then does a GHES ref also archive its github.com-form twin. */
   ownsBareRefs?: boolean;
 }
 

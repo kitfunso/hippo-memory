@@ -1,4 +1,3 @@
-// What the delivery recorder watches: the candidates, the picks and the guarded observer methods.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import { scoreOverlap } from '../../base/rank/prompt-recall.js';
 import { blockHash } from '../../base/util/token-text.js';
@@ -67,7 +66,6 @@ interface Rejection {
 export function rejectId(state: RecorderState, id: string, rejection: Rejection): void {
   const { stage, reason, score, tokens } = rejection;
   const held = state.candidates.get(id);
-  // First rejection wins; an id never offered is not a candidate of this call.
   if (!held || held.reason !== null) return;
   state.candidates.set(id, { ...held, stage, reason, score, tokens });
 }
@@ -103,7 +101,6 @@ function offerEntries(
   for (const e of entries) {
     const held = state.candidates.get(e.id);
     const wanted: DeliveryPool = pool ?? (e.pinned ? 'pin' : 'recent');
-    // A loaded recent row the prompt-recall gate then judges belongs to that pool.
     const relabel =
       held !== undefined &&
       held.reason === null &&

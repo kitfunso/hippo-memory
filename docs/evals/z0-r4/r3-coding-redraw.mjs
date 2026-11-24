@@ -1,7 +1,3 @@
-// Read-only: four ways to build the item 10 redraw on round 3's A2/A1 H1 spreads, seed rule in the loop, at one fixed
-// effect (default -0.11), to compare the joint power each way gives. unit = fresh family, seed and residual per unit (the prereg's words);
-// resid = fresh residual only; family = a whole family redrawn; shrink = every part at correlation 1 - f (marginals kept).
-// Usage: node docs/evals/z0-r4/r3-coding-redraw.mjs --analyzer <checkout of 04835462b> [--sims 2000] [--delta -0.11] [--level 0.025] [--report FILE] [--grading FILE] [--drop-list FILE]
 import { arg, openRound3 } from './r3-open.mjs';
 
 const { load, scoredNoDrop } = await openRound3(['scripts/token-eval/z0-hypotheses.mjs', 'scripts/token-eval/z0-size-sim.mjs', 'dist/eval/eval-stats.js']);

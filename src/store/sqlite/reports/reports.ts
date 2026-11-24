@@ -1,4 +1,3 @@
-// hippo.db's Reports group: the tenant reports, listings and usage reports the status verbs print.
 import { type DatabaseSyncLike, withReadSnapshot } from '../../../db/index.js';
 import { cachedStatement } from '../../../db/statement-cache.js';
 import { supersededIn } from '../../../db/sql-predicates.js';
@@ -31,8 +30,6 @@ type CorrectionLinkDbRow = {
   source_created: string | null;
 };
 
-/** The ` AND` range that resumes after `after` on the given created and id columns, and the
- * arguments it binds. */
 function afterRange(created: string, id: string, after: ReportPage['after']): SqlFragment {
   if (!after) return { sql: '', params: [] };
   return {
@@ -41,8 +38,6 @@ function afterRange(created: string, id: string, after: ReportPage['after']): Sq
   };
 }
 
-/** A page of the superseded rows joined to their successor and that row's extraction source: the
- * pairs the report lists, and no other row. */
 function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLinkPage {
   const range = afterRange('old.created', 'old.id', page.after);
   const rows = cachedStatement(
@@ -68,7 +63,6 @@ function correctionLinks(db: DatabaseSyncLike, page: ReportPage): CorrectionLink
 
 const RAW = "kind = 'raw'";
 
-/** The raw count in SQL and a page of the raw rows missing provenance, on one snapshot. */
 function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePage {
   return withReadSnapshot(db, () => {
     // SAFETY: an aggregate with no GROUP BY always answers one row.
@@ -97,8 +91,6 @@ function rawProvenance(db: DatabaseSyncLike, page: ReportPage): RawProvenancePag
   });
 }
 
-/** Strength tallies and the open-conflict count on one snapshot, so they never straddle another
- * process's write. */
 function memoryStatus(
   db: DatabaseSyncLike,
   rules: StoreModel,
@@ -112,7 +104,6 @@ function memoryStatus(
   }));
 }
 
-// The two totals read side tables only, so they skip the mirror setup the memory reads open with.
 const reportTotalsBodies: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
   tokenUse: summarizeTokenUse,
   failures: summarizeFailures,
@@ -120,7 +111,6 @@ const reportTotalsBodies: Bodies<Pick<Reports, 'tokenUse' | 'failures'>> = {
 
 type Scored = 'memoryStatus' | 'statusCounts';
 
-// These two score strength, so they score by the store's loss-aversion rules.
 function scoredReadsBodies(files: StoreFiles): Bodies<Pick<Reports, Scored>> {
   return {
     memoryStatus: (db, ...args) => memoryStatus(db, files, ...args),

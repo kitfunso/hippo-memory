@@ -1,5 +1,3 @@
-// `hippo capture --last-session` for a caller whose transcript was read on another machine: its
-// project names the rows, never the store's folder.
 import { BadRequestError } from '../../base/errors/api-errors.js';
 import type { ContextWith, EntryContext } from '../../api/types.js';
 import { assertCallerIds, type CallerProject } from '../../api/prompt-hook.js';
@@ -32,8 +30,6 @@ export type SessionCaptureResult = Readonly<CaptureTally>;
 function assertSessionCapture(req: SessionCaptureRequest): void {
   assertCallerIds(req.sessionId, req.project);
   if (req.sessionId.trim() === '') throw new BadRequestError('session id: required');
-  // A '' project would read every project's rows as its own and write user-global rows; a rewritten
-  // one would split a project.
   assertCallerProject(req.project);
   if (req.texts.length > MAX_TEXTS) throw new BadRequestError(`texts: at most ${MAX_TEXTS}`);
   const sizes = req.texts.map((t) => Buffer.byteLength(t, 'utf8'));
@@ -58,13 +54,9 @@ export async function captureSessionTexts(
   const ctx = withEntryInfra(given);
   assertSessionCapture(req);
   const scrubbed = req.texts.map(scrubForSharing);
-  // Scrubbed again after extraction: bold removal can rebuild an address or key.
   const extracted = scrubbedItems(extractFromTexts(scrubbed), scrubForSharing);
-  // The newest items win, since the end of a session states where it landed.
   const items = extracted.slice(-MAX_ITEMS);
   if (items.length === 0) return { captured: 0, skipped: 0, rejected: 0 };
-  // The project filter is classifyOriginProject's in SQL: the caller's rows and user-global rows
-  // block a copy, other projects' rows do not.
   const dedup = { tenantId: ctx.tenantId, project: projectNames(req.project) };
   const twins = boldTwins(scrubbed, scrubForSharing);
   const held = await ctx.store.captures.textsHolding(

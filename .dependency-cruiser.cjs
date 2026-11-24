@@ -1,6 +1,3 @@
-// Import rules for src/, built from layers.json so the map and the rules cannot drift.
-// Run: npm run check:deps. Name and syntax rules (requireGroup in routes, SQLite words, process.env)
-// live in .oxlintrc.json; runtime cycles between features are .dependency-cruiser-cycles.cjs.
 'use strict';
 const { existsSync, readdirSync } = require('node:fs');
 const { join } = require('node:path');
@@ -9,7 +6,6 @@ const layers = require('./layers.json');
 const SRC = join(__dirname, 'src');
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** A path regex for src files under `folders` or equal to `roots`. */
 function srcPaths(folders, roots = []) {
   const parts = [...folders.map((f) => `${escape(f)}/`), ...roots.map((r) => `${escape(r)}$`)];
   return `^src/(${parts.join('|')})`;
@@ -18,7 +14,6 @@ function srcPaths(folders, roots = []) {
 const keysOf = (record, layer) => Object.keys(record).filter((key) => record[key] === layer);
 const layerPaths = (layer) => srcPaths(keysOf(layers.folders, layer), keysOf(layers.rootFiles, layer));
 
-/** Every src folder or root file layers.json lacks, every entry that no longer exists, and every named file gone. */
 function mapProblems() {
   const entries = readdirSync(SRC, { withFileTypes: true });
   const actual = {
@@ -49,7 +44,6 @@ if (problems.length > 0) {
   throw new Error(`layers.json does not match src/:\n  ${problems.join('\n  ')}\nList the folder or file under its layer, or remove the stale entry.`);
 }
 
-/** One rule per layer: its files import nothing from a higher layer, type-only imports included. */
 const layerOrder = layers.order.slice(0, -1).map((layer, i) => ({
   name: `layer-${layer}`,
   comment: `${layer} imports only from its own layer or a lower one (order: ${layers.order.join(' < ')})`,
@@ -102,7 +96,6 @@ const adapterRules = [
   },
 ];
 
-/** A root or kit that stops importing the adapter means layers.json names the wrong file. */
 const adapterRequired = entrances.map((file) => ({
   name: `adapter-used-by-${file.replace(/\W+/g, '-')}`,
   comment: `layers.json names src/${file} as an adapter entrance, so it must import src/${adapter.folder}`,
@@ -151,7 +144,6 @@ const storeReach = [
 const IO_MODULES = '^(fs|fs/promises|os|child_process)$';
 const SQLITE_MODULE = '^node:sqlite$';
 const notType = ['type-only', 'type-import'];
-// The composition roots and adapters, which read the environment once and pass settings down.
 const ENV_READERS = [
   '^src/cli\\.ts$',
   '^src/surface/(cli|server|mcp|hooks-install)/',
@@ -166,7 +158,6 @@ const strayStore = {
   severity: 'error',
 };
 
-// One rule per depth, for the file's own folder, its parent and its grandparent: $1 is that folder.
 const ownBarrels = ['', '[^/]+/', '[^/]+/[^/]+/'].map((below, up) => ({
   name: `no-own-barrel-${up}`,
   comment: 'a file imports the module that defines a name, never the index.ts of its folder or one above, which re-exports the file and loops back',
@@ -242,7 +233,6 @@ module.exports = {
   forbidden: [...layerOrder, ...apart, ...barrels, ...adapterRules, ...storeReach, ...reachRules],
   required: adapterRequired,
   options: {
-    // The node modules a rule names are kept, so a rule can bar a src file from them.
     includeOnly: ['^src/', IO_MODULES, SQLITE_MODULE],
     exclude: { path: '\\.d\\.ts$' },
     tsPreCompilationDeps: true,

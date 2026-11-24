@@ -1,5 +1,3 @@
-// Sweep: every by-id or by-scope surface of a member read grant, asked as four keys on one real server over HTTP and MCP.
-// A new route or tool that takes an id must join the table below or be exempted, so a surface cannot skip the rule.
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, setMeta } from '../../src/db/index.js';
@@ -24,8 +22,6 @@ const VECTOR = [1, 0, 0];
 const WHO = ['O', 'M', 'N', 'A'] as const;
 type Who = (typeof WHO)[number];
 
-/** What each of the four keys sees on one surface: O owns the row and holds the grant, M holds the grant only, N holds
- * none, A is an admin with none. */
 type PerKey<T> = Readonly<Record<Who, T>>;
 type Cells = PerKey<string>;
 interface Key {
@@ -48,7 +44,6 @@ interface PairSet {
   N: Pair;
   A: Pair;
 }
-/** The fields of a reply the table reads; each route's reply holds only its own. */
 interface Body {
   error?: string;
   results?: Array<{ id: string }>;
@@ -103,13 +98,11 @@ async function http(who: Who, method: string, path: string, body?: JsonValue): P
   return { status: res.status, json: text.length === 0 ? {} : (JSON.parse(text) as Body) };
 }
 
-/** A JSON-RPC reply: a result, or the error a refused call becomes. */
 interface RpcBody {
   result?: { content: Array<{ text: string }>; isError?: boolean };
   error?: { message: string };
 }
 
-/** A tools/call reply: the tool's own text, or the message of the error a refused or failed call becomes. */
 interface ToolReply {
   readonly text: string;
   readonly failed: boolean;
@@ -130,7 +123,6 @@ async function mcpCall(who: Who, name: string, args: Record<string, JsonValue>):
 const mcp = async (who: Who, name: string, args: Record<string, JsonValue>): Promise<string> =>
   (await mcpCall(who, name, args)).text;
 
-/** A refusal as the status it stands for, so an HTTP cell and an MCP cell read alike. */
 function refusal(status: number, message: string): string | null {
   if (status === 403 || /requires admin role|written by someone else|records no writer/.test(message)) return '403';
   if (status === 404 || /not found|No drillable|Could not resolve/i.test(message)) return '404';
@@ -148,12 +140,10 @@ function row(extra: Partial<CreateMemoryOptions> = {}, tag = 'sweepother'): stri
   return entry.id;
 }
 
-/** A row each write case consumes, with text no earlier share left in the global store. */
 const fresh = (extra: Partial<CreateMemoryOptions> = {}): string => row(extra, `sweepfresh${counter}`);
 
 const seenIn = (found: boolean): string => (found ? 'R' : 'hidden');
 const refused = (reply: Reply): string | null => refusal(reply.status, reply.json.error ?? '');
-// A cell reads 'hidden' only after a 200, so a 400 or 500 for every key cannot pass as a hidden row.
 const readCell = (reply: Reply, found: (json: Body) => boolean): string =>
   refused(reply) ?? (reply.status === 200 ? seenIn(found(reply.json)) : `status ${reply.status}`);
 const textCell = (call: ToolReply, marker: string): string =>
@@ -161,10 +151,8 @@ const textCell = (call: ToolReply, marker: string): string =>
 const writeCell = (reply: Reply): string => (reply.status === 200 ? '200' : (refused(reply) ?? `${reply.status}`));
 const OK_TEXT = /^(Shared|Resolved)/;
 const mcpWriteCell = (text: string, ok: RegExp = OK_TEXT): string => refusal(0, text) ?? (ok.test(text) ? '200' : text);
-// The reply names the fate the store applied, so a reject that fell back to a plain forget does not read as 200.
 const REJECTED_TEXT = /^Resolved conflict \d+: kept \S+, rejected \(tombstoned\) and removed /;
 
-// 'skipped' is a 200 that left the strength alone, so a refusal or a failure is its own cell.
 async function outcomeDelta(run: () => Promise<string | null>): Promise<string> {
   const before = readEntry(store, ids.r)?.outcomePositive ?? 0;
   const failure = await run();
@@ -185,7 +173,6 @@ const rememberEvents = (): Array<{ id: number; actor: string; targetId: string |
   }
 };
 
-/** O's copy leaves one global 'remember' event naming O's key, never the CLI, on a row that keeps S. */
 async function auditedCopy(who: Who, run: () => Promise<string>): Promise<string> {
   const before = new Set(rememberEvents().map((event) => event.id));
   const cell = await run();
@@ -303,7 +290,6 @@ const TABLE: readonly SurfaceRow[] = [
   {
     name: 'hippo_outcome on the ids of the last recall',
     covers: ['hippo_outcome'],
-    // N's recall of S is refused, so it has no row to rate: this cell is not coverage of N.
     expected: { O: 'applied', M: 'applied', N: 'skipped', A: 'applied' },
     run: (who) =>
       outcomeDelta(async () => {
@@ -353,7 +339,6 @@ const TABLE: readonly SurfaceRow[] = [
   {
     name: 'context with a scope query, over HTTP',
     covers: ['GET /v1/context'],
-    // HTTP reads `scope` as a tag boost, not an admission request, so no key reads S here and none is refused.
     expected: { O: 'hidden', M: 'hidden', N: 'hidden', A: 'hidden' },
     run: async (who) => {
       const reply = await http(who, 'GET', `/v1/context?scope=${encodeURIComponent(S)}`);
@@ -398,7 +383,6 @@ const TABLE: readonly SurfaceRow[] = [
   },
 ];
 
-// Routes and tools that take an id and are not memory surfaces, each with its reason.
 const INTEGER_ID_ROUTES = [
   'POST /v1/predictions/:id/close',
   'GET /v1/predictions/:id',
@@ -435,7 +419,6 @@ const EXEMPT_ROUTES: ReadonlyMap<string, string> = new Map([
 ]);
 const EXEMPT_TOOLS: ReadonlyMap<string, string> = new Map();
 
-/** One open pair for the listing and one for each write case, since resolving a pair consumes it. */
 async function seedConflicts(): Promise<void> {
   const made: Array<{ memoryAId: string; memoryBId: string; reason: string; score: number }> = [];
   const pair = (reason: string): number => made.push({ memoryAId: row(), memoryBId: row(), reason, score: 0.9 }) - 1;
@@ -501,7 +484,6 @@ async function seedRows(): Promise<void> {
 beforeAll(async () => {
   globalHome = makeRoot('member-grant-sweep-global');
   vi.stubEnv('HIPPO_HOME', globalHome);
-  // The context tool's auto query reads the checkout's git state, which differs between a dev branch and CI.
   vi.stubEnv('GIT_DIR', join(globalHome, 'no-repo'));
   vi.stubEnv('HIPPO_V1_RPS', '0');
   store = makeRoot('member-grant-sweep', {
@@ -538,7 +520,6 @@ describe('the sweep covers every surface that takes an id', () => {
   const covered = new Set(TABLE.flatMap((surface) => surface.covers));
 
   it('lists a route with a path parameter or a regex in the table, or exempts it with a reason', () => {
-    // A regex route's label holds no ':', yet it captures a value, so it counts as a by-id route.
     const missing = V1_ROUTES.filter((route) => 'regex' in route || routeLabel(route).includes(':'))
       .map((route) => `${route.method} ${routeLabel(route)}`)
       .filter((label) => !covered.has(label) && !EXEMPT_ROUTES.has(label));

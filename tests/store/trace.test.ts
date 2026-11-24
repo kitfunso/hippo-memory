@@ -139,7 +139,6 @@ describe('hippo trace record', () => {
 describe('hippo trace <id>', () => {
   it('shows the half-life the memory decays on, not one recomputed from a 7-day base', async () => {
     initTestStore(hippoDir);
-    // 123 days is no base times a write-time multiplier, like a half-life that recalls stretched.
     const entry = {
       ...createMemory('the release checklist lives in docs/release.md', { baseHalfLifeDays: 365 }),
       halfLifeDays: 123,
@@ -190,7 +189,6 @@ describe('hippo recall --outcome filter', () => {
 
   it('does NOT filter non-trace entries by --outcome', async () => {
     initTestStore(hippoDir);
-    // Record a failure trace
     await runHippo([
       'trace',
       'record',
@@ -201,12 +199,10 @@ describe('hippo recall --outcome filter', () => {
       '--outcome',
       'failure',
     ]);
-    // Remember a regular episodic memory that shares some text
     await runHippo(['remember', 'database connector patch applied successfully to staging']);
 
     const out = await runHippo(['recall', 'database connector patch', '--outcome', 'success', '--json']);
     const parsed = JSON.parse(out);
-    // The failure trace must be dropped; the episodic memory must survive.
     const allText = JSON.stringify(parsed);
     expect(allText).not.toContain('still broken');
     expect(allText).toContain('applied successfully to staging');

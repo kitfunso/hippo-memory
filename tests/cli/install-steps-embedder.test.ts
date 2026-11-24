@@ -1,4 +1,3 @@
-// The embedder install reaches npm through a stand-in runner, so no test downloads the package.
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, type EmbeddingsConfig } from '../../src/base/config/config.js';
@@ -58,7 +57,6 @@ function machine(over: Over): Machine {
   return { calls, deps };
 }
 
-/** An execFileSync failure as Node builds it: npm's own output went to the terminal. */
 function npmExit(status: number): Error {
   return Object.assign(new Error(`Command failed: node npm-cli.js install --global ${PKG}`), {
     status,

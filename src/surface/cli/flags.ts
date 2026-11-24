@@ -1,6 +1,3 @@
-// Each flag's kind, read from the verb table's flags: parseArgs needs a flag's kind before the
-// verb's module loads.
-
 import { COMMANDS } from './verbs.js';
 
 // A value on a switch is refused, as `--fix=false` reads as on under Boolean() and `--pin=true` as
@@ -15,7 +12,6 @@ export interface VerbFlags {
   readonly lists?: readonly string[];
 }
 
-// The entry point reads these for every verb, so no verb declares them.
 const GLOBAL_FLAGS: VerbFlags = { switches: ['help', 'version'] };
 
 const FIELD_KINDS = [
@@ -36,8 +32,6 @@ const DECLARED: ReadonlyMap<VerbFlags, ReadonlyMap<string, FlagKind>> = new Map(
   ]),
 );
 
-// A flag typed on a verb that does not declare it still has to parse: it takes the kind its
-// declaring verbs agree on, and where they differ it is a plain value.
 const SHARED_KIND: ReadonlyMap<string, FlagKind> = (() => {
   const shared = new Map<string, FlagKind>();
   for (const kinds of DECLARED.values()) {

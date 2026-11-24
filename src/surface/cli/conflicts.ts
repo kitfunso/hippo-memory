@@ -1,5 +1,3 @@
-// `hippo conflicts` and `hippo resolve`: list the contradicting memory pairs and settle one.
-
 import { truncateWithEllipsis } from '../../base/util/ellipsize.js';
 import { conflictToWire } from '../../base/memory/conflict-wire.js';
 import * as api from '../../api/index.js';
@@ -20,7 +18,6 @@ import { CONFLICT_STATUSES, type ConflictStatus } from '../../base/ports/store/c
 
 const CONFLICT_PREVIEW_CHARS = 120;
 
-/** `--status` as a conflict status or '*', or exit 1 with the message that lists every allowed value. */
 function conflictStatusFilter(status: string): ConflictStatus | '*' {
   if (status === '*') return status;
   const found = CONFLICT_STATUSES.find((s) => s === status);
@@ -48,8 +45,6 @@ export async function handleConflicts({
     return;
   }
 
-  // The header leads with the count, so a list past one page is read once to count and again from
-  // page 2 to print.
   let total = 0;
   let first: api.ConflictPage | undefined;
   for await (const page of api.conflictPages(read)) {
@@ -85,7 +80,6 @@ function printConflictLines(conflicts: api.ConflictPage['conflicts']): void {
   }
 }
 
-/** Shown when --keep is missing, to help the user decide. */
 async function showConflictForResolve(
   hippoRoot: string,
   conflictId: number,
@@ -126,7 +120,6 @@ export async function handleResolve({
 }: CommandContext): Promise<void> {
   requireInit(hippoRoot);
 
-  // Accept "42" or "conflict_42"
   const idText = (args[0] ?? '').replace(/^conflict_/, '');
   if (!idText) {
     fail('Usage: hippo resolve <conflict_id> --keep <memory_id> [--forget]');
@@ -140,9 +133,6 @@ export async function handleResolve({
   }
 
   const forgetLoser = boolFlag(flags, 'forget');
-  // --reject-loser tombstones the loser's digest so it cannot be re-asserted, as well as removing
-  // it. --reason is optional here, unlike `hippo reject`: resolve already has the conflict id and
-  // keepId.
   const rejectLoser = boolFlag(flags, 'reject-loser');
   const reasonFlag = stringFlag(flags, 'reason');
   const result = await api.conflictResolve(cliApiContext(hippoRoot, tenantId), conflictId, {

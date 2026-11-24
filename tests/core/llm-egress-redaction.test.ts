@@ -1,4 +1,3 @@
-// The store is not scrubbed at write, so every path that ships memory text off the box must scrub it first.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { anthropicLlm } from '../../src/infra/anthropic-llm.js';
 import { openAiChatLlm } from '../../src/infra/openai-chat-llm.js';
@@ -24,7 +23,6 @@ afterEach(() => {
 });
 
 const SECRET = 'AKIA' + 'Q7'.repeat(8);
-// Bearer and JWT shapes only the strict redaction catches; a path on the store redaction would leak them.
 const BEARER = 'b'.repeat(24);
 const JWT = `eyJ${'h'.repeat(12)}.eyJ${'p'.repeat(12)}.sig`;
 const TEXT = `the deploy key is ${SECRET} for prod, header Bearer ${BEARER}, session ${JWT}`;

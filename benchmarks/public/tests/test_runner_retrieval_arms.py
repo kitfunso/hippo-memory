@@ -1,5 +1,3 @@
-"""runner/run_retrieval.py (prereg Amendment 6 dated notes 5): a server counts as up only when it runs the arm's backend
-with embeddings on exactly for hippo-emb, so no arm is retrieved with the wrong search."""
 from __future__ import annotations
 
 import io
@@ -29,10 +27,10 @@ BEST = {"arm": "hippo", "embeddings": True, "readOnly": False, "rankScore": True
     ("hippo365", {"arm": "hippo", "embeddings": True, **OFF}, False),
     ("bm25", {"arm": "hippo", "embeddings": False, **OFF}, False),
     ("hippo-best", BEST, True),
-    ("hippo-best", {**BEST, "embeddings": False}, False),  # the cross-encoder over a store with no vectors
+    ("hippo-best", {**BEST, "embeddings": False}, False),
     ("hippo-best", {**BEST, "rerankerTopK": 0}, False),
-    ("hippo-best", {**BEST, "rankScore": False}, False),  # the runner's sort by score would undo the reranker
-    ("hippo-emb", {"arm": "hippo", "embeddings": True, "readOnly": False}, False),  # a server too old to report them
+    ("hippo-best", {**BEST, "rankScore": False}, False),
+    ("hippo-emb", {"arm": "hippo", "embeddings": True, "readOnly": False}, False),
 ])
 def test_the_health_check_matches_the_arm_and_its_embeddings(monkeypatch, arm, health, ok):
     monkeypatch.setattr(rr.urllib.request, "urlopen", lambda url, timeout: io.BytesIO(json.dumps(health).encode()))

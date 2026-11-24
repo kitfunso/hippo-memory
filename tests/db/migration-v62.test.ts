@@ -1,4 +1,3 @@
-// Schema v62 refuses a task snapshot or conflict status outside its list, and keeps every row already stored.
 import { describe, expect, it } from 'vitest';
 import { closeHippoDb, getSchemaVersion, openHippoDb, setMeta, type DatabaseSyncLike } from '../../src/db/index.js';
 import { v62 } from '../../src/db/migrations/v62.js';
@@ -10,14 +9,12 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { LATEST_SCHEMA_VERSION } from '../_helpers/schema-version.js';
 import { listMemoryConflicts, replaceDetectedConflicts, writeEntriesTogether } from '../_helpers/root-forms.js';
 
-// Every status a task snapshot row may hold: the two the store writes itself, then the close statuses.
 const TASK_SNAPSHOT_STATUSES = ['active', 'superseded', ...SNAPSHOT_CLOSE_STATUSES] as const;
 
 const SNAPSHOT_TRIGGERS = ['trg_task_snapshots_status_check_insert', 'trg_task_snapshots_status_check_update'];
 const CONFLICT_TRIGGERS = ['trg_memory_conflicts_status_check_insert', 'trg_memory_conflicts_status_check_update'];
 const SNAPSHOT_REFUSED = /invalid task snapshot status: must be active\|superseded\|cleared\|done\|session-ended/;
 const CONFLICT_REFUSED = /invalid conflict status: must be open\|resolved/;
-// The statuses a store at v61 held, as a scan of a real store found them, plus the one close status it had none of.
 const SNAPSHOT_SCAN = ['active', 'done', 'session-ended', 'superseded', 'cleared'];
 const CONFLICT_SCAN = ['open', 'resolved'];
 
@@ -60,7 +57,6 @@ function triggerNames(db: DatabaseSyncLike): string[] {
   return rows.map((row) => row.name);
 }
 
-/** Takes a current store back to v61's shape: none of v62's triggers, and both versions stamped 61. */
 function toV61(db: DatabaseSyncLike): void {
   for (const name of [...SNAPSHOT_TRIGGERS, ...CONFLICT_TRIGGERS]) db.exec(`DROP TRIGGER ${name}`);
   setMeta(db, 'schema_version', '61');
@@ -72,7 +68,6 @@ interface ListedStatuses {
   message: string[];
 }
 
-/** The values a trigger's WHEN list names, and the ones its message names. */
 function listedBy(db: DatabaseSyncLike, trigger: string): ListedStatuses {
   // SAFETY: the SELECT names one TEXT column, sql.
   const { sql } = db.prepare(`SELECT sql FROM sqlite_master WHERE name = ?`).get(trigger) as { sql: string };

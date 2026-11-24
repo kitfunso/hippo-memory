@@ -1,6 +1,3 @@
-// The init and setup steps that touch the machine: Codex hooks, the settings.json warning and the
-// daily schedule.
-
 import * as path from 'node:path';
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import type { InstallResult } from '../hooks-install/rules/json-hooks.js';
@@ -73,17 +70,7 @@ export function warnClaudeSettingsUnusable(
   return true;
 }
 
-/**
- * Machine-level daily runner sweeping all registered workspaces: user crontab on Linux/macOS, a
- * scheduled task on Windows; skips if installed.
- */
-/**
- * Bound on each schtasks and crontab call, so a scheduler that never answers cannot hang `hippo
- * init` or `hippo setup`.
- */
 const SCHEDULER_CALL_TIMEOUT_MS = 30_000;
-// Piped stderr stands in for `2>nul` and `2>/dev/null`, so no shell is needed to keep the
-// scheduler's complaints off the terminal.
 const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
   encoding: 'utf-8',
   stdio: 'pipe',
@@ -91,8 +78,6 @@ const SCHEDULER_CALL: ExecFileSyncOptionsWithStringEncoding = {
   timeout: SCHEDULER_CALL_TIMEOUT_MS,
 };
 
-/** Runs one scheduler program from argv with no shell; tests hand in a stand-in so no real
- * schtasks or crontab runs. */
 type RunScheduler = (
   file: string,
   args: readonly string[],
@@ -119,14 +104,11 @@ export function setupDailySchedule(
   run: RunScheduler = execFileSync,
   platform: NodeJS.Platform = process.platform,
 ): void {
-  // Checked here, not per caller, so init, init --scan and setup all honour it.
   if (envSkipSchedule()) {
     console.log('   HIPPO_SKIP_SCHEDULE=1, so the machine-level daily runner was not scheduled.');
     return;
   }
   const isWindows = platform === 'win32';
-  // The path rules follow the platform being scheduled for, so a Windows root is never judged by
-  // POSIX rules.
   const runnerDir = (isWindows ? path.win32 : path.posix).resolve(globalRoot);
   if (hasUnsafeRunnerPathChars(runnerDir, platform)) {
     console.log(`   Skipping schedule: runner path contains unsafe characters.`);
@@ -143,11 +125,10 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
   try {
     const existing = run('schtasks', ['/query', '/tn', taskName], SCHEDULER_CALL);
     if (existing.includes(taskName)) {
-      return; // already scheduled
+      return;
     }
   } catch (err) {
     if (schedulerTimedOut(err)) {
-      // An unanswered query may hide an existing task, so nothing is created over it.
       console.log(
         `   schtasks /query did not answer within ${SCHEDULER_CALL_TIMEOUT_MS / 1000} s and was stopped, so Task ` +
           `Scheduler was not changed; run hippo init again, or check for the task ${taskName}.`,
@@ -162,7 +143,6 @@ function scheduleOnWindows(taskName: string, cmd: string, run: RunScheduler): vo
     console.log(`   Scheduled machine-level daily runner (6:15am) via Task Scheduler: ${taskName}`);
   } catch (err) {
     if (schedulerTimedOut(err)) warnSchedulerTimedOut('schtasks /create');
-    // No admin rights or schtasks unavailable, fall back to printing instructions
     console.log(`   To schedule the machine-level daily runner, run:`);
     console.log(
       `   schtasks /create /tn "${taskName}" /tr "${quoteInsideWindowsArg(buildWindowsTaskRun(cmd))}" /sc daily /st ` +
@@ -182,7 +162,6 @@ function hasNoCrontabYet<E>(err: E): boolean {
   );
 }
 
-/** The user's crontab; a user with none has an empty one, and any other failure throws. */
 function readCrontab(run: RunScheduler): string {
   try {
     return run('crontab', ['-l'], SCHEDULER_CALL);
@@ -194,10 +173,8 @@ function readCrontab(run: RunScheduler): string {
 
 const dailyCronLine = (cmd: string, marker: string): string => `15 6 * * * ${cmd} ${marker}`;
 
-// The five schedule fields or an @macro, with any leading blanks.
 const CRON_SCHEDULE = /^\s*(?:@\S+|\S+(?:\s+\S+){4})(?=\s|$)/;
 
-/** Best effort shell scan: false when `text` ends inside a quote, where a marker is another job's data. */
 function outsideQuotes(text: string): boolean {
   let open = '';
   for (let i = 0; i < text.length; i++) {
@@ -210,7 +187,6 @@ function outsideQuotes(text: string): boolean {
   return open === '';
 }
 
-/** Where `marker` stands in `line` as a whole token outside quotes, or -1; `<marker>-old` is another name. */
 function markerAt(line: string, marker: string): number {
   const blankOrEdge = (i: number): boolean => i < 0 || i >= line.length || /\s/.test(line[i]);
   const isOurs = (at: number): boolean =>
@@ -221,7 +197,6 @@ function markerAt(line: string, marker: string): number {
   return -1;
 }
 
-/** `line` with its command replaced by `cmd`, schedule and marker kept; null when it has no schedule. */
 function withCommand(line: string, at: number, cmd: string): string | null {
   const schedule = CRON_SCHEDULE.exec(line)?.[0];
   if (schedule === undefined || at < schedule.length) return null;
@@ -236,7 +211,6 @@ type CrontabPlan =
   | { readonly kind: 'write'; readonly text: string; readonly said: readonly string[] };
 
 function appendEntry(existing: string, marker: string, cmd: string): CrontabPlan {
-  // A user with no crontab yet gets the line alone, with no blank line above it.
   const kept = existing.trimEnd();
   return {
     kind: 'write',
@@ -245,10 +219,6 @@ function appendEntry(existing: string, marker: string, cmd: string): CrontabPlan
   };
 }
 
-/**
- * What to do with the user's crontab so it holds exactly one active line for the daily runner.
- * Every other line is kept as it was, line endings included.
- */
 function reconcileCrontab(existing: string, marker: string, cmd: string): CrontabPlan {
   const lines = existing.split('\n');
   const isEntry = (line: string): boolean => !/^\s*#/.test(line) && markerAt(line, marker) >= 0;
@@ -282,7 +252,7 @@ function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): vo
   const marker = `# hippo:${taskName}`;
   try {
     const plan = reconcileCrontab(readCrontab(run), marker, cmd);
-    if (plan.kind === 'keep') return; // already scheduled
+    if (plan.kind === 'keep') return;
     if (plan.kind === 'unreadable') {
       log.warn(
         `install: the daily runner line in your crontab is not a cron schedule hippo can read, so it was left as it ` +
@@ -298,7 +268,6 @@ function scheduleOnCrontab(taskName: string, cmd: string, run: RunScheduler): vo
       `install: crontab could not be read or written, so the daily runner is not scheduled: ${errorMessage(err)}`,
       errorFields(err),
     );
-    // No permission or no crontab program: print the line for the user to add by hand.
     console.log(`   To schedule the machine-level daily runner, add to crontab (crontab -e):`);
     console.log(`   ${dailyCronLine(cmd, marker)}`);
   }

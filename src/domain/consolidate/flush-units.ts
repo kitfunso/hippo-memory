@@ -1,5 +1,3 @@
-// Splits sleep's queued writes, deletes and dormant moves into components that must each commit
-// whole, so the flush can commit in short transactions.
 import type { MemoryEntry } from '../../base/memory/entry.js';
 import type {
   DormantMove,
@@ -43,14 +41,12 @@ export function groupFlush(
   for (const entry of writes) componentOf(entry.id).writes.push(entry);
   for (const id of deletes) componentOf(id).deletes.push(id);
   for (const move of dormant) componentOf(move.entry.id).dormant.push(move);
-  // A row queued twice keeps its first place and its last version, as one batch always did.
   return [...byRoot.values()].map((c) => ({
     ...c,
     writes: [...new Map(c.writes.map((e) => [e.id, e])).values()],
   }));
 }
 
-/** Maps each id to its unit's representative; an id in no unit is its own. */
 function unionFind(units: readonly (readonly string[])[]): (id: string) => string {
   const up = new Map<string, string>();
   const find = (id: string): string => {

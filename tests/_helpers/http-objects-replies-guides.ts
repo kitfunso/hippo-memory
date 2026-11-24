@@ -1,10 +1,7 @@
-// Expected error replies of the process, project brief and skill routes.
 import { type Reply, over, at, BAD_STATUS } from './http-objects-replies-records.js';
 
 const PROC = '/v1/processes';
 const PROC_MISSING = '/v1/processes/99999/supersede';
-// Each row also sends every later field invalid, and the supersede target does not exist,
-// so a row pins which check answers first as well as the reply text.
 export const PROCESS_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${PROC}?status=retired`, undefined, 400, BAD_STATUS],
   [
@@ -124,8 +121,6 @@ export const PROCESS_REPLIES: readonly Reply[] = [
 const BRIEF = '/v1/project-briefs';
 const BRIEF_REFRESH = '/v1/project-briefs/refresh';
 const BRIEF_MISSING = '/v1/project-briefs/99999/supersede';
-// Each row also sends every later field invalid, and the supersede target does not exist,
-// so a row pins which check answers first as well as the reply text.
 export const BRIEF_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${BRIEF}?status=retired`, undefined, 400, BAD_STATUS],
   ['create: blank repo', 'POST', BRIEF, { repo: '  ', summary: 7 }, 400, 'repo is required (non-empty string)'],
@@ -207,8 +202,6 @@ export const BRIEF_REPLIES: readonly Reply[] = [
 
 const SKILL = '/v1/skills';
 const SKILL_MISSING = '/v1/skills/99999/supersede';
-// Each row also sends every later field invalid, and the supersede target does not exist,
-// so a row pins which check answers first as well as the reply text.
 export const SKILL_REPLIES: readonly Reply[] = [
   ['list: an unknown status', 'GET', `${SKILL}?status=retired`, undefined, 400, BAD_STATUS],
   [

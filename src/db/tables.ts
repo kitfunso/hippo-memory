@@ -46,7 +46,6 @@ export function countTableRows(db: DatabaseSyncLike, table: string): number | nu
       | undefined;
     return Number(row?.n ?? 0);
   } catch (err) {
-    // Callers treat an uncountable table as unknown; the bundle and doctor still finish.
     log.warn(`could not count rows in table ${table}`, {
       table,
       code: errorCode(err) || 'unknown',

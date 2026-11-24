@@ -1,4 +1,3 @@
-// A write into a restricted scope needs the grant a read of it needs; quarantine scopes are never client-writable.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';

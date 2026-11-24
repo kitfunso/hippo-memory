@@ -1,4 +1,3 @@
-// The scored run's lock: repo state, frozen inputs, prereg pins and the create-once marker. Impure on purpose (git and fs).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -29,14 +28,12 @@ function checkRepoState(cfg) {
   const tracked = git(cfg.repo, ['ls-files', '--', cfg.promptDir]).stdout.split('\n').filter(Boolean).map((p) => path.basename(p)).sort();
   if (tracked.join('|') !== prompts.join('|')) throw new Error('a prompt file is not tracked');
   if (git(cfg.repo, ['status', '--porcelain', '--', cfg.prereg, ...cfg.scriptFiles, cfg.promptDir]).stdout.trim()) throw new Error('prereg, scripts or prompts are not clean at HEAD');
-  // The lock is the oldest commit that set the Status line, so a later prereg edit cannot move it.
   const lockCommit = git(cfg.repo, ['log', '--reverse', '--format=%H', '-G\\*\\*Status:\\*\\* PRE-REG-LOCKED', '--', cfg.prereg]).stdout.split('\n').find(Boolean);
   if (!lockCommit) throw new Error('no commit set the prereg Status to PRE-REG-LOCKED');
   if (!git(cfg.repo, ['branch', '-r', '--contains', lockCommit]).stdout.trim()) throw new Error('the lock commit is not on a remote branch');
   return lockCommit;
 }
 
-// The prereg, the scripts and the prompts may not differ from the lock commit, and every input the prereg pins must match its pin.
 function checkFrozen(cfg, lockCommit) {
   const diff = git(cfg.repo, ['diff', '--name-only', lockCommit, 'HEAD', '--', cfg.prereg, ...cfg.scriptFiles, cfg.promptDir]);
   if (diff.status !== 0) throw new Error('git diff against the lock commit failed');
@@ -70,7 +67,6 @@ export const appendLine = (file, obj) => fs.appendFileSync(file, `${JSON.stringi
 export const resumesLog = (lock) => `${lock.marker.slice(0, -5)}.resumes.jsonl`;
 export const countResumes = (lock) => (fs.existsSync(resumesLog(lock)) ? fs.readFileSync(resumesLog(lock), 'utf8').split('\n').filter(Boolean).length : 0);
 
-// A resume continues the same lock and the same item list, and only before a result exists.
 export function startResume(lock, itemListSha256, dir) {
   const m = JSON.parse(fs.readFileSync(lock.marker, 'utf8'));
   if (m.lockCommit !== lock.lockCommit) throw new Error('the marker belongs to a different lock commit');

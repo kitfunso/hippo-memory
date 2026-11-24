@@ -16,7 +16,6 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PLUGIN, 'hooks', 'hooks.js
   hooks: Record<string, HookGroup[]>;
 };
 
-/** The hippo command line a hook runs: scripts/hook.mjs starts `hippo` with the args after the script. */
 const hippoLine = (hook: HookGroup['hooks'][number]): string => ['hippo', ...(hook.args ?? []).slice(1)].join(' ');
 
 const commands = (event: string, matcher?: string): string[] =>

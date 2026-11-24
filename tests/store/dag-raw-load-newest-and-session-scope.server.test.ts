@@ -1,18 +1,3 @@
-/**
- * v1.6.2 patch — covers the two functional bugs codex caught after v1.6.1:
- *
- *   #1 (regression in v1.6.1): loadSessionRawMemories with cap returned
- *      the OLDEST `cap` rows (ORDER BY ASC LIMIT). For a session with
- *      >cap raws, the newest rows were dropped and the "fresh tail"
- *      protection silently failed. Now loads NEWEST `cap` rows and
- *      reverses to chronological order.
- *
- *   #2 (pre-existing in v1.5.2): loadFreshRawMemories was tenant-wide
- *      only. Multi-session tenants surfaced cross-session rows tagged
- *      isFreshTail=true. Now accepts an optional sessionId; RecallOptions
- *      gains freshTailSessionId for callers who want the correct shape.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { serveKeyed } from '../_helpers/keyed-server.js';
@@ -70,7 +55,6 @@ describe('loadSessionRawMemories cap preserves NEWEST rows', () => {
     }
     const got = loadSessionRawMemories(root, 'sess-x', 'default', 3);
     expect(got.length).toBe(3);
-    // Pre-v1.6.2 returned ids[0..2]; v1.6.2 returns ids[7..9] in oldest-first order.
     expect(got.map((e) => e.id)).toEqual([ids[7], ids[8], ids[9]]);
   });
 
@@ -84,9 +68,6 @@ describe('loadSessionRawMemories cap preserves NEWEST rows', () => {
     }
     const r = await assemble(ctxFor(root), 'sess-y', { rowCap: 5, freshTailCount: 3, budget: 100000 });
     expect(r.truncated).toBe(true);
-    // Pre-v1.6.2: items would be ids[0..4] (oldest), and freshTailCount=3 would
-    // mark ids[2..4] as fresh-tail — actually stale relative to ids[9..11].
-    // v1.6.2: items are ids[7..11] (newest 5), fresh-tail = ids[9..11].
     const itemIds = r.items.map((it) => it.id);
     expect(itemIds).toContain(ids[11]);
     expect(itemIds).toContain(ids[10]);
@@ -129,8 +110,6 @@ describe('loadFreshRawMemories sessionId scope', () => {
   });
 
   it('recall with freshTailSessionId scopes the fresh-tail to that session', async () => {
-    // Two concurrent sessions; the cross-session row must NOT be marked
-    // isFreshTail when the caller scopes to sess-A.
     const a = makeRaw('row in session A query', 'sess-A');
     a.created = '2026-01-01T00:00:00.000Z';
     const b = makeRaw('row in session B query', 'sess-B');
@@ -164,9 +143,6 @@ describe('loadFreshRawMemories sessionId scope', () => {
 });
 
 describe('HTTP /v1/memories accepts new RecallOptions', () => {
-  // Codex round 2 caught that pre-v1.6.2 the HTTP recall route silently
-  // ignored freshTailCount, freshTailSessionId, and summarizeOverflow. They
-  // were JS-API-only. Now wired through query params.
   let root: string;
   let serverHandle: { url: string; stop: () => Promise<void> };
   beforeEach(async () => {

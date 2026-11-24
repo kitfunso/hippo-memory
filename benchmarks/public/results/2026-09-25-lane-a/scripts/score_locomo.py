@@ -7,13 +7,11 @@ import evaluation as ev
 
 LANE_A = HOME + r'\hippo\benchmarks\public\results\2026-09-25-lane-a'
 LOCOMO = os.path.join(LANE_A, 'locomo')
-# --rerun: deviation 3, bm25 answers regenerated with the identical procedure and judged blind with hippo@365.
 RERUN = '--rerun' in sys.argv
 JUDGED = os.path.join(LOCOMO, 'bm25-rerun') if RERUN else LOCOMO
 
 data = json.load(io.open(HOME + r'\hippo-bench\locomo\data\locomo10.json', encoding='utf-8'))
 
-# answers: (arm, qid) -> text. arms: hippo365 (new), bm25 (reused amendment1), hippo7 (amendment1, secondary compare)
 ans = {}
 for f in glob.glob(os.path.join(LOCOMO, 'answers', 'hippo365-batch-*.jsonl')):
     for l in io.open(f, encoding='utf-8'):
@@ -21,7 +19,7 @@ for f in glob.glob(os.path.join(LOCOMO, 'answers', 'hippo365-batch-*.jsonl')):
             a = json.loads(l); ans[('hippo365', a['id'])] = a['answer']
 amendment1 = [json.loads(l) for l in io.open(os.path.join(LOCOMO, 'reused-from-amendment1', 'amendment1-answers.jsonl'), encoding='utf-8') if l.strip()]
 for a in amendment1:
-    arm = 'hippo7' if a['arm'] == 'hippo' else a['arm']  # amendment1 called the 7-day arm 'hippo'
+    arm = 'hippo7' if a['arm'] == 'hippo' else a['arm']
     ans[(arm, a['id'])] = a['answer']
 if RERUN:
     for f in glob.glob(os.path.join(JUDGED, 'answers', 'bm25-batch-*.jsonl')):
@@ -29,7 +27,6 @@ if RERUN:
             if l.strip():
                 a = json.loads(l); ans[('bm25', a['id'])] = a['answer']
 
-# judge_key: jid -> {arm, qid, answer}; verdicts: jid -> label CORRECT/WRONG (new blind judging, hippo365 + bm25 re-judged)
 key = json.load(io.open(os.path.join(JUDGED, 'judge_key.json'), encoding='utf-8'))
 verd = {}
 for f in glob.glob(os.path.join(JUDGED, 'verdicts', '*.jsonl')):
@@ -38,8 +35,6 @@ for f in glob.glob(os.path.join(JUDGED, 'verdicts', '*.jsonl')):
             v = json.loads(l); verd[v['id']] = v['label'].upper() == 'CORRECT'
 judge_new = {(k['arm'], k['qid']): verd[j] for j, k in key.items() if j in verd}
 
-# old bm25 verdicts from amendment1 (for the "report both old and new bm25" requirement)
-# amendment1's verdicts.jsonl embeds arm + id (qid) directly per line, no separate judge_key needed.
 old_bm25_judge = {}
 for l in io.open(os.path.join(LOCOMO, 'reused-from-amendment1', 'amendment1-verdicts.jsonl'), encoding='utf-8'):
     if l.strip():

@@ -1,4 +1,3 @@
-// Past the cap, loadContextCandidates reads the v57 decay-key subset and must return the rows the full-tenant rank would.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeHippoDb, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
 import { DECAY_KEY_HALF_LIVES, DECAY_KEY_INDEX } from '../../src/db/decay-key.js';
@@ -59,7 +58,6 @@ function withDb<T>(fn: (db: DatabaseSyncLike) => T): T {
   }
 }
 
-// The full-tenant rank as it was before v57, frozen here so a change to the live rank cannot move the expectation.
 function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
   const { sql: where, params } = contextRowsWhere(tenant, {});
   const sql = `SELECT id FROM memories WHERE id IN (SELECT id FROM memories WHERE ${where}
@@ -71,8 +69,6 @@ function scanIds(cap: number, now: Date, tenant = 'default'): string[] {
   );
 }
 
-// The caps at which a key without the reward factor first drops a row it should keep: the pinned rows plus the rows that
-// are within the key's half-lives both with and without the factor.
 function plainKeyCaps(now: Date): number[] {
   const { sql: where, params } = contextRowsWhere('default', {});
   const plain = '(julianday(?) - julianday(last_retrieved)) / half_life_days';
@@ -108,7 +104,6 @@ afterEach(() => {
   removeDir(home);
 });
 
-// Ten-day half-life rows, aged in half-lives: a boosted row the unscaled key would leave out must still outrank a plain one.
 function rfRow(id: string, halfLivesOld: number, outcomePositive = 0): MemoryEntry {
   const lastRetrieved = new Date(BASE - halfLivesOld * 10 * DAY_MS).toISOString();
   return {
@@ -131,13 +126,11 @@ describe('loadContextCandidates past the cap', () => {
         paths.add(got.subset && !got.scan ? 'subset' : 'scan');
       }
     }
-    // Both arms must run, or the equality above proves nothing about the subset.
     expect([...paths].sort()).toEqual(['scan', 'subset']);
   });
 
   it('keeps a row whose outcomes slow its decay past the key plain rows would be cut at', () => {
     const plain = [3, 4, 5].map((n) => rfRow(`a${n}`, DECAY_KEY_HALF_LIVES - 0.1));
-    // Eight positive outcomes scale the half-life by 1.44, so a row 1.25 key-lengths old reads 0.87 and beats the plain rows.
     const boosted = rfRow('b1', DECAY_KEY_HALF_LIVES * 1.25, 8);
     const dead = [1, 2, 3, 4].map((n) => rfRow(`d${n}`, 40));
     withDb((db) => {

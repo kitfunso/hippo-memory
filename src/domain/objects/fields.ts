@@ -1,5 +1,3 @@
-// Field checks every typed object shares, so each kind refuses the same input in the same words.
-
 import { BadRequestError } from '../../base/errors/api-errors.js';
 
 /** Required text, trimmed: blank is refused, and so is text over `max` once trimmed. The caller

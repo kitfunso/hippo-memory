@@ -1,8 +1,3 @@
-/** Rejected-value tombstone: a human can refuse byte-stable re-ingestion of a rejected fact
- * (exact normalized value); paraphrase matching is out of scope. db-agnostic (helpers take a
- * `DatabaseSyncLike`) and imports nothing from the store layer above it, which imports this (the
- * reverse is a cycle). */
-
 import { rowDigests, tombstoneDigest } from '../../../base/records/rejection-digest.js';
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { RejectedValueError } from '../../../base/errors/api-errors.js';
@@ -142,20 +137,15 @@ export function checkRejectionGuard(
     const tombstone = readRejectedValue(db, tenantId, digest);
     return tombstone ? [{ digest, tombstone, leadInScoped: digest === identity }] : [];
   });
-  if (hits.length === 0) return; // miss ends the guard — the overwhelmingly common case
-
-  // Id-only on purpose (ids are global ULIDs; the tombstone lookup is tenant-scoped); tenant_id is
-  // read as a tenantId-only upsert introduces content there.
+  if (hits.length === 0) return;
   const storedRow = cachedStatement(
     db,
     `SELECT content, lead_in, tenant_id FROM memories WHERE id = ?`,
   ).get(entryId) as StoredContentRow | undefined;
-  // An unchanged same-id re-persist (recall boost, decay, star toggle) is exempt.
   const refusing = hits.find((hit) => introducesContent(storedRow, tenantId, hit.digest));
   if (refusing) throw rejectedValueError(refusing.tombstone, entryId, refusing.leadInScoped);
 }
 
-/** The columns of the row an id holds now that say whether a write to it introduces content. */
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 interface StoredContentRow {
   readonly content: string;
@@ -178,7 +168,6 @@ export function introducesContent(
   );
 }
 
-/** The refusal of a write to `entryId` that `tombstone` matched. */
 function rejectedValueError(
   tombstone: RejectedValueRow,
   entryId: string,

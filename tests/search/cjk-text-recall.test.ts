@@ -1,6 +1,3 @@
-// Chinese, Japanese and Korean text is matched like English: the api read behind `hippo recall` owns the contract,
-// the CLI rows wire it up, and the sleep pass's conflict check reads the same words.
-
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { remember, retrieve } from '../../src/api/index.js';
@@ -12,7 +9,6 @@ import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 
-// Each query shares no character pair with `other`, so only `fact` may come back.
 const CASES = [
   { lang: 'zh', fact: '数据库连接池的大小必须设置为二十', other: '部署前必须先运行迁移脚本', query: '数据库连接池' },
   {
@@ -63,7 +59,6 @@ describe('CJK remember then recall, through the api', () => {
   });
 });
 
-// The word splitter once cut every non-ASCII letter into a space, so these had no words at all.
 const OTHER_SCRIPTS = [
   { script: 'Cyrillic', fact: 'сервер перезагружается ночью', other: 'база данных хранит заказы', query: 'сервер' },
   {
@@ -88,7 +83,6 @@ describe('other scripts, through the api', () => {
   });
 });
 
-/** `hippo <args>` run in this process from `cwd`; a non-zero exit fails the test. */
 async function hippo(cwd: string, ...args: string[]): Promise<string> {
   const saved = process.cwd();
   process.chdir(cwd);

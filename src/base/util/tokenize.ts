@@ -3,8 +3,6 @@ export const CJK_SCRIPTS = String.raw`\p{sc=Han}\p{sc=Hira}\p{sc=Kana}\p{sc=Hang
 /** CJK_SCRIPTS and ー, the prolonged-sound mark, a Common-script letter inside katakana words. */
 export const CJK_LETTERS = `${CJK_SCRIPTS}ー`;
 const HAS_CJK = new RegExp(`[${CJK_LETTERS}]`, 'u');
-// Letters, marks and digits of every script make words, so Cyrillic, Greek or Arabic text is not
-// cut into spaces and `café` stays one word.
 const NOT_WORD = new RegExp(String.raw`[^\p{L}\p{M}\p{N}_\s${CJK_LETTERS}]`, 'gu');
 const CJK_RUN = new RegExp(`[${CJK_LETTERS}]+`, 'gu');
 const CJK_RUN_SPLIT = new RegExp(`([${CJK_LETTERS}]+)`, 'u');

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// CI test-only export gate. A src/ export that no other src/ file names but a test does exists for the test, unless a file under scripts/ or benchmarks/ imports it or it is a pure function or class its own module calls (scripts/lib/export-purity.mjs).
-// Any such export fails, with no baseline; package entry files are exempt.
-// Usage: check-test-only-exports.mjs [--list] [--why]. --why prints the verdict on every candidate.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -35,7 +32,6 @@ const toSrc = (dist) => dist.replace(/^dist\//, 'src/').replace(/\.js$/, '.ts');
 const isSource = (n) => n.endsWith('.ts') && !n.endsWith('.d.ts');
 const isScript = (n) => /\.([cm]?js|[cm]?ts)$/.test(n) && !/\.d\.[cm]?ts$/.test(n);
 
-/** The src/ files behind package.json `exports` and `bin`; a bin script is followed to the dist file it imports. */
 function entryFiles(root, pkg) {
   const dists = [...JSON.stringify(pkg.exports ?? {}).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   const bins = pkg.bin?.constructor === Object ? Object.values(pkg.bin) : [pkg.bin ?? []].flat();
@@ -48,7 +44,6 @@ function entryFiles(root, pkg) {
   );
 }
 
-/** Every `src/file.ts:NAME` exported by src/ that no other src/ file names but a test does, sorted. */
 function namedOnlyByTests(files, tests, entries) {
   const users = new Map();
   for (const f of files) {
@@ -153,7 +148,6 @@ function main(args) {
   return check(current);
 }
 
-// Guarded so the test can import judgeExports without running the check.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exit(main(process.argv.slice(2)));
 }

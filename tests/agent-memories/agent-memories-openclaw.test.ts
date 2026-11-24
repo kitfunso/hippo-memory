@@ -1,6 +1,3 @@
-/**
- * OpenClaw adapter: workspace precedence and the items of the workspace's MEMORY.md.
- */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -36,7 +33,6 @@ function ctxFor(env: Record<string, string | undefined> = {}, over: Partial<Adap
 const hash12 = (text: string): string => sha256Hex(text).slice(0, 12);
 
 describe('openclaw adapter: workspace precedence', () => {
-  // Folder variables are given relative to the temp tree and resolved inside the test; the profile is used as is.
   const cases: ReadonlyArray<readonly [string, Record<string, string>, string[]]> = [
     ['nothing set', {}, ['home', '.openclaw', 'workspace']],
     ['OPENCLAW_HOME', { OPENCLAW_HOME: 'oc-home' }, ['oc-home', '.openclaw', 'workspace']],
@@ -69,7 +65,6 @@ describe('openclaw adapter: workspace precedence', () => {
     const env = Object.fromEntries(Object.entries(relEnv).map(([k, v]) => [k, k === 'OPENCLAW_PROFILE' ? v : at(v)]));
     const workspace = at(...expected);
     write(path.join(workspace, 'MEMORY.md'), '- the memory that belongs to this workspace');
-    // Every other candidate holds a decoy so a wrong pick shows in the items.
     for (const decoy of ['home/.openclaw', 'oc-home/.openclaw', 'state']) {
       const file = at(decoy, 'workspace', 'MEMORY.md');
       if (!fs.existsSync(file)) write(file, '- a decoy from another candidate');

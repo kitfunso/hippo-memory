@@ -1,15 +1,3 @@
-/**
- * Runtime tests for api.outcomeForLastRecall (Episode A, Task 3).
- *
- * Validates the documented contract:
- *   - empty last_retrieval_ids returns {applied: 0, ids: []}
- *   - multi-id last_retrieval_ids forwards to api.outcome and reports applied count
- *   - cross-tenant ids in last_retrieval_ids are silently skipped (matches MCP semantics)
- *   - one audit_log row per affected id, tagged with ctx.actor
- *
- * Real-DB per project convention (mkdtempSync + initStore + rmSync cleanup).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect } from 'vitest';
 import { remember, outcomeForLastRecall } from '../../src/api/index.js';
@@ -73,13 +61,6 @@ describe('api.outcomeForLastRecall', () => {
   it('silently skips cross-tenant ids AND filters them out of the response (no leak)', async () => {
     const home = tmpHome();
     try {
-      // The id belongs to tenant_b. last_retrieval_ids is hippoRoot-level
-      // (NOT tenant-scoped at the index layer) so the cross-tenant id can
-      // legally appear there. outcome() filters via readEntry(..., tenantId)
-      // and silently skips the row — matches MCP outcome semantics for the
-      // WRITE path. v1.11.4: also filter the RESPONSE so cross-tenant ids
-      // do not leak via the returned `ids` list (fix for the HTTP /v1/outcome
-      // no-body last-recall disclosure path; see api.outcome JSDoc).
       const tenantBId = await seedMemory(home, 'belongs-to-tenant-b', 'tenant_b');
       seedLastRetrievalIds(home, [tenantBId]);
 
@@ -87,8 +68,6 @@ describe('api.outcomeForLastRecall', () => {
       const result = await outcomeForLastRecall(ctxA, true);
 
       expect(result.applied).toBe(0);
-      // ids must NOT contain tenant_b's id — that would be a cross-tenant
-      // ID enumeration vector via the HTTP route.
       expect(result.ids).toEqual([]);
       expect(result.ids).not.toContain(tenantBId);
     } finally {

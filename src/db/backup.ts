@@ -30,7 +30,6 @@ export function withBackup<T>(
   try {
     return transaction(backup);
   } catch (err) {
-    // A locked file on Windows must not hide why the transaction failed.
     try {
       fs.rmSync(backup, { force: true });
     } catch (cleanupError) {

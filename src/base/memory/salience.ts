@@ -1,8 +1,3 @@
-/**
- * Salience gate: decides at memory creation whether content is stored at full strength, starts
- * weakened, or is skipped.
- */
-
 import type { MemoryEntry } from './entry.js';
 import { isErrorTagged } from './ambient.js';
 import { textOverlap } from '../util/tokenize.js';
@@ -23,7 +18,6 @@ export interface SalienceOptions {
   maxRepeatErrors?: number;
 }
 
-// Each store or skip reason carries a score; a novel memory adds bonuses for structure and length.
 const REPEAT_ERROR_SCORE = 0.3;
 const ERROR_DESPITE_OVERLAP_SCORE = 0.7;
 const NEAR_DUPLICATE_SCORE = 0.5;
@@ -32,7 +26,6 @@ const NOVEL_ERROR_SCORE = 0.9;
 const NOVEL_BASE_SCORE = 0.5;
 const STRUCTURED_TAGS_BONUS = 0.15;
 const LENGTH_BONUS = 0.1;
-// A novel memory earns LENGTH_BONUS past each of these lengths in characters.
 const LONG_CONTENT_CHARS = 100;
 const VERY_LONG_CONTENT_CHARS = 300;
 
@@ -105,8 +98,6 @@ function judgeOverlappingNonError(
   window: MemoryEntry[],
   duplicateMatch: ReturnType<typeof findBestOverlap>,
 ): SalienceResult {
-  // A near-duplicate may be a changed value (port 8080 then 8081), so only the same text is
-  // skipped.
   const key = duplicateKey(trimmed);
   const same = window.find((m) => heldTextKeys(m).includes(key));
   if (!same) {

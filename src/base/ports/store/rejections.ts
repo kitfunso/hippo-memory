@@ -1,6 +1,4 @@
 import type { MethodEffects } from './effects.js';
-// What a store refuses or fails to keep: the rejection tombstones every write guard reads, and the
-// failure log.
 
 export interface RejectionCheck {
   readonly tenantId: string;
@@ -84,8 +82,6 @@ export type LiftedRejection =
   | { status: 'not_found' }
   | { status: 'ambiguous'; candidates: RejectedValueRow[] };
 
-// The FailureLog group, kept apart from port.ts: the row each tool failure writes, read back by
-// request id so a retried send gets the first answer.
 export interface FailureLog {
   /** Appends one row and answers its id. */
   record(event: FailureEvent): Promise<number>;

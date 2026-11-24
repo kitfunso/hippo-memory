@@ -1,5 +1,3 @@
-// The reranker port: a recall names a reranker and the registry its root built hands back the
-// function.
 import type { SearchResult } from '../rank/search-types.js';
 import type { ClefSettings } from '../config/config.js';
 
@@ -28,40 +26,25 @@ export type RerankerConfigValue =
   | { [key: string]: RerankerConfigValue };
 
 export interface RerankerOptions {
-  /** Cap candidates passed to the reranker. Each reranker sets its own default. */
   topK?: number;
-  /** Per-track config blob; opaque to the seam. */
   config?: Record<string, RerankerConfigValue>;
-  /** The CLEF rerankers' transport, from the root's config; the other rerankers ignore it. */
   clef?: ClefSettings;
-  /** The request's abort signal: a hosted scorer stops its call, and no outage is reported, once
-   * it fires. */
   signal?: AbortSignal;
 }
 
 /** Which backend and model produced a rerank, or why it fell back. */
 export interface RerankProvenance {
-  /** `cloudflare`, `private-endpoint`, or `native` when the input order was kept. */
   backend: 'cloudflare' | 'private-endpoint' | 'native';
-  /** Model the caller asked for. */
   requestedModel: string;
-  /** Model the provider says scored the request, when it reports one. */
   actualModel?: string;
-  /** Set when the input order was kept instead of a model ranking. */
   fallbackReason?: string;
-  /** Provider-reported token usage, when sent. */
   inputTokens?: number;
   outputTokens?: number;
 }
 
 export interface RerankResult extends SearchResult {
-  /** Score assigned by the reranker. Replaces `score` for downstream ordering; original `score` preserved on the
-   *  SearchResult. */
   rerankScore: number;
-  /** 1-indexed rank in the input to the reranker. */
   preRerankRank: number;
-  /** 1-indexed rank in the reranker output. */
   postRerankRank: number;
-  /** Recorded by rerankers that track model identity (the CLEF rerankers). */
   rerankProvenance?: RerankProvenance;
 }

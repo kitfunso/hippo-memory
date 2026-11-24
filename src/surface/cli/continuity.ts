@@ -1,5 +1,3 @@
-// Where-you-left-off verbs that read or save the live state: snapshot, current and working memory.
-
 import { CONTINUITY_EVENT_LIMIT, continuityLatest } from '../../api/continuity/continuity.js';
 import { cliApiContext, cliStore } from './api-context.js';
 import {

@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-/**
- * In-process LongMemEval retrieval. Avoids the 500x subprocess + model-load
- * tax of shelling out to `hippo recall`. Imports hippo's search functions
- * directly so the embedding model is loaded once.
- *
- * Output matches retrieve.py JSONL schema for downstream evaluate_retrieval.py.
- *
- * Usage:
- *   node retrieve_inprocess.mjs --data data/longmemeval_oracle.json --store-dir hippo_store2 --output results/retrieval_v27.jsonl
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -73,8 +63,6 @@ if (RERANKER) {
 console.error('options:', { embeddingWeight: EMB_WEIGHT, mmrLambda: MMR_LAMBDA, budget: BUDGET, minResults: MIN_RESULTS });
 
 fs.mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-// Truncate + use sync appendFileSync so progress is always visible on disk —
-// buffered streams made it look like the job was stuck earlier.
 fs.writeFileSync(OUTPUT_PATH, '');
 function writeLine(obj) {
   fs.appendFileSync(OUTPUT_PATH, JSON.stringify(obj) + '\n');
@@ -90,7 +78,6 @@ for (let i = 0; i < limit; i++) {
   const question = q.question ?? '';
   try {
     const ranked = MODE === 'physics'
-      // Same options the CLI passes on its physics path (src/cli.ts recall).
       ? await physicsSearch(question, entries, {
         budget: BUDGET,
         hippoRoot,

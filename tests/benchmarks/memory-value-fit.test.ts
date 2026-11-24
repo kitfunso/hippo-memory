@@ -1,17 +1,3 @@
-/**
- * LC2-E2 memory-value fitter — deterministic mechanism tests.
- *
- * Two kinds of test here:
- *   - Pure-function tests (runES, selectWinner, bootstrapCI): synthetic
- *     objectives / toy inputs, no store fixture, hand-computable results.
- *   - Fixture tests (computeFit, runIntegrityGate): the real hand-specified
- *     2-question fixture from memory-value-fixtures.ts, run through the
- *     real pipeline (ingest -> simulate -> extract) into real SQLite
- *     scratch stores — same house rule as memory-value-harness.test.ts
- *     (no mocks). ES hyperparams are reduced (fewer restarts/generations)
- *     for these so the suite stays fast; the pinned 5/60/8 protocol lives
- *     only in fit.mjs's production defaults, not in every test.
- */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -52,15 +38,6 @@ type GateOptions = {
 // SAFETY: fit.mjs destructures all four options, but its inferred parameter type omits splitRegistered and registeredResults.
 const gate = runIntegrityGate as (opts?: GateOptions) => ReturnType<typeof runIntegrityGate>;
 
-// File-unique scratch root. Vitest runs test FILES in parallel workers, and
-// memory-value-harness.test.ts uses the DEFAULT root with the same fixture
-// question_ids — two files on one root cleanupScratch() each other's stores
-// mid-test (full-suite failure 2026-08-10). Same isolation pattern as
-// memory-value-determinism.test.ts; common.mjs reads the env fresh per call.
-// Hook order matters: clearAblationEnv deletes HIPPO_MV_SCRATCH_ROOT, so the
-// override is re-set in a LATER beforeEach (vitest runs same-level hooks in
-// registration order).
-// mkdtemp per process: two worktrees running this suite at once must not share a root.
 const FIT_SCRATCH_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-mv-fit-test-scratch-'));
 
 beforeEach(clearAblationEnv);
@@ -72,17 +49,7 @@ afterAll(() => {
   fs.rmSync(FIT_SCRATCH_ROOT, { recursive: true, force: true });
 });
 
-// Small ES budget for the fixture tests — proves the mechanism, not the
-// pinned protocol depth (that lives in fit.mjs's own defaults).
 const FAST_FIT_OPTS = { restarts: 2, maxGens: 10 };
-
-// recencyVector is imported from fit.mjs (fix round: single shared source
-// for restart-0's init AND crossCheckRecency's cross-check vector, instead
-// of this file keeping its own duplicate literal that could drift from it).
-
-// ---------------------------------------------------------------------------
-// runES — pure mechanism tests (tests 4, 7)
-// ---------------------------------------------------------------------------
 
 describe('runES (pure, synthetic objectives)', () => {
   it('tie discipline: a flat objective (parent == every offspring) never replaces the parent', () => {
@@ -101,7 +68,7 @@ describe('runES (pure, synthetic objectives)', () => {
     });
     expect(result.best).toEqual([0.5, -0.5]);
     expect(result.bestObjective).toBe(0);
-    expect(result.generations).toBe(10); // ran to maxGens; a tie is not termination
+    expect(result.generations).toBe(10);
   });
 
   it('sigma halves after exactly 5 consecutive non-improving generations', () => {
@@ -118,8 +85,8 @@ describe('runES (pure, synthetic objectives)', () => {
       box: [-1, 1],
       init: [0.1, 0.1],
     });
-    expect(result.trajectory[4].sigma).toBe(0.3); // gens 1-4: still flat, no halving yet
-    expect(result.trajectory[5].sigma).toBe(0.15); // gen 5: 5th consecutive flat gen -> halve
+    expect(result.trajectory[4].sigma).toBe(0.3);
+    expect(result.trajectory[5].sigma).toBe(0.15);
     expect(result.finalSigma).toBe(0.15);
   });
 
@@ -138,7 +105,7 @@ describe('runES (pure, synthetic objectives)', () => {
       init: [-0.9, -0.9],
     });
     expect(result.generations).toBe(8);
-    expect(result.finalSigma).toBe(0.3); // no non-improving generation ever occurred
+    expect(result.finalSigma).toBe(0.3);
   });
 
   it('terminates when sigma drops below sigmaMin, before maxGens is reached', () => {
@@ -156,15 +123,11 @@ describe('runES (pure, synthetic objectives)', () => {
       init: [0.1, 0.1],
     });
     expect(result.generations).toBeLessThan(100);
-    expect(result.generations).toBe(25); // 5 halvings x 5 flat gens each
+    expect(result.generations).toBe(25);
     expect(result.finalSigma).toBeLessThan(0.01);
   });
 
   it('rejects a mutation whose L2 norm is < 1e-9 without resampling (offspring is simply skipped)', () => {
-    // sigma effectively 0 -> every mutation lands within 1e-9 of the parent;
-    // if the parent itself sits within 1e-9 of the origin, every offspring
-    // is rejected and the objective must never be called on a degenerate
-    // near-zero vector.
     let callCount = 0;
     const rng = mulberry32(202);
     const result = runES({
@@ -182,16 +145,10 @@ describe('runES (pure, synthetic objectives)', () => {
       box: [-1, 1],
       init: [0, 0], // parent at the origin: any tiny mutation is also ~0
     });
-    // The initial parent objective is always evaluated once; every offspring
-    // this generation must be rejected (norm < 1e-9), so callCount stays 1.
     expect(callCount).toBe(1);
     expect(result.best).toEqual([0, 0]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// selectWinner — cross-restart tie-break (test 7, last clause)
-// ---------------------------------------------------------------------------
 
 describe('selectWinner', () => {
   it('breaks exact train-objective ties by ascending restart index', () => {
@@ -213,23 +170,15 @@ describe('selectWinner', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// bootstrapCI — pure percentile-method test (test 5)
-// ---------------------------------------------------------------------------
-
 describe('bootstrapCI', () => {
   it('matches hand-derived percentile bounds on a toy 4-question paired set', () => {
-    // deltas for 4 questions; a 3-value rng cycle (period 3) against 4 draws
-    // per resample deliberately does NOT align, so the 5 resample means are
-    // not all identical — see the test file's PR description for the by-hand
-    // derivation: resample means = [2.25, 2.75, 3.0, 2.25, 2.75].
     const deltas = [1, 2, 3, 4];
-    const cycle = [0, 0.5, 0.99]; // -> indices [0, 2, 3] repeating
+    const cycle = [0, 0.5, 0.99];
     let i = 0;
     const rng = () => cycle[i++ % cycle.length];
 
     const { point, ci95 } = bootstrapCI(deltas, 5, rng);
-    expect(point).toBe(2.5); // mean(deltas), independent of resampling
+    expect(point).toBe(2.5);
     expect(ci95[0]).toBeCloseTo(2.25, 10);
     expect(ci95[1]).toBeCloseTo(2.975, 10);
   });
@@ -244,10 +193,6 @@ describe('bootstrapCI', () => {
     expect(() => bootstrapCI([1, 2, 3], 0, () => 0.5)).toThrow(/resamples must be >= 1/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Fixture-backed tests (real SQLite scratch stores, hand-specified fixture)
-// ---------------------------------------------------------------------------
 
 describe('computeFit (real fixture)', () => {
   beforeEach(cleanupScratch);
@@ -297,7 +242,6 @@ describe('computeFit (real fixture)', () => {
     const unfitted = evaluateStore(rows, [0.3]) as Scored;
     expect(fitted.N).toBe(rows.length);
     expect(fitted.goldCount).toBe(1);
-    // The fitted run adds exactly the 'weighted' scorer to the unfitted set.
     expect(Object.keys(fitted.perScorer).sort()).toEqual([...Object.keys(unfitted.perScorer), 'weighted'].sort());
     for (const [name, byBudget] of Object.entries(fitted.perScorer)) {
       const { retention, keepN } = byBudget[0.3];
@@ -306,14 +250,9 @@ describe('computeFit (real fixture)', () => {
       expect(retention, name).toBeLessThanOrEqual(1);
       expect(keepN, name).toBe(Math.ceil(0.3 * rows.length));
     }
-    // Scorers the fit does not touch score the same with or without weights.
     expect(fitted.perScorer.recency[0.3].retention).toBe(unfitted.perScorer.recency[0.3].retention);
   });
 });
-
-// ---------------------------------------------------------------------------
-// runIntegrityGate (real fixture, plus a tamper case)
-// ---------------------------------------------------------------------------
 
 describe('runIntegrityGate (real fixture)', () => {
   beforeEach(cleanupScratch);
@@ -326,15 +265,6 @@ describe('runIntegrityGate (real fixture)', () => {
       { questionId: 'fixture_q_b', split: 'heldout' as const },
     ];
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
-    // varyingFeatures comes from the REPRODUCED value (`good.varyingFeatures`),
-    // not a hardcoded [...FIT_DIMS] — the tiny 2-question, reduced-simulation
-    // fixture does not vary across every one of the 8 production FIT_DIMS
-    // (e.g. `strength` is constant within both toy stores), so hardcoding
-    // FIT_DIMS here would fail the NEW reproduced==registered variance check
-    // (gate-hardening fix round) even though the gate is behaving correctly.
-    // `expectedFitDims` lets this fixture test the MECHANISM (registered==
-    // expected AND reproduced==registered) without asserting production's
-    // FIT_DIMS onto a toy dataset that was never meant to vary across all 8.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
       evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
@@ -347,11 +277,6 @@ describe('runIntegrityGate (real fixture)', () => {
   });
 
   it('assertVarianceLiveness: registered varyingFeatures must equal expectedFitDims exactly (non-tautological)', async () => {
-    // Every other gate test in this file sets expectedFitDims to
-    // good.varyingFeatures itself, so the FIRST assertGate in
-    // assertVarianceLiveness (registered vs expected) is tautologically true
-    // everywhere else — this test deliberately diverges expectedFitDims from
-    // the registered set so that branch actually gets exercised and can fail.
     for (const q of QUESTIONS) await runPipeline(q);
     const splitRegistered = { train: ['fixture_q_a'], heldout: ['fixture_q_b'] };
     const questionSplits = [
@@ -378,19 +303,14 @@ describe('runIntegrityGate (real fixture)', () => {
       { questionId: 'fixture_q_b', split: 'heldout' as const },
     ];
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
-    // See the previous test for why varyingFeatures/expectedFitDims come
-    // from the fixture's own reproduced value rather than FIT_DIMS.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
       evaluate: { summary: good.summary, varyingFeatures: good.varyingFeatures },
     };
     const gateOpts = { splitRegistered, registeredResults, expectedFitDims: good.varyingFeatures };
 
-    // Sanity: the untampered gate passes against this synthetic reference.
     expect(() => gate(gateOpts)).not.toThrow();
 
-    // Corrupt one non-gold row in the HELDOUT question so its recency
-    // ranking (and therefore heldout recency retention) shifts.
     const featuresPath = featuresPathFor('fixture_q_b');
     // SAFETY: readJsonl is untyped (.mjs harness module); featuresPath is a
     // features.jsonl written by extract.mjs earlier in this test's own
@@ -398,7 +318,7 @@ describe('runIntegrityGate (real fixture)', () => {
     const rows = readJsonl(featuresPath) as Array<{ gold: number; features: { age_days: number } }>;
     const target = rows.find((r) => r.gold === 0);
     expect(target?.gold, 'fixture must contain at least one non-gold row').toBe(0);
-    target!.features.age_days = 0; // make an old, non-gold row look newest
+    target!.features.age_days = 0;
     writeJsonl(featuresPath, rows);
 
     expect(() => gate(gateOpts)).toThrow(/\(c\)/);
@@ -406,8 +326,6 @@ describe('runIntegrityGate (real fixture)', () => {
 
   it('throws a named disjointness failure (not a raw comparison) when an id appears in both train and heldout', async () => {
     for (const q of QUESTIONS) await runPipeline(q);
-    // train/heldout overlap on fixture_q_b — assertSplitIntegrity must catch
-    // this before any evaluateAll/baseline work runs.
     const splitRegistered = { train: ['fixture_q_a', 'fixture_q_b'], heldout: ['fixture_q_b'] };
     const registeredResults = { split: { trainCount: 2, heldoutCount: 1 } };
 
@@ -424,8 +342,6 @@ describe('runIntegrityGate (real fixture)', () => {
     const good = evaluateAll(questionSplits, { budgets: [0.3], primaryBudget: 0.3 });
     // SAFETY: evaluateAll's summary carries a heldout block (evaluate.mjs); the inferred type is {}.
     const heldoutSummary = (good.summary as { heldout: unknown }).heldout;
-    // `train` summary is present but missing its recency/uniform cells — a
-    // realistic "malformed committed JSON" shape, not just an absent key.
     const registeredResults = {
       split: { trainCount: 1, heldoutCount: 1 },
       evaluate: { summary: { heldout: heldoutSummary, train: {} }, varyingFeatures: good.varyingFeatures },
@@ -443,10 +359,6 @@ describe('runIntegrityGate (real fixture)', () => {
     expect((caught as Error).message).toMatch(/\(b\).*missing train\.recency cell/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// computeBarsMet — pure bars-met/degenerate-pairing guard (test 7.iii)
-// ---------------------------------------------------------------------------
 
 describe('computeBarsMet', () => {
   it('throws a named data-integrity error when a bootstrap CI bound is null (empty paired-delta set)', () => {
@@ -471,18 +383,10 @@ describe('computeBarsMet', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// computeFit — non-finite objective / zero-norm winner guards (tests 7.iv, 7.v)
-// ---------------------------------------------------------------------------
-
 describe('computeFit (degenerate-input guards)', () => {
   beforeEach(cleanupScratch);
 
   it('(iv) throws a named error when every candidate objective is non-finite (all-zero-gold cache)', () => {
-    // No real pipeline run needed: a stubbed cachedRowsById whose only row
-    // is non-gold forces computeTrainObjective to skip every id (zero-gold
-    // skip rule), so computeTrainObjective returns null and the objective
-    // wrapper maps that to -Infinity for every candidate ES ever evaluates.
     const zeroFeatures = Object.fromEntries(CONFIG.FEATURES.map((f: string) => [f, 0]));
     const cachedRowsById = new Map([
       ['synthetic_q', [{ memory_id: 'm0', sessionIndex: 0, turnIdx: 0, gold: 0, features: zeroFeatures }]],
@@ -493,10 +397,6 @@ describe('computeFit (degenerate-input guards)', () => {
   });
 
   it('(v) throws a named error when the winning vector has near-zero L2 norm (box=[0,0])', async () => {
-    // box=[0,0] clips every init AND every mutation to exactly 0, so every
-    // offspring's L2 norm is < 1e-9 and gets rejected (runES's own
-    // zero-norm mutation guard) for the entire run — the parent, and
-    // therefore the winner, never moves off the all-zero vector.
     for (const q of QUESTIONS) await runPipeline(q);
     const trainIds = QUESTIONS.map((q) => q.question_id);
     const cachedRowsById = cacheTrainRows(trainIds);
@@ -506,15 +406,9 @@ describe('computeFit (degenerate-input guards)', () => {
   });
 
   it('(vi) throws a named error when opts.restarts < 1', () => {
-    // No pipeline run needed: the restarts guard fires before any row is
-    // ever read, so an empty trainIds/cachedRowsById is sufficient.
     expect(() => computeFit([], new Map(), { restarts: 0 })).toThrow(/restarts must be >= 1/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// initVectorForRestart / recencyVector — missing-dim guard (fix round)
-// ---------------------------------------------------------------------------
 
 describe('initVectorForRestart / recencyVector', () => {
   it('initVectorForRestart throws a named error when dims is missing "age_days" (restart 0)', () => {
@@ -525,10 +419,6 @@ describe('initVectorForRestart / recencyVector', () => {
     expect(() => recencyVector(['strength'])).toThrow(/missing "age_days"/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// verifyFrozenWeights — freeze binding (codex round-2 P2; pure unit tests)
-// ---------------------------------------------------------------------------
 
 describe('verifyFrozenWeights', () => {
   const goodWeights = { age_days: -0.5, content_length: -0.6 };

@@ -1,4 +1,3 @@
-"""Check a round's runs files against a sha256 manifest before any script prints a figure; stdlib only, imported by path."""
 import datetime
 import hashlib
 import json
@@ -30,7 +29,6 @@ def write(root, manifest):
 
 
 def checked_files(root, manifest):
-    """The runs files under root, returned only when the set and every sha256 equal the manifest's."""
     files, digests = _digests(root)
     try:
         recorded = {e['file']: e['sha256'] for e in json.loads(manifest.read_text(encoding='utf-8'))['files']}

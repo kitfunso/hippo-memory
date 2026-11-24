@@ -1,7 +1,3 @@
-// `hippo invalidate` marks a memory wrong by storing confidence 'stale'.
-// Reading it put the tier back to 'observed', so one recall undid the
-// invalidation while the 'invalidated' tag stayed on the row.
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { markRetrieved } from '../../src/entry/memory.js';
@@ -57,8 +53,6 @@ describe('a deliberate stale tier survives being read', () => {
     expect(updated.confidence).toBe('stale');
   });
 
-  // Supersede is the second writer of a stored 'stale' (src/cli.ts:4703) and
-  // reaches the same read path, so it needs its own case.
   it('a superseded memory stays stale through a read', () => {
     const superseded = {
       ...createMemory('the old decision', { confidence: 'observed' }),

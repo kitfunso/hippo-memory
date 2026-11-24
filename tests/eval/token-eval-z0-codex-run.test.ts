@@ -1,4 +1,3 @@
-// Z0 set X through runAll: Claude teaches, Codex applies, the carry, the X3 stub and the X4 block (E6 plan tests 6-9, 22).
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +33,6 @@ describe('set X end to end (test 6)', () => {
         expect(a.codexMemoryWait, task).toEqual({ ms: 0, timedOut: false });
       }
     }
-    // Only the three teaches resume; a Codex apply gets no correction (prereg 85, 110).
     expect(logLines(log).filter((l) => l.startsWith('resume '))).toHaveLength(3);
     const seen = fakeSeen(codexLog);
     expect(seen).toHaveLength(6);
@@ -79,10 +77,8 @@ describe('X3 stub (test 8)', () => {
       shas.push(sha);
     }
     expect(shas[0]).not.toBe(shas[1]);
-    // Both refs sit in the one cache now and name different commits.
     const refs = git(cache, 'for-each-ref', '--format=%(refname) %(objectname)', 'refs/eval/seqF/a-xa', 'refs/eval-x3/seqF/a-xa').trim().split('\n');
     expect(refs).toEqual([`refs/eval-x3/seqF/a-xa ${shas[0]}`, `refs/eval/seqF/a-xa ${shas[1]}`]);
-    // grade.json names the ref the cell was graded from, X3 beside X1.
     const x1 = xIsolate('x3b');
     await xRun(xTrio(r), ['X1'], x1.out, x1.op);
     const stubRef = (o: string, arm: string) => JSON.parse(readFileSync(join(o, 'grading', 'seqF', arm, 'seed1', 'a-xa.grade.json'), 'utf8')).stubRef;

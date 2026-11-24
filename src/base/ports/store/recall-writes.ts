@@ -57,14 +57,9 @@ export interface RecallTraceInput {
   results: RecallTraceResultInput[];
 }
 
-/** One ranked result to persist alongside its trace row. */
 interface RecallTraceResultInput {
   memoryId: string;
   score: number;
-  /**
-   * Per-stage rerank steps when the caller ran with explain/--why; omitted (or empty) persists
-   * `rerank_json` as NULL.
-   */
   rerankSteps?: RerankStep[];
 }
 

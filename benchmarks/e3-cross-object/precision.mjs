@@ -1,6 +1,3 @@
-// E3.1 cross-object references precision measurement (DESCRIPTIVE, not a gate).
-// Seeds genuine cross-references + decoys (incl. a generic-word entity name trap),
-// runs extractGraph, classifies each emitted `references` edge true/false by construction.
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,33 +12,29 @@ mkdirSync(join(home, '.hippo'), { recursive: true });
 initStore(home);
 const T = 'default';
 const objects = sqliteStore(home).objects;
-const intended = new Set(); // `${srcName}=>${tgtName}` genuine references
+const intended = new Set();
 
 async function decRef(text, srcName, tgtName) { await saveDecision(objects, loadConfig(home).defaultHalfLifeDays, T, { decisionText: text }); if (tgtName) intended.add(`${srcName}=>${tgtName}`); }
 
-// Targets (policies/customers/projects with identifiable names)
 await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'RetryBudget', policyText: 'cap retries' });
 await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'CacheTTL', policyText: 'ttl 30s' });
 await savePolicy(objects, loadConfig(home).defaultHalfLifeDays, T, { policyName: 'DataRetention', policyText: 'delete after 90d' });
 await saveCustomerNote(objects, loadConfig(home).defaultHalfLifeDays, T, { customer: 'Northwind', note: 'enterprise tier' });
 await saveProjectBrief(objects, loadConfig(home).defaultHalfLifeDays, T, { repo: 'billing-svc', summary: 'invoicing service' });
-// A GENERIC-WORD entity name trap (plan-eng LOW): a customer literally named "Core".
 await saveCustomerNote(objects, loadConfig(home).defaultHalfLifeDays, T, { customer: 'Core', note: 'a customer literally named Core' });
 
-// GENUINE references (8): decisions/briefs that name a target.
 await decRef('We adopt RetryBudget to cap retry storms', 'We adopt RetryBudget to cap retry storms', 'RetryBudget');
 await decRef('Lower CacheTTL to reduce staleness', 'Lower CacheTTL to reduce staleness', 'CacheTTL');
 await decRef('DataRetention now applies to audit logs too', 'DataRetention now applies to audit logs too', 'DataRetention');
 await decRef('Onboard Northwind onto the new plan', 'Onboard Northwind onto the new plan', 'Northwind');
 await decRef('Migrate billing-svc to the shared queue', 'Migrate billing-svc to the shared queue', 'billing-svc');
 await decRef('RetryBudget and CacheTTL must both be tuned together', 'RetryBudget and CacheTTL must both be tuned together', 'RetryBudget');
-intended.add('RetryBudget and CacheTTL must both be tuned together=>CacheTTL'); // 2-target decision
+intended.add('RetryBudget and CacheTTL must both be tuned together=>CacheTTL');
 await saveProjectBrief(objects, loadConfig(home).defaultHalfLifeDays, T, { repo: 'audit-svc', summary: 'enforces DataRetention on every write' });
 intended.add('audit-svc=>DataRetention');
 
-// DECOYS (should NOT match): word-boundary near-miss + generic prose.
-await decRef('the team is retrying flaky steps', 'd-retry', null);   // "retry" not a name; "retrying" != RetryBudget
-await decRef('we refactored the core scheduler module', 'd-core', null); // "core" the generic word -> FALSE if it matches the "Core" customer
+await decRef('the team is retrying flaky steps', 'd-retry', null);
+await decRef('we refactored the core scheduler module', 'd-core', null);
 
 const r = await extractGraph(sqliteStore(home), T);
 const graph = await sqliteStore(home).graphReads.graphRows(T, { limit: 1000 });

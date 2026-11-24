@@ -1,4 +1,3 @@
-// Schema v59 adds four partial indexes for the sleep path; each real read must plan onto its index.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { closeHippoDb, getSchemaVersion, openHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
@@ -50,7 +49,6 @@ function count(db: DatabaseSyncLike, table: string): number {
   return (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 }
 
-// A partial index holds only the rare rows, so a SCAN of it is the whole win; a temp sort would not be.
 function expectIndexNoSort(detail: string, index: string): void {
   expect(detail).toContain(`USING INDEX ${index}`);
   expect(detail).not.toContain('USE TEMP B-TREE FOR ORDER BY');

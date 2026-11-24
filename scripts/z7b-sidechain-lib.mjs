@@ -1,4 +1,3 @@
-// Pure helpers for the Z7b strict sub-agent lesson eval (prereg docs/evals/2026-10-03-z7b-sidechain-strict-prereg.md). No fs, no child_process.
 import * as L from './z7-sidechain-lib.mjs';
 
 export const SEED_STRING = 'z7b-2026-10-03';
@@ -17,9 +16,6 @@ const isObj = (v) => v !== null && v instanceof Object && !Array.isArray(v);
 const idOf = (it) => L.itemId(it.session, it.file);
 const tplKey = (it) => `${it.session}|${it.template}`;
 
-// --- draw ---
-
-// z7Fresh is L.buildDraw(eligible); its dev and scored items are Z7b's dev set, so they can only tune.
 export function buildDrawZ7b(eligible, z7Fresh) {
   const dev = [...z7Fresh.dev, ...z7Fresh.scored];
   const devSet = new Set(dev);
@@ -47,13 +43,11 @@ export function buildDrawZ7b(eligible, z7Fresh) {
   };
 }
 
-// Z7's drawMismatch contract, but a missing pin never matches.
 export function drawMismatchZ7b(fresh, stored, pinSha) {
   if (!pinSha) return 'there is no scored list sha256 pin';
   return L.drawMismatch(fresh, stored, pinSha);
 }
 
-// in: {manifestSha, z7Fresh, z7Stored, fresh, stored}. Returns why the draw cannot stand, or null.
 export function checkDrawZ7b(inp, pins, z7Pin = Z7_SCORED_SHA) {
   const bad = L.checkPins(pins, { manifest: inp.manifestSha, scoredList: inp.fresh.itemListSha256 }, PIN_PROMPTS);
   if (bad.length) return `pin mismatch: ${bad.join(', ')}`;
@@ -62,30 +56,23 @@ export function checkDrawZ7b(inp, pins, z7Pin = Z7_SCORED_SHA) {
   return drawMismatchZ7b(inp.fresh, inp.stored, pins.scoredList);
 }
 
-// Dev commands have no prereg pins yet, so the stored draw must equal the fresh rebuild.
 export function checkDevDrawZ7b(inp, z7Pin = Z7_SCORED_SHA) {
   const z7 = L.drawMismatch(inp.z7Fresh, inp.z7Stored, z7Pin);
   if (z7) return `Z7 dev set: ${z7}`;
   return L.drawMismatch(inp.fresh, inp.stored, inp.fresh.itemListSha256);
 }
 
-// Gate names whose value is null, nested ones dotted (G2.recheck).
 export function untestedGates(g) {
   return Object.entries(g).flatMap(([k, v]) => (v === null ? [k]
     : isObj(v) ? Object.entries(v).filter(([, x]) => x === null).map(([s]) => `${k}.${s}`) : []));
 }
-
-// --- prompt hashes ---
 
 export function promptShaAgree(sidecars, current, names) {
   if (!sidecars.length) return false;
   return sidecars.every((s) => isObj(s) && names.every((n) => L.isStr(current[n]) && s[n] === current[n]));
 }
 
-// Only the named prompts count; parsePins collects every backticked .txt hash in the section.
 export const pinsMatchPrompts = (pins, promptSha, names) => names.every((n) => Boolean(pins.prompts[n]) && pins.prompts[n] === promptSha?.[n]);
-
-// --- filter ---
 
 export function parseFilter(stdout, n) {
   const o = L.parseJsonReply(stdout);
@@ -98,7 +85,6 @@ export function parseFilter(stdout, n) {
   return labels.includes(null) ? { ok: false, labels: [] } : { ok: true, labels };
 }
 
-// The recheck-surviving lessons in filter order, each keeping the judge's own index k.
 export function candidates(judge, recheck, id) {
   const gone = recheck[id]?.keptKeys ?? [];
   return L.MODELS.flatMap((model) => (judge[model][id]?.verified ?? []).flatMap((l, k) => (gone.includes(`${model}:${k}`) ? [] : [{ model, k, kind: l.kind, text: l.text }])));
@@ -106,7 +92,6 @@ export function candidates(judge, recheck, id) {
 
 export const removalKeys = (cands, parsed) => (parsed.ok ? cands.filter((_, i) => parsed.labels[i] !== 'keep').map((c) => `${c.model}:${c.k}`) : []);
 
-// filter.items[id].removed become extra keptKeys, the same trick Z7 uses for its aug row.
 export function mergeRemovals(recheck, filter) {
   return Object.fromEntries(Object.entries(recheck).map(([id, r]) => [id, filter.items[id] ? { ...r, keptKeys: [...r.keptKeys, ...filter.items[id].removed] } : r]));
 }
@@ -118,8 +103,6 @@ export function filterStats(filter) {
   return { parse: [its.filter((i) => i.ok).length, its.length], labels };
 }
 
-// --- gates and verdict ---
-
 export function gatesZ7b(fUnf, isolation, control, filterParse) {
   const g = L.gateResults({ isolation, parse: fUnf.parse, evidenceFail: fUnf.evidenceFail, control, unplanted: fUnf.unplanted, planted: fUnf.planted });
   const [k, n] = filterParse;
@@ -127,7 +110,6 @@ export function gatesZ7b(fUnf, isolation, control, filterParse) {
   return g;
 }
 
-// BUILD cannot be decided before the precision audit, so only INVALID and DROP are final here.
 export function verdictZ7b(ci, unionUnfCi, valid) {
   if (!valid) return 'INVALID';
   if (unionUnfCi.hi < 0.1) return 'DROP';
@@ -145,11 +127,8 @@ export function finalizeAuditZ7b(preliminary, ci, n, confirmed) {
   };
 }
 
-// --- calibration and audit samples ---
-
 const sample = (ids, rng) => L.shuffled([...ids].sort(cmp), rng);
 
-// topUpIds (one judge only) fill a short precision sample after every both-judge id: a harder test, never an easier one.
 export function calibSamples(round, bearingIds, removedIds, priorIds, topUpIds = []) {
   const rng = L.rngFromString(`z7b-calib-r${round}`);
   const prior = new Set(priorIds);
@@ -182,7 +161,6 @@ export const calibPass = (precisionMarks) => {
   return n >= 10 && confirmed * 4 >= n * 3;
 };
 
-// 12 bearing plus 4 bearing-before-filter-only items, in one shuffled list with no labels.
 export function auditSample(bearingIds, droppedIds) {
   const rng = L.rngFromString('z7b-audit');
   const bearing = sample(bearingIds, rng).slice(0, PRECISION_SAMPLE);

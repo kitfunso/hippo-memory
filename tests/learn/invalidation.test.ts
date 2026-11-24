@@ -150,9 +150,6 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
   });
 
   it('BYSTANDER LOCK: a multi-token pattern containing a tag word does not invalidate that tag', async () => {
-    // The incident shape: pattern tokens include "hippo"; bystander is tagged
-    // exactly `hippo` but its CONTENT overlaps < 0.5 with the pattern. On the
-    // pre-fix code (token-level tagMatch) this fired; it must not now.
     const bystander = createMemory('Weekly grocery budget tracking notes', {
       tags: ['hippo'],
     });
@@ -249,7 +246,7 @@ describe('invalidateMatching safety (2026-06-09 incident)', () => {
     );
 
     expect(result.dryRun).toBe(true);
-    expect(result.invalidated).toBe(1); // would-be count
+    expect(result.invalidated).toBe(1);
     expect(result.targets).toContain(mem.id);
     expect(result.preview.length).toBe(1);
     expect(result.preview[0].id).toBe(mem.id);
@@ -355,7 +352,7 @@ describe('invalidateMatching dryRun + onlyId composition', () => {
     expect(result.dryRun).toBe(true);
     expect(result.invalidated).toBe(1);
     expect(result.preview[0].id).toBe(mem.id);
-    expect(result.preview[0].headline).not.toContain('\n'); // flattened
+    expect(result.preview[0].headline).not.toContain('\n');
     const untouched = readEntry(hippoRoot, mem.id);
     expect(untouched!.confidence).toBe(mem.confidence);
     expect(untouched!.tags).not.toContain('invalidated');

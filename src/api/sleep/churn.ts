@@ -1,6 +1,3 @@
-// Code-churn staleness for `hippo invalidate --churn` and sleep's opt-in pass: the repo and project
-// it reads, and one run per store, each on its own.
-
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { GIT_CALL_TIMEOUT_MS } from '../../base/util/time.js';
 import { type ChurnStaleResult, detectChurnStale } from '../../domain/learn/churn-stale.js';
@@ -15,9 +12,6 @@ export interface ChurnStore {
   readonly store: StoreWith<'learning'>;
 }
 
-/** Tags, in each store, the memories of `repoDir`'s project whose files git says have churned. A
- * store that fails gives a result with `error` set, so it never skips the next store or a
- * sleep's later phases. */
 async function markChurnStale(
   ctx: Pick<Context, 'tenantId' | 'infra'>,
   stores: readonly ChurnStore[],
@@ -37,7 +31,6 @@ async function markChurnStale(
     try {
       results.push({ root, result: await detectChurnStale(store, repo, detect) });
     } catch (err) {
-      // The caller prints the text; the class and stack stay in the debug log.
       log.debug(`churn staleness failed for ${root}: ${errorMessage(err)}`, errorFields(err));
       const failed = { checked: 0, marked: 0, alreadyMarked: 0, skippedPinned: [], preview: [] };
       results.push({ root, result: { ...failed, dryRun: opts.dryRun, error: errorMessage(err) } });

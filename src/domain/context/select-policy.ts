@@ -1,6 +1,3 @@
-// The ranking and budget policy of a context block, on plain rows: the api reads the stores, prices
-// the rows and asks these functions who gets in.
-
 import { isRecallOnly, type MemoryEntry } from '../../base/memory/entry.js';
 import { isWorthSurfacing } from '../../base/memory/memory-quality.js';
 import { compareScoredResults, compareScoresDesc } from '../../base/rank/compare.js';
@@ -27,7 +24,6 @@ export interface Picked<T extends PricedRow> {
   used: number;
 }
 
-// Overlap a candidate needs with the prompt when the config sets none.
 const DEFAULT_PROMPT_RECALL_THRESHOLD = 0.04;
 const DEFAULT_PROMPT_RECALL_MIN_SHARED = 2;
 const DEFAULT_PROMPT_RECALL_MAX_ITEMS = 5;
@@ -56,7 +52,6 @@ export function pinsWithinCap<T extends PricedRow>(
   const keptIds = new Set<string>();
   let used = 0;
   for (const { row } of walk) {
-    // A synced pin sits in both stores.
     if (keptIds.has(row.entry.id)) continue;
     if (used + row.tokens > cap) {
       onOverCap?.(row);

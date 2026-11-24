@@ -1,5 +1,3 @@
-// hippo.db's half of the Objects store group: the binding and the reads of the typed objects and predictions.
-
 import { type DatabaseSyncLike } from '../../../db/index.js';
 import { escapeLike } from '../../../base/util/escape.js';
 import { keysetAfter } from '../../../db/sql.js';
@@ -100,10 +98,6 @@ function listRows<K extends ObjectKind>(
   return rows.map((row) => spec.rowTo(row));
 }
 
-/**
- * The successor is joined in so a superseded version is kept only while the row that replaced it is
- * not yet in force.
- */
 function policiesInForce(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -149,7 +143,6 @@ function skillsByName(db: DatabaseSyncLike, tenantId: string, query: SkillsByNam
 // SAFETY: every read cast to this row selects all its keys; scripts/checks/check-row-casts.mjs proves it.
 type BriefReceiptDbRow = BriefReceipt;
 
-/** The quotes around the tag stop `path:hip` matching a memory tagged `path:hippo`. */
 function briefReceipts(
   db: DatabaseSyncLike,
   tenantId: string,

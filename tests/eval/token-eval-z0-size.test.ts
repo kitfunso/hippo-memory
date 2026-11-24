@@ -1,4 +1,3 @@
-/** Z0 sizing (D6): known-answer power, the false-win rate at a true zero, spread recovery and its bound, the seed rule, the level check, and a CLI read of generated records. */
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -14,14 +13,12 @@ import { parseArgs, runCli } from '../../scripts/token-eval/z0-size.mjs';
 import { CELLS, skewCell } from '../../scripts/token-eval/z0-skew-check.mjs';
 import { PRICES, generate, jsonl } from '../fixtures/z0-gen.js';
 
-// Each case simulates thousands of runs; a shared CI runner can be several times slower than a laptop.
 vi.setConfig({ testTimeout: 180_000 });
 
 const spread = (family: number, sequence: number, noise: number) => ({ scale: 1, loss: 0, family, sequence, noise });
 const both = (s: ReturnType<typeof spread>) => ({ violation: s, excluded: s });
 
 type Unit = { repo: string; family: string; seed: number; value: number };
-/** Draws written apart from the sizer: y = delta + a_f + b_s + e inside each repository, b_s shared by its families. */
 function reference(rand: () => number, repos: number, families: number, seeds: number, [fam, seq, noise]: readonly number[], delta = 0): Unit[] {
   const units: Unit[] = [];
   for (let r = 0; r < repos; r++) {
@@ -50,7 +47,6 @@ describe('Z0 sizing', () => {
       return hits / sims;
     };
     const power = repeatSizer(both(spread(...spreads)), { sims, seed: 7, rule: false }, 'T1')({ repos, families }, m);
-    // Each share is near 0.4 to 0.5, so 1500 runs give a standard error near 0.013 and the gap of two shares near 0.018.
     expect(Math.abs(power.win - verdictShares(-m, 'win'))).toBeLessThan(0.07);
     expect(Math.abs(power.tie - verdictShares(0, 'tie'))).toBeLessThan(0.07);
     expect(power.win).toBeGreaterThan(0.2);
@@ -74,7 +70,6 @@ describe('Z0 sizing', () => {
   });
 
   it('holds the H4 cost gate to its two-sided 2.5% at a true ratio of 1.10 when repository costs are near normal', () => {
-    // Skewed cells sit between 2.5% and the prereg's 5% (z0-skew-check.mjs, analyzer doc); this one shows the interval is sound.
     const near = CELLS.find((c: { name: string }) => c.name === 'near normal')!;
     const s = skewCell(near, 4_000, 1);
     expect(s.costLog).toBeLessThanOrEqual(0.025 + 2 * Math.sqrt((0.025 * 0.975) / 4_000));
@@ -107,7 +102,6 @@ describe('Z0 sizing', () => {
     expect(clopperPearsonUpper(0, 22, 0.8)).toBeCloseTo(1 - 0.2 ** (1 / 22), 9);
     expect(clopperPearsonUpper(22, 22, 0.8)).toBe(1);
     const p = clopperPearsonUpper(5, 20, 0.8);
-    // P(X <= 5 | 20, p) by the plain binomial sum: exp(lnGamma) keeps the coefficients exact enough.
     const cdf = Array.from({ length: 6 }, (_, i) => Math.exp(lnGamma(21) - lnGamma(i + 1) - lnGamma(21 - i) + i * Math.log(p) + (20 - i) * Math.log(1 - p))).reduce((a, b) => a + b, 0);
     expect(cdf).toBeCloseTo(0.2, 6);
   });
@@ -116,7 +110,6 @@ describe('Z0 sizing', () => {
     const m = 0.3;
     const at = (noise: number, family = 0.01, stream = 5) => seedsNeeded(reference(seededRandom(stream), 6, 4, 3, [family, 0.01, noise]), m);
     expect(at(1e-6)).toBe(3);
-    // The family term alone leaves family / k / G = 0.17 / 24 of variance, above the (0.3 / 3.5)^2 target.
     expect(at(0.01, 1)).toBeNull();
     for (const stream of [1, 2, 3, 4, 5]) {
       const needs = [0.01, 0.5, 2].map((noise) => at(noise, 0.01, stream) ?? Infinity);
@@ -161,7 +154,6 @@ describe('Z0 sizing', () => {
       expect(run.seeds).toBeGreaterThanOrEqual(3);
       expect(run.seeds).toBeLessThanOrEqual(9);
       seen.add(run.seeds);
-      // The same stream drawn straight to that many seeds is identical: later seeds add to the wave-1 families.
       expect(repeatRun(cal, { ...design, seeds: run.seeds }, -0.15, seededRandom(i)).units).toEqual(run.units);
       const families = new Set(run.units.violation.filter((u: Unit) => u.seed === 1).map((u: Unit) => u.family));
       for (let s = 2; s <= run.seeds; s++) expect(new Set(run.units.violation.filter((u: Unit) => u.seed === s).map((u: Unit) => u.family))).toEqual(families);
@@ -184,7 +176,6 @@ describe('Z0 sizing', () => {
     for (const u of units) expect(u.t.cost / u.c.cost).toBeCloseTo(1.1, 12);
     expect(harmRun(cal, { repos: 1, tasks: 1 }, rand)).toHaveLength(3);
     const ratios = (c: { family?: number; sequence?: number }) => harmRun({ ...cal, ...c }, { repos: 1, tasks: 3, seeds: 3 }, seededRandom(6)).map((u: { t: { cost: number }; c: { cost: number } }) => Math.log(u.t.cost / u.c.cost));
-    // Only the sequence varies: one value per seed, shared by every task. Only the family varies: one per task, shared by every seed.
     const seq = ratios({ sequence: 0.2 });
     for (let s = 0; s < 3; s++) expect(new Set([0, 1, 2].map((k) => seq[k * 3 + s]!.toFixed(10))).size).toBe(1);
     expect(new Set(seq.map((x: number) => x.toFixed(10))).size).toBe(3);
@@ -204,12 +195,10 @@ describe('Z0 sizing', () => {
     const level = levelCheck(noisy, noisy, design, 0.2, { sims: 60, seed: 2 });
     expect([true, false]).toContain(level.held);
     for (const c of level.cells) expect(c.level).toBeGreaterThanOrEqual(0);
-    // A rule that always stops leaves no run to read, which cannot pass as held.
     const stopping = both(spread(1, 0, 0.01));
     const none = levelCheck(stopping, stopping, { repos: 6, families: 3 }, 0.15, { sims: 10, seed: 1 });
     expect(none.cells[0]).toMatchObject({ name: 'rule at bounds', runs: 0 });
     expect([Number.isNaN(none.cells[0].level), none.held]).toEqual([true, false]);
-    // A rule that stops some runs is judged on the runs it let go, so its bar is wider than the fixed-seed cells'.
     const some = levelCheck(both(spread(0.05, 0, 0.05)), both(spread(0.05, 0, 0.05)), { repos: 6, families: 3 }, 0.15, { sims: 40, seed: 1 });
     const [ruled, fixed] = [some.cells[0]!, some.cells[2]!];
     expect(ruled.runs > 0 && ruled.runs < 40).toBe(true);
@@ -240,7 +229,6 @@ describe('Z0 sizing', () => {
 
   it('reads generated calibration records end to end and prices sessions and days per tool', () => {
     const g = generate({ knobs: { A1: { fail: 0, resolve: 1 }, A2: { fail: 0, resolve: 1 }, X2: { fail: 0 }, X3: { fail: 0 } } });
-    // The run folder's teardown removes this folder (vitest.config.ts).
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-size-'));
     const prices = { ...PRICES, codex: { inputPerMTok: 1.25, cacheWritePerMTok: 0, cacheReadPerMTok: 0.125, outputPerMTok: 10 } };
     const files = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(prices) };
@@ -261,7 +249,6 @@ describe('Z0 sizing', () => {
     expect(report.unavailable).toEqual([]);
     expect(report.effects.map((e: { minimumEffect: number }) => e.minimumEffect)).toEqual([0.15, 0.2, 0.25]);
     for (const { chosen, level } of report.effects) {
-      // No spread in these records, so two families per repository pass (one gives the rule nothing to fit) and the fewest repositories win.
       expect(chosen).toMatchObject({ repos: 5, fits: true, boundsPass: true, setR: { families: 10 }, setX: { families: 10 }, H1: { familiesPerRepo: 2 } });
       expect(chosen.H1.power).toMatchObject({ meanSeeds: 3, stopShare: 0 });
       expect(chosen.H1.boundsPower).toMatchObject({ win: 1, tie: 1, meanSeeds: 3, stopShare: 0 });

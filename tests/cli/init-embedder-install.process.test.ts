@@ -1,4 +1,3 @@
-// `hippo init` run from a fake npm global folder whose npm is a stand-in, so no test downloads the embedder.
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -7,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HIPPO_BIN } from '../_helpers/hippo-bin.js';
 
 const PKG = '@huggingface/transformers@4.3.2';
-// Records each call, then lays down a package that resolves, as a real install would.
 const FAKE_NPM = `
 const fs = require('node:fs');
 const path = require('node:path');
@@ -34,7 +32,6 @@ describe('hippo init installs the local embedder from a global npm install', () 
     const modules = path.join(prefix, process.platform === 'win32' ? '' : 'lib', 'node_modules');
     fs.mkdirSync(path.join(modules, 'npm', 'bin'), { recursive: true });
     fs.writeFileSync(path.join(modules, 'npm', 'bin', 'npm-cli.js'), FAKE_NPM);
-    // A link keeps the repo's build in place; --preserve-symlinks makes hippo see the global path.
     const repo = path.dirname(path.dirname(HIPPO_BIN));
     fs.symlinkSync(repo, path.join(modules, 'hippo-memory'), 'junction');
     hippoBin = path.join(modules, 'hippo-memory', 'bin', 'hippo.js');
@@ -43,7 +40,6 @@ describe('hippo init installs the local embedder from a global npm install', () 
   });
 
   afterEach(() => {
-    // The link goes first and alone, so the recursive delete can never walk into the repo.
     const link = path.dirname(path.dirname(hippoBin));
     fs.unlinkSync(link);
     if (fs.existsSync(link)) throw new Error(`could not remove the link ${link}; left ${tmp} in place`);

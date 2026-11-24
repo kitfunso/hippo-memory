@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/** Lane 5 of docs/EXPERIMENT-PROTOCOL.md: paired retrieval A/B. Baseline store
- *  vs the same store with Jev's error tag auto-applied to the top-K rows.
- *  Identical queries, identical corpus. No API calls: Jev scores are on disk. */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -40,7 +37,6 @@ const tagSet = new Set(
 );
 console.error(`corpus rows scored by Jev: ${present.length}; tagging top ${K} (base rate ${baseRate.toFixed(3)})`);
 
-/** The Jev arm: error tag, negative valence, doubled half-life (memory.ts:394). */
 const jevEntries = entries.map((e) =>
   tagSet.has(e.id)
     ? { ...e, tags: [...e.tags, 'error'], emotional_valence: 'negative', half_life_days: e.half_life_days * 2 }

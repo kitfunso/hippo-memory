@@ -15,7 +15,6 @@ export interface CopilotEventLine {
   agentId?: unknown;
 }
 
-/** The `data` fields read from a user.message or assistant.message line; any may be absent. */
 interface CopilotMessageData {
   content?: unknown;
   source?: unknown;

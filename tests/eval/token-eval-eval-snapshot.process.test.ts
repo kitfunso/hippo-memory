@@ -1,4 +1,3 @@
-// The eval checkout builder (prereg 51, stage 2 plan D3): rule files out, forbidden terms scrubbed, one reproducible commit.
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -52,7 +51,6 @@ describe('buildSnapshot', () => {
     const kept = ['# Rules', '- Run the linter before you commit.', WITHHELD, '- Keep functions short.', ...Array(6).fill(WITHHELD), '- Name tests after behaviour.', ''];
     expect(readFileSync(join(rulesOut, 'AGENTS.md'), 'utf8').split('\n')).toEqual(kept);
     expect(m.withheld).toEqual({ 'AGENTS.md': [3, 5, 6, 7, 8, 9, 10] });
-    // Only AGENTS.md changed, so its first version is the one earlier copy, withheld the same way.
     expect(m.history).toEqual([{ file: 'AGENTS.md', commit: src.old, date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), copy: expect.stringMatching(/^history\/AGENTS\.md\/.+\.md$/) }]);
     expect(readFileSync(join(rulesOut, m.history![0]!.copy), 'utf8').split('\n')).toEqual(['# Rules', '- Run the linter after you commit.', WITHHELD, '']);
     expect(JSON.parse(readFileSync(join(rulesOut, 'history/index.json'), 'utf8'))).toEqual(m.history);

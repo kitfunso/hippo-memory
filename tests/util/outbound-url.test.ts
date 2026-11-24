@@ -1,4 +1,3 @@
-// One rule for every endpoint that receives a key or memory text: the embeddings base URL and both rerankers.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

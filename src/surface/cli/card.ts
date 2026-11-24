@@ -1,5 +1,3 @@
-// The `hippo card` verb (the agent work board); main() loads it lazily from the command table.
-
 import { cliStore } from './api-context.js';
 import { isHandoffOutcome } from '../../base/session/handoff.js';
 import { type Card, type CardStatus, isCardStatus } from '../../base/records/card.js';
@@ -22,7 +20,6 @@ import { requireInit } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
 import { CliExit, fail } from './exit.js';
 
-// Each subcommand's usage line, written once so the repeated checks cannot drift.
 const CARD_USAGE = {
   create:
     'hippo card create --title "..." [--repo <name>] [--contract <text>] [--budget <n>] [--depends-on <id>...]',
@@ -41,7 +38,6 @@ function usageError(sub: keyof typeof CARD_USAGE): CliExit {
   return new CliExit(1);
 }
 
-// Mirrors ARCHIVE_REASON_REQUIRED so the block message can't drift from its usage line.
 const CARD_BLOCK_REASON_REQUIRED =
   'hippo card block <id> requires --reason "<why>" (recorded as a comment).';
 
@@ -84,7 +80,6 @@ function printCard(detail: CardDetail): void {
   console.log('');
 }
 
-// A too-large --run would silently round to a different id (mirrors parsePositiveIncidentId).
 function cardRunFlag(flags: CliFlags): number | undefined {
   const raw = stringFlagOrExit(flags, 'run');
   if (raw === undefined) return undefined;
@@ -101,15 +96,12 @@ interface CardRefusalOptions {
   readonly id: string;
 }
 
-// Reads after the store already refused, so this only explains the refusal, never changes it.
 async function cardRefusal({ hippoRoot, tenantId, id }: CardRefusalOptions): Promise<string> {
   const detail = await cliStore(hippoRoot).cards.detail(tenantId, id);
   const liveRun = detail?.runs.find((r) => !r.ended);
   return `status ${detail?.card.status ?? 'unknown'}, live run ${liveRun?.id ?? 'none'}`;
 }
 
-// One entry per subcommand: the flags handleCard actually reads for it, so a typo like --depend-on
-// fails fast instead of silently doing nothing.
 type CardSubcommand =
   | 'create'
   | 'show'
@@ -228,8 +220,6 @@ async function cardShow(
   printCard(detail);
 }
 
-/** Every page of the tenant's cards in list order, the largest page at a time, so the list
- * prints as it reads. */
 async function* cardPages(
   hippoRoot: string,
   tenantId: string,
@@ -419,8 +409,6 @@ async function cardComment(
   if (!id) {
     throw usageError('comment');
   }
-  // Only show and comment look the card up directly; claim/heartbeat/block/review/complete throw
-  // from the store instead.
   const cards = cliStore(hippoRoot).cards;
   const card = (await cards.detail(tenantId, id))?.card;
   if (!card) {

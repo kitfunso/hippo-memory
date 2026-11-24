@@ -1,5 +1,3 @@
-// The CLI ranking core writes through the store the context carries, and the port names no SQLite code.
-
 import type { Context } from '../../src/api/types.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -165,7 +163,6 @@ describe('retrieve with the CLI ranking core', () => {
 
 describe('the store port', () => {
   it('imports nothing from the SQLite layer, so an add-on can build a store on it alone', () => {
-    // A layering rule about imports, which no call can show, so the file text is the contract.
     const source = readFileSync(join(import.meta.dirname, '../../src/base/ports/store.ts'), 'utf8');
     expect(source).not.toMatch(/from '\.\.\/db\//);
   });

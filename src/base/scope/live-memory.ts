@@ -1,4 +1,3 @@
-// Here, not in base/memory, since scope already imports memory and the quarantine test is scope's.
 import { isSuperseded } from '../memory/liveness.js';
 import { isQuarantineScope } from './recall-scope.js';
 

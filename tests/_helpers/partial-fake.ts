@@ -1,5 +1,3 @@
-// A partial fake of a store, port or context, typed against the real type so a renamed or retyped member fails typecheck:tests.
-
 /** The members of `T` a fake may set; a method keeps its exact signature, an object member may set only some of its own. */
 export type PartialFake<T> = T extends (...args: never[]) => infer _Result
   ? T

@@ -1,4 +1,3 @@
-// Calls, expected rows and hooks the objects-conformance tests share; useObjectsConformance seeds the two-tenant store.
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { auditRowsOn } from './audit-rows.js';
@@ -45,7 +44,6 @@ export const ACTOR = 'api_key:caller';
 
 type Metadata = AuditEvent['metadata'];
 
-/** One savable kind: the nth save's fields, what its row holds for them, and the create row's keys after the id. `group` fills the filter column. */
 interface KindCase {
   readonly kind: SavableKind;
   readonly idKey: string;
@@ -136,7 +134,6 @@ export const CASES: readonly KindCase[] = [
   },
 ];
 
-/** The mirror as a caller can tell it apart: its row, tenant and what recall matches on. */
 interface MirrorView {
   readonly id: string;
   readonly tenantId: string;
@@ -167,7 +164,6 @@ export async function conforms(calls: readonly Call[]): Promise<Side> {
   return runOnFixture(fixture, 'objects', calls);
 }
 
-/** One save, built once per call list so every call is handed the same mirror id. */
 interface Draft {
   readonly n: number;
   readonly group: string;
@@ -343,7 +339,6 @@ export function auditRowsAt(root: string): AuditEvent[] {
   }
 }
 
-/** One incident to open, built once per call list so every call is handed the same mirror id. */
 interface Opening {
   readonly n: number;
   readonly tenantId: string;

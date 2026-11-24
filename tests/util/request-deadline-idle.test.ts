@@ -1,4 +1,3 @@
-// RequestDeadline.onceIdle must run every function registered while store calls are in flight, not only the last one.
 import { describe, expect, it } from 'vitest';
 import { RequestDeadline } from '../../src/base/util/request-scope.js';
 
@@ -34,7 +33,6 @@ describe('RequestDeadline.onceIdle', () => {
     await second.call;
     expect(ran).toEqual(['first', 'second']);
 
-    // Each ran once: a later idle moment does not replay them.
     const third = pendingCall();
     deadline.track(third.call);
     third.settle();

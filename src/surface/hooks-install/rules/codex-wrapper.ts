@@ -1,5 +1,3 @@
-// The Codex launcher wrapper: where its files go, which paths an install may touch, and the script text it writes;
-// surface/hooks-install/codex-wrapper.ts moves and writes the files.
 import * as path from 'node:path';
 import { PACKAGE_ROOT } from '../../../base/config/package-root.js';
 import { HIPPO_CODEX_WRAPPER_MARKER } from './shared.js';
@@ -35,7 +33,6 @@ export interface CodexWrapperMetadata {
   installMode: 'same-path' | 'cmd-shim';
   logFile: string;
   installedAt: string;
-  /** The hippo CLI the user opted in; absent in metadata written before this field. */
   hippoCliPath?: string;
 }
 
@@ -75,8 +72,6 @@ export function pathEquals(a: string, b: string): boolean {
   return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
 }
 
-// The launchers detectRealCodexPath looks for, so the only originals the installer can have
-// recorded.
 export const CODEX_LAUNCHER_NAMES: readonly string[] =
   process.platform === 'win32' ? ['codex.cmd', 'codex.ps1', 'codex.exe', 'codex'] : ['codex'];
 

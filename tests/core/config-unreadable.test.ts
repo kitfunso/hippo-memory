@@ -1,12 +1,9 @@
-// A config.json that exists but cannot be reached must stop the load, as an unparseable one does: defaults would
-// silently drop the user's settings.
 import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { configReader, isSharedStore, loadConfig } from '../../src/host/config-file.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
-// chmod cannot deny access on win32, and root ignores mode bits.
 const modeBitsDoNotBind = process.platform === 'win32' || process.getuid?.() === 0;
 
 let locked: string | undefined;
@@ -15,7 +12,6 @@ afterEach(() => {
   locked = undefined;
 });
 
-/** A store folder whose config.json cannot be stat'ed: the folder keeps read but loses search permission. */
 function rootWithUnreachableConfig(): string {
   const root = makeRoot('config-unreadable', { init: false });
   writeFileSync(join(root, 'config.json'), '{"defaultHalfLifeDays": 12}');

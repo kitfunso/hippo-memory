@@ -1,6 +1,3 @@
-// The project names of a store: the reads `hippo projects`, doctor and the note sync plan from, and
-// the merge and the repair, each one transaction, backed up first, whose mirror files follow the
-// commit.
 import type { MemoryEntry } from '../../memory/entry.js';
 import type { AuditLog } from './audit.js';
 import type { EntryFilter, PageRequest } from './reports.js';
@@ -8,19 +5,10 @@ import type { DormantSnapshot, EntryPage } from './types.js';
 import type { MethodEffects } from './effects.js';
 
 export interface ProjectTags {
-  /** Every project name with live rows, in the order its first row was written. */
   originTallies(tenantId: string, sourcePrefix: string): Promise<OriginTally[]>;
-  /** The readable dormant snapshots whose row `filter` keeps, by tenant then id. Live rows come
-   * from entriesWhere. */
   dormantWhere(filter: EntryFilter): Promise<DormantSnapshot[]>;
-  /** Each distinct project name, transcript and working folder the tenant's compactions recorded
-   * together. */
   compactionOrigins(tenantId: string): Promise<CompactionOrigin[]>;
-  /** Folds `from` into `into` and writes the project_merge audit row; a dry run rolls back and
-   * writes nothing, backup and mirrors included. */
   merge(scope: ProjectTagScope, request: MergeRequest): Promise<AppliedMerge>;
-  /** Applies a repair planned from the reads above and writes the project_repair audit row; a
-   * row the plan names that is gone or moved since its read is skipped. */
   repair(scope: ProjectTagScope, plan: RepairPlan): Promise<AppliedRepair>;
   repairedOnce(): Promise<boolean>;
   markRepairedOnce(): Promise<void>;
@@ -67,7 +55,6 @@ export interface CompactionOrigin {
 /** One project name's live rows: how many, how many whose source starts with the asked prefix,
  * and the newest. */
 export interface OriginTally {
-  /** '' is user-global, null is unknown. */
   readonly origin: string | null;
   readonly live: number;
   readonly prefixed: number;
@@ -76,7 +63,6 @@ export interface OriginTally {
 
 export interface ProjectTagScope {
   readonly tenantId: string;
-  /** Who the audit rows name. */
   readonly actor: string;
 }
 
@@ -91,8 +77,6 @@ export interface MergeRequest extends ProjectFold {
 
 /** What folding one project name into another changed. */
 export interface FoldResult {
-  /** Imports the target already held for the same note, moved to dormant storage; the rest are
-   * re-tagged and the next sync files them under the target. */
   readonly setAside: readonly string[];
   readonly restamped: readonly string[];
   readonly dormantRestamped: readonly string[];
@@ -116,16 +100,10 @@ export interface RowRetag {
 }
 
 export interface RepairPlan {
-  /** Imports filed under the wrong project, set aside. */
   readonly copies: readonly RowRead[];
-  /** Applied after the copies, each as `merge` folds. */
   readonly folds: readonly ProjectFold[];
-  /** Live user-global sleep merges to re-tag. */
   readonly toProject: readonly RowRetag[];
-  /** Live user-global sleep merges whose parents sit in two projects, retired to dormant
-   * storage. */
   readonly setAside: readonly string[];
-  /** Named in the audit row only. */
   readonly untraced: readonly string[];
 }
 

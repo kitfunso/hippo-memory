@@ -1,6 +1,3 @@
-// Git auto-learn: fix/revert/bug commit subjects become memories.
-// `hippo learn`, init, sleep and MCP hippo_learn share it.
-
 import { ForbiddenError } from '../../base/errors/api-errors.js';
 import { fetchGitLog, extractLessons, partitionLessons } from '../../domain/learn/autolearn.js';
 import type { HippoConfig } from '../../base/config/config.js';
@@ -35,8 +32,6 @@ import { strengthOf, type Context, type ContextWith } from '../types.js';
 export interface LearnProfile {
   readonly tags: readonly string[];
   readonly source: string;
-  /** Also invalidate what a migration subject supersedes, score schema fit, path-tag, count and
-   * embed each row. */
   readonly full: boolean;
 }
 
@@ -54,27 +49,21 @@ export const MCP_LEARN: LearnProfile = Object.freeze({
 });
 
 export interface LearnOptions {
-  /** The repo to read; absent, the folder the context's machine runs in. */
   repoPath?: string;
   days: number;
   profile: LearnProfile;
-  /** Runs the git reads, since the api layer never starts a process; absent, the machine's git. */
   git?: GitRunner;
-  /** Rows read per page of the tenant scan; defaults to TENANT_PAGE_ROWS. */
   pageRows?: number;
 }
 
-// A page bounds what one read holds, so a large tenant never sits in memory as rows.
 const TENANT_PAGE_ROWS = 500;
 
 export interface LearnResult {
-  /** `no-commits`: an empty git log; `no-lessons`: a log with no lesson-shaped subject. */
   status: 'not-a-repo' | 'no-commits' | 'no-lessons' | 'scanned';
   added: number;
   skipped: number;
   rejected: number;
   lowInfo: number;
-  /** Each lesson whose migration target weakened at least one memory, in scan order. */
   invalidations: Array<{ from: string; count: number }>;
 }
 
@@ -85,7 +74,6 @@ export async function learn(
   ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>,
   opts: LearnOptions,
 ): Promise<LearnResult> {
-  // It reads the host's own git history, which belongs to the host, not to the caller's tenant.
   if (!ctx.actor.hostAdmin) throw new ForbiddenError('hippo_learn requires a host admin');
   const none = { added: 0, skipped: 0, rejected: 0, lowInfo: 0, invalidations: [] };
   const repoPath = opts.repoPath ?? ctx.infra.machine.cwd;
@@ -96,8 +84,6 @@ export async function learn(
   const config = ctx.config;
   const parsed = extractLessons(gitLog, config.gitLearnPatterns);
   if (parsed.length === 0) return { status: 'no-lessons', ...none };
-  // The gate filters the loop input, so a dropped lesson neither stores nor invalidates;
-  // docs/decisions git-learn-gate-placement says why.
   const { kept, dropped } = partitionLessons(parsed);
   return {
     status: 'scanned',
@@ -111,8 +97,6 @@ interface QueuedLesson {
   key: string;
 }
 
-/** Where a batch writes and what it has learned so far: `live` and `keys` follow every write, so
- * a later lesson matches against them. */
 interface LessonBatch {
   readonly ctx: ContextWith<'lessonWrites' | 'vectors' | 'vectorWrites'>;
   readonly writes: LessonWrites;
@@ -122,8 +106,6 @@ interface LessonBatch {
   readonly full: boolean;
 }
 
-/** Writes `queued` in one transaction; a refused lesson is dropped from `live` and `keys` and
- * must not abort the rest of the git-log scan. */
 async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]): Promise<void> {
   if (queued.length === 0) return;
   const { ctx, writes, live, keys, counts } = batch;
@@ -162,7 +144,6 @@ async function landLessons(batch: LessonBatch, queued: readonly QueuedLesson[]):
   });
 }
 
-/** The keys of the rows that may hold a lesson, the only rows that can be its copy. */
 async function knownKeys(
   ctx: Context,
   writes: LessonWrites,
@@ -204,16 +185,11 @@ function newLessonMemory(
 }
 
 interface TenantScan {
-  /** The rows a lesson's migration target can weaken; every lesson written this batch joins
-   * them. */
   readonly live: MemoryEntry[];
   readonly fitSource: SchemaFitSource;
-  /** Duplicate keys of what the caller can read. */
   readonly keys: Set<string>;
 }
 
-/** One pass over the tenant in pages: keeps the rows `targets` match, and from the rows the
- * caller can read only the tag counts, texts and duplicate keys that scoring a lesson needs. */
 async function scanTenant(
   ctx: Context,
   targets: readonly InvalidationTarget[],
@@ -227,7 +203,6 @@ async function scanTenant(
   for await (const page of memoryPages(ctx.store, ctx.tenantId, pageRows)) {
     for (const entry of page) {
       if (matches(entry)) live.push(entry);
-      // Learn is host-admin only, so it reads what an admin can.
       if (entry.scope != null && !canReadScope(ctx.actor, entry.scope)) continue;
       for (const tag of entry.tags) tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
       contents.push(entry.content);
@@ -247,8 +222,6 @@ async function writeLessons(
   const { profile } = opts;
   const { batch, fitSource } = await openLessonBatch(ctx, lessons, opts);
   const pathTags = profile.full ? extractPathTags(opts.repoPath) : [];
-  // Lessons queue and land in one transaction; an invalidation reads the store, so it flushes the
-  // queue first.
   const queue: QueuedLesson[] = [];
   for (const lesson of lessons) {
     const key = duplicateKey(lesson);
@@ -285,9 +258,6 @@ async function openLessonBatch(
 ): Promise<OpenedLessonBatch> {
   const { profile } = opts;
   const writes = ctx.store.lessonWrites;
-  // One pass serves the batch: invalidation matches against `live`, which follows every write
-  // below. Schema fit needs every readable row, and each lesson is scored against them as they were
-  // before the batch.
   const targets = profile.full
     ? lessons.flatMap((lesson) => extractInvalidationTarget(lesson) ?? [])
     : [];

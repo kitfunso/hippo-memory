@@ -1,5 +1,3 @@
-// Leaf module: the one value space JSON.parse can produce, so boundary guards narrow a shared type.
-
 export type JsonValue =
   | string
   | number

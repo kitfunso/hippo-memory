@@ -1,5 +1,3 @@
-// A handoff's git evidence, read with no store, so a hook with no store can send it with the
-// session's end.
 import { execFileSync } from 'node:child_process';
 import type { HandoffEvidence } from '../../base/session/handoff.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
@@ -10,8 +8,6 @@ const DEFAULT_TIMEOUT_MS = 2000;
 // no commit) gives.
 const GIT_FATAL_STATUS = 128;
 
-/** git's stdout, or null when it has none to give; only a failure other than "not a repository"
- * is logged, once. */
 function gitOutput(args: readonly string[], cwd: string, timeoutMs: number): string | null {
   try {
     return execFileSync('git', args, {
@@ -31,8 +27,6 @@ function gitOutput(args: readonly string[], cwd: string, timeoutMs: number): str
   }
 }
 
-// Best-effort git state; a missing git, non-repo cwd, or a call past timeoutMs (each call, default
-// 2 s) yields null fields rather than throw, so a hook with a hard deadline can cap a slow repo.
 export function collectHandoffEvidence(
   cwd: string,
   testStatus: HandoffEvidence['testStatus'],

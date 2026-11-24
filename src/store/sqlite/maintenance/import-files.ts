@@ -1,5 +1,3 @@
-// The port calls the published importers make on hippo.db, kept synchronous because those importers
-// return their result rather than a Promise.
 import type { EntryWrite } from '../../../base/ports/store/entry-writes.js';
 import type { EntryFilter } from '../../../base/ports/store/reports.js';
 import type { RejectionCheck } from '../../../base/ports/store/rejections.js';
@@ -11,8 +9,6 @@ import { handlesOf, openStore } from '../runtime/handles.js';
 import { inPortTerms } from '../runtime/port-errors.js';
 import { refusedAmong } from '../review/rejections.js';
 
-/** The FolderFiles, EntryWrites, Rejections and Sharing calls an import makes, each answered at
- * once. */
 interface SqliteImportFiles {
   ensure(): void;
   writeEntry(write: EntryWrite): void;

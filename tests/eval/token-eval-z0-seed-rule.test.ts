@@ -1,4 +1,3 @@
-/** Z0 seed rule (Amendment 2 item 5): seed counts from wave-1 records, the stop, the wave-1 refusal, and blindness. */
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -10,7 +9,6 @@ import type { Generated, GenOptions, Z0Record } from '../fixtures/z0-gen.js';
 vi.setConfig({ testTimeout: 180_000 });
 
 const ARGV = ['--runs', 'runs.jsonl', '--plan', 'plan.json', '--prices', 'prices.json', '--sims', '20'];
-// Wave 1 with no spread at all: every unit is zero, so the rule has nothing to add.
 const QUIET: GenOptions = { knobs: { A1: { fail: 0, resolve: 1 }, A2: { fail: 0, resolve: 1 }, X2: { fail: 0 }, X3: { fail: 0 } } };
 
 interface Rule {
@@ -24,7 +22,6 @@ interface Rule {
 }
 type Run = { code: number; stdout: string; stderr: string; json: Rule | null };
 
-/** Writes the records under a fresh folder (vitest.config.ts removes it) and runs the CLI on them. */
 function run(g: Generated, extra: string[] = []): Run {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'z0-seed-rule-'));
   const files = { 'runs.jsonl': jsonl(g.records), 'plan.json': JSON.stringify(g.plan), 'prices.json': JSON.stringify(PRICES) };
@@ -33,7 +30,6 @@ function run(g: Generated, extra: string[] = []): Run {
   return { ...res, json: res.code === 0 && !extra.includes('--out') ? JSON.parse(res.stdout) : null };
 }
 
-/** A1 and A2 trade places; the corpus check wants `captured` on A2 only. */
 const withArmsSwapped = (g: Generated): Generated => {
   const records = g.records.map((r) => {
     const arm = r.arm === 'A1' ? 'A2' : r.arm === 'A2' ? 'A1' : r.arm;
@@ -42,7 +38,6 @@ const withArmsSwapped = (g: Generated): Generated => {
   return { records, plan: planOf(records) };
 };
 
-/** Arm A2 fails every apply task in families 0 and 1 and none elsewhere, in every seed: a pure family spread. */
 function familySpread(): Generated {
   const g = generate(QUIET);
   for (const r of g.records) {
@@ -51,7 +46,6 @@ function familySpread(): Generated {
   return g;
 }
 
-/** Every key at every depth, read through the reviver, which visits each one. */
 const keysOf = (text: string): string[] => {
   const keys: string[] = [];
   JSON.parse(text, (k, v) => { keys.push(k); return v; });

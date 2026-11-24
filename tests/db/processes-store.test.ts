@@ -1,15 +1,3 @@
-/**
- * E2 process first-class object — store-layer tests.
- * Docs: docs/plans/2026-05-29-e2-process-object.md
- *
- * Covers what only processes have; the shared lifecycle rules run per kind in typed-object-store.test.ts.
- * 1. the process save creates the memory mirror + processes row (+ process_create audit), version 1
- * 2. memory content: name + numbered steps + description
- * 3. the process list status filter; status 'active' excludes non-active
- * 4. steps validation: non-array / non-string / empty / count cap / length cap; trim-then-store
- * 5. a damaged steps column reads as no steps and warns once per shape
- */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { closeObject, objectById, listObjects } from '../../src/domain/objects/lifecycle.js';
 import { CLI_ACTOR } from '../../src/base/scope/actor.js';
@@ -147,7 +135,6 @@ describe('processes store (first-class object)', () => {
     expect((await listObjects(objectsAt(home), PROCESS, 'default', { status: 'closed' })).map((x) => x.id)).toEqual([
       c.id,
     ]);
-    // a (active), b (superseded), c (closed), b-v2 (active) = 4 total rows.
     expect((await listObjects(objectsAt(home), PROCESS, 'default', {})).length).toBe(4);
   });
 
@@ -157,7 +144,6 @@ describe('processes store (first-class object)', () => {
     expect(() => validateProcessSteps(['ok', '   '])).toThrow(/must not be blank/);
     expect(() => validateProcessSteps(Array(MAX_PROCESS_STEPS + 1).fill('x'))).toThrow(/step cap/);
     expect(() => validateProcessSteps(['y'.repeat(MAX_PROCESS_STEP_LEN + 1)])).toThrow(/must be at most/);
-    // trim-then-store: a padded step is stored trimmed.
     expect(validateProcessSteps(['  spaced  '])).toEqual(['spaced']);
 
     const proc = await cliSave(home, 'default', PROCESS, {
@@ -166,7 +152,6 @@ describe('processes store (first-class object)', () => {
     });
     expect(proc.steps).toEqual(['lead/trail']);
     expect((await objectById(objectsAt(home), PROCESS, 'default', proc.id))!.steps).toEqual(['lead/trail']);
-    // saveProcess rejects bad steps and writes nothing.
     const before = countRows(home, 'processes');
     await expect(
       cliSave(home, 'default', PROCESS, {

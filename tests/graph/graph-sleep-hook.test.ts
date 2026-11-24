@@ -1,15 +1,3 @@
-/**
- * E3 sleep enqueue-hook - tests.
- * Docs: docs/plans/2026-06-02-e3-sleep-enqueue-hook.md
- *
- * PRODUCER: every graph-source E2 mutation (save/close of decision/policy/
- * customer_note/project_brief, + project-brief refresh) marks its tenant dirty
- * via markGraphDirty -> graph_extraction_queue (fail-soft).
- * CONSUMER: api.sleep drains the pending queue - per dirty tenant: extractGraph
- * full rebuild, then mark only items at/below the snapshot watermark processed.
- * Real SQLite (temp dirs), no mocks.
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { closeObject } from '../../src/domain/objects/lifecycle.js';
@@ -55,7 +43,6 @@ interface TestCtx {
 
 function newCtx(): TestCtx {
   const { root: hippoRoot } = makeStore('sleep-hook');
-  // Per-test HIPPO_HOME isolation (autoShare phase calls initGlobal()).
   const globalTmp = makeRoot('sleep-hook-global', { init: false });
   vi.stubEnv('HIPPO_HOME', globalTmp);
   const ctx = apiCtx(hippoRoot, T, adminActor('test:sleep-hook'));
@@ -74,8 +61,6 @@ describe('sleep enqueue-hook', () => {
   beforeEach(() => {
     tc = newCtx();
   });
-
-  // -- Producer --------------------------------------------------------------
 
   it('1. saveDecision enqueues one pending queue item for its tenant', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
@@ -121,12 +106,9 @@ describe('sleep enqueue-hook', () => {
       objectsAt(tc.hippoRoot),
       { now: evalNow(), baseHalfLifeDays: loadConfig(tc.hippoRoot).defaultHalfLifeDays, tenantId: T, actor: 'cli' },
       'myrepo',
-    ); // delegates to saveProjectBrief
-    // save(d) + close(d) + saveBrief + refresh(->saveBrief) = 4 enqueues
+    );
     expect(pending(tc.hippoRoot).length).toBe(4);
   });
-
-  // -- Consumer --------------------------------------------------------------
 
   it('5. sleep rebuilds the graph for a dirty tenant and drains its queue', async () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
@@ -137,11 +119,11 @@ describe('sleep enqueue-hook', () => {
       policyText: 'retry 3x',
     });
     expect(pending(tc.hippoRoot).length).toBe(2);
-    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // not yet extracted
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0);
 
     const r = await sleepWholeStore(tc.ctx, { noShare: true });
-    expect(loadEntities(tc.hippoRoot, T, { limit: 100 }).length).toBe(2); // rebuilt by sleep
-    expect(pending(tc.hippoRoot)).toHaveLength(0); // drained
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 }).length).toBe(2);
+    expect(pending(tc.hippoRoot)).toHaveLength(0);
     expect(processed(tc.hippoRoot).length).toBe(2);
     expect(r.graph).toEqual({ tenants: 1, entities: 2, relations: 0 });
   });
@@ -152,7 +134,7 @@ describe('sleep enqueue-hook', () => {
     });
     const r1 = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r1.graph?.tenants).toBe(1);
-    const r2 = await sleepWholeStore(tc.ctx, { noShare: true }); // nothing newly dirty
+    const r2 = await sleepWholeStore(tc.ctx, { noShare: true });
     expect(r2.graph).toBeUndefined();
     expect(pending(tc.hippoRoot)).toHaveLength(0);
   });
@@ -180,14 +162,13 @@ describe('sleep enqueue-hook', () => {
     const r = await sleepWholeStore(tc.ctx, { dryRun: true });
     expect(r.graph).toBeUndefined();
     expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0);
-    expect(pending(tc.hippoRoot)).toHaveLength(1); // still dirty
+    expect(pending(tc.hippoRoot)).toHaveLength(1);
   });
 
   it('9. snapshot watermark: an item enqueued DURING the rebuild stays pending', async () => {
     await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'Adopt Postgres as the primary application datastore',
     });
-    // Inject an extractGraph that enqueues a NEW item (id > watermark) mid-rebuild.
     const phases: Partial<SleepPhases> = {
       extractGraph: async (store, tid) => {
         if (tid === T) {
@@ -199,7 +180,6 @@ describe('sleep enqueue-hook', () => {
       },
     };
     await runSleep(tc.ctx, { noShare: true }, phases);
-    // The original (<= watermark) is processed; the mid-rebuild arrival is still pending.
     const stillPending = pending(tc.hippoRoot);
     expect(stillPending).toHaveLength(1);
     expect(processed(tc.hippoRoot).length).toBe(1);
@@ -218,11 +198,11 @@ describe('sleep enqueue-hook', () => {
         return realExtractGraph(store, tid);
       },
     };
-    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
     expect(loadEntities(tc.hippoRoot, 'tenantOk', { limit: 100 }).length).toBe(1);
-    expect(pending(tc.hippoRoot, 'tenantOk')).toHaveLength(0); // ok tenant drained
-    expect(pending(tc.hippoRoot, 'tenantFail')).toHaveLength(1); // failed tenant left pending
-    expect(r.graph?.tenants).toBe(1); // only tenantOk counted
+    expect(pending(tc.hippoRoot, 'tenantOk')).toHaveLength(0);
+    expect(pending(tc.hippoRoot, 'tenantFail')).toHaveLength(1);
+    expect(r.graph?.tenants).toBe(1);
     expect(detailLines(r).some((d) => d.includes('graph: extract failed'))).toBe(true);
   });
 
@@ -234,7 +214,6 @@ describe('sleep enqueue-hook', () => {
       decisionText: 'Adopt Postgres (managed)',
       supersedesDecisionId: d1.id,
     });
-    // No call to graph extract / extractGraph here - sleep is the only trigger.
     await sleepWholeStore(tc.ctx, { noShare: true });
     const rels = loadRelations(tc.hippoRoot, T, { limit: 100 });
     expect(rels.some((r) => r.relType === 'supersedes')).toBe(true);
@@ -251,9 +230,6 @@ describe('sleep enqueue-hook', () => {
       decisionText: 'Adopt Postgres as the system of record',
     });
     expect(pending(tc.hippoRoot)).toHaveLength(1);
-    // Simulate dedup/audit removing the queued mirror mid-sleep: the queue row
-    // FK-cascade-deletes, so a drain-TIME tenant load would drop T entirely. The
-    // dirty-tenant snapshot taken before the deleting phases must still rebuild T.
     const phases: Partial<SleepPhases> = {
       deduplicateStore: async () => {
         deleteEntry(tc.hippoRoot, d.memoryId!);
@@ -261,8 +237,8 @@ describe('sleep enqueue-hook', () => {
       },
     };
     const r = await runSleep(tc.ctx, { noShare: true }, phases);
-    expect(r.graph?.tenants).toBe(1); // T rebuilt despite the mid-sleep deletion
-    expect(pending(tc.hippoRoot)).toHaveLength(0); // its queue row cascade-deleted (mark = no-op)
+    expect(r.graph?.tenants).toBe(1);
+    expect(pending(tc.hippoRoot)).toHaveLength(0);
   });
 
   it('15. fail-soft: a dirty-tenant snapshot failure does not abort core sleep', async () => {
@@ -274,27 +250,23 @@ describe('sleep enqueue-hook', () => {
         throw new Error('boom: queue read failed');
       },
     };
-    const r = await runSleep(tc.ctx, { noShare: true }, phases); // must NOT reject
-    expect(r.active).toBeGreaterThanOrEqual(0); // consolidation still ran (result built)
-    expect(r.graph).toBeUndefined(); // graph refresh skipped, not crashed
+    const r = await runSleep(tc.ctx, { noShare: true }, phases);
+    expect(r.active).toBeGreaterThanOrEqual(0);
+    expect(r.graph).toBeUndefined();
     expect(detailLines(r).some((d) => d.includes('dirty-tenant snapshot failed'))).toBe(true);
-    expect(pending(tc.hippoRoot)).toHaveLength(1); // item left pending, recovered next sleep
+    expect(pending(tc.hippoRoot)).toHaveLength(1);
   });
 
   it('16. atomic rebuild: graphRebuild.applyOps rolls back all writes on a throw', async () => {
     const d = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, T, {
       decisionText: 'Adopt Postgres as the system of record',
     });
-    // A rebuild that inserts then throws must leave NO partial graph rows: the
-    // whole transaction rolls back. This is what makes extractGraph atomic, so two
-    // concurrent rebuilds serialize on the write lock instead of duplicating rows.
     const entity = (entityType: EntityType, memoryId: string) => ({
       entityType,
       name: entityType,
       memoryId,
       sourceObject: { type: 'decision', id: d.id } as const,
     });
-    // The second op names another tenant's memory, so its insert throws after the first one wrote.
     const foreign = await saveDecision(objectsAt(tc.hippoRoot), loadConfig(tc.hippoRoot).defaultHalfLifeDays, 'other', {
       decisionText: 'Adopt Redis as a cache',
     });
@@ -308,7 +280,7 @@ describe('sleep enqueue-hook', () => {
         { from: 0, holdMs: Infinity },
       ),
     ).rejects.toThrow();
-    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0); // insert rolled back
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(0);
   });
 
   it('17. a sleep stopped between graph chunks leaves the tenant pending, and the next sleep converges', async () => {
@@ -337,7 +309,7 @@ describe('sleep enqueue-hook', () => {
 
     expect(stopped.graph).toBeUndefined();
     expect(pending(tc.hippoRoot)).toHaveLength(queued);
-    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(1); // the first chunk's one op stays
+    expect(loadEntities(tc.hippoRoot, T, { limit: 100 })).toHaveLength(1);
 
     await sleepWholeStore(tc.ctx, { noShare: true });
 

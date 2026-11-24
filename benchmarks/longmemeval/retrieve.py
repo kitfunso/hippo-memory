@@ -1,21 +1,3 @@
-"""Retrieve memories for each LongMemEval question using hippo recall.
-
-For each question, calls `hippo recall "<question>" --json --budget N`
-and saves the retrieval results in JSONL format.
-
-NOT THE CANONICAL HARNESS for LongMemEval comparisons. This script shells
-out to `hippo recall` per question with a default budget of 4000 tokens.
-On LongMemEval (sessions stored as ~14k-char blobs) that produces ~1
-result per query, capping recall@K at recall@1 regardless of retrieval
-quality. Use `retrieve_inprocess.mjs` for any parity comparison — it
-calls hybridSearch in-process with budget=1,000,000 and min-results=10
-by default, which is what every published v0.27/v0.28 baseline used.
-
-See benchmarks/LONGMEMEVAL_RESOLVED.md for the 2026-04-26 incident where
-mixing this script's output with retrieve_inprocess.mjs output produced
-a fake "5x regression" that did not exist.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -49,7 +31,6 @@ Re-run with --i-know-this-is-not-canonical to silence this warning.
 
 
 def load_dataset(data_path: Path) -> list[dict[str, Any]]:
-    """Load LongMemEval dataset from a JSON file."""
     if not data_path.exists():
         raise FileNotFoundError(f"Dataset not found: {data_path}")
 
@@ -75,21 +56,8 @@ def recall_memories(
     budget: int = 4000,
     timeout: int = 30,
 ) -> list[dict[str, Any]]:
-    """Call hippo recall and return retrieved memories.
-
-    Args:
-        query: The question to use as recall query.
-        hippo_bin: Path to hippo CLI binary.
-        store_dir: Directory containing the .hippo/ store.
-        budget: Token budget for retrieval.
-        timeout: Command timeout in seconds.
-
-    Returns:
-        List of memory result dicts from hippo recall --json output.
-    """
     cmd = [hippo_bin, "recall", query, "--json", "--budget", str(budget)]
 
-    # Isolate from global ~/.hippo store by overriding HIPPO_HOME + HOME/USERPROFILE
     import os
     env = {**os.environ, "HIPPO_HOME": str(store_dir), "HOME": str(store_dir), "USERPROFILE": str(store_dir)}
 
@@ -140,18 +108,6 @@ def retrieve_all(
     hippo_bin: str = "hippo",
     budget: int = 4000,
 ) -> Path:
-    """Retrieve memories for all questions and save to JSONL.
-
-    Args:
-        data_path: Path to LongMemEval JSON dataset.
-        store_dir: Directory containing the .hippo/ store.
-        output_path: Path to write JSONL results.
-        hippo_bin: Path to hippo CLI binary.
-        budget: Token budget for retrieval.
-
-    Returns:
-        Path to the output JSONL file.
-    """
     entries = load_dataset(data_path)
     logger.info("Retrieving memories for %d questions", len(entries))
 

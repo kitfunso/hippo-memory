@@ -1,5 +1,3 @@
-// Cursor reads the root AGENTS.md and its docs no longer mention .cursorrules, so hippo
-// writes AGENTS.md and opens .cursorrules only to remove a block an older hippo left there.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -7,9 +5,7 @@ import * as path from 'node:path';
 import { runCli } from '../../src/cli.js';
 import { runInProcess } from '../_helpers/run-in-process.js';
 const START = '<!-- hippo:start -->';
-// What hippo wrote to .cursorrules before this change, trimmed.
 const OLD_BLOCK = `${START}\n# Project Memory (Hippo)\n#   hippo context --auto --budget 1500\n<!-- hippo:end -->\n`;
-// The block every release up to 1.52.6 wrote to .cursorrules, verbatim.
 const RELEASED_BLOCK =
   '# Project Memory (Hippo)\n# Before each task, load context:\n#   hippo context --auto --budget 1500\n# After errors:\n#   hippo remember "<error description>" --error\n# After completing:\n#   hippo outcome --good';
 
@@ -35,7 +31,6 @@ afterEach(() => {
 async function hippo(...args: string[]): Promise<string> {
   try {
     const r = await runInProcess(() => runCli(['node', 'hippo', ...args]));
-    // A verb that sets process.exitCode instead of exiting fails here, as the real process would on exit.
     expect(r.status || Number(process.exitCode ?? 0), r.stderr).toBe(0);
     return r.stdout;
   } finally {

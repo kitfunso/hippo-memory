@@ -1,5 +1,3 @@
-// hippo.db's ProjectTags group: the reads `hippo projects` plans from, and the merge and repair,
-// each one transaction backed up first.
 import {
   getMeta,
   setMeta,
@@ -54,8 +52,6 @@ import { isSuperseded } from '../../../base/memory/liveness.js';
 
 const TX_LABEL = 'merge_projects';
 
-/** A rewrite's answer plus the ids whose mirrors are rewritten, and those whose mirrors go, once
- * it commits. */
 interface TagRewrite<T> {
   readonly result: T;
   readonly rewrite: readonly string[];
@@ -68,7 +64,6 @@ interface RewriteStep<T> {
   readonly body: (backup: string) => TagRewrite<T>;
 }
 
-/** One transaction, the store backed up first, with mirrors following the commit. */
 function rewrite<T>(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -77,8 +72,6 @@ function rewrite<T>(
   const done = withBackup(db, files.hippoRoot, backupLabel, (backup) =>
     withWriteScope(db, TX_LABEL, () => body(backup)),
   );
-  // After commit, as the agent memory sync does: a stale mirror would bring the old tag back on the
-  // next rebuild.
   for (const entry of readEntriesByIds(db, done.rewrite, tenantId).values()) {
     writeEntryMirrors(files.hippoRoot, entry);
   }
@@ -92,7 +85,6 @@ function rowsWhere(db: DatabaseSyncLike, filter: EntryFilter): Iterable<MemoryEn
   );
 }
 
-/** The keys of the live imports `into` already holds. */
 function heldNotes(db: DatabaseSyncLike, tenantId: string, into: string): Set<string> {
   const held = new Set<string>();
   const imports = {
@@ -107,21 +99,15 @@ function heldNotes(db: DatabaseSyncLike, tenantId: string, into: string): Set<st
   return held;
 }
 
-/** Re-tags `from`'s rows, snapshots and compactions to `into`, setting aside the imports `into`
- * already holds. */
 function fold(
   db: DatabaseSyncLike,
   files: StoreFiles,
   tenantId: string,
   { from, into }: ProjectFold,
 ): FoldResult {
-  // The sync renames the rest to `into`'s prefix and keeps their ids; only a note `into` already
-  // holds would show twice.
   const held = heldNotes(db, tenantId, into);
   const setAside: string[] = [];
   const restamped: string[] = [];
-  // A row set aside sits at or before the page cursor, so the write never moves a row the walk has
-  // yet to read.
   for (const row of rowsWhere(db, { tenantId, origins: [from] })) {
     const tag = toolTag(row.source);
     const live = isImport(row.source) && !isSuperseded(row) && row.kind !== 'raw';
@@ -163,12 +149,10 @@ function merge(
     ]);
     return { result: { ...folded, backup }, rewrite: folded.restamped, purge: folded.setAside };
   };
-  // A dry run rolls back, so it writes no backup and no mirror.
   if (dryRun) return withTrialScope(db, TX_LABEL, () => body(null)).result;
   return rewrite(db, files, { tenantId, backupLabel: 'before-merge', body });
 }
 
-/** Sets aside each planned copy still live under the name the plan read it with. */
 function setAsideCopies(
   db: DatabaseSyncLike,
   files: StoreFiles,
@@ -194,8 +178,6 @@ function setAsideCopies(
   return done;
 }
 
-/** The planned sleep merges still live and user-global; the plan chose each by its parents, so
- * one re-tagged since stays as it is. */
 function userGlobalMerges(
   db: DatabaseSyncLike,
   tenantId: string,
@@ -212,7 +194,6 @@ interface RetireOptions {
   readonly now: Date;
 }
 
-/** A live row to dormant storage, restorable, as sleep's dormant move does. */
 function retire(db: DatabaseSyncLike, { files, row, actor, now }: RetireOptions): void {
   insertDormantRow(db, {
     entry: row,

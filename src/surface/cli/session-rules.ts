@@ -1,5 +1,3 @@
-// `hippo session-rules`: the SessionStart hook that sends the rules the person taught, and nothing
-// else.
 import { estimateTokens } from '../../base/util/token-text.js';
 import { userRulesGet } from '../../api/index.js';
 import { printedTokens, userRuleLine, userRuleLines } from '../../api/context/context-render.js';
@@ -18,7 +16,6 @@ async function printSessionRules(
   stdinText: string | undefined,
 ): Promise<void> {
   const { currentSessionId, ledgerSessionId, payloadSessionId } = resolveContextSession(stdinText);
-  // Booked at the first hook call, as the prompt hook books it, so the holdout sees no rules.
   const held = await inPilotHoldout(hippoRoot, tenantId, currentSessionId, {
     write: payloadSessionId !== undefined,
   });
@@ -29,7 +26,6 @@ async function printSessionRules(
     currentProject: ctx.infra.machine.projectIdentity(workingFolder(ctx)),
     currentSessionId,
   });
-  // A store with hundreds of rules would fill the first context, so the newest that fit are sent.
   const kept = newestWithin(rules, sessionRulesBudgetOf(ctx.config.pinnedInject), (e) =>
     printedTokens(userRuleLine(e)),
   );
@@ -62,6 +58,5 @@ async function printSessionRules(
 
 export async function handleSessionRules({ hippoRoot, tenantId }: CommandContext): Promise<void> {
   const { text: stdinText } = await readHookStdin();
-  // Fires in every folder, so it never requires init: a folder with no store reads the global one.
   await cliHookRequest(() => printSessionRules(hookStoreRoot(hippoRoot), tenantId, stdinText));
 }

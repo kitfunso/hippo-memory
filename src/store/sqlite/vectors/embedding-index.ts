@@ -1,6 +1,3 @@
-// hippo.db's EmbeddingIndex: sessions by id, each holding the lock and the rebuild it took,
-// so a session stays on the thread that opened it. The model checks take the opener, since an
-// unreadable index there reads as none.
 import { randomUUID } from 'node:crypto';
 import { closeHippoDb } from '../../../db/index.js';
 import { listEveryTenantEntryIds } from '../entries/entry-reads.js';
@@ -30,8 +27,6 @@ import { dropVectorStaging, upsertVectors } from '../../../db/vector-store.js';
 import type { FileLock } from '../../../host/file-lock.js';
 import { embedLockKey, tryEmbedLock } from './embed-lock.js';
 
-// The staged vectors live in a TEMP table, which only the handle that made it sees, so the rebuild
-// keeps one open; a worker's handle outlives it, so the table is dropped too.
 function beginRebuild(open: Handles['open']): VectorRebuild {
   const db = open();
   try {
@@ -48,7 +43,6 @@ function beginRebuild(open: Handles['open']): VectorRebuild {
   }
 }
 
-/** What a session took: the lock, and a rebuild begun and not yet committed. */
 interface Session {
   lock: FileLock | null;
   rebuild: VectorRebuild | null;
@@ -100,8 +94,6 @@ function rebuildSteps(
   };
 }
 
-// A particle's start strength is scored, so seed and reset score by the store's loss-aversion
-// rules.
 function indexSteps({ on, open, files }: Handles): Steps {
   return {
     ...rebuildSteps(open, files.hippoRoot),

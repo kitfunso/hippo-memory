@@ -1,4 +1,3 @@
-// A fenced block over the part budget: the fence wraps each part only while it leaves room for code.
 import { describe, expect, it } from 'vitest';
 import { CONTENT_CAP } from '../../src/domain/agent-memories/source.js';
 import { container, partsOf } from '../_helpers/agent-memories-parts.js';

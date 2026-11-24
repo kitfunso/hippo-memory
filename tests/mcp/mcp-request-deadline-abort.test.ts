@@ -1,4 +1,3 @@
-// A tool call whose request signal has aborted stops before it reads or writes the store.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { handleMcpRequest, type McpContext } from '../../src/surface/mcp/server.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';

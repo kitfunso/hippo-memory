@@ -1,4 +1,3 @@
-// Codex gets hippo's memory from two hooks in its own hooks.json; hippo appends them and never edits the user's entries.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -46,7 +45,6 @@ const COMPACT_GROUP = {
 const HIPPO_ONLY = { hooks: { UserPromptSubmit: [PROMPT_GROUP], SessionStart: [COMPACT_GROUP] } };
 const USER_GROUP = { matcher: 'startup', hooks: [{ type: 'command', command: 'echo my own hook', timeout: 3 }] };
 
-// The AGENTS.md block hippo 0.24.0 to 1.52.6 wrote for Codex, which init refreshes.
 const OLD_CODEX = `
 ## Project Memory (Hippo)
 
@@ -73,7 +71,6 @@ hippo capture --stdin <<< '<decisions, errors, lessons ${EM_DASH} 2-5 bullets>'
 \`\`\`
 `.trim();
 
-// The AGENTS.md block hippo 2.1.0 wrote for Codex, which told the agent to load context at the start of every task.
 const CODEX_BEFORE_ONE_CHANNEL = `
 ## Project Memory (Hippo)
 
@@ -299,7 +296,6 @@ function machine(): Machine {
   return m;
 }
 
-// A PATH with no codex on it, because `hook install codex` and `setup` rename the launcher they find there.
 function cliEnv(m: Machine, extraEnv: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
@@ -315,13 +311,11 @@ function cliEnv(m: Machine, extraEnv: Record<string, string>): NodeJS.ProcessEnv
     ...extraEnv,
   });
 }
-// In process; the first init case and the first hook turn keep a real child as the CLI pin.
 async function hippo(m: Machine, extraEnv: Record<string, string>, cwd: string, ...args: string[]): Promise<string> {
   const r = await runCliAs(args, { cwd, env: cliEnv(m, extraEnv) });
   expect(r.status, r.stderr).toBe(0);
   return r.stdout;
 }
-// Without --no-schedule init would register a real OS task, without --no-learn it would run git.
 const init = (m: Machine, extraEnv: Record<string, string> = {}) =>
   hippo(m, extraEnv, m.repo, 'init', '--no-schedule', '--no-learn');
 function initSpawned(m: Machine): string {
@@ -531,7 +525,6 @@ describe('the installed Codex hooks, run with the payloads Codex sends', () => {
     const context = JSON.parse(first).hookSpecificOutput.additionalContext;
     expect(context).toContain('projectless hook remembers the staging flag');
     expect(context).toContain('[global]');
-    // A projectless cwd reads no task state, so neither the text nor a pointer to it appears.
     expect(context).not.toContain('Foreign project handoff summary');
     expect(context).not.toContain('Resume the unrelated deployment');
     expect(context).not.toContain('other-project-session');

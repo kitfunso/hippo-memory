@@ -1,28 +1,9 @@
 #!/usr/bin/env node
-/**
- * Physics-search ablation: physics ON vs physics OFF on the same corpus.
- *
- * Builds a fresh store from a LongMemEval subset (50 questions -> ~113
- * sessions ingested as memories). Each memory is tagged with its source
- * session ID so ground truth is recoverable. Runs both hybridSearch
- * (classic BM25+cosine+MMR) and physicsSearch (particle simulation) in-
- * process. Reports MRR, NDCG@5, Recall@5, and mean query latency.
- *
- * Run:
- *   node scripts/physics-ablation.mjs
- *
- * Flags:
- *   --num-questions N   (default 50)
- *   --store DIR         (default benchmarks/physics-ablation/store)
- *   --rebuild           force re-ingest even if store exists
- *   --out DIR           (default benchmarks/physics-ablation)
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// hippo internals — use dist so we call production code paths
 import { createMemory } from '../dist/entry/memory.js';
 import { initStore, writeEntry, loadAllEntries } from '../dist/entry/testing.js';
 import { embedMemoryInto as embedMemory } from '../dist/domain/search/embed-memories.js';
@@ -33,10 +14,6 @@ import { hybridSearch } from '../dist/entry/search.js';
 import { physicsSearch } from '../dist/entry/store-kit.js';
 import { buildCorpus } from '../dist/domain/search/bm25.js';
 import { DEFAULT_PHYSICS_CONFIG } from '../dist/base/rank/physics-config.js';
-
-// ---------------------------------------------------------------------------
-// Flags
-// ---------------------------------------------------------------------------
 
 function flag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -53,10 +30,6 @@ const REBUILD = process.argv.includes('--rebuild');
 const DATA_PATH = path.join(REPO, 'benchmarks', 'longmemeval', 'data', 'longmemeval_oracle.json');
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-
-// ---------------------------------------------------------------------------
-// Metrics (matching src/domain/eval/eval.ts)
-// ---------------------------------------------------------------------------
 
 function mrr(returned, expectedSet) {
   for (let i = 0; i < returned.length; i++) {
@@ -85,10 +58,6 @@ function ndcgAtK(returned, expectedSet, k) {
   return idcg === 0 ? 0 : dcg / idcg;
 }
 
-// ---------------------------------------------------------------------------
-// Paired bootstrap CI for the difference of means (physics - classic).
-// ---------------------------------------------------------------------------
-
 function pairedBootstrapCI(diffs, iters = 5000, alpha = 0.05) {
   const n = diffs.length;
   if (n === 0) return { meanDiff: 0, low: 0, high: 0 };
@@ -106,10 +75,6 @@ function pairedBootstrapCI(diffs, iters = 5000, alpha = 0.05) {
   return { meanDiff: mean, low: lo, high: hi };
 }
 
-// ---------------------------------------------------------------------------
-// Ingest: build a fresh store from LongMemEval subset
-// ---------------------------------------------------------------------------
-
 function sessionToContent(questionDate, sessionId, turns) {
   const header = `[Date: ${questionDate || 'unknown'}]\n[Session: ${sessionId}]\n\n`;
   const body = turns.map((t) => `${t.role === 'user' ? 'User' : 'Assistant'}: ${t.content}`).join('\n');
@@ -117,7 +82,6 @@ function sessionToContent(questionDate, sessionId, turns) {
 }
 
 async function buildStore(questions) {
-  // fresh dir
   if (fs.existsSync(HIPPO_ROOT)) {
     fs.rmSync(HIPPO_ROOT, { recursive: true, force: true });
   }
@@ -125,16 +89,15 @@ async function buildStore(questions) {
   initStore(HIPPO_ROOT);
 
   console.error(`Ingesting into ${HIPPO_ROOT}...`);
-  const sessionToMemId = new Map(); // answer_session_id -> mem id
+  const sessionToMemId = new Map();
   let totalSessions = 0;
 
   for (const q of questions) {
     for (let i = 0; i < q.haystack_sessions.length; i++) {
       const sid = q.haystack_session_ids[i];
-      if (sessionToMemId.has(sid)) continue; // dedup: some sessions appear in multiple questions
+      if (sessionToMemId.has(sid)) continue;
       const date = q.haystack_dates ? q.haystack_dates[i] : '';
       const content = sessionToContent(date, sid, q.haystack_sessions[i]);
-      // trim excessive length: embedding model has limits
       const trimmed = content.length > 8000 ? content.slice(0, 8000) : content;
       const entry = createMemory(trimmed, {
         tags: [`session:${sid}`],
@@ -170,7 +133,6 @@ async function embedStoreAndInitPhysics() {
   }
   console.error(`Embedding done in ${((Date.now() - eStart) / 1000).toFixed(1)}s`);
 
-  // Verify physics state exists for all entries
   const db = openHippoDb(HIPPO_ROOT);
   try {
     const n = db.prepare('SELECT COUNT(*) as c FROM memory_physics').get();
@@ -179,10 +141,6 @@ async function embedStoreAndInitPhysics() {
     closeHippoDb(db);
   }
 }
-
-// ---------------------------------------------------------------------------
-// Run evals
-// ---------------------------------------------------------------------------
 
 function buildPasses(entries, corpus) {
   return [
@@ -211,7 +169,6 @@ function buildPasses(entries, corpus) {
   ];
 }
 
-/** Runs every case through one pass and returns its summary row. */
 async function runPass(p, cases) {
   console.error(`\n=== Running pass: ${p.label} ===`);
   const perCase = [];
@@ -261,15 +218,10 @@ async function runPass(p, cases) {
 }
 
 async function runAblation(cases, entries) {
-  // Pre-build BM25 corpus once (same for both passes — it's a function of
-  // entries, not of toggle).
   const corpus = buildCorpus(entries.map((e) => `${e.content} ${e.tags.join(' ')}`));
 
   const passes = buildPasses(entries, corpus);
 
-  // Warmup: run each pass once on the first query to prime caches, disk,
-  // and embedding-model JIT. Prevents the first pass from eating the I/O
-  // tax on cold starts and making its latency look worse.
   if (cases.length > 0) {
     console.error('Warmup (1 query each pass)...');
     for (const p of passes) {
@@ -293,15 +245,12 @@ function sign(x) {
   return x >= 0 ? '+' : '';
 }
 
-/** Paired per-case diffs, the per-type table and the four bootstrap CIs (mrr, recall, ndcg, latency in that draw order). */
 function comparePasses(cl, ph) {
-  // Per-case paired diffs
   const byId = new Map(cl.cases.map((c) => [c.id, c]));
   const diffsMrr = [],
     diffsR5 = [],
     diffsNdcg5 = [],
     diffsLat = [];
-  // Per-question-type breakdown
   const byType = new Map();
   for (const pc of ph.cases) {
     const cc = byId.get(pc.id);
@@ -340,7 +289,6 @@ function decideVerdict(cl, ph, typeRows, ciNdcg5, latRatio) {
   const ndcgDelta = ph.meanNdcgAt5 - cl.meanNdcgAt5;
   const ciCrossesZero = ciNdcg5.low < 0 && ciNdcg5.high > 0;
 
-  // Check per-type signals — is there any type where physics wins by >2pp?
   const winningTypes = typeRows.filter((r) => r.physicsNdcg5 - r.classicNdcg5 > 0.02);
   const losingTypes = typeRows.filter((r) => r.physicsNdcg5 - r.classicNdcg5 < -0.02);
 
@@ -479,18 +427,11 @@ function writeReport(summary, metadata) {
   const md = renderReadme(report, results);
   fs.writeFileSync(path.join(OUT_DIR, 'README.md'), md);
 
-  // Stdout table
   console.log('');
   console.log(md);
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
-/** Loads LongMemEval and takes a stratified, deterministic sample of NUM_QUESTIONS. */
 function loadStratifiedQuestions() {
-  // Load LongMemEval
   console.error(`Loading LongMemEval from ${DATA_PATH}...`);
   const raw = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
   const all = Array.isArray(raw) ? raw : (raw.data ?? raw.questions ?? raw.entries);
@@ -508,13 +449,10 @@ function loadStratifiedQuestions() {
   const questions = [];
   for (const t of types) {
     const pool = byType.get(t);
-    // Deterministic: take first `perType` in dataset order; each type's pool
-    // is already in a fixed order in the oracle file, so runs are reproducible.
     for (let i = 0; i < Math.min(perType, pool.length); i++) {
       questions.push(pool[i]);
     }
   }
-  // Trim back to NUM_QUESTIONS
   questions.length = Math.min(NUM_QUESTIONS, questions.length);
   console.error(`  ${questions.length} questions stratified across ${types.length} types (of ${all.length} total)`);
   const typeCounts = {};
@@ -523,13 +461,11 @@ function loadStratifiedQuestions() {
   return questions;
 }
 
-/** Recovers the session -> memory map from the store, or builds and embeds the store first. */
 async function openOrBuildStore(questions) {
   let sessionToMemId;
   const existingStore = fs.existsSync(path.join(HIPPO_ROOT, 'hippo.db'));
   if (existingStore && !REBUILD) {
     console.error(`Reusing existing store at ${HIPPO_ROOT} (pass --rebuild to re-ingest)`);
-    // Rebuild session->mem map from entries
     const entries = loadAllEntries(HIPPO_ROOT);
     sessionToMemId = new Map();
     for (const e of entries) {
@@ -544,7 +480,6 @@ async function openOrBuildStore(questions) {
   return sessionToMemId;
 }
 
-/** Eval cases: expected = the set of memory IDs for each question's answer sessions. */
 function buildEvalCases(questions, sessionToMemId) {
   const cases = [];
   let dropped = 0;
@@ -576,13 +511,10 @@ async function main() {
   const sessionToMemId = await openOrBuildStore(questions);
   const cases = buildEvalCases(questions, sessionToMemId);
 
-  // Load entries once for in-process searches
   const entries = loadAllEntries(HIPPO_ROOT);
 
-  // Run the two passes
   const summary = await runAblation(cases, entries);
 
-  // Report
   writeReport(summary, {
     numQuestions: NUM_QUESTIONS,
     corpusSize: entries.length,

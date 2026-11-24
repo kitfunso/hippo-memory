@@ -1,18 +1,3 @@
-/**
- * J1 anchoring — api.recall integration tests.
- *
- * Asserts:
- * - api.recall populates RecallResult.anchoringHint when opts.recallHistory
- *   is passed AND R1 or R2 conditions are met against the just-computed top-1
- * - config.runtime.anchoringHint false (HIPPO_ANCHORING=off at the root) short-circuits (returns no hint regardless)
- * - api.recall is PURE: calling twice with same opts.recallHistory returns
- *   identical results (return-value purity; audit_log delta is expected)
- * - suppressedByInterference increments on R2 fire (lights up the placeholder
- *   counter that has been hardcoded to 0 since v1.12.13)
- *
- * Real DB throughout (project convention).
- */
-
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
@@ -76,7 +61,6 @@ describe('api.recall anchoringHint', () => {
 
   it('populates anchoringHint on R2 (memory_dominance) when snapshot has 2 prior wins for same memory', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
-    // Two prior recalls in the snapshot, both returning this memory id.
     const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
     const result = await retrieve(ctxFor(root), {
       query: 'frobnicate baz quux',
@@ -117,7 +101,6 @@ describe('api.recall anchoringHint', () => {
   });
 
   it('absent on R1 query_repeat when current top is null (zero memory results)', async () => {
-    // No memory seeded, so top is null. R1 can't fire on null top.
     const snapshot: RecallHistorySnapshot = [entry(hashQueryText('xyzzy plugh'), null)];
     const result = await retrieve(ctxFor(root), {
       query: 'xyzzy plugh',
@@ -169,11 +152,8 @@ describe('api.recall anchoringHint', () => {
   it('cross-tenant scoping: tenant-b snapshot does not interact with tenant-a context', async () => {
     const memId = seedQueryMatchingMemory(root, 'frobnicate baz quux content');
     const snapshot: RecallHistorySnapshot = [entry(111, memId), entry(222, memId)];
-    // ctx is tenant-default; snapshot rows reference memId which is also tenant-default.
-    // Pass to a tenant-b ctx — top will be null (no matching memory in tenant-b).
     const ctxB: FullContext = apiCtx(root, 'tenant-b', { subject: 'cli', role: 'admin' });
     const result = await retrieve(ctxB, { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
-    // No matching memory in tenant-b → top null → R2 cannot fire (current can't extend dominance).
     expect(result.anchoringHint).toBeUndefined();
   });
 });

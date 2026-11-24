@@ -1,4 +1,3 @@
-// The hippo build and tool versions every Z0 record names, and the --pins check that keeps chunked calibration runs on one build.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';

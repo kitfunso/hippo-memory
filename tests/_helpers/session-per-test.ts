@@ -1,5 +1,3 @@
-// One request's handles per test, closed after it, so a test's store calls share one handle per store as a CLI
-// command's do; a test that opens and closes hippo.db on every call pays a WAL checkpoint each time.
 import { afterEach, beforeEach, expect } from 'vitest';
 import type { Objects } from '../../src/base/ports/store.js';
 import type { MemoryEntry } from '../../src/base/memory/entry.js';
@@ -17,12 +15,10 @@ import { holdSession } from './test-session.js';
 export interface TestSession {
   readonly session: () => RequestStores;
   readonly writeEntry: (hippoRoot: string, entry: MemoryEntry, opts?: WriteEntryOptions) => void;
-  /** The row with `id` in any tenant, or null. */
   readonly readEntry: (hippoRoot: string, id: string) => MemoryEntry | null;
   readonly sqliteStore: typeof sqliteStore;
   readonly apiCtx: typeof apiCtx;
   readonly objectsAt: (hippoRoot: string) => Objects;
-  /** The session's handle on the store, which closeHippoDb leaves open; a test that needs a second connection opens one. */
   readonly sessionDb: (hippoRoot: string) => DatabaseSyncLike;
 }
 
@@ -31,7 +27,6 @@ export interface TestSession {
 export function sessionPerTest(): TestSession {
   let current: { readonly session: RequestStores; readonly files: Map<string, StoreFiles> } | undefined;
   let release = (): void => {};
-  // Only this scope's tests lend the session to the root-keyed helpers, since only they run the close below.
   beforeEach(() => {
     release = holdSession(() => running().session);
   });
@@ -41,13 +36,11 @@ export function sessionPerTest(): TestSession {
     current = undefined;
   });
   const running = () => {
-    // A beforeAll seed would hold the handle into the first test, so only a test and its hooks get one.
     if (expect.getState().currentTestName === undefined) throw new Error('sessionPerTest: no test is running');
     current ??= { session: new RequestStores(), files: new Map() };
     return current;
   };
   const session = () => running().session;
-  // One StoreFiles per folder for the test, so its writes share one project walk as one store's do.
   const files = (hippoRoot: string): StoreFiles => {
     const { files: built } = running();
     const made = built.get(hippoRoot) ?? storeFilesOf(hippoRoot, { session: session() });

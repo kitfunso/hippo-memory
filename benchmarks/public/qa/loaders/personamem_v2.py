@@ -26,7 +26,6 @@ LICENCE = "CC BY 4.0 (Hugging Face bowen-upenn/PersonaMem-v2)"
 DATA = Path.home() / "hippo-bench" / "datasets" / "personamem_v2"
 DATA_FILES = [DATA / "benchmark.csv"] + sorted((DATA / "chat_history_32k").glob("*.json"))
 
-# inference.py:229: the query gets this sentence appended before it is sent.
 RECALL = " Please recall my related preferences from our conversation history to give personalized responses."
 
 
@@ -37,7 +36,6 @@ def _rows() -> list[dict]:
 
 
 def _query(row: dict) -> str:
-    """The user query's content (inference.py:212-227: JSON first, then a Python dict literal; all 5,000 rows are the latter)."""
     try:
         d = json.loads(row["user_query"])
     except ValueError:
@@ -46,7 +44,6 @@ def _query(row: dict) -> str:
 
 
 def _history(link: str) -> list[dict]:
-    """The one list in the file (inference.py:75-97): the messages in order."""
     d = json.loads((DATA / "chat_history_32k" / Path(link).name).read_text(encoding="utf-8"))
     lists = [v for v in d.values() if isinstance(v, list)]
     if len(lists) != 1:
@@ -55,8 +52,6 @@ def _history(link: str) -> list[dict]:
 
 
 def conversations():
-    """One user per persona. Turns are the 32k chat history in order, system message included (it holds the persona and is
-    the first message the authors send). The data holds no dates."""
     seen = set()
     for r in _rows():
         link = r["chat_history_32k_link"]
@@ -68,8 +63,6 @@ def conversations():
 
 
 def _options(row: dict) -> tuple[str, dict]:
-    """inference.py:176-204, verbatim apart from the seed: the authors seed with Python's `hash` of a string, which changes
-    every run, so the seed here is a SHA-256 of the same text (persona id and the query with RECALL appended)."""
     seed = int(hashlib.sha256(f"{row['persona_id']}_{_query(row)}{RECALL}".encode("utf-8")).hexdigest()[:8], 16)
     options = [row["correct_answer"]] + json.loads(row["incorrect_answers"])
     random.Random(seed).shuffle(options)
@@ -82,27 +75,22 @@ def _options(row: dict) -> tuple[str, dict]:
 
 
 def questions() -> list[dict]:
-    """The 5,000 rows in file order. qid is the row number, since a persona's 25 questions are distinct rows."""
     out = []
     for i, r in enumerate(_rows()):
         instruction, mapping = _options(r)
         out.append({"qid": f"pm2-{i:04d}", "user_id": f"persona{r['persona_id']}", "question": _query(r),
                     "gold": r["correct_answer"], "category": r["pref_type"], "mcq": instruction, "options": mapping,
-                    "ask_after": None})  # the query comes after the whole history (inference.py:257)
+                    "ask_after": None})
     return out
 
 
 def answer_prompt(q: dict, memories: list[dict]) -> tuple[str, str]:
-    """The authors' system message (the MCQ instruction, inference.py:294) as the system prompt, and their user message
-    (the query and RECALL, inference.py:229) after the retrieved memories, which stand in for the chat history they
-    send before it. The framing lines are ours."""
     mems = "\n\n".join(f"[{i}] {m['memory']}" for i, m in enumerate(memories, 1)) or "(none)"
     return q["mcq"], ("Memories retrieved from your earlier conversation with this user, best match first:\n\n" + mems
                       + "\n\nThe user now writes:\n\n" + q["question"] + RECALL)
 
 
 def extract_final_answer(response: str) -> str:
-    """inference.py:338-369, verbatim."""
     if not response:
         return ""
     patterns = [
@@ -126,7 +114,6 @@ def extract_final_answer(response: str) -> str:
 
 
 def check_mcq_correctness(predicted: str, correct: str, mapping: dict) -> bool:
-    """inference.py:371-379, verbatim."""
     if not predicted or not mapping:
         return False
     return mapping.get(predicted.upper(), "") == correct
@@ -137,8 +124,6 @@ def judge(q: dict, answer: str):
 
 
 def score(out: Path, bonferroni: int | None = None) -> str:
-    """Accuracy per arm and hippo365 minus bm25 with the interval over personas (one store each, prereg Amendment 6
-    revision 1 item 9), from the answers the call log settles; an exhausted answer scores wrong."""
     sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
     import harness  # noqa: E402  (imported here: harness imports this module while it runs)
 

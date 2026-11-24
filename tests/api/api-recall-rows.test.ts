@@ -1,5 +1,3 @@
-// The api reads behind `hippo recall`, driven against a real temp store: budget fit, store origin, scoped continuity, JSON rows.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { resolveEmbeddingProvider } from '../../src/infra/embedding-provider.js';
 import { join } from 'node:path';
@@ -162,7 +160,6 @@ describe('recallStoreSetting and recallRowOrigin', () => {
     expect(off.globalOn).toBe(false);
     // SAFETY: the origin reads only the isGlobal tag, so a bare id is enough of a row.
     expect(off.isGlobal({ entry: { id: 'mem_elsewhere' }, isGlobal: true } as SearchResult)).toBe(false);
-    // The reach is probed when the context is built, so the global store is seen by a context built after it exists.
     initTestStore(globalRoot);
     const s = recallStoreSetting(ctx(), 'team-a');
     expect(s).toEqual({ globalRoot, primaryIsGlobal: false, activeScope: 'team-a' });

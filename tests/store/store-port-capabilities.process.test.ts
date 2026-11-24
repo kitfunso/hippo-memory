@@ -1,5 +1,3 @@
-// What a store can do is the groups it sets: audit and learn run on hippo.db's stores, and a store without local files
-// gets neither sleep nor an unfenced hippo.db.
 import type { ContextWith } from '../../src/api/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';

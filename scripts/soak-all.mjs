@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-/**
- * Run all 10 soak-test workload profiles in sequence and produce a summary
- * table that the Frontier AI Discovery feasibility study can cite as O1
- * evidence. Each profile runs against the same starting state (same seed)
- * so cross-profile comparison is apples-to-apples.
- *
- * Usage:
- *   node scripts/soak-all.mjs --ticks 500 --particles 200 --out benchmarks/soak/results/
- */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -74,7 +65,6 @@ for (const profile of PROFILES) {
   }
   const wallMs = Date.now() - started;
 
-  // Parse CSV tail for summary stats
   const csv = fs.readFileSync(outCsv, 'utf8').trim().split(/\r?\n/);
   const header = csv[0].split(',');
   const rows = csv.slice(1).map((line) => line.split(','));
@@ -88,7 +78,7 @@ for (const profile of PROFILES) {
   const maxAbsE = energies.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   const maxVel = rows.reduce((m, r) => Math.max(m, Number(r[idxMaxVel]) || 0), 0);
   const finalN = rows.length ? Number(rows[rows.length - 1][idxParticles]) : 0;
-  const bounded = Number.isFinite(finalE) && maxVel <= 1.0; // config cap is 0.1; 10x = 1.0
+  const bounded = Number.isFinite(finalE) && maxVel <= 1.0;
 
   summary.push({
     profile,
@@ -103,7 +93,6 @@ for (const profile of PROFILES) {
   });
 }
 
-// ---- write summary ----
 const summaryPath = path.join(OUT_DIR, 'soak-summary.md');
 const lines = [];
 lines.push('# O1 Soak Test — 10 Workload Profiles');

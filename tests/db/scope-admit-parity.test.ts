@@ -1,4 +1,3 @@
-// E10 lane A: scopeAdmitSql, run on a real store's memories table, admits exactly what passesScopeFilterForRecall admits.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { closeHippoDb } from '../../src/db/index.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';

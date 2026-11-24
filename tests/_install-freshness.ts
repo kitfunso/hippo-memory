@@ -1,4 +1,3 @@
-// vitest globalSetup for every project: tests need the packages the lockfile pins, but only process and server tests need a build.
 import { resolve } from 'node:path';
 import { staleDependencies } from './_build-freshness.js';
 

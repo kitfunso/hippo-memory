@@ -1,4 +1,3 @@
-// hippo.db's half of the ConnectorEvents store group: each call on a handle of its own.
 import type { DatabaseSyncLike } from '../../../db/index.js';
 import { githubCursor, githubRoute, GITHUB_DLQ, saveGitHubCursor } from './github.js';
 import {

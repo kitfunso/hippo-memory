@@ -1,4 +1,3 @@
-// serve() as the CLI on this machine meets it: each request sends the member key the server wrote to its key file.
 import type { ServerHandle } from '../../src/server.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { serve as serveSwitched } from './store-switch.js';
@@ -12,7 +11,6 @@ type ServeOptions = Parameters<typeof serveSwitched>[0];
 
 export interface KeyedServer extends ServerHandle {
   readonly key: string;
-  /** The Authorization header the key makes, for a test that sends its own request through node:http. */
   readonly auth: { readonly authorization: string };
 }
 

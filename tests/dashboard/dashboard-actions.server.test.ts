@@ -1,5 +1,3 @@
-// The four dashboard writes (pin, wrong, resolve, forget): their result mapping, tenant and live-only guards, and the request guards in front of them.
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { request as httpRequest } from 'node:http';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
@@ -234,7 +232,6 @@ describe('request guards', () => {
     const path = `/api/memory/${target.id}/pin`;
     const json = { 'Content-Type': 'application/json' };
 
-    // The 413 closes its connection, so it goes last.
     const broken = await call(dash.port, 'POST', path, { headers: json, body: '{"pinned": tru' });
     const big = await call(dash.port, 'POST', path, {
       headers: json,
@@ -269,11 +266,9 @@ describe('request guards', () => {
             : new Promise<void>((done) => socket.once('close', () => done()));
         resolve({ status: res.statusCode ?? 0, closed });
       });
-      // A reset before the reply is the bug this guards: the server closed with request bytes unread.
       req.on('error', (err) => {
         if (!answered) reject(err);
       });
-      // Unpaced and never ended, as a large upload is, so only the server can close the connection.
       const send = async (): Promise<void> => {
         for (let sent = 0; sent < 1024 * 1024 && !req.destroyed && !answered; sent += chunk.length) {
           await new Promise<void>((done) => req.write(chunk, () => done()));
@@ -307,7 +302,6 @@ describe('request guards', () => {
         },
       );
       req.on('error', reject);
-      // Headers only: the body they promise is never written.
       req.flushHeaders();
     });
     expect(status).toBe(408);

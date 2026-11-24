@@ -1,13 +1,3 @@
-/**
- * J3 baserate detector — HTTP route parity test.
- * Docs: docs/plans/2026-05-26-j3-baserate-detector.md
- *
- * Covers:
- * 1. GET /v1/predictions/stats returns baserate JSON
- * 2. Missing class param returns 400
- * 3. Audit log has predict_baserate row post-call
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -42,7 +32,6 @@ afterEach(async () => {
 
 describe('HTTP /v1/predictions/stats', () => {
   it.skipIf(needsHippoDb('db'))('returns baserate JSON for a class with closed predictions', async () => {
-    // Seed: 2 closed predictions in class "http-test"
     for (const [est, act] of [
       [3, 5],
       [4, 6],

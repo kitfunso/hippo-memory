@@ -1,5 +1,3 @@
-// The SessionEnd hook: reads the payload inline, then hands the slow work to a detached worker
-// before the host exits.
 import * as fs from 'node:fs';
 import { defaultSleepLogPath, resolveJsonHookPaths } from '../../hooks-install/json-hooks.js';
 import { copilotTranscriptFor } from '../../capture/copilot-transcript.js';
@@ -46,18 +44,14 @@ export async function handleSessionEnd({
   const turn = boolFlag(flags, 'turn');
   const logFile = stringFlag(flags, 'log-file') ?? runtimeLogFile(flags);
 
-  // Bounded read: extracts transcript_path + session_id for the detached worker's argv.
   const raw = await readStdinBounded();
   // Read before normalizing: the Copilot CLI's agentStop shares this hook line, and camelCase keys
   // would pass as VS Code's.
   const stop = turn ? vscodeStopInput(raw) : null;
   if (turn && !stop) return;
   const stdinText = normalizeHookPayload(raw.text);
-  // Before the spawn, since the worker finds its store from the folder it inherits.
   const root = payloadCwdRoot(hippoRoot, stdinText, runtime);
   const input = stop ?? sessionEndInput(stdinText, raw.timedOut, runtime);
-  // Only a host payload ends a session: a manual run and a reply's end (turn mode) are not
-  // boundaries.
   const rec =
     !turn && input !== null && !input.manual
       ? await startSessionEndRecorder(root, tenantId, stdinText, runtime)
@@ -99,7 +93,6 @@ async function runSessionEndWorker(
       `session-end: the worker did not spawn, running inline: ${errorMessage(err)}`,
       errorFields(err),
     );
-    // Inline is the last resort, handed what the child's argv would have carried.
     try {
       await handleSessionEndWorker({
         hippoRoot: root,
@@ -112,12 +105,9 @@ async function runSessionEndWorker(
     }
     return;
   }
-  // After the spawn, so a locked store delays only the row; the hook's short lock wait bounds it.
   await flushOnHook(rec, root, tenantId);
 }
 
-/** Flushes on the hook's own request, started after the spawn, so its short lock wait bounds the
- * row's write. */
 async function flushOnHook(
   rec: DeliveryRecorder | null,
   root: string,
@@ -142,8 +132,6 @@ async function startSessionEndRecorder(
   });
 }
 
-/** What the session-end payload named; null for one hippo refuses or one that never arrived, and
- * the worker then runs with neither value. */
 function sessionEndInput(
   stdinText: string | undefined,
   timedOut: boolean,
@@ -172,8 +160,6 @@ type SessionEndWorkerInput = {
   turn: boolean;
 };
 
-/** The flags the detached worker would parse from its argv, so the inline run sees what the
- * child would have; the hook's own flags fill the gaps. */
 function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags {
   const out: CliFlags = {};
   const keep = (name: string, value: CliFlags[string] | null | undefined): void => {
@@ -189,8 +175,6 @@ function inlineWorkerFlags(flags: CliFlags, w: SessionEndWorkerInput): CliFlags 
   return out;
 }
 
-/** The input of a VS Code Stop payload with a session id that can name the lock file; null makes
- * turn mode a silent no-op. */
 function vscodeStopInput(raw: BoundedStdin): CaptureInput | null {
   const receipt = readVscodeStop(raw.text, raw.timedOut);
   return receipt.status === 'received' &&

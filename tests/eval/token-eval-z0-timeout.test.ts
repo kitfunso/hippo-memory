@@ -1,5 +1,3 @@
-// Z0 session timeouts with the fake Claude Code (prereg 165): a graded record priced from its transcript, never a plan limit.
-// Costs nothing; each HANG waits out a short session timeout.
 import { describe, it, expect, afterEach } from 'vitest';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -60,7 +58,6 @@ describe('a session that runs out of time (prereg 165)', () => {
     const t1 = find(recs, 'A4', 't1');
     expect(t1).toMatchObject({ invalid: null, timedOut: true, resolved: false, teachTurns: 1, teachForm: 'correction', lessons: [{ lessonId: 'f1-l1', first: 'fail', final: 'pass' }] });
     expect(logLines(log)).toContain(`resume ${t1.sessionId}`);
-    // Only session 1 hung, so the resume is priced from its result, where the fake always reports 50 output tokens.
     expect(t1.usage!.extra.outputTokens).toBe(50);
     expect(rawResult(out, 'A4', 'n1.json').files['CLAUDE.md']).toContain('- Write the lesson file, because');
     expect(validateCorpus(recs, readPlan(out))).toEqual([]);
@@ -75,7 +72,6 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(t1).toMatchObject({ invalid: null, timedOut: true, resolved: false, costUsd: null, turnsSource: 'transcript', lessons: [{ first: 'fail', final: 'fail' }] });
     expect(t1.usage!.extra).toEqual({ inputTokens: 13, cacheWriteTokens: 40, cacheReadTokens: 200, outputTokens: 47 });
     expect(t1.usage!.firstSession.outputTokens).toBe(50);
-    // The hung resume's transcript grew past the teach message, so A4 counts the lesson as told (decision 7).
     expect(rawResult(out, 'A4', 'n1.json').files['CLAUDE.md']).toContain('- Write the lesson file, because');
   }, 120_000);
 
@@ -86,7 +82,6 @@ describe('a session that runs out of time (prereg 165)', () => {
     expect(t1).toMatchObject({ invalid: null, timedOut: true, turnsSource: 'transcript' });
     expect(t1.resumeSessionId).not.toBe(t1.sessionId);
     expect(t1.usage!.extra).toEqual({ inputTokens: 13, cacheWriteTokens: 40, cacheReadTokens: 200, outputTokens: 47 });
-    // Session 1's result says 3 turns; the resume made two messages of its own.
     expect(t1.turns).toBe(5);
   }, 300_000);
 
@@ -110,13 +105,11 @@ describe('a session that runs out of time (prereg 165)', () => {
   it('a timeout kills the agent and every process under it', async () => {
     const { out } = isolate('hang-tree');
     const r = makeRepo();
-    // The 110 s limit on this test sits under the fake's 120 s hang, so a run that waited on the tree fails here.
     await run(spec(r, [], [task(r, 'n1', 'HANG'), plain(r, 'n2')]), ['A0'], out, TIMEOUT);
     const tick = join(out, 'tick.txt');
     expect(existsSync(tick)).toBe(true);
     const pid = Number(readFileSync(join(out, 'grandchild.pid'), 'utf8'));
     try {
-      // The kill can return before the process table drops the grandchild, so wait for the death instead of a fixed pause.
       await waitFor(() => !alive(pid), { what: `grandchild ${pid} dead`, timeoutMs: 10_000 });
     } finally {
       if (alive(pid)) process.kill(pid, 'SIGKILL');

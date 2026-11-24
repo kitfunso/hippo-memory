@@ -1,4 +1,3 @@
-// Each store method the op table places on a reader thread answers as the in-process store does and never waits for the write lock; each write this file names leaves what the in-process one leaves.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { detectForwardClaim } from '../../src/domain/learn/forward-claim-detector.js';
@@ -48,10 +47,8 @@ const GITHUB_CURSOR = {
   repo: REPO,
   stream: 'issues',
 } as const;
-/** Ids the extra seed makes, read by the rows below once it has run. */
 const made = { handoffId: 0, cardId: '' };
 
-/** The rows the moved-reads seed lacks, written through the in-process store: connector state, working memory, a claimed card, a failure, a token row, a rejection, a conflict and a dormant memory. */
 async function seedSessionAndAdmin(root: string): Promise<void> {
   const s = sqliteStore(root);
   await s.connectorEvents.markEventSeen(SLACK_EVENT);
@@ -247,7 +244,6 @@ const SESSION_AND_ADMIN_READS: readonly Read[] = [
   read('sharing.sourceTallies', (s) => s.sharing.sourceTallies(TENANT), /count: [1-9]/),
 ];
 
-/** The groups that were the local files: the ledger, the folder and sharing; the index's sessions run on the writer. */
 const FOLDER_GROUP_READS: readonly Read[] = [
   read('folderFiles.home', (s) => s.folderFiles.home(), /folderName: '/),
   read('ledger.lastSent', (s) => s.ledger.lastSent(TENANT, SESSION, 'http_recall'), "hash: 'block-seeded'"),
@@ -328,7 +324,6 @@ const READS: readonly Read[] = [
       }),
     'mem_p_fill0',
   ),
-  // The resolved root both stores open, so their vector writes share one embed turn.
   read('vectorWrites.indexKey', (s) => s.vectorWrites.indexKey(), /[/\\]/),
   read(
     'contextReads.ambientCandidates',
@@ -347,7 +342,6 @@ const READS: readonly Read[] = [
         admit: { currentProject: '', includeCrossProject: true },
         recall: { terms: ['rollout'], limit: 5 },
       }),
-    // The id must follow the recall key: the entries list holds mem_p_plain too.
     /recall: \[ \{[\s\S]*?id: 'mem_p_plain'/,
   ),
   read(
@@ -466,7 +460,6 @@ const READS: readonly Read[] = [
 interface Write {
   readonly name: string;
   readonly run: Call<string>;
-  /** Each in a row or mirror file after the write and in none before it. */
   readonly leaves: readonly string[];
 }
 
@@ -479,7 +472,6 @@ function write<T>(name: string, run: Call<T>, leaves: readonly string[]): Write 
 }
 
 const ACTOR = 'reads-on-readers';
-// Its origin is set, so the folders of the two stores leave the same mirror.
 const PROMOTED = {
   ...createMemory('promoted note on the rollout', { tenantId: TENANT }),
   id: 'g_promoted',
@@ -591,14 +583,12 @@ const WRITES: readonly Write[] = [
 let seed: MovedReadsSeed;
 const homes: string[] = [];
 
-/** A fresh copy of the seeded store; the copies are removed after the file's stores have closed. */
 function copy(): string {
   const made = freshStore(seed.templates, 'local');
   homes.push(made.home);
   return made.root;
 }
 
-// Seeding the template stores row by row runs past the 30 s hook default on a slow runner.
 beforeAll(async () => {
   seed = await seedMovedReads();
 }, 120_000);
@@ -620,15 +610,12 @@ describe('a read the op table places on a reader thread', () => {
   let onWorkers: Served;
   let inProcess: Served;
 
-  // Reads write nothing, so both stores serve one copy for the whole table.
   beforeAll(async () => {
     const root = copy();
-    // The shared seed has no skill, and the skill read must find one.
     await cliSave(root, TENANT, SKILL, {
       skillName: 'rollback',
       instructions: 'page the owner, then revert',
     });
-    // Nor a raw row under an artifact ref; its id sorts last, so the backfill read's first page keeps its rows.
     const raw = createMemory('raw vault note on the rollout', {
       kind: 'raw',
       artifactRef: 'vault:golden:rollout.md',
@@ -653,7 +640,6 @@ describe('a read the op table places on a reader thread', () => {
         .map(([method]) => (group === 'base' ? method : `${group}.${method}`)),
     );
 
-    // A row named `<method> <case>` is one more case of that method.
     expect([...new Set(READS.map((row) => row.name.split(' ')[0]))].sort()).toEqual(tagged.sort());
   });
 
@@ -681,7 +667,6 @@ describe('a read the op table places on a reader thread', () => {
         answered = true;
       };
       void answer.then(settle, settle);
-      // A read sent to the writer thread waits behind the blocked write until the lock is let go, which is only below.
       await waitFor(() => answered, {
         what: `${name} to answer with the write lock held`,
       });
