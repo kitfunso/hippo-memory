@@ -13,11 +13,11 @@ Docs
 What we measured
 We built hippo and ran these tests, so read them as a vendor's numbers. We ran rivals on the same answer model where we could. Scores marked published come from each team's own setup, so we give no ranks.
 Repeat mistakes in real Claude Code sessions
-Each run corrects Claude Code once and then, N to N tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab), and published the test as AI-PsychosisBench (opens in new tab), so any memory can run on the same tasks.
+Each run corrects Claude Code once and then, N or more tasks later, gives it a task where the same mistake is possible. We ran it on N repositories, registered first (opens in new tab), and published the test as AI-PsychosisBench (opens in new tab), so any memory can run on the same tasks.
 No memory Nin N
 Claude Code's built-in memory Nin N
 Built-in memory plus hippo Nin N
-The chart counts first chances N to N tasks after the correction. The registered measure, the first chance in each mistake family over N units, gives N points fewer repeats with hippo [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
+The chart shows the registered measure, the first chance in each mistake family over N units. Hippo gives N points fewer repeats [N N], at the same cost, a ratio of N [N N]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 Round N already preregistered, tests which parts of hippo drive the gain. The test code and task data are public in AI-PsychosisBench.
 Official-setup rows side by side
 Hippo N run with the same answer model, judge and settings as the published rows.

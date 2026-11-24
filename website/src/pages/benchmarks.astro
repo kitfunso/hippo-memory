@@ -30,11 +30,11 @@ const codeCls = 'rounded bg-paper-3 px-1.5 py-0.5 font-mono text-sm text-ink-2';
       <div class="wrap py-(--section-y)">
         <h2 class="text-balance">Repeat mistakes in real Claude Code sessions</h2>
         <p class="mt-4 mb-8 max-w-3xl leading-relaxed text-ink-2">
-          Each run corrects Claude Code once and then, 2 to 4 tasks later, gives it a task where the same mistake is possible. We ran it on 29 repositories, <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">registered first<span class="sr-only"> (opens in new tab)</span></a>, and published the test as <a class="link" href={site.links.aiPsychosisBench} target="_blank" rel="noopener noreferrer">AI-PsychosisBench<span class="sr-only"> (opens in new tab)</span></a>, so any memory can run on the same tasks.
+          Each run corrects Claude Code once and then, 2 or more tasks later, gives it a task where the same mistake is possible. We ran it on 29 repositories, <a class="link" href={site.links.z0Round3} target="_blank" rel="noopener noreferrer">registered first<span class="sr-only"> (opens in new tab)</span></a>, and published the test as <a class="link" href={site.links.aiPsychosisBench} target="_blank" rel="noopener noreferrer">AI-PsychosisBench<span class="sr-only"> (opens in new tab)</span></a>, so any memory can run on the same tasks.
         </p>
         <RepeatMistakes />
         <p class="mt-8 max-w-3xl leading-relaxed text-ink-2">
-          The chart counts first chances 2 to 4 tasks after the correction. The registered measure, the first chance in each mistake family over 148 units, gives 14.9 points fewer repeats with hippo [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
+          The chart shows the registered measure, the first chance in each mistake family over 148 units. Hippo gives 14.9 points fewer repeats [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
         </p>
         <p class="mt-4 max-w-3xl leading-relaxed text-ink-2">
           Round 4, already preregistered, tests which parts of hippo drive the gain. The test code and task data are public in AI-PsychosisBench.

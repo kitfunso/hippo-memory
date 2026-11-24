@@ -81,9 +81,9 @@ Real sessions on 29 repositories, with the plan registered before the run.
 
 | Claude Code with | Repeats per 100 chances |
 |---|--:|
-| No memory | 83 |
+| No memory | 84 |
 | Built-in memory | 21 |
-| Built-in plus hippo | **11** |
+| Built-in plus hippo | **12** |
 
 Cost with hippo: 1.006 times, the same.
 
@@ -222,15 +222,15 @@ We built hippo and ran these tests, so read them as a vendor's numbers. We ran r
 
 ### Repeat mistakes in real Claude Code sessions
 
-Each run corrects Claude Code once and then, 2 to 4 tasks later, gives it a task where the same mistake is possible. We ran it on 29 repositories, [registered first](docs/evals/2026-11-08-z0-round3-result.md).
+Each run corrects Claude Code once and then, 2 or more tasks later, gives it a task where the same mistake is possible. We ran it on 29 repositories, [registered first](docs/evals/2026-11-08-z0-round3-result.md).
 
 | Claude Code with | Repeats in 100 |
 |---|--:|
 | No memory | 83 |
-| Claude Code's built-in memory | 21 |
+| Claude Code's built-in memory | 26 |
 | Built-in memory plus hippo | **11** |
 
-The chart counts first chances 2 to 4 tasks after the correction. The registered measure, the first chance in each mistake family over 148 units, gives 14.9 points fewer repeats with hippo [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
+The chart shows the registered measure, the first chance in each mistake family over 148 units. Hippo gives 14.9 points fewer repeats [5.5, 24.3], at the same cost, a ratio of 1.006 [0.964, 1.049]. On tasks with no lesson to apply, neither the cost nor the share solved changed.
 
 Round 4, already preregistered, tests which parts of hippo drive the gain.
 
@@ -1303,7 +1303,7 @@ Judge it by what is tested. 3,500+ tests run against a real database, with no mo
 
 ### Has hippo been shown to make agents better at their work?
 
-On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md). We corrected Claude Code once on 29 repositories and counted repeats 2 to 4 tasks later, finding 11 in 100 with hippo added, against 21 with built-in memory alone, at the same cost. Every run is in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
+On repeat mistakes, yes, in [one test of our own](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/2026-11-08-z0-round3-result.md). We corrected Claude Code once on 29 repositories and counted repeats 2 or more tasks later, finding 12 in 100 with hippo added, against 26 with built-in memory alone, at the same cost. Every run is in [docs/evals](https://github.com/kitfunso/hippo-memory/blob/master/docs/evals/README.md).
 
 ---
 
