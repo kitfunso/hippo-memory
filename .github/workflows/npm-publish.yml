@@ -33,15 +33,15 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      id-token: write   # OIDC token for npm trusted publishing and provenance
+      id-token: write
     outputs:
       dist-tag: ${{ steps.disttag.outputs.tag }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           # check-expiring-keys-floor.mjs reads earlier release tags; a shallow clone holds only this one.
           fetch-depth: 0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'

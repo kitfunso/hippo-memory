@@ -8,7 +8,7 @@ gold_meta = json.load(io.open(os.path.join(LME, 'gold_meta.json'), encoding='utf
 sample = json.load(io.open(os.path.join(LME, 'sample.json'), encoding='utf-8'))
 
 key = json.load(io.open(os.path.join(LME, 'judge_key.json'), encoding='utf-8'))
-verd = {}  # judge id -> bool correct
+verd = {}
 for f in glob.glob(os.path.join(LME, 'verdicts', '*.jsonl')):
     for l in io.open(f, encoding='utf-8'):
         if l.strip():

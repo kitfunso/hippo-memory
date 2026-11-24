@@ -12,7 +12,7 @@ sample = json.load(io.open(os.path.join(LANE_A, 'locomo', 'sample.json'), encodi
 assert len(sample) == 400, len(sample)
 
 BATCH_SIZE = 40
-meta = {}  # qid -> {category_name, ground_truth_answer, reference_date}
+meta = {}
 for i, qid in enumerate(sample):
     batch = i // BATCH_SIZE
     q = json.load(io.open(os.path.join(PREDICTED, qid + '.json'), encoding='utf-8'))

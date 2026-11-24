@@ -13,9 +13,9 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      id-token: write   # OIDC login proves the io.github.kitfunso namespace; no secret needed
+      id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       # npm can take over 10 minutes to show a new version after the publish job ends, so wait up to 30.
       - name: server.json version is on npm
         run: |
