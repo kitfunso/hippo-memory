@@ -70,6 +70,7 @@ function mint(root: string, label: string, owner: string): Key {
 function sqlAt<T>(rig: Rig, text: string, ...args: SqlArg[]): T[] {
   const db = openHippoDb(rig.root);
   try {
+    // SAFETY: every caller names the columns its row type declares.
     return db.prepare(text).all(...args) as T[];
   } finally {
     closeHippoDb(db);
