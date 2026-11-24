@@ -250,7 +250,6 @@ describe('server-detect', () => {
     const home = makeRoot();
     const pidfile = join(home, 'server.pid');
     const stub: Server = createServer(() => {
-      /* deliberately never responds */
     });
     try {
       const port = await new Promise<number>((resolve) => {

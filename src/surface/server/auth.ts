@@ -293,7 +293,6 @@ function bearerActor(id: BearerIdentity): Actor {
   if (id.owner !== undefined) actor.owner = id.owner;
   if (id.localKey) actor.localKey = true;
   if (id.viaAuthResolver) actor.viaAuthResolver = true;
-  // Only the server's own tenant owns the host; any other tenant's admin key is a tenant admin.
   else if (id.role === 'admin' && id.tenantId === envTenant()) actor.hostAdmin = true;
   return actor;
 }

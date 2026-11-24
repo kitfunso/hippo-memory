@@ -27,7 +27,6 @@ function safeRmSync(p: string): void {
   try {
     rmSync(p, { recursive: true, force: true });
   } catch {
-    /* best-effort */
   }
 }
 

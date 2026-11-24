@@ -36,7 +36,6 @@ function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {
-    // best-effort cleanup only — a leftover scratch tmpdir is harmless.
   }
 }
 

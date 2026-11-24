@@ -195,7 +195,6 @@ globalThis.fetch = async (input, init) => {
   try {
     expected = Object.keys(JSON.parse(init?.body ?? '{}').questions ?? {}).length;
   } catch {
-    /* not a Jev call shape */
   }
   try {
     const res = await realFetch(input, init);

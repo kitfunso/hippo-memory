@@ -129,7 +129,6 @@ function loadTier1Queries(): string[] {
       }
     }
   } catch {
-    // fall through to fallback
   }
   if (queries.length === 0) {
     return [

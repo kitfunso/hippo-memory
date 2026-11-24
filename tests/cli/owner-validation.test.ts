@@ -16,15 +16,15 @@ describe('owner format', () => {
   });
 
   it.each([
-    'alice', // no prefix
-    'admin:alice', // wrong prefix
-    'USER:alice', // uppercase prefix
-    'user:alice@example.com', // @ not allowed
-    'user:alice.smith', // . not allowed
-    'user: alice', // space
-    'user:', // empty id
-    ':alice', // empty prefix
-    'user:alice:extra', // extra colon
+    'alice',
+    'admin:alice',
+    'USER:alice',
+    'user:alice@example.com',
+    'user:alice.smith',
+    'user: alice',
+    'user:',
+    ':alice',
+    'user:alice:extra',
   ])('rejects invalid owner string %s', (owner) => {
     expect(validateOwner(owner, { strict: true }).ok).toBe(false);
   });

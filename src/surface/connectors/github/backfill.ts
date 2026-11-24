@@ -49,7 +49,6 @@ function syntheticRepository(repoFullName: string): GitHubRepository {
     full_name: repoFullName,
     name: name ?? repoFullName,
     owner: { login: owner ?? repoFullName },
-    // private intentionally omitted — fail-safe to private scope.
   };
 }
 

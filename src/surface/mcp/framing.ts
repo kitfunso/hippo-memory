@@ -16,10 +16,7 @@ export type FrameRemainder = number | 'line';
 export type FrameResult =
   | { kind: 'message'; body: string; rest: Buffer }
   | { kind: 'skip'; rest: Buffer }
-  // Over the cap POST /mcp puts on a body, so one client cannot make the process buffer without bound.
   | { kind: 'oversize'; rest: Buffer; remainder: FrameRemainder }
-  // `needs` is the buffer length a Content-Length frame has to reach before it can complete; absent, a newline or the
-  // cap decides.
   | { kind: 'incomplete'; needs?: number };
 
 function skipWhitespace(buffer: Buffer): number {

@@ -83,7 +83,6 @@ process.once('message', (message) => {
       : sleepJob(job, session);
   runStoreRequest(work, 'server')
     .then((result): SleepReply<JobResult> => ({ ok: true, result }), failureReply)
-    // Exit only once the reply is written, or the parent could see the process end first.
     .then(async (reply) => {
       const code = await sendReply(reply);
       if (reply.ok) await saveGraphAfter(job, reply.result);

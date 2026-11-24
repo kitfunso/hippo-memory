@@ -6,11 +6,11 @@ import { mulberry32 } from '../../scripts/lib/prng.mjs';
 describe('calibration B* selection', () => {
   it('picks the LARGEST budget where C2 late mean ∈ [0.04, 0.24] AND lower-CI > 0', () => {
     const candidates = [
-      { budget: 200, lateMean: 0.3, lateCI: 0.05 }, // mean too high
-      { budget: 400, lateMean: 0.2, lateCI: 0.05 }, // in band, lower-CI=0.15 > 0 ✓
-      { budget: 600, lateMean: 0.1, lateCI: 0.05 }, // in band, lower-CI=0.05 > 0 ✓
-      { budget: 800, lateMean: 0.05, lateCI: 0.06 }, // in band, lower-CI=-0.01 < 0 ✗
-      { budget: 1000, lateMean: 0.02, lateCI: 0.01 }, // too low ✗
+      { budget: 200, lateMean: 0.3, lateCI: 0.05 },
+      { budget: 400, lateMean: 0.2, lateCI: 0.05 },
+      { budget: 600, lateMean: 0.1, lateCI: 0.05 },
+      { budget: 800, lateMean: 0.05, lateCI: 0.06 },
+      { budget: 1000, lateMean: 0.02, lateCI: 0.01 },
     ];
     const bStar = selectBStar(candidates);
     expect(bStar.budget).toBe(600);
@@ -49,9 +49,9 @@ describe('calibration B* selection', () => {
 
   it('skips a candidate flagged starved=true even when it would otherwise be selected', () => {
     const candidates = [
-      { budget: 800, lateMean: 0.2, lateCI: 0.03, starved: true }, // would qualify; skipped
-      { budget: 600, lateMean: 0.1, lateCI: 0.04, starved: false }, // qualifies
-      { budget: 400, lateMean: 0.05, lateCI: 0.01, starved: false }, // qualifies but smaller
+      { budget: 800, lateMean: 0.2, lateCI: 0.03, starved: true },
+      { budget: 600, lateMean: 0.1, lateCI: 0.04, starved: false },
+      { budget: 400, lateMean: 0.05, lateCI: 0.01, starved: false },
     ];
     const bStar = selectBStar(candidates);
     expect(bStar.budget).toBe(600);
@@ -60,8 +60,8 @@ describe('calibration B* selection', () => {
 
   it('reason string omits "(not starved)" when no candidate carries the flag', () => {
     const candidates = [
-      { budget: 800, lateMean: 0.3, lateCI: 0.02 }, // out of band, no starved flag
-      { budget: 600, lateMean: 0.02, lateCI: 0.01 }, // out of band, no starved flag
+      { budget: 800, lateMean: 0.3, lateCI: 0.02 },
+      { budget: 600, lateMean: 0.02, lateCI: 0.01 },
     ];
     const bStar = selectBStar(candidates);
     expect(bStar.budget).toBeNull();

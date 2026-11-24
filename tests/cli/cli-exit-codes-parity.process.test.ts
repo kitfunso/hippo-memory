@@ -127,7 +127,6 @@ function masked(text: string): string {
     .replace(/\r\n/g, '\n')
     .replaceAll('\\', '/')
     .replace(/^\d+\.\d+\.\d+\n$/, '<version>\n')
-    // A log line's fields (time, error class, stack) move with each run and each build; its message is pinned.
     .replace(/^(\[hippo\] \w+: .*?) ts=\S+.*$/gm, '$1 <fields>');
   const labels: ReadonlyArray<readonly [string, string]> = [
     [store, '<store>'],

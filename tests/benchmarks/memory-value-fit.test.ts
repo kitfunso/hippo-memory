@@ -74,14 +74,14 @@ describe('runES (pure, synthetic objectives)', () => {
   it('sigma halves after exactly 5 consecutive non-improving generations', () => {
     const rng = mulberry32(456);
     const result = runES({
-      objective: () => 0, // always flat -> every generation is non-improving
+      objective: () => 0,
       dims: ['a', 'b'],
       rng,
       lambda: 8,
       sigma0: 0.3,
       flatGensBeforeHalve: 5,
       maxGens: 6,
-      sigmaMin: 0.0001, // low enough that only the halving schedule is under test
+      sigmaMin: 0.0001,
       box: [-1, 1],
       init: [0.1, 0.1],
     });
@@ -93,7 +93,7 @@ describe('runES (pure, synthetic objectives)', () => {
   it('terminates at maxGens when the objective keeps improving (sigma never halves)', () => {
     const rng = mulberry32(789);
     const result = runES({
-      objective: (v: number[]) => v[0] + v[1], // strictly increasing while inside the box
+      objective: (v: number[]) => v[0] + v[1],
       dims: ['a', 'b'],
       rng,
       lambda: 8,
@@ -111,13 +111,13 @@ describe('runES (pure, synthetic objectives)', () => {
   it('terminates when sigma drops below sigmaMin, before maxGens is reached', () => {
     const rng = mulberry32(101);
     const result = runES({
-      objective: () => 0, // flat -> forces repeated halving
+      objective: () => 0,
       dims: ['a', 'b'],
       rng,
       lambda: 8,
       sigma0: 0.3,
       flatGensBeforeHalve: 5,
-      maxGens: 100, // generous cap; sigmaMin should stop the run first
+      maxGens: 100,
       sigmaMin: 0.01,
       box: [-1, 1],
       init: [0.1, 0.1],
@@ -143,7 +143,7 @@ describe('runES (pure, synthetic objectives)', () => {
       maxGens: 2,
       sigmaMin: 1e-13,
       box: [-1, 1],
-      init: [0, 0], // parent at the origin: any tiny mutation is also ~0
+      init: [0, 0],
     });
     expect(callCount).toBe(1);
     expect(result.best).toEqual([0, 0]);
@@ -155,7 +155,7 @@ describe('selectWinner', () => {
     const perRestart = [
       { restart: 0, trainObjective: 0.5 },
       { restart: 1, trainObjective: 0.7 },
-      { restart: 2, trainObjective: 0.7 }, // tie with restart 1
+      { restart: 2, trainObjective: 0.7 },
       { restart: 3, trainObjective: 0.6 },
     ];
     expect(selectWinner(perRestart).restart).toBe(1);
@@ -164,7 +164,7 @@ describe('selectWinner', () => {
   it('a later restart only wins on STRICTLY greater objective', () => {
     const perRestart = [
       { restart: 0, trainObjective: 0.9 },
-      { restart: 1, trainObjective: 0.9 }, // tie with restart 0 — restart 0 keeps it
+      { restart: 1, trainObjective: 0.9 },
     ];
     expect(selectWinner(perRestart).restart).toBe(0);
   });

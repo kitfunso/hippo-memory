@@ -141,7 +141,7 @@ for (let qi = 0; qi < data.length; qi++) {
       id: `turn_${sid}_${turnIdxs[turnI]}`,
       score,
       strength: 1.0,
-      tags: [sid],          // critical for evaluate_retrieval.py — matches answer_session_ids
+      tags: [sid],
       content: contents[turnI],
       tokens: Math.ceil(contents[turnI].length / 4),
     };

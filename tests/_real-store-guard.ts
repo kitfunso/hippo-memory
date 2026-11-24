@@ -52,7 +52,6 @@ export function snapshot(dir: string): string {
       const r = rel ? `${rel}/${name}` : name;
       const st = statSync(abs);
       if (st.isDirectory()) walk(abs, r);
-      // size + mtime so a same-size in-place rewrite is still caught.
       else files.push(`${r}:${st.size}:${st.mtimeMs}`);
     }
   };

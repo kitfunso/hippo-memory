@@ -131,7 +131,6 @@ describe('MCP-over-HTTP transport', () => {
       try {
         reader.cancel().catch(() => {});
       } catch {
-        /* no-op */
       }
     } finally {
       ac.abort();

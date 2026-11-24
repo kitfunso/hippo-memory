@@ -20,7 +20,7 @@ async function seedDuplicateRawRow(): Promise<string[]> {
   const raw = fs.readFileSync(path.join(vaultDir, 'dup.md'), 'utf8');
   const hash = createHash('sha256').update(raw).digest('hex');
   await remember(vaultCtx(), {
-    content: raw, // no frontmatter in the fixture, so body === raw
+    content: raw,
     kind: 'raw',
     artifactRef: 'vault:v:dup.md',
     owner: 'agent:vault-import',
@@ -148,13 +148,11 @@ describe('importVault (u) — importing the store path preserves existing vault 
         try {
           fs.rmdirSync(link);
         } catch {
-          /* link already gone */
         }
       }
       try {
         fs.rmdirSync(linkParent);
       } catch {
-        /* leave the empty temp dir for the OS to reap */
       }
     }
   });
@@ -203,7 +201,6 @@ describe('importVault (w) — nested non-dot store skipped under an aliased hipp
         try {
           fs.rmdirSync(hippoAlias);
         } catch {
-          /* link already gone */
         }
       }
     }

@@ -77,7 +77,6 @@ async function startServer(workspace: string): Promise<SpawnedServer> {
       try {
         rmSync(pidfilePath);
       } catch {
-        /* ignore */
       }
     }
   };

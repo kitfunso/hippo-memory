@@ -217,7 +217,7 @@ describe('writeRecallTrace', () => {
           query: 'q',
           results: [
             { memoryId: 'mem-a', score: 0.9 },
-            { memoryId: 'mem-a', score: 0.5 }, // same memory id twice, different ranks
+            { memoryId: 'mem-a', score: 0.5 },
           ],
         });
         const rows = queryAll<{ result_rank: number }>(
@@ -286,7 +286,7 @@ describe('recordTraceOutcome', () => {
         const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
         recordTraceOutcome(db, {
           traceId: traceId!,
-          tenantId: 'tenant_b', // mismatched — trace belongs to 'default'
+          tenantId: 'tenant_b',
           outcome: 'positive',
           memoryIds: ['mem-a'],
         });

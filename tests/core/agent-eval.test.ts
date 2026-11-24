@@ -140,7 +140,7 @@ function generateTasks(): Task[] {
       const cat = TRAP_CATEGORIES.find((c) => c.id === trapCat)!;
       const queryIdx = Math.min(
         cat.recallQueries.length - 1,
-        Math.floor((pos - 1) / 20), // vary queries across encounters
+        Math.floor((pos - 1) / 20),
       );
       tasks.push({
         id: pos,

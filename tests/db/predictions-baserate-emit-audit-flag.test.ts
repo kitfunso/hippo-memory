@@ -42,7 +42,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
 
   it('emitAudit=false on n=0 path: skips audit emit', () => {
     expect(countPredictBaserateAudits(root)).toBe(0);
-    const br = computePredictionBaserate(root, 'default', 'empty-class', 'recall', /*emitAudit=*/ false);
+    const br = computePredictionBaserate(root, 'default', 'empty-class', 'recall', false);
     expect(br.nClosed).toBe(0);
     expect(countPredictBaserateAudits(root)).toBe(0);
   });
@@ -51,7 +51,7 @@ describe('computePredictionBaserate emitAudit flag', () => {
     const p = await savePrediction(root, 'default', { classTag: 'pop', claimText: 'populated case', estimateValue: 2 });
     await closePrediction(root, 'default', p.id, { closureState: 'closed', actualValue: 4 });
     expect(countPredictBaserateAudits(root)).toBe(0);
-    const br = computePredictionBaserate(root, 'default', 'pop', 'recall', /*emitAudit=*/ false);
+    const br = computePredictionBaserate(root, 'default', 'pop', 'recall', false);
     expect(br.nClosed).toBe(1);
     expect(countPredictBaserateAudits(root)).toBe(0);
   });

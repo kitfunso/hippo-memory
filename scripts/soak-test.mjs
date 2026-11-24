@@ -60,7 +60,7 @@ function makeParticle(id, position, opts = {}) {
     position,
     velocity: Array.from({ length: position.length }, () => 0),
     mass: opts.mass ?? 1.0,
-    charge: opts.charge ?? 0.0, // +1 = positive valence, -1 = negative, 0 = neutral
+    charge: opts.charge ?? 0.0,
     temperature: opts.temperature ?? 1.0,
     lastSimulation: new Date().toISOString(),
   };

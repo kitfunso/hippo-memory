@@ -153,13 +153,10 @@ export function newestWorthSurfacing<T extends { entry: MemoryEntry }>(
 ): T[] {
   return (
     [...rows]
-      // Newest first, then id: stable within one store, but same-millisecond rows fall to random ids across ingests.
       .sort((a, b) => {
         const byCreated = Date.parse(b.entry.created) - Date.parse(a.entry.created);
         return byCreated !== 0 ? byCreated : b.entry.id.localeCompare(a.entry.id);
       })
-      // Filter before slice so a junk row is backfilled past, not counted against N. Pins bypass the floor: a dropped
-      // pin's share of the shared budget would go to a backfilled row, and the pin loop could not win it back.
       .filter(({ entry }) => entry.pinned || (isWorthSurfacing(entry) && !isRecallOnly(entry)))
       .slice(0, limit)
   );

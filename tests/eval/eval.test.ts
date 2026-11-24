@@ -172,9 +172,9 @@ describe('compareSummaries', () => {
       { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 },
     ]);
     const cur = mockSummary([
-      { id: 'a', mrr: 1, r10: 1, ndcg: 0.8 }, // improved
-      { id: 'b', mrr: 1, r10: 1, ndcg: 0.6 }, // regressed
-      { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 }, // unchanged
+      { id: 'a', mrr: 1, r10: 1, ndcg: 0.8 },
+      { id: 'b', mrr: 1, r10: 1, ndcg: 0.6 },
+      { id: 'c', mrr: 1, r10: 1, ndcg: 0.5 },
     ]);
     const cmp = compareSummaries(base, cur);
     expect(cmp.improved.map((d) => d.id)).toEqual(['a']);

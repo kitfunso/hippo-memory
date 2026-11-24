@@ -121,7 +121,7 @@ function buildDerangement(sessions, seed) {
 const BASE64_KEYS = new Set(['signature', 'data']);
 function mentionsZ1c(line) {
   let s = line;
-  try { s = JSON.stringify(JSON.parse(line), (k, v) => (BASE64_KEYS.has(k) && !(v instanceof Object) ? '' : v)); } catch { /* raw line */ }
+  try { s = JSON.stringify(JSON.parse(line), (k, v) => (BASE64_KEYS.has(k) && !(v instanceof Object) ? '' : v)); } catch {}
   return /\bz1c\b/i.test(s);
 }
 
@@ -202,7 +202,7 @@ function findStoreRoot(cwd) {
   let dir = path.resolve(cwd);
   for (let i = 0; i < 64; i++) {
     let isHippo = false;
-    try { isHippo = fs.statSync(path.join(dir, '.hippo')).isDirectory(); } catch { /* keep climbing */ }
+    try { isHippo = fs.statSync(path.join(dir, '.hippo')).isDirectory(); } catch {}
     if (isHippo) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break;

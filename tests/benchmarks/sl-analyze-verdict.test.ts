@@ -87,7 +87,7 @@ describe('computeVerdict', () => {
         ciHigh: 0.22,
         hookFailures: { push: 0, complete: 0 },
         sanityPass: true,
-        tiePass: false, // degenerate
+        tiePass: false,
       }),
     ).toBe('NOT_SUPPORTED');
   });
@@ -100,9 +100,9 @@ describe('computeVerdict', () => {
         delta: 0.13,
         ciLow: 0.04,
         ciHigh: 0.22,
-        hookFailures: { push: 1, complete: 0 }, // would normally trigger HOOK_FAIL
-        sanityPass: false, // overrides everything
-        tiePass: false, // would normally trigger NOT_SUPPORTED
+        hookFailures: { push: 1, complete: 0 },
+        sanityPass: false,
+        tiePass: false,
       }),
     ).toBe('SANITY_FAIL');
   });
@@ -115,7 +115,7 @@ describe('computeVerdict', () => {
         delta: 0.13,
         ciLow: 0.04,
         ciHigh: 0.22,
-        hookFailures: { push: 0, complete: 1 }, // single complete failure -> HOOK_FAIL
+        hookFailures: { push: 0, complete: 1 },
         sanityPass: true,
         tiePass: false,
       }),

@@ -120,7 +120,6 @@ export function readLedger(hippoRoots, tenantId, sinceIso) {
         });
       }
     } catch {
-      // A store older than schema v45 has no ledger; it contributes nothing.
     } finally {
       closeHippoDb(db);
     }

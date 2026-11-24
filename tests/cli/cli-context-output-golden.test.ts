@@ -55,7 +55,6 @@ function mask(text: string): string {
       .join('<root>')
       .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z/g, '<ts>')
       .replace(/\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?/g, '<ts>')
-      // Scores decay by the millisecond between runs; four places still pin the ranking inputs.
       .replace(/"score":(\d+\.\d+)/g, (_m, v: string) => `"score":${Number(v).toFixed(4)}`)
   );
 }

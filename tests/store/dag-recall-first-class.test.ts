@@ -148,7 +148,6 @@ describe('first-class DAG recall (scoring layer)', () => {
     const br = results[0]?.breakdown;
     expect(br?.summaryDeboost).toBeCloseTo(0.85);
     expect(br?.summaryFreshnessBoost).toBeCloseTo(1.05);
-    // final = composite (pre-deboost) * 0.85 * 1.05 = composite * 0.8925
   });
 
   it('physicsSearch physics-particle path applies deboost', async () => {
@@ -158,7 +157,7 @@ describe('first-class DAG recall (scoring layer)', () => {
     const queryVec = [1, 0, 0, 0];
     const particle: PhysicsParticle = {
       memoryId: summary.id,
-      position: [1, 0, 0, 0], // perfect cosine match with query
+      position: [1, 0, 0, 0],
       velocity: [0, 0, 0, 0],
       mass: 1.0,
       charge: 0,

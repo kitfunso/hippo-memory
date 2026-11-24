@@ -212,12 +212,6 @@ describe('memory-value harness (real stores)', () => {
     expect(run2.rowCounts).toEqual(run1.rowCounts);
     expect(run2.goldCounts).toEqual(run1.goldCounts);
     expect(run2.recency).toEqual(run1.recency);
-    // Sanity: the split.mjs determinism test above already proves the
-    // harness's OWN seeded RNG reproduces identically; this test's
-    // reproducibility instead comes from recency depending only on
-    // fixture-controlled session dates, which never change between runs —
-    // memory ids (crypto.randomUUID(), the real production path) are NOT
-    // asserted equal across runs, by design (see file header).
   });
 });
 

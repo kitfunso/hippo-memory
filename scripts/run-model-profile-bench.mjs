@@ -30,8 +30,6 @@ const VERBOSE = hasFlag('--verbose');
 
 const PROFILE_TABLE = {
   default: { budget: 1500, framing: 'observe' },
-  // 'tuned' is applied implicitly in Phase C by letting hippo auto-detect — see C1.
-  // For Phase A we only run 'default'.
 };
 
 function resolveProfile(name) {
@@ -157,7 +155,6 @@ function setupHippoStore(tmpDir, memories) {
   try {
     hippoCall(['init', '--no-hooks', '--no-schedule', '--no-learn'], { HIPPO_HOME: tmpDir }, undefined, tmpDir);
   } catch {
-    // Non-fatal: init may warn if already exists.
   }
   for (const m of memories) {
     const args = ['remember', m.content];
@@ -206,7 +203,7 @@ function askModel(model, prompt) {
         'json',
         '--no-session-persistence',
         '--disallowed-tools',
-        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // pure text eval — no agentic tool use
+        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand',
       ],
       {
         input: prompt,

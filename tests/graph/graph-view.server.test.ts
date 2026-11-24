@@ -37,7 +37,6 @@ describe('graph-view: buildGraphModel (real DB)', () => {
     try {
       rmSync(home, { recursive: true, force: true });
     } catch {
-      /* ignore */
     }
   });
 

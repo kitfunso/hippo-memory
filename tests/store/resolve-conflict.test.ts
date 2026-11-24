@@ -20,7 +20,6 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  // Clean up any leftover temp dirs
 });
 
 async function seedConflict() {

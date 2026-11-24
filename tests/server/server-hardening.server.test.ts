@@ -53,7 +53,6 @@ describe('server hardening', () => {
       try {
         await handle.stop();
       } catch {
-        /* already stopped */
       }
     }
     vi.stubEnv('SLACK_SIGNING_SECRET', undefined);
@@ -78,7 +77,6 @@ describe('server hardening', () => {
       try {
         reader.cancel().catch(() => {});
       } catch {
-        /* no-op */
       }
       expect(closedReason).toBe('max_age_exceeded');
     } finally {
@@ -126,7 +124,6 @@ describe('server hardening', () => {
       try {
         reader.cancel().catch(() => {});
       } catch {
-        /* no-op */
       }
       expect(closedReason).toBe('auth_revoked');
       expect(afterRevoke.join('')).not.toContain(': ping');

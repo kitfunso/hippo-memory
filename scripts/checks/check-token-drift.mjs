@@ -36,18 +36,17 @@ const SCAN_PATHS = ['ui/index.html', 'ui/src', 'src/surface/dashboard/dashboard.
 const EXEMPT_FILES = new Set([
   'ui/src/tokens.ts',
   'ui/src/tokens.css',
-  // Migration map documents the old→new mapping; exempt by extension below.
 ]);
 
 const EXEMPT_EXTENSIONS = new Set([
-  '.md', // migration map + design docs cite legacy hex for reference
+  '.md',
   '.png',
   '.jpg',
   '.gif',
   '.svg',
   '.ico',
-  '.woff2', // binaries
-  '.json', // package-lock noise
+  '.woff2',
+  '.json',
 ]);
 
 function shouldScan(filePath) {

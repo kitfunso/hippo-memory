@@ -176,7 +176,7 @@ async function main() {
   const sandbox = mkdtempSync(join(tmpdir(), 'hippo-rsi-demo-'));
   const cleanup = () => {
     if (existsSync(sandbox)) {
-      try { rmSync(sandbox, { recursive: true, force: true }); } catch { /* ignore */ }
+      try { rmSync(sandbox, { recursive: true, force: true }); } catch {}
     }
   };
   process.on('exit', cleanup);

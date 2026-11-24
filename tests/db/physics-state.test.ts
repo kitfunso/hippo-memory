@@ -489,7 +489,6 @@ describe('resetAllPhysicsState', () => {
       const entries = [makeMemoryEntry('mem_has_emb'), makeMemoryEntry('mem_no_emb')];
       const embeddingIndex = {
         mem_has_emb: [0.1, 0.2, 0.3],
-        // mem_no_emb intentionally missing
       } satisfies Record<string, number[]>;
 
       const count = resetAllPhysicsState(db, entries, embeddingIndex, { now: NOW });

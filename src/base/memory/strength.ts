@@ -38,7 +38,7 @@ export const LEGACY_TYPED_HALF_LIFE = 90;
 export const EMOTIONAL_MULTIPLIERS = {
   neutral: 1.0,
   positive: 1.0,
-  negative: 2.0, // error-tagged
+  negative: 2.0,
   critical: 2.0,
 } satisfies Record<EmotionalValence, number>;
 

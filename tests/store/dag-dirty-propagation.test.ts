@@ -154,7 +154,7 @@ describe('child-write dirty-flag propagation', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       dagLevel: 1,
-      dagParentId: summary.id, // points across tenant boundary
+      dagParentId: summary.id,
     });
     writeEntry(hippoRoot, child);
     expect(await dirtyFor(hippoRoot, 'tenant1')).toEqual([]);
@@ -248,7 +248,7 @@ describe('child-write dirty-flag propagation', () => {
       baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
       layer: Layer.Episodic,
       dagLevel: 1,
-      dagParentId: summary.id, // points to deleted parent
+      dagParentId: summary.id,
     });
     expect(() => writeEntry(hippoRoot, orphan)).not.toThrow();
     expect(await dirtyFor(hippoRoot, 'default')).toEqual([]);

@@ -15,7 +15,6 @@ export default createAdapter({
   },
 
   async store(_content, _tags) {
-    // No-op: static memory does not learn during the sequence
   },
 
   async recall(query, _budget = undefined) {
@@ -44,7 +43,6 @@ export default createAdapter({
   },
 
   async outcome(_good) {
-    // No feedback mechanism for static memory
   },
 
   async cleanup() {

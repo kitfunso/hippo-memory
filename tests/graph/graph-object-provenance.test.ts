@@ -361,7 +361,6 @@ describe('graph provenance is anchored to the first-class object, not its memory
     } finally {
       closeHippoDb(db);
     }
-    // (the memory-only SET NULL not-blocked case is covered by the memory-only forget test above.)
   });
 
   it('a tenant-only move of an object-backed (mirrorless) row revalidates the object and ABORTs', async () => {

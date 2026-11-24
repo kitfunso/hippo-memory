@@ -106,11 +106,11 @@ describe('route lookup by method', () => {
 
   it('answers a malformed escape as the walk does, under every method', () => {
     const paths = [
-      '/v1/recall/drill/%E0%A4%A', // a pattern row's param: 400
+      '/v1/recall/drill/%E0%A4%A',
       '/v1/memories/%E0%A4%A/archive',
-      '/v1/nope/%E0%A4%A', // no row has this shape: 404
+      '/v1/nope/%E0%A4%A',
       '/v1/memories%E0',
-      '/v1/recall/drill/a%20b', // a well-formed escape decodes and matches
+      '/v1/recall/drill/a%20b',
     ];
     for (const path of paths) {
       for (const method of [...METHODS, 'BREW']) {

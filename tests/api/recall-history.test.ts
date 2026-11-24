@@ -106,7 +106,7 @@ describe('detectAnchoring — R1 query_repeat', () => {
 
   it('does NOT fire when query repeat is outside recentRepeatWindow', () => {
     const hist: RecallHistorySnapshot = [
-      entry(100, 'mem_a'), // [0] — outside window=5 when slice(-5) runs on 6+ entries
+      entry(100, 'mem_a'),
       entry(201, 'x'),
       entry(202, 'x'),
       entry(203, 'x'),
@@ -140,7 +140,7 @@ describe('detectAnchoring — R2 memory_dominance', () => {
   it('counts only DISTINCT queryHashes (same query repeated does not inflate)', () => {
     const hist: RecallHistorySnapshot = [
       entry(100, 'mem_a'),
-      entry(100, 'mem_a'), // duplicate query — only counted once
+      entry(100, 'mem_a'),
     ];
     expect(detectAnchoring(hist, 100, 'mem_a')?.reason).not.toBe('memory_dominance');
   });
@@ -158,7 +158,7 @@ describe('detectAnchoring — tie precedence + cooldown', () => {
     const hist: RecallHistorySnapshot = [
       entry(100, 'mem_a'),
       entry(200, 'mem_a'),
-      entry(300, 'mem_a', /*anchoredOn=*/ 'mem_a'), // R2 fired here
+      entry(300, 'mem_a', 'mem_a'),
     ];
     expect(detectAnchoring(hist, 400, 'mem_a')).toBeNull();
   });
@@ -167,8 +167,8 @@ describe('detectAnchoring — tie precedence + cooldown', () => {
     const hist: RecallHistorySnapshot = [
       entry(100, 'mem_a'),
       entry(200, 'mem_a'),
-      entry(300, 'mem_a', /*anchoredOn=*/ 'mem_a'), // R2 fired on mem_a
-      entry(400, 'mem_b'), // different top, no anchoredOn
+      entry(300, 'mem_a', 'mem_a'),
+      entry(400, 'mem_b'),
     ];
     const hint = detectAnchoring(hist, 400, 'mem_b');
     expect(hint).not.toBeNull();

@@ -401,7 +401,6 @@ function followCall(env, scope, call) {
     scope.reads.push(...callee.reads);
     for (const [index, kinds] of callee.keyParams) {
       if (!callArgs[index]) noteUnfollowed(env, call, 'missing key argument');
-      // A helper that hands the value back is classed by what its caller does with it.
       else {
         for (const kind of kinds) {
           addRead(env, scope, callArgs[index], call, kind === 'returned' ? useKind(env, call) : kind);

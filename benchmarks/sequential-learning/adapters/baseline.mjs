@@ -4,11 +4,9 @@ export default createAdapter({
   name: 'No memory',
 
   async init() {
-    // Nothing to set up
   },
 
   async store(_content, _tags) {
-    // No-op: lessons are discarded
   },
 
   async recall(_query, _budget = undefined) {
@@ -16,10 +14,8 @@ export default createAdapter({
   },
 
   async outcome(_good) {
-    // No feedback mechanism
   },
 
   async cleanup() {
-    // Nothing to tear down
   },
 });

@@ -113,8 +113,4 @@ describe('hippo audit prune CLI', () => {
     expect(stdout).toMatch(/--tenant/);
   });
 
-  // Note: unknown audit subcommands (e.g. `hippo audit frobnicate`) fall through
-  // to the existing memory-quality auditor for back-compat. The audit subcommand
-  // dispatcher only intercepts `list` and `prune`. No assertion possible on
-  // strict "unknown sub" rejection without breaking back-compat.
 });

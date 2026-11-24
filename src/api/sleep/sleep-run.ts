@@ -413,7 +413,7 @@ async function emitSleepAudit(
       dryRun,
       noShare: opts.noShare ?? false,
       partial: phaseError !== null,
-      triggeredByTenant: ctx.tenantId, // preserve for audit forensics
+      triggeredByTenant: ctx.tenantId,
     };
     if (phaseError) sleepAuditMetadata.errorMessage = errorMessage(phaseError.thrown);
     const nextUnitIds = failedUnitOf(

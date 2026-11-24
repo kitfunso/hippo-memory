@@ -58,7 +58,7 @@ function parseArgs() {
   const args = process.argv.slice(2);
   const opts = {
     budgets: [200, 400, 600, 800, 1000],
-    nSeeds: 10, // post-review P0-1 -- bumped from 5 to 10 for usable CI.
+    nSeeds: 10,
     output: join(__dirname, 'results', 'v1.7.6-calibration'),
   };
   for (let i = 0; i < args.length; i++) {

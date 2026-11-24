@@ -171,7 +171,7 @@ function insertPredictionRow(
     opts.estimateValue ?? null,
     opts.estimateUnit ?? null,
     opts.targetDate ?? null,
-    null, // actual_value — null until close
+    null,
     now,
   );
 

@@ -236,7 +236,6 @@ describe('uninitialized store gate: neither verb may create a store', () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-precompact-uninit-project-'));
     homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hippo-precompact-uninit-home-'));
     env = { ...process.env, HIPPO_HOME: homeDir, HOME: homeDir, USERPROFILE: homeDir };
-    // Deliberately no `initHippo(dir, env)` — this is the whole point.
   });
 
   afterEach(() => {

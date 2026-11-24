@@ -57,7 +57,7 @@ export function ingestQuestion(question) {
       }
       const schemaFit = computeSchemaFit(content, [], entriesSoFar);
       const entry = createMemory(content, {
-        kind: 'raw', // these are raw conversation turns, never distilled/summarized
+        kind: 'raw',
         source: 'longmemeval',
         source_session_id: t.sessionId,
         schema_fit: schemaFit,

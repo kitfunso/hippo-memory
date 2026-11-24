@@ -50,7 +50,7 @@ function computeMvFeatures(entry: MemoryEntry, now: Date, rules: StrengthModel):
     retrievalCount: entry.retrievalCount,
     outcomePositive: pos,
     outcomeNegative: neg,
-    outcomeRatio: (pos - neg) / (pos + neg + 1), // same formula as extract.mjs / calculateRewardFactor's ratio term
+    outcomeRatio: (pos - neg) / (pos + neg + 1),
     contentLength: entry.content.length,
   };
 }

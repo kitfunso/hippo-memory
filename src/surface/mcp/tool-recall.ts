@@ -84,8 +84,8 @@ interface SuppressionInputs {
 function suppressionCounts(i: SuppressionInputs): SuppressionCounts {
   return {
     totalCandidates: i.poolSize + i.droppedByScope,
-    droppedPreRank: i.droppedByScope + i.cut.length - i.list.length, // the bucket CLI and API recall use for copies
-    droppedByBudget: Math.max(0, i.poolSize - i.cut.length), // an upper bound: rows that never matched count too
+    droppedPreRank: i.droppedByScope + i.cut.length - i.list.length,
+    droppedByBudget: Math.max(0, i.poolSize - i.cut.length),
     summarySubstitutionsAdded: i.tail.filter((r) => r.isSummary).length,
     freshTailAdded: i.tail.filter((r) => r.isFreshTail && !r.isSummary).length,
   };

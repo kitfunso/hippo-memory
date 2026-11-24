@@ -160,10 +160,6 @@ describe('POST /v1/sleep', () => {
       expect(res.status).toBe(200);
       const body = await jsonAs<{ dryRun: boolean }>(res);
       expect(body.dryRun).toBe(false);
-      // Test passes when the sleep call completes without error against the
-      // cross-tenant store. The dedupe MAY or MAY NOT fire depending on the
-      // jaccard threshold; the point is that the route does NOT throw on
-      // cross-tenant rows, confirming the host-wide design.
     },
   );
 

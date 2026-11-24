@@ -28,7 +28,7 @@ function agedEntry(overrides: Partial<MemoryEntry> & { confidence: MemoryEntry['
       confidence: overrides.confidence,
     }),
     lastRetrieved: old,
-    halfLifeDays: 3650, // survives DECAY_THRESHOLD so it stays a survivor
+    halfLifeDays: 3650,
     ...overrides,
   };
 }

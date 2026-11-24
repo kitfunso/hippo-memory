@@ -10,7 +10,7 @@ export const enterprise = {
 export const site = {
   name: 'hippo',
   pkg: 'hippo-memory',
-  version: pkg.version, // Build-source version; publication is verified separately.
+  version: pkg.version,
   positioning: pkg.description,
   title: 'hippo: open-source memory for Claude Code, Codex and Cursor',
   description:

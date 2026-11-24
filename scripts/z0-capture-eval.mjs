@@ -107,7 +107,7 @@ function parseLines(text) {
   const out = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line) continue;
-    try { out.push(JSON.parse(line)); } catch { /* partial line */ }
+    try { out.push(JSON.parse(line)); } catch {}
   }
   return out;
 }

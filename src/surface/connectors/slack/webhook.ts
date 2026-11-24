@@ -213,7 +213,7 @@ async function tenantOrPark(d: SignedSlackRequest, body: JsonValue): Promise<str
   );
   if (resolvedTenant === null) {
     await parkAndAck(d, {
-      tenantId: null, // unroutable - stored as '__unroutable__'
+      tenantId: null,
       teamId: body.team_id,
       error: `unroutable team_id: ${body.team_id}`,
       bucket: 'unroutable',
@@ -233,7 +233,7 @@ async function parkUnparseable(d: SignedSlackRequest, teamIdFromRaw: string | nu
       ? await resolveTenant(d.store, { connector: 'slack', teamId: teamIdFromRaw }, hostFallback())
       : null;
   await parkAndAck(d, {
-    tenantId: parseFailTenant, // null → '__unroutable__' sentinel
+    tenantId: parseFailTenant,
     teamId: teamIdFromRaw,
     error: 'invalid JSON',
     bucket: 'parse_error',

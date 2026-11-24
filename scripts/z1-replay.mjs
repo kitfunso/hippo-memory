@@ -123,7 +123,6 @@ function makeResolvers(home, storeMap) {
         try {
           isHippoDir = fs.statSync(path.join(dir, '.hippo')).isDirectory();
         } catch {
-          // no .hippo at this level; keep climbing
         }
         if (isHippoDir) {
           root = dir;
@@ -856,7 +855,7 @@ function emptyZ1Bucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
-    tokensScored: [], // per-file only: parallel scored flags; fold ignores them
+    tokensScored: [],
     noRecall: { count: 0, total: 0 },
   };
 }
@@ -901,7 +900,7 @@ function emptyZ1bBucket() {
     reset: { primary: makeAcc(), secondary: makeAcc() },
     lifetime: { primary: makeAcc(), secondary: makeAcc() },
     tokens: [],
-    tokensScored: [], // per-file only: parallel scored flags; fold ignores them
+    tokensScored: [],
     intervalHasBlock: { count: 0, total: 0 },
     tokensUnattributed: 0,
     addedEvents: 0,

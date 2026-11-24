@@ -21,7 +21,6 @@ function safeRmSync(p: string): void {
   try {
     rmSync(p, { recursive: true, force: true });
   } catch {
-    /* best-effort */
   }
 }
 function mem(home: string, tenant: string, text: string, opts: { scope?: string | null } = {}): MemoryEntry {
@@ -127,7 +126,7 @@ describe('graph-recall scope parity', () => {
       store: sqliteStore(home),
       tenantId: T,
       budget: 4000,
-      recallScope: { requested: 'slack:private:dm1' }, // additive absent -> exact-narrowing (api semantics)
+      recallScope: { requested: 'slack:private:dm1' },
     });
     const ids = out.map((r) => r.entry.id);
     expect(ids).toContain(privNeighbor.id);

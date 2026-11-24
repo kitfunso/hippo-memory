@@ -359,7 +359,6 @@ describe('project write gate', () => {
         // SAFETY: the case under test is a JS gate writing to a frozen argument.
         (c.actor as { subject: string }).subject = 'hijacked';
       } catch {
-        // A frozen actor throws in strict mode; either way the request's actor stays.
       }
       try {
         // SAFETY: the case under test is a JS gate pushing into the actor's scopes.

@@ -38,7 +38,6 @@ function safeRmSync(p: string): void {
   try {
     fs.rmSync(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {
-    // best-effort cleanup only
   }
 }
 
@@ -120,7 +119,6 @@ function spawnBounded(
       if (stdin.delayMs) setTimeout(write, stdin.delayMs);
       else write();
     }
-    // 'idle': stdin stays open, untouched. 'ignore': child.stdin is null.
   });
 }
 

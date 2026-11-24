@@ -86,7 +86,7 @@ function readWalSizeMb(home: string): number | null {
     try {
       const s = statSync(candidate);
       return s.size / 1024 / 1024;
-    } catch { /* keep trying */ }
+    } catch {}
   }
   return null;
 }
@@ -163,7 +163,7 @@ async function doRequest(
           // control, not external/untrusted input.
           const parsed = JSON.parse(body) as { id?: string };
           if (parsed.id) idCreated = parsed.id;
-        } catch { /* ignore */ }
+        } catch {}
       }
       return { ok: res.ok, latencyMs: performance.now() - t0, idCreated };
     } else {

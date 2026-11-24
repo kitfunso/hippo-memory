@@ -306,14 +306,14 @@ export function evaluateAll(questionSplits, opts = {}) {
     budgets,
     primaryBudget,
     scorers: scorerNames,
-    summary, // split -> scorer -> budget -> { meanRetention, questionsIncluded, questionsSkippedZeroGold, degenerate, degenerateReason? }
-    bestSingleFactor, // split -> budget -> { scorer, meanRetention, questionsIncluded } | null, VARYING features only
-    varyingFeatures, // dataset-wide (raw, pre-normalization) non-constant feature names
-    deadFeatures, // dataset-wide constant feature names (provably inert for uniform/weighted; single-factor rows marked degenerate)
-    featureVarianceDetail, // feature -> { min, max, mean, variance, varies }
-    varianceGate, // { passed, minVarying, varyingCount, varyingFeatures, deadFeatures }
-    perQuestion, // split/N/goldCount per question (bookkeeping)
-    pairedRecords, // primaryBudget only, every scorer, every question (bootstrap input)
+    summary,
+    bestSingleFactor,
+    varyingFeatures,
+    deadFeatures,
+    featureVarianceDetail,
+    varianceGate,
+    perQuestion,
+    pairedRecords,
   };
 }
 

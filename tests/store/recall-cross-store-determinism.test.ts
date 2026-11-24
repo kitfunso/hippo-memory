@@ -124,7 +124,7 @@ describe('recall cross-store determinism', () => {
       embedderFor: resolveEmbeddingProvider,
       budget: 100_000,
       now: NOW,
-      localBump: 1.0, // remove the local-bias multiplier so this mirrors the plain hybridSearch case
+      localBump: 1.0,
     });
     const resultsB = await searchBothHybrid(QUERY, ...sharingStores(storeB, emptyGlobalB), {
       tenantId: ALL_TENANTS,

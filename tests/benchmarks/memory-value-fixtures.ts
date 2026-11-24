@@ -114,7 +114,7 @@ export function buildQuestionC() {
     question_id: 'fixture_q_c',
     question_type: 'temporal-reasoning',
     question: 'What was the theta topic answer? (never read by simulate/extract)',
-    question_date: formatLmeDate(day(7)), // BEFORE session s1 (day 10) — the causal-clamp case
+    question_date: formatLmeDate(day(7)),
     answer: 'the theta topic answer (never read by simulate/extract)',
     answer_session_ids: ['fixture_q_c_sess1'],
     haystack_dates: [formatLmeDate(day(0)), formatLmeDate(day(10))],

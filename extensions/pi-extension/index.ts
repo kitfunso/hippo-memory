@@ -167,14 +167,13 @@ export default function (pi: any) {
     if (!hippoInitialized(cwd)) return;
 
     if (sessionMemoryCount < 1) {
-      try { runHippo(['sleep'], cwd); } catch { /* best effort */ }
+      try { runHippo(['sleep'], cwd); } catch {}
       return;
     }
 
     try {
       runHippo(['sleep'], cwd);
     } catch {
-      // Best effort — don't block shutdown
     }
   });
 

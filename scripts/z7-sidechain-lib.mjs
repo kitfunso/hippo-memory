@@ -170,7 +170,7 @@ export function stripForkPrefix(text) {
       try {
         const e = JSON.parse(line);
         if (e.type === 'user' && contentText(e.message?.content).trimStart().startsWith('<fork-boilerplate')) return text.slice(end + 1);
-      } catch { /* a damaged line is not the boundary */ }
+      } catch {}
     }
     pos = end + 1;
   }
@@ -360,7 +360,7 @@ export function recheckList(real, decoy, rng) {
 export function parseJsonReply(stdout) {
   const t = (stdout ?? '').replace(/```(?:json)?/gi, '').trim();
   for (const s of [t, t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)]) {
-    try { const v = JSON.parse(s); if (isObj(v) && !Array.isArray(v)) return v; } catch { /* next candidate */ }
+    try { const v = JSON.parse(s); if (isObj(v) && !Array.isArray(v)) return v; } catch {}
   }
   return null;
 }

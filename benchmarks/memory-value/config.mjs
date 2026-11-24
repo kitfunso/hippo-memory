@@ -69,8 +69,8 @@ export const EXCLUDED_FEATURES = Object.freeze(['bm25_score']);
  * evaluate.mjs applies those weights with no additional orientation multiply.
  */
 export const ORIENTATION = Object.freeze({
-  age_days: -1, // recency-positive: younger memories score higher
-  outcome_negative: -1, // harm-negative: more negative outcomes score lower
+  age_days: -1,
+  outcome_negative: -1,
 });
 
 /** Orientation for a feature name; +1 (keep-positive) unless negated above. */

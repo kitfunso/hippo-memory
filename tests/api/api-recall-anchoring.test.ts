@@ -146,7 +146,6 @@ describe('api.recall anchoringHint', () => {
     const r1 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     const r2 = await retrieve(ctxFor(root), { query: 'frobnicate baz quux', hints: { recallHistory: snapshot } });
     expect(r1.anchoringHint).toEqual(r2.anchoringHint);
-    // Audit_log will have 2 rows (one per call) — that's expected and not a purity violation.
   });
 
   it('cross-tenant scoping: tenant-b snapshot does not interact with tenant-a context', async () => {

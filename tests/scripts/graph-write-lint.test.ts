@@ -18,7 +18,6 @@ describe('check-graph-writes lint', () => {
       try {
         rmSync(dir, { recursive: true, force: true });
       } catch {
-        /* ignore */
       }
     });
 

@@ -268,9 +268,9 @@ describe('backfillRepo', () => {
         {
           items: [
             issueItem(1, '2026-05-01T10:00:00Z'),
-            issueItem(2, '2026-05-02T10:00:00Z', /* isPr */ true),
+            issueItem(2, '2026-05-02T10:00:00Z', true),
             issueItem(3, '2026-05-03T10:00:00Z'),
-            issueItem(4, '2026-05-04T10:00:00Z', /* isPr */ true),
+            issueItem(4, '2026-05-04T10:00:00Z', true),
             issueItem(5, '2026-05-05T10:00:00Z'),
           ],
           next: null,

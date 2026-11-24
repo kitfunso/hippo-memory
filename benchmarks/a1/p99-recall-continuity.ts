@@ -134,7 +134,6 @@ function loadTier1Queries(): string[] {
       }
     }
   } catch {
-    // fall through
   }
   if (queries.length === 0) {
     return [

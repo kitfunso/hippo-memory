@@ -16,10 +16,10 @@ describe('hitRateByPhase with restrictLateTo', () => {
 
   it('restrictLateTo=4 puts last 4 traps in late, first 11 in early, middle 10 in mid', () => {
     const pattern = [
-      ...Array(11).fill(true), // early all hit -> 100%
+      ...Array(11).fill(true),
       ...Array(5).fill(true),
-      ...Array(5).fill(false), // mid 50%
-      ...Array(4).fill(false), // late all miss -> 0%
+      ...Array(5).fill(false),
+      ...Array(4).fill(false),
     ];
     expect(pattern.length).toBe(25);
     const results = buildTrapResults(pattern);
@@ -31,9 +31,9 @@ describe('hitRateByPhase with restrictLateTo', () => {
 
   it('restrictLateTo=4 with all late traps hit returns late=1.0', () => {
     const pattern = [
-      ...Array(11).fill(false), // early all miss
-      ...Array(10).fill(false), // mid all miss
-      ...Array(4).fill(true), // late all hit
+      ...Array(11).fill(false),
+      ...Array(10).fill(false),
+      ...Array(4).fill(true),
     ];
     const results = buildTrapResults(pattern);
     const phases = hitRateByPhase(results, 4);

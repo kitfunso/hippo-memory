@@ -88,7 +88,6 @@ describe('llmReranker', () => {
           abortedFromSignal = true;
           reject(new DOMException('aborted', 'AbortError'));
         });
-        // never resolves on its own; only the abort can complete it
       });
     });
 

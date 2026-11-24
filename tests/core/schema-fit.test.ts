@@ -56,12 +56,12 @@ describe('computeSchemaFit', () => {
 
     const fitRelevantContent = computeSchemaFit(
       'FRED cache silently dropped another series during refresh',
-      [], // no tags
+      [],
       pool,
     );
     const fitIrrelevantContent = computeSchemaFit(
       'Kubernetes namespace isolation for multi-tenant clusters',
-      [], // no tags
+      [],
       pool,
     );
 

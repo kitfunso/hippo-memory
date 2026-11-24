@@ -15,7 +15,6 @@ afterEach(() => {
   try {
     removeDir(dir);
   } catch {
-    // best-effort cleanup only
   }
 });
 

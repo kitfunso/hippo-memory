@@ -15,7 +15,6 @@ afterEach(() => {
   try {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } catch {
-    // best-effort cleanup only
   }
 });
 

@@ -263,7 +263,6 @@ async function rebuildOneSummary(options: RebuildOneSummaryOptions): Promise<voi
     result.rebuilt++;
     rebuiltContent.set(summary.id, newContent);
   }
-  // changed=false (refused also false) → race lost; not failure, not success, silently skip
 }
 
 async function regenerate(
@@ -313,8 +312,6 @@ async function clearZeroChildSummary(
     now,
   });
   if (changed) result.zeroChildSkipped++;
-  // changed=false means race lost or row vanished: skip silently. `refused` is always false here, as only new content
-  // is checked against the tombstones.
 }
 
 function summaryLabel(summary: MemoryEntry): string {

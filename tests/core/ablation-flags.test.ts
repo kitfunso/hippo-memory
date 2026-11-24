@@ -345,9 +345,9 @@ describe('HIPPO_FAKE_NOW', () => {
       '2026-06-11',
       '2026-06-11T12:00:00',
       '2026-06-11T12:00:00+01:00',
-      '2026-06-11T12:00:00Z', // millis required (exact toISOString form)
-      '2026-02-31T00:00:00.000Z', // rollover (codex round-3 P2)
-      '2026-13-01T00:00:00.000Z', // rollover month
+      '2026-06-11T12:00:00Z',
+      '2026-02-31T00:00:00.000Z',
+      '2026-13-01T00:00:00.000Z',
     ]) {
       vi.stubEnv('HIPPO_FAKE_NOW', junk);
       const before = Date.now();

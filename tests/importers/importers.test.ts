@@ -345,9 +345,6 @@ describe('--global: writes to global store', () => {
       hippoRoot: tmpDir,
       global: true,
       dryRun: false,
-      // Override global root by patching - we test this by providing a real initStore'd dir
-      // and using the function's global=true path which calls initGlobal() -> getGlobalRoot()
-      // Instead, test the non-global result directly in custom dir
     });
 
     const resultLocal = importChatGPT(file, makeOpts({ global: false }));
@@ -363,9 +360,9 @@ describe('min length filter', () => {
     const file = writeTmp(
       'mixed.txt',
       [
-        'ok', // too short (2 chars)
-        'yes', // too short (3 chars)
-        'hi there', // too short (8 chars)
+        'ok',
+        'yes',
+        'hi there',
         'This is a valid memory entry that is long enough',
         'Another valid entry with sufficient length to pass the filter',
       ].join('\n'),

@@ -47,7 +47,7 @@ function parseArgs() {
     seed: undefined,
     nSeeds: 1,
     budget: 2000,
-    restrictLateTo: null, // v1.7.7 -- null preserves chronological-third behavior.
+    restrictLateTo: null,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -425,7 +425,7 @@ function buildOutput(conditionResults, opts = {}) {
 
   return {
     benchmark: 'hippo-sequential-learning',
-    version: '1.7.7',  // v1.7.7 -- bump for audit
+    version: '1.7.7',
     timestamp: new Date().toISOString(),
     conditions,
     tasks: N_TASKS,

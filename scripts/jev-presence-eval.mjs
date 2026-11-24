@@ -217,7 +217,6 @@ async function callJevOnce(body) {
     try {
       json = JSON.parse(text);
     } catch {
-      /* non-JSON error body */
     }
     if (res.status === 422) jevHttp.code422++;
     return { ok: res.ok, status: res.status, json, rawText: res.ok ? null : redact(text).slice(0, 2000) };
@@ -252,7 +251,6 @@ async function getJevRaw(row) {
     try {
       return { ...JSON.parse(readFileSync(cp, 'utf8')), fromCache: true };
     } catch {
-      /* corrupt cache, refetch below */
     }
   }
   const body = buildRequestBody(row.query, row.pool);

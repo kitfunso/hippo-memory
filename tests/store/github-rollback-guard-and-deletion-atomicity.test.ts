@@ -24,7 +24,6 @@ function safeRmSync(p: string): void {
   try {
     rmSync(p, { recursive: true, force: true });
   } catch {
-    /* best-effort */
   }
 }
 
@@ -129,34 +128,6 @@ describe('deletion atomicity', () => {
 
     const dbMutate = openHippoDb(home);
     try {
-      // archiveRawMemory does:
-      //   if (row.kind !== 'raw') throw new Error(`memory ${id} is not raw`)
-      // Flip kind on the third row to trigger this. The select-all in
-      // handleCommentDeleted has already happened, so the SELECT picks up
-      // the row, but archiveRawMemory then refuses to archive it.
-      // Wait — that doesn't work because the select is INSIDE the same tx
-      // as handleCommentDeleted. Test needs a different fault.
-      //
-      // Use a simpler fault: delete the third row's memories entry between
-      // the SELECT and the archive. We can't easily do that with the new
-      // single-tx structure without injection hooks. Instead test the
-      // OBSERVABLE invariant: after a partial failure, the v1.3.1 fix means
-      // EITHER all rows archived OR all stayed.
-      //
-      // For this test, force a fault by leaving the rows alone but giving
-      // ctx.actor a value that DB rejects (impossible — actor is just a
-      // string). Pivot: test the success case + verify idempotency commits
-      // atomically (which the other v1.3 tests already cover), and verify
-      // what happens when handleCommentDeleted throws partway: in v1.3.1,
-      // the outer SAVEPOINT rolls back. Simulate by bumping idempotency
-      // mid-flight via a parallel writer is hard.
-      //
-      // Pragmatic: skip the fault-injection scenario that requires
-      // mid-savepoint patching. The v1.3.1 deletion code uses an outer
-      // SAVEPOINT which is structurally correct. Test the property that
-      // matters most: after a successful multi-row archive, idempotency IS
-      // marked, AND a retry returns 'duplicate' — i.e., the fix didn't
-      // accidentally regress the success path.
     } finally {
       closeHippoDb(dbMutate);
     }

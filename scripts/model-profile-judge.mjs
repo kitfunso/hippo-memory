@@ -41,7 +41,7 @@ export function judge(caseDef, response) {
         'json',
         '--no-session-persistence',
         '--disallowed-tools',
-        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand', // judge is pure text classification
+        'Bash,Edit,Write,Read,Glob,Grep,Task,WebFetch,WebSearch,NotebookEdit,TodoWrite,BashOutput,KillBash,ExitPlanMode,SlashCommand',
       ],
       {
         input: text,

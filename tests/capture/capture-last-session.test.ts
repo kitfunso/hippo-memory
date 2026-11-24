@@ -27,16 +27,16 @@ function transcriptJsonl(entries: unknown[]): string {
 describe('summariseTranscript', () => {
   it('extracts plain-string user messages and assistant text blocks', () => {
     const jsonl = transcriptJsonl([
-      { type: 'permission-mode', permissionMode: 'default' }, // should be ignored
+      { type: 'permission-mode', permissionMode: 'default' },
       { type: 'user', message: { role: 'user', content: 'please add feature X' } },
       {
         type: 'assistant',
         message: {
           role: 'assistant',
           content: [
-            { type: 'thinking', thinking: 'internal monologue' }, // skipped
+            { type: 'thinking', thinking: 'internal monologue' },
             { type: 'text', text: 'Sure, implementing feature X now.' },
-            { type: 'tool_use', name: 'Edit', input: {} }, // skipped
+            { type: 'tool_use', name: 'Edit', input: {} },
           ],
         },
       },
@@ -44,7 +44,7 @@ describe('summariseTranscript', () => {
         type: 'user',
         message: {
           role: 'user',
-          content: [{ type: 'tool_result', content: 'noisy tool output' }], // skipped
+          content: [{ type: 'tool_result', content: 'noisy tool output' }],
         },
       },
     ]);

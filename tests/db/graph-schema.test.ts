@@ -12,7 +12,6 @@ describe('graph schema v37', () => {
     try {
       rmSync(home, { recursive: true, force: true });
     } catch {
-      /* ignore */
     }
   });
 

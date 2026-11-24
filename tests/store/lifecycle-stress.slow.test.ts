@@ -101,8 +101,8 @@ describe('lifecycle-stress value-based metric', () => {
       { factKey: 'fact1', topic: 'T1', answerToken: 'ANS2222' },
     ];
     const assembled = [
-      { entry: { content: 'T0 was ANS0000 (old).' } }, // stale, ranks first
-      { entry: { content: 'T0 is ANS1111 (current).' } }, // current, ranks second
+      { entry: { content: 'T0 was ANS0000 (old).' } },
+      { entry: { content: 'T0 is ANS1111 (current).' } },
       { entry: { content: 'T1 is ANS2222.' } },
     ];
     expect(scoreAssembled(assembled, staleLabels).answered).toBe(1);

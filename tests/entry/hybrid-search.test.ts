@@ -379,7 +379,6 @@ describe('mmrRerank', () => {
       bm25: 0,
       cosine: 0,
       tokens: 0,
-      // force id to match what we index in embeddings map
     };
   }
 
@@ -402,8 +401,8 @@ describe('mmrRerank', () => {
     c.entry.id = 'c';
     const idx = {
       a: [1, 0, 0],
-      b: [0.99, 0.14, 0], // cos(a, b) ≈ 0.99 — duplicates
-      c: [0, 0, 1], // orthogonal — diverse
+      b: [0.99, 0.14, 0],
+      c: [0, 0, 1],
     };
     const ranked = mmrRerank([a, b, c], idx, 0.5, false);
     expect(ranked[0].entry.id).toBe('a');

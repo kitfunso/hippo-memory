@@ -127,7 +127,6 @@ async function refusalsOf(
   const asked: MemoryItem[] = [];
   for (const item of items) {
     if (item.text.trim().length < MIN_ITEM_CHARS) out.set(item.key, 'short');
-    // Imported rows reach prompts, so the bar is text leaving the machine: Bearer headers and JWTs count too.
     else if (item.flagged === true || redactSecretsStrict(item.text) !== item.text) {
       out.set(item.key, 'secret');
     } else asked.push(item);

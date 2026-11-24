@@ -128,7 +128,6 @@ describe('graph extraction (deterministic, from consolidated first-class objects
     try {
       rmSync(home, { recursive: true, force: true });
     } catch {
-      /* ignore */
     }
   });
 

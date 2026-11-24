@@ -79,7 +79,7 @@ describe('api.ts:833 DAG substitution ordering', () => {
     const parentB: EntryIdentity = { id: 'parent-aaa', content: 'aaa summary of topic aaa' };
     const overflowByParent = new Map<string, number>([
       [parentA.id, 2],
-      [parentB.id, 2], // tied overflow count with parentA
+      [parentB.id, 2],
     ]);
     const eligibleParents = [parentA, parentB];
     eligibleParents.sort((a, b) => {

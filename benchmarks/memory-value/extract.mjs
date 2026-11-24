@@ -34,11 +34,11 @@ export function computeFeatures(entry, now) {
   const raw = {
     age_days: ageDays,
     half_life_days: entry.half_life_days,
-    strength: calculateStrength(entry, now), // derived, never entry.strength (inert-write constraint)
+    strength: calculateStrength(entry, now),
     retrieval_count: entry.retrieval_count,
     outcome_positive: pos,
     outcome_negative: neg,
-    outcome_ratio: (pos - neg) / (pos + neg + 1), // same formula as calculateRewardFactor's ratio term
+    outcome_ratio: (pos - neg) / (pos + neg + 1),
     schema_fit: entry.schema_fit,
     pinned: entry.pinned ? 1 : 0,
     starred: entry.starred ? 1 : 0,

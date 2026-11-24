@@ -205,7 +205,6 @@ function cleanupBackupPlugins(logger?: { info?: (...args: unknown[]) => void }):
       }
     }
   } catch {
-    // Best-effort cleanup — don't break boot
   }
 }
 

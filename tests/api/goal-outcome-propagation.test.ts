@@ -90,7 +90,6 @@ describe('completeGoal lifespan-windowed propagation', () => {
     seedRecallLog(root, g.id, m.id, now);
     expect(() => seedRecallLog(root, g.id, m.id, now)).toThrow(/UNIQUE/i);
     await completeGoal(root, g.id, { outcomeScore: 0.9 });
-    // Strength multiplied by 1.10 once, not twice.
   });
 
   it('strength clamps at upper bound 1.0', async () => {

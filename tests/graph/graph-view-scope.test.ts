@@ -59,7 +59,6 @@ describe('graph-view personal scope', () => {
     try {
       removeDir(home);
     } catch {
-      /* best-effort */
     }
   });
 

@@ -387,7 +387,7 @@ describe('Scoring', () => {
       const query = [1, 0, 0];
       const config = {
         ...DEFAULT_PHYSICS_CONFIG,
-        clusterThreshold: 0.99, // very tight threshold for the close cluster
+        clusterThreshold: 0.99,
         clusterTopK: 10,
         interferenceGain: 1.0,
       };
@@ -405,7 +405,7 @@ describe('Scoring', () => {
       const query = vecNormalize([1, 1, 0]);
       const config = {
         ...DEFAULT_PHYSICS_CONFIG,
-        clusterThreshold: 0.95, // high threshold; cos([1,0,0],[0,1,0]) = 0
+        clusterThreshold: 0.95,
         clusterTopK: 10,
       };
       const results = physicsScore(particles, query, config);
