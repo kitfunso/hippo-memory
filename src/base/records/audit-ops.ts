@@ -69,11 +69,14 @@ export const AUDIT_OPS = [
   'project_merge', // emitted by `hippo projects merge --apply` with every id it touched
   'project_repair', // emitted by `hippo projects repair --apply` with every id it touched
   'quality_repair', // emitted by `hippo audit repair --apply` for each memory it moved to dormant storage
-  // Written by a SCIM add-on for each committed user write; core writes none.
   'scim_user_create',
   'scim_user_replace',
   'scim_user_patch',
   'scim_user_delete',
+  'scim_group_create',
+  'scim_group_replace',
+  'scim_group_patch',
+  'scim_group_delete',
 ] as const;
 
 export type AuditOp = (typeof AUDIT_OPS)[number];

@@ -1,5 +1,3 @@
-/** The four SCIM user ops, written by an add-on, must round-trip through GET /v1/audit?op= and `hippo audit list --op`. */
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import type { ServerHandle } from '../../src/server.js';
@@ -8,7 +6,16 @@ import { makeStore } from '../_helpers/make-root.js';
 import { serveAsAdmin } from '../_helpers/admin-server.js';
 import { runCliOut } from '../_helpers/run-cli-as.js';
 
-const SCIM_OPS = ['scim_user_create', 'scim_user_replace', 'scim_user_patch', 'scim_user_delete'] as const;
+const SCIM_OPS = [
+  'scim_user_create',
+  'scim_user_replace',
+  'scim_user_patch',
+  'scim_user_delete',
+  'scim_group_create',
+  'scim_group_replace',
+  'scim_group_patch',
+  'scim_group_delete',
+] as const;
 const ACTOR = 'system:scim-token:acme';
 
 interface Row {
@@ -22,7 +29,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe('SCIM user ops through the audit readers', () => {
+describe('SCIM user and group ops through the audit readers', () => {
   let base: string;
   let home: string;
   let handle: ServerHandle;
@@ -61,12 +68,15 @@ describe('SCIM user ops through the audit readers', () => {
     });
   });
 
-  it('hippo audit list --op scim_user_delete --json returns the delete row', async () => {
+  it.each([
+    ['scim_user_delete', 'user-3'],
+    ['scim_group_delete', 'user-7'],
+  ] as const)('hippo audit list --op %s --json returns the delete row', async (op, targetId) => {
     const env = { ...process.env, HIPPO_HOME: home };
-    const out = await runCliOut(['audit', 'list', '--op', 'scim_user_delete', '--json'], { env, cwd: base });
+    const out = await runCliOut(['audit', 'list', '--op', op, '--json'], { env, cwd: base });
     // SAFETY: --json prints the AuditEvent[]; the assertions below check each field used.
     const rows = JSON.parse(out) as Row[];
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ op: 'scim_user_delete', actor: ACTOR, targetId: 'user-3' });
+    expect(rows[0]).toMatchObject({ op, actor: ACTOR, targetId });
   });
 });
