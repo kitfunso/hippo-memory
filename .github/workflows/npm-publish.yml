@@ -12,9 +12,6 @@ name: Publish to npm
 # npm-publish.yml and "Allow npm publish" ticked; unticked, it may only stage.
 # No NPM_TOKEN secret is needed after that.
 # docs/release-policy.md covers tags and the `stable` channel.
-#
-# After a `latest` publish the release-dispatch job wakes a downstream CI with a repository_dispatch.
-# It reads RELEASE_DISPATCH_REPO and RELEASE_DISPATCH_TOKEN from the `release-dispatch` environment (limited to v*.*.* tags) and skips when either is unset.
 
 on:
   push:
@@ -102,14 +99,12 @@ jobs:
     secrets:
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-  # Wakes a downstream CI after a `latest` release; skips unless both environment secrets are set.
   release-dispatch:
     needs: [publish]
     if: needs.publish.outputs.dist-tag == 'latest'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: release-dispatch
-    # The publish has already run; a failed dispatch must not mark the release red.
     continue-on-error: true
     permissions: {}
     steps:
