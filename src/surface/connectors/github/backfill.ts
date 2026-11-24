@@ -32,6 +32,8 @@ export interface BackfillOptions {
   sleepMs?: (ms: number) => Promise<void>;
   /** github.com unless the caller passes GITHUB_ENTERPRISE_URL's site. */
   site?: GitHubSite;
+  /** GitHub user ids GITHUB_TRUSTED_USER_IDS vouches for; the CLI reads it. */
+  trustedUserIds?: ReadonlySet<number>;
 }
 
 export interface BackfillStreamCounts {
@@ -71,6 +73,7 @@ interface IssuesItem {
   title: string;
   body: string | null;
   user: GitHubSender;
+  author_association?: string;
   updated_at?: string;
   pull_request?: unknown;
 }
@@ -79,6 +82,7 @@ interface IssueCommentItem {
   id: number;
   body: string | null;
   user: GitHubSender;
+  author_association?: string;
   updated_at?: string;
   issue_url?: string;
 }
@@ -87,6 +91,7 @@ interface PrReviewCommentItem {
   id: number;
   body: string | null;
   user: GitHubSender;
+  author_association?: string;
   updated_at?: string;
   pull_request_url?: string;
 }
@@ -119,6 +124,7 @@ interface DrainStreamOptions {
   readonly maxItems?: number;
   readonly host: string | undefined;
   readonly ownsBareRefs: boolean;
+  readonly trustedUserIds?: ReadonlySet<number>;
 }
 
 /** The next page's URL. A link to another origin or with credentials throws, so the token never
@@ -187,14 +193,15 @@ async function ingestBackfillItem(
   item: JsonValue,
   evt: IngestEvent,
   updatedAt: string | null,
-  site: Pick<DrainStreamOptions, 'host' | 'ownsBareRefs'>,
+  options: Pick<DrainStreamOptions, 'host' | 'ownsBareRefs' | 'trustedUserIds'>,
 ): Promise<boolean> {
   const r = await ingestEvent(ctx, {
     event: evt,
     rawBody: JSON.stringify(item),
     deliveryId: `backfill:${ctx.tenantId}:${updatedAt ?? ''}`,
-    host: site.host,
-    ownsBareRefs: site.ownsBareRefs,
+    host: options.host,
+    ownsBareRefs: options.ownsBareRefs,
+    trustedUserIds: options.trustedUserIds,
   });
   return r.status === 'ingested' || r.status === 'skipped';
 }
@@ -237,6 +244,7 @@ function issueItemToEvent(item: JsonValue, repository: GitHubRepository): Ingest
       title: item.title,
       body: item.body ?? null,
       user: { login: item.user.login, id: item.user.id },
+      author_association: item.author_association,
       updated_at: item.updated_at,
     },
   };
@@ -261,6 +269,7 @@ function issueCommentItemToEvent(
       id: c.id,
       body: c.body ?? null,
       user: { login: c.user.login, id: c.user.id },
+      author_association: c.author_association,
       updated_at: c.updated_at,
     },
   };
@@ -285,6 +294,7 @@ function prReviewCommentItemToEvent(
       id: c.id,
       body: c.body ?? null,
       user: { login: c.user.login, id: c.user.id },
+      author_association: c.author_association,
       updated_at: c.updated_at,
     },
   };
@@ -346,6 +356,7 @@ async function backfillStream(
     maxItems: opts.maxPerStream,
     host: site.host,
     ownsBareRefs: site.ownsBareRefs,
+    trustedUserIds: opts.trustedUserIds,
   });
   // A capped run (--max) must leave the HWM at its previous value so the next run re-fetches the
   // unprocessed tail.

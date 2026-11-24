@@ -3,6 +3,8 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import {
   GITHUB_COM,
   headerHost,
+  fromSite,
+  payloadFromSite,
   hostMismatch,
   mismatchSender,
   parseGitHubEnterpriseUrl,
@@ -159,5 +161,39 @@ describe('mismatchSender', () => {
 
   it('returns null for any other error text', () => {
     expect(mismatchSender('unroutable: installation_id=99')).toBeNull();
+  });
+});
+
+describe('fromSite', () => {
+  it.each([
+    [undefined, 'github.com', true],
+    [undefined, 'ghes.example.com', false],
+    [undefined, undefined, false],
+    ['ghes.example.com', 'github.com', false],
+  ])('github.com site: sent %s, payload %s is %s', (sent, payloadSays, expected) => {
+    expect(fromSite(GITHUB_COM, sent, payloadSays)).toBe(expected);
+  });
+
+  it.each([
+    ['ghes.example.com', 'ghes.example.com', true],
+    [undefined, 'ghes.example.com', false],
+    ['ghes.example.com', 'github.com', false],
+    ['ghes.example.com', undefined, false],
+    ['other.example.com', 'other.example.com', false],
+  ])('GHES site: sent %s, payload %s is %s', (sent, payloadSays, expected) => {
+    expect(fromSite(GHES, sent, payloadSays)).toBe(expected);
+  });
+});
+
+describe('payloadFromSite', () => {
+  it.each([
+    [undefined, 'github.com', true],
+    [undefined, 'ghes.example.com', false],
+    [undefined, undefined, false],
+    ['ghes.example.com', 'ghes.example.com', true],
+    ['ghes.example.com', 'github.com', false],
+    ['ghes.example.com', undefined, false],
+  ])('host %s, payload %s is %s', (host, payloadSays, expected) => {
+    expect(payloadFromSite(host, payloadSays)).toBe(expected);
   });
 });

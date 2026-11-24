@@ -1,4 +1,4 @@
-// An api or domain read of an optional group with a fallback (an F group) sits at one of eight pinned
+// An api or domain read of an optional group with a fallback (an F group) sits at one of nine pinned
 // sites, each with the reason no root binds it (beside each pin below); a new one fails here until it is named.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -50,7 +50,7 @@ function fallbackReads(): string[] {
 }
 
 describe('fallback reads of optional groups', () => {
-  it('sit at the eight pinned sites and nowhere else', () => {
+  it('sit at the nine pinned sites and nowhere else', () => {
     expect(fallbackReads()).toEqual(
       [
         // 1-2. vectorSourceOf and graphStoresOf: the searched store is picked per call.
@@ -71,7 +71,11 @@ describe('fallback reads of optional groups', () => {
         "src/domain/search/embed-memories.ts: StoreWith<never, 'embeddingIndex' | 'vectors' | 'vectorWrites'>",
         // 7. sharing and folderFiles: the published sleep entry takes any folder.
         "src/api/sleep/sleep-run.ts: ContextWith<SleepGroup, 'sharing' | 'folderFiles'>",
-        // 8. promote: serve binds the row on every store; a shared store reads no folder files, and under serve only hippo.db, which has them, is not shared.
+        // 8. connectorWrites and quarantine: published remember and supersede take any store, and one with no review groups keeps the frame.
+        'src/api/memories/promote.ts: ContextWith<never, ReviewGroup>',
+        'src/api/memories/remember.ts: ContextWith<never, ReviewGroup>',
+        'src/api/memories/write-screen.ts: ContextWith<never, ReviewGroup>',
+        // 9. promote: serve binds the row on every store; a shared store reads no folder files, and under serve only hippo.db, which has them, is not shared.
         "src/api/memories/promote.ts: ContextWith<never, 'folderFiles'>",
       ].sort(),
     );

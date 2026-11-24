@@ -713,8 +713,13 @@ function commitPinned(db: DatabaseSyncLike, pin: PinWrite): MemoryEntry {
 }
 
 /** Reach, the CAS on the old row, the successor's insert and the supersede row in one BEGIN
- * IMMEDIATE transaction. Two racing supersedes: one CAS wins. */
-function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
+ * IMMEDIATE transaction. Two racing supersedes: one CAS wins. `afterWrite` runs on the successor's row inside
+ * the same scope, so its throw undoes the supersede. */
+export function commitSupersede(
+  db: DatabaseSyncLike,
+  write: SupersedeWrite,
+  afterWrite?: WriteEntryInternalOptions['afterWrite'],
+): void {
   const { tenantId, actor, oldId, successor } = write;
   // The refusal row lands after the scope has rolled back, in a fresh implicit transaction the
   // aborted one cannot undo.
@@ -732,7 +737,7 @@ function commitSupersede(db: DatabaseSyncLike, write: SupersedeWrite): void {
       if (won.dag_parent_id) {
         markSummaryDirtyInTx(db, { summaryId: won.dag_parent_id, tenantId, actor });
       }
-      writeEntryDbOnly(db, successor, { actor });
+      writeEntryDbOnly(db, successor, { actor, afterWrite });
       appendAuditEvents(db, [
         { tenantId, actor, op: 'supersede', targetId: oldId, metadata: { newId: successor.id } },
       ]);

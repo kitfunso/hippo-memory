@@ -60,7 +60,7 @@ The `UserPromptSubmit` hook runs `hippo context --pinned-only --include-recent 5
 
 ### Your rules at session start
 
-The `SessionStart` hook runs `hippo session-rules`, which prints the rules you stated to this project as session context and nothing else. It sends up to 2,000 tokens (`pinnedInject.sessionRulesBudget`), newest rules first, and a last line counts the rest. It prints nothing when there are none.
+The `SessionStart` hook runs `hippo session-rules`, which prints the rules you stated to this project as session context and nothing else. It sends the newest rules that fit 2,000 tokens (`pinnedInject.sessionRulesBudget`), oldest first, and a last line counts the rest. It prints nothing when there are none.
 
 ### Auto-capture errors
 

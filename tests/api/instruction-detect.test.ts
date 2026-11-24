@@ -6,7 +6,7 @@ import {
   detectInstructionIn,
   instructionPatterns,
   markTolerant,
-} from '../../src/api/instruction-detect.js';
+} from '../../src/domain/trust/instruction-detect.js';
 import { hiddenCase, markedText, markFreeText, readings } from '../_helpers/hidden-mark-cases.js';
 import { forAll } from '../_helpers/property.js';
 import { fillTo, ONE_MIB, scanWithinWatchdog, WATCHDOG_MS } from '../_helpers/scan-watchdog.js';

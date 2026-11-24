@@ -23,7 +23,11 @@ import type {
   DrillDownSummary,
 } from '../objects/drill-down.js';
 import { DATE_PREFIX_CHARS } from '../../base/util/token-text.js';
-import { INSTRUCTION_LIKE_TAG, isUntrustedSource } from '../instruction-detect.js';
+import {
+  INSTRUCTION_LIKE_TAG,
+  isUntrustedSource,
+  printedTags,
+} from '../../domain/trust/instruction-detect.js';
 
 /** The frames around untrusted rows, so the agent reading the block treats them as data whatever
  * the detector said. */
@@ -48,10 +52,16 @@ function escapeFrameClose(text: string): string {
   return text.replace(/(\\*)»/g, (_match, slashes: string) => `${slashes}${slashes}\\»`);
 }
 
-function shownContent(e: MemoryEntry): string {
+function shownContent(e: MemoryEntry, tagStr = ''): string {
   const open = frameOpen(e.tags);
   const text = shownText(e);
-  return open === null ? text : `${open}${escapeFrameClose(text)}${UNTRUSTED_CLOSE}`;
+  return open === null ? text : `${open}${escapeFrameClose(text + tagStr)}${UNTRUSTED_CLOSE}`;
+}
+
+/** A framed row's tags go inside the frame with its content, since a member writes them too; the
+ * tag text printed after the row is '' then. */
+function tagsOutsideFrame(e: MemoryEntry, tagStr: string): string {
+  return frameOpen(e.tags) === null ? tagStr : '';
 }
 
 export function snapshotText(s: TaskSnapshot): string {
@@ -177,8 +187,9 @@ export function contextLine({
   strengthPct,
 }: ContextLineOptions): string {
   const e = item.entry;
-  const content = shownContent(e);
-  const tagStr = e.tags.length > 0 ? ` [${e.tags.join(', ')}]` : '';
+  const tagText = printedTags(e.tags);
+  const content = shownContent(e, tagText);
+  const tagStr = tagsOutsideFrame(e, tagText);
   const strengthStr = showStrength ? ` (${strengthPct}%)` : '';
   const globalPrefix = item.isGlobal ? '[global] ' : '';
   const label = confidenceLabel(e, now);
@@ -240,8 +251,9 @@ export function crossProjectHeading(entries: number): string {
 
 export function crossProjectLine(item: Pick<ContextResultEntry, 'entry' | 'origin'>): string {
   const originLabel = item.origin === null || item.origin === '' ? 'unknown-origin' : item.origin;
-  const tagStr = item.entry.tags.length > 0 ? ` [${item.entry.tags.join(', ')}]` : '';
-  return `- **[${originLabel}]** ${shownContent(item.entry)}${tagStr}`;
+  const tagText = printedTags(item.entry.tags);
+  const tagStr = tagsOutsideFrame(item.entry, tagText);
+  return `- **[${originLabel}]** ${shownContent(item.entry, tagText)}${tagStr}`;
 }
 
 /** An explicit header lets agents and humans tell borrowed context from project memory; no items

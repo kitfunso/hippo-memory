@@ -51,7 +51,11 @@ import { assertAddonRoutes, assertPublicJson } from './route-checks.js';
 import { answerRequest } from './failure-replies.js';
 import { bootLimiters } from './rate-limits.js';
 import type { RateLimiter } from './rate-limit.js';
-import { githubSiteFromEnv, warnGitHubPreviousSecretOpen } from '../connectors/github/webhook.js';
+import {
+  githubSiteFromEnv,
+  githubTrustedUserIds,
+  warnGitHubPreviousSecretOpen,
+} from '../connectors/github/webhook.js';
 import { warnSlackPreviousSecretOpen } from '../connectors/slack/webhook.js';
 import { oauthBoot } from './oauth-resource.js';
 import {
@@ -261,6 +265,7 @@ export async function serve(opts: ServeOptions): Promise<ServerHandle> {
   assertFlagsValid();
   // A bad GITHUB_ENTERPRISE_URL is refused here, not on the first delivery.
   githubSiteFromEnv();
+  githubTrustedUserIds(); // A bad entry refuses the start, as a flag typo does.
   const loopbackHosts = await loopbackBindHosts(host);
   assertTlsOrCleartextAllowed(
     host,

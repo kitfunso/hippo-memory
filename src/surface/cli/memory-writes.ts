@@ -61,6 +61,8 @@ export type Remembered =
       readonly via: string;
       readonly startedWeak?: api.StartedWeak;
       readonly warnings: readonly string[];
+      /** Set when the server held the write for review. */
+      readonly quarantined?: { readonly reason: string };
     };
 
 export interface Promoted {
@@ -275,8 +277,17 @@ function relayedRequest(request: RememberRequest): api.RememberOptions {
 
 function relayed(server: ServerInfo, reply: api.RememberResult | api.RememberSkipped): Remembered {
   if ('skipped' in reply) return { status: 'skipped', ...reply.skipped };
-  const { id, kind, tenantId, startedWeak, warnings = [] } = reply;
-  return { status: 'relayed', id, kind, tenantId, via: server.url, warnings, startedWeak };
+  const { id, kind, tenantId, startedWeak, warnings = [], quarantined } = reply;
+  return {
+    status: 'relayed',
+    id,
+    kind,
+    tenantId,
+    via: server.url,
+    warnings,
+    startedWeak,
+    quarantined,
+  };
 }
 
 interface ServedCall<T> {

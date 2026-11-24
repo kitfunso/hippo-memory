@@ -117,6 +117,19 @@ describe('check-test-only-exports.mjs: script callers and the purity rule', () =
     expect(counted('state.ts')).toEqual(['readCounter', 'readRuns', 'seenCount', 'tableSize']);
   });
 
+  it('does not take sorting a new array literal as a write to the names inside it', () => {
+    file(
+      'src/mark.ts',
+      `export const MARK = 'm';\nexport function hasMark(tags: readonly string[]): boolean { return tags.includes(MARK); }\nexport const marked = hasMark([]);\n`,
+    );
+    file(
+      'src/sorter.ts',
+      `import { MARK } from './mark.js';\nexport function withMark(tags: readonly string[]): string[] { return [...tags, MARK].sort(); }\nexport const sorted = withMark([]);\n`,
+    );
+    file('tests/mark.test.ts', '// hasMark withMark\n');
+    expect([...counted('mark.ts'), ...counted('sorter.ts')]).toEqual([]);
+  });
+
   it('counts a function that reaches the db layer, fs through a second module, console or process.env', () => {
     expect(counted('report.ts')).toEqual(expect.arrayContaining(['describeRows', 'firstLine', 'home', 'shout']));
   });

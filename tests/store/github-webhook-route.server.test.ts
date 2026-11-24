@@ -1,144 +1,25 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createHmac } from 'node:crypto';
 import { serve, type ServerHandle } from '../../src/server.js';
-import { openHippoDb, closeHippoDb, type DatabaseSyncLike } from '../../src/db/index.js';
+import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { jsonAs } from '../_helpers/http-objects-server.js';
-import { log } from '../../src/base/util/log.js';
-import { hostMismatch, mismatchSender, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
+import {
+  SECRET,
+  defaultHeaders,
+  issueBody,
+  issueCommentBody,
+  postWebhook,
+  prReviewCommentBody,
+  pullRequestBody,
+  queryOne,
+  sign,
+} from '../_helpers/github-webhook-route.js';
+import { githubTrustedUserIds } from '../../src/surface/connectors/github/webhook.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
-
-const SECRET = 'github-webhook-secret';
-
-/** Query a single row from the hippo SQLite handle. */
-function queryOne<T>(db: DatabaseSyncLike, sql: string): T {
-  // SAFETY: sql is a literal SELECT against known hippo schema columns; the
-  // row shape is declared by the generic type argument at each call site and
-  // checked immediately by the assertions that follow.
-  return db.prepare(sql).get() as T;
-}
-
-function sign(body: string, secret: string = SECRET): string {
-  return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
-}
-
-function postWebhook(port: number, body: string, headers: Record<string, string>): Promise<Response> {
-  return fetch(`http://127.0.0.1:${port}/v1/connectors/github/events`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body,
-  });
-}
-
-function defaultHeaders(body: string, eventName: string, deliveryId: string) {
-  return {
-    'x-hub-signature-256': sign(body),
-    'x-github-event': eventName,
-    'x-github-delivery': deliveryId,
-  };
-}
-
-interface IssueBodyOptions {
-  action?: string;
-  number?: number;
-  installationId?: number | null;
-  repoFullName?: string;
-}
-
-interface GitHubIssueEventPayload {
-  action: string;
-  issue: { number: number; title: string; body: string; user: { login: string; id: number } };
-  repository: { full_name: string; private: boolean; owner: { login: string }; name: string };
-  sender: { login: string; id: number };
-  installation?: { id: number };
-}
-
-function issueBody(opts: IssueBodyOptions = {}): string {
-  const obj: GitHubIssueEventPayload = {
-    action: opts.action ?? 'opened',
-    issue: {
-      number: opts.number ?? 42,
-      title: 'Bug',
-      body: 'broken',
-      user: { login: 'alice', id: 1 },
-    },
-    repository: {
-      full_name: opts.repoFullName ?? 'acme/repo',
-      private: false,
-      owner: { login: 'acme' },
-      name: 'repo',
-    },
-    sender: { login: 'alice', id: 1 },
-  };
-  if (opts.installationId !== null) {
-    obj.installation = { id: opts.installationId ?? 99 };
-  }
-  return JSON.stringify(obj);
-}
-
-function issueCommentBody(action: 'created' | 'edited' | 'deleted' = 'created'): string {
-  return JSON.stringify({
-    action,
-    issue: { number: 42 },
-    comment: {
-      id: 999,
-      body: 'I can repro',
-      user: { login: 'bob', id: 2 },
-    },
-    repository: {
-      full_name: 'acme/repo',
-      private: false,
-      owner: { login: 'acme' },
-      name: 'repo',
-    },
-    sender: { login: 'bob', id: 2 },
-    installation: { id: 99 },
-  });
-}
-
-function pullRequestBody(): string {
-  return JSON.stringify({
-    action: 'opened',
-    pull_request: {
-      number: 7,
-      title: 'Fix',
-      body: 'patches the bug',
-      user: { login: 'carol', id: 3 },
-    },
-    repository: {
-      full_name: 'acme/repo',
-      private: false,
-      owner: { login: 'acme' },
-      name: 'repo',
-    },
-    sender: { login: 'carol', id: 3 },
-    installation: { id: 99 },
-  });
-}
-
-function prReviewCommentBody(action: 'created' | 'deleted' = 'created'): string {
-  return JSON.stringify({
-    action,
-    pull_request: { number: 7 },
-    comment: {
-      id: 12345,
-      body: 'nit',
-      user: { login: 'dave', id: 4 },
-    },
-    repository: {
-      full_name: 'acme/repo',
-      private: false,
-      owner: { login: 'acme' },
-      name: 'repo',
-    },
-    sender: { login: 'dave', id: 4 },
-    installation: { id: 99 },
-  });
-}
 
 describe('POST /v1/connectors/github/events', () => {
   let root: string;
@@ -582,201 +463,107 @@ describe('POST /v1/connectors/github/events', () => {
       closeHippoDb(db);
     }
   });
+  it('19. a comment from a listed user id is kept live; once the id leaves the list the same author is held', async () => {
+    const commentBody = (id: number, text: string): string =>
+      JSON.stringify({
+        action: 'created',
+        issue: { number: 42 },
+        comment: {
+          id,
+          body: text,
+          user: { login: 'erin', id: 5 },
+          author_association: 'CONTRIBUTOR',
+        },
+        repository: {
+          full_name: 'acme/repo',
+          html_url: 'https://github.com/acme/repo',
+          private: false,
+          owner: { login: 'acme' },
+          name: 'repo',
+        },
+        sender: { login: 'erin', id: 5 },
+        installation: { id: 99 },
+      });
+    const scopeOf = (commentId: number) =>
+      loadAllEntries(root, 'default').find(
+        (e) => e.artifactRef === `github://acme/repo/issue/42/comment/${String(commentId)}`,
+      )?.scope;
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', ' 5 , ,6 ');
+    const first = commentBody(2001, 'I can repro on arm64');
+    expect((await postWebhook(handle.port, first, defaultHeaders(first, 'issue_comment', 'd-18a'))).status).toBe(200);
+    expect(scopeOf(2001)).toBe('github:public:acme/repo');
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '6');
+    const second = commentBody(2002, 'Still repros on arm64');
+    expect((await postWebhook(handle.port, second, defaultHeaders(second, 'issue_comment', 'd-18b'))).status).toBe(200);
+    expect(scopeOf(2002)).toBe('quarantine:private:github:public:acme/repo');
+  });
 });
 
-describe('POST /v1/connectors/github/events on GHES', () => {
-  const GHES_URL = 'https://ghes.example.com';
-  const GHES_SITE = parseGitHubEnterpriseUrl(GHES_URL);
-  let root: string;
-  let handle: ServerHandle;
+describe('githubTrustedUserIds', () => {
+  it('reads numeric ids, trims them and drops blank entries; unset is an empty list', () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', ' 5, ,1234567 ');
+    expect([...githubTrustedUserIds()].sort((x, y) => x - y)).toEqual([5, 1234567]);
 
-  beforeEach(async () => {
-    root = makeRoot('gh-route-ghes');
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
-    vi.stubEnv('GITHUB_ENTERPRISE_URL', GHES_URL);
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', undefined);
+    expect(githubTrustedUserIds().size).toBe(0);
   });
 
-  afterEach(async () => {
-    await handle.stop();
+  it('refuses a login, or a login:id pair, and names the command that gets an id', () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', '5,alice');
+    expect(() => githubTrustedUserIds()).toThrow(/entry 2/);
+    expect(() => githubTrustedUserIds()).toThrow(/gh api users\/<login> --jq \.id/);
+
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice:5');
+    expect(() => githubTrustedUserIds()).toThrow(/GITHUB_TRUSTED_USER_IDS/);
   });
 
-  const ghesHeaders = (body: string, eventName: string, deliveryId: string) => ({
-    ...defaultHeaders(body, eventName, deliveryId),
-    'x-github-enterprise-host': 'ghes.example.com',
-  });
+  it('never prints an entry, such as a token pasted into the wrong variable', () => {
+    const pasted = `ghp_${'x'.repeat(36)}`;
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', `5,${pasted}`);
 
-  const dlqRows = () => {
-    const db = openHippoDb(root);
+    expect(pasted).toHaveLength(40);
+    let message = '';
     try {
-      return db.prepare(`SELECT bucket, tenant_id, error FROM github_dlq ORDER BY id`).all() as Array<{
-        bucket: string;
-        tenant_id: string;
-        error: string;
-      }>;
-    } finally {
-      closeHippoDb(db);
+      githubTrustedUserIds();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
     }
-  };
-
-  const liveRaws = (artifactRef: string) =>
-    loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === artifactRef);
-
-  it('G1. issues.opened is stored under the host ref, repo tag and scope', async () => {
-    const body = issueBody();
-    const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g1'));
-    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
-
-    const row = loadAllEntries(root, 'default').find((e) => e.tags.includes('source:github') && e.kind === 'raw');
-    expect(row?.artifactRef).toBe('github://ghes.example.com/acme/repo/issue/42');
-    expect(row?.tags).toContain('repo:ghes.example.com/acme/repo');
-    expect(row?.scope).toBe('github:public:ghes.example.com/acme/repo');
+    expect(message).toContain('not numeric GitHub user ids: entry 2;');
+    expect(message).not.toContain(pasted);
   });
 
-  it.each([
-    {
-      eventName: 'issue_comment',
-      make: (a: 'created' | 'deleted') => issueCommentBody(a),
-      ref: 'github://ghes.example.com/acme/repo/issue/42/comment/999',
-    },
-    {
-      eventName: 'pull_request_review_comment',
-      make: (a: 'created' | 'deleted') => prReviewCommentBody(a),
-      ref: 'github://ghes.example.com/acme/repo/pull/7/review_comment/12345',
-    },
-  ])('G2. a deleted $eventName archives the row stored under the host ref', async ({ eventName, make, ref }) => {
-    const created = make('created');
-    await postWebhook(handle.port, created, ghesHeaders(created, eventName, `g2a-${eventName}`));
-    expect(liveRaws(ref)).toHaveLength(1);
+  it('counts entry positions before blank entries are dropped and never prints a hex secret', () => {
+    const secret = '0123456789abcdef0123456789abcdef';
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', `5,,${secret}`);
 
-    const deleted = make('deleted');
-    const res = await postWebhook(handle.port, deleted, ghesHeaders(deleted, eventName, `g2b-${eventName}`));
-    expect(await jsonAs<{ status: string; archivedCount: number }>(res)).toMatchObject({
-      status: 'archived',
-      archivedCount: 1,
-    });
-    expect(liveRaws(ref)).toHaveLength(0);
-  });
-
-  it.each([{ header: 'other.example.com' }, { header: undefined }])(
-    'G3. a delivery from $header is parked as host_mismatch, with a warning',
-    async ({ header }) => {
-      const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-      try {
-        const body = issueBody();
-        const deliveryId = `g3-${header ?? 'none'}`;
-        const signed = defaultHeaders(body, 'issues', deliveryId);
-        const headers = header === undefined ? signed : { ...signed, 'x-github-enterprise-host': header };
-        const res = await postWebhook(handle.port, body, headers);
-        expect(res.status).toBe(200);
-        expect(await jsonAs<{ ok: boolean; status: string }>(res)).toEqual({ ok: true, status: 'dlq' });
-
-        expect(dlqRows()).toEqual([
-          { bucket: 'host_mismatch', tenant_id: 'default', error: hostMismatch(header, GHES_SITE) },
-        ]);
-        expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
-        const parked = warn.mock.calls.filter(([m]) => String(m).includes('host_mismatch'));
-        expect(parked).toHaveLength(1);
-        expect(String(parked[0]?.[0])).toContain(deliveryId);
-      } finally {
-        warn.mockRestore();
-      }
-    },
-  );
-
-  it('G4. a delivery whose header names the site but whose payload names github.com parks as host_mismatch', async () => {
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    let message = '';
     try {
-      const body = issueBody().replace('"repository":{', '"repository":{"html_url":"https://github.com/acme/repo",');
-      const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g4'));
-      expect(await jsonAs<{ ok: boolean; status: string }>(res)).toEqual({ ok: true, status: 'dlq' });
-      const rows = dlqRows();
-      expect(rows.map((r) => r.bucket)).toEqual(['host_mismatch']);
-      expect(rows[0]?.error).toContain('ghes.example.com');
-      expect(mismatchSender(rows[0]?.error ?? '')).toEqual({ sent: 'ghes.example.com' });
-      expect(loadAllEntries(root, 'default').filter((e) => e.tags.includes('source:github'))).toHaveLength(0);
-      expect(warn.mock.calls.filter(([m]) => String(m).includes('host_mismatch'))).toHaveLength(1);
-    } finally {
-      warn.mockRestore();
+      githubTrustedUserIds();
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
     }
+    expect(message).toContain('entry 3');
+    expect(message).not.toContain(secret);
   });
 
-  it('G4b. a payload naming the site host is ingested', async () => {
-    const body = issueBody().replace(
-      '"repository":{',
-      '"repository":{"html_url":"https://ghes.example.com/acme/repo",',
+  it('keeps hippo serve from starting on a bad entry', async () => {
+    vi.stubEnv('GITHUB_TRUSTED_USER_IDS', 'alice');
+
+    const started = await serve({
+      hippoRoot: makeRoot('trusted-ids-bad'),
+      host: '127.0.0.1',
+      port: 0,
+    }).then(
+      async (handle) => {
+        await handle.stop();
+        return true;
+      },
+      (err: Error) => err,
     );
-    const res = await postWebhook(handle.port, body, ghesHeaders(body, 'issues', 'g4b'));
-    expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'ingested' });
-  });
 
-  it('G5. an unmapped github.com delivery parks as host_mismatch, not unroutable, when a routing row exists', async () => {
-    const db = openHippoDb(root);
-    try {
-      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`).run(
-        'globex/other',
-        'default',
-        '2026-01-01T00:00:00.000Z',
-      );
-    } finally {
-      closeHippoDb(db);
-    }
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    try {
-      const body = issueBody({ installationId: null });
-      const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', 'g5'));
-      expect(await jsonAs<{ status: string }>(res)).toMatchObject({ status: 'dlq' });
-    } finally {
-      warn.mockRestore();
-    }
-    expect(dlqRows().map((r) => r.bucket)).toEqual(['host_mismatch']);
-  });
-});
-
-describe('POST /v1/connectors/github/events with a bad GITHUB_ENTERPRISE_URL', () => {
-  it('G4. serve refuses to start, naming the setting', async () => {
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
-    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghe');
-    await expect(serve({ hippoRoot: makeRoot('gh-ghes-boot'), host: '127.0.0.1', port: 0 })).rejects.toThrow(
-      /GITHUB_ENTERPRISE_URL/,
-    );
-  });
-});
-
-describe('POST /v1/connectors/github/events with GITHUB_ENTERPRISE_BARE_REFS_HOST set', () => {
-  let root: string;
-  let handle: ServerHandle;
-
-  beforeEach(async () => {
-    root = makeRoot('gh-route-bare');
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
-    handle = await serve({ hippoRoot: root, host: '127.0.0.1', port: 0 });
-  });
-
-  afterEach(async () => {
-    await handle.stop();
-  });
-
-  const ghesHeaders = (body: string, eventName: string, deliveryId: string) => ({
-    ...defaultHeaders(body, eventName, deliveryId),
-    'x-github-enterprise-host': 'ghes.example.com',
-  });
-
-  it('B1. a signed GHES deletion archives the comment an earlier unset-URL delivery stored bare', async () => {
-    const created = issueCommentBody('created');
-    await postWebhook(handle.port, created, ghesHeaders(created, 'issue_comment', 'b1-created'));
-    const bareRef = 'github://acme/repo/issue/42/comment/999';
-    const live = () => loadAllEntries(root, 'default').filter((e) => e.kind === 'raw' && e.artifactRef === bareRef);
-    expect(live()).toHaveLength(1);
-
-    vi.stubEnv('GITHUB_ENTERPRISE_URL', 'https://ghes.example.com');
-    vi.stubEnv('GITHUB_ENTERPRISE_BARE_REFS_HOST', 'ghes.example.com');
-    const deleted = issueCommentBody('deleted');
-    const res = await postWebhook(handle.port, deleted, ghesHeaders(deleted, 'issue_comment', 'b1-deleted'));
-    expect(await jsonAs<{ status: string; archivedCount: number }>(res)).toMatchObject({
-      status: 'archived',
-      archivedCount: 1,
-    });
-    expect(live()).toHaveLength(0);
+    expect(started).toBeInstanceOf(Error);
+    expect(String(started)).toMatch(/GITHUB_TRUSTED_USER_IDS/);
   });
 });

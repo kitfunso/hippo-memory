@@ -14,8 +14,9 @@ import type { KeysetPosition } from '../../base/util/keyset.js';
 import {
   detectInstruction,
   detectInstructionIn,
+  instructionIn,
   UNTRUSTED_ORIGIN_TAG,
-} from '../instruction-detect.js';
+} from '../../domain/trust/instruction-detect.js';
 import type { ContextWith } from '../types.js';
 import type { QuarantineEditOutcome, QuarantineStatus } from '../../base/ports/store/quarantine.js';
 
@@ -130,15 +131,15 @@ export interface QuarantineEditResult {
   warnings?: string[];
 }
 
-/** The 400 or 404 a refused edit text answers before any write. A row the read missed is judged by
- * the text alone, so a flagged text never reaches the store. */
-function screenEditText(id: string, text: string, held: MemoryEntry | undefined): void {
-  if (!held) {
-    if (detectInstruction(text).flagged) {
-      throw new NotFoundError(`memory ${id} ${UNKNOWN_EDIT_ID}`);
-    }
-    return;
-  }
+/** The tags the successor stores and the edit screens, marks included, since the context line prints
+ * them and `instruction-like` completes "ignore all previous". */
+function successorTagsOf(held: MemoryEntry | undefined): string[] {
+  return [...new Set([...(held?.tags ?? []), UNTRUSTED_ORIGIN_TAG])];
+}
+
+/** The 400 for a held row whose kept lead-in or stored tags read as an instruction: an edit keeps
+ * both, so it cannot release it. */
+function refuseKeptFlags(id: string, held: MemoryEntry, tags: readonly string[]): void {
   const lead = held.leadIn ? detectInstruction(held.leadIn) : null;
   if (lead?.flagged) {
     throw new BadRequestError(
@@ -146,16 +147,40 @@ function screenEditText(id: string, text: string, held: MemoryEntry | undefined)
         'an edit keeps the lead-in, so it cannot release this item; nothing was changed',
     );
   }
-  const found = detectInstructionIn({ content: text, leadIn: held.leadIn });
-  if (!found.flagged) return;
+  // No text: each tag, then the tags as a context line prints them.
+  const found = instructionIn({ content: '' }, tags);
+  if (found.flagged) {
+    throw new BadRequestError(
+      `the kept tags of memory ${id} read as an instruction (${found.reason ?? 'unknown'}); ` +
+        'an edit keeps the tags, so it cannot release this item; nothing was changed',
+    );
+  }
+}
+
+/** Throws the 400 or 404 a refused edit answers before any write, else returns the screened tags. A row
+ * the read missed is judged by the text alone, so a flagged text never reaches the store. */
+function screenEditText(id: string, text: string, held: MemoryEntry | undefined): string[] {
+  const tags = successorTagsOf(held);
+  if (!held) {
+    if (detectInstruction(text).flagged) {
+      throw new NotFoundError(`memory ${id} ${UNKNOWN_EDIT_ID}`);
+    }
+    return tags;
+  }
+  refuseKeptFlags(id, held, tags);
+  const found = instructionIn({ content: text, leadIn: held.leadIn }, tags);
+  if (!found.flagged) return tags;
   const reason = found.reason ?? 'unknown';
   if (detectInstruction(text).flagged) {
     throw new BadRequestError(
       `edited text still reads as an instruction (${reason}); nothing was changed`,
     );
   }
+  const joined = detectInstructionIn({ content: text, leadIn: held.leadIn }).flagged
+    ? 'lead-in'
+    : 'tags';
   throw new BadRequestError(
-    `the edited text of memory ${id} reads as an instruction when joined to its kept lead-in (${reason}); ` +
+    `the edited text of memory ${id} reads as an instruction when joined to its kept ${joined} (${reason}); ` +
       'nothing was changed',
   );
 }
@@ -174,7 +199,7 @@ export async function quarantineEdit(
   if (!edit) throw new StoreNotPortedError(ctx.store.kind, 'quarantine.editQuarantined');
   const vetted = vetSecrets(content.trim());
   const [held] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  screenEditText(id, vetted.content, held);
+  const tags = screenEditText(id, vetted.content, held);
   const leadIn = held?.leadIn ?? null;
   const result = await edit(
     ctx.tenantId,
@@ -182,7 +207,7 @@ export async function quarantineEdit(
     {
       content: vetted.content,
       leadIn,
-      tags: [...new Set([...(held?.tags ?? []), UNTRUSTED_ORIGIN_TAG])],
+      tags,
       baseHalfLifeDays: ctx.config.defaultHalfLifeDays,
     },
     ctx.actor.subject,
