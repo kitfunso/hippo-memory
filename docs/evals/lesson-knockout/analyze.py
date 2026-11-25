@@ -30,7 +30,7 @@ def contrast(units: list[dict], exclude_na: bool) -> dict:
                 high=point+margin if margin is not None else None)
 
 
-def report() -> dict:
+def read_roster() -> tuple[dict, dict]:
     plan = json.loads(subprocess.check_output(["node", str(PLAN)], encoding="utf-8"))
     if plan["sha256"] != DIGEST:
         raise ValueError("Frozen task inputs changed")
@@ -50,22 +50,50 @@ def report() -> dict:
         if (r["id"] in variants and type(r["flagged"]) is not bool
                 or r["id"] not in variants and r["flagged"] is not None):
             raise ValueError(f"Invalid variant eligibility {f}")
+        audit = r.get("pathAudit") or {}
+        if (type(audit.get("transcripts")) is not int or audit["transcripts"] < 1
+                or not isinstance(audit.get("hits"), list)):
+            raise ValueError(f"Missing transcript path audit {f}")
         sessions.add(r["session"])
         found[key] = r
+    return slots, found
+
+
+def disagreement(rows: list[dict]) -> float:
+    return mean((u["T"]["verdict"] != "pass") != (u["Tp"]["verdict"] != "pass") for u in rows)
+
+
+def flagged_counts(units: list[dict], include_contaminated: bool) -> dict:
+    counts = {}
+    for arm in ARMS:
+        flags = [u[arm]["flagged"] for u in units if include_contaminated or not u[arm]["pathAudit"]["hits"]]
+        counts[arm] = dict(eligible=sum(flag is not None for flag in flags), flagged=flags.count(True))
+    return counts
+
+
+def report() -> dict:
+    slots, found = read_roster()
     result = dict(planned=len(slots), observed=len(found), status="incomplete")
     if len(found) != len(slots):
         return result
-    units = [{a: found[(u, a)] for a in ARMS} for u, *_ in plan["units"]]
+    units = [{a: found[(u, a)] for a in ARMS} for u, arm in slots if arm == "T"]
     fork_errors = sum(len({(r["snapshotHash"], r["resetHash"], r["teachId"], r["targetCount"])
                            for r in u.values()}) != 1 for u in units)
     loss = sum(not r["hookSeen"] for r in found.values()) / len(found)
-    noise = mean((u["T"]["verdict"] != "pass") != (u["Tp"]["verdict"] != "pass") for u in units)
+    by_arm = {a: sum(bool(u[a]["pathAudit"]["hits"]) for u in units) for a in ARMS}
+    contaminated = sum(by_arm.values())
     gates = dict(forkErrors=fork_errors, storeErrors=sum(not r["storeVerified"] for r in found.values()),
                  missingRequestEvidence=sum(not r["complete"] for r in found.values()),
                  neutralLeaks=sum(u["N"]["targetText"] for u in units), hookLoss=loss,
-                 hookMissesByArm={a: sum(not u[a]["hookSeen"] for u in units) for a in ARMS}, disagreement=noise)
-    violation = contrast(units, False)
-    excluded = contrast(units, True)
+                 hookMissesByArm={a: sum(not u[a]["hookSeen"] for u in units) for a in ARMS},
+                 contaminatedByArm=by_arm, contaminatedPairs=contaminated, scheduledPairs=len(found))
+    if contaminated * 100 > 5 * len(found):
+        return {**result, "status": "protocol-failure", "gates": gates}
+    clean = [u for u in units if not (u["N"]["pathAudit"]["hits"] or u["T"]["pathAudit"]["hits"])]
+    intact = [u for u in units if not (u["T"]["pathAudit"]["hits"] or u["Tp"]["pathAudit"]["hits"])]
+    noise = gates["disagreement"] = disagreement(intact)
+    violation = contrast(clean, False)
+    excluded = contrast(clean, True)
     kills = []
     if violation["estimate"] < .15:
         kills.append("content")
@@ -77,8 +105,9 @@ def report() -> dict:
     status = "invalid" if bad else "kill" if kills else "audit-required" if passes else "inconclusive"
     return dict(**{**result, "status": status}, gates=gates, kill=kills, violation=violation, excluded=excluded,
                 emptyCaptures=sum(u["T"]["targetCount"] == 0 for u in units),
-                flaggedFollows={a: dict(eligible=len(variants), flagged=sum(u[a]["flagged"] is True for u in units))
-                                for a in ARMS},
+                sensitivity=dict(violation=contrast(units, False), excluded=contrast(units, True),
+                                 disagreement=disagreement(units), flaggedFollows=flagged_counts(units, True)),
+                flaggedFollows=flagged_counts(units, False),
                 rawGrades={a: dict(Counter(u[a]["verdict"] for u in units)) for a in ARMS})
 
 

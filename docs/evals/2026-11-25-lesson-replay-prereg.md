@@ -176,3 +176,5 @@ For the cached estimate, keep the saved one-hour markers and the frozen call ord
 Prices read 25 November 2026, in USD per million tokens. For `claude-opus-5-5`, ordinary input is $4, one-hour writes $8, hits $0.20 and output $20. For `claude-sonnet-5-5`, those rates are $2, $4, $0.10 and $10. Five-minute writes would cost $5 and $2.50 respectively. The calculation multiplies each token class by its model’s rate, sums before rounding to cents, and applies standard synchronous pricing. [Anthropic model pricing](https://platform.claude.com/docs/en/about-claude/pricing#model-pricing) · [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
 
 **Status.** Body recovery, decision-receipt matching and offline pricing are complete. API acceptance, realized cache reuse and fidelity remain untested. Keith’s money approval is required before the first gate request.
+
+25 Nov 2026. Keith approved the entry gate and conditional full schedule using Windows User `Z0_CONSOLE_KEY_2` as `ANTHROPIC_API_KEY`, with `Z0_CONSOLE_KEY_3` for a first-request authentication or credit stop.

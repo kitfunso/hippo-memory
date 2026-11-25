@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { hash, root } from './plan.mjs';
+import { tmpdir } from 'node:os';
+import { hash, root, folder } from './plan.mjs';
 import { mod } from './slice.mjs';
 const {createMemory} = await mod('base/memory/entry');
 const {DEFAULT_CONFIG} = await mod('base/config/config');
@@ -9,10 +10,13 @@ const {initStore,writeEntry,loadAllEntries} = await mod('store/sqlite/fixtures')
 const {extractFromTexts} = await mod('surface/capture/extract');
 const {collectSessionTurns} = await mod('surface/capture/transcript');
 export const join = path.join;
+const verifying=path.resolve(process.argv[1]??'')===join(folder,'verify.mjs');
+export const stateRoot=verifying ? fs.mkdtempSync(join(tmpdir(),'knockout-verify-')) : root;
+if(verifying) process.on('exit',()=>fs.rmSync(stateRoot,{recursive:true,force:true}));
 export const mkdir = dir => fs.mkdirSync(dir,{recursive:true});
 export const save = (f,v) => fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{flag:'wx'});
 export function inside(p) {
-  const rel=path.relative(path.resolve(root),path.resolve(p));
+  const rel=path.relative(path.resolve(stateRoot),path.resolve(p));
   assert(rel && !rel.startsWith('..') && !path.isAbsolute(rel),'Outside experiment root');
   for (let cur=path.resolve(p); cur!==path.dirname(cur); cur=path.dirname(cur))
     assert(!fs.lstatSync(cur,{throwIfNoEntry:false})?.isSymbolicLink(),'Linked path '+cur);
@@ -51,7 +55,7 @@ export function externalCheck(work) {
     ['CLAUDE.md','managed-settings.json','managed-settings.d'].map(file=>join(dir,file)));
   for (let p=path.dirname(work);;p=path.dirname(p)) {
     for (const f of ['CLAUDE.md','CLAUDE.local.md','AGENTS.md','.claude']) paths.push(join(p,f));
-    if (p===path.dirname(p)) break;
+    if (p===path.dirname(p) || (verifying && p===stateRoot)) break;
   }
   for (const f of paths) assert(!fs.existsSync(f),'Uncontrolled external instructions '+f);
 }

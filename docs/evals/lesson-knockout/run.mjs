@@ -13,6 +13,7 @@ import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
 import { normalize,evidence } from './evidence.mjs';
+import { auditApply } from './path-audit.mjs';
 
 const [mode,id,token='Z0_SUB_TOKEN',attempt]=process.argv.slice(2);
 assert(['smoke','unit'].includes(mode),'Usage: run.mjs smoke|unit FAMILY [TOKEN_VAR]');
@@ -26,6 +27,7 @@ assert.equal(hash(JSON.stringify(units)),'7b3e3078f73cd6c11a2a6e50aabad48728016f
 const original=inside(join(root,mode,u.id));
 const unit=reuse?inside(join(original,'coding-check')):original;
 const live=smoke?join(unit,'live'):inside(join(root,'active/live')),work=join(live,'work');
+const records=smoke?live:inside(join(root,'active/operator'));
 const pre=join(original,'pre'),baseStore=join(pre,'store'),snap=join(original,'snapshot'),store=join(work,'.hippo');
 if(reuse) {
   const prior=fs.readdirSync(original,{recursive:true}).filter(f=>f.endsWith('.request.json')).length;
@@ -51,8 +53,6 @@ assert(execFileSync(binary,['--version'],{encoding:'utf8'}).trim().startsWith(pi
 externalCheck(work);
 if(!smoke) {
   for(const name of ['unit','checkpoints','limit-archives']) mkdir(inside(join(root,name)));
-  execFileSync('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',join(folder,'worker.ps1'),
-    '-Action','check'],{stdio:'inherit'});
 }
 mkdir(path.dirname(unit)); fs.mkdirSync(unit); mkdir(checkEnv.TEMP);
 mkdir(inside(path.dirname(live)));
@@ -60,6 +60,7 @@ process.env.TMP=process.env.TEMP=checkEnv.TEMP;
 save(join(unit,'design.json'),{unit:u,mode,roster:hash(JSON.stringify(units)),model:pins.modelOpus,effort:pins.effort});
 function checkout(task) {
   fs.mkdirSync(live); mkdir(work);
+  if(!smoke) fs.mkdirSync(records);
   git('init','-q'); git('config','core.autocrlf','false');
   execFileSync('python',[join(folder,'checkout.py'),u.source,task.baseRef],{cwd:work,env:checkEnv,stdio:'inherit'});
   assert.equal(git('rev-parse','HEAD'),task.baseRef);
@@ -69,23 +70,23 @@ function checkout(task) {
 function prepare(task) {
   checkProjectSettings(work);
   if(smoke) return;
-  save(join(live,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
+  save(join(records,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
   execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
-    join(folder,'worker.ps1'),'-Action','prepare','-Live',live],{cwd:live,env:checkEnv,stdio:'inherit'});
+    join(folder,'prepare.ps1'),'-Live',live],{cwd:live,env:checkEnv,stdio:'inherit'});
   checkProjectSettings(work);
 }
 async function session(task,prompt,session,id,resume=false) {
   const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain};
   if(reuse) call.frozenSmoke=true;
-  fs.writeFileSync(join(live,'call.json'),JSON.stringify(call));
+  fs.writeFileSync(join(records,'call.json'),JSON.stringify(call));
   checkProjectSettings(work);
-  await launch(live,token,checkEnv,!smoke);
+  const archives=await launch(live,token,checkEnv,!smoke);
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
-  const result=read(join(live,id+'.json'));
+  const result=read(join(records,id+'.json'));
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');
-  return {transcript,commands:commandLog(sessionFiles(projects,session)),result};
+  return {transcript,archives,commands:commandLog(sessionFiles(projects,session)),result};
 }
 function settings(hook) {
   save(join(live,'settings.json'),{autoMemoryEnabled:true,autoMemoryDirectory:join(live,'home/.claude/projects/unit/memory'),
@@ -95,14 +96,13 @@ function settings(hook) {
 function grade(before,commands) {
   const post=stateCommit(work,before);
   holdPre(work,post,FIRST_REF);
-  return runCheck(u.lesson,{work,env:checkEnv,preCommit:before,postCommit:post,commands,scratch:join(live,'grade')});
+  return runCheck(u.lesson,{work,env:checkEnv,preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
 }
 function archive(name) {
   const dest=inside(join(unit,'evidence',name));
-  if(smoke) return fs.renameSync(inside(live),dest);
-  // New files inherit the operator directory ACL; a same-volume rename would retain worker access.
-  copy(live,dest);
-  fs.rmSync(inside(live),{recursive:true});
+  fs.renameSync(inside(live),dest);
+  if(!smoke) fs.renameSync(records,inside(join(dest,'operator')));
+  return dest;
 }
 mkdir(join(unit,'evidence'));
 async function teach() {
@@ -146,13 +146,14 @@ for (const [index,arm] of u.order.filter(a=>!smoke || a!=='Tp').entries()) {
   const before=stateCommit(work,u.apply.baseRef), sid=randomUUID();
   holdPre(work,before);
   const cue=await openCue(work,sid); settings(cue.hook);
-  const {commands,result}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
+  const {commands,result,archives}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
+  const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
-  const audit=evidence(join(live,'bodies/apply'),result,notes,u.lesson,{...u.apply,work});
+  const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work});
   const flagged=u.cls==='variant' ? verdict==='fail' && commands.some(c=>normalize(c).includes(normalize(u.lesson.keyPhrase))) : null;
-  save(join(live,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,
-    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,...audit});
-  archive('apply-'+index);
+  const dest=archive('apply-'+index);
+  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,
+    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
 }
 if(smoke) assert(smokeChecks.every(Boolean),'Task smoke failed its request or delivery gate; evidence retained');

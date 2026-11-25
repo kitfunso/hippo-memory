@@ -4,8 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const original = cp.spawnSync;
 if (process.platform === 'win32' && original('git',['--version']).error?.code === 'EPERM') {
-  const scratch = 'C:/z0-lessons/lesson-knockout/io';
-  fs.mkdirSync(scratch,{recursive:true});
+  const scratch = require('node:os').tmpdir();
   cp.spawnSync = function spawn(file,args,options={}) {
     if (options.stdio==='inherit' || options.stdio==='ignore') return original(file,args,options);
     const dir=fs.mkdtempSync(path.join(scratch,'proc-'));

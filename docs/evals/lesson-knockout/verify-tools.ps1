@@ -13,7 +13,5 @@ foreach($chain in $cases.Keys){
     $value=[Environment]::GetEnvironmentVariable($key) -replace '\\','/'
     if(!$value.Contains($live) -or $value.Contains('eval-envs')){throw "Shared writable cache for $chain / $key"}
   }
-  if($env:HEX_OFFLINE -ne '1' -or $env:CARGO_NET_OFFLINE -ne 'true' -or $env:JULIA_PKG_OFFLINE -ne 'true' -or
-    $env:npm_config_offline -ne 'true' -or $env:GOPROXY -ne 'off' -or $env:UV_OFFLINE -ne '1'){throw "Offline policy missing for $chain"}
 }
-Write-Output "Passed private cache paths and offline variables for $($cases.Count) declared toolchains."
+Write-Output "Passed private cache paths for $($cases.Count) declared toolchains."

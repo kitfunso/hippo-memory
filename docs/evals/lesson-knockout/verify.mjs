@@ -1,16 +1,16 @@
+import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {spawn} from 'node:child_process';
-import {once} from 'node:events';
 import { folder,root,checkTaskPins,roster,hash,read } from './plan.mjs';
-import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn } from './state.mjs';
+import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy } from './state.mjs';
+import { auditApply } from './path-audit.mjs';
 import { evidence } from './evidence.mjs';
 import { openCue,retryLimited } from './delivery.mjs';
 
 checkTaskPins();
 const rosterHash=hash(JSON.stringify(roster()));
 assert.equal(rosterHash,'7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42');
-const dir=fs.mkdtempSync(join(root,'verify-')),teach=join(dir,'teach'),pre=join(dir,'pre');
+const dir=stateRoot,teach=join(dir,'teach'),pre=join(dir,'pre');
 function put(base,file,text) {
   const target=join(base,file); mkdir(join(target,'..')); fs.writeFileSync(target,text);
 }
@@ -73,22 +73,66 @@ assert(audited([user,msg('system',txt(cueText))]).hookSeen);
 assert(!audited([user,answer,result('id',cueText)]).hookSeen);
 assert(audited([user,msg('system',txt('UserPromptSubmit hook additional context: check-it'))]).targetText);
 const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
-for(const name of ['checkpoints','limit-archives']) mkdir(join(root,name));
+const records=join(dir,'operator');mkdir(records);put(records,'call.json','reserved');
+for(const name of ['checkpoints','limit-archives']) mkdir(join(dir,name));
 let attempts=0,waits=0;
 await retryLimited(state,async()=>{
   assert.equal(fs.readFileSync(join(state,'pre'),'utf8'),'original');
   assert(!fs.existsSync(join(state,'partial')));
-  if(attempts++===0){put(state,'partial','cut off');put(state,'pre','changed');return 75;}
+  assert.equal(fs.readFileSync(join(records,'call.json'),'utf8'),'reserved');
+  if(attempts++===0){put(state,'partial','cut off');put(state,'pre','changed');put(records,'call.json','cut off');return 75;}
   return 0;
 },async ms=>{assert.equal(ms,900000);waits++;},1);
 assert.equal(attempts,2);assert.equal(waits,1);
 await assert.rejects(retryLimited(state,async()=>1,async()=>assert.fail('Unexpected wait')),/exited 1/);
 await assert.rejects(retryLimited(state,async()=>75,async()=>assert.fail('Unexpected wait'),0),/wait exhausted/);
 const unit=join(root,'smoke',roster()[0].id);
+const live=join(root,'active/live'),project='home/.claude/projects/unit';
+const sibling=join(root,'unit/sibling/snapshot/hippo.db'),checker=roster()[0].lesson.checkPath;
+const row=(...blocks)=>JSON.stringify({type:'assistant',cwd:join(live,'work'),message:{content:blocks}});
+const fixture=join(dir,'transcript-test');
+put(fixture,join(project,sid+'.jsonl'),row(tool('ok','Glob',{pattern:'src/**/*.js'}),
+  tool('cache','Write',{file_path:'../cache/work.tmp'}),
+  tool('ps','PowerShell',{command:'Get-Content ../home/tmp/tool.log'}),
+  tool('dist','Read',{file_path:join(process.env.KNOCKOUT_SLICE_ROOT,'dist/index.js')})));
+put(fixture,join(project,sid,'subagents/agent-test.jsonl'),row(tool('read','Read',{file_path:sibling}),
+  tool('cat','Bash',{command:'cat "'+checker+'"'})));
+const planted=auditApply([fixture],sid,live);
+assert.equal(planted.transcripts,2);
+assert.deepEqual(planted.hits.map(h=>[h.tool,h.path]),[['Read',sibling],['Bash',checker]]
+  .map(([name,p])=>[name,p.replaceAll('\\','/').toLowerCase()]));
+const cutoff=join(dir,'cutoff');
+put(cutoff,join(project,sid+'.jsonl'),row(
+  tool('ps','PowerShell',{command:'Get-Content ..\\..\\operator\\setup.json'}),
+  tool('glob','Glob',{path:'C:/z0-runs/r4',pattern:'*.json'}),
+  tool('grep','Grep',{path:folder,pattern:'needle'}),
+  tool('edit','Edit',{file_path:'/c/z0-runs/r4/tasks/example'}),
+  tool('write','Write',{file_path:sibling})));
+const retryAudit=auditApply([cutoff,fixture],sid,live);
+assert.deepEqual(new Set(retryAudit.hits.filter(h=>h.attempt===0).map(h=>h.tool)),
+  new Set(['PowerShell','Glob','Grep','Edit','Write']));
+assert.equal(retryAudit.hits.filter(h=>h.attempt===1).length,2);
+let smokeApplies=0;
+function checkPaths(receipt,id,originalLive) {
+  const audit=auditApply([receipt],read(join(receipt,id+'.json')).session,originalLive);
+  assert.deepEqual(audit.hits,[],receipt);
+  if(id==='apply') smokeApplies++;
+}
+for(const base of [unit,join(unit,'coding-check')]) {
+  for(const index of [0,1]) checkPaths(join(base,'evidence','apply-'+index),'apply',join(base,'live'));
+}
+for(const name of ['delivery-check','command-check']) {
+  for(const arm of ['T','N']) checkPaths(join(unit,name,arm),'probe',join(unit,name,'live'));
+}
+function savedNotes(receipt) {
+  const dst=fs.mkdtempSync(join(dir,'smoke-store-'));
+  copy(join(receipt,'work/.hippo'),join(dst,'store'));
+  return contents(join(dst,'store'));
+}
 if(fs.existsSync(join(unit,'delivery-check/N/delivery.json'))) {
   for(const arm of ['T','N']) {
     const p=join(unit,'delivery-check',arm), result=evidence(join(p,'bodies/probe'),read(join(p,'probe.json')),
-      contents(join(p,'work/.hippo')),roster()[0].lesson);
+      savedNotes(p),roster()[0].lesson);
     assert(result.complete && result.hookSeen && result.targetText===(arm==='T'));
   }
 }
@@ -103,7 +147,7 @@ for(const arm of ['T','N']){
 for(const arm of ['T','N']) {
   const u=roster()[0],receipt=fs.readdirSync(join(unit,'coding-check/evidence')).map(n=>join(unit,'coding-check/evidence',n))
     .find(p=>read(join(p,'grade.json')).arm===arm);
-  const r=evidence(join(receipt,'bodies/apply'),read(join(receipt,'apply.json')),contents(join(receipt,'work/.hippo')),
+  const r=evidence(join(receipt,'bodies/apply'),read(join(receipt,'apply.json')),savedNotes(receipt),
     u.lesson,{...u.apply,work:join(unit,'coding-check/live/work')});
   assert(r.complete && r.hookSeen && r.targetText===(arm==='T'));
 }
@@ -114,10 +158,6 @@ try {
   const response=await fetch(cue.hook.url,{method:'POST',body:JSON.stringify(event)});
   const body=await response.json();
   assert.equal(body.hookSpecificOutput.additionalContext,'Project notes\n'+contents(join(work,'.hippo')).map(e=>'- '+e.content).join('\n'));
-  if(process.argv.includes('--worker')) {
-    const proc=spawn('powershell.exe',['-NoProfile','-ExecutionPolicy','Bypass','-File',join(folder,'worker.ps1'),
-      '-Action','check','-ProbeUrl',cue.hook.url,'-ProbeEvent',Buffer.from(JSON.stringify(event)).toString('base64')],{stdio:'inherit'});
-    assert.equal((await once(proc,'exit'))[0],0,'Worker qualification failed');
-  }
 } finally { await cue.close(); }
 console.log('Passed task pins, state forks, settings, cache link, delivery sources, retry rollback, saved coding and diagnostic receipts, and HTTP hook.');
+console.log('Path audit passed: '+smokeApplies+' clean smoke applies, four clean probes, both planted tool inputs flagged.');
