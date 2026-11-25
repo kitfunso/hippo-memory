@@ -82,10 +82,7 @@ function exec(sql: string, ...args: string[]): void {
 }
 
 function promoteRows(id: string): number {
-  const found = query<{ n: number }>(
-    "SELECT count(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?",
-    id,
-  );
+  const found = query<{ n: number }>("SELECT count(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?", id);
   return found[0]?.n ?? 0;
 }
 
@@ -646,7 +643,9 @@ describe('project write gate', () => {
     });
     const r = await promote(keyM.plaintext, id, { name: 'alpha', aliases: ['beta'] });
     expect(r.status).toBe(409);
-    expect(errorOf(r)).toBe(`Refusing to promote ${id}: its project changed while the project write gate was asked; retry`);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
     expect(calls.map((c) => c.project)).toEqual(['beta']);
     expect(promoteRows(id)).toBe(0);
   });
@@ -659,7 +658,9 @@ describe('project write gate', () => {
     });
     const r = await promote(keyM.plaintext, id, { name: 'beta' });
     expect(r.status).toBe(409);
-    expect(errorOf(r)).toBe(`Refusing to promote ${id}: it is superseded by mem_case37_next; promote that one instead.`);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: it is superseded by mem_case37_next; promote that one instead.`,
+    );
     expect(calls.map((c) => c.project)).toEqual(['beta']);
     expect(promoteRows(id)).toBe(0);
   });
