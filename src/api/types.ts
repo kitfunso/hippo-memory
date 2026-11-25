@@ -84,7 +84,8 @@ export type GlobalTargetInReach = Omit<
 export interface ProjectWriteCall {
   readonly tenantId: string;
   readonly actor: Readonly<Actor>;
-  /** The caller's project name, already checked by assertCallerProject; null when the write names none. */
+  /** The caller's project name, checked by assertCallerProject. For a write to an existing memory,
+   * that memory's stored origin, unchecked. null when the write names no single project. */
   readonly project: string | null;
   /** Aborts when the gate passes its deadline. */
   readonly signal: AbortSignal;

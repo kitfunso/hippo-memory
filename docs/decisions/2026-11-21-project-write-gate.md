@@ -31,4 +31,4 @@ POST /v1/memories and MCP `hippo_remember` take the project name from the caller
 - Writes that name no project reach the gate with a null project.
 
 ## Reconsider when
-- Object-kind routes or supersede start to stamp a caller's project: they would need the same gate.
+- Object-kind routes or supersede start to stamp a caller's project: they would need the same gate. Supersede, forget, raw archive, outcome and conflict resolve on an existing memory now ask it too, as `docs/decisions/2026-11-24-project-write-gate-existing-rows.md` says.

@@ -16,6 +16,7 @@ import {
 } from '../../domain/trust/reject-flow.js';
 import type { RejectedValueRow } from '../../base/ports/store/rejections.js';
 import { requireHostAdmin, type Context, type ContextWith } from '../types.js';
+import { admitRowWrite } from '../project-write-gate.js';
 import { memoryGet } from './memories.js';
 import { canReadScope, personalScopeOf, scopeReaderOf } from '../../base/scope/recall-scope.js';
 
@@ -26,6 +27,7 @@ export interface ForgetResult {
   id: string;
 }
 export async function forget(ctx: Context, id: string): Promise<ForgetResult> {
+  await admitRowWrite(ctx, id);
   const entryWrites = ctx.store.entryWrites;
   await entryWrites.forget({
     tenantId: ctx.tenantId,

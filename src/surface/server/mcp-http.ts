@@ -96,6 +96,7 @@ function mcpContextFor(
     hostAdmin: ctx.actor.hostAdmin,
     owner: ctx.actor.owner,
     clientKey: ctx.clientKey,
+    signal: ctx.signal,
     store: ctx.store,
     storeFor: opts.storeFor,
     tools: opts.mcpTools,

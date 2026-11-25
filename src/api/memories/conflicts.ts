@@ -24,6 +24,7 @@ import { keysetPages, pageLimit } from '../pages.js';
 import type { KeysetPosition } from '../../base/util/keyset.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
 import { requireHostAdmin, type Actor, type ContextWith } from '../types.js';
+import { admitProjectWrite, admitRowWrite } from '../project-write-gate.js';
 import type { TenantReach } from './memories.js';
 
 /** A page of a conflict list: `limit` (default DEFAULT_LIST_LIMIT, at most MAX_LIST_LIMIT) and
@@ -101,8 +102,10 @@ export async function conflictResolve(
       `conflict ${conflictId} names a memory that is superseded, archived or quarantined`,
     );
   }
+  await admitRowWrite(ctx, loser.id, `conflict not found: ${conflictId}`);
   const reason = opts.reason ?? `resolveConflict ${conflictId}: kept ${keep.id}`;
   const fate = conflictLoserFate(opts, loser, personalScopeOf(ctx.actor));
+  if (fate.kind === 'reject') await admitProjectWrite(ctx, null);
   if (fate.kind !== 'weaken') await assertMayRemove(ctx, conflictId, loser.id);
   const resolved = await ctx.store.conflicts.resolve(ctx.tenantId, {
     conflictId,

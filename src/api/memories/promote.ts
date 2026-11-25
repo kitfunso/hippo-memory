@@ -18,6 +18,7 @@ import {
 import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
+import { admitRowWrite } from '../project-write-gate.js';
 import { withDetached } from '../detached.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
@@ -190,19 +191,20 @@ export async function supersede(
   newContent: string,
   overrides: SupersedeOverrides = {},
 ): Promise<SupersedeResult> {
-  return supersedeScreened(ctx, oldId, newContent, overrides);
+  const admitted = await admitRowWrite(ctx, oldId, `Memory not found: ${oldId}`);
+  const old = admitted ?? (await ctx.store.entriesByIds([oldId], ctx.tenantId))[0];
+  const target = assertSupersedable(ctx, oldId, old ?? null);
+  return supersedeScreened(ctx, target, newContent, overrides);
 }
 
 /** The successor runs the same screen as remember: a member's flagged text in a shared scope is held where the
  * store reviews and holds a supersede (`supersedeHeld`), else tagged. Secret vetting is not done here. */
 async function supersedeScreened(
   ctx: ContextWith<never, ReviewGroup>,
-  oldId: string,
+  target: MemoryEntry,
   newContent: string,
   overrides: SupersedeOverrides,
 ): Promise<SupersedeResult> {
-  const [old] = await ctx.store.entriesByIds([oldId], ctx.tenantId);
-  const target = assertSupersedable(ctx, oldId, old ?? null);
   const reviewer = reviewerOf(ctx);
   const tags = withoutCaptureTags(overrides.tags ?? target.tags);
   const verdict = screenWrite(ctx.actor, {
@@ -230,20 +232,20 @@ async function supersedeScreened(
     tenantId: ctx.tenantId,
     actor: ctx.actor.subject,
     ...scopeReaderOf(ctx.actor),
-    oldId,
+    oldId: target.id,
     successor,
   };
   if (reviewer?.supersedeHeld && verdict.quarantine) {
     await reviewer.supersedeHeld({ ...write, quarantine: verdict.quarantine });
     return {
       ok: true,
-      oldId,
+      oldId: target.id,
       newId: successor.id,
       quarantined: { reason: verdict.quarantine.reason },
     };
   }
   await ctx.store.entryWrites.supersede(write);
-  return { ok: true, oldId, newId: successor.id };
+  return { ok: true, oldId: target.id, newId: successor.id };
 }
 
 /** The tenant-scoped row to supersede; another tenant's id, or a row out of reach, reads as not
@@ -286,6 +288,7 @@ export async function rawArchive(
   id: string,
   reason: string,
 ): Promise<ArchiveRawResult> {
+  await admitRowWrite(ctx, id);
   return {
     ok: true,
     archivedAt: await ctx.store.entryWrites.archiveRaw(archiveOf(ctx, id, reason)),
