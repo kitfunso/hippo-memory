@@ -13,12 +13,13 @@ import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,r
 import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { GUARD,guardedLesson } from '../checker-guard/lesson.mjs';
+import { auditCalls,auditFile,readAudits } from './crash-audit.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
-const modes=['check','probe','smoke','qualify','pair','full'];
+const modes=['check','probe','smoke','qualify','pair','full','audit'];
 const [mode,token='Z0_SUB_TOKEN',key] = process.argv.slice(2);
-assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|qualify|pair|full [TokenVar] [pair key]');
+assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|qualify|pair|full|audit [TokenVar] [pair key]');
 assert.match(token,/^Z0_SUB_TOKEN(?:_[123])?$/);
 if(['smoke','qualify'].includes(mode)) assert.equal(token,'Z0_SUB_TOKEN');
 const plan=loadPlan();
@@ -144,6 +145,38 @@ function assess(u,dir,env,id,arm) {
   assert.equal(row.stops>0,arm==='ON','Stop instrumentation missing or unexpected');
   return row;
 }
+function auditArm(top,pair,u,base,arm) {
+  const {dir}=read(path.join(base,arm+'.json'));
+  const intents=fs.readdirSync(base).filter(n=>new RegExp('^'+arm+'-\\d+\\.json$').test(n))
+    .map(n=>read(path.join(base,n))).filter(i=>i.dir===dir);
+  assert.equal(intents.length,1,'Expected one intent for the graded '+arm+' slot of '+pair);
+  const {id,pre}=intents[0],work=path.join(dir,'work');
+  const env={...toolEnv(u,dir,false),LESSON_WORK:work,LESSON_PRE:pre,LESSON_EVENTS:path.join(dir,'stops.jsonl')};
+  const files=sessionFiles(path.join(env.CLAUDE_CONFIG_DIR,'projects'),id);
+  const events=fs.existsSync(env.LESSON_EVENTS)?fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse):[];
+  const first=stateCommit(work,pre);
+  const inputs=[{post:first,commands:commandLog(files)},...events.filter(e=>e.response).map(e=>({post:e.post,commands:e.commands}))];
+  const scratch=path.join(top,'crash-audit',pair,arm);
+  fs.mkdirSync(scratch,{recursive:true});
+  const calls=inputs.map(({post,commands})=>log=>runCheck(guardedLesson(u.lesson),
+    {work,env:{...graderEnv(env),CHECK_LOG:log},preCommit:pre,postCommit:post,commands,scratch}));
+  const outcome=auditCalls(calls,i=>path.join(scratch,'call-'+i+'.log'));
+  return {pair,arm,dir,id,grader:GUARD,firstTree:run('git',['rev-parse',first+'^{tree}'],work,env).trim(),...outcome};
+}
+function auditArms() {
+  const file=auditFile(root),audits=readAudits(file);
+  let added=0;
+  for(const p of schedule) {
+    const base=path.join(root,'trial',p.key),result=path.join(base,'result.json');
+    if(!fs.existsSync(result)) continue;
+    for(const [arm,row] of Object.entries(read(result).rows)) {
+      if(row===null || row.grader===GUARD || audits.has(p.key+' '+arm)) continue;
+      fs.appendFileSync(file,JSON.stringify({...auditArm(root,p.key,byId.get(p.id),base,arm),at:new Date().toISOString()})+'\n');
+      added++;
+    }
+  }
+  console.log('Crash audit added '+added+' arm records; '+readAudits(file).size+' in '+file);
+}
 async function collectArm({pair,u,base,arm,template,slot,seedHash,promptText},
   {launch=armCmd,gate=boxGate,prepare=prepareSlot,grade=assess,sleep=wait}={}) {
   const completed=path.join(base,arm+'.json');
@@ -250,7 +283,7 @@ assert.deepEqual(pins(),{
 assert.equal(await hashFile(binary),'5064e6e0572dca86257363ca04d48653eef20ef27f1bd04b504ed7199ed3fd13');
 assert.equal(run('git',['rev-parse','HEAD'],slice,process.env).trim(),'70eb87c0fdabdcc96754c80ccb4f975df87213ca');
 assert.equal(digest(fs.readFileSync(path.join(corpus,'plan.json'))),'fdc2911c1d908c101327348a56d1c302141ae8cdaa9c1056ed0d9dfd3d7c5471');
-if(mode!=='check') {
+if(!['check','audit'].includes(mode)) {
   const dir=path.join(checkRoot,'shell-probe');
   const env=mode==='probe'?toolEnv(smoke,dir):privateEnv(dir);
   const js="const r=require('node:child_process').spawnSync(process.env.CLAUDE_CODE_GIT_BASH_PATH,['--noprofile','--norc','-c','exit 0']);if(r.status!==0){console.error('Git Bash unavailable: '+(r.error?.code??r.status));process.exit(1)}";
@@ -260,6 +293,8 @@ if(mode==='probe') {
   const work=path.join(checkRoot,'shell-probe');
   boxGate({work,env:toolEnv(smoke,work)});
   console.log('Git Bash and Z0 box gate passed; no model call');
+} else if(mode==='audit') {
+  auditArms();
 } else if(mode==='check') {
   const d=fs.mkdtempSync(path.join(checkRoot,'offline-'));
   const {checkRecovery,checkTimeout,checkProfile,checkSetup}=await import('./offline.mjs');
@@ -313,15 +348,35 @@ if(mode==='probe') {
     assert.equal(row.first,'pass');
     assert.equal(row.nonStopTimeouts,1);
     assert.equal(row.grader,GUARD);
+    const crash=path.join(d,'crash.mjs'),odd=path.join(d,'odd.mjs');
+    fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));\n");
+    fs.writeFileSync(odd,'process.exit(7);\n');
+    const lessonAt=checkPath=>({...smoke,lesson:{...smoke.lesson,checkPath}});
     if(arm==='OFF') {
-      const crash=path.join(dir,'crash.mjs');
-      fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));\n");
-      assert.throws(()=>checks({...smoke,lesson:{...smoke.lesson,checkPath:crash}},work,env,dir,sessionId,env.LESSON_PRE),/exited 2/);
+      assert.throws(()=>checks(lessonAt(crash),work,env,dir,sessionId,env.LESSON_PRE),/exited 2/);
       assert.match(fs.readFileSync(path.join(dir,'checker.log'),'utf8'),/checker crashed: Error: fixture crash/);
     }
     if(arm==='ON') {
       assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
       assert.ok(qualifies({revision,rows:{ON:row}}));
+      const base=path.join(d,'audit-pair');
+      json(path.join(base,'ON.json'),{row,dir});
+      json(path.join(base,'ON-0.json'),{id:sessionId,pre:env.LESSON_PRE,dir});
+      json(path.join(base,'ON-1.json'),{id:randomUUID(),pre:env.LESSON_PRE,dir:path.join(base,'retry-x')});
+      const stops=fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse).filter(e=>e.response).length;
+      const audit=(name,u)=>auditArm(d,name,u,base,'ON');
+      const ran=audit('ran',smoke);
+      assert.ok(stops>0);
+      assert.equal(ran.status,'ran');
+      assert.equal(ran.calls,1+stops);
+      assert.equal(ran.id,sessionId);
+      assert.equal(ran.firstTree,run('git',['rev-parse',stateCommit(work,env.LESSON_PRE)+'^{tree}'],work,env).trim());
+      assert.ok(!fs.readdirSync(path.join(d,'crash-audit','ran','ON')).some(n=>n.endsWith('.log')),'The audit kept the log of a call that ran');
+      const crashed=audit('crash',lessonAt(crash));
+      assert.equal(crashed.status,'crash');
+      assert.equal(crashed.call,0);
+      assert.match(fs.readFileSync(crashed.log,'utf8'),/checker crashed/);
+      assert.equal(audit('odd',lessonAt(odd)).status,'error');
     }
     assert.equal(run('git',['rev-parse','refs/z0/pre'],work,env).trim(),env.LESSON_PRE);
     console.log(arm+' seed, retained timeout and final grade passed');

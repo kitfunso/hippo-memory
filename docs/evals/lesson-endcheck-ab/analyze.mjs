@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {loadPlan,read,revision,root} from './paths.mjs';
 import {schedule,signP} from './design.mjs';
 import {upperNet} from './safety.mjs';
+import {audited,auditFile,readAudits} from './crash-audit.mjs';
 
 const units=new Map(loadPlan().units.map(u=>[u.id,u]));
 const fmt=x=>x.toFixed(4);
@@ -55,6 +56,7 @@ export function summarize(results) {
 const args=process.argv.slice(2);
 assert.ok(!args.length || (args.length===1 && ['--fixture','--fixture-missing'].includes(args[0])),'unexpected argument');
 const results=[];
+const audits=args.length?new Map():readAudits(auditFile(root));
 for(const p of schedule) {
   const u=units.get(p.id);
   if(args.length) {
@@ -72,7 +74,7 @@ for(const p of schedule) {
   assert.equal(row.revision,revision);
   assert.ok(on===null?row.missing.ON:valid(on) && on.stops>0);
   assert.ok(off===null?row.missing.OFF:valid(off) && !off.listings.length && !off.stops);
-  results.push({p,u,off,on});
+  results.push({p,u,off:audited(off,p.key,'OFF',audits),on:audited(on,p.key,'ON',audits)});
 }
 console.log(summarize(results).join('\n'));
 if(results.length!==schedule.length)process.exitCode=2;
