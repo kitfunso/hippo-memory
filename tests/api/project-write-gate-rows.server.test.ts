@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
@@ -6,6 +6,7 @@ import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
 import { adminActor, outcome, quarantineApprove, type Actor } from '../../src/api/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
+import { log } from '../../src/base/util/log.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -58,10 +59,12 @@ interface Seed {
 let gated: Rig;
 let plain: Rig;
 let solo: Rig;
+let patient: Rig;
 let keyO: Key;
 let keyQ: Key;
 let keyB: Key;
 let keyC: Key;
+let keyP: Key;
 let counter = 0;
 
 function mint(root: string, label: string, owner: string): Key {
@@ -174,6 +177,10 @@ function idOf(r: Reply, field: 'id' | 'newId'): string {
   return value;
 }
 
+function toolCall(name: string, args: Record<string, JsonValue>): Payload {
+  return { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
+}
+
 async function mcp(
   rig: Rig,
   key: Key,
@@ -181,8 +188,7 @@ async function mcp(
   args: Record<string, JsonValue>,
   extra: Record<string, string> = {},
 ): Promise<string> {
-  const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
-  const r = await http(rig, key, 'POST', '/mcp', call, extra);
+  const r = await http(rig, key, 'POST', '/mcp', toolCall(name, args), extra);
   expect(r.status, r.text).toBe(200);
   const body: { result?: { content: Array<{ text: string }> }; error?: { message: string } } = JSON.parse(r.text);
   return body.result?.content[0]?.text ?? body.error?.message ?? '';
@@ -213,11 +219,11 @@ async function seedWithoutProject(rig: Rig, key: Key): Promise<string> {
   return idOf(r, 'id');
 }
 
-async function startRig(root: string, withGate: boolean): Promise<Rig> {
+async function startRig(root: string, withGate: boolean, gateTimeoutMs = 100): Promise<Rig> {
   const gate: GateState = { calls: [], answer: ALPHA_ONLY };
   const options = withGate
     ? {
-        projectWriteGateTimeoutMs: 100,
+        projectWriteGateTimeoutMs: gateTimeoutMs,
         projectWriteGate: (c: ProjectWriteCall) => {
           gate.calls.push(c);
           return gate.answer(c);
@@ -244,6 +250,7 @@ beforeAll(async () => {
   const tmp = makeRoot('project-write-gate-rows', { init: false });
   const rootA = sharedStoreAt(tmp, 'srv-gated');
   const rootB = sharedStoreAt(tmp, 'srv-plain');
+  const rootP = sharedStoreAt(tmp, 'srv-patient');
   const rootC = path.join(tmp, 'srv-solo', '.hippo');
   fs.mkdirSync(rootC, { recursive: true });
   initTestStore(rootC);
@@ -252,15 +259,18 @@ beforeAll(async () => {
   keyQ = mint(rootA, 'rows-q', 'oid-b');
   keyB = mint(rootB, 'rows-b', 'oid-a');
   keyC = mint(rootC, 'rows-c', 'oid-a');
+  keyP = mint(rootP, 'rows-p', 'oid-a');
   gated = await startRig(rootA, true);
   plain = await startRig(rootB, false);
   solo = await startRig(rootC, true);
+  patient = await startRig(rootP, true, 10_000);
 });
 
 afterAll(async () => {
   await gated?.handle.stop();
   await plain?.handle.stop();
   await solo?.handle.stop();
+  await patient?.handle.stop();
 });
 
 describe('project write gate on an existing row', () => {
@@ -533,6 +543,48 @@ describe('project write gate on outcome, when the request ends', () => {
     await expect(outcome(ctx, ids, true)).rejects.toMatchObject({ name: 'AbortError' });
     expect(calls).toEqual(['alpha']);
     expect(ids.map((id) => readEntry(root, id)?.outcomePositive)).toEqual([0, 0]);
+  });
+});
+
+describe('project write gate on hippo_outcome over /mcp, when the request ends', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  function lateLineLogged(): Promise<void> {
+    return new Promise((resolve) => {
+      const note = (message: string): void => {
+        if (message.includes('after its deadline reply')) resolve();
+      };
+      vi.spyOn(log, 'trail').mockImplementation(note);
+      vi.spyOn(log, 'warn').mockImplementation(note);
+    });
+  }
+
+  it('18b. a request past its deadline starts no second gate call and no store write', async () => {
+    const alpha = await seed(patient, keyP, { project: 'alpha', content: 'tessellwick cranes notes' });
+    const beta = await seed(patient, keyP, { project: 'beta', content: 'tessellwick tugboat notes' });
+    arm(patient);
+    const headers = { 'x-hippo-project': 'alpha', 'x-hippo-project-aliases': 'beta' };
+    const recalled = await mcp(patient, keyP, 'hippo_recall', { query: 'tessellwick' }, headers);
+    expect([recalled.includes('cranes'), recalled.includes('tugboat')]).toEqual([true, true]);
+    let release = (): void => {};
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    arm(patient, async () => {
+      await released;
+      return null;
+    });
+    vi.stubEnv('HIPPO_REQUEST_DEADLINE_MS', '500');
+    const finished = lateLineLogged();
+    const r = await http(patient, keyP, 'POST', '/mcp', toolCall('hippo_outcome', { good: true }), headers);
+    expect(r.status, r.text).toBe(504);
+    release();
+    await finished;
+    expect(asked(patient)).toHaveLength(1);
+    expect([alpha, beta].map((id) => row(patient, id)?.outcome_positive)).toEqual([0, 0]);
   });
 });
 
