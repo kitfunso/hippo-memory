@@ -134,3 +134,5 @@ python -B "$d/analyze.py"
 Before scored collection, the audit flagged both planted reads and found no hits in the four saved smoke applies or the four no-tool probes. The synthetic rosters passed the exclusion, sensitivity and protocol failure checks. The scored roster had zero observations.
 
 Scored collection requires separate launch approval, an available operator subscription, passing pins and a passing box check at launch. The smoke budget is exhausted.
+
+25 Nov 2026: Keith authorised scored collection on Z0_SUB_TOKEN ("use the subscription key").

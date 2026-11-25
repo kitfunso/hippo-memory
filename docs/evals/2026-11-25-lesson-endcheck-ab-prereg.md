@@ -4,6 +4,8 @@ Registered 25 November 2026 before a live smoke or scored launch. Prepared for r
 
 ## Question and decision
 
+25 Nov 2026: Keith authorised one live qualification and, if it passes, the full launch on the Claude Code subscription token ("use the subscription key").
+
 H1 predicts that enabling the slice 1 Stop hook lowers the proportion of omission lessons failed before a human correction. H2 predicts that the hook introduces few failures on tasks that round 3 A2 passed. A lesson fails when the frozen lesson checker says `fail` or `na`, round 3's violation coding. Task acceptance, final-after-correction performance and reminders issued are different outcomes. None substitutes for H1.
 
 The direction in the experiment brief supplies the kill rule for this slice. If ON's omission failure rate is equal to or above OFF's, kill the proposed benefit. If lower and the one-sided paired randomisation p value is at most 0.05, report a reduction on these cases. Otherwise report inconclusive. A reduction alone earns no safety claim. The harm margin chosen for this design is 5 percentage points. Report the observed excess and the one-sided 95% upper limit on paired net excess failures among historical passes. Call the result within margin only when that limit is below 5%. Even a clean trial cannot establish zero harm.
