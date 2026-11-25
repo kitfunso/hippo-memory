@@ -1,15 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { pathToFileURL } from 'node:url';
-import { folder, hash, root } from './plan.mjs';
-
-const dist = path.resolve(folder,'../../../../wt-slice1/dist');
-for(const [name,digest] of Object.entries({
-  extract:'f22390d95e8d703ef7ef21259604141a5fdf12f4d2be28d989705eeb38d6583a',
-  transcript:'12013c6b5140ea7108ba910910d503a5be8ed644144e400738e5295083773193'
-})) assert.equal(hash(fs.readFileSync(path.join(dist,'surface/capture',name+'.js'))),digest,'Changed capture build');
-const mod = name => import(pathToFileURL(path.join(dist,name+'.js')));
+import { hash, root } from './plan.mjs';
+import { mod } from './slice.mjs';
 const {createMemory} = await mod('base/memory/entry');
 const {DEFAULT_CONFIG} = await mod('base/config/config');
 const {initStore,writeEntry,loadAllEntries} = await mod('store/sqlite/fixtures');
@@ -28,45 +21,53 @@ export function inside(p) {
 export function copy(src,dst) {
   inside(dst);
   assert(!fs.existsSync(dst),'Occupied destination '+dst);
-  fs.cpSync(src,dst,{recursive:true,errorOnExist:true,force:false});
+  fs.cpSync(src,dst,{recursive:true,errorOnExist:true,force:false,verbatimSymlinks:true});
 }
 const names = new Set(['claude.md','claude.local.md','agents.md','agents.override.md','memory.md']);
 const memoryPath = rel => names.has(path.posix.basename(rel).toLowerCase()) ||
   rel.toLowerCase().split('/').some(p=>p==='.claude' || p==='.agents');
 
 // Entire config/home is restored, including unknown future memory locations and session history.
-export function files(dir,{memoryOnly=false}={}) {
+export function files(dir,{memoryOnly=false,home=false}={}) {
   const out={};
   function walk(rel) {
     for (const e of fs.readdirSync(join(dir,rel),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))) {
       const key=rel ? rel+'/'+e.name : e.name;
+      if (home && ['tmp','local','roaming'].includes(key)) continue;
       if (memoryOnly && ['.git','.hippo'].includes(e.name)) continue;
       if (e.isSymbolicLink()) {
-        const real=fs.realpathSync(join(dir,key)), relative=path.relative(dir,real);
-        if (!memoryOnly || memoryPath(key) || relative.startsWith('..') || path.isAbsolute(relative) ||
-            fs.statSync(real).isDirectory()) throw Error('Linked surface '+key);
+        if ((!memoryOnly && !home) || memoryPath(key)) throw Error('Linked surface '+key);
         continue;
       }
       if (e.isDirectory()) walk(key);
-      else if (!memoryOnly || memoryPath(key)) out[key]=hash(fs.readFileSync(join(dir,key)));
+      else if ((!memoryOnly && !home) || memoryPath(key)) out[key]=hash(fs.readFileSync(join(dir,key)));
     }
   }
   walk('');
   return out;
 }
 export function externalCheck(work) {
-  const paths=['C:/Program Files/ClaudeCode/CLAUDE.md','C:/Program Files/ClaudeCode/managed-settings.json',
-    'C:/Program Files/ClaudeCode/managed-settings.d'];
+  const paths=['C:/Program Files/ClaudeCode','C:/ProgramData/ClaudeCode'].flatMap(dir=>
+    ['CLAUDE.md','managed-settings.json','managed-settings.d'].map(file=>join(dir,file)));
   for (let p=path.dirname(work);;p=path.dirname(p)) {
     for (const f of ['CLAUDE.md','CLAUDE.local.md','AGENTS.md','.claude']) paths.push(join(p,f));
     if (p===path.dirname(p)) break;
   }
   for (const f of paths) assert(!fs.existsSync(f),'Uncontrolled external instructions '+f);
 }
+export function checkProjectSettings(work) {
+  for (const name of ['settings.json','settings.local.json']) {
+    assert(!fs.lstatSync(join(work,'.claude',name),{throwIfNoEntry:false}),'Uncontrolled project settings: '+name);
+  }
+}
 export function freezeBuiltIn(live,pre) {
   inside(pre); mkdir(pre);
-  const home=files(join(live,'home'));
-  copy(join(live,'home'),join(pre,'home'));
+  checkProjectSettings(join(live,'work'));
+  const home=files(join(live,'home'),{home:true});
+  mkdir(join(pre,'home'));
+  for(const f of Object.keys(home)) {
+    const dest=join(pre,'home',f); mkdir(path.dirname(dest)); fs.copyFileSync(join(live,'home',f),dest);
+  }
   const work=join(live,'work'), repo=files(work,{memoryOnly:true});
   for (const f of Object.keys(repo)) {
     const dest=join(pre,'repo',f); mkdir(path.dirname(dest)); fs.copyFileSync(join(work,f),dest);
@@ -85,7 +86,8 @@ export function resetBuiltIn(live,pre,expected) {
   for (const f of Object.keys(expected.repo)) {
     const dest=inside(join(work,f)); mkdir(path.dirname(dest)); fs.copyFileSync(join(pre,'repo',f),dest);
   }
-  const actual={repo:files(work,{memoryOnly:true}),home:files(join(live,'home'))};
+  checkProjectSettings(work);
+  const actual={repo:files(work,{memoryOnly:true}),home:files(join(live,'home'),{home:true})};
   assert.deepEqual(actual,expected,'Built-in state differs from pre-teach');
   return hash(JSON.stringify(expected));
 }
@@ -102,7 +104,7 @@ export function capture(transcript,followup,home,pre,session) {
   const actual=turns.filter(t=>t.role==='user').at(-1)?.text.trim();
   assert.equal(actual,followup.trim(),'Missing teaching turn');
   const rows=extractFromTexts([actual],1,0).map(item=>entry(item.content,session,'capture'));
-  const after=files(home);
+  const after=files(home,{home:true});
   for (const [key,digest] of Object.entries(after)) {
     if (pre.home[key]===digest || !/\/memory\/.*\.md$/i.test(key)) continue;
     const text=fs.readFileSync(join(home,key),'utf8').trim();

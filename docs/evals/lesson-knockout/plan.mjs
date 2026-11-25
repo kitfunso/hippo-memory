@@ -76,6 +76,9 @@ export async function estimate() {
 
 if (process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const units=roster();
-  console.log(JSON.stringify(process.argv[2]==='usage' ? await estimate() :
+  const command=process.argv[2];
+  console.log(JSON.stringify(command==='usage' ? await estimate() :
+    command==='guards' ? [...new Set(units.flatMap(u=>[u.source,path.join(tasks,u.repo,'tasks-run.json'),u.lesson.checkPath]))] :
+    command==='labels' ? Object.fromEntries(['variant','omission','pattern','unlabelled'].map(c=>[c,units.filter(u=>u.cls===c).map(u=>u.id)])) :
     {sha256:hash(JSON.stringify(units)),units:units.map(u=>[u.id,u.teach.id,u.apply.id,u.order])},null,2));
 }

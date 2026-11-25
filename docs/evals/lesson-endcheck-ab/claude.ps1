@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory)][string]$PromptFile
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'limit.ps1')
 $info = New-Object System.Diagnostics.ProcessStartInfo
 $info.FileName = 'C:\z0-runs\scored\bin\claude.exe'
 $info.UseShellExecute = $false
@@ -40,9 +41,16 @@ if (!$child.WaitForExit(1800000)) {
   & "$env:SystemRoot\System32\taskkill.exe" /PID $child.Id /T /F | Out-Null
   throw 'Owned Claude Code session timed out'
 }
-$null = $errStream.Result
+$result = $null
+try { $result = $out.Result | ConvertFrom-Json } catch {
+  try { $result = ($out.Result.Trim() -split "\n")[-1] | ConvertFrom-Json } catch { $result = $null }
+}
+# Only the classification leaves the launcher. Child output can contain task text.
+if (Test-SubscriptionLimit $result ($out.Result + [Environment]::NewLine + $errStream.Result)) {
+  [Console]::WriteLine('LIMITED')
+  exit 0
+}
 if ($child.ExitCode -ne 0) { throw "Claude Code exited $($child.ExitCode)" }
-$result = $out.Result | ConvertFrom-Json
 if ($result.is_error -or $result.subtype -ne 'success' -or $result.session_id -ne $SessionId) {
   throw 'Claude Code returned an incomplete session'
 }

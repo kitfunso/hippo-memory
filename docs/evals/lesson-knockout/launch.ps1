@@ -32,12 +32,13 @@ $private=@{ HOME="$Live/home"; USERPROFILE="$Live/home"; CLAUDE_CONFIG_DIR="$Liv
 foreach ($k in $private.Keys) { $pi.EnvironmentVariables[$k]=$private[$k] }
 $pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']=[Environment]::GetEnvironmentVariable($TokenVar,'User')
 if ($pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] -notlike 'sk-ant-oat*') { throw 'Missing subscription credential or unexpected credential type' }
-$argv=@('-p','--output-format','json','--setting-sources','project','--strict-mcp-config','--settings',"$Live/settings.json",'--model',$call.model,'--effort',$call.effort)
+$argv=@('-p','--output-format','json','--setting-sources','','--strict-mcp-config','--settings',"$Live/settings.json",'--model',$call.model,'--effort',$call.effort)
 if ($call.diagnostic) {
   if (!$call.smoke -or $call.resume) { throw 'Invalid diagnostic' }
   $argv+=@('--restricted','--permission-mode','dontAsk','--tools','','--max-turns','1')
 } elseif ($call.smoke) {
-  $argv+=@('--restricted','--permission-mode','acceptEdits','--tools','Read,Glob,Grep,Edit,Write','--max-turns','3')
+  $maxTurns=if ($call.frozenSmoke) { '2' } else { '3' }
+  $argv+=@('--restricted','--permission-mode','acceptEdits','--tools','Read,Glob,Grep,Edit,Write','--max-turns',$maxTurns)
 } else { $argv+=@('--permission-mode','bypassPermissions') }
 if ($call.resume) { $argv+=@('--resume',$call.session) } else { $argv+=@('--session-id',$call.session) }
 $pi.Arguments=(($argv | ForEach-Object { '"'+$_+'"' }) -join ' ')
@@ -53,7 +54,13 @@ $p.StandardInput.BaseStream.Write($bytes,0,$bytes.Length)
 $p.StandardInput.BaseStream.Close()
 if (-not $p.WaitForExit(3600000)) { & taskkill /PID $p.Id /T /F | Out-Null; throw 'Owned session timed out' }
 $p.WaitForExit()
-try { $result=($out.Result.Trim() | ConvertFrom-Json) } catch { throw "Claude Code returned no JSON (exit $($p.ExitCode))" }
+$result=$null
+try { $result=($out.Result.Trim() | ConvertFrom-Json) } catch { if(!$out.IsCompleted){throw} }
+if(!$call.smoke -and (!$result -or $result.is_error) -and $result.subtype -notlike 'error_max*' -and
+  (($out.Result + "`n" + $err.Result) -match 'usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error')) {
+  exit 75
+}
+if(!$result){throw "Claude Code returned no JSON (exit $($p.ExitCode))"}
 if ($result.session_id -ne $call.session) { throw 'Session id mismatch' }
 # The operator record contains counters and status only. The CLI owns transcript evidence.
 $record=[ordered]@{session=$result.session_id;subtype=$result.subtype;isError=$result.is_error;turns=$result.num_turns;usage=$result.usage;models=@($result.modelUsage.PSObject.Properties.Name);exit=$p.ExitCode}

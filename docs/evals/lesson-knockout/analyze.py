@@ -34,6 +34,8 @@ def report() -> dict:
     plan = json.loads(subprocess.check_output(["node", str(PLAN)], encoding="utf-8"))
     if plan["sha256"] != DIGEST:
         raise ValueError("Frozen task inputs changed")
+    labels = json.loads(subprocess.check_output(["node", str(PLAN), "labels"], encoding="utf-8"))
+    variants = set(labels["variant"])
     slots = {(u, a): i for u, _, _, order in plan["units"] for i, a in enumerate(order)}
     found = {}
     sessions = set()
@@ -45,6 +47,9 @@ def report() -> dict:
                 or r["repo"] != r["id"].split("-")[0] or r["verdict"] not in {"pass", "fail", "na"}
                 or r["session"] in sessions):
             raise ValueError(f"Invalid record {f}")
+        if (r["id"] in variants and type(r["flagged"]) is not bool
+                or r["id"] not in variants and r["flagged"] is not None):
+            raise ValueError(f"Invalid variant eligibility {f}")
         sessions.add(r["session"])
         found[key] = r
     result = dict(planned=len(slots), observed=len(found), status="incomplete")
@@ -57,7 +62,8 @@ def report() -> dict:
     noise = mean((u["T"]["verdict"] != "pass") != (u["Tp"]["verdict"] != "pass") for u in units)
     gates = dict(forkErrors=fork_errors, storeErrors=sum(not r["storeVerified"] for r in found.values()),
                  missingRequestEvidence=sum(not r["complete"] for r in found.values()),
-                 neutralLeaks=sum(u["N"]["targetText"] for u in units), hookLoss=loss, disagreement=noise)
+                 neutralLeaks=sum(u["N"]["targetText"] for u in units), hookLoss=loss,
+                 hookMissesByArm={a: sum(not u[a]["hookSeen"] for u in units) for a in ARMS}, disagreement=noise)
     violation = contrast(units, False)
     excluded = contrast(units, True)
     kills = []
@@ -71,7 +77,8 @@ def report() -> dict:
     status = "invalid" if bad else "kill" if kills else "audit-required" if passes else "inconclusive"
     return dict(**{**result, "status": status}, gates=gates, kill=kills, violation=violation, excluded=excluded,
                 emptyCaptures=sum(u["T"]["targetCount"] == 0 for u in units),
-                flaggedFollows={a: sum(u[a]["flagged"] for u in units) for a in ARMS},
+                flaggedFollows={a: dict(eligible=len(variants), flagged=sum(u[a]["flagged"] is True for u in units))
+                                for a in ARMS},
                 rawGrades={a: dict(Counter(u[a]["verdict"] for u in units)) for a in ARMS})
 
 

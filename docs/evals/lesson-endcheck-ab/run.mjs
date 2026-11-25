@@ -3,40 +3,48 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { runCheck,stateCommit } from '../../../scripts/token-eval/checks.mjs';
+import { holdPre,runCheck,stateCommit } from '../../../scripts/token-eval/checks.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
 import { assertNoAncestorInstructions } from '../../../scripts/token-eval/homes.mjs';
-import { restoreInstructions } from '../../../scripts/token-eval/workspace.mjs';
+import { cleanPath } from '../../../scripts/token-eval/arms.mjs';
+import net from 'node:net';
+import { setTimeout as wait } from 'node:timers/promises';
 import { binary,corpus,digest,dist,freeze,json,loadPlan,read,root,slice } from './paths.mjs';
-import { blob,checkout,install,privateEnv,run,seed } from './prepare.mjs';
+import { checkout,install,privateEnv,run,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { pins } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
-const modes=['check','probe','smoke','pair','full'];
+const modes=['check','probe','smoke','qualify','pair','full'];
 const [mode,token='Z0_SUB_TOKEN',key] = process.argv.slice(2);
-assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|pair|full [TokenVar] [pair key]');
+assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|qualify|pair|full [TokenVar] [pair key]');
 assert.match(token,/^Z0_SUB_TOKEN(?:_[123])?$/);
-if(mode==='smoke') assert.equal(token,'Z0_SUB_TOKEN');
+if(['smoke','qualify'].includes(mode)) assert.equal(token,'Z0_SUB_TOKEN');
 const plan=loadPlan();
 const byId=new Map(plan.units.map(u=>[u.id,u]));
 const smoke=plan.units.find(u=>u.family==='q173-f3' && u.seed===2);
 const {END_CHECK_LEAD}=await dist('api/end-check.js');
 
-function toolEnv(u,dir) {
+function toolEnv(u,dir,initial=true) {
   const env=privateEnv(dir);
   const cmd=". 'C:/eval-authors/s3x-env.ps1'\nGet-S3xTool '"+u.toolchain+"' | ConvertTo-Json -Compress";
   const tc=JSON.parse(run('powershell.exe',['-NoProfile','-Command',cmd],dir,env));
   const sub=s=>s.replaceAll('{work}',dir);
   for (const [k,v] of Object.entries(tc.env)) env[k]=sub(v);
+  if(env.GRADLE_USER_HOME) {
+    const properties=path.join(env.GRADLE_USER_HOME,'gradle.properties');
+    env.GRADLE_USER_HOME=path.join(dir,'cache','gradle');
+    fs.mkdirSync(env.GRADLE_USER_HOME,{recursive:true});
+    if(initial && fs.existsSync(properties)) fs.copyFileSync(properties,path.join(env.GRADLE_USER_HOME,'gradle.properties'));
+  }
   const pk=Object.keys(env).find(k=>k.toUpperCase()==='PATH');
-  if(tc.path) env[pk]=sub(tc.path)+';'+env[pk];
-  if(tc.tail) env[pk]+=';'+sub(tc.tail);
+  const combined=[tc.path && sub(tc.path),env[pk],tc.tail && sub(tc.tail)].filter(Boolean).join(path.delimiter);
+  env[pk]=[path.join(dir,'bin'),cleanPath(combined,{env,cwd:dir}).value].join(path.delimiter);
   env.EVAL_SEED=String(u.seed);
-  if(u.toolchain==='python') run('python',['-m','venv',path.join(dir,'venv')],dir,env);
+  if(initial && u.toolchain==='python') run('python',['-m','venv',path.join(dir,'venv')],dir,env);
   return env;
 }
-const armCmd=(id,arm,tokenName,settings,work,env,prompt)=>run('powershell.exe',
+const armCmd=(id,tokenName,settings,work,env,prompt)=>run('powershell.exe',
   ['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(here,'claude.ps1'),'-Mode','apply',
     '-SessionId',id,'-Settings',settings,'-PromptFile',prompt,'-TokenVar',tokenName],work,env);
 
@@ -49,13 +57,19 @@ function checks(u,work,env,dir,id,pre) {
   const first=grade(stateCommit(work,pre),commandLog(files));
   const events=fs.existsSync(env.LESSON_EVENTS)?fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse):[];
   const transcript=fs.readFileSync(file,'utf8').trimEnd().split('\n').map(JSON.parse);
+  const summaries=transcript.filter(x=>x.subtype==='stop_hook_summary');
+  const dispatches=summaries.flatMap(x=>x.hookInfos??[]).filter(h=>h.command==='hippo end-check');
+  assert.ok(summaries.every(x=>!x.hookErrors?.length),'Stop summary reported errors');
+  assert.equal(dispatches.length,events.length,'Stop dispatch and shim event counts differ');
   const failedHooks=transcript.map(x=>x.attachment).filter(h=>h?.hookEvent && /error|cancel|timeout/.test(h.type??''));
-  if(failedHooks.length) {
-    json(path.join(dir,'hook-faults.json'),failedHooks.map(h=>({event:h.hookEvent,type:h.type,exit:h.exitCode})));
-    throw new Error('Claude Code hook failure; see hook-faults.json');
-  }
+  const routine=h=>h.hookEvent!=='Stop' && (h.timedOut===true || h.type==='hook_timeout');
+  const nonStopTimeouts=failedHooks.filter(routine).length;
+  if(failedHooks.length) json(path.join(dir,'hook-faults.json'),failedHooks.map(h=>({
+    event:h.hookEvent,type:h.type,exit:h.exitCode,timedOut:h.timedOut,durationMs:h.durationMs})));
+  if(failedHooks.some(h=>!routine(h))) throw new Error('Unclassified hook failure; see hook-faults.json');
   const actual=transcript
-    .filter(x=>x.attachment?.hookEvent==='Stop').flatMap(x=>[x.attachment.content].flat())
+    .filter(x=>x.attachment?.hookEvent==='Stop' && x.attachment.type==='hook_additional_context')
+    .map(x=>[x.attachment.content].flat().join('\n'))
     .filter(s=>typeof s==='string' && s.includes(END_CHECK_LEAD));
   const listings=events.filter(e=>e.response).map(e=>{
     const text=JSON.parse(e.response).hookSpecificOutput.additionalContext;
@@ -65,36 +79,104 @@ function checks(u,work,env,dir,id,pre) {
     return {text,target:target.length,other:lines.length-target.length,atStop:grade(e.post,e.commands)};
   });
   assert.deepEqual(listings.map(x=>x.text),actual,'emitted and delivered reminders differ');
-  return {first,stops:events.length,listings:listings.map(({text,...rest})=>rest)};
+  const productionTimeouts=events.filter(e=>e.outcome==='production_timeout').length;
+  return {first,stops:events.length,productionTimeouts,nonStopTimeouts,listings:listings.map(({text,...rest})=>rest)};
 }
 
 async function prepareSlot(u,dir,template,arm) {
   const env=toolEnv(u,dir);
   const work=checkout(u,dir,env,template);
+  env.LESSON_WORK=work;
   env.LESSON_EVENTS=path.join(dir,'stops.jsonl');
   if(u.task.setup) run('cmd.exe',['/d','/c',u.task.setup],work,env,{timeout:1800000});
-  restoreInstructions(work,new Map(u.files.filter(f=>f.surface==='instructions').map(f=>[f.path.slice(5),blob(f)])));
   const settings=install(dir,work,env,arm);
   const base=run('git',['rev-parse','HEAD'],work,env).trim();
   env.LESSON_PRE=stateCommit(work,base);
+  holdPre(work,env.LESSON_PRE);
   const normalized=JSON.stringify(read(settings)).replaceAll(JSON.stringify(dir).slice(1,-1),'%slot%');
   const common=JSON.parse(normalized);
   delete common.hooks.Stop;
   return {env,work,settings,common,preTree:run('git',['rev-parse',env.LESSON_PRE+'^{tree}'],work,env).trim()};
 }
 function graderEnv(env) {
-  return {...env,NODE_OPTIONS:'--require "'+path.join(here,'file-stdio.cjs')+'"'};
+  return {...env,NODE_OPTIONS:'--require "'+path.join(here,'file-stdio.cjs').replaceAll('\\','/')+'"'};
 }
-async function execute(pair,u,base,arms) {
+const limitWaitMs=15*60_000, maxWaits=8*96;
+const revision='neon-1';
+const qualificationPrompt='Create Qualification.kt in the repository root using Write, containing only class Qualification. Finish immediately after that edit without running commands.';
+function boxGate(slot) {
+  const output=run(slot.env.CLAUDE_CODE_GIT_BASH_PATH,['C:/z0-runs/s7/box-check.sh'],slot.work,slot.env);
+  console.log(output.trim());
+}
+function record(file,value) {
+  const tmp=file+'.'+randomUUID()+'.tmp';
+  fs.writeFileSync(tmp,JSON.stringify(value)+'\n',{flag:'wx'});
+  try { fs.linkSync(tmp,file); } finally { fs.unlinkSync(tmp); }
+}
+function assess(u,dir,env,id,arm) {
+  const row=checks(u,env.LESSON_WORK,env,dir,id,env.LESSON_PRE);
+  assert.equal(row.stops>0,arm==='ON','Stop instrumentation missing or unexpected');
+  return row;
+}
+async function collectArm({pair,u,base,arm,template,slot,seedHash,promptText},
+  {launch=armCmd,gate=boxGate,prepare=prepareSlot,grade=assess,sleep=wait}={}) {
+  const completed=path.join(base,arm+'.json');
+  if(fs.existsSync(completed)) return read(completed);
+  const missing=(reason,dir)=>{
+    record(completed,{row:null,reason,dir});
+    return read(completed);
+  };
+  for(let attempt=0;;attempt++) {
+    const journal=path.join(base,arm+'-'+attempt);
+    const intent=journal+'.json',status=journal+'.returned.json';
+    if(!fs.existsSync(intent)) {
+      if(attempt) {
+        const dir=fs.mkdtempSync(path.join(base,'retry-'));
+        const fresh=await prepare(u,dir,template,arm);
+        assert.equal(fresh.preTree,slot.preTree);
+        assert.deepEqual(fresh.common,slot.common);
+        slot={...fresh,dir};
+      }
+      const {dir,work,settings,env}=slot,id=randomUUID(),prompt=path.join(dir,'prompt.txt');
+      freeze(prompt,promptText);
+      gate(slot);
+      record(intent,{id,dir,pre:env.LESSON_PRE,arm,seedHash,tokenVar:token});
+      let reply;
+      try { reply=launch(id,token,settings,work,env,prompt).trim(); }
+      catch(e) { return missing('launcher failure '+(e.status??e.code??e.name),dir); }
+      assert.ok(reply==='LIMITED' || reply===id,'unrecognised launcher reply');
+      record(status,{limited:reply==='LIMITED',at:Date.now()});
+    }
+    const {id,dir,pre,tokenVar}=read(intent);
+    if(!fs.existsSync(status)) return missing('dispatch without confirmed return',dir);
+    const returned=read(status);
+    if(returned.limited) {
+      if(['smoke','qualify'].includes(pair) || attempt>=maxWaits) return missing('limit wait budget exhausted',dir);
+      assert.equal(token,tokenVar,'resume the limited arm with its assigned token variable');
+      const remaining=Math.max(0,returned.at+limitWaitMs-Date.now());
+      console.log(pair+' '+arm+' subscription limited; waiting before fresh attempt '+(attempt+2));
+      await sleep(remaining);
+      continue;
+    }
+    const work=path.join(dir,'work');
+    const env=dir===slot.dir?slot.env:{...toolEnv(u,dir,false),LESSON_WORK:work,LESSON_PRE:pre,LESSON_EVENTS:path.join(dir,'stops.jsonl')};
+    let row;
+    try { row=grade(u,dir,env,id,arm); }
+    catch(e) { return missing('assessment: '+e.name+' '+e.message.split('\n')[0],dir); }
+    record(completed,{row,dir});
+    return read(completed);
+  }
+}
+async function execute(pair,u,base,arms,promptText=u.task.prompt) {
   const result=path.join(base,'result.json');
   if(fs.existsSync(result)) return;
-  fs.mkdirSync(path.dirname(base),{recursive:true});
-  fs.mkdirSync(base); // A partial or concurrent launch cannot spend again.
-  const template=path.join(base,'template');
+  fs.mkdirSync(base,{recursive:true});
+  const prep=fs.mkdtempSync(path.join(base,'prep-'));
+  const template=path.join(prep,'template');
   const seedHash=await seed(u,template);
   const prepared=[];
   for(const [i,arm] of arms.entries()) {
-    const dir=path.join(base,'s'+(i+1));
+    const dir=path.join(prep,'s'+(i+1));
     fs.mkdirSync(dir);
     const slot=await prepareSlot(u,dir,template,arm);
     prepared.push({...slot,dir,arm});
@@ -103,18 +185,18 @@ async function execute(pair,u,base,arms) {
     assert.deepEqual(prepared[0].common,prepared[1].common,'non-Stop settings differ');
     assert.equal(prepared[0].preTree,prepared[1].preTree,'prepared workspaces differ');
   }
-  const rows={};
-  for(const {dir,work,settings,arm,env} of prepared) {
-    const id=randomUUID(), prompt=path.join(dir,'prompt.txt');
-    freeze(prompt,u.task.prompt);
-    json(path.join(dir,'launch.json'),{id,pair,arm,seedHash,tokenVar:token});
-    armCmd(id,arm,token,settings,work,env,prompt);
-    rows[arm]=checks(u,work,env,dir,id,env.LESSON_PRE);
-    assert.equal(rows[arm].stops>0,arm==='ON','Stop instrumentation missing or unexpected');
-    json(path.join(dir,'grade.json'),rows[arm]);
+  const baseline=path.join(base,'baseline.json');
+  const identity={revision,pair,id:u.id,seedHash,preTree:prepared[0].preTree,common:prepared[0].common};
+  if(fs.existsSync(baseline)) assert.deepEqual(read(baseline),identity,'baseline changed on recovery');
+  else record(baseline,identity);
+  const rows={},missing={};
+  for(const slot of prepared) {
+    const {row,reason}=await collectArm({pair,u,base,arm:slot.arm,template,slot,seedHash,promptText});
+    rows[slot.arm]=row;
+    if(reason) missing[slot.arm]=reason;
   }
-  json(result,{pair,id:u.id,seedHash,rows});
-  console.log(pair+' complete');
+  record(result,{revision,pair,id:u.id,seedHash,rows,missing});
+  console.log(pair+(Object.keys(missing).length?' closed with missing evidence':' complete'));
 }
 
 async function hashFile(f) {
@@ -138,14 +220,19 @@ assert.equal(run('git',['rev-parse','HEAD'],slice,process.env).trim(),'70eb87c0f
 assert.equal(digest(fs.readFileSync(path.join(corpus,'plan.json'))),'fdc2911c1d908c101327348a56d1c302141ae8cdaa9c1056ed0d9dfd3d7c5471');
 if(mode!=='check') {
   const dir=path.join(root,'shell-probe');
-  const env=privateEnv(dir);
+  const env=mode==='probe'?toolEnv(smoke,dir):privateEnv(dir);
   const js="const r=require('node:child_process').spawnSync(process.env.CLAUDE_CODE_GIT_BASH_PATH,['--noprofile','--norc','-c','exit 0']);if(r.status!==0){console.error('Git Bash unavailable: '+(r.error?.code??r.status));process.exit(1)}";
   run(process.execPath,['-e',js],dir,env);
 }
 if(mode==='probe') {
-  console.log('Git Bash launch passed; no model call');
+  const work=path.join(root,'shell-probe');
+  boxGate({work,env:toolEnv(smoke,work)});
+  console.log('Git Bash and Z0 box gate passed; no model call');
 } else if(mode==='check') {
   const d=fs.mkdtempSync(path.join(root,'offline-'));
+  const {checkRecovery,checkTimeout}=await import('./offline.mjs');
+  await checkRecovery(d,collectArm);
+  checkTimeout(d);
   const template=path.join(d,'template');
   const stamp=await seed(smoke,template);
   const arms=[];
@@ -162,33 +249,63 @@ if(mode==='probe') {
     const sessionId=randomUUID();
     const t=path.join(env.CLAUDE_CONFIG_DIR,'projects','fixture',sessionId+'.jsonl');
     const message=(type,content)=>JSON.stringify({type,message:{role:type,content}});
-    freeze(t,[message('user','Fix the example'),message('assistant',[{type:'tool_use',id:'w',name:'Write',input:{file_path:'Example.java',content:'class Example {}'}}]),
+    fs.writeFileSync(path.join(work,'Example.kt'),'class Example {}\n');
+    freeze(t,[message('user','Fix the example'),message('assistant',[{type:'tool_use',id:'w',name:'Write',input:{file_path:'Example.kt',content:'class Example {}'}}]),
       message('user',[{type:'tool_result',tool_use_id:'w',content:'done'}])].join('\n')+'\n');
     const output=run(process.execPath,[hippo,'end-check'],work,env,{input:JSON.stringify({transcript_path:t})});
     assert.ok(output.includes('spotlessApply'),'real Stop missed seeded detector');
     if(arm==='ON'){
-      const emitted=run('cmd.exe',['/d','/c','hippo','end-check'],work,env,
+      const nested=path.join(work,'subdir');
+      fs.mkdirSync(nested);
+      const emitted=run('cmd.exe',['/d','/c','hippo','end-check'],nested,env,
         {input:JSON.stringify({session_id:sessionId,transcript_path:t})});
       assert.equal(emitted,output);
-      assert.ok(JSON.parse(fs.readFileSync(env.LESSON_EVENTS,'utf8')).post);
+      const {post}=JSON.parse(fs.readFileSync(env.LESSON_EVENTS,'utf8'));
+      assert.equal(run('git',['rev-parse','refs/z0/hold/stop/'+post],work,env).trim(),post);
+      fs.appendFileSync(t,JSON.stringify({subtype:'stop_hook_summary',hookInfos:[{command:'hippo end-check'}],hookErrors:[]})+'\n');
+      assert.throws(()=>checks(smoke,work,env,dir,sessionId,env.LESSON_PRE),/emitted and delivered/);
+      fs.appendFileSync(t,JSON.stringify({attachment:{type:'hook_additional_context',hookEvent:'Stop',
+        content:[JSON.parse(emitted).hookSpecificOutput.additionalContext]}})+'\n');
     }
-    const knownFail=runCheck(smoke.lesson,{work,env:graderEnv(env),preCommit:env.LESSON_PRE,postCommit:env.LESSON_PRE,commands:[],scratch:dir});
-    console.log(arm+' installed; seed visible; fixture listed target; no-edit checker='+knownFail);
+    fs.appendFileSync(t,JSON.stringify({attachment:{hookEvent:'UserPromptSubmit',type:'hook_cancelled',timedOut:true}})+'\n'
+      +message('assistant',[{type:'tool_use',id:'g',name:'Bash',input:{command:'./gradlew spotlessApply'}}])+'\n');
+    const row=assess(smoke,dir,env,sessionId,arm);
+    assert.equal(row.first,'pass');
+    assert.equal(row.nonStopTimeouts,1);
+    if(arm==='ON') assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
+    assert.equal(run('git',['rev-parse','refs/z0/pre'],work,env).trim(),env.LESSON_PRE);
+    console.log(arm+' seed, retained timeout and final grade passed');
   }
   assert.deepEqual(arms[0].common,arms[1].common);
   assert.equal(arms[0].preTree,arms[1].preTree);
   console.log('same baseline '+stamp);
-} else if(mode==='smoke') {
+} else {
+  // A named pipe releases on process exit and serialises recovery across operator restarts.
+  const lock=net.createServer(s=>s.end());
+  await new Promise((ok,fail)=>lock.once('error',fail).listen('\\\\.\\pipe\\lesson-endcheck-ab-collector',ok));
+  try {
+  if(mode==='smoke') {
   const smokeDir=path.join(root,'smoke');
+  assert.ok(!fs.existsSync(smokeDir) || key==='new-attempt','Preserve the historical smoke; use new-attempt for an authorised smoke');
   // Keep the original smoke evidence when a later operator has a new launch authorisation.
   const dest=fs.existsSync(smokeDir) && key==='new-attempt' ? fs.mkdtempSync(path.join(root,'smoke-retry-')) : null;
   await execute('smoke',smoke,dest?path.join(dest,'attempt'):smokeDir,['ON']);
-} else {
+  } else if(mode==='qualify') {
+    await execute('qualify',smoke,path.join(root,'qualification-'+revision),['ON'],qualificationPrompt);
+  } else {
   const smokeRoots=[path.join(root,'smoke'),...fs.readdirSync(root).filter(n=>/^smoke-retry-[\w-]+$/.test(n)).map(n=>path.join(root,n,'attempt'))];
-  assert.ok(smokeRoots.some(d=>{const f=path.join(d,'result.json');return fs.existsSync(f)&&read(f).rows.ON.stops>0;}),
-    'A completed live smoke with working hooks is required before scored launches');
+  smokeRoots.push(path.join(root,'qualification-'+revision));
+  assert.ok(smokeRoots.some(d=>{
+    const f=path.join(d,'result.json');
+    if(!fs.existsSync(f)) return false;
+    const r=read(f);
+    return r.revision===revision && r.rows.ON?.listings.some(l=>l.target>0);
+  }),
+    'A completed live smoke with a delivered Stop listing is required before scored launches');
   const todo=mode==='full'?schedule:schedule.filter(p=>p.key===key);
   assert.ok(todo.length,'unknown pair');
   for(const p of todo) await execute(p.key,byId.get(p.id),path.join(root,'trial',p.key),p.order);
+  }
+  } finally { lock.close(); }
 }
 
