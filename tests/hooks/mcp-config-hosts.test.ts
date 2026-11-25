@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Homes } from '../../src/base/util/agent-homes.js';
+import { log } from '../../src/base/util/log.js';
 import { parseJson, type JsonObject, type JsonValue } from '../../src/base/util/json.js';
 import {
   installMcpConfigHost,
@@ -25,6 +27,11 @@ const SERVER = {
   antigravity: { command: CMD, args: ['mcp'] },
   'muse-code': { transport: 'stdio', command: CMD, args: ['mcp'], mode: 'optional' },
 } satisfies Record<string, JsonObject>;
+const BASE = {
+  junie: {},
+  antigravity: {},
+  'muse-code': { schema_version: 1 },
+} as const satisfies Record<string, JsonObject>;
 const USER_SERVER = { command: 'npx', args: ['their-server'] };
 const TABLE = `[mcp_servers.hippo]\ncommand = "${CMD}"\nargs = ["mcp"]\n`;
 const tableWith = (eol: string): string => TABLE.replace(/\n/g, eol);
@@ -33,11 +40,13 @@ const HAND_WRITTEN: [string, JsonObject][] = [
   ['a Windows path to hippo.cmd', { command: 'C:\\Users\\me\\AppData\\Roaming\\npm\\hippo.cmd', args: ['mcp'] }],
   ['npx with the package', { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] }],
   ['npx with a pinned version', { command: 'npx', args: ['-y', 'hippo-memory@3.16.0', 'mcp'] }],
+  ['npx with no flag', { command: 'npx', args: ['hippo-memory', 'mcp'] }],
 ];
 const NOT_HIPPO_MCP: [string, JsonObject][] = [
   ['hippo serve', { command: 'hippo', args: ['serve'] }],
   ['hippo recall', { command: 'hippo', args: ['recall'] }],
   ['npx with another package', { command: 'npx', args: ['-y', 'other-memory', 'mcp'] }],
+  ['npx launching another CLI first', { command: 'npx', args: ['-y', 'other-cli', 'hippo-memory', 'mcp'] }],
 ];
 const FILE_STYLES: [string, string, string, string, string][] = [
   ['a BOM, CRLF and four spaces', BOM, '\r\n', '    ', '\r\n'],
@@ -54,6 +63,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
+  syncBuiltinESMExports();
   fs.rmSync(home, { recursive: true, force: true });
 });
 
@@ -72,6 +83,17 @@ const readJson = (file: string): JsonValue => parseJson(read(file).replace(/^﻿
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, text);
+}
+
+function failStat(failure: Error, target: string): void {
+  const real = fs.statSync;
+  // SAFETY: the stand-in forwards every call it does not fail to the real statSync with the caller's own arguments.
+  const stand = ((p: fs.PathLike, ...rest: [fs.StatSyncOptions?]) => {
+    if (String(p) === target) throw failure;
+    return real(p, ...rest);
+  }) as typeof fs.statSync;
+  vi.spyOn(fs, 'statSync').mockImplementation(stand);
+  syncBuiltinESMExports();
 }
 
 describe('the host rows', () => {
@@ -112,6 +134,51 @@ describe('the host rows', () => {
   it('count a file in place of the folder as absent', () => {
     write(path.join(home, '.junie'), 'not a folder');
     expect(isMcpConfigHostPresent(rowNamed('junie'), homes)).toBe(false);
+  });
+
+  it('put Grok Build under GROK_HOME when it is set and not blank', () => {
+    const grok = path.join(home, 'grok-elsewhere');
+    const withGrok: Homes = { home, env: { GROK_HOME: grok } };
+    expect(rowNamed('grok-build').file(withGrok)).toBe(path.join(grok, 'config.toml'));
+    expect(rowNamed('grok-build').dirs(withGrok)).toEqual([grok]);
+    for (const blank of ['', '  ']) {
+      const blankHome: Homes = { home, env: { GROK_HOME: blank } };
+      expect(rowNamed('grok-build').file(blankHome)).toBe(fileOf('grok-build'));
+      expect(rowNamed('grok-build').dirs(blankHome)).toEqual([path.join(home, '.grok')]);
+    }
+  });
+
+  it('check GROK_HOME and not ~/.grok for Grok Build when it is set, and write there', () => {
+    const grok = path.join(home, 'grok-elsewhere');
+    const withGrok: Homes = { home, env: { GROK_HOME: grok } };
+    fs.mkdirSync(path.join(home, '.grok'));
+    expect(isMcpConfigHostPresent(rowNamed('grok-build'), withGrok)).toBe(false);
+    fs.mkdirSync(grok);
+    expect(isMcpConfigHostPresent(rowNamed('grok-build'), withGrok)).toBe(true);
+    expect(installMcpConfigHost(rowNamed('grok-build'), withGrok).status).toBe('added');
+    expect(read(path.join(grok, 'config.toml'))).toBe(TABLE);
+    expect(fs.existsSync(fileOf('grok-build'))).toBe(false);
+  });
+
+  it('warn about a folder whose check fails, count it as absent and still check the other folders', () => {
+    const [first, second] = rowNamed('antigravity').dirs(homes);
+    fs.mkdirSync(second, { recursive: true });
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    const failure = Object.assign(new Error(`ENOTDIR: not a directory, stat '${first}'`), {
+      code: 'ENOTDIR',
+      syscall: 'stat',
+    });
+    failStat(failure, first);
+    expect(isMcpConfigHostPresent(rowNamed('antigravity'), homes)).toBe(true);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(first), expect.anything());
+    fs.rmSync(second, { recursive: true });
+    expect(isMcpConfigHostPresent(rowNamed('antigravity'), homes)).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
+  it('throw a folder check failure that is not a filesystem error', () => {
+    failStat(new TypeError('bad argument'), rowNamed('junie').dirs(homes)[0]);
+    expect(() => isMcpConfigHostPresent(rowNamed('junie'), homes)).toThrow('bad argument');
   });
 });
 
@@ -165,7 +232,7 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
   );
 
   it.each(NOT_HIPPO_MCP)('does not count a "hippo-memory" entry running %s: install adds "hippo"', (_label, server) => {
-    const before = { [KEY[name]]: { 'hippo-memory': server } };
+    const before = { ...BASE[name], [KEY[name]]: { 'hippo-memory': server } };
     write(fileOf(name), JSON.stringify(before));
     expect(install(name).status).toBe('added');
     expect(readJson(fileOf(name))).toMatchObject({ [KEY[name]]: { 'hippo-memory': server, hippo: SERVER[name] } });
@@ -175,11 +242,11 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
 
   it.each(FILE_STYLES)('keeps the file style on install and uninstall: %s', (_label, bom, eol, indent, end) => {
     const dress = (value: JsonObject): string => bom + JSON.stringify(value, null, indent).replace(/\n/g, eol) + end;
-    const original = dress({ theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } });
+    const original = dress({ ...BASE[name], theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } });
     write(fileOf(name), original);
     expect(install(name).status).toBe('added');
     expect(read(fileOf(name))).toBe(
-      dress({ theme: 'dark', [KEY[name]]: { theirs: USER_SERVER, hippo: SERVER[name] } }),
+      dress({ ...BASE[name], theme: 'dark', [KEY[name]]: { theirs: USER_SERVER, hippo: SERVER[name] } }),
     );
     expect(install(name).status).toBe('present');
     expect(uninstall(name).status).toBe('removed');
@@ -214,7 +281,7 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
   });
 
   it('keeps every other server and top-level key', () => {
-    const before = { theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } };
+    const before = { ...BASE[name], theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } };
     write(fileOf(name), JSON.stringify(before));
     expect(install(name).status).toBe('added');
     expect(readJson(fileOf(name))).toMatchObject({ theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } });
@@ -237,15 +304,28 @@ describe('muse-code schema_version', () => {
     expect(readJson(fileOf('muse-code'))).toEqual(written);
   });
 
-  it('never adds schema_version to an existing object', () => {
-    write(fileOf('muse-code'), '{"theme":"dark"}');
-    install('muse-code');
-    expect(readJson(fileOf('muse-code'))).toEqual({ theme: 'dark', mcp_servers: written.mcp_servers });
-    write(fileOf('muse-code'), '{}');
-    uninstall('muse-code');
-    install('muse-code');
-    expect(readJson(fileOf('muse-code'))).toEqual({ mcp_servers: written.mcp_servers });
-  });
+  it.each([['{}'], ['{"theme":"x"}'], ['{"mcp_servers":{"theirs":{"command":"x","args":[]}}}']])(
+    'leaves an existing file with no schema_version unchanged: invalid for %s',
+    (text) => {
+      write(fileOf('muse-code'), text);
+      expect(install('muse-code')).toEqual({ name: 'muse-code', file: fileOf('muse-code'), status: 'invalid' });
+      expect(uninstall('muse-code').status).toBe('absent');
+      expect(read(fileOf('muse-code'))).toBe(text);
+    },
+  );
+
+  it.each([[true], [false]])(
+    'keeps a hand-written entry with no mode, which Muse reads as required: kept, no byte changed (schema_version %s)',
+    (withSchema) => {
+      const entry = { transport: 'stdio', command: 'hippo', args: ['mcp'] };
+      const servers = { hippo: entry };
+      const text = JSON.stringify(withSchema ? { schema_version: 1, mcp_servers: servers } : { mcp_servers: servers });
+      write(fileOf('muse-code'), text);
+      expect(install('muse-code').status).toBe('kept');
+      expect(uninstall('muse-code').status).toBe('kept');
+      expect(read(fileOf('muse-code'))).toBe(text);
+    },
+  );
 
   it('keeps an existing schema_version value as it is', () => {
     write(fileOf('muse-code'), '{"schema_version":2}');
@@ -383,7 +463,50 @@ describe('grok-build TOML', () => {
     expect(grokStatus(read(file()))).toBe('absent');
   });
 
+  const STRING_HOLDS_TABLE: [string, string][] = [
+    ['a multiline basic string', '"""'],
+    ['a multiline literal string', "'''"],
+  ];
+
+  it.each(STRING_HOLDS_TABLE)('absent: %s holds a hippo table and ends on a [x] line', (_label, quote) => {
+    const text = `note = ${quote}\n${TABLE}[x]${quote}\nmodel = "x"\n`;
+    expect(grokStatus(text)).toBe('absent');
+    seeded(text);
+    expect(uninstall('grok-build').status).toBe('absent');
+    expect(read(file())).toBe(text);
+    expect(install('grok-build').status).toBe('added');
+    expect(read(file())).toBe(`${text}\n${TABLE}`);
+    expect(grokStatus(read(file()))).toBe('present');
+    expect(uninstall('grok-build').status).toBe('removed');
+    expect(read(file())).toBe(text);
+  });
+
+  it.each(STRING_HOLDS_TABLE)('kept, not present: a hippo table whose body holds %s', (_label, quote) => {
+    const text = `${TABLE}note = ${quote}\nmore\n${quote}\n`;
+    expect(grokStatus(text)).toBe('kept');
+    seeded(text);
+    expect(uninstall('grok-build').status).toBe('kept');
+    expect(read(file())).toBe(text);
+  });
+
+  const UNREADABLE: [string, string][] = [
+    ['an escaped table key', '[mcp_servers."\\u0068ippo"]\ncommand = "hippo"\nargs = ["mcp"]\n'],
+    ['an escaped parent key', '["mcp_\\u0073ervers".hippo]\ncommand = "hippo"\nargs = ["mcp"]\n'],
+    ['an escaped dotted key', 'mcp_servers."\\u0068ippo".command = "x"\n'],
+    ['an escaped key under [mcp_servers]', '[mcp_servers]\n"\\u0068ippo".command = "x"\n'],
+    ['an escaped key beside our table', `${TABLE}\n[other."a\\tb"]\nc = 1\n`],
+  ];
+
+  it.each(UNREADABLE)('unreadable: %s', (_label, text) => {
+    expect(grokStatus(text)).toBe('unreadable');
+    seeded(text);
+    expect(install('grok-build').status).toBe('unreadable');
+    expect(uninstall('grok-build').status).toBe('unreadable');
+    expect(read(file())).toBe(text);
+  });
+
   const USER_OWNED: [string, string][] = [
+    ['keys inside a multiline string', '[mcp_servers.hippo]\nnote = """\ncommand = "hippo"\nargs = ["mcp"]\n"""\n'],
     ['another command', '[mcp_servers.hippo]\ncommand = "npx"\nargs = ["mcp"]\n'],
     ['other args', '[mcp_servers.hippo]\ncommand = "hippo"\nargs = ["mcp", "--x"]\n'],
     ['a missing args line', '[mcp_servers.hippo]\ncommand = "hippo"\n'],
@@ -435,6 +558,7 @@ describe('grok-build TOML', () => {
       '[mcp_servers.hippo]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n',
     ],
     ['an added startup_timeout_sec', `${TABLE}startup_timeout_sec = 60\n`],
+    ['npx with no flag', '[mcp_servers.memory]\ncommand = "npx"\nargs = ["hippo-memory", "mcp"]\n'],
     ['an added env', `${TABLE}env = { A = "b" }\n`],
     ['a trailing comment on a key line', `[mcp_servers.hippo]\ncommand = "hippo" # mine\nargs = ["mcp"]\n`],
     ['a trailing comment on the header', `[mcp_servers.hippo] # mine\ncommand = "hippo"\nargs = ["mcp"]\n`],
@@ -449,6 +573,10 @@ describe('grok-build TOML', () => {
   });
 
   const NOT_KEPT: [string, string][] = [
+    [
+      'npx launching another CLI first',
+      '[mcp_servers.memory]\ncommand = "npx"\nargs = ["-y", "other-cli", "hippo-memory", "mcp"]\n',
+    ],
     ['hippo serve', '[mcp_servers.memory]\ncommand = "hippo"\nargs = ["serve"]\n'],
     ['hippo with mcp and more', '[mcp_servers.memory]\ncommand = "hippo"\nargs = ["mcp", "--x"]\n'],
     ['npx with another package', '[mcp_servers.memory]\ncommand = "npx"\nargs = ["-y", "other", "mcp"]\n'],
@@ -482,6 +610,8 @@ describe('grok-build TOML', () => {
     ['a hippo table under another parent', '[profiles.mcp_servers.hippo]\ncommand = "x"\n'],
     ['an [mcp_servers] table without hippo', '[mcp_servers]\nother = { command = "x" }\n'],
     ['dotted keys for another server', 'mcp_servers.other.command = "x"\n'],
+    ['a backslash in a comment', 'a = 1\n# C:\\x = y\n'],
+    ['a backslash in a multiline string', 'a = """\n[b\\u0068]\nc\\d = 1\n"""\n'],
   ];
 
   it.each(ABSENT)('absent: %s', (_label, text) => {

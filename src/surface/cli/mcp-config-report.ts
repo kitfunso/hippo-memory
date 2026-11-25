@@ -39,6 +39,9 @@ const unreadableReason = (format: McpConfigFormat): string =>
     ? 'has comments or is not a JSON object hippo can change'
     : 'is not a TOML file hippo can change';
 
+const invalidReason = (format: McpConfigFormat): string =>
+  (format.kind === 'json' ? format.host.invalid?.({}) : null) ?? 'is not a config the host accepts';
+
 const withTail = (head: string, tail: string[]): string[] =>
   tail.length === 0 ? [head] : [`${head}; ${tail[0]}`, ...tail.slice(1)];
 
@@ -59,6 +62,10 @@ const INSTALL_LINES = {
       `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged`,
       snippetLines(target.format, 'add'),
     ),
+  invalid: (file, target) => [
+    `WARNING: ${file} ${invalidReason(target.format)}, so it was left unchanged; ` +
+      `then run \`hippo hook install ${target.name}\``,
+  ],
 } as const satisfies Record<McpMergeStatus, Lines>;
 
 const REMOVE_BY_HAND = 'remove the "hippo" server by hand if hippo added it';

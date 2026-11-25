@@ -38,6 +38,8 @@ const HOSTS: readonly Host[] = [
   },
 ];
 
+const OUTPUT_FORMS: readonly Host[] = [HOSTS[0], HOSTS[2]];
+
 const FLAGS = ['--no-schedule', '--no-learn'];
 const INIT_FLAGS = [...FLAGS, '--no-embeddings'];
 const ADDED = /^\s+(junie|antigravity|grok-build|muse-code)\s+Added the "hippo" MCP server -> (.+)$/gm;
@@ -66,7 +68,9 @@ function machine(extraEnv: NodeJS.ProcessEnv = {}): Machine {
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
     if (
-      /^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)
+      /^(path|codex_home|claude_config_dir|grok_home|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(
+        key,
+      )
     ) {
       delete env[key];
     }
@@ -150,26 +154,27 @@ describe.each(HOSTS)('hippo hook with $name', (host) => {
     const second = hippo(m, 'hook', 'uninstall', host.name);
     expect(second.stdout).toContain(`No hippo MCP server found in ${file}`);
   });
+});
 
-  it('leaves a hippo entry the user wrote and prints what to paste', () => {
-    const m = machine();
-    const file = fileOf(m, host);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const own =
-      host.key === null
-        ? '[mcp_servers.hippo]\ncommand = "node"\nargs = ["my-server.js"]\n'
-        : JSON.stringify({ [host.key]: { hippo: { command: 'node', args: ['my-server.js'] } } });
-    fs.writeFileSync(file, own);
+describe('hippo hook with GROK_HOME set', () => {
+  it('writes and removes the Grok Build server under GROK_HOME and leaves ~/.grok alone', () => {
+    const base = machine();
+    const grokHome = path.join(base.root, 'grok-elsewhere');
+    const m = { ...base, env: { ...base.env, GROK_HOME: grokHome } };
+    const file = path.join(grokHome, 'config.toml');
 
-    const install = hippo(m, 'hook', 'install', host.name);
-    expect(install.stdout).toContain(`Left the "hippo" MCP server in ${file} as it is`);
-    expect(install.stdout).toContain(host.key === null ? '[mcp_servers.hippo]' : `under "${host.key}"`);
-    const uninstall = hippo(m, 'hook', 'uninstall', host.name);
-    expect(uninstall.stdout).toContain(`Left the "hippo" MCP server in ${file}`);
-    expect(readText(file)).toBe(own);
+    const install = hippo(m, 'hook', 'install', 'grok-build');
+    expect(install.stdout).toContain(`Added the "hippo" MCP server -> ${file}`);
+    expect(readText(file)).toContain(`[mcp_servers.hippo]\ncommand = "${hippoCommand()}"\nargs = ["mcp"]`);
+    expect(fs.existsSync(path.join(m.home, '.grok'))).toBe(false);
+
+    const uninstall = hippo(m, 'hook', 'uninstall', 'grok-build');
+    expect(uninstall.stdout).toContain(`Removed the "hippo" MCP server from ${file}`);
   });
+});
 
-  it('prints the entry to paste for hook install and setup, and only a hint for init', () => {
+describe.each(OUTPUT_FORMS)('hippo hook output with $name', (host) => {
+  it('prints the entry to paste for hook install and setup, a hint for init, and leaves a user-owned entry', () => {
     const m = machine();
     const file = fileOf(m, host);
     presentDirs(m, host);
@@ -193,6 +198,9 @@ describe.each(HOSTS)('hippo hook with $name', (host) => {
     const setup = hippo(m, 'setup', ...FLAGS);
     expect(setup.stdout).toContain(`${left}; replace the entry with this`);
     expect(setup.stdout).toContain(paste);
+
+    const uninstall = hippo(m, 'hook', 'uninstall', host.name);
+    expect(uninstall.stdout).toContain(`Left the "hippo" MCP server in ${file}`);
     expect(readText(file)).toBe(own);
   });
 
@@ -273,6 +281,29 @@ describe('hippo setup with the MCP hosts', () => {
 
     expect(stdout).toContain('No JSON-hook-capable tools detected');
     expect(stdout).toContain('Run with --all to install hooks anyway.');
+  });
+
+  it('still writes the other hosts when XDG_CONFIG_HOME is a file, and names the folder where the OS says ENOTDIR', () => {
+    const base = machine();
+    const xdg = path.join(base.root, 'xdg-file');
+    fs.writeFileSync(xdg, 'not a folder');
+    const m = { ...base, env: { ...base.env, XDG_CONFIG_HOME: xdg } };
+    const museDir = path.join(xdg, 'muse');
+    const osSaysEnotdir = (() => {
+      try {
+        fs.statSync(museDir, { throwIfNoEntry: false });
+        return false;
+      } catch (err) {
+        return err instanceof Error && 'code' in err && err.code === 'ENOTDIR';
+      }
+    })();
+    presentDirs(m, HOSTS[0]);
+
+    const { stderr } = hippo(m, 'setup', ...FLAGS);
+
+    expectHippoIn(m, HOSTS[0]);
+    expect(fs.existsSync(path.join(xdg, 'muse'))).toBe(false);
+    if (osSaysEnotdir) expect(stderr).toContain(museDir);
   });
 
   it('--all writes every host even with no folder present', () => {

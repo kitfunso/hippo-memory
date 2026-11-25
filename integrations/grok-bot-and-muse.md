@@ -80,14 +80,14 @@ Then ask the Bot to use hippo, for example: "Use hippo_recall to find what I dec
 In the Muse app, you add hippo by asking Muse to build a Custom Connector. Muse saves it as a skill. Send Muse this prompt with your URL in it:
 
 ```text
-Build a custom integration to my hippo memory server. It is a remote MCP server over HTTP at https://<tunnel host>/mcp. It needs an Authorization: Bearer header with an API key. Connect to it, test every tool end to end, show me the results, and save the integration as a reusable skill. Ask me for the key through the secure credential flow.
+Build a custom integration to my hippo memory server. It is a remote MCP server over HTTP at https://<tunnel host>/mcp. It needs an Authorization: Bearer header with an API key. Connect to it, list its tools, call hippo_status to check the connection, show me the results, and save the integration as a reusable skill. Ask me for the key through the secure credential flow.
 ```
 
 If Muse asks about the transport, answer "HTTP at that URL". If it asks about auth, answer "a bearer token".
 
 When Muse asks for credentials, type the key in its secure credential prompt. Muse keeps it in its Secure Credentials Store.
 
-Muse tests each tool and saves the skill. Start a new conversation and ask Muse to use hippo.
+Muse checks the connection and saves the skill. Start a new conversation and ask Muse to use hippo.
 
 ## Agents on your machine
 

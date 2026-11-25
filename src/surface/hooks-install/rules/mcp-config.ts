@@ -14,8 +14,10 @@ const BOM = '\uFEFF';
 
 export interface McpConfigHost {
   readonly key: 'mcpServers' | 'servers' | 'mcp_servers';
+  readonly subsetMatch?: true;
   seed?(): JsonObject;
   server(): JsonObject;
+  readonly invalid?: (config: JsonObject) => string | null;
 }
 
 export function hippoCommand(): string {
@@ -32,15 +34,25 @@ const ANTIGRAVITY_MCP: McpConfigHost = {
   server: () => ({ command: hippoCommand(), args: ['mcp'] }),
 };
 
+const MUSE_NEEDS_SCHEMA = 'has no "schema_version", which Muse Code needs; add "schema_version": 1';
+
 const MUSE_CODE_MCP: McpConfigHost = {
   key: 'mcp_servers',
   seed: () => ({ schema_version: 1 }),
   server: () => ({ transport: 'stdio', command: hippoCommand(), args: ['mcp'], mode: 'optional' }),
+  invalid: (config) => (config.schema_version === undefined ? MUSE_NEEDS_SCHEMA : null),
 };
+
+function hasKeysOf(entry: JsonObject, ours: JsonObject): boolean {
+  const keys = Object.keys(entry);
+  const ourKeys = Object.keys(ours);
+  return keys.length === ourKeys.length && keys.every((key) => ourKeys.includes(key));
+}
 
 function isHipposServer(entry: JsonValue | undefined, host: McpConfigHost): boolean {
   if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
   const ours = host.server();
+  if (host.subsetMatch !== true && !hasKeysOf(entry, ours)) return false;
   return Object.entries(entry).every(([key, value]) =>
     key === 'command'
       ? value === 'hippo' || value === 'hippo.cmd'
@@ -56,10 +68,15 @@ function commandName(command: string): string {
 const isHippoPackage = (arg: string): boolean =>
   arg === HIPPO_PACKAGE || arg.startsWith(`${HIPPO_PACKAGE}@`);
 
+function npxRunsHippoMcp(args: readonly string[]): boolean {
+  const operand = args.findIndex((arg) => !arg.startsWith('-'));
+  return operand !== -1 && isHippoPackage(args[operand]) && args[operand + 1] === 'mcp';
+}
+
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {
   const name = commandName(command);
   if (name === 'hippo') return args.length === 1 && args[0] === 'mcp';
-  return name === 'npx' && args.some((arg, i) => isHippoPackage(arg) && args[i + 1] === 'mcp');
+  return name === 'npx' && npxRunsHippoMcp(args);
 }
 
 function entryRunsHippoMcp(entry: JsonValue | undefined): boolean {
@@ -85,12 +102,12 @@ export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig |
   return isJsonObjectLiteral(servers) ? { config, servers } : null;
 }
 
-export type McpMergeStatus = 'added' | 'present' | 'kept' | 'user-owned' | 'unreadable';
+export type McpMergeStatus = 'added' | 'present' | 'kept' | 'user-owned' | 'unreadable' | 'invalid';
 
 export function addHippoServer(
   read: McpConfig,
   host: McpConfigHost,
-): Exclude<McpMergeStatus, 'unreadable'> {
+): Exclude<McpMergeStatus, 'unreadable' | 'invalid'> {
   const existing = read.servers[MCP_KEY];
   if (existing !== undefined) {
     if (isHipposServer(existing, host)) return 'present';
@@ -159,6 +176,11 @@ export interface McpConfigRow {
   readonly format: McpConfigFormat;
 }
 
+function grokHome(homes: Homes): string {
+  const set = homes.env.GROK_HOME;
+  return set !== undefined && set.trim() !== '' ? set : path.join(userHome(homes), '.grok');
+}
+
 function museConfigDir(homes: Homes): string {
   return path.join(homes.env.XDG_CONFIG_HOME || path.join(userHome(homes), '.config'), 'muse');
 }
@@ -184,8 +206,8 @@ export const MCP_CONFIG_HOSTS: readonly McpConfigRow[] = [
   {
     name: 'grok-build',
     label: 'Grok Build',
-    dirs: (homes) => [path.join(userHome(homes), '.grok')],
-    file: (homes) => path.join(userHome(homes), '.grok', 'config.toml'),
+    dirs: (homes) => [grokHome(homes)],
+    file: (homes) => path.join(grokHome(homes), 'config.toml'),
     format: { kind: 'toml-block' },
   },
   {

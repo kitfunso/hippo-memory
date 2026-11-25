@@ -467,10 +467,10 @@
       "claims": ["README.md"],
       "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
       "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
-      "setup": "hippo init and hippo setup, when ~/.grok exists, add the hippo server to ~/.grok/config.toml; hippo hook install grok-build does the same and hippo hook uninstall grok-build removes only that entry",
+      "setup": "hippo init and hippo setup, when $GROK_HOME (else ~/.grok) exists, add the hippo server to $GROK_HOME/config.toml (else ~/.grok/config.toml); hippo hook install grok-build does the same and hippo hook uninstall grok-build removes only that entry",
       "store": null,
       "maxSaveDelay": null,
-      "interface": "MCP, from the hippo server in ~/.grok/config.toml",
+      "interface": "MCP, from the hippo server in $GROK_HOME/config.toml (else ~/.grok/config.toml)",
       "modes": [
         { "name": "Grok Build agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],

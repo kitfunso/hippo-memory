@@ -1,6 +1,7 @@
 import { runsHippoMcp } from './mcp-config.js';
+import { startsOutsideString } from './toml-strings.js';
 
-export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned';
+export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned' | 'unreadable';
 
 interface GrokLine {
   readonly content: string;
@@ -11,6 +12,7 @@ interface GrokScan {
   readonly tables: readonly number[];
   readonly servers: readonly number[];
   readonly otherForm: boolean;
+  readonly escapedKey: boolean;
 }
 
 interface GrokInspection {
@@ -33,6 +35,7 @@ const HIPPO = key('hippo');
 const ANY_HEADER = new RegExp(`^${WS}\\[`);
 const BLANK = new RegExp(`^${WS}$`);
 const BLANK_OR_COMMENT = new RegExp(`^${WS}(?:#.*)?$`);
+const COMMENT_LINE = new RegExp(`^${WS}#`);
 const HIPPO_HEADER = new RegExp(`^${WS}\\[\\[?${MCP_SERVERS}\\.${HIPPO}(?:\\]|\\.)`);
 const OWN_HEADER = new RegExp(`^${WS}\\[${MCP_SERVERS}\\.${HIPPO}\\]${WS}$`);
 const MCP_SERVERS_HEADER = new RegExp(`^${WS}\\[${MCP_SERVERS}\\]${WS}(?:#.*)?$`);
@@ -49,6 +52,7 @@ const ARGS_ENTRY = new RegExp(`^${WS}args${WS}=${WS}\\[(.*)\\]${WS}(?:#.*)?$`);
 const USER_OWNED: GrokInspection = { status: 'user-owned', drop: [] };
 const KEPT: GrokInspection = { status: 'kept', drop: [] };
 const ABSENT: GrokInspection = { status: 'absent', drop: [] };
+const UNREADABLE: GrokInspection = { status: 'unreadable', drop: [] };
 
 function splitLines(text: string): GrokLine[] {
   const body = text.startsWith(BOM) ? text.slice(BOM.length) : text;
@@ -68,12 +72,24 @@ function isOtherHippoForm(line: string, section: Section): boolean {
   return section === 'mcp_servers' && SERVER_HIPPO_KEY.test(line);
 }
 
-function scan(contents: readonly string[]): GrokScan {
+const hasBackslash = (text: string): boolean => text.includes('\\');
+
+function hasEscapedKey(line: string): boolean {
+  if (ANY_HEADER.test(line)) return hasBackslash(line);
+  if (COMMENT_LINE.test(line)) return false;
+  const equals = line.indexOf('=');
+  return equals !== -1 && hasBackslash(line.slice(0, equals));
+}
+
+function scan(contents: readonly string[], outside: readonly boolean[]): GrokScan {
   const tables: number[] = [];
   const servers: number[] = [];
   let section: Section = 'root';
   let otherForm = false;
+  let escapedKey = false;
   contents.forEach((line, index) => {
+    if (!outside[index]) return;
+    escapedKey = escapedKey || hasEscapedKey(line);
     if (!ANY_HEADER.test(line)) {
       otherForm = otherForm || isOtherHippoForm(line, section);
       return;
@@ -82,13 +98,18 @@ function scan(contents: readonly string[]): GrokScan {
     if (SERVER_HEADER.test(line)) servers.push(index);
     section = sectionAfterHeader(line);
   });
-  return { tables, servers, otherForm };
+  return { tables, servers, otherForm, escapedKey };
 }
 
-function bodyLineIndexes(contents: readonly string[], header: number): number[] {
+function bodyLineIndexes(
+  contents: readonly string[],
+  outside: readonly boolean[],
+  header: number,
+): number[] {
   const found: number[] = [];
-  for (let i = header + 1; i < contents.length && !ANY_HEADER.test(contents[i]); i++) {
-    if (!BLANK_OR_COMMENT.test(contents[i])) found.push(i);
+  for (let i = header + 1; i < contents.length; i++) {
+    if (outside[i] && ANY_HEADER.test(contents[i])) break;
+    if (!outside[i] || !BLANK_OR_COMMENT.test(contents[i])) found.push(i);
   }
   return found;
 }
@@ -109,8 +130,14 @@ function parseArgs(inner: string): string[] | null {
 const captures = (lines: readonly string[], pattern: RegExp): string[] =>
   lines.flatMap((line) => pattern.exec(line)?.[1] ?? []);
 
-function runsHippoTable(contents: readonly string[], header: number): boolean {
-  const body = bodyLineIndexes(contents, header).map((i) => contents[i]);
+function runsHippoTable(
+  contents: readonly string[],
+  outside: readonly boolean[],
+  header: number,
+): boolean {
+  const body = bodyLineIndexes(contents, outside, header)
+    .filter((i) => outside[i])
+    .map((i) => contents[i]);
   const commands = captures(body, COMMAND_ENTRY);
   const argLists = captures(body, ARGS_ENTRY);
   if (commands.length !== 1 || argLists.length !== 1) return false;
@@ -120,18 +147,20 @@ function runsHippoTable(contents: readonly string[], header: number): boolean {
 
 function inspect(lines: readonly GrokLine[]): GrokInspection {
   const contents = lines.map((line) => line.content);
-  const { tables, servers, otherForm } = scan(contents);
+  const outside = startsOutsideString(contents);
+  const { tables, servers, otherForm, escapedKey } = scan(contents, outside);
+  if (escapedKey) return UNREADABLE;
   if (tables.length === 0 && !otherForm) {
-    return servers.some((server) => runsHippoTable(contents, server)) ? KEPT : ABSENT;
+    return servers.some((server) => runsHippoTable(contents, outside, server)) ? KEPT : ABSENT;
   }
   if (tables.length !== 1 || otherForm) return USER_OWNED;
   const header = tables[0];
-  const body = bodyLineIndexes(contents, header);
+  const body = bodyLineIndexes(contents, outside, header);
   if (OWN_HEADER.test(contents[header]) && isOwnBody(contents, body)) {
     const blankBefore = header > 0 && BLANK.test(contents[header - 1]) ? [header - 1] : [];
     return { status: 'present', drop: [header, ...body, ...blankBefore] };
   }
-  return servers.includes(header) && runsHippoTable(contents, header) ? KEPT : USER_OWNED;
+  return servers.includes(header) && runsHippoTable(contents, outside, header) ? KEPT : USER_OWNED;
 }
 
 export function grokStatus(text: string): GrokStatus {

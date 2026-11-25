@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isFileSystemError } from '../../base/util/expected-errors.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import type { Homes } from '../../base/util/agent-homes.js';
 import { tryParseJson, type JsonValue } from '../../base/util/json.js';
 import { grokStatus, planGrokInstall, planGrokRemoval } from './rules/grok-build.js';
@@ -51,7 +52,9 @@ export function mergeMcpServer(file: string, host: McpConfigHost): McpMergeStatu
   const read = readMcpConfig(text, host);
   if (read === null) return 'unreadable';
   const status = addHippoServer(read, host);
-  if (status === 'added') writeFileAtomic(file, jsonText(read.config, jsonTextStyle(text)));
+  if (status !== 'added') return status;
+  if ((host.invalid?.(read.config) ?? null) !== null) return 'invalid';
+  writeFileAtomic(file, jsonText(read.config, jsonTextStyle(text)));
   return status;
 }
 
@@ -91,7 +94,7 @@ function removeGrokBlock(file: string): McpRemoveStatus {
     return 'removed';
   }
   const status = grokStatus(text);
-  return status === 'user-owned' || status === 'kept' ? status : 'absent';
+  return status === 'present' ? 'absent' : status;
 }
 
 function mergeInFormat(file: string, format: McpConfigFormat): McpMergeStatus {
@@ -102,10 +105,21 @@ function removeInFormat(file: string, format: McpConfigFormat): McpRemoveStatus 
   return format.kind === 'json' ? removeMcpServer(file, format.host) : removeGrokBlock(file);
 }
 
+function isFolder(dir: string): boolean {
+  try {
+    return fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true;
+  } catch (err) {
+    if (!isFileSystemError(err)) throw err;
+    log.warn(
+      `could not check the folder ${dir}, so hippo counts it as missing: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+    return false;
+  }
+}
+
 export function isMcpConfigHostPresent(row: McpConfigRow, homes: Homes): boolean {
-  return row
-    .dirs(homes)
-    .some((dir) => fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory() === true);
+  return row.dirs(homes).some(isFolder);
 }
 
 export function installMcpConfigHost(row: McpConfigRow, homes: Homes): McpConfigInstallResult {

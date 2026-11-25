@@ -84,11 +84,13 @@ export interface CopilotPaths {
 
 export const COPILOT_CLI_MCP: McpConfigHost = {
   key: 'mcpServers',
+  subsetMatch: true,
   server: () => ({ type: 'local', command: hippoCommand(), args: ['mcp'], env: {}, tools: ['*'] }),
 };
 
 export const VSCODE_MCP: McpConfigHost = {
   key: 'servers',
+  subsetMatch: true,
   server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }),
 };
 
