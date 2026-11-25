@@ -117,13 +117,12 @@ describe('serve({ sleep }) on a store that is not hippo.db', () => {
     });
 
     const failed = await postSleep(server, bearer(admin));
-    const failedBody = (await failed.json()) as { error: string };
+    expect({ status: failed.status, body: await failed.json() }).toMatchObject({
+      status: 500,
+      body: { error: INTERNAL_ERROR_MESSAGE },
+    });
     const next = await postSleep(server, bearer(admin));
 
-    expect({ status: failed.status, error: failedBody.error }).toEqual({
-      status: 500,
-      error: INTERNAL_ERROR_MESSAGE,
-    });
     expect(next.status).toBe(200);
     expect(calls).toBe(2);
     await expect(server.stop()).resolves.toBeUndefined();
