@@ -1,4 +1,5 @@
 import type { Detector } from '../base/memory/detect-tags.js';
+import { duplicateKey } from '../base/util/same-text.js';
 
 export const END_CHECK_MAX_RULES = 3;
 export const END_CHECK_LEAD =
@@ -16,6 +17,12 @@ export interface DetectedRule {
   readonly content: string;
   readonly created: string;
   readonly detector: Detector;
+  readonly flags: number;
+}
+
+export interface CorrectionText {
+  readonly content: string;
+  readonly detector: Detector | null;
 }
 
 const RUNNERS =
@@ -26,6 +33,8 @@ const GROUPING = /[(){}]/g;
 const PATH_WORD = /^[\w.@~/\\:-]*\w\.[a-z0-9]{1,8}$/i;
 const BASH_WRITE =
   /(?:^|[\s;&|])(?:sed\s+-i|tee|mv|cp|rm|touch|patch|git\s+apply)\b|(?:^|[^\d&>])>>?\s*(?!\/dev\/null\b|&)[^\s|&;]+/;
+const CURLY_QUOTES = /[\u2018\u2019\u201c\u201d]/g;
+const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 
 export function commandKey(command: string): string {
   return command.replace(/['"`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -71,12 +80,44 @@ function hasInOrder(ran: readonly string[], wanted: readonly string[]): boolean 
   return found === wanted.length;
 }
 
-function ranCommand(ran: string, command: string): boolean {
+export function ranCommand(ran: string, command: string): boolean {
   const wanted = wordsOf(command);
   if (wanted.length === 0) return false;
   return ran
     .split(SEGMENT_SPLIT)
     .some((segment) => runnerForms(segment).some((form) => hasInOrder(form, wanted)));
+}
+
+export function ranProgram(ran: string, command: string): boolean {
+  const program = runnerForms(command).at(-1)?.[0];
+  if (program === undefined) return false;
+  return ran
+    .split(SEGMENT_SPLIT)
+    .some((segment) => runnerForms(segment).some((form) => sameWord(form[0], program)));
+}
+
+function proseWords(text: string): string[] {
+  return wordsOf(text.replace(CURLY_QUOTES, ''))
+    .map((word) => word.replace(TRAILING_PUNCTUATION, ''))
+    .filter((word) => word !== '');
+}
+
+export function mentionsCommand(text: string, command: string): boolean {
+  const said = proseWords(text);
+  const wanted = proseWords(command);
+  if (wanted.length === 0) return false;
+  return said.some((_, i) => hasInOrder(said.slice(i), wanted));
+}
+
+export function corrects(correction: CorrectionText, rule: DetectedRule): boolean {
+  if (duplicateKey(correction.content) === duplicateKey(rule.content)) return true;
+  const own = correction.detector?.commands.flat() ?? [];
+  return rule.detector.commands
+    .flat()
+    .some(
+      (command) =>
+        mentionsCommand(correction.content, command) || own.some((ran) => ranCommand(ran, command)),
+    );
 }
 
 function globPattern(glob: string): RegExp {

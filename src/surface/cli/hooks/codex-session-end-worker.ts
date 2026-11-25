@@ -116,9 +116,8 @@ async function captureCodexRollout(
   transcriptPath: string,
 ): Promise<void> {
   const digestLog: LineLog = (message, opts) => appendSessionEndCloseLog(logFile, message, opts);
-  const scan = readSessionScan(transcriptPath, digestLog, {
-    scriptedIsHuman: envCaptureScripted(),
-  });
+  const scriptedIsHuman = envCaptureScripted();
+  const scan = readSessionScan(transcriptPath, digestLog, { scriptedIsHuman });
   const captureOpts: CaptureOptions = {
     source: 'last-session',
     transcriptPath,
@@ -128,10 +127,11 @@ async function captureCodexRollout(
     tenantId,
     originProject: store === hippoRoot ? undefined : resolveProjectIdentity(process.cwd()),
     sessionTurns: scan?.turns,
+    scriptedIsHuman,
     saveMessages: store === hippoRoot,
   };
   try {
-    await runCapture(captureTarget(store, 'full'), captureOpts);
+    await runCapture(captureTarget(store, 'full', tenantId), captureOpts);
   } catch (err) {
     reportSessionEndFailure(logFile, 'codex session-end: capture', err);
   }

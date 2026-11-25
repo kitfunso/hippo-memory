@@ -173,7 +173,7 @@ async function captureEndedSession(
 ): Promise<boolean> {
   const logFile = stringFlag(flags, 'log-file') ?? null;
   try {
-    await runCapture(captureTarget(store, mode), {
+    await runCapture(captureTarget(store, mode, tenantId), {
       source: 'last-session',
       transcriptPath,
       logFile,
@@ -182,6 +182,7 @@ async function captureEndedSession(
       tenantId,
       originProject,
       sessionTurns: turns,
+      scriptedIsHuman: envCaptureScripted(),
       sessionId: stringFlag(flags, 'session-id'),
       saveMessages,
       fromStart,

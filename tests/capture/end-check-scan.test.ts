@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { END_CHECK_LEAD } from '../../src/api/end-check.js';
-import { scanForEndCheck } from '../../src/surface/capture/end-check-scan.js';
+import { scanForEndCheck, scanForValidity } from '../../src/surface/capture/end-check-scan.js';
 import { collectSessionTurns } from '../../src/surface/capture/transcript.js';
 
 const SESSION = '0d0a77e4-2997-4106-b10f-21af152d5eca';
@@ -207,5 +207,52 @@ describe('scanForEndCheck', () => {
       commands: [],
       earlierChecks: '',
     });
+  });
+});
+
+describe('scanForValidity', () => {
+  it('keeps each typed prompt and gives the commands that landed before one, in time order', () => {
+    const correction = 'Every pytest call takes -m "not notebooks".';
+    writeMain([
+      prompt('fix the reader', 0),
+      use('b1', 'Bash', { command: 'pytest -m "not notebooks"' }, 1),
+      result('b1', 2),
+      use('t1', 'Task', { prompt: 'run lint' }, 3),
+      result('t1', 6),
+      use('b2', 'Bash', { command: 'pytest tests/test_io.py' }, 7),
+      result('b2', 8),
+      use('b3', 'Bash', { command: 'npm test' }, 9),
+      prompt(correction, 10),
+      use('b4', 'Bash', { command: 'pytest -m "not notebooks" tests/test_io.py' }, 11),
+      result('b4', 12),
+      said('ok', 13),
+    ]);
+    writeSubagent('agent-a1.jsonl', [
+      asSidechain(use('s1', 'Bash', { command: 'ruff check .' }, 4)),
+      asSidechain(result('s1', 5)),
+      asSidechain(use('s2', 'Bash', { command: 'make lint' }, 11)),
+      asSidechain(result('s2', 12)),
+    ]);
+
+    const scan = scanForValidity(main);
+
+    expect(scan.prompts.map(({ text, at: time }) => [text, time])).toEqual([
+      ['fix the reader', Date.parse(at(0))],
+      [correction, Date.parse(at(10))],
+    ]);
+    expect(scan.prompts[0].seq).toBeLessThan(scan.prompts[1].seq);
+    expect(scan.before(scan.prompts[0]).commands).toEqual([]);
+    expect(scan.before(scan.prompts[1]).commands).toEqual([
+      'pytest -m "not notebooks"',
+      'ruff check .',
+      'pytest tests/test_io.py',
+    ]);
+  });
+
+  it('reads scripted prompts only when scripted turns are the person', () => {
+    writeMain([prompt('teach', 0, 'sdk-cli'), said('ok', 1), prompt('fix it', 2, 'sdk-cli'), said('done', 3)]);
+
+    expect(scanForValidity(main).prompts).toEqual([]);
+    expect(scanForValidity(main, { scriptedIsHuman: true }).prompts.map((p) => p.text)).toEqual(['teach', 'fix it']);
   });
 });

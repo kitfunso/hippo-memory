@@ -8,9 +8,20 @@ import { spawn } from 'node:child_process';
 import type { HookRuntime } from '../../base/session/capture-contract.js';
 import { bookTokenUse } from '../../api/ledger-db.js';
 import { sessionPilotArm } from '../../api/pilot-arm.js';
-import { cliDetached, cliFolder, cliInfra, cliLedgerReach, cliSyncOptions } from './api-context.js';
+import {
+  cliApiContext,
+  cliDetached,
+  cliFolder,
+  cliInfra,
+  cliLedgerReach,
+  cliSyncOptions,
+  type CliContext,
+} from './api-context.js';
 import { detachedEmbedder } from '../../api/embeddings.js';
+import { detectedRules } from '../../api/end-check-rules.js';
 import type { CaptureTarget } from '../capture/command.js';
+import type { RuleFlagging } from '../capture/validity-flags.js';
+import { workingFolder } from './shared.js';
 import type { WorkerMode } from '../capture/session-worker.js';
 import { llmFromEnv } from '../../infra/ports.js';
 import { llmRoute } from '../../infra/llm-route.js';
@@ -211,9 +222,26 @@ export async function inPilotHoldout(
   return (await sessionPilotArm(tenantId, sessionId, opts.write, { reach })) === 'holdout';
 }
 
+function ruleFlagging(root: string, tenantId: string): RuleFlagging {
+  let ctx: CliContext | undefined;
+  const context = (): CliContext => (ctx ??= cliApiContext(root, tenantId));
+  return {
+    rules: () => {
+      const read = context();
+      const currentProject = read.infra.machine.projectIdentity(workingFolder(read));
+      return detectedRules(read, { currentProject });
+    },
+    tag: async (ids, tag) => {
+      const { store, reach } = context();
+      await store.learning.addTagToEntries(tenantId, ids, tag);
+      await reach?.global?.store.learning.addTagToEntries(tenantId, ids, tag);
+    },
+  };
+}
+
 /** What capture writes into for a store folder: its port, its config, what embeds the new rows,
  * and the model a whole capture asks for follow-up rules when the folder's config turns it on. */
-export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
+export function captureTarget(root: string, mode: WorkerMode, tenantId: string): CaptureTarget {
   const folder = cliFolder(root);
   // A per-reply capture sees only the turns since the last reply, and would pay for a call per reply.
   const askModel = mode === 'full' && folder.config.capture.followUpRules === 'model';
@@ -231,5 +259,6 @@ export function captureTarget(root: string, mode: WorkerMode): CaptureTarget {
         ? 'capture.followUpRules is "model" but no model is set: ANTHROPIC_API_KEY is not set ' +
           'and neither is HIPPO_LLM_BASE_URL; follow-up rules skipped'
         : undefined,
+    flagging: ruleFlagging(root, tenantId),
   };
 }

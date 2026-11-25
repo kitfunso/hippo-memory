@@ -42,6 +42,7 @@ import type { Llm } from '../../base/ports/llm.js';
 import { PRIVATE_DIR } from '../../host/private-dir.js';
 import { evalClock } from '../../infra/eval-switches.js';
 import { userMessageItems, userMessageRef } from './user-messages.js';
+import { flagFollowedRules, pickedRules, type RuleFlagging } from './validity-flags.js';
 
 export interface CaptureOptions {
   source: 'stdin' | 'file' | 'last-session';
@@ -94,6 +95,7 @@ export interface CaptureTarget {
   readonly llmModel?: string;
   /** Why no `llm` came when the config asked for one; printed inside the capture's log. */
   readonly llmMissing?: string;
+  readonly flagging?: RuleFlagging;
 }
 
 export async function runCapture(target: CaptureTarget, options: CaptureOptions): Promise<void> {
@@ -181,6 +183,7 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
 
   const held = await storedKeysInView(target.store, dedup, extracted, boldTwins(scrubbed, scrub));
   const detected = await withRuleDetectors(target, options, extracted, held);
+  await flagFollowedRules(target.flagging, options, pickedRules(rules, followUps, detected, scrub));
 
   printCaptureTally(options, await captureFromCli(target, options, dedup, detected, held));
 }

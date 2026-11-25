@@ -3,6 +3,8 @@ import { tryParseJson } from '../util/json.js';
 export const DETECT_TAG_PREFIX = 'detect:';
 const APPLIES_PREFIX = `${DETECT_TAG_PREFIX}applies:`;
 const COMMAND_PREFIX = `${DETECT_TAG_PREFIX}cmd:`;
+const FLAG_PREFIX = `${DETECT_TAG_PREFIX}flagged:`;
+export const MAX_FLAGS = 3;
 
 export interface Detector {
   readonly applies: readonly string[];
@@ -15,6 +17,14 @@ export function isDetectTag(tag: string): boolean {
 
 export function withoutDetectTags(tags: readonly string[]): string[] {
   return tags.filter((tag) => !isDetectTag(tag));
+}
+
+export function flagTag(sessionId: string): string {
+  return `${FLAG_PREFIX}${sessionId}`;
+}
+
+export function flagCount(tags: readonly string[]): number {
+  return tags.filter((tag) => tag.startsWith(FLAG_PREFIX)).length;
 }
 
 export function detectorTags(detector: Detector): string[] {
