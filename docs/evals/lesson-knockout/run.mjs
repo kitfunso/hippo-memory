@@ -5,7 +5,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { checkedRoster,background,folder,root,read,pins,hash } from './plan.mjs';
+import { checkedRoster,checkerEnv,GRADER,background,folder,root,read,pins,hash } from './plan.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
@@ -13,7 +13,7 @@ import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-e
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { normalize,evidence } from './evidence.mjs';
+import { flagOf,evidence } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,continueUnit } from './continuation.mjs';
@@ -43,11 +43,7 @@ if(reuse) {
     assert(r.complete && r.hookSeen && r.targetText===(arm==='T'),'HTTP qualification missing');
   }
 }
-const checkEnv={...process.env};
-for (const key of Object.keys(checkEnv)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete checkEnv[key];
-Object.assign(checkEnv,{GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'NUL',GIT_TERMINAL_PROMPT:'0',GIT_OPTIONAL_LOCKS:'0',
-  NODE_OPTIONS:'--require "'+join(folder,'local-stdio.cjs')+'"',
-  TEMP:join(unit,'tmp'),TMP:join(unit,'tmp'),HOME:join(live,'home'),USERPROFILE:join(live,'home')});
+const checkEnv=checkerEnv({TEMP:join(unit,'tmp'),TMP:join(unit,'tmp'),HOME:join(live,'home'),USERPROFILE:join(live,'home')});
 const git=(...args)=>execFileSync('git',['-c','core.longpaths=true','-c','maintenance.auto=false',...args],
   {cwd:work,env:checkEnv,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}).trim();
 const binary='C:/z0-runs/scored/bin/claude.exe';
@@ -157,9 +153,9 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
   const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
-  const flagged=u.cls==='variant' ? verdict==='fail' && commands.some(c=>normalize(c).includes(normalize(u.lesson.keyPhrase))) : null;
+  const flagged=flagOf(u,verdict,commands);
   const dest=archive('apply-'+index);
-  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,
+  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,grader:GRADER,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
   if(!smoke) assert(audit.complete && (arm!=='N' || !audit.targetText),'Apply request evidence failed: '+arm);

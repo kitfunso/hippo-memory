@@ -13,6 +13,8 @@ export const recorderTimeoutSeconds = 40;
 export const posix = s => s.replaceAll('\\','/');
 export const run = (file,args,cwd,env,opts={}) => execFileSync(file,args,{cwd,env,windowsHide:true,
   encoding:'utf8',stdio:['pipe','pipe','pipe'],maxBuffer:32*1024*1024,...opts});
+export const runSetup = (setup,work,env) => run('cmd.exe',['/d','/s','/c','"'+setup+'"'],work,env,
+  {timeout:1800000,windowsVerbatimArguments:true});
 export function privateEnv(dir) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
     /^(SystemRoot|windir|ComSpec|Path|PATHEXT|ProgramFiles(?:\(x86\))?|ProgramW6432|SystemDrive|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(k)));

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {privateEnv,run} from './prepare.mjs';
+import {privateEnv,run,runSetup} from './prepare.mjs';
 import {upperNet} from './safety.mjs';
 import {verifyBoxCheck} from './pins.mjs';
 
@@ -98,4 +98,15 @@ export function checkProfile(root) {
   const home=path.join(dir,'home')+path.sep;
   assert.ok(path.isAbsolute(cache) && cache.toLowerCase().startsWith(home.toLowerCase()),
     'pip cache resolves outside the private home: '+cache);
+}
+
+export function checkSetup(root) {
+  const dir=path.join(root,'setup'),work=path.join(dir,'work');
+  fs.mkdirSync(work,{recursive:true});
+  const env={...privateEnv(dir),LESSON_Q:path.join(dir,'q dir')};
+  const write=name=>`node -e "require('fs').writeFileSync('${name}',process.argv[1])" `;
+  const tool=path.join('-boot','Scripts','x.exe');
+  runSetup(write('a.txt')+'"%LESSON_Q%-boot" && '+write('b.txt')+'"%LESSON_Q%'+tool+'"',work,env);
+  assert.equal(fs.readFileSync(path.join(work,'a.txt'),'utf8'),env.LESSON_Q+'-boot');
+  assert.equal(fs.readFileSync(path.join(work,'b.txt'),'utf8'),env.LESSON_Q+tool);
 }

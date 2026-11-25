@@ -8,6 +8,36 @@ from pathlib import Path
 import analyze
 
 
+def refused(text: str) -> None:
+    try:
+        analyze.read_roster()
+    except ValueError as error:
+        assert text in str(error), error
+        return
+    raise AssertionError("Accepted a receipt that needs " + text)
+
+
+def regrade_cases(plan: dict, labels: dict, files: dict) -> None:
+    unit = plan["units"][1][0]
+    path = files[unit, "N"]
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({k: v for k, v in record.items() if k != "grader"}), encoding="utf-8")
+    refused("offline regrade")
+    verdict = "fail" if record["verdict"] == "pass" else "pass"
+    flagged = False if unit in labels["variant"] else None
+    path.with_name("regrade.json").write_text(json.dumps(dict(grader=analyze.GRADER, id=unit, arm="N",
+        session=record["session"], verdict=verdict, flagged=flagged)), encoding="utf-8")
+    teach = path.parents[2] / "regrade-teach.json"
+    form = lambda found: json.dumps(dict(grader=analyze.GRADER, id=unit, form=found, recordedForm="correction"))
+    teach.write_text(form("correction"), encoding="utf-8")
+    assert analyze.read_roster()[1][unit, "N"]["verdict"] == verdict
+    teach.write_text(form("confirmation"), encoding="utf-8")
+    refused("recollect")
+    teach.unlink()
+    path.with_name("regrade.json").unlink()
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
 def verify() -> None:
     plan = json.loads(subprocess.check_output(["node", str(analyze.PLAN)], encoding="utf-8"))
     labels = json.loads(subprocess.check_output(["node", str(analyze.PLAN), "labels"], encoding="utf-8"))
@@ -23,7 +53,7 @@ def verify() -> None:
                 record = dict(id=unit, arm=arm, repo=unit.split("-")[0], mode="unit", session=unit+arm,
                               teachId=unit, snapshotHash=unit, resetHash=unit, targetCount=1, storeVerified=True,
                               verdict="fail" if arm == "N" else "pass", hookSeen=True, complete=True,
-                              pathAudit={"transcripts": 1, "hits": []},
+                              pathAudit={"transcripts": 1, "hits": []}, grader=analyze.GRADER,
                               targetText=arm != "N", flagged=(arm == "N") if unit in labels["variant"] else None)
                 path = analyze.ROOT / unit / "evidence" / f"apply-{index}" / "grade.json"
                 path.parent.mkdir(parents=True)
@@ -72,12 +102,13 @@ def verify() -> None:
             change(unit, "T", hookSeen=True, verdict="fail")
         report = analyze.report()
         assert report["status"] == "kill" and report["kill"] == ["content", "noise"]
+        regrade_cases(plan, labels, files)
         files[first, "T"].unlink()
         assert analyze.report()["status"] == "incomplete"
     finally:
         analyze.ROOT = original
         shutil.rmtree(directory)
-    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity and the protocol failure gate.")
+    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity, the protocol failure gate and offline regrades.")
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { checkedRoster,folder,read,root } from './plan.mjs';
 
-function complete(dir,u) {
+export function complete(dir,u) {
   const grades=u.order.map((_,i)=>path.join(dir,'evidence','apply-'+i,'grade.json'));
   if(!grades.every(f=>fs.existsSync(f))) return false;
   const freeze=read(path.join(dir,'freeze.json')),sessions=new Set([freeze.teachId]);

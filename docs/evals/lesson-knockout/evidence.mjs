@@ -3,6 +3,8 @@ import path from 'node:path';
 import { read,root } from './plan.mjs';
 
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
+export const flagOf=(u,verdict,commands)=>u.cls==='variant' ?
+  verdict==='fail' && commands.some(c=>normalize(c).includes(normalize(u.lesson.keyPhrase))) : null;
 const textBlocks=value=>typeof value==='string' ? [value] :
   (value??[]).filter(x=>x.type==='text').map(x=>x.text);
 const hook=/UserPromptSubmit hook (?:additional )?context:\s*/i;

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { drawOrder } from '../../../scripts/token-eval/lessons.mjs';
 
@@ -12,6 +13,16 @@ export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const pins = read('C:/z0-runs/r4/pins-r4.json');
 export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
+export const GRADER = 'checker-env-2';
+export function checkerEnv(extra) {
+  const env = {...process.env};
+  for (const key of Object.keys(env)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete env[key];
+  Object.assign(env, {GIT_CONFIG_NOSYSTEM:'1', GIT_CONFIG_GLOBAL:'NUL', GIT_TERMINAL_PROMPT:'0', GIT_OPTIONAL_LOCKS:'0',
+    NODE_OPTIONS:'--require "'+path.join(folder,'local-stdio.cjs').replaceAll('\\','/')+'"'}, extra);
+  const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});
+  if (probe.status !== 0) throw Error('Checker environment cannot start node (exit '+probe.status+'): '+(probe.error?.message ?? 'see stderr above'));
+  return env;
+}
 const rank = (role, id) => hash(`lesson-knockout|1|${role}|${id}`);
 const ordered = (items, key) => [...items].sort((a,b) => key(a).localeCompare(key(b), 'en'));
 const chains = read('C:/eval-authors/r3-repos.json');

@@ -12,6 +12,7 @@ ROOT = Path("C:/z0-lessons/lesson-knockout/unit")
 PLAN = Path(__file__).with_name("plan.mjs")
 ARMS = ("T", "Tp", "N")
 DIGEST = "7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42"
+GRADER = "checker-env-2"
 
 
 def contrast(units: list[dict], exclude_na: bool) -> dict:
@@ -30,6 +31,21 @@ def contrast(units: list[dict], exclude_na: bool) -> dict:
                 high=point+margin if margin is not None else None)
 
 
+def regraded(f: Path, r: dict) -> dict:
+    """A receipt from before the checker fix takes its verdict and flag from the offline regrade."""
+    apply, teach = f.with_name("regrade.json"), f.parents[2] / "regrade-teach.json"
+    if r.get("grader") is not None or not apply.exists() or not teach.exists():
+        raise ValueError(f"Receipt needs the offline regrade {f}")
+    x = json.loads(apply.read_text(encoding="utf-8"))
+    t = json.loads(teach.read_text(encoding="utf-8"))
+    if (x["grader"] != GRADER or t["grader"] != GRADER or t["id"] != r["id"]
+            or (x["id"], x["arm"], x["session"]) != (r["id"], r["arm"], r["session"])):
+        raise ValueError(f"Invalid regrade {apply}")
+    if t["form"] != t["recordedForm"]:
+        raise ValueError(f"Teach form differs from the recorded form; recollect {r['id']}")
+    return {**r, "verdict": x["verdict"], "flagged": x["flagged"]}
+
+
 def read_roster() -> tuple[dict, dict]:
     plan = json.loads(subprocess.check_output(["node", str(PLAN)], encoding="utf-8"))
     if plan["sha256"] != DIGEST:
@@ -41,6 +57,8 @@ def read_roster() -> tuple[dict, dict]:
     sessions = set()
     for f in ROOT.glob("*/evidence/apply-*/grade.json"):
         r = json.loads(f.read_text(encoding="utf-8"))
+        if r.get("grader") != GRADER:
+            r = regraded(f, r)
         key = r["id"], r["arm"]
         if (r["mode"] != "unit" or key not in slots or key in found
                 or f.parents[2].name != r["id"] or f.parent.name != f"apply-{slots[key]}"

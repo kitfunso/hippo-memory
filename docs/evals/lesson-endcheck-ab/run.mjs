@@ -10,7 +10,7 @@ import { cleanPath } from '../../../scripts/token-eval/arms.mjs';
 import net from 'node:net';
 import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
-import { checkout,install,privateEnv,run,seed } from './prepare.mjs';
+import { checkout,install,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
@@ -105,7 +105,7 @@ async function prepareSlot(u,dir,template,arm) {
   const work=checkout(u,dir,env,template);
   env.LESSON_WORK=work;
   env.LESSON_EVENTS=path.join(dir,'stops.jsonl');
-  if(u.task.setup) run('cmd.exe',['/d','/c',u.task.setup],work,env,{timeout:1800000});
+  if(u.task.setup) runSetup(u.task.setup,work,env);
   const settings=install(dir,work,env,arm);
   const base=run('git',['rev-parse','HEAD'],work,env).trim();
   env.LESSON_PRE=stateCommit(work,base);
@@ -256,10 +256,11 @@ if(mode==='probe') {
   console.log('Git Bash and Z0 box gate passed; no model call');
 } else if(mode==='check') {
   const d=fs.mkdtempSync(path.join(checkRoot,'offline-'));
-  const {checkRecovery,checkTimeout,checkProfile}=await import('./offline.mjs');
+  const {checkRecovery,checkTimeout,checkProfile,checkSetup}=await import('./offline.mjs');
   await checkRecovery(d,collectArm);
   checkTimeout(d);
   checkProfile(d);
+  checkSetup(d);
   const template=path.join(d,'template');
   const stamp=await seed(smoke,template);
   const arms=[];
