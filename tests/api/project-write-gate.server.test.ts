@@ -12,7 +12,7 @@ import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/util/store-bl
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
 import { createMemory } from '../_helpers/default-half-life-memory.js';
-import { readEntry, writeEntry } from '../_helpers/root-forms.js';
+import { deleteEntry, readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
@@ -719,6 +719,20 @@ describe('project write gate', () => {
     );
     expect(rows('case41')).toEqual([{ origin_project: '' }]);
     expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('42. a row deleted while the gate is asked answers 404 and writes no audit row', async () => {
+    const id = await seed('case42', 'beta');
+    set(() => {
+      deleteEntry(store, id);
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(404);
+    expect(errorOf(r)).toBe(`memory not found: ${id}`);
+    expect(rows('case42')).toEqual([]);
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
     expect(promoteRows(id)).toBe(0);
   });
 });
