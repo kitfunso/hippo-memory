@@ -689,4 +689,36 @@ describe('project write gate', () => {
     expect(calls.map((c) => c.project)).toEqual(['beta']);
     expect(promoteRows(id)).toBe(0);
   });
+
+  it('40. a row whose origin goes from user-global to none while the gate is asked answers 409', async () => {
+    const id = seedWithOrigin('case40', '');
+    set(() => {
+      rewrite(id, { originProject: null });
+      return null;
+    });
+    const r = await promote(keyA.plaintext, id);
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
+    expect(rows('case40')).toEqual([{ origin_project: null }]);
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('41. a row whose origin goes from none to user-global while the gate is asked answers 409', async () => {
+    const id = seedWithOrigin('case41', null);
+    set(() => {
+      rewrite(id, { originProject: '' });
+      return null;
+    });
+    const r = await promote(keyA.plaintext, id);
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
+    expect(rows('case41')).toEqual([{ origin_project: '' }]);
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+  });
 });

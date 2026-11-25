@@ -110,7 +110,7 @@ async function promoteInPlace(
   if (ctx.projectWriteGate !== undefined) {
     await admitOriginWrite(ctx, row.originProject);
     const now = await promotableRow(ctx, id, project);
-    if ((now.originProject || null) !== (row.originProject || null)) {
+    if ((now.originProject ?? null) !== (row.originProject ?? null)) {
       throw new ConflictError(
         `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
       );
