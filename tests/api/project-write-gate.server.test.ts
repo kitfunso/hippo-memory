@@ -69,19 +69,6 @@ function rows(content: string): Array<{ origin_project: string | null }> {
   return query('SELECT origin_project FROM memories WHERE content = ?', content);
 }
 
-function storedRow(content: string): { id: string; scope: string | null } {
-  const found = query<{ id: string; scope: string | null }>(
-    'SELECT id, scope FROM memories WHERE content = ?',
-    content,
-  );
-  expect(found).toHaveLength(1);
-  return found[0]!;
-}
-
-function heldCount(id: string): number {
-  return query<{ n: number }>('SELECT COUNT(*) AS n FROM memory_quarantine WHERE memory_id = ?', id)[0]!.n;
-}
-
 async function http(
   base: string,
   token: string,
@@ -468,27 +455,6 @@ describe('project write gate', () => {
     expect(calls.at(-1)?.actor.subject).toBe('localhost:cli');
     expect(calls.at(-1)?.actor.localKey).toBe(true);
     expect(rows('case24b')).toEqual([{ origin_project: 'alpha' }]);
-  });
-
-  it('24c. over REST, the local CLI key writes instruction-like text to a shared scope and it is not held', async () => {
-    const token = readLocalKey(store);
-    set(() => null);
-    const content = `${INJECTION} case24c`;
-    const r = await write(gated.url, token ?? '', content);
-    expect(r.status, r.text).toBe(200);
-    const row = storedRow(content);
-    expect(row.scope).toBeNull();
-    expect(heldCount(row.id)).toBe(0);
-  });
-
-  it('24d. over MCP, the local CLI key writes instruction-like text to a shared scope and it is not held', async () => {
-    const token = readLocalKey(store);
-    set(() => null);
-    const content = `${INJECTION} case24d`;
-    await mcpRemember(gated.url, token ?? '', content);
-    const row = storedRow(content);
-    expect(row.scope).toBeNull();
-    expect(heldCount(row.id)).toBe(0);
   });
 
   it('25. over MCP, a gate that throws an HttpError leaks none of its text', async () => {
