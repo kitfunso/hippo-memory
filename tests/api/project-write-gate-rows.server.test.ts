@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
-import { adminActor, outcome, quarantineApprove, type Actor } from '../../src/api/index.js';
+import { adminActor, outcome, quarantineApprove, quarantineList, type Actor } from '../../src/api/index.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { log } from '../../src/base/util/log.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
@@ -210,6 +210,20 @@ async function seed(rig: Rig, key: Key, opts: Seed = {}): Promise<string> {
   return idOf(r, 'id');
 }
 
+function seedRestricted(rig: Rig, key: Key, project: string): string {
+  counter += 1;
+  const entry = {
+    ...createMemory(`seeded restricted row ${counter} about harbor logistics`, {
+      tenantId: 'default',
+      scope: 'slack:private:C9',
+      owner: key.owner,
+    }),
+    originProject: project,
+  };
+  writeEntry(rig.root, entry);
+  return entry.id;
+}
+
 async function seedWithoutProject(rig: Rig, key: Key): Promise<string> {
   arm(rig, ADMIT_ALL);
   counter += 1;
@@ -381,8 +395,7 @@ describe('project write gate on an existing row', () => {
 
   it('11. a row the caller cannot reach answers 404 and the gate is not asked', async () => {
     const theirs = await seed(gated, keyQ, { personal: true });
-    const walled = await seed(gated, keyO, { project: 'beta' });
-    execAt(gated, "UPDATE memories SET scope = 'slack:private:C9' WHERE id = ?", walled);
+    const walled = seedRestricted(gated, keyO, 'beta');
     arm(gated);
     for (const id of [theirs, walled]) {
       const supersede = await http(gated, keyO, 'POST', `/v1/memories/${id}/supersede`, { content: 'case11' });
@@ -419,8 +432,7 @@ describe('project write gate on an existing row', () => {
     const sameProject = await seed(gated, keyO, { project: 'beta' });
     const mine = await seed(gated, keyO, { project: 'beta', personal: true });
     const theirs = await seed(gated, keyQ, { project: 'beta', personal: true });
-    const walled = await seed(gated, keyO, { project: 'beta' });
-    execAt(gated, "UPDATE memories SET scope = 'slack:private:C9' WHERE id = ?", walled);
+    const walled = seedRestricted(gated, keyO, 'beta');
     arm(gated);
     const ids = [alpha, beta, sameProject, mine, theirs, walled, 'mem_absent', beta];
     const r = await http(gated, keyO, 'POST', '/v1/outcome', { good: true, ids });
@@ -437,6 +449,7 @@ describe('project write gate on an existing row', () => {
     const heldScope = "SELECT COUNT(*) AS n FROM memories WHERE id = ? AND scope LIKE 'quarantine:private:%'";
     expect(countAt(gated, heldScope, held)).toBe(1);
     const admin = apiCtx(gated.root, 'default', adminActor('test'));
+    await quarantineList(admin);
     arm(gated, async (c) => {
       if (c.project === 'alpha') await quarantineApprove(admin, held);
       return null;
