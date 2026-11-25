@@ -161,7 +161,8 @@ export interface ServeOptions {
    * with that text. Statuses: 400 for a bad project name (the gate is not asked), 403 for a
    * refusal, 500 for any other throw or rejection (the gate's text stays in the server log),
    * 503 for a busy store or past the deadline. The local CLI key (subject localhost:cli, no owner)
-   * reaches the gate too, so a gate that should let it through must allow it. Add-on routes that
+   * reaches the gate too, so a gate that should let it through must allow it. A promote on a shared
+   * store asks with the row's stored origin, never the project in the request body. Add-on routes that
    * call the exported captureSessionTexts, preCompactForCaller, saveCompactionItemsForCaller,
    * captureFailureForCaller or sessionEndHandoffForCaller must call admitProjectWrite first: those
    * never ask the gate.
