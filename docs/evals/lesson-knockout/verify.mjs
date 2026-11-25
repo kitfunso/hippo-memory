@@ -1,10 +1,14 @@
 import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
+import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
-import { evidence } from './evidence.mjs';
+import { archivedTarget,evidence,permissionAudit } from './evidence.mjs';
+import { assertCheckerTools,checkerModules,gradeEnv } from './grading.mjs';
+import { runCheck } from '../../../scripts/token-eval/checks.mjs';
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { openCue,retryLimited } from './delivery.mjs';
 import { runSetupScript } from './setup.mjs';
 import { continueUnit } from './continuation.mjs';
@@ -102,6 +106,8 @@ function checkFinalResponse() {
   const final={type:'assistant',uuid:'row-two',sessionId:sid,requestId:'two',message:{id:'msg-two',type:'message',
     role:'assistant',stop_reason:'end_turn',usage:{output_tokens:3},content:[txt('Finished.')]}};
   const check=()=>evidence(series,result,[],lesson,task,trace);
+  const firstTurn={...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one',stop_reason:'tool_use'}};
+  const transcript=last=>put(series,sid+'.jsonl',[firstTurn,last].map(r=>JSON.stringify(r)).join('\n'));
   for(const row of rows) put(series,row.request_file,JSON.stringify({system:[txt('base')],messages:[user]}));
   put(series,rows[1].request_file,JSON.stringify({system:[txt(lesson.rule)],messages:[user]}));
   put(series,'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
@@ -110,10 +116,12 @@ function checkFinalResponse() {
   assert.equal(check().complete,false);
   for(const changed of [{requestId:'other'},{sessionId:'other'},{uuid:'other'},
     {message:{...final.message,stop_reason:'max_tokens'}},{message:{...final.message,id:'other'}}]) {
-    put(series,sid+'.jsonl',JSON.stringify({...final,...changed}));
+    transcript({...final,...changed});
     assert.equal(check().complete,false);
   }
   put(series,sid+'.jsonl',JSON.stringify(final));
+  assert.equal(check().complete,false);
+  transcript(final);
   const verified=check();
   assert(verified.complete && verified.targetText && verified.requests===2 && verified.transcriptResponse==='two');
   put(series,rows[1].response_file,'{"id":"msg-two"}');
@@ -124,10 +132,71 @@ function checkFinalResponse() {
   put(series,rows[0].response_file,'{"id":"msg-one"}');
   put(series,rows[1].response_file,' ');
   assert.throws(check,SyntaxError);
-  put(series,rows[1].response_file,'');
-  fs.unlinkSync(join(series,rows[1].request_file));
+  put(series,rows[1].response_file,'{"id":"msg-two"}');
   assert.equal(check().complete,false);
+  transcript(final);
+  assert.equal(check().complete,true);
+  put(series,'index.jsonl',JSON.stringify(rows[0]));
+  fs.unlinkSync(join(series,rows[1].request_file)); fs.unlinkSync(join(series,rows[1].response_file));
+  assert.equal(check().complete,false);
+  const archived=join(series,'archived');
+  put(archived,'a.request.json',JSON.stringify({system:[txt('base')],messages:[user]}));
+  assert.equal(archivedTarget([archived,join(series,'absent')],lesson,task),false);
+  put(archived,'b.request.json',JSON.stringify({system:[txt(lesson.rule)],messages:[user]}));
+  assert.equal(archivedTarget([join(series,'absent'),archived],lesson,task),true);
 }
+function checkPermissions() {
+  const folderPath=join(dir,'permissions'),trace=join(folderPath,'t.jsonl');
+  const row=(prompt,mode)=>({type:'user',permissionMode:mode,message:{role:'user',content:prompt}});
+  const write=(...rows)=>put(folderPath,'t.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
+  write(row('Teach','bypassPermissions'),row('Feedback','bypassPermissions'));
+  assert(permissionAudit(trace,'Feedback',[]).ok);
+  assert(permissionAudit(trace,'Feedback',[{tool:'WebFetch',id:'w'},{tool:'Agent',id:'a'}]).ok);
+  for(const tool of ['Edit','Write','Bash','PowerShell','Read']) assert(!permissionAudit(trace,'Feedback',[{tool,id:'x'}]).ok);
+  assert(!permissionAudit(trace,'Feedback',undefined).ok);
+  assert(!permissionAudit(trace,'Another prompt',[]).ok);
+  write(row('Teach','bypassPermissions'),row('Feedback','default'));
+  assert(!permissionAudit(trace,'Feedback',[]).ok);
+  write(row('Teach','bypassPermissions'),{type:'user',message:{role:'user',content:[txt('Feedback')]}});
+  assert(!permissionAudit(trace,'Feedback',[]).ok);
+}
+checkPermissions();
+console.log('Passed prompt permission mode, structured denials and deliberate deny list.');
+function checkGrading() {
+  const base=join(dir,'grading'),work=join(base,'work'),live=join(base,'live');
+  mkdir(work);
+  const env=checkerEnv({TEMP:base,TMP:base});
+  const git=(...args)=>execFileSync('git',['-c','user.name=t','-c','user.email=t@t',...args],{cwd:work,env,encoding:'utf8'}).trim();
+  git('init','-q'); put(work,'a.txt','a'); git('add','a.txt'); git('commit','-q','-m','a');
+  const head=git('rev-parse','HEAD'),log=join(base,'checker.log'),graded=gradeEnv(env,{toolchain:'npm'},live,log);
+  const grade=(name,source)=>{
+    put(base,name,source);
+    return runCheck({id:name,checkPath:join(base,name),check:{}},
+      {work,env:graded,preCommit:head,postCommit:head,commands:[],scratch:join(base,'scratch')});
+  };
+  assert.equal(grade('rule.mjs',"console.log('broken: rule');process.exit(1);"),'fail');
+  assert.match(fs.readFileSync(log,'utf8'),/broken: rule/);
+  assert.throws(()=>grade('git.mjs',"import {execFileSync} from 'node:child_process';"+
+    "execFileSync('git',['rev-parse','--verify','refs/absent']);process.exit(0);"),/exited 2/);
+  assert.throws(()=>grade('async.mjs',"await Promise.reject(new Error('lost'));"),/exited 2/);
+  assert.match(fs.readFileSync(log,'utf8'),/checker crashed/);
+  const python=gradeEnv(env,{toolchain:'python'},live,log),scripts=join(live,'venv','Scripts');
+  const same=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
+  assert(same(python.CHECK_PYTHON,join(scripts,'python.exe')));
+  assert(same(python.PATH.split(';')[0],scripts),'Task venv is not first on the grading PATH');
+  const q256=roster().find(u=>u.id==='q256-f5'),q145=roster().find(u=>u.id==='q145-f2');
+  assert.deepEqual(checkerModules(q256.lesson.checkPath),['coverage','pytest']);
+  assert.deepEqual(checkerModules(q145.lesson.checkPath),['ruff','mypy','pytest']);
+  put(base,'mods.mjs',"run(['-m', 'json']);run([\"-m\", \"no_such_module_q1\"]);");
+  const fake={id:'fake',lesson:{checkPath:join(base,'mods.mjs')}};
+  assert.throws(()=>assertCheckerTools(fake,{...env,CHECK_PYTHON:'python'}),/lacks checker modules.*no_such_module_q1/);
+  assert.throws(()=>assertCheckerTools(fake,env),/outside a Python toolchain/);
+  put(base,'mods.mjs',"run(['-m', 'json']);");
+  assert.deepEqual(assertCheckerTools(fake,{...env,CHECK_PYTHON:'python'}),['json']);
+  assert.deepEqual(assertCheckerTools(roster()[1],env),[]);
+}
+checkGrading();
+console.log('Passed task grading environment, checker crash exit, checker log and checker module probe.');
 checkFinalResponse();
 console.log('Passed final response transcript match, request coverage, leak scan and rejection cases.');
 const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
@@ -222,6 +291,7 @@ for(const base of [unit,join(unit,'coding-check')]) {
 for(const name of ['delivery-check','command-check']) {
   for(const arm of ['T','N']) checkPaths(join(unit,name,arm),'probe',join(unit,name,'live'));
 }
+const savedTranscript=(p,file)=>join(p,'home/.claude/projects/unit',read(join(p,file)).session+'.jsonl');
 function savedNotes(receipt) {
   const dst=fs.mkdtempSync(join(dir,'smoke-store-'));
   copy(join(receipt,'work/.hippo'),join(dst,'store'));
@@ -230,7 +300,7 @@ function savedNotes(receipt) {
 if(fs.existsSync(join(unit,'delivery-check/N/delivery.json'))) {
   for(const arm of ['T','N']) {
     const p=join(unit,'delivery-check',arm), result=evidence(join(p,'bodies/probe'),read(join(p,'probe.json')),
-      savedNotes(p),roster()[0].lesson);
+      savedNotes(p),roster()[0].lesson,{},savedTranscript(p,'probe.json'));
     assert(result.complete && result.hookSeen && result.targetText===(arm==='T'));
   }
 }
@@ -246,7 +316,7 @@ for(const arm of ['T','N']) {
   const u=roster()[0],receipt=fs.readdirSync(join(unit,'coding-check/evidence')).map(n=>join(unit,'coding-check/evidence',n))
     .find(p=>read(join(p,'grade.json')).arm===arm);
   const r=evidence(join(receipt,'bodies/apply'),read(join(receipt,'apply.json')),savedNotes(receipt),
-    u.lesson,{...u.apply,work:join(unit,'coding-check/live/work')});
+    u.lesson,{...u.apply,work:join(unit,'coding-check/live/work')},savedTranscript(receipt,'apply.json'));
   assert(r.complete && r.hookSeen && r.targetText===(arm==='T'));
 }
 const work=join(dir,'loopback');mkdir(work);
@@ -262,14 +332,17 @@ console.log('Path audit passed: '+smokeApplies+' clean smoke applies, four clean
 
 const [first,second,third]=roster().slice(0,3),unitRoot=join(dir,'unit'),partial=join(unitRoot,first.id);
 const active=join(dir,'active'),design={unit:first,mode:'unit',roster:rosterHash};
-const frozen={preHash:hash(JSON.stringify(manifest)),snapshotHash:hash(JSON.stringify(files(snap))),teachId:sid,targetRows:[]};
+const frozen={preHash:hash(JSON.stringify(manifest)),snapshotHash:hash(JSON.stringify(files(snap))),teachId:sid,targetRows:[],apparatus:APPARATUS};
 const json=(base,file,value)=>put(base,file,JSON.stringify(value));
 json(partial,'design.json',design);
 copy(pre,join(partial,'pre')); json(partial,'pre/manifest.json',manifest);
 copy(base,join(partial,'pre/store'));
 copy(snap,join(partial,'snapshot'));
 put(partial,'evidence/teach/home/.claude/projects/unit/'+sid+'.jsonl','{}');
-for(const id of ['teach','feedback']) json(partial,'evidence/teach/operator/'+id+'.json',{session:sid,exit:0,isError:false});
+const teachReceipt=apparatus=>{
+  for(const id of ['teach','feedback']) json(partial,'evidence/teach/operator/'+id+'.json',{session:sid,exit:0,isError:false,apparatus});
+};
+teachReceipt(APPARATUS);
 put(active,'live/work/.git/HEAD',first.apply.baseRef+'\n');
 json(active,'operator/setup.json',{toolchain:first.toolchain,setup:first.apply.setup,constraintHash:pins['sha256:pip-constraint']});
 put(active,'live/cache/raw.bin',Buffer.from([0,255,10]));
@@ -281,7 +354,9 @@ async function refuse(pattern) {
 await refuse(/freeze\.json/);
 json(partial,'freeze.json',{...frozen,preHash:'changed'}); await refuse(/manifest changed/);
 json(partial,'freeze.json',{...frozen,snapshotHash:'changed'}); await refuse(/snapshot changed/);
+json(partial,'freeze.json',{...frozen,apparatus:APPARATUS-1}); await refuse(/another apparatus/);
 json(partial,'freeze.json',frozen);
+teachReceipt(APPARATUS-1); await refuse(/Invalid frozen teach receipt/); teachReceipt(APPARATUS);
 put(partial,'pre/home/extra','changed'); await refuse(/Pre-teach home changed/); fs.unlinkSync(join(partial,'pre/home/extra'));
 put(partial,'pre/repo/extra','changed'); await refuse(/Pre-teach repo changed/); fs.unlinkSync(join(partial,'pre/repo/extra'));
 for(const [base,file,pattern] of [
@@ -317,7 +392,8 @@ function finishFixture(u) {
   const dest=join(unitRoot,u.id);
   json(dest,'freeze.json',frozen);
   for(const [i,arm] of u.order.entries()) json(dest,'evidence/apply-'+i+'/grade.json',{
-    id:u.id,repo:u.repo,arm,mode:'unit',verdict:'fail',session:u.id+'-'+arm,teachId:sid,
+    id:u.id,repo:u.repo,arm,mode:'unit',verdict:'fail',session:u.id+'-'+arm,teachId:sid,apparatus:APPARATUS,
+    preTree:'tree',archivedTargetText:false,
     snapshotHash:frozen.snapshotHash,resetHash:frozen.preHash,targetCount:0,storeVerified:true,
     complete:true,requests:1,hookSeen:false,targetText:false,pathAudit:{transcripts:1,hits:[]}
   });
@@ -335,5 +411,14 @@ collect((id,token,resume)=>{
   finishFixture(scheduled.find(u=>u.id===id));
 });
 assert.deepEqual(calls,[[second.id,tokenVar,true],[third.id,tokenVar,false]]);
+collect(()=>assert.fail('Completed unit relaunched'));
+const neutral=third.order.indexOf('N');
+for(const [i,change,pattern] of [[0,{preTree:'other'},/different work trees/],
+  [neutral,{archivedTargetText:true},/Invalid scored receipt/],[1,{apparatus:APPARATUS-1},/Invalid scored receipt/]]) {
+  const file='evidence/apply-'+i+'/grade.json',saved=read(join(unitRoot,third.id,file));
+  json(join(unitRoot,third.id),file,{...saved,...change});
+  assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),pattern);
+  json(join(unitRoot,third.id),file,saved);
+}
 collect(()=>assert.fail('Completed unit relaunched'));
 console.log('Passed roster order, complete skips, continuation routing and first-failure stop with a fake launcher.');

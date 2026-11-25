@@ -12,7 +12,7 @@ ROOT = Path("C:/z0-lessons/lesson-knockout/unit")
 PLAN = Path(__file__).with_name("plan.mjs")
 ARMS = ("T", "Tp", "N")
 DIGEST = "7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42"
-APPARATUS = 2
+APPARATUS = 3
 
 
 def contrast(units: list[dict], exclude_na: bool) -> dict:
@@ -43,7 +43,7 @@ def read_roster() -> tuple[dict, dict]:
     for f in ROOT.glob("*/evidence/apply-*/grade.json"):
         r = json.loads(f.read_text(encoding="utf-8"))
         if r.get("apparatus") != APPARATUS:
-            raise ValueError(f"Receipt from before the 25 Nov apparatus fix {f}")
+            raise ValueError(f"Receipt from before the apparatus fix {f}")
         key = r["id"], r["arm"]
         if (r["mode"] != "unit" or key not in slots or key in found
                 or f.parents[2].name != r["id"] or f.parent.name != f"apply-{slots[key]}"

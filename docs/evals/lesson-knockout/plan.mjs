@@ -13,14 +13,19 @@ export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const pins = read('C:/z0-runs/r4/pins-r4.json');
 export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
-export const APPARATUS = 2;
+export const APPARATUS = 3;
+export const DENIED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'];
+export const preload = name => '--require "'+path.join(folder,name).replaceAll('\\','/')+'"';
+export function assertNodeStarts(env, label) {
+  const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});
+  if (probe.status !== 0) throw Error(label+' cannot start node (exit '+probe.status+'): '+(probe.error?.message ?? 'see stderr above'));
+}
 export function checkerEnv(extra) {
   const env = {...process.env};
   for (const key of Object.keys(env)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete env[key];
   Object.assign(env, {GIT_CONFIG_NOSYSTEM:'1', GIT_CONFIG_GLOBAL:'NUL', GIT_TERMINAL_PROMPT:'0', GIT_OPTIONAL_LOCKS:'0',
-    NODE_OPTIONS:'--require "'+path.join(folder,'local-stdio.cjs').replaceAll('\\','/')+'"'}, extra);
-  const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});
-  if (probe.status !== 0) throw Error('Checker environment cannot start node (exit '+probe.status+'): '+(probe.error?.message ?? 'see stderr above'));
+    NODE_OPTIONS:preload('local-stdio.cjs')}, extra);
+  assertNodeStarts(env, 'Checker environment');
   return env;
 }
 const rank = (role, id) => hash(`lesson-knockout|1|${role}|${id}`);

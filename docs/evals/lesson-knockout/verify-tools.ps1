@@ -13,5 +13,6 @@ foreach($chain in $cases.Keys){
     $value=[Environment]::GetEnvironmentVariable($key) -replace '\\','/'
     if(!$value.Contains($live) -or $value.Contains('eval-envs')){throw "Shared writable cache for $chain / $key"}
   }
+  Assert-SessionPath $env:PATH $chain $live
 }
-Write-Output "Passed private cache paths for $($cases.Count) declared toolchains."
+Write-Output "Passed private cache paths and session PATH for $($cases.Count) declared toolchains."

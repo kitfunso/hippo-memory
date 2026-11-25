@@ -27,7 +27,8 @@ for(const arm of ['T','N']) {
       hooks:{UserPromptSubmit:[{hooks:[cue.hook]}]}});
     await launch(live,token,process.env,{id:'probe',session:sid,smoke:true,diagnostic:true,
       prompt:'Reply OK.',model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain});
-    const result=evidence(join(live,'bodies/probe'),read(join(live,'probe.json')),notes,u.lesson);
+    const result=evidence(join(live,'bodies/probe'),read(join(live,'probe.json')),notes,u.lesson,{},
+      join(live,'home/.claude/projects/unit',sid+'.jsonl'));
     if(transport==='command') {
       const output=join(live,'command-output.json');
       result.commandExit=fs.existsSync(join(live,'command-exit'))?Number(fs.readFileSync(join(live,'command-exit'),'utf8')):null;

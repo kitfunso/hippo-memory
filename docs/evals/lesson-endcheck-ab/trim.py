@@ -1,6 +1,7 @@
 """Delete rebuildable slot caches and venvs in closed A/B pairs; --dry lists, --loop SECONDS repeats."""
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -10,8 +11,33 @@ import time
 LP = chr(92) * 2 + '?' + chr(92)
 ROOT = 'C:/z0-lessons/lesson-endcheck-ab'
 TRIAL = os.path.join(ROOT, 'trial')
+PC = os.path.join(ROOT, 'pc')
+PLAN = os.path.join(ROOT, 'corpus', 'plan.json')
 JOURNAL = os.path.join(ROOT, 'trim.jsonl')
 DRY = '--dry' in sys.argv
+
+
+def runs_python(check_path: str, seen: frozenset = frozenset()) -> bool:
+    src = open(check_path, encoding='utf8').read()
+    if 'CHECK_PYTHON' in src or re.search(r'spawn\w*\(\s*["\']python', src):
+        return True
+    local = [os.path.normpath(os.path.join(os.path.dirname(check_path), m))
+             for m in re.findall(r'from\s+["\'](\.[^"\']+)["\']', src)]
+    return any(runs_python(m, seen | {check_path}) for m in local if m not in seen)
+
+
+def interpreter_units() -> frozenset:
+    with open(PLAN, encoding='utf8') as plan:
+        return frozenset(u['id'] for u in json.load(plan)['units'] if runs_python(u['lesson']['checkPath']))
+
+
+def linked(path: str) -> bool:
+    return os.path.islink(path) or os.path.isjunction(path)
+
+
+def inside(path: str, base: str) -> bool:
+    real, top = os.path.realpath(path), os.path.realpath(base)
+    return real != top and os.path.commonpath([real, top]) == top
 
 
 def long_path(path: str) -> str:
@@ -55,15 +81,19 @@ def slots(pair: str) -> list[str]:
 
 def poetry_cache(slot: str) -> str:
     prep, pair = os.path.basename(os.path.dirname(slot)), os.path.basename(os.path.dirname(os.path.dirname(slot)))
-    return os.path.join(ROOT, 'pc', pair[:8] + '-' + prep[-6:] + '-' + os.path.basename(slot))
+    return os.path.join(PC, pair[:8] + '-' + prep[-6:] + '-' + os.path.basename(slot))
 
 
-def targets(slot: str) -> list[str]:
-    out = [os.path.join(slot, 'cache'), poetry_cache(slot)]
+def targets(slot: str, keep_venv: bool) -> list[str]:
+    owned = [(os.path.join(slot, 'cache'), slot), (poetry_cache(slot), PC)]
     venv = os.path.join(slot, 'venv')
-    if os.path.isfile(os.path.join(venv, 'pyvenv.cfg')):
-        out.append(venv)
-    return [p for p in out if os.path.isdir(p) and not os.path.isjunction(p)]
+    if not keep_venv and os.path.isfile(os.path.join(venv, 'pyvenv.cfg')):
+        owned.append((venv, slot))
+    return [p for p, base in owned if os.path.isdir(p) and not linked(p) and inside(p, base)]
+
+
+def refuse(path: str, reason: str) -> None:
+    print(json.dumps({'refused': path, 'reason': reason}), flush=True)
 
 
 def record(path: str) -> dict:
@@ -77,14 +107,20 @@ def record(path: str) -> dict:
                       if os.path.isdir(os.path.join(path, name))}}
 
 
-def trim_once() -> float:
+def trim_once(keep: frozenset) -> float:
     freed = 0
     for name in sorted(os.listdir(TRIAL)):
         pair = os.path.join(TRIAL, name)
+        if linked(pair) or not inside(pair, TRIAL):
+            refuse(pair, 'linked pair')
+            continue
         if not os.path.isfile(os.path.join(pair, 'result.json')):
             continue
         for slot in slots(pair):
-            for path in targets(slot):
+            if linked(slot) or not inside(slot, pair):
+                refuse(slot, 'slot outside its pair')
+                continue
+            for path in targets(slot, re.sub(r'-\d+$', '', name) in keep):
                 gb = size(path) / 1e9
                 if not DRY:
                     kept = record(path)
@@ -100,8 +136,10 @@ def trim_once() -> float:
 
 if __name__ == '__main__':
     loop = float(sys.argv[sys.argv.index('--loop') + 1]) if '--loop' in sys.argv else 0
+    keep = interpreter_units()
+    print(json.dumps({'dry': DRY, 'keep_venv_units': sorted(keep)}), flush=True)
     while True:
-        print(json.dumps({'dry': DRY, 'freed_gb': round(trim_once(), 2)}), flush=True)
+        print(json.dumps({'dry': DRY, 'freed_gb': round(trim_once(keep), 2)}), flush=True)
         if not loop:
             break
         time.sleep(loop)

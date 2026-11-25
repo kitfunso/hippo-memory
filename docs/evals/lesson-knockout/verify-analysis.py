@@ -73,7 +73,7 @@ def verify() -> None:
         report = analyze.report()
         assert report["status"] == "kill" and report["kill"] == ["content", "noise"]
         record = json.loads(files[first, "N"].read_text(encoding="utf-8"))
-        files[first, "N"].write_text(json.dumps({k: v for k, v in record.items() if k != "apparatus"}), encoding="utf-8")
+        files[first, "N"].write_text(json.dumps({**record, "apparatus": analyze.APPARATUS - 1}), encoding="utf-8")
         try:
             analyze.report()
             raise AssertionError("Accepted a receipt from before the apparatus fix")

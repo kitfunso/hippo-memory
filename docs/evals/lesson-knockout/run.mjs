@@ -5,7 +5,8 @@ import path from 'node:path';
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { checkedRoster,checkerEnv,APPARATUS,background,folder,root,read,pins,hash } from './plan.mjs';
+import { checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,read,pins,hash } from './plan.mjs';
+import { assertCheckerTools,gradeEnv } from './grading.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
@@ -13,7 +14,7 @@ import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-e
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { flagOf,evidence,permissionAudit } from './evidence.mjs';
+import { archivedTarget,flagOf,evidence,permissionAudit } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,continueUnit } from './continuation.mjs';
@@ -82,9 +83,11 @@ function prepare(task) {
   save(join(records,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
   runSetupScript(live,checkEnv,join(folder,'prepare.ps1'));
   checkProjectSettings(work);
+  assertCheckerTools(u,graderEnv());
 }
+const graderEnv=()=>gradeEnv(checkEnv,u,live,join(records,'grade','checker.log'));
 async function session(task,prompt,session,id,resume=false) {
-  const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain};
+  const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain,apparatus:APPARATUS};
   if(reuse) call.frozenSmoke=true;
   checkProjectSettings(work);
   const onFirstCall=!smoke && id==='apply' ? ()=>save(join(unit,'evidence','intent-'+session+'.json'),{session}) : undefined;
@@ -92,24 +95,23 @@ async function session(task,prompt,session,id,resume=false) {
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
-  if(!smoke) {
-    const permissions=permissionAudit(transcript);
-    assert(permissions.modes.length && permissions.modes.every(m=>m==='bypassPermissions') && !permissions.denied,
-      'Session permission check failed for '+id+': '+JSON.stringify(permissions));
-  }
   const result=read(join(records,id+'.json'));
+  if(!smoke) {
+    const permissions=permissionAudit(transcript,prompt,result.permissionDenials);
+    assert(permissions.ok && result.apparatus===APPARATUS,'Session permission check failed for '+id+': '+JSON.stringify(permissions));
+  }
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');
   return {transcript,archives,commands:commandLog(sessionFiles(projects,session)),result};
 }
 function settings(hook) {
   save(join(live,'settings.json'),{autoMemoryEnabled:true,autoMemoryDirectory:join(live,'home/.claude/projects/unit/memory'),
     disableAllHooks:false,hooks:hook ? {UserPromptSubmit:[{hooks:[hook]}]} : {},
-    permissions:{deny:['WebFetch','WebSearch','Agent','Task']},sandbox:{enabled:false}});
+    permissions:{deny:DENIED_TOOLS},sandbox:{enabled:false}});
 }
 function grade(before,commands) {
   const post=stateCommit(work,before);
   holdPre(work,post,FIRST_REF);
-  return runCheck(u.lesson,{work,env:checkEnv,preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
+  return runCheck(u.lesson,{work,env:graderEnv(),preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
 }
 function archive(name) {
   const dest=inside(join(unit,'evidence',name));
@@ -139,7 +141,8 @@ async function teach() {
   assert.deepEqual(contents(store),baseline,'Unexpected direct write during isolated teach');
   createStore(snap,[...baseline,...learned]);
   const snapshotHash=hash(JSON.stringify(files(snap)));
-  save(join(unit,'freeze.json'),{teachId,form,snapshotHash,targetRows:learned.map(e=>e.id),preHash:hash(JSON.stringify(expected))});
+  save(join(unit,'freeze.json'),{teachId,form,snapshotHash,targetRows:learned.map(e=>e.id),preHash:hash(JSON.stringify(expected)),
+    apparatus:APPARATUS});
   archive('teach');
 }
 const smokeChecks=[];
@@ -151,7 +154,9 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   assert.equal(hash(JSON.stringify(files(snap))),snapshotHash,'Frozen snapshot changed');
   const fork=forkStore(snap,baseStore,store,teachId,arm);
   const notes=contents(store);
-  const before=stateCommit(work,u.apply.baseRef), sid=randomUUID();
+  const before=stateCommit(work,u.apply.baseRef), sid=randomUUID(), preTree=git('rev-parse',before+'^{tree}');
+  for(let i=0;i<index;i++) assert.equal(read(join(unit,'evidence','apply-'+i,'grade.json')).preTree,preTree,
+    'Apply work tree differs from arm '+i);
   holdPre(work,before);
   const cue=await openCue(work,sid); settings(cue.hook);
   const {commands,result,archives,transcript}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
@@ -159,11 +164,12 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const verdict=grade(before,commands);
   const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=flagOf(u,verdict,commands);
+  const archivedTargetText=archivedTarget(archives.map(a=>join(path.dirname(a),'operator','bodies','apply')),u.lesson,{...u.apply,work});
   const dest=archive('apply-'+index);
-  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,
-    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...audit});
+  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,
+    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,archivedTargetText,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
-  if(!smoke) assert(audit.complete && (arm!=='N' || !audit.targetText),'Apply request evidence failed: '+arm);
+  if(!smoke) assert(audit.complete && (arm!=='N' || (!audit.targetText && !archivedTargetText)),'Apply request evidence failed: '+arm);
 }
 if(continuing) await continueUnit(design,applyArm);
 else {

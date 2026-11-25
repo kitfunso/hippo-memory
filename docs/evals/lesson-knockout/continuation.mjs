@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { findTranscript,listTranscripts } from '../../../scripts/token-eval/records.mjs';
-import { read,hash,pins } from './plan.mjs';
+import { APPARATUS,read,hash,pins } from './plan.mjs';
 import { files,inside,join,mkdir,stateRoot } from './state.mjs';
 
 function readFreeze(unit) {
   const freeze=read(inside(join(unit,'freeze.json')));
   const expected=read(inside(join(unit,'pre/manifest.json')));
   assert.equal(hash(JSON.stringify(expected)),freeze.preHash,'Pre-teach manifest changed');
+  assert.equal(freeze.apparatus,APPARATUS,'Teach freeze from another apparatus');
   return {...freeze,expected};
 }
 
@@ -49,7 +50,7 @@ export function checkContinuation(design) {
   assert(freeze.teachId && findTranscript(join(teach,'home/.claude/projects'),freeze.teachId),'Missing teach transcript');
   for(const id of ['teach','feedback']) {
     const r=read(inside(join(teach,'operator',id+'.json')));
-    assert(r.session===freeze.teachId && r.exit===0 && r.isError===false,'Invalid frozen teach receipt: '+id);
+    assert(r.session===freeze.teachId && r.exit===0 && r.isError===false && r.apparatus===APPARATUS,'Invalid frozen teach receipt: '+id);
   }
   checkArchivedAttempts(u);
   const active=inside(join(stateRoot,'active')),live=inside(join(active,'live')),operator=inside(join(active,'operator'));

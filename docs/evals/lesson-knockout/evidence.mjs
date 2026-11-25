@@ -2,21 +2,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { read,root } from './plan.mjs';
 
-const WORK_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell']);
-export function permissionAudit(transcript) {
-  const modes=new Set(),uses=new Map();
-  let denied=0;
-  for(const line of fs.readFileSync(transcript,'utf8').split(/\r?\n/)) {
-    if(!line.trim()) continue;
-    const row=JSON.parse(line);
-    if(row.permissionMode) modes.add(row.permissionMode);
-    for(const b of Array.isArray(row.message?.content) ? row.message.content : []) {
-      if(b.type==='tool_use') uses.set(b.id,b.name);
-      if(b.type==='tool_result' && b.is_error && WORK_TOOLS.has(uses.get(b.tool_use_id)) &&
-        /requested permissions/i.test(JSON.stringify(b.content))) denied++;
-    }
-  }
-  return {modes:[...modes],denied};
+const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
+const rowsOf=file=>fs.readFileSync(file,'utf8').split(/\r?\n/).filter(line=>line.trim()).map(line=>JSON.parse(line));
+const promptText=content=>typeof content==='string' ? content :
+  Array.isArray(content) ? content.filter(b=>b.type==='text').map(b=>b.text).join('') : null;
+export function permissionAudit(transcript,prompt,denials) {
+  const rows=rowsOf(transcript);
+  const modes=[...new Set(rows.map(r=>r.permissionMode).filter(Boolean))];
+  const promptRows=rows.filter(r=>r.type==='user' && promptText(r.message?.content)===prompt);
+  const promptMode=promptRows.at(-1)?.permissionMode ?? null;
+  const denied=Array.isArray(denials) ? denials.filter(d=>GATED_TOOLS.has(d.tool)).map(d=>d.tool) : null;
+  const ok=modes.length>0 && modes.every(m=>m==='bypassPermissions') && promptMode==='bypassPermissions' &&
+    Array.isArray(denied) && denied.length===0;
+  return {ok,modes,promptMode,denied};
+}
+const mainTurns=transcript=>rowsOf(transcript).filter(r=>r.type==='assistant' && !r.isSidechain &&
+  !r.isApiErrorMessage && r.message?.model!=='<synthetic>');
+function reconciled(rows,transcript) {
+  if(!transcript || !fs.existsSync(transcript) || !rows.length) return false;
+  const turns=mainTurns(transcript),ids=new Map(turns.map(r=>[r.requestId,r.message?.id]));
+  return turns.length>0 && ids.size===rows.length && rows.every(r=>ids.get(r.request_id)===r.message_id) &&
+    rows.at(-1).request_id===turns.at(-1).requestId && rows.at(-1).message_id===turns.at(-1).message?.id;
 }
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
 export const flagOf=(u,verdict,commands)=>u.cls==='variant' ?
@@ -101,16 +107,24 @@ export function evidence(dir,result,notes,lesson,task={},transcript) {
       return true;
     });
   const bodies=rows.filter(r=>names.includes(r.request_file)).map(r=>read(path.join(dir,r.request_file)));
-  const valid=b=>Array.isArray(b.messages) && b.system && !b.not_recorded;
   const surfaces=bodies.filter(valid).map(b=>deliverySurfaces(b,task));
   const block=normalize('Project notes\n'+notes.map(e=>'- '+e.content).join('\n'));
-  const target=(s,allow=false)=>normalize(s).includes(normalize(lesson.rule)) ||
-    (!allow && normalize(s).includes(normalize(lesson.keyPhrase)));
-  const targetText=surfaces.some(({system,prompt,results})=>
-    [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
   const first=surfaces[0];
   const hookSeen=!!first && [...first.system,...first.prompt].some(s=>s!==task.prompt && hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {requests:bodies.length,complete:!!complete && bodies.every(valid),hookSeen,targetText,
-    ...(transcriptResponse && {transcriptResponse})};
+  return {requests:bodies.length,complete:!!complete && bodies.every(valid) && reconciled(rows,transcript),hookSeen,
+    targetText:targetIn(surfaces,lesson,task),...(transcriptResponse && {transcriptResponse})};
+}
+
+const valid=b=>Array.isArray(b.messages) && b.system && !b.not_recorded;
+function targetIn(surfaces,lesson,task) {
+  const target=(s,allow=false)=>normalize(s).includes(normalize(lesson.rule)) ||
+    (!allow && normalize(s).includes(normalize(lesson.keyPhrase)));
+  return surfaces.some(({system,prompt,results})=>
+    [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
+}
+
+export function archivedTarget(dirs,lesson,task) {
+  return dirs.some(dir=>fs.existsSync(dir) && fs.readdirSync(dir).filter(n=>n.endsWith('.request.json'))
+    .map(n=>read(path.join(dir,n))).filter(valid).some(b=>targetIn([deliverySurfaces(b,task)],lesson,task)));
 }

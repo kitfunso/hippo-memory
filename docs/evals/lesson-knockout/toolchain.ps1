@@ -32,6 +32,21 @@ if($Chain -eq 'python') {
   $env:PIP_CONSTRAINT='C:/z0-runs/r4/pip-constraints.txt'
   $env:PATH="$Live/venv/Scripts;C:/z0-runs/r4/poetry-2.5.1/Scripts;$env:PATH"
 }
+function Assert-SessionPath([string]$PathValue,[string]$Chain,[string]$Root) {
+  $dirs=@($PathValue -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"')).TrimEnd('\','/') -replace '/','\' } | Where-Object { $_ })
+  $found={ param($name) foreach ($dir in $dirs) { foreach ($ext in @('') + ($env:PATHEXT -split ';')) { if (Test-Path -LiteralPath (Join-Path $dir ($name+$ext)) -PathType Leaf) { return $true } } }; $false }
+  if (& $found 'hippo') { throw 'A hippo launcher resolves on the session PATH' }
+  foreach ($tool in @('git','node','npm','npx')) { if (!(& $found $tool)) { throw "Session PATH lacks $tool" } }
+  $root=[IO.Path]::GetFullPath($Root)
+  foreach ($dir in @((Get-S3xTool $Chain).path -replace '\{work\}',$root -split ';' | Where-Object { $_ })) {
+    if ($dirs -notcontains $dir.TrimEnd('\')) { throw "Session PATH lacks toolchain folder $dir" }
+  }
+}
+$hippoLaunchers=@('hippo','hippo.cmd','hippo.ps1','hippo.exe','hippo.bat')
+$env:PATH=(@($env:PATH -split ';' | Where-Object {
+  $dir=[Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"'))
+  $dir -and -not ($hippoLaunchers | Where-Object { Test-Path -LiteralPath (Join-Path $dir $_) })
+}) -join ';')
 $toolKeys=@('MAVEN_ARGS','npm_config_cache','UV_CACHE_DIR','PIP_CACHE_DIR','PIP_CONSTRAINT',
   'GEM_PATH','PNPM_HOME','npm_config_store_dir','pnpm_config_store_dir','BUNDLE_USER_HOME',
   'HEX_CACHE_HOME','NUGET_HTTP_CACHE_PATH','NUGET_PLUGINS_CACHE_PATH',
