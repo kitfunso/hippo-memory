@@ -11,6 +11,7 @@ import type { JsonValue } from '../../src/base/util/json.js';
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/util/store-blocked.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
 import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
@@ -70,15 +71,6 @@ function queryAt<T>(root: string, sql: string, ...args: string[]): T[] {
 
 function rows(content: string): Array<{ origin_project: string | null }> {
   return query('SELECT origin_project FROM memories WHERE content = ?', content);
-}
-
-function exec(sql: string, ...args: string[]): void {
-  const db = openHippoDb(store);
-  try {
-    db.prepare(sql).run(...args);
-  } finally {
-    closeHippoDb(db);
-  }
 }
 
 function promoteRows(id: string): number {
@@ -197,6 +189,12 @@ async function seed(
 
 function promote(token: string, id: string, project?: JsonValue): Promise<Reply> {
   return http(gated.url, token, `/v1/memories/${id}/promote`, project === undefined ? {} : { project });
+}
+
+function seedWithOrigin(content: string, origin: string | null): string {
+  const row = { ...createMemory(content, { tenantId: 'default' }), originProject: origin };
+  writeEntry(store, row);
+  return row.id;
 }
 
 function rewrite(id: string, patch: Partial<MemoryEntry>): void {
@@ -545,8 +543,7 @@ describe('project write gate', () => {
   });
 
   it('29. a user-global row reaches the gate as a null project', async () => {
-    const id = await seed('case29', 'beta');
-    exec("UPDATE memories SET origin_project = '' WHERE id = ?", id);
+    const id = seedWithOrigin('case29', '');
     set(() => 'no unscoped promotes');
     const refused = await promote(keyM.plaintext, id, { name: 'alpha' });
     expect(refused.status).toBe(403);
@@ -620,8 +617,7 @@ describe('project write gate', () => {
   });
 
   it('35. a stored origin with upper case reaches the gate unchecked and never answers 400', async () => {
-    const id = await seed('case35', 'beta');
-    exec("UPDATE memories SET origin_project = 'Beta' WHERE id = ?", id);
+    const id = seedWithOrigin('case35', 'Beta');
     set(() => 'no beta for you');
     const refused = await promote(keyA.plaintext, id);
     expect(refused.status).toBe(403);
