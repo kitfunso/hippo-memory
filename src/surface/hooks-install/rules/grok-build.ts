@@ -1,5 +1,12 @@
+import { isDeepStrictEqual } from 'node:util';
 import { runsHippoMcp } from './mcp-config.js';
-import { startsOutsideString } from './toml-strings.js';
+import {
+  isTomlTable,
+  readToml,
+  type TomlRead,
+  type TomlStatement,
+  type TomlValue,
+} from './toml-read.js';
 
 export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned' | 'unreadable';
 
@@ -8,46 +15,25 @@ interface GrokLine {
   readonly eol: string;
 }
 
-interface GrokScan {
-  readonly tables: readonly number[];
-  readonly servers: readonly number[];
-  readonly otherForm: boolean;
-  readonly escapedKey: boolean;
-}
-
 interface GrokInspection {
   readonly status: GrokStatus;
   readonly drop: readonly number[];
 }
 
-type Section = 'root' | 'mcp_servers' | 'other';
+interface Fact {
+  readonly path: readonly string[];
+  readonly statement: TomlStatement;
+  readonly value?: TomlValue;
+}
 
 const BOM = '﻿';
 const HEADER = '[mcp_servers.hippo]';
 const ARGS_LINE = 'args = ["mcp"]';
 const OWN_COMMANDS: readonly string[] = ['hippo', 'hippo.cmd'];
-
-const WS = '[ \\t]*';
-const key = (name: string): string => `${WS}(?:${name}|"${name}"|'${name}')${WS}`;
-const MCP_SERVERS = key('mcp_servers');
-const HIPPO = key('hippo');
-
-const ANY_HEADER = new RegExp(`^${WS}\\[`);
-const BLANK = new RegExp(`^${WS}$`);
-const BLANK_OR_COMMENT = new RegExp(`^${WS}(?:#.*)?$`);
-const COMMENT_LINE = new RegExp(`^${WS}#`);
-const HIPPO_HEADER = new RegExp(`^${WS}\\[\\[?${MCP_SERVERS}\\.${HIPPO}(?:\\]|\\.)`);
-const OWN_HEADER = new RegExp(`^${WS}\\[${MCP_SERVERS}\\.${HIPPO}\\]${WS}$`);
-const MCP_SERVERS_HEADER = new RegExp(`^${WS}\\[${MCP_SERVERS}\\]${WS}(?:#.*)?$`);
-const ROOT_HIPPO_KEY = new RegExp(`^${MCP_SERVERS}\\.${HIPPO}[=.]`);
-const ROOT_INLINE_TABLE = new RegExp(`^${MCP_SERVERS}=`);
-const SERVER_HIPPO_KEY = new RegExp(`^${HIPPO}[=.]`);
-const SERVER_NAME = `(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*')`;
-const SERVER_HEADER = new RegExp(
-  `^${WS}\\[${MCP_SERVERS}\\.${WS}${SERVER_NAME}${WS}\\]${WS}(?:#.*)?$`,
-);
-const COMMAND_ENTRY = new RegExp(`^${WS}command${WS}=${WS}"([^"]*)"${WS}(?:#.*)?$`);
-const ARGS_ENTRY = new RegExp(`^${WS}args${WS}=${WS}\\[(.*)\\]${WS}(?:#.*)?$`);
+const MCP_SERVERS = 'mcp_servers';
+const HIPPO = 'hippo';
+const OWN_HEADER = /^\[mcp_servers\.hippo\][ \t]*$/;
+const BLANK = /^[ \t]*$/;
 
 const USER_OWNED: GrokInspection = { status: 'user-owned', drop: [] };
 const KEPT: GrokInspection = { status: 'kept', drop: [] };
@@ -63,116 +49,98 @@ function splitLines(text: string): GrokLine[] {
   });
 }
 
-function sectionAfterHeader(line: string): Section {
-  return MCP_SERVERS_HEADER.test(line) ? 'mcp_servers' : 'other';
+function isString(value: TomlValue | undefined): value is string {
+  return typeof value === 'string';
 }
 
-function isOtherHippoForm(line: string, section: Section): boolean {
-  if (section === 'root') return ROOT_HIPPO_KEY.test(line) || ROOT_INLINE_TABLE.test(line);
-  return section === 'mcp_servers' && SERVER_HIPPO_KEY.test(line);
+function isStringList(value: TomlValue | undefined): value is readonly string[] {
+  return Array.isArray(value) && value.every(isString);
 }
 
-const hasBackslash = (text: string): boolean => text.includes('\\');
-
-function hasEscapedKey(line: string): boolean {
-  if (ANY_HEADER.test(line)) return hasBackslash(line);
-  if (COMMENT_LINE.test(line)) return false;
-  const equals = line.indexOf('=');
-  return equals !== -1 && hasBackslash(line.slice(0, equals));
+function valueFacts(path: readonly string[], value: TomlValue, statement: TomlStatement): Fact[] {
+  const inner = isTomlTable(value)
+    ? Object.entries(value).flatMap(([key, item]) => valueFacts([...path, key], item, statement))
+    : [];
+  return [{ path, value, statement }, ...inner];
 }
 
-function scan(contents: readonly string[], outside: readonly boolean[]): GrokScan {
-  const tables: number[] = [];
-  const servers: number[] = [];
-  let section: Section = 'root';
-  let otherForm = false;
-  let escapedKey = false;
-  contents.forEach((line, index) => {
-    if (!outside[index]) return;
-    escapedKey = escapedKey || hasEscapedKey(line);
-    if (!ANY_HEADER.test(line)) {
-      otherForm = otherForm || isOtherHippoForm(line, section);
-      return;
-    }
-    if (HIPPO_HEADER.test(line)) tables.push(index);
-    if (SERVER_HEADER.test(line)) servers.push(index);
-    section = sectionAfterHeader(line);
-  });
-  return { tables, servers, otherForm, escapedKey };
+const factsOf = (statement: TomlStatement): Fact[] =>
+  statement.kind === 'key'
+    ? valueFacts(statement.path, statement.value, statement)
+    : [{ path: statement.path, statement }];
+
+const isHippoFact = (fact: Fact): boolean => fact.path[0] === MCP_SERVERS && fact.path[1] === HIPPO;
+const touchesHippo = (statement: TomlStatement): boolean => factsOf(statement).some(isHippoFact);
+const sealsMcpServers = (statement: TomlStatement): boolean =>
+  statement.kind !== 'table' && isDeepStrictEqual(statement.path, [MCP_SERVERS]);
+
+function serverNames(facts: readonly Fact[]): string[] {
+  const names = facts.filter((fact) => fact.path.length > 1 && fact.path[0] === MCP_SERVERS);
+  return [...new Set(names.map((fact) => fact.path[1]))];
 }
 
-function bodyLineIndexes(
-  contents: readonly string[],
-  outside: readonly boolean[],
-  header: number,
-): number[] {
-  const found: number[] = [];
-  for (let i = header + 1; i < contents.length; i++) {
-    if (outside[i] && ANY_HEADER.test(contents[i])) break;
-    if (!outside[i] || !BLANK_OR_COMMENT.test(contents[i])) found.push(i);
-  }
-  return found;
+function valueAt(facts: readonly Fact[], path: readonly string[]): TomlValue | undefined {
+  const found = facts.filter((fact) => isDeepStrictEqual(fact.path, path));
+  return found.length === 1 ? found[0].value : undefined;
 }
 
-function isOwnBody(contents: readonly string[], body: readonly number[]): boolean {
-  if (body.length !== 2) return false;
-  const [command, args] = body.map((i) => contents[i].replace(/^[ \t]+|[ \t]+$/g, ''));
-  return OWN_COMMANDS.some((own) => command === `command = "${own}"`) && args === ARGS_LINE;
+function serverRunsHippoMcp(facts: readonly Fact[], name: string): boolean {
+  const server = [MCP_SERVERS, name];
+  const isArrayTable = (fact: Fact): boolean =>
+    fact.statement.kind === 'array-table' && isDeepStrictEqual(fact.path, server);
+  if (facts.some(isArrayTable)) return false;
+  const command = valueAt(facts, [...server, 'command']);
+  const args = valueAt(facts, [...server, 'args']);
+  return isString(command) && isStringList(args) && runsHippoMcp(command, args);
 }
 
-function parseArgs(inner: string): string[] | null {
-  if (inner.trim() === '') return [];
-  const items = inner.trim().replace(/,$/, '').split(',');
-  const values = items.map((item) => /^"([^"]*)"$/.exec(item.trim())?.[1]);
-  return values.every((value) => value !== undefined) ? values : null;
+const trimmedLine = (lines: readonly GrokLine[], statement: TomlStatement): string =>
+  lines[statement.line].content.replace(/^[ \t]+|[ \t]+$/g, '');
+
+function isOwnTable(hippo: readonly Fact[], lines: readonly GrokLine[]): boolean {
+  if (hippo.length !== 3) return false;
+  const [table, command, args] = hippo.map((fact) => fact.statement);
+  return (
+    table.kind === 'table' &&
+    OWN_HEADER.test(lines[table.line].content) &&
+    command.kind === 'key' &&
+    OWN_COMMANDS.some((own) => trimmedLine(lines, command) === `command = "${own}"`) &&
+    args.kind === 'key' &&
+    trimmedLine(lines, args) === ARGS_LINE
+  );
 }
 
-const captures = (lines: readonly string[], pattern: RegExp): string[] =>
-  lines.flatMap((line) => pattern.exec(line)?.[1] ?? []);
-
-function runsHippoTable(
-  contents: readonly string[],
-  outside: readonly boolean[],
-  header: number,
-): boolean {
-  const body = bodyLineIndexes(contents, outside, header)
-    .filter((i) => outside[i])
-    .map((i) => contents[i]);
-  const commands = captures(body, COMMAND_ENTRY);
-  const argLists = captures(body, ARGS_ENTRY);
-  if (commands.length !== 1 || argLists.length !== 1) return false;
-  const args = parseArgs(argLists[0]);
-  return args !== null && runsHippoMcp(commands[0], args);
+function sameStatement(a: TomlStatement, b: TomlStatement): boolean {
+  if (a.kind !== b.kind || !isDeepStrictEqual(a.path, b.path)) return false;
+  return a.kind !== 'key' || (b.kind === 'key' && isDeepStrictEqual(a.value, b.value));
 }
 
-function inspect(lines: readonly GrokLine[]): GrokInspection {
-  const contents = lines.map((line) => line.content);
-  const outside = startsOutsideString(contents);
-  const { tables, servers, otherForm, escapedKey } = scan(contents, outside);
-  if (escapedKey) return UNREADABLE;
-  if (tables.length === 0 && !otherForm) {
-    return servers.some((server) => runsHippoTable(contents, outside, server)) ? KEPT : ABSENT;
-  }
-  if (tables.length !== 1 || otherForm) return USER_OWNED;
-  const header = tables[0];
-  const body = bodyLineIndexes(contents, outside, header);
-  if (OWN_HEADER.test(contents[header]) && isOwnBody(contents, body)) {
-    const blankBefore = header > 0 && BLANK.test(contents[header - 1]) ? [header - 1] : [];
-    return { status: 'present', drop: [header, ...body, ...blankBefore] };
-  }
-  return servers.includes(header) && runsHippoTable(contents, outside, header) ? KEPT : USER_OWNED;
+const sameStatements = (a: readonly TomlStatement[], b: readonly TomlStatement[]): boolean =>
+  a.length === b.length && a.every((statement, index) => sameStatement(statement, b[index]));
+
+function withoutLines(text: string, lines: readonly GrokLine[], drop: readonly number[]): string {
+  const bom = text.startsWith(BOM) ? BOM : '';
+  const kept = lines.filter((_, index) => !drop.includes(index));
+  return bom + kept.map((line) => line.content + line.eol).join('');
 }
 
-export function grokStatus(text: string): GrokStatus {
-  return inspect(splitLines(text)).status;
+function ownInspection(
+  text: string,
+  read: TomlRead,
+  lines: readonly GrokLine[],
+  hippo: readonly Fact[],
+): GrokInspection {
+  const header = hippo[0].statement.line;
+  const blankBefore = header > 0 && BLANK.test(lines[header - 1].content) ? [header - 1] : [];
+  const drop = [...hippo.map((fact) => fact.statement.line), ...blankBefore];
+  const after = readToml(withoutLines(text, lines, drop));
+  const others = read.statements.filter((statement) => !touchesHippo(statement));
+  return after !== null && sameStatements(after.statements, others)
+    ? { status: 'present', drop }
+    : UNREADABLE;
 }
 
-export function grokTableLines(command: string): string[] {
-  return [HEADER, `command = "${command}"`, ARGS_LINE];
-}
-
-export function planGrokInstall(text: string, command: string): string {
-  if (grokStatus(text) !== 'absent') return text;
+function appendTable(text: string, command: string): string {
   const lines = splitLines(text);
   const eol = lines.find((line) => line.eol !== '')?.eol ?? '\n';
   const table = grokTableLines(command)
@@ -183,11 +151,47 @@ export function planGrokInstall(text: string, command: string): string {
   return text + (endsOpen ? eol : '') + eol + table;
 }
 
-export function planGrokRemoval(text: string): string | null {
+function appendedIfHolds(text: string, read: TomlRead, command: string): string | null {
+  if (read.statements.some(sealsMcpServers)) return null;
+  const next = appendTable(text, command);
+  const after = readToml(next);
+  const table = readToml(grokTableLines(command).join('\n'));
+  if (after === null || table === null) return null;
+  return sameStatements(after.statements, [...read.statements, ...table.statements]) ? next : null;
+}
+
+function inspectRead(text: string, read: TomlRead): GrokInspection {
+  const facts = read.statements.flatMap(factsOf);
+  const hippo = facts.filter(isHippoFact);
+  if (hippo.length === 0) {
+    if (serverNames(facts).some((name) => serverRunsHippoMcp(facts, name))) return KEPT;
+    return appendedIfHolds(text, read, OWN_COMMANDS[0]) === null ? UNREADABLE : ABSENT;
+  }
   const lines = splitLines(text);
-  const { status, drop } = inspect(lines);
-  if (status !== 'present') return null;
-  const kept = lines.filter((_, index) => !drop.includes(index));
-  const bom = text.startsWith(BOM) ? BOM : '';
-  return bom + kept.map((line) => line.content + line.eol).join('');
+  if (isOwnTable(hippo, lines)) return ownInspection(text, read, lines, hippo);
+  return serverRunsHippoMcp(facts, HIPPO) ? KEPT : USER_OWNED;
+}
+
+function inspect(text: string): GrokInspection {
+  const read = readToml(text);
+  return read === null ? UNREADABLE : inspectRead(text, read);
+}
+
+export function grokStatus(text: string): GrokStatus {
+  return inspect(text).status;
+}
+
+export function grokTableLines(command: string): string[] {
+  return [HEADER, `command = "${command}"`, ARGS_LINE];
+}
+
+export function planGrokInstall(text: string, command: string): string {
+  const read = readToml(text);
+  if (read === null || inspectRead(text, read).status !== 'absent') return text;
+  return appendedIfHolds(text, read, command) ?? text;
+}
+
+export function planGrokRemoval(text: string): string | null {
+  const { status, drop } = inspect(text);
+  return status === 'present' ? withoutLines(text, splitLines(text), drop) : null;
 }

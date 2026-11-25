@@ -225,6 +225,39 @@ describe.each(OUTPUT_FORMS)('hippo hook output with $name', (host) => {
     );
     expect(readText(file)).toBe(own);
   });
+
+  it('leaves a file it cannot read unchanged and names the entry to add if there is no hippo server', () => {
+    const m = machine();
+    const file = fileOf(m, host);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const broken = host.key === null ? 'note = """\nopen\n' : '// mine\n{}\n';
+    fs.writeFileSync(file, broken);
+    const reason =
+      host.key === null ? 'is not a TOML file hippo can read' : 'has comments or is not a JSON object hippo can change';
+    const add = host.key === null ? 'add this table by hand:' : `add this under "${host.key}" by hand: "hippo": `;
+
+    const install = hippo(m, 'hook', 'install', host.name);
+    expect(install.stdout).toContain(
+      `WARNING: ${file} ${reason}, so it was left unchanged; if it has no hippo server, ${add}`,
+    );
+    expect(readText(file)).toBe(broken);
+  });
+});
+
+describe('hippo hook install with a Muse Code file that has no schema_version', () => {
+  it('says the file was left unchanged, why, and what to do', () => {
+    const m = machine();
+    const file = fileOf(m, HOSTS[3]);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '{}');
+
+    const install = hippo(m, 'hook', 'install', 'muse-code');
+    expect(install.stdout).toContain(
+      `WARNING: ${file} was left unchanged: it has no "schema_version", which Muse Code needs; ` +
+        'add "schema_version": 1. Then run `hippo hook install muse-code`\n',
+    );
+    expect(readText(file)).toBe('{}');
+  });
 });
 
 describe('hippo hook with an unknown target', () => {

@@ -68,9 +68,52 @@ function commandName(command: string): string {
 const isHippoPackage = (arg: string): boolean =>
   arg === HIPPO_PACKAGE || arg.startsWith(`${HIPPO_PACKAGE}@`);
 
+const NPX_FLAGS: ReadonlySet<string> = new Set([
+  '-y',
+  '--yes',
+  '--no',
+  '-q',
+  '--quiet',
+  '-s',
+  '--silent',
+  '--prefer-offline',
+  '--prefer-online',
+  '--offline',
+  '--ignore-existing',
+  '--include-workspace-root',
+  '--workspaces',
+  '-ws',
+]);
+const NPX_PACKAGE_OPTIONS: ReadonlySet<string> = new Set(['-p', '--package']);
+
+interface NpxCall {
+  readonly packages: readonly string[];
+  readonly operand: number;
+}
+
+const takesValue = (option: string): boolean =>
+  !option.includes('=') && !option.startsWith('--no-') && !NPX_FLAGS.has(option);
+
+function readNpxCall(args: readonly string[]): NpxCall {
+  const packages: string[] = [];
+  let i = 0;
+  while (i < args.length && args[i].startsWith('-')) {
+    const option = args[i];
+    if (option === '--') return { packages, operand: i + 1 };
+    const equals = option.indexOf('=');
+    const name = equals === -1 ? option : option.slice(0, equals);
+    const value = takesValue(option) ? args[i + 1] : option.slice(equals + 1);
+    if (NPX_PACKAGE_OPTIONS.has(name) && value !== undefined) packages.push(value);
+    i += takesValue(option) ? 2 : 1;
+  }
+  return { packages, operand: i };
+}
+
 function npxRunsHippoMcp(args: readonly string[]): boolean {
-  const operand = args.findIndex((arg) => !arg.startsWith('-'));
-  return operand !== -1 && isHippoPackage(args[operand]) && args[operand + 1] === 'mcp';
+  const { packages, operand } = readNpxCall(args);
+  if (args.length !== operand + 2 || args[operand + 1] !== 'mcp') return false;
+  if (packages.length === 0) return isHippoPackage(args[operand]);
+  return packages.some(isHippoPackage) && args[operand] === 'hippo';
 }
 
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {

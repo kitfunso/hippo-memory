@@ -37,7 +37,7 @@ function pasteLines(target: McpReportTarget, paste: McpPaste): string[] {
 const unreadableReason = (format: McpConfigFormat): string =>
   format.kind === 'json'
     ? 'has comments or is not a JSON object hippo can change'
-    : 'is not a TOML file hippo can change';
+    : 'is not a TOML file hippo can read';
 
 const invalidReason = (format: McpConfigFormat): string =>
   (format.kind === 'json' ? format.host.invalid?.({}) : null) ?? 'is not a config the host accepts';
@@ -57,14 +57,14 @@ const INSTALL_LINES = {
       `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
       pasteLines(target, paste),
     ),
-  unreadable: (file, target) =>
-    withTail(
-      `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged`,
-      snippetLines(target.format, 'add'),
-    ),
+  unreadable: (file, target) => {
+    const [add, ...snippet] = snippetLines(target.format, 'add');
+    const head = `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged`;
+    return [`${head}; if it has no hippo server, ${add}`, ...snippet];
+  },
   invalid: (file, target) => [
-    `WARNING: ${file} ${invalidReason(target.format)}, so it was left unchanged; ` +
-      `then run \`hippo hook install ${target.name}\``,
+    `WARNING: ${file} was left unchanged: it ${invalidReason(target.format)}. ` +
+      `Then run \`hippo hook install ${target.name}\``,
   ],
 } as const satisfies Record<McpMergeStatus, Lines>;
 
