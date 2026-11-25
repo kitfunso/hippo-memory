@@ -44,6 +44,13 @@ Install `cloudflared` from [Cloudflare's downloads page](https://developers.clou
 cloudflared tunnel --url http://127.0.0.1:6789
 ```
 
+If this machine already runs a named tunnel, give the quick tunnel its own config file:
+
+```bash
+echo "no-autoupdate: true" > quick-tunnel.yml
+cloudflared tunnel --config quick-tunnel.yml --url http://127.0.0.1:6789
+```
+
 `cloudflared` prints a `https://<name>.trycloudflare.com` URL. The app's server URL is that host plus `/mcp`:
 
 ```text
@@ -70,7 +77,7 @@ Then ask the Bot to use hippo, for example: "Use hippo_recall to find what I dec
 
 ## 5. Add hippo to the Muse app
 
-The Muse app has no MCP settings page. You ask Muse to build a Custom Connector, and Muse saves it as a skill. Send Muse this prompt with your URL in it:
+In the Muse app, you add hippo by asking Muse to build a Custom Connector. Muse saves it as a skill. Send Muse this prompt with your URL in it:
 
 ```text
 Build a custom integration to my hippo memory server. It is a remote MCP server over HTTP at https://<tunnel host>/mcp. It needs an Authorization: Bearer header with an API key. Connect to it, test every tool end to end, show me the results, and save the integration as a reusable skill. Ask me for the key through the secure credential flow.
