@@ -1282,7 +1282,7 @@ Triggered by a community request on X (Sep 2026, attributed to @sophiamyang; the
 | `hippo wm push/read/flush` working memory | README "Working memory" | per-card scratchpad, cleared on handoff |
 | `hippo outcome --good/--bad`, `--error` 2x half-life | README "errors stick" | limit and failure signal per runtime (W3) |
 | `hippo share` / `hippo peers`, `owner` in the envelope | `src/cli.ts:9268-9330`, `MEMORY_ENVELOPE.md` | multi-agent attribution |
-| Hooks and MCP for Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi | `integrations/`, `extensions/` | the adapter layer; Grok Build and Muse Code are NOT covered today |
+| Hooks and MCP for Claude Code, Codex, Cursor, OpenClaw, OpenCode, Pi | `integrations/`, `extensions/` | the adapter layer; Grok Build, Muse Code, Junie and Antigravity are covered by an MCP entry from `hippo init` |
 | `hippo dashboard` web UI (localhost:3333) | README command table, `ui/` | the board view; the proposal called the UI "planned", it is shipped |
 | CS1 PreCompact capture + compact-resume hook | Part IV | first limit detector (W4) |
 

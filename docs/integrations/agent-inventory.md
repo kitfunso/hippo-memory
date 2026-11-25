@@ -29,7 +29,7 @@ Four rules decide a status:
 |---|---|
 | `id`, `names` | A stable id, and every name the docs use for the agent. The check matches claims against `names`, ignoring case. |
 | `checked` | The date someone last checked the entry against source. |
-| `integration` | Any of `native-hooks`, `native-plugin`, `wrapper`, `instruction-file`, `mcp-recipe`; or `none` alone. |
+| `integration` | Any of `native-hooks`, `native-plugin`, `wrapper`, `instruction-file`, `mcp-recipe`; or `none` alone. `mcp-recipe` covers an MCP entry the user pastes and one that `hippo init` or `hippo setup` writes. |
 | `sources`, `claims` | Repo paths of the integration code, and of the pages that claim support. Every path must exist. |
 | `routes` | What hippo does today for each of six moments, or `null`: prompt context, tool failure, pre-loss save, post-compaction extract, session end, compact resume. |
 | `upstream` | The host's pre-loss event and its before-trim or reset event, as named in the ROADMAP AZ4 table, or `null`. |
