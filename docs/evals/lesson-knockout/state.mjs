@@ -14,8 +14,8 @@ const verifying=path.resolve(process.argv[1]??'')===join(folder,'verify.mjs');
 export const stateRoot=verifying ? fs.mkdtempSync(join(tmpdir(),'knockout-verify-')) : root;
 if(verifying) process.on('exit',()=>fs.rmSync(stateRoot,{recursive:true,force:true}));
 export const mkdir = dir => fs.mkdirSync(dir,{recursive:true});
-export const treeIds=(git,commit)=>({preTree:git('rev-parse',commit+'^{tree}'),
-  ignoredSetup:hash(git('ls-files','--others','--ignored','--exclude-standard','--directory'))});
+export const treeOf=(git,commit)=>git('rev-parse',commit+'^{tree}');
+export const ignoredListing=git=>hash(git('ls-files','--others','--ignored','--exclude-standard','--directory'));
 export const save = (f,v) => fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{flag:'wx'});
 export function inside(p) {
   const rel=path.relative(path.resolve(stateRoot),path.resolve(p));

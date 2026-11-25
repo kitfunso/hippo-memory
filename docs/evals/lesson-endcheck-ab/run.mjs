@@ -12,11 +12,12 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
 import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
-import { GUARD,guardedLesson } from '../checker-guard/lesson.mjs';
+import { GUARD,guardedRun } from '../checker-guard/lesson.mjs';
 import { auditCalls,auditFile,readAudits } from './crash-audit.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
+const FIRST_GRADE_REF='refs/z0/hold/grade-first';
 const modes=['check','probe','smoke','qualify','pair','full','audit'];
 const [mode,token='Z0_SUB_TOKEN',key] = process.argv.slice(2);
 assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|qualify|pair|full|audit [TokenVar] [pair key]');
@@ -73,9 +74,12 @@ function checks(u,work,env,dir,id,pre) {
   const file=findTranscript(projects,id);
   assert.ok(file,'missing apply transcript');
   const files=sessionFiles(projects,id);
-  const grade=(post,commands)=>runCheck(guardedLesson(u.lesson),{work,env:{...graderEnv(env),CHECK_LOG:path.join(dir,'checker.log')},
-    preCommit:pre,postCommit:post,commands,scratch:dir});
-  const first=grade(stateCommit(work,pre),commandLog(files));
+  const grade=(post,commands)=>guardedRun(runCheck,u.lesson,{work,env:{...graderEnv(env),CHECK_LOG:path.join(dir,'checker.log')},
+    preCommit:pre,postCommit:post,commands,scratch:dir,status:path.join(dir,'checker-status.json')});
+  const firstPost=stateCommit(work,pre),firstCommands=commandLog(files);
+  holdPre(work,firstPost,FIRST_GRADE_REF);
+  fs.writeFileSync(path.join(dir,'first-commands.json'),JSON.stringify(firstCommands)+'\n');
+  const first=grade(firstPost,firstCommands);
   const events=fs.existsSync(env.LESSON_EVENTS)?fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse):[];
   const transcript=fs.readFileSync(file,'utf8').trimEnd().split('\n').map(JSON.parse);
   const summaries=transcript.filter(x=>x.subtype==='stop_hook_summary');
@@ -103,7 +107,7 @@ function checks(u,work,env,dir,id,pre) {
   assert.deepEqual(listings.map(x=>x.text),actual.map(x=>x.text),'emitted and delivered reminders differ');
   const lastTurn=lastAssistantTurn(transcript);
   const productionTimeouts=events.filter(e=>e.outcome==='production_timeout').length;
-  return {first,grader:GUARD,stops:events.length,productionTimeouts,nonStopTimeouts,
+  return {first,firstPost,grader:GUARD,stops:events.length,productionTimeouts,nonStopTimeouts,
     listings:listings.map(({text,...rest},i)=>({...rest,continued:lastTurn>actual[i].index}))};
 }
 
@@ -158,9 +162,10 @@ function auditArm(top,pair,u,base,arm) {
   const inputs=[{post:first,commands:commandLog(files)},...events.filter(e=>e.response).map(e=>({post:e.post,commands:e.commands}))];
   const scratch=path.join(top,'crash-audit',pair,arm);
   fs.mkdirSync(scratch,{recursive:true});
-  const calls=inputs.map(({post,commands})=>log=>runCheck(guardedLesson(u.lesson),
-    {work,env:{...graderEnv(env),CHECK_LOG:log},preCommit:pre,postCommit:post,commands,scratch}));
-  const outcome=auditCalls(calls,i=>path.join(scratch,'call-'+i+'.log'));
+  const {CHECK_LOG,...blind}=graderEnv(env);
+  const calls=inputs.map(({post,commands})=>()=>guardedRun(runCheck,u.lesson,
+    {work,env:blind,preCommit:pre,postCommit:post,commands,scratch,status:path.join(scratch,'checker-status.json')}));
+  const outcome=auditCalls(calls);
   return {pair,arm,dir,id,grader:GUARD,firstTree:run('git',['rev-parse',first+'^{tree}'],work,env).trim(),...outcome};
 }
 function auditArms() {
@@ -348,6 +353,9 @@ if(mode==='probe') {
     assert.equal(row.first,'pass');
     assert.equal(row.nonStopTimeouts,1);
     assert.equal(row.grader,GUARD);
+    assert.equal(run('git',['rev-parse',FIRST_GRADE_REF],work,env).trim(),row.firstPost);
+    assert.deepEqual(read(path.join(dir,'first-commands.json')),commandLog(sessionFiles(path.join(env.CLAUDE_CONFIG_DIR,'projects'),sessionId)));
+    assert.ok(!fs.existsSync(path.join(dir,'checker-status.json')),'The guard record stayed in the slot');
     const crash=path.join(d,'crash.mjs'),odd=path.join(d,'odd.mjs');
     fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));\n");
     fs.writeFileSync(odd,'process.exit(7);\n');
@@ -371,11 +379,10 @@ if(mode==='probe') {
       assert.equal(ran.calls,1+stops);
       assert.equal(ran.id,sessionId);
       assert.equal(ran.firstTree,run('git',['rev-parse',stateCommit(work,env.LESSON_PRE)+'^{tree}'],work,env).trim());
-      assert.ok(!fs.readdirSync(path.join(d,'crash-audit','ran','ON')).some(n=>n.endsWith('.log')),'The audit kept the log of a call that ran');
+      assert.deepEqual(fs.readdirSync(path.join(d,'crash-audit','ran','ON')).filter(n=>/log|status|mark/i.test(n)),[],
+        'The audit kept a log or a guard record');
       const crashed=audit('crash',lessonAt(crash));
-      assert.equal(crashed.status,'crash');
-      assert.equal(crashed.call,0);
-      assert.match(fs.readFileSync(crashed.log,'utf8'),/checker crashed/);
+      assert.deepEqual([crashed.status,crashed.call,crashed.log],['crash',0,undefined]);
       assert.equal(audit('odd',lessonAt(odd)).status,'error');
     }
     assert.equal(run('git',['rev-parse','refs/z0/pre'],work,env).trim(),env.LESSON_PRE);

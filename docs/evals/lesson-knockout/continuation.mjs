@@ -17,8 +17,15 @@ export function checkTeachReceipts(unit,freeze,u) {
     const file=join(teach,'operator',id+'.json');
     assert(fs.existsSync(file),'Missing frozen teach receipt: '+id);
     const r=read(file);
-    assert(r.session===freeze.teachId && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.cutOff===false &&
+    assert(r.session===freeze.teachId && r.call===id && r.promptSha256===hash(prompts[id]) && r.json===true && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.cutOff===false &&
       permissionAudit(transcript,prompts[id],r.permissionDenials).ok,'Invalid frozen teach receipt: '+id);
+  }
+}
+
+export function assertSameTree(unit,index,tree) {
+  for(let i=0;i<index;i++) {
+    const earlier=read(join(unit,'evidence','apply-'+i,'grade.json'));
+    assert(earlier.preTree===tree.preTree && earlier.ignoredSetup===tree.ignoredSetup,'Apply work tree differs from arm '+i);
   }
 }
 

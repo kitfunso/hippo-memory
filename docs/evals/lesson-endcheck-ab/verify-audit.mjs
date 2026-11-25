@@ -23,19 +23,22 @@ try {
   assert.throws(()=>audited({first:'pass',grader:'crash-guard-0'},'p','ON',audits),/Unknown grader stamp/);
   assert.throws(()=>readAudits(write('dup.jsonl',[{pair:'p',arm:'ON',status:'ran'},{pair:'p',arm:'ON',status:'ran'}])),/Duplicate/);
   assert.throws(()=>readAudits(write('bad.jsonl',[{pair:'p',arm:'ON',status:'pass'}])),/Unknown crash audit status/);
-  const log=path.join(dir,'call.log');
-  assert.equal(classify(log,()=>{ fs.writeFileSync(log,'verdict text'); return 'fail'; }),'ran');
-  assert.ok(!fs.existsSync(log),'A log of a call that ran stayed on disk');
-  assert.equal(classify(log,()=>{ fs.writeFileSync(log,'checker crashed: Error: x\n'); throw Error('checker for lesson x exited 2'); }),'crash');
-  assert.equal(classify(log,()=>{ fs.writeFileSync(log,'checker did not finish: signal\n'); throw Error('checker for lesson x exited 2'); }),'error');
-  assert.equal(classify(log,()=>{ fs.writeFileSync(log,'checker crashed: Error: x\n'); throw Error('checker for lesson x exited 7'); }),'error');
-  assert.equal(classify(log,()=>{ throw Error('checker for lesson x exited 2'); }),'error');
+  assert.deepEqual(audited({first:'fail',grader:'crash-guard-1'},'p','OFF',audits),{first:'fail',grader:'crash-guard-1'});
+  assert.equal(audited({first:'pass',grader:'crash-guard-1'},'p','ON',audits),null);
+  assert.throws(()=>audited({first:'pass',grader:'crash-guard-1'},'r','ON',audits),/no crash audit record/);
+  const fault=guard=>()=>{ const error=Error('checker for lesson x exited 2'); error.guard=guard; throw error; };
+  assert.equal(classify(()=>'fail'),'ran');
+  assert.equal(classify(fault({guard:GUARD,state:'crash',code:2})),'crash');
+  for(const state of ['timeout','signal','error','wrapper-error','exit'])
+    assert.equal(classify(fault({guard:GUARD,state})),'error',state);
+  assert.equal(classify(fault({guard:'crash-guard-1',state:'crash'})),'error');
+  assert.equal(classify(fault(null)),'error');
+  assert.equal(classify(()=>{ throw Error('checker crashed: imitation'); }),'error');
   const seen=[];
-  const call=result=>log=>{ seen.push(log); if(result) { fs.writeFileSync(log,'checker crashed: y\n'); throw Error('exited 2'); } return 'pass'; };
-  assert.deepEqual(auditCalls([call(false),call(false)],i=>path.join(dir,'c'+i+'.log')),{calls:2,status:'ran'});
-  const crashed=auditCalls([call(false),call(true),call(false)],i=>path.join(dir,'d'+i+'.log'));
-  assert.deepEqual(crashed,{calls:3,status:'crash',call:1,log:path.join(dir,'d1.log')});
-  assert.deepEqual(seen.slice(-2),[path.join(dir,'d0.log'),path.join(dir,'d1.log')]);
+  const call=(i,crash)=>()=>{ seen.push(i); if(crash) fault({guard:GUARD,state:'crash'})(); return 'pass'; };
+  assert.deepEqual(auditCalls([call(0),call(1)]),{calls:2,status:'ran'});
+  assert.deepEqual(auditCalls([call(2),call(3,true),call(4)]),{calls:3,status:'crash',call:1});
+  assert.deepEqual(seen,[0,1,2,3]);
 } finally {
   fs.rmSync(dir,{recursive:true,force:true});
 }

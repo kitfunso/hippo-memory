@@ -11,13 +11,13 @@ const promptText=content=>typeof content==='string' ? content :
 export const wellFormedDenials=denials=>Array.isArray(denials) &&
   denials.every(d=>d && typeof d.tool==='string' && d.tool && typeof d.id==='string' && d.id);
 export const cleanDenials=denials=>wellFormedDenials(denials) && !denials.some(d=>GATED_TOOLS.has(d.tool));
+const promptStart=(rows,prompt)=>rows.findLastIndex(r=>r.type==='user' && promptText(r.message?.content)===prompt);
 export function permissionAudit(transcript,prompt,denials) {
-  const rows=rowsOf(transcript);
-  const modes=[...new Set(rows.map(r=>r.permissionMode).filter(Boolean))];
-  const promptRows=rows.filter(r=>r.type==='user' && promptText(r.message?.content)===prompt);
-  const promptMode=promptRows.at(-1)?.permissionMode ?? null;
+  const rows=rowsOf(transcript),start=promptStart(rows,prompt);
+  const modes=[...new Set(rows.slice(Math.max(start,0)).map(r=>r.permissionMode).filter(Boolean))];
+  const promptMode=start<0 ? null : rows[start].permissionMode ?? null;
   const denied=wellFormedDenials(denials) ? denials.filter(d=>GATED_TOOLS.has(d.tool)).map(d=>d.tool) : null;
-  const ok=modes.length>0 && modes.every(m=>m==='bypassPermissions') && promptMode==='bypassPermissions' &&
+  const ok=start>=0 && modes.length>0 && modes.every(m=>m==='bypassPermissions') && promptMode==='bypassPermissions' &&
     Array.isArray(denied) && denied.length===0;
   return {ok,modes,promptMode,denied};
 }
@@ -35,6 +35,15 @@ export function mainPairs(transcript) {
   return pairs;
 }
 const pairOf=r=>r.request_id+'\n'+r.message_id;
+function sessionTranscripts(transcript) {
+  const sid=path.basename(transcript,'.jsonl'),sub=path.join(path.dirname(transcript),sid,'subagents');
+  const subs=fs.existsSync(sub)?fs.readdirSync(sub).filter(f=>f.endsWith('.jsonl')).sort().map(f=>path.join(sub,f)):[];
+  return [transcript,...subs];
+}
+const apiRows=transcript=>sessionTranscripts(transcript).flatMap(rowsOf).filter(r=>r.type==='api-request');
+const sorted=list=>JSON.stringify([...list].sort());
+export const sourcesMatch=(rows,transcript)=>rows.every(r=>typeof r.query_source==='string' && r.query_source.length>0) &&
+  sorted(rows.map(r=>r.query_source))===sorted(apiRows(transcript).map(r=>r.querySource));
 function reconciled(main,transcript) {
   if(!transcript || !fs.existsSync(transcript) || !main.length) return false;
   const pairs=mainPairs(transcript),sent=main.map(pairOf);
@@ -120,8 +129,8 @@ export function evidence(dir,result,notes,lesson,task={},transcript) {
   const main=rows.filter(r=>r.query_source===MAIN_SOURCE),side=rows.filter(r=>r.query_source!==MAIN_SOURCE);
   let transcriptResponse;
   const complete=names.length>0 && names.length===rows.length && indexed.size===rows.length && names.every(n=>indexed.has(n)) &&
-    rows.every(r=>typeof r.query_source==='string' && /^[a-z_:]+$/.test(r.query_source) &&
-      r.session_id===result.session && ownFile(r.request_file) && ownFile(r.response_file)) &&
+    !!transcript && fs.existsSync(transcript) && sourcesMatch(rows,transcript) &&
+    rows.every(r=>r.session_id===result.session && ownFile(r.request_file) && ownFile(r.response_file)) &&
     main.every((r,i)=>{
       const raw=fs.readFileSync(path.join(dir,r.response_file));
       if(raw.length) return JSON.parse(raw).id===r.message_id;
@@ -149,26 +158,35 @@ function targetIn(surfaces,lesson,task) {
     [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
 }
 
-function archivedAttempt(live,id,sid,lesson,task) {
+const USAGE_KEYS=['input_tokens','output_tokens','cache_creation_input_tokens','cache_read_input_tokens'];
+const zeroUsage=usage=>!!usage && USAGE_KEYS.every(k=>usage[k]===0 || usage[k]===undefined);
+function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const operator=path.join(path.dirname(live),'operator'),dir=path.join(operator,'bodies',id);
   const transcript=findTranscript(path.join(live,'home/.claude/projects'),sid);
-  const pairs=transcript?mainPairs(transcript):[];
-  const names=requestNames(dir),rows=indexRows(dir),record=path.join(operator,id+'.json');
-  const deniedOk=!fs.existsSync(record) || cleanDenials(read(record).permissionDenials);
-  const modes=transcript?rowsOf(transcript).map(r=>r.permissionMode).filter(Boolean):[];
-  const permissions=deniedOk && modes.every(m=>m==='bypassPermissions');
-  if(!names.length && !rows.length && pairs && !pairs.length) return {status:'refused',target:false,permissions};
-  const bodies=names.map(n=>read(path.join(dir,n))),sent=new Set(rows.map(pairOf));
-  const inspectable=!!pairs && !!transcript && names.length>0 && bodies.every(valid) &&
-    rows.every(r=>names.includes(r.request_file) && r.session_id===sid) && pairs.every(p=>sent.has(p));
+  const pairs=transcript?mainPairs(transcript):[],api=transcript?apiRows(transcript):[];
+  const names=requestNames(dir),rows=indexRows(dir),recordFile=path.join(operator,id+'.json');
+  const record=fs.existsSync(recordFile)?read(recordFile):null;
+  const own=record?.session===sid && record.call===id && record.cutOff===true;
+  const lines=transcript?rowsOf(transcript):[],start=promptStart(lines,prompt);
+  const modes=start<0?[]:lines.slice(start).map(r=>r.permissionMode).filter(Boolean);
+  if(own && record.json===true && record.turns===0 && zeroUsage(record.usage) && cleanDenials(record.permissionDenials) &&
+    !names.length && !rows.length && !api.length && !!pairs && !pairs.length)
+    return {status:'refused',target:false,permissions:true};
+  const bodies=names.map(n=>read(path.join(dir,n))),indexed=new Set(rows.map(r=>r.request_file)),sent=new Set(rows.map(pairOf));
+  const inspectable=own && !!transcript && !!pairs && names.length>0 && names.length===rows.length && indexed.size===rows.length &&
+    names.every(n=>indexed.has(n)) && bodies.every(valid) && rows.every(r=>r.session_id===sid) &&
+    sourcesMatch(rows,transcript) && pairs.every(p=>sent.has(p));
+  const permissions=own && cleanDenials(record.permissionDenials) && modes.length>0 && modes.every(m=>m==='bypassPermissions');
   return {status:inspectable?'dispatched':'unauditable',
     target:inspectable && targetIn(bodies.map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
 }
 
-export function archivedAudit(archives,id,sid,lesson,task) {
-  const attempts=archives.map(live=>archivedAttempt(live,id,sid,lesson,task));
+export function archivedAudit(archives,id,sid,prompt,lesson,task) {
+  const attempts=archives.map(live=>archivedAttempt(live,id,sid,prompt,lesson,task));
   const count=status=>attempts.filter(a=>a.status===status).length;
   return {archivedAttempts:attempts.length,archivedRefused:count('refused'),archivedUnauditable:count('unauditable'),
-    archivedTargetText:attempts.some(a=>a.target),archivedPermissions:attempts.every(a=>a.permissions)};
+    archivedTargetText:attempts.some(a=>a.target),archivedPermissions:attempts.every(a=>a.permissions),
+    archivedStatuses:attempts.map(a=>a.status)};
 }
+export const pathAttempts=(archives,archived,live)=>[...archives.filter((_,i)=>archived.archivedStatuses[i]!=='refused'),live];
 export const neutralClean=r=>r.targetText===false && r.archivedTargetText===false && r.archivedUnauditable===0;

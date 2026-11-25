@@ -2,17 +2,17 @@ import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
-import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeIds } from './state.mjs';
+import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
-import { archivedAudit,evidence,mainPairs,permissionAudit } from './evidence.mjs';
-import { assertCheckerTools,checkerModules,gradeEnv,guardedLesson } from './grading.mjs';
+import { archivedAudit,evidence,mainPairs,pathAttempts,permissionAudit } from './evidence.mjs';
+import { assertCheckerTools,checkerModules,gradeEnv,guardedRun } from './grading.mjs';
 import { runCheck,stateCommit } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { openCue,retryLimited } from './delivery.mjs';
 import { runSetupScript } from './setup.mjs';
-import { continueUnit } from './continuation.mjs';
+import { assertSameTree,continueUnit } from './continuation.mjs';
 import { collectRemaining } from './collect.mjs';
 
 checkTaskPins();
@@ -108,7 +108,9 @@ function checkFinalResponse() {
     role:'assistant',stop_reason:'end_turn',usage:{output_tokens:3},content:[txt('Finished.')]}};
   const check=()=>evidence(series,result,[],lesson,task,trace);
   const firstTurn={...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one',stop_reason:'tool_use'}};
-  const transcript=last=>put(series,sid+'.jsonl',[firstTurn,last].map(r=>JSON.stringify(r)).join('\n'));
+  const apis=rows.map(r=>({type:'api-request',sessionId:sid,querySource:r.query_source}));
+  const lines=(...turns)=>put(series,sid+'.jsonl',[...apis,...turns].map(r=>JSON.stringify(r)).join('\n'));
+  const transcript=last=>lines(firstTurn,last);
   for(const row of rows) put(series,row.request_file,JSON.stringify({system:[txt('base')],messages:[user]}));
   put(series,rows[1].request_file,JSON.stringify({system:[txt(lesson.rule)],messages:[user]}));
   put(series,'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
@@ -120,16 +122,16 @@ function checkFinalResponse() {
     transcript({...final,...changed});
     assert.equal(check().complete,false);
   }
-  put(series,sid+'.jsonl',JSON.stringify(final));
+  lines(final);
   assert.equal(check().complete,false);
   transcript(final);
   const verified=check();
   assert(verified.complete && verified.targetText && verified.requests===2 && verified.transcriptResponse==='two');
   put(series,rows[1].response_file,'{"id":"msg-two"}');
-  put(series,sid+'.jsonl',JSON.stringify({...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one'}}));
+  lines({...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one'}});
   put(series,rows[0].response_file,'');
   assert.equal(check().complete,false);
-  put(series,sid+'.jsonl',JSON.stringify(final));
+  lines(final);
   put(series,rows[0].response_file,'{"id":"msg-one"}');
   put(series,rows[1].response_file,' ');
   assert.throws(check,SyntaxError);
@@ -150,9 +152,10 @@ function checkRequestSeries() {
     message_uuid:'row-'+id,request_file:file+'.request.json',response_file:id+'.response.json'});
   const body=text=>JSON.stringify({system:[txt(text)],messages:[user]});
   const turns=[turn('one'),turn('one'),turn('two'),turn('three','end_turn')];
-  const write=(rows,bodies={},trail=turns)=>{
+  const apiOf=r=>({type:'api-request',sessionId:sid,querySource:r.query_source});
+  const write=(rows,bodies={},trail=turns,api=rows)=>{
     fs.rmSync(series,{recursive:true,force:true});
-    put(series,sid+'.jsonl',trail.map(r=>JSON.stringify(r)).join('\n'));
+    put(series,sid+'.jsonl',[...api.map(apiOf),...trail].map(r=>JSON.stringify(r)).join('\n'));
     for(const r of rows) {
       put(series,r.request_file,bodies[r.request_file] ?? body('base'));
       put(series,r.response_file,JSON.stringify({id:r.message_id}));
@@ -184,6 +187,18 @@ function checkRequestSeries() {
   write(main,{},[turn('one'),turn('two'),turn('one'),turn('three','end_turn')]);
   assert.equal(mainPairs(trace),null);
   assert.equal(check().complete,false,'A transcript with a repeated response passed');
+  const explore=row('explore','agent:builtin:Explore');
+  write([explore,...main]);
+  assert(check().complete,'A mixed-case side source with its api-request row failed');
+  write([explore,...main],{},turns,main);
+  assert.equal(check().complete,false,'An index source without an api-request row passed');
+  write(main,{},turns,[...main,explore]);
+  assert.equal(check().complete,false,'An api-request row without an index row passed');
+  write([{...explore,query_source:'Agent:builtin:Explore'},...main],{},turns,[explore,...main]);
+  assert.equal(check().complete,false,'A source in another case passed');
+  write([explore,...main],{},turns,main);
+  put(series,path.join(sid,'subagents','agent-a.jsonl'),JSON.stringify(apiOf(explore)));
+  assert(check().complete,'A subagent api-request row was not counted');
 }
 function checkArchives() {
   const base=join(dir,'archives'),prompt=task.prompt;
@@ -191,32 +206,51 @@ function checkArchives() {
   const leaked=JSON.stringify({system:[txt(lesson.rule)],messages:[user]});
   const turn={type:'assistant',requestId:'r1',message:{id:'m1'}};
   const row={session_id:sid,query_source:'sdk',request_id:'r1',message_id:'m1',request_file:'a.request.json',response_file:'r1.response.json'};
-  const attempt=(name,{turns=[],bodies={},rows,record,mode='bypassPermissions',transcript=true}={})=>{
+  const api={type:'api-request',sessionId:sid,querySource:'sdk'};
+  const refusal={session:sid,call:'apply',cutOff:true,json:true,turns:0,usage:{input_tokens:0,output_tokens:0},permissionDenials:[]};
+  const sentRecord={...refusal,turns:1,usage:{input_tokens:5,output_tokens:2}};
+  const attempt=(name,{turns=[],bodies={},rows,record=refusal,mode='bypassPermissions',transcript=true,lead=prompt}={})=>{
     const live=join(base,name,'live'),operator=join(base,name,'operator');
     mkdir(live);
-    const lines=[{type:'user',permissionMode:mode,message:{role:'user',content:prompt}},...turns];
+    const lines=[{type:'user',permissionMode:mode,message:{role:'user',content:lead}},...turns];
     if(transcript) put(join(live,'home/.claude/projects/unit'),sid+'.jsonl',lines.map(r=>JSON.stringify(r)).join('\n'));
     for(const [file,content] of Object.entries(bodies)) put(join(operator,'bodies/apply'),file,content);
     if(rows) put(join(operator,'bodies/apply'),'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
     if(record) put(operator,'apply.json',JSON.stringify(record));
     return live;
   };
-  const audit=(...lives)=>archivedAudit(lives,'apply',sid,lesson,task);
-  const refused=attempt('refused'),silent=attempt('silent',{transcript:false});
-  const sent=attempt('sent',{turns:[turn],bodies:{'a.request.json':clean},rows:[row],record:{permissionDenials:[]}});
+  const dispatched={turns:[api,turn],bodies:{'a.request.json':clean},rows:[row],record:sentRecord};
+  const audit=(...lives)=>archivedAudit(lives,'apply',sid,prompt,lesson,task);
+  const refused=attempt('refused'),silent=attempt('silent',{transcript:false}),sent=attempt('sent',dispatched);
   assert.deepEqual(audit(refused,silent,sent),{archivedAttempts:3,archivedRefused:2,archivedUnauditable:0,
-    archivedTargetText:false,archivedPermissions:true});
-  assert.equal(audit(attempt('leak',{turns:[turn],bodies:{'a.request.json':leaked},rows:[row]})).archivedTargetText,true);
-  assert.equal(audit(attempt('rejected',{bodies:{'a.request.json':leaked}})).archivedTargetText,true);
-  for(const [name,spec] of [['withheld',{turns:[turn],bodies:{'a.request.json':JSON.stringify({not_recorded:true})},rows:[row]}],
-    ['lost',{turns:[turn]}],['unindexed',{turns:[turn],bodies:{'a.request.json':clean},rows:[]}],
-    ['foreign',{turns:[turn],bodies:{'a.request.json':clean},rows:[{...row,session_id:'other'}]}],
-    ['untranscribed',{bodies:{'a.request.json':clean},rows:[row],transcript:false}]]) {
+    archivedTargetText:false,archivedPermissions:true,archivedStatuses:['refused','refused','dispatched']});
+  assert.throws(()=>auditApply([silent,sent],sid,sent),/Missing apply transcript/);
+  assert.deepEqual(pathAttempts([silent],audit(silent),sent),[sent]);
+  assert.equal(auditApply(pathAttempts([silent],audit(silent),sent),sid,sent).transcripts,1);
+  assert.equal(audit(attempt('leak',{...dispatched,bodies:{'a.request.json':leaked}})).archivedTargetText,true);
+  for(const [name,spec] of [
+    ['withheld',{...dispatched,bodies:{'a.request.json':JSON.stringify({not_recorded:true})}}],
+    ['lost',{...dispatched,bodies:{},rows:undefined}],['unindexed',{...dispatched,rows:[]}],
+    ['foreign',{...dispatched,rows:[{...row,session_id:'other'}]}],['untranscribed',{...dispatched,transcript:false}],
+    ['rejected',{bodies:{'a.request.json':leaked},record:sentRecord}],
+    ['extra-body',{...dispatched,bodies:{'a.request.json':clean,'b.request.json':clean}}],
+    ['unmatched-source',{...dispatched,turns:[{...api,querySource:'compact'},turn]}],
+    ['no-api-row',{...dispatched,turns:[turn]}],
+    ['unbodied-row',{...dispatched,turns:[api,api,turn],rows:[row,{...row,request_id:'r2',message_id:'m2',request_file:'c.request.json',response_file:'r2.response.json'}]}],['sent-unrecorded',{...dispatched,record:null}],
+    ['api-only',{turns:[api]}],['no-record',{record:null}],['other-call',{record:{...refusal,call:'teach'}}],
+    ['other-session',{record:{...refusal,session:'other'}}],['not-cut-off',{record:{...refusal,cutOff:false}}],
+    ['no-json',{record:{session:sid,call:'apply',cutOff:true,json:false,permissionDenials:null}}],
+    ['used-tokens',{record:{...refusal,usage:{input_tokens:3,output_tokens:0}}}],
+    ['no-usage',{record:{...refusal,usage:undefined}}],['took-turns',{record:{...refusal,turns:1}}]]) {
     const r=audit(attempt(name,spec));
-    assert(r.archivedUnauditable===1 && r.archivedTargetText===false,name);
+    assert(r.archivedUnauditable===1 && r.archivedRefused===0 && r.archivedTargetText===false,name);
   }
-  for(const [name,spec] of [['default',{mode:'default'}],['denied',{record:{permissionDenials:[{tool:'Write',id:'x'}]}}],
-    ['malformed',{record:{permissionDenials:null}}],['partial',{record:{permissionDenials:[{tool:'Edit'}]}}]]) {
+  for(const [name,spec] of [['default',{...dispatched,mode:'default'}],
+    ['denied',{...dispatched,record:{...sentRecord,permissionDenials:[{tool:'Write',id:'x'}]}}],
+    ['malformed',{...dispatched,record:{...sentRecord,permissionDenials:null}}],
+    ['partial',{...dispatched,record:{...sentRecord,permissionDenials:[{tool:'Edit'}]}}],
+    ['no-mode',{...dispatched,mode:null}],['other-prompt',{...dispatched,lead:'Another prompt'}],
+    ['unrecorded',{...dispatched,record:null}]]) {
     assert.equal(audit(attempt(name,spec)).archivedPermissions,false,name);
   }
 }
@@ -228,7 +262,7 @@ function checkTrees() {
     git('init','-q'); put(work,'.gitignore','build/\n'); put(work,'src.txt','base');
     git('add','.'); git('commit','-q','-m','base');
     for(const [file,text] of Object.entries(extra)) put(work,file,text);
-    return treeIds(git,stateCommit(work,git('rev-parse','HEAD')));
+    return {preTree:treeOf(git,stateCommit(work,git('rev-parse','HEAD'))),ignoredSetup:ignoredListing(git)};
   };
   const a=make('a',{'setup.txt':'one','build/x':'1'}),b=make('b',{'setup.txt':'two','build/x':'1'});
   const c=make('c',{'setup.txt':'one'}),d=make('d',{'setup.txt':'one','build/x':'1'});
@@ -236,6 +270,17 @@ function checkTrees() {
   assert(a.preTree!==b.preTree && a.ignoredSetup===b.ignoredSetup,'Different setup files must change the tree');
   assert(a.preTree===c.preTree && a.ignoredSetup!==c.ignoredSetup,'Ignored setup output must change the listing');
   assert.deepEqual(a,d);
+  assert.deepEqual(a,make('e',{'setup.txt':'one','build/x':'2'}),'Ignored build contents are listed by path only');
+  const gate=join(dir,'tree-gate');
+  put(gate,'evidence/apply-0/grade.json',JSON.stringify(a));
+  assertSameTree(gate,0,b);
+  assertSameTree(gate,1,a);
+  assert.throws(()=>assertSameTree(gate,1,b),/differs from arm 0/);
+  assert.throws(()=>assertSameTree(gate,1,c),/differs from arm 0/);
+  const arm=fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function applyArm')[1];
+  const at=text=>arm.indexOf(text);
+  assert(at('assertSameTree(')>0 && at('assertSameTree(')<at('holdPre(') && at('holdPre(')<at('openCue(') &&
+    at('openCue(')<at('await session('),'The tree gate must run before the apply session');
 }
 function checkPermissions() {
   const folderPath=join(dir,'permissions'),trace=join(folderPath,'t.jsonl');
@@ -253,6 +298,9 @@ function checkPermissions() {
   assert(!permissionAudit(trace,'Feedback',[]).ok);
   write(row('Teach','bypassPermissions'),{type:'user',message:{role:'user',content:[txt('Feedback')]}});
   assert(!permissionAudit(trace,'Feedback',[]).ok);
+  write(row('Teach','default'),row('Feedback','bypassPermissions'));
+  assert(permissionAudit(trace,'Feedback',[]).ok,'Earlier teach turns leaked into the resumed feedback check');
+  assert(!permissionAudit(trace,'Teach',[]).ok,'A later mode change escaped the teach check');
 }
 checkPermissions();
 console.log('Passed prompt permission mode, structured denials and deliberate deny list.');
@@ -263,17 +311,21 @@ function checkGrading() {
   const git=(...args)=>execFileSync('git',['-c','user.name=t','-c','user.email=t@t',...args],{cwd:work,env,encoding:'utf8'}).trim();
   git('init','-q'); put(work,'a.txt','a'); git('add','a.txt'); git('commit','-q','-m','a');
   const head=git('rev-parse','HEAD'),log=join(base,'checker.log'),graded=gradeEnv(env,{toolchain:'npm'},live,log);
-  const grade=(name,source)=>{
+  const status=join(base,'checker-status.json');
+  const grade=(name,source,options={})=>{
     put(base,name,source);
-    return runCheck(guardedLesson({id:name,checkPath:join(base,name),check:{}}),
-      {work,env:graded,preCommit:head,postCommit:head,commands:[],scratch:join(base,'scratch')});
+    return guardedRun(runCheck,{id:name,checkPath:join(base,name),check:{}},
+      {work,env:graded,preCommit:head,postCommit:head,commands:[],scratch:join(base,'scratch'),status,...options});
   };
+  const stateOf=fn=>{ try { fn(); } catch(error) { return error.guard?.state ?? error.name; } return 'returned'; };
   assert.equal(grade('rule.mjs',"console.log('broken: rule');process.exit(1);"),'fail');
   assert.match(fs.readFileSync(log,'utf8'),/broken: rule/);
-  assert.throws(()=>grade('git.mjs',"import {execFileSync} from 'node:child_process';"+
-    "execFileSync('git',['rev-parse','--verify','refs/absent']);process.exit(0);"),/exited 2/);
+  assert(!fs.existsSync(status),'The guard record stayed on disk');
+  assert.equal(stateOf(()=>grade('git.mjs',"import {execFileSync} from 'node:child_process';"+
+    "execFileSync('git',['rev-parse','--verify','refs/absent']);process.exit(0);")),'crash');
   assert.throws(()=>grade('async.mjs',"await Promise.reject(new Error('lost'));"),/exited 2/);
   assert.match(fs.readFileSync(log,'utf8'),/checker crashed/);
+  assert.equal(grade('spoof.mjs',"process.stderr.write('checker crashed: not really\\n');process.exit(process.env.CHECK_GUARD_MARK===undefined?1:0);"),'fail');
   assert.equal(grade('direct.mjs',"import fs from 'node:fs';fs.writeSync(1,'direct-out\\n');fs.writeSync(2,'direct-err\\n');process.exit(0);"),'pass');
   assert.match(fs.readFileSync(log,'utf8'),/direct-out[\s\S]*direct-err/);
   put(base,'throw-child.cjs',"throw new Error('forked child');");
@@ -281,6 +333,13 @@ function checkGrading() {
     "const spawned=spawnSync(process.execPath,['-e','throw new Error(1)']);"+
     "fork("+JSON.stringify(join(base,'throw-child.cjs'))+",{stdio:'ignore'}).on('exit',code=>"+
     "process.exit(spawned.status===1 && code===1 ? 0 : 1));"),'pass','The crash guard reached a child node process');
+  const logDir=join(base,'log-is-a-folder');
+  mkdir(logDir);
+  assert.equal(stateOf(()=>grade('noisy.mjs',"console.log('x');process.exit(1);",{env:{...graded,CHECK_LOG:logDir}})),'wrapper-error');
+  assert.throws(()=>guardedRun(()=>'pass',{id:'stub',checkPath:join(base,'rule.mjs'),check:{}},{env:graded,status}),
+    /without a matching guard record/);
+  assert.equal(grade('quick.mjs',"setTimeout(()=>process.exit(0),200);",{deadlineMs:3000}),'pass');
+  assert.equal(stateOf(()=>grade('slow.mjs',"setTimeout(()=>process.exit(0),6000);",{deadlineMs:1500})),'timeout');
   const python=gradeEnv(env,{toolchain:'python'},live,log),scripts=join(live,'venv','Scripts');
   const same=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
   assert(same(python.CHECK_PYTHON,join(scripts,'python.exe')));
@@ -291,18 +350,24 @@ function checkGrading() {
   const system=execFileSync('python',['-c','import sys;print(sys.executable)'],{env,encoding:'utf8'}).trim();
   const pyEnv={...env,CHECK_PYTHON:system},fake={id:'fake',lesson:{checkPath:join(base,'mods.mjs')}};
   put(base,'mods.mjs',"run(['-m', 'pip']);run([\"-m\", \"no_such_module_q1\"]);");
-  assert.throws(()=>assertCheckerTools(fake,pyEnv,base),/cannot run python -m no_such_module_q1/);
-  assert.throws(()=>assertCheckerTools(fake,env,base),/outside a Python toolchain/);
+  assert.throws(()=>assertCheckerTools(fake,pyEnv),/cannot run python -m no_such_module_q1/);
+  assert.throws(()=>assertCheckerTools(fake,env),/outside a Python toolchain/);
   const pkg=join(base,'pkg');
   put(pkg,'brokenmod_q1/__init__.py','raise ImportError("broken on import")');
   const found=execFileSync(system,['-c','import importlib.util as u;print(u.find_spec("brokenmod_q1") is not None)'],{cwd:pkg,env,encoding:'utf8'});
   assert.equal(found.trim(),'True','The broken package must be discoverable, as the old probe accepted it');
   put(base,'mods.mjs',"run(['-m', 'brokenmod_q1']);");
-  assert.throws(()=>assertCheckerTools(fake,pyEnv,pkg),/cannot run python -m brokenmod_q1/);
+  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PYTHONPATH:pkg}),/cannot run python -m brokenmod_q1/);
   put(base,'mods.mjs',"run(['-m', 'pip']);");
-  assert.deepEqual(assertCheckerTools(fake,pyEnv,base),['pip']);
-  assert.throws(()=>assertCheckerTools(fake,{...env,CHECK_PYTHON:join(base,'other','python.exe')},base),/is not CHECK_PYTHON/);
-  assert.deepEqual(assertCheckerTools(roster()[1],env,base),[]);
+  const shadow=join(base,'shadow');
+  put(shadow,'pip.py','raise SystemExit(9)');
+  const back=process.cwd();
+  process.chdir(shadow);
+  try { assert.deepEqual(assertCheckerTools(fake,pyEnv),['pip'],'A module in the current folder shadowed the probe'); }
+  finally { process.chdir(back); }
+  assert.throws(()=>assertCheckerTools(fake,{...env,CHECK_PYTHON:join(base,'other','python.exe')}),/is not CHECK_PYTHON/);
+  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PATH:join(base,'empty-path')}),/is not CHECK_PYTHON/);
+  assert.deepEqual(assertCheckerTools(roster()[1],env),[]);
 }
 checkGrading();
 console.log('Passed task grading environment, checker crash exit, checker log and checker module probe.');
@@ -450,12 +515,14 @@ const active=join(dir,'active'),design={unit:first,mode:'unit',roster:rosterHash
 const frozen={preHash:hash(JSON.stringify(manifest)),snapshotHash:hash(JSON.stringify(files(snap))),teachId:sid,targetRows:[],
   apparatus:APPARATUS,form:'correction'};
 const json=(base,file,value)=>put(base,file,JSON.stringify(value));
-function teachFixture(dest,u,{apparatus=APPARATUS,mode='bypassPermissions',cutOff=false}={}) {
-  const rows=[u.teach.prompt,teachMessage(u.lesson,frozen.form)].map((content,i)=>
+function teachFixture(dest,u,{apparatus=APPARATUS,mode='bypassPermissions',cutOff=false,record={}}={}) {
+  const prompts=[u.teach.prompt,teachMessage(u.lesson,frozen.form)];
+  const rows=prompts.map((content,i)=>
     ({type:'user',permissionMode:i ? mode : 'bypassPermissions',message:{role:'user',content}}));
   put(dest,'evidence/teach/home/.claude/projects/unit/'+sid+'.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
-  for(const id of ['teach','feedback'])
-    json(dest,'evidence/teach/operator/'+id+'.json',{session:sid,exit:0,isError:false,apparatus,cutOff,permissionDenials:[]});
+  for(const [i,id] of ['teach','feedback'].entries())
+    json(dest,'evidence/teach/operator/'+id+'.json',{session:sid,call:id,promptSha256:hash(prompts[i]),json:true,exit:0,
+      isError:false,apparatus,cutOff,permissionDenials:[],...record});
 }
 json(partial,'design.json',design);
 copy(pre,join(partial,'pre')); json(partial,'pre/manifest.json',manifest);
@@ -475,7 +542,8 @@ json(partial,'freeze.json',{...frozen,preHash:'changed'}); await refuse(/manifes
 json(partial,'freeze.json',{...frozen,snapshotHash:'changed'}); await refuse(/snapshot changed/);
 json(partial,'freeze.json',{...frozen,apparatus:APPARATUS-1}); await refuse(/another apparatus/);
 json(partial,'freeze.json',frozen);
-for(const change of [{apparatus:2},{mode:'default'},{cutOff:true}]) {
+for(const change of [{apparatus:2},{mode:'default'},{cutOff:true},{record:{json:false}},{record:{call:'other'}},
+  {record:{promptSha256:hash('other')}}]) {
   teachFixture(partial,first,change); await refuse(/Invalid frozen teach receipt/);
 }
 teachFixture(partial,first);
@@ -549,9 +617,17 @@ for(const [i,change,pattern] of [[0,{preTree:'c'.repeat(40)},/different work tre
 }
 const teachDir=join(unitRoot,third.id,'evidence/teach/operator');
 for(const [change,pattern] of [[{apparatus:2},/Invalid frozen teach receipt/],[{mode:'default'},/Invalid frozen teach receipt/],
-  [{cutOff:true},/Invalid frozen teach receipt/]]) {
+  [{cutOff:true},/Invalid frozen teach receipt/],[{record:{json:false}},/Invalid frozen teach receipt/],
+  [{record:{promptSha256:hash('other')}},/Invalid frozen teach receipt/]]) {
   teachFixture(join(unitRoot,third.id),third,change);
   assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),pattern);
+}
+teachFixture(join(unitRoot,third.id),third);
+const teachReceipt=read(join(teachDir,'teach.json')),feedbackReceipt=read(join(teachDir,'feedback.json'));
+for(const [file,value] of [['feedback.json',teachReceipt],['teach.json',feedbackReceipt]]) {
+  teachFixture(join(unitRoot,third.id),third);
+  json(teachDir,file,value);
+  assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),/Invalid frozen teach receipt/,'Swapped '+file);
 }
 teachFixture(join(unitRoot,third.id),third);
 fs.unlinkSync(join(teachDir,'feedback.json'));

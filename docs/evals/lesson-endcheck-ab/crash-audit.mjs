@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { GUARD } from '../checker-guard/lesson.mjs';
+import { GUARD,guardState } from '../checker-guard/lesson.mjs';
 
 export const STATUSES=['ran','crash','error'];
 export const auditFile=root=>path.join(root,'crash-audit.jsonl');
+export const AUDITED_GRADERS=[undefined,'crash-guard-1'];
 
 export function readAudits(file) {
   const audits=new Map();
@@ -20,28 +21,25 @@ export function readAudits(file) {
 
 export function audited(row,pair,arm,audits) {
   if(row===null || row.grader===GUARD) return row;
-  assert.equal(row.grader,undefined,'Unknown grader stamp on the '+arm+' row of '+pair);
+  assert.ok(AUDITED_GRADERS.includes(row.grader),'Unknown grader stamp on the '+arm+' row of '+pair);
   const a=audits.get(pair+' '+arm);
   assert.ok(a,'The unguarded '+arm+' row of '+pair+' has no crash audit record');
   return a.status==='ran'?row:null;
 }
 
-export function classify(log,grade) {
-  fs.rmSync(log,{force:true});
+export function classify(grade) {
   try {
     grade();
   } catch(error) {
-    const text=fs.existsSync(log)?fs.readFileSync(log,'utf8'):'';
-    return /exited 2\b/.test(error.message) && /^checker crashed: /m.test(text)?'crash':'error';
+    return guardState(error);
   }
-  fs.rmSync(log,{force:true});
   return 'ran';
 }
 
-export function auditCalls(calls,logOf) {
+export function auditCalls(calls) {
   for(const [index,grade] of calls.entries()) {
-    const log=logOf(index),status=classify(log,()=>grade(log));
-    if(status!=='ran') return {calls:calls.length,status,call:index,log};
+    const status=classify(grade);
+    if(status!=='ran') return {calls:calls.length,status,call:index};
   }
   return {calls:calls.length,status:'ran'};
 }
