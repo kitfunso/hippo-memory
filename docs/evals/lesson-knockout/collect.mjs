@@ -43,8 +43,14 @@ function launchUnit(id,token,continuation) {
 
 if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
   const [mode,...args]=process.argv.slice(2),token=args.at(-1);
-  assert(/^Z0_SUB_TOKEN(?:_[123])?$/.test(token),'Expected a subscription token variable name');
-  if(mode==='remaining' && args.length===1) collectRemaining(checkedRoster(),path.join(root,'unit'),token,launchUnit);
-  else if(mode==='continue' && args.length===2) launchUnit(args[0],token,true);
-  else throw Error('Usage: collect.mjs continue FAMILY TOKEN_VAR | remaining TOKEN_VAR');
+  if(mode==='finish' && args.length===1 && args[0]==='q145-f1') {
+    process.env.KNOCKOUT_SLICE_ROOT??=path.resolve(folder,'../../../../wt-slice1');
+    const {finishQ145}=await import('./finish-q145.mjs');
+    await finishQ145();
+  } else {
+    assert(/^Z0_SUB_TOKEN(?:_[123])?$/.test(token),'Expected a subscription token variable name');
+    if(mode==='remaining' && args.length===1) collectRemaining(checkedRoster(),path.join(root,'unit'),token,launchUnit);
+    else if(mode==='continue' && args.length===2) launchUnit(args[0],token,true);
+    else throw Error('Usage: collect.mjs finish q145-f1 | continue FAMILY TOKEN_VAR | remaining TOKEN_VAR');
+  }
 }

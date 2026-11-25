@@ -94,6 +94,42 @@ const cueText='UserPromptSubmit hook additional context: Project notes\n- backgr
 assert(audited([user,msg('system',txt(cueText))]).hookSeen);
 assert(!audited([user,answer,result('id',cueText)]).hookSeen);
 assert(audited([user,msg('system',txt('UserPromptSubmit hook additional context: check-it'))]).targetText);
+function checkFinalResponse() {
+  const series=join(dir,'final-request'),trace=join(series,sid+'.jsonl');
+  const result={session:sid,subtype:'success',isError:false,exit:0};
+  const rows=['one','two'].map(id=>({session_id:sid,request_id:id,message_id:'msg-'+id,message_uuid:'row-'+id,
+    request_file:id+'.request.json',response_file:id+'.response.json'}));
+  const final={type:'assistant',uuid:'row-two',sessionId:sid,requestId:'two',message:{id:'msg-two',type:'message',
+    role:'assistant',stop_reason:'end_turn',usage:{output_tokens:3},content:[txt('Finished.')]}};
+  const check=()=>evidence(series,result,[],lesson,task,trace);
+  for(const row of rows) put(series,row.request_file,JSON.stringify({system:[txt('base')],messages:[user]}));
+  put(series,rows[1].request_file,JSON.stringify({system:[txt(lesson.rule)],messages:[user]}));
+  put(series,'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
+  put(series,rows[0].response_file,'{"id":"msg-one"}');
+  put(series,rows[1].response_file,'');
+  assert.equal(check().complete,false);
+  for(const changed of [{requestId:'other'},{sessionId:'other'},{uuid:'other'},
+    {message:{...final.message,stop_reason:'max_tokens'}},{message:{...final.message,id:'other'}}]) {
+    put(series,sid+'.jsonl',JSON.stringify({...final,...changed}));
+    assert.equal(check().complete,false);
+  }
+  put(series,sid+'.jsonl',JSON.stringify(final));
+  const verified=check();
+  assert(verified.complete && verified.targetText && verified.requests===2 && verified.transcriptResponse==='two');
+  put(series,rows[1].response_file,'{"id":"msg-two"}');
+  put(series,sid+'.jsonl',JSON.stringify({...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one'}}));
+  put(series,rows[0].response_file,'');
+  assert.equal(check().complete,false);
+  put(series,sid+'.jsonl',JSON.stringify(final));
+  put(series,rows[0].response_file,'{"id":"msg-one"}');
+  put(series,rows[1].response_file,' ');
+  assert.throws(check,SyntaxError);
+  put(series,rows[1].response_file,'');
+  fs.unlinkSync(join(series,rows[1].request_file));
+  assert.equal(check().complete,false);
+}
+checkFinalResponse();
+console.log('Passed final response transcript match, request coverage, leak scan and rejection cases.');
 const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
 const records=join(dir,'operator');mkdir(records);
 for(const name of ['checkpoints','limit-archives']) mkdir(join(dir,name));

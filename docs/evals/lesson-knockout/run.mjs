@@ -153,10 +153,10 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const before=stateCommit(work,u.apply.baseRef), sid=randomUUID();
   holdPre(work,before);
   const cue=await openCue(work,sid); settings(cue.hook);
-  const {commands,result,archives}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
+  const {commands,result,archives,transcript}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
   const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
-  const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work});
+  const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=u.cls==='variant' ? verdict==='fail' && commands.some(c=>normalize(c).includes(normalize(u.lesson.keyPhrase))) : null;
   const dest=archive('apply-'+index);
   save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,

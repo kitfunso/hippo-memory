@@ -142,3 +142,5 @@ Scored collection requires separate launch approval, an available operator subsc
 **25 Nov 2026.** PowerShell startup created the apply home before the reset of q145-f1. Setup now starts with its own Windows profile, working directory and cache. The unit remains incomplete and unscored. On an approved restart, archive the failed live tree and its operator records intact, verify the original pre-teach and snapshot hashes, and run only the unstarted applies from that frozen teach in order (Tp, T, N).
 
 **25 Nov 2026.** `collect.mjs continue FAMILY TOKEN_VAR` accepts a verified frozen teach only before its first apply starts. `collect.mjs remaining TOKEN_VAR` skips complete units, uses the same continuation for partial units, and stops at the first failure in roster order.
+
+**25 Nov 2026.** N’s final raw response was empty at exit. Accept only a zero-byte final response from a successful session when its transcript confirms the indexed request, message and final text row with `end_turn`. Audit every request body. No grade was read and zero scored contrasts existed at amendment.

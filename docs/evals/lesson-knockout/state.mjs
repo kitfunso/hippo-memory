@@ -132,6 +132,10 @@ export function forkStore(snap,baseline,dst,session,arm) {
     copy(baseline,dst);
     for (const e of targets) writeEntry(dst,{...e,content:neutral(e.content),sourceSessionId:null,source:'neutral'});
   } else copy(snap,dst);
+  return verifyFork(source,dst,session,arm);
+}
+export function verifyFork(source,dst,session,arm) {
+  const targets=source.filter(e=>e.sourceSessionId===session);
   const rows=contents(dst);
   assert.deepEqual(rows.map(e=>e.id),source.map(e=>e.id));
   if (arm==='N') {

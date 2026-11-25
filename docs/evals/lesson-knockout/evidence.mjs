@@ -55,14 +55,33 @@ export function deliverySurfaces(body,task={}) {
   return {system,prompt,results};
 }
 
-export function evidence(dir,result,notes,lesson,task={}) {
+function finalMessageMatches(file,row,result) {
+  if(!file || result.exit!==0 || result.isError!==false || result.subtype!=='success' ||
+    !row.request_id || !row.message_id || !row.message_uuid || row.response_file!==row.request_id+'.response.json' ||
+    path.basename(file)!==result.session+'.jsonl' || !fs.existsSync(file)) return false;
+  const transcript=fs.readFileSync(file,'utf8').trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
+  const last=transcript.filter(r=>r.type==='assistant').at(-1),m=last?.message;
+  return last?.sessionId===result.session && last.requestId===row.request_id && last.uuid===row.message_uuid &&
+    m?.id===row.message_id && m.type==='message' && m.role==='assistant' && m.stop_reason==='end_turn' &&
+    m.usage?.output_tokens>0 && Array.isArray(m.content) &&
+    m.content.some(b=>b.type==='text' && typeof b.text==='string' && b.text.trim());
+}
+
+export function evidence(dir,result,notes,lesson,task={},transcript) {
   const names=fs.existsSync(dir)?fs.readdirSync(dir).filter(n=>n.endsWith('.request.json')):[];
   const index=path.join(dir,'index.jsonl');
   const rows=fs.existsSync(index)?fs.readFileSync(index,'utf8').trim().split('\n').filter(Boolean).map(l=>JSON.parse(l)):[];
   const indexed=new Set(rows.map(r=>r.request_file));
+  let transcriptResponse;
   const complete=names.length>0 && names.length===rows.length && names.every(n=>indexed.has(n)) &&
-    rows.every(r=>r.session_id===result.session && path.basename(r.response_file)===r.response_file &&
-      read(path.join(dir,r.response_file)).id===r.message_id);
+    rows.every((r,i)=>{
+      if(r.session_id!==result.session || path.basename(r.response_file)!==r.response_file) return false;
+      const raw=fs.readFileSync(path.join(dir,r.response_file));
+      if(raw.length) return JSON.parse(raw).id===r.message_id;
+      if(i!==rows.length-1 || !finalMessageMatches(transcript,r,result)) return false;
+      transcriptResponse=r.request_id;
+      return true;
+    });
   const bodies=rows.filter(r=>names.includes(r.request_file)).map(r=>read(path.join(dir,r.request_file)));
   const valid=b=>Array.isArray(b.messages) && b.system && !b.not_recorded;
   const surfaces=bodies.filter(valid).map(b=>deliverySurfaces(b,task));
@@ -74,5 +93,6 @@ export function evidence(dir,result,notes,lesson,task={}) {
   const first=surfaces[0];
   const hookSeen=!!first && [...first.system,...first.prompt].some(s=>s!==task.prompt && hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {requests:bodies.length,complete:!!complete && bodies.every(valid),hookSeen,targetText};
+  return {requests:bodies.length,complete:!!complete && bodies.every(valid),hookSeen,targetText,
+    ...(transcriptResponse && {transcriptResponse})};
 }
