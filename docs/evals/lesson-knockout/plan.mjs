@@ -1,0 +1,81 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { drawOrder } from '../../../scripts/token-eval/lessons.mjs';
+
+export const root = 'C:/z0-lessons/lesson-knockout';
+export const tasks = 'C:/z0-runs/r4/tasks';
+export const e1 = 'C:/Users/skf_s/Documents/hippo-mechanisms-2026-11-24/experiment1';
+export const read = f => JSON.parse(fs.readFileSync(f, 'utf8'));
+export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+export const pins = read('C:/z0-runs/r4/pins-r4.json');
+export const folder = path.dirname(fileURLToPath(import.meta.url));
+export const arms = ['T', 'Tp', 'N'];
+const rank = (role, id) => hash(`lesson-knockout|1|${role}|${id}`);
+const ordered = (items, key) => [...items].sort((a,b) => key(a).localeCompare(key(b), 'en'));
+const chains = read('C:/eval-authors/r3-repos.json');
+const labels = read(path.join(e1,'data/lesson-labels.json')).lessons;
+
+export function checkTaskPins() {
+  const index=fs.readFileSync(path.join(tasks,'sha256.txt'));
+  if(hash(index)!==pins['sha256:tasks']) throw Error('Changed frozen task index');
+  for(const line of index.toString().trim().split(/\r?\n/)) {
+    const match=/^([0-9a-f]{64})\s+([\w./-]+)$/.exec(line);
+    if(!match || match[2].split('/').includes('..') || path.isAbsolute(match[2])) throw Error('Bad task pin');
+    if(hash(fs.readFileSync(path.join(tasks,match[2])))!==match[1]) throw Error('Changed frozen file '+match[2]);
+  }
+}
+
+export function roster() {
+  const primary = [], reserve = [];
+  for (const repo of [...pins.batch1Keys.split(','), ...pins.batch2Keys.split(',')]) {
+    const file = path.join(tasks,repo,'tasks-run.json');
+    const spec = read(file), seq = spec.sequences.find(s => s.id === repo);
+    const order = drawOrder(seq,spec.families,1);
+    const families = ordered(spec.families,f => rank('family',f.id));
+    for (const [i,f] of families.entries()) {
+      const lesson = f.lessons.find(l => !l.supersedes);
+      const paired = order.map(id => seq.tasks.find(t => t.id === id)).filter(t => t.lessonId === lesson.id);
+      const teach = paired.find(t => t.kind === 'teach'), apply = paired.find(t => t.kind === 'apply');
+      const checkPath = path.resolve(path.dirname(file),lesson.check.script);
+      if (!teach || !apply || !fs.existsSync(checkPath)) throw Error('Incomplete task '+f.id);
+      const unit = {id:f.id,repo,source:seq.repo,toolchain:chains[repo].toolchain,cls:labels[f.id]?.[0] ?? 'unlabelled',
+        lesson:{...lesson,checkPath},teach,apply,specHash:hash(fs.readFileSync(file)),
+        checkerHash:hash(fs.readFileSync(checkPath)),order:ordered(arms,a => rank('order',f.id+'|'+a))};
+      (i===0 ? primary : reserve).push(unit);
+    }
+  }
+  return ordered([...primary,...ordered(reserve,u=>rank('reserve',u.id)).slice(0,49-primary.length)],u=>rank('unit',u.id));
+}
+
+export function background(u) {
+  return ordered(roster().filter(v=>v.repo!==u.repo && !v.lesson.rule.toLowerCase().includes(u.lesson.keyPhrase.toLowerCase())),
+    v=>rank('background',u.id+'|'+v.id)).slice(0,20).map(v=>v.lesson.rule);
+}
+
+export async function estimate() {
+  const {loadRound3, firstApplies} = await import(pathToFileURL(path.join(e1,'scripts/load.mjs')));
+  const {records,filtered} = loadRound3();
+  const teaches = records.filter(r=>r.arm==='A2' && r.kind==='teach' && r.teachTurns===1 && !r.invalid && !r.timedOut && !r.agentError);
+  const applies = firstApplies(filtered,'A2').filter(r=>!r.invalid && !r.timedOut && !r.agentError);
+  const fields = ['inputTokens','cacheWriteTokens','cacheReadTokens','outputTokens'];
+  function mean(rows,includeResume) {
+    return Object.fromEntries(fields.map(f=>[f, rows.reduce((n,r)=>{
+      const v=r.usage.firstSession[f]+(includeResume ? r.usage.extra[f] : 0);
+      if (!Number.isFinite(v)) throw Error('Missing usage '+r.taskId);
+      return n+v;
+    },0)/rows.length]));
+  }
+  const teach=mean(teaches,true),apply=mean(applies,false),units=roster().length;
+  const projected=Object.fromEntries(fields.map(f=>[f,Math.round(units*(teach[f]+arms.length*apply[f]))]));
+  return {units,repos:new Set(roster().map(u=>u.repo)).size,teachSessions:units,applySessions:units*arms.length,
+    sessions:units*(1+arms.length),cliInvocations:units*(2+arms.length), historicalTeach:teaches.length,
+    historicalApply:applies.length,teach,apply,projected,totalTokens:Object.values(projected).reduce((a,b)=>a+b)};
+}
+
+if (process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+  const units=roster();
+  console.log(JSON.stringify(process.argv[2]==='usage' ? await estimate() :
+    {sha256:hash(JSON.stringify(units)),units:units.map(u=>[u.id,u.teach.id,u.apply.id,u.order])},null,2));
+}
