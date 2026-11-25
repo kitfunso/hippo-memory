@@ -54,6 +54,14 @@ export function background(u) {
     v=>rank('background',u.id+'|'+v.id)).slice(0,20).map(v=>v.lesson.rule);
 }
 
+export function checkedRoster() {
+  checkTaskPins();
+  const units=roster();
+  if(hash(JSON.stringify(units))!=='7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42')
+    throw Error('Roster drift');
+  return units;
+}
+
 export function guardPaths(units) {
   return [...new Set(units.flatMap(u=>[u.source,path.join(tasks,u.repo,'tasks-run.json'),u.lesson.checkPath]))];
 }

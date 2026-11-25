@@ -1,11 +1,14 @@
 import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { folder,root,checkTaskPins,roster,hash,read } from './plan.mjs';
+import { folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
 import { evidence } from './evidence.mjs';
 import { openCue,retryLimited } from './delivery.mjs';
+import { runSetupScript } from './setup.mjs';
+import { continueUnit } from './continuation.mjs';
+import { collectRemaining } from './collect.mjs';
 
 checkTaskPins();
 const rosterHash=hash(JSON.stringify(roster()));
@@ -28,7 +31,26 @@ put(teach,'home/.claude/projects/unit/new.jsonl','Teach conversation');
 const apply=join(dir,'apply');
 put(apply,'work/CLAUDE.local.md','Changed base');
 put(apply,'work/pkg/.claude/rules/extra.md','Extra');
-resetBuiltIn(apply,pre,manifest);
+put(dir,'setup-probe.ps1',`param([string]$Live)
+$ErrorActionPreference='Stop'
+$roaming=[Environment]::GetFolderPath('ApplicationData','Create')
+& $env:ComSpec /d /c 'echo setup>"%USERPROFILE%\\setup-marker.txt"'
+if ($LASTEXITCODE) { throw 'Setup child failed' }
+$paths=@($env:USERPROFILE,$env:HOME,$PWD.Path,$env:APPDATA,$roaming,$env:LOCALAPPDATA,
+  [Environment]::GetFolderPath('LocalApplicationData'),$env:TEMP,$env:TMP,$env:PSModuleAnalysisCachePath)
+[IO.File]::WriteAllText((Join-Path $Live 'work/setup-paths.json'),(ConvertTo-Json $paths))
+`);
+const profile=join(apply,'home');
+runSetupScript(apply,{...process.env,HOME:profile,USERPROFILE:profile},join(dir,'setup-probe.ps1'));
+assert.equal(resetBuiltIn(apply,pre,manifest),hash(JSON.stringify(manifest)));
+assert.deepEqual(fs.readdirSync(apply).sort(),['home','setup-home','work']);
+const setupHome=join(apply,'setup-home');
+assert.deepEqual(read(join(apply,'work/setup-paths.json')),
+  ['','','','AppData/Roaming','AppData/Roaming','AppData/Local','AppData/Local','tmp','tmp','AppData/Local/ModuleAnalysisCache']
+    .map(p=>join(setupHome,p)));
+assert.equal(fs.readFileSync(join(apply,'setup-home/setup-marker.txt'),'utf8').trim(),'setup');
+assert.throws(()=>resetBuiltIn(apply,pre,manifest),/Occupied destination/);
+console.log('Passed Windows setup before apply home reset.');
 for(const p of paths) assert.equal(fs.readFileSync(join(apply,p),'utf8'),'Before');
 assert(!fs.existsSync(join(apply,'work/pkg/.claude/rules/extra.md')));
 assert(!fs.existsSync(join(apply,'home/.claude/projects/unit/new.jsonl')));
@@ -85,16 +107,18 @@ put(records,'teach.json',JSON.stringify({session:feedback.session}));
 for(const call of [feedback,fork]) {
   const before=unitState();
   const checks=[refused,refused,ready];
-  let pauses=0,calls=0;
+  let pauses=0,calls=0,intents=0;
   const archives=await retryLimited(state,call,()=>{
     assert.equal(checks.length,0);
+    assert.equal(intents,1);
     assert.deepEqual(read(join(records,'call.json')),call);
     put(records,call.id+'.json',JSON.stringify({session:call.session}));
     calls++;
     return 0;
-  },()=>checks.shift(),{maxWaits:0,delay:ms=>{
+  },()=>checks.shift(),{maxWaits:0,onFirstCall:()=>{intents++},delay:ms=>{
     assert.equal(ms,300000);
     assert.equal(calls,0);
+    assert.equal(intents,0);
     assert.deepEqual(unitState(),before);
     pauses++;
   }});
@@ -199,3 +223,81 @@ try {
 } finally { await cue.close(); }
 console.log('Passed task pins, state forks, settings, cache link, delivery sources, retry rollback, saved coding and diagnostic receipts, and HTTP hook.');
 console.log('Path audit passed: '+smokeApplies+' clean smoke applies, four clean probes, both planted tool inputs flagged.');
+
+const [first,second,third]=roster().slice(0,3),unitRoot=join(dir,'unit'),partial=join(unitRoot,first.id);
+const active=join(dir,'active'),design={unit:first,mode:'unit',roster:rosterHash};
+const frozen={preHash:hash(JSON.stringify(manifest)),snapshotHash:hash(JSON.stringify(files(snap))),teachId:sid,targetRows:[]};
+const json=(base,file,value)=>put(base,file,JSON.stringify(value));
+json(partial,'design.json',design);
+copy(pre,join(partial,'pre')); json(partial,'pre/manifest.json',manifest);
+copy(base,join(partial,'pre/store'));
+copy(snap,join(partial,'snapshot'));
+put(partial,'evidence/teach/home/.claude/projects/unit/'+sid+'.jsonl','{}');
+for(const id of ['teach','feedback']) json(partial,'evidence/teach/operator/'+id+'.json',{session:sid,exit:0,isError:false});
+put(active,'live/work/.git/HEAD',first.apply.baseRef+'\n');
+json(active,'operator/setup.json',{toolchain:first.toolchain,setup:first.apply.setup,constraintHash:pins['sha256:pip-constraint']});
+put(active,'live/cache/raw.bin',Buffer.from([0,255,10]));
+const interrupted=files(active);
+async function refuse(pattern) {
+  await assert.rejects(()=>continueUnit(design,()=>assert.fail('Unexpected apply')),pattern);
+  assert.deepEqual(fs.readdirSync(partial).filter(n=>n.startsWith('interrupted-')),[]);
+}
+await refuse(/freeze\.json/);
+json(partial,'freeze.json',{...frozen,preHash:'changed'}); await refuse(/manifest changed/);
+json(partial,'freeze.json',{...frozen,snapshotHash:'changed'}); await refuse(/snapshot changed/);
+json(partial,'freeze.json',frozen);
+put(partial,'pre/home/extra','changed'); await refuse(/Pre-teach home changed/); fs.unlinkSync(join(partial,'pre/home/extra'));
+put(partial,'pre/repo/extra','changed'); await refuse(/Pre-teach repo changed/); fs.unlinkSync(join(partial,'pre/repo/extra'));
+for(const [base,file,pattern] of [
+  [active,'operator/call.json',/operator evidence/],[partial,'evidence/apply-0/grade.json',/evidence or intent/],
+  [partial,'evidence/intent-test.json',/evidence or intent/],
+  [active,'live/home/.claude/projects/unit/apply.jsonl',/transcript already exists/],
+  [active,'operator/owner.json',/Different active task/],
+]) {
+  json(base,file,{});
+  await refuse(pattern);
+  fs.unlinkSync(join(base,file));
+  if(file.startsWith('evidence/apply-')) fs.rmdirSync(join(base,'evidence/apply-0'));
+}
+const retryCall='limit-archives/unit-cutoff/operator/call.json';
+put(dir,'limit-archives/unit-cutoff/live/work/.git/shallow',first.apply.baseRef);
+json(dir,retryCall,{id:'apply',prompt:first.apply.prompt});
+await refuse(/Archived apply/);
+fs.unlinkSync(join(dir,retryCall));
+const beforeResume=files(partial),applied=[];
+await continueUnit(design,async(arm,index,saved)=>{
+  assert.equal(saved.snapshotHash,frozen.snapshotHash); assert.deepEqual(saved.expected,manifest);
+  assert.equal(index,applied.length); applied.push(arm);
+  assert.deepEqual(fs.readdirSync(active),[]);
+});
+assert.deepEqual(applied,['Tp','T','N']);
+const archives=fs.readdirSync(partial).filter(n=>n.startsWith('interrupted-'));
+assert.equal(archives.length,1);
+assert.deepEqual(files(join(partial,archives[0])),interrupted);
+for(const [name,digest] of Object.entries(beforeResume)) assert.equal(hash(fs.readFileSync(join(partial,name))),digest);
+console.log('Passed frozen continuation, intact archive, refusal checks and apply order.');
+
+function finishFixture(u) {
+  const dest=join(unitRoot,u.id);
+  json(dest,'freeze.json',frozen);
+  for(const [i,arm] of u.order.entries()) json(dest,'evidence/apply-'+i+'/grade.json',{
+    id:u.id,repo:u.repo,arm,mode:'unit',verdict:'fail',session:u.id+'-'+arm,teachId:sid,
+    snapshotHash:frozen.snapshotHash,resetHash:frozen.preHash,targetCount:0,storeVerified:true,
+    complete:true,requests:1,hookSeen:false,targetText:false,pathAudit:{transcripts:1,hits:[]}
+  });
+}
+finishFixture(first);
+mkdir(join(unitRoot,second.id));
+const calls=[],tokenVar='Z0_SUB_TOKEN_2',scheduled=[first,second,third];
+const collect=launch=>collectRemaining(scheduled,unitRoot,tokenVar,launch);
+const attempted=[];
+assert.throws(()=>collect(id=>{attempted.push(id); throw Error('Fake launcher failed')}),/Fake launcher failed/);
+assert.deepEqual(attempted,[second.id]);
+assert.throws(()=>collect(()=>{}),/without complete evidence/);
+collect((id,token,resume)=>{
+  calls.push([id,token,resume]);
+  finishFixture(scheduled.find(u=>u.id===id));
+});
+assert.deepEqual(calls,[[second.id,tokenVar,true],[third.id,tokenVar,false]]);
+collect(()=>assert.fail('Completed unit relaunched'));
+console.log('Passed roster order, complete skips, continuation routing and first-failure stop with a fake launcher.');

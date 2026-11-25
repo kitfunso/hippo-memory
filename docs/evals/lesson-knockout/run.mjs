@@ -2,9 +2,10 @@ import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { roster,background,folder,root,read,pins,hash,checkTaskPins } from './plan.mjs';
+import { checkedRoster,background,folder,root,read,pins,hash } from './plan.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
@@ -14,16 +15,17 @@ import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
 import { normalize,evidence } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
+import { runSetupScript } from './setup.mjs';
+import { applyFrozen,continueUnit } from './continuation.mjs';
 
 const [mode,id,token='Z0_SUB_TOKEN',attempt]=process.argv.slice(2);
 assert(['smoke','unit'].includes(mode),'Usage: run.mjs smoke|unit FAMILY [TOKEN_VAR]');
-const smoke=mode==='smoke', units=roster(), u=units.find(v=>v.id===id);
+const smoke=mode==='smoke', units=checkedRoster(), u=units.find(v=>v.id===id);
 const reuse=smoke && attempt==='frozen-apply';
-assert(!attempt || reuse,'Unknown attempt');
+const continuing=!smoke && attempt==='frozen-apply';
+assert(!attempt || reuse || continuing,'Unknown attempt');
 assert(u && (!smoke || u.id===units[0].id),'Family outside fixed roster or smoke selection');
 assert(/^Z0_SUB_TOKEN(?:_[123])?$/.test(token) && (!smoke || token==='Z0_SUB_TOKEN'));
-checkTaskPins();
-assert.equal(hash(JSON.stringify(units)),'7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42','Roster drift');
 const original=inside(join(root,mode,u.id));
 const unit=reuse?inside(join(original,'coding-check')):original;
 const live=smoke?join(unit,'live'):inside(join(root,'active/live')),work=join(live,'work');
@@ -52,15 +54,26 @@ const binary='C:/z0-runs/scored/bin/claude.exe';
 assert(execFileSync(binary,['--version'],{encoding:'utf8'}).trim().startsWith(pins.claudeVersion+' '),'CLI version drift');
 externalCheck(work);
 if(!smoke) {
+  const lock=net.createServer(socket=>socket.end());
+  await new Promise((ok,fail)=>lock.once('error',fail).listen('\\\\.\\pipe\\lesson-knockout-collector',ok));
+  lock.unref();
   for(const name of ['unit','checkpoints','limit-archives']) mkdir(inside(join(root,name)));
 }
-mkdir(path.dirname(unit)); fs.mkdirSync(unit); mkdir(checkEnv.TEMP);
-mkdir(inside(path.dirname(live)));
+const design={unit:u,mode,roster:hash(JSON.stringify(units)),model:pins.modelOpus,effort:pins.effort};
+if(!continuing) {
+  if(!smoke) assert(!fs.existsSync(live) && !fs.existsSync(records),'Another unit has active collection state');
+  mkdir(path.dirname(unit)); fs.mkdirSync(unit); mkdir(checkEnv.TEMP);
+  mkdir(inside(path.dirname(live)));
+  save(join(unit,'design.json'),design);
+  mkdir(join(unit,'evidence'));
+}
 process.env.TMP=process.env.TEMP=checkEnv.TEMP;
-save(join(unit,'design.json'),{unit:u,mode,roster:hash(JSON.stringify(units)),model:pins.modelOpus,effort:pins.effort});
 function checkout(task) {
   fs.mkdirSync(live); mkdir(work);
-  if(!smoke) fs.mkdirSync(records);
+  if(!smoke) {
+    fs.mkdirSync(records);
+    save(join(records,'owner.json'),{unit:u.id,task:task.id});
+  }
   git('init','-q'); git('config','core.autocrlf','false');
   execFileSync('python',[join(folder,'checkout.py'),u.source,task.baseRef],{cwd:work,env:checkEnv,stdio:'inherit'});
   assert.equal(git('rev-parse','HEAD'),task.baseRef);
@@ -71,15 +84,15 @@ function prepare(task) {
   checkProjectSettings(work);
   if(smoke) return;
   save(join(records,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
-  execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
-    join(folder,'prepare.ps1'),'-Live',live],{cwd:live,env:checkEnv,stdio:'inherit'});
+  runSetupScript(live,checkEnv,join(folder,'prepare.ps1'));
   checkProjectSettings(work);
 }
 async function session(task,prompt,session,id,resume=false) {
   const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain};
   if(reuse) call.frozenSmoke=true;
   checkProjectSettings(work);
-  const archives=await launch(live,token,checkEnv,call);
+  const onFirstCall=!smoke && id==='apply' ? ()=>save(join(unit,'evidence','intent-'+session+'.json'),{session}) : undefined;
+  const archives=await launch(live,token,checkEnv,call,onFirstCall);
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
@@ -103,7 +116,6 @@ function archive(name) {
   if(!smoke) fs.renameSync(records,inside(join(dest,'operator')));
   return dest;
 }
-mkdir(join(unit,'evidence'));
 async function teach() {
   checkout(u.teach);
   for (const dir of ['home/tmp','home/local','home/roaming','home/.claude/projects/unit/memory']) mkdir(join(live,dir));
@@ -129,12 +141,8 @@ async function teach() {
   save(join(unit,'freeze.json'),{teachId,form,snapshotHash,targetRows:learned.map(e=>e.id),preHash:hash(JSON.stringify(expected))});
   archive('teach');
 }
-if(!reuse) await teach();
-const expected=read(join(pre,'manifest.json'));
-const {teachId,snapshotHash,preHash}=read(join(original,'freeze.json'));
-assert.equal(hash(JSON.stringify(expected)),preHash,'Pre-teach manifest changed');
 const smokeChecks=[];
-for (const [index,arm] of u.order.filter(a=>!smoke || a!=='Tp').entries()) {
+async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   checkout(u.apply);
   prepare(u.apply);
   const resetHash=resetBuiltIn(live,pre,expected);
@@ -154,6 +162,12 @@ for (const [index,arm] of u.order.filter(a=>!smoke || a!=='Tp').entries()) {
   save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
+  if(!smoke) assert(audit.complete && (arm!=='N' || !audit.targetText),'Apply request evidence failed: '+arm);
+}
+if(continuing) await continueUnit(design,applyArm);
+else {
+  if(!reuse) await teach();
+  await applyFrozen(original,u.order.filter(a=>!smoke || a!=='Tp'),applyArm);
 }
 if(smoke) assert(smokeChecks.every(Boolean),'Task smoke failed its request or delivery gate; evidence retained');
 console.log(mode+' complete '+u.id);

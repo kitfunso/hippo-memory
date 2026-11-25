@@ -138,3 +138,7 @@ Scored collection requires separate launch approval, an available operator subsc
 25 Nov 2026: Keith authorised scored collection on Z0_SUB_TOKEN ("use the subscription key").
 
 **25 Nov 2026.** At this amendment, there were zero scored knockout observations. If the pinned box check reports a median above 150 ms, the runner waits five minutes and checks again at the same invocation. The refusal leaves unit state intact. It records no intent or call and uses no assignment or subscription wait.
+
+**25 Nov 2026.** PowerShell startup created the apply home before the reset of q145-f1. Setup now starts with its own Windows profile, working directory and cache. The unit remains incomplete and unscored. On an approved restart, archive the failed live tree and its operator records intact, verify the original pre-teach and snapshot hashes, and run only the unstarted applies from that frozen teach in order (Tp, T, N).
+
+**25 Nov 2026.** `collect.mjs continue FAMILY TOKEN_VAR` accepts a verified frozen teach only before its first apply starts. `collect.mjs remaining TOKEN_VAR` skips complete units, uses the same continuation for partial units, and stops at the first failure in roster order.

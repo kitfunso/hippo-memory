@@ -2,18 +2,12 @@ param([Parameter(Mandatory)][string]$Live)
 $ErrorActionPreference='Stop'
 $Live=[IO.Path]::GetFullPath($Live)
 if($Live -ne 'C:\z0-lessons\lesson-knockout\active\live'){ throw 'Unexpected task root' }
+if($env:USERPROFILE -ne (Join-Path $Live 'setup-home')){ throw 'Start setup through the unit runner' }
 $spec=Get-Content -Raw -Encoding UTF8 'C:/z0-lessons/lesson-knockout/active/operator/setup.json' | ConvertFrom-Json
 . "$PSScriptRoot/toolchain.ps1" $spec.toolchain $Live
 foreach($item in @(Get-ChildItem Env: | Where-Object Name -match 'TOKEN|SECRET|API.?KEY|^ANTHROPIC_|^AWS_')) {
   [Environment]::SetEnvironmentVariable($item.Name,$null)
 }
-$env:HOME="$Live/setup-home"
-$env:USERPROFILE=$env:HOME
-$env:LOCALAPPDATA="$env:HOME/local"
-$env:APPDATA="$env:HOME/roaming"
-$env:TEMP="$env:HOME/tmp"
-$env:TMP=$env:TEMP
-foreach($d in @($env:LOCALAPPDATA,$env:APPDATA,$env:TEMP)) { [IO.Directory]::CreateDirectory($d) | Out-Null }
 if($spec.toolchain -eq 'python') {
   if((Get-FileHash -Algorithm SHA256 $env:PIP_CONSTRAINT).Hash -ne $spec.constraintHash){throw 'pip constraint differs from frozen pin'}
   & python -m venv "$Live/venv"
