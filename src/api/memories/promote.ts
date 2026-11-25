@@ -106,6 +106,34 @@ async function promoteInPlace(
     }
     assertCallerProject(project);
   }
+  let row = await promotableRow(ctx, id, project);
+  if (ctx.projectWriteGate !== undefined) {
+    await admitOriginWrite(ctx, row.originProject);
+    const now = await promotableRow(ctx, id, project);
+    if ((now.originProject || null) !== (row.originProject || null)) {
+      throw new ConflictError(
+        `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+      );
+    }
+    row = now;
+  }
+  await ctx.store.appendAuditEvents([
+    {
+      tenantId: ctx.tenantId,
+      actor: ctx.actor.subject,
+      op: 'promote',
+      targetId: id,
+      metadata: { sourceId: id },
+    },
+  ]);
+  return { ok: true, sourceId: id, globalId: id, originProject: row.originProject ?? null };
+}
+
+async function promotableRow(
+  ctx: Context,
+  id: string,
+  project: PromoteOptions['project'],
+): Promise<MemoryEntry> {
   const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
   const ref =
     project === undefined
@@ -119,17 +147,7 @@ async function promoteInPlace(
   const row = admitted ? entry : undefined;
   assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
   assertPromotable(id, row);
-  await admitOriginWrite(ctx, row.originProject);
-  await ctx.store.appendAuditEvents([
-    {
-      tenantId: ctx.tenantId,
-      actor: ctx.actor.subject,
-      op: 'promote',
-      targetId: id,
-      metadata: { sourceId: id },
-    },
-  ]);
-  return { ok: true, sourceId: id, globalId: id, originProject: row.originProject ?? null };
+  return row;
 }
 
 function assertPromotable(id: string, entry: MemoryEntry): void {

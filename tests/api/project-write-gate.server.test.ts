@@ -5,11 +5,13 @@ import * as path from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { HttpError, admitProjectWrite, serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuthResolver } from '../../src/surface/server/types.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/util/store-blocked.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
@@ -198,6 +200,12 @@ async function seed(
 
 function promote(token: string, id: string, project?: JsonValue): Promise<Reply> {
   return http(gated.url, token, `/v1/memories/${id}/promote`, project === undefined ? {} : { project });
+}
+
+function rewrite(id: string, patch: Partial<MemoryEntry>): void {
+  const row = readEntry(store, id);
+  if (row === null) throw new Error(`no row ${id}`);
+  writeEntry(store, { ...row, ...patch });
 }
 
 describe('project write gate', () => {
@@ -628,5 +636,31 @@ describe('project write gate', () => {
     expect(ok.status, ok.text).toBe(200);
     expect(calls.map((c) => c.project)).toEqual(['Beta']);
     expect(promoteRows(id)).toBe(1);
+  });
+
+  it('36. a row that changes project while the gate is asked answers 409 and writes no audit row', async () => {
+    const id = await seed('case36', 'beta');
+    set(() => {
+      rewrite(id, { originProject: 'alpha' });
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'alpha', aliases: ['beta'] });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(`Refusing to promote ${id}: its project changed while the project write gate was asked; retry`);
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('37. a row superseded while the gate is asked answers 409 and writes no audit row', async () => {
+    const id = await seed('case37', 'beta');
+    set(() => {
+      rewrite(id, { supersededBy: 'mem_case37_next' });
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(`Refusing to promote ${id}: it is superseded by mem_case37_next; promote that one instead.`);
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
   });
 });
