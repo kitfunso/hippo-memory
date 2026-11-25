@@ -37,7 +37,15 @@ function pasteLines(target: McpReportTarget, paste: McpPaste): string[] {
 const unreadableReason = (format: McpConfigFormat): string =>
   format.kind === 'json'
     ? 'has comments or is not a JSON object hippo can change'
-    : 'is not a TOML file hippo can read';
+    : 'is not a TOML file hippo can change safely';
+
+const addIfNoServer = (format: McpConfigFormat): string[] =>
+  format.kind === 'json'
+    ? snippetLines(format, 'add')
+    : [
+        `add a "hippo" server under mcp_servers by hand, with command = "${hippoCommand()}" ` +
+          'and args = ["mcp"]',
+      ];
 
 const invalidReason = (format: McpConfigFormat): string =>
   (format.kind === 'json' ? format.host.invalid?.({}) : null) ?? 'is not a config the host accepts';
@@ -58,7 +66,7 @@ const INSTALL_LINES = {
       pasteLines(target, paste),
     ),
   unreadable: (file, target) => {
-    const [add, ...snippet] = snippetLines(target.format, 'add');
+    const [add, ...snippet] = addIfNoServer(target.format);
     const head = `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged`;
     return [`${head}; if it has no hippo server, ${add}`, ...snippet];
   },

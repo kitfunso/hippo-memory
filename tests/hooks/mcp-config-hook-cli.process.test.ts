@@ -233,8 +233,13 @@ describe.each(OUTPUT_FORMS)('hippo hook output with $name', (host) => {
     const broken = host.key === null ? 'note = """\nopen\n' : '// mine\n{}\n';
     fs.writeFileSync(file, broken);
     const reason =
-      host.key === null ? 'is not a TOML file hippo can read' : 'has comments or is not a JSON object hippo can change';
-    const add = host.key === null ? 'add this table by hand:' : `add this under "${host.key}" by hand: "hippo": `;
+      host.key === null
+        ? 'is not a TOML file hippo can change safely'
+        : 'has comments or is not a JSON object hippo can change';
+    const add =
+      host.key === null
+        ? `add a "hippo" server under mcp_servers by hand, with command = "${hippoCommand()}" and args = ["mcp"]\n`
+        : `add this under "${host.key}" by hand: "hippo": `;
 
     const install = hippo(m, 'hook', 'install', host.name);
     expect(install.stdout).toContain(

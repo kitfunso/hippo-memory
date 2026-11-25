@@ -499,6 +499,7 @@ describe('grok-build TOML', () => {
     ['a "\\q" key', '"\\q" = 1\n'],
     ['an inline mcp_servers table, which a [mcp_servers.hippo] header cannot extend', 'mcp_servers = { a = {} }\n'],
     ['an mcp_servers array of tables', '[[mcp_servers]]\nname = "x"\n'],
+    ['a root inline mcp_servers table with another server', 'mcp_servers = { other = { command = "x" } }\n'],
   ];
 
   it.each(UNREADABLE)('unreadable: %s', (_label, text) => {
@@ -507,9 +508,10 @@ describe('grok-build TOML', () => {
     seeded(text);
     const result = install('grok-build');
     expect(result.status).toBe('unreadable');
-    expect(mcpInstallLines(result.file, result.status, rowNamed('grok-build'), 'snippet')[0]).toContain(
-      'if it has no hippo server',
-    );
+    const lines = mcpInstallLines(result.file, result.status, rowNamed('grok-build'), 'snippet');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('if it has no hippo server, add a "hippo" server under mcp_servers by hand');
+    expect(lines[0]).not.toContain('[mcp_servers.hippo]');
     expect(uninstall('grok-build').status).toBe('unreadable');
     expect(read(file())).toBe(text);
   });
