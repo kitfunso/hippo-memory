@@ -393,15 +393,13 @@ function servedOptsFor(
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
-  const sleeps = createSleepQueue(opts.hippoRoot, runtime.onHippoDb);
+  const sleeps = createSleepQueue(opts.hippoRoot, runtime.onHippoDb, opts.sleep);
   const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
   const run = (): Promise<void> => {
     counts.autoSleeps += 1;
     return sleeps.consolidate();
   };
-  // The auto-sleep child reopens hippo.db by its folder, so another store never starts one.
   const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
-  // The count reads the store's reports, so a store without them starts no sleep.
   const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
   const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
   const callers = createCallerState(autoSleep);
@@ -410,7 +408,7 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     oauthChallenge,
-    v1Routes: bindV1Routes(store, runtime.onHippoDb),
+    v1Routes: bindV1Routes(store, runtime.onHippoDb, runtime.onHippoDb || opts.sleep !== undefined),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     mcpTools: bindMcpTools(store),
     store,

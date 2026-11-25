@@ -6,6 +6,7 @@ import { type Actor, type SleepOptions, type SleepResult, type Context } from '.
 import { envSleepTimeoutMs } from '../../base/util/env.js';
 import { HttpError, STORE_NOT_PORTED_MESSAGE } from '../../base/errors/http-errors.js';
 import { replyError, type FailureReply } from './failure-reply.js';
+import type { ServeOptions } from './types.js';
 
 const DEFAULT_SLEEP_DEADLINE_MS = 600_000;
 
@@ -162,12 +163,19 @@ function unansweredFailure(
 // waiting one already covers.
 const MAX_SLEEPS_IN_LINE = 2;
 const SLEEP_RETRY_AFTER_SEC = 30;
+const OWN_SLEEP_ROOM = 1;
+
+const ownRun = <R>(answer: Promise<R>): ChildRun<R> => ({
+  answer,
+  ended: answer.then(
+    () => undefined,
+    () => undefined,
+  ),
+});
 
 /** A server's sleeps, one at a time in a child process: POST /v1/sleep and the auto-sleep a
  * write starts share it. */
 export interface SleepQueue {
-  /** `sleep` for the HTTP route: same result and errors, stopped at the deadline (10 minutes, or
-   * HIPPO_SLEEP_TIMEOUT_MS). */
   readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;
@@ -176,56 +184,64 @@ export interface SleepQueue {
   readonly settled: () => Promise<void>;
 }
 
-/** The queue of the server on `hippoRoot`, whose child reopens that folder; `onHippoDb` says the
- * served store is it. */
-export function createSleepQueue(hippoRoot: string, onHippoDb: boolean): SleepQueue {
+export function createSleepQueue(
+  hippoRoot: string,
+  onHippoDb: boolean,
+  ownSleep?: ServeOptions['sleep'],
+): SleepQueue {
   const { inTurn, settled } = sleepLine();
   return {
-    // The child sleeps the hippo.db under the folder, so another store that sets the sleep groups
-    // gets 501 as before.
-    sleep: (ctx, opts) =>
-      onHippoDb
-        ? inTurn<SleepResult>({
-            kind: 'sleep',
-            hippoRoot,
-            tenantId: ctx.tenantId,
-            actor: ctx.actor,
-            opts,
-          })
-        : Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE)),
-    // The child logs the run's skipped passes to its stderr, which is this server's log.
+    sleep: (ctx, opts) => {
+      if (onHippoDb) {
+        return inTurn<SleepResult>(
+          () =>
+            runInChild({
+              kind: 'sleep',
+              hippoRoot,
+              tenantId: ctx.tenantId,
+              actor: ctx.actor,
+              opts,
+            }),
+          MAX_SLEEPS_IN_LINE,
+        );
+      }
+      if (ownSleep !== undefined) {
+        return inTurn<SleepResult>(() => ownRun(ownSleep(ctx, opts)), OWN_SLEEP_ROOM);
+      }
+      return Promise.reject(new HttpError(501, STORE_NOT_PORTED_MESSAGE));
+    },
     consolidate: async () => {
-      await inTurn<unknown>({ kind: 'consolidate', hippoRoot });
+      await inTurn<unknown>(
+        () => runInChild({ kind: 'consolidate', hippoRoot }),
+        MAX_SLEEPS_IN_LINE,
+      );
     },
     settled,
   };
 }
 
-/** The line a queue's jobs wait in, and the end of its current turn. */
 interface SleepLine {
-  readonly inTurn: <R>(job: SleepJob) => Promise<R>;
+  readonly inTurn: <R>(start: () => ChildRun<R>, room: number) => Promise<R>;
   readonly settled: () => Promise<void>;
 }
 
 function sleepLine(): SleepLine {
   let turn: Promise<void> = Promise.resolve();
   let inLine = 0;
-  const inTurn = <R>(job: SleepJob): Promise<R> => {
-    if (inLine >= MAX_SLEEPS_IN_LINE) {
+  const inTurn = <R>(start: () => ChildRun<R>, room: number): Promise<R> => {
+    if (inLine >= room) {
       return Promise.reject(
         new HttpError(
           503,
-          'a sleep is already running and another is waiting; retry when one has finished',
+          room === 1
+            ? 'a sleep is already running; retry when it has finished'
+            : 'a sleep is already running and another is waiting; retry when one has finished',
           SLEEP_RETRY_AFTER_SEC,
         ),
       );
     }
     inLine += 1;
-    // One sleep at a time, as on the server's single thread: a second one waits its turn and does
-    // not fight the first for the write lock.
-    const child = turn.then(() => runInChild<R>(job));
-    // A failed sleep reaches its own caller through its answer; the turn lasts until the child has
-    // exited.
+    const child = turn.then(start);
     turn = child
       .then((run) => run.ended)
       .finally(() => {

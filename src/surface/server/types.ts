@@ -1,6 +1,6 @@
 // Public option and handle types for serve(), plus the /v1 route shape.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Actor, Context, EntryContext } from '../../api/index.js';
+import type { Actor, Context, EntryContext, SleepOptions, SleepResult } from '../../api/index.js';
 import type { ContextWith, ProjectWriteGate } from '../../api/types.js';
 import type { JsonValue } from '../../base/util/json.js';
 import type { Role, RoleLevel } from '../../base/scope/role.js';
@@ -135,6 +135,9 @@ export interface ServeOptions {
    * to it; its caller closes it. */
   store?: HippoStore;
   autoSleep?: false;
+  /** How POST /v1/sleep runs on a store that is not hippo.db: run it in another process and resolve once
+   * that process has ended. One runs at a time; unset, the route answers 501 there. */
+  sleep?: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
   /** Tests only: shortens the wait for a signed webhook's body, which defaults to 10 s. */
@@ -285,33 +288,31 @@ export type BoundRoute = { method: string; unported?: true } & (
   | ({ auth: 'webhook-signature' } & PathEndpoint<RouteRequest>)
 );
 
-/** A route that runs on any store, or with a `hippoDbOnly` reason on hippo.db alone. */
 type AnyStoreRoute = {
   method: string;
   auth: GatedAuth;
   storeReady?: never;
   hippoDbOnly?: string;
+  runsSleep?: true;
 } & PathEndpoint<AuthedRouteRequest>;
 
-/** A route that needs the optional group `G`: boot hands its handler the store it proved, or
- * marks the row 501. */
 export type GroupRouteOf<G extends OptionalGroup> = {
   method: string;
   auth: GatedAuth;
   storeReady: G;
   hippoDbOnly?: never;
+  runsSleep?: never;
 } & PathEndpoint<GroupRequest<G>>;
 
 /** A route that needs any one optional group. */
 export type GroupRoute = { [G in OptionalGroup]: GroupRouteOf<G> }[OptionalGroup];
 
-/** A connector webhook: boot hands it the connector store it proved, or answers 501 for a store
- * without one. */
 export type WebhookRoute = {
   method: string;
   auth: 'webhook-signature';
   storeReady?: never;
   hippoDbOnly?: never;
+  runsSleep?: never;
 } & PathEndpoint<WebhookRouteRequest>;
 
 /** One /v1 route: an exact path or a matchPath pattern, paired with one method's handler. Under
