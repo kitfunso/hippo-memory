@@ -660,4 +660,33 @@ describe('project write gate', () => {
     expect(calls.map((c) => c.project)).toEqual(['beta']);
     expect(promoteRows(id)).toBe(0);
   });
+
+  it('38. a row with no stored origin reaches the gate as a null project', async () => {
+    const id = seedWithOrigin('case38', null);
+    expect(rows('case38')).toEqual([{ origin_project: null }]);
+    set(() => 'no unscoped promotes');
+    const refused = await promote(keyA.plaintext, id);
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.text)).toEqual({ error: 'no unscoped promotes' });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+    set(() => null);
+    const ok = await promote(keyA.plaintext, id);
+    expect(ok.status, ok.text).toBe(200);
+    expect(JSON.parse(ok.text)).toEqual({ ok: true, sourceId: id, globalId: id, originProject: null });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('39. a gate that throws answers 500 and writes no audit row', async () => {
+    const id = await seed('case39', 'beta');
+    set(() => {
+      throw new Error('upstream detail');
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(500);
+    expect(r.text).not.toContain('upstream detail');
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
 });
