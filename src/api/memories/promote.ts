@@ -19,6 +19,7 @@ import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
 import { withDetached } from '../detached.js';
+import { admitOriginWrite } from '../project-write-gate.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
   assertCopyRight,
@@ -99,7 +100,6 @@ async function promoteInPlace(
   id: string,
   project: PromoteOptions['project'],
 ): Promise<PromoteResult> {
-  // A host admin names no project; every other caller must, before any row is read.
   if (!ctx.actor.hostAdmin) {
     if (project === undefined) {
       throw new BadRequestError("a shared store needs the caller's project");
@@ -116,12 +116,10 @@ async function promoteInPlace(
     (entry !== undefined &&
       ref !== undefined &&
       classifyOriginProject(entry.originProject, ref) !== 'cross-project');
-  // An unadmitted row fails like a missing one, so the reply says nothing of other projects.
   const row = admitted ? entry : undefined;
   assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
   assertPromotable(id, row);
-  // A shared store already serves the row to its project, so a copy would only be a duplicate the
-  // next dedupe deletes.
+  await admitOriginWrite(ctx, row.originProject);
   await ctx.store.appendAuditEvents([
     {
       tenantId: ctx.tenantId,
