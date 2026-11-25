@@ -88,6 +88,7 @@ function promptOf(turns: readonly (readonly string[])[]): string {
 /** A rule the model picked, and the whole sentences it came from. */
 export interface FollowUpRule extends ExtractedItem {
   readonly sentences: readonly string[];
+  readonly turnFromEnd: number;
 }
 
 interface Pick {
@@ -135,7 +136,10 @@ function rulesOf(turns: readonly (readonly string[])[], picks: readonly Pick[]):
       const content = pickedText(sentences);
       // It prints as the person's order, so text shaped like an injected instruction never becomes one.
       if (content === null || detectInstruction(content).flagged) return [];
-      return [{ content, category: 'rule', tags: ['follow-up'], fromUser: true, sentences }];
+      const turnFromEnd = turns.length - 1 - i;
+      return [
+        { content, category: 'rule', tags: ['follow-up'], fromUser: true, sentences, turnFromEnd },
+      ];
     });
 }
 

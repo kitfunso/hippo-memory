@@ -3,6 +3,8 @@ import {
   DETECT_TAG_PREFIX,
   detectorOf,
   detectorTags,
+  flagCount,
+  flagTag,
   isDetectTag,
   withoutDetectTags,
   type Detector,
@@ -79,5 +81,16 @@ describe('telling detect: tags from the rest', () => {
     expect(withoutDetectTags(tags)).toEqual(['b', 'a', 'from-user']);
     expect(withoutDetectTags(['a'])).toEqual(['a']);
     expect(withoutDetectTags([])).toEqual([]);
+  });
+});
+
+describe('the detect:flagged: tag', () => {
+  it('names one session, counts one per session, and is a detect: tag with no detector in it', () => {
+    const tags = ['rule', flagTag('s1'), ...detectorTags(DETECTOR), flagTag('s2')];
+    expect(flagTag('s1')).toBe('detect:flagged:s1');
+    expect(flagCount(tags)).toBe(2);
+    expect(flagCount(['rule', 'flagged:s1'])).toBe(0);
+    expect(isDetectTag(flagTag('s1'))).toBe(true);
+    expect(detectorOf(tags)).toEqual(DETECTOR);
   });
 });

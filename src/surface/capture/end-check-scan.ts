@@ -7,6 +7,7 @@ import {
   isBashWrite,
   type EndCheckScan,
 } from '../../api/end-check.js';
+import type { ScanPrompt, ValidityScan } from '../../api/validity.js';
 import { isObjectLike, isStringValue } from '../../base/session/capture-contract.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { readSessionTranscript } from './session-digest.js';
@@ -34,6 +35,7 @@ interface FileRead {
   readonly calls: ToolCall[];
   readonly landed: Set<string>;
   readonly checks: string[];
+  readonly prompts: ScanPrompt[];
   seq: number;
   promptSeq: number;
   promptAt: number | null;
@@ -128,9 +130,11 @@ function visit(record: TranscriptRecord, read: FileRead, opts: TranscriptReadOpt
   if (record.type !== 'user') return;
   readResults(record, read);
   const message = record.message;
-  if (isObjectLike(message) && humanUserText(record, message, opts) !== '') {
+  const text = isObjectLike(message) ? humanUserText(record, message, opts) : '';
+  if (text !== '') {
     read.promptSeq = read.seq;
     read.promptAt = at;
+    read.prompts.push({ seq: read.seq, at, text });
   }
 }
 
@@ -139,6 +143,7 @@ function readFile(file: string, opts: TranscriptReadOptions): FileRead {
     calls: [],
     landed: new Set(),
     checks: [],
+    prompts: [],
     seq: 0,
     promptSeq: 0,
     promptAt: null,
@@ -203,6 +208,41 @@ function scanOf(main: FileRead, subagents: readonly FileRead[]): EndCheckScan {
     editedSincePrompt: editsSincePrompt.length > 0 || bashWrite,
     commands,
     earlierChecks: main.checks.join('\n'),
+  };
+}
+
+function commandsBefore(
+  main: FileRead,
+  subagents: readonly FileRead[],
+  prompt: ScanPrompt,
+): string[] {
+  const calls = [main, ...subagents].flatMap((read) =>
+    read.calls.filter(
+      (call) =>
+        call.bash !== null &&
+        read.landed.has(call.id) &&
+        (read === main ? call.seq < prompt.seq : call.at < prompt.at),
+    ),
+  );
+  const timed = calls.every((call) => Number.isFinite(call.at));
+  const ordered = timed ? [...calls].sort((a, b) => a.at - b.at) : calls;
+  return ordered.flatMap((call) => (call.bash === null ? [] : [call.bash]));
+}
+
+export function scanForValidity(
+  transcriptPath: string,
+  opts: TranscriptReadOptions = {},
+): ValidityScan {
+  const main = readFile(transcriptPath, opts);
+  const subagents = subagentFiles(transcriptPath).map((file) => readFile(file, opts));
+  return {
+    prompts: main.prompts,
+    before: (prompt) => ({
+      editsSincePrompt: [],
+      editedSincePrompt: false,
+      commands: commandsBefore(main, subagents, prompt),
+      earlierChecks: '',
+    }),
   };
 }
 

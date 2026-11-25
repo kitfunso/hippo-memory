@@ -5,16 +5,25 @@ import {
   applies,
   bashWritePaths,
   commandKey,
+  corrects,
   done,
   endCheckText,
   globMatch,
   isBashWrite,
+  mentionsCommand,
   openRules,
   stopContext,
   type DetectedRule,
   type EndCheckScan,
 } from '../../src/api/end-check.js';
-import type { Detector } from '../../src/base/memory/detect-tags.js';
+import {
+  brokeAfterDone,
+  flaggedRules,
+  type Correction,
+  type ScanPrompt,
+  type ValidityScan,
+} from '../../src/api/validity.js';
+import { MAX_FLAGS, type Detector } from '../../src/base/memory/detect-tags.js';
 
 function scan(over: Partial<EndCheckScan> = {}): EndCheckScan {
   return { editsSincePrompt: [], editedSincePrompt: true, commands: [], earlierChecks: '', ...over };
@@ -25,7 +34,7 @@ function detector(applyGlobs: string[], ...commands: string[][]): Detector {
 }
 
 function rule(id: string, created: string, applyGlobs: string[] = []): DetectedRule {
-  return { id, content: `Rule ${id}: run the check.`, created, detector: detector(applyGlobs, ['pytest']) };
+  return { id, content: `Rule ${id}: run the check.`, created, detector: detector(applyGlobs, ['pytest']), flags: 0 };
 }
 
 const ran = (command: string, landed: string): boolean => done(detector([], [command]), scan({ commands: [landed] }));
@@ -245,5 +254,100 @@ describe('the stop context', () => {
     expect(JSON.parse(stopContext(text))).toEqual({
       hookSpecificOutput: { hookEventName: 'Stop', additionalContext: text },
     });
+  });
+});
+
+const MARKER = detector(['**/*.py'], ['pytest -m not notebooks']);
+const MARKER_RULE: DetectedRule = {
+  id: 'marker',
+  content: 'Run tests with pytest -m "not notebooks"',
+  created: '2026-11-01T00:00:00.000Z',
+  detector: MARKER,
+  flags: 0,
+};
+const Q118 = 'Every pytest call takes -m "not notebooks", single tests too';
+const LINT_RULE: DetectedRule = {
+  ...MARKER_RULE,
+  id: 'lint',
+  content: 'Run npm run lint before you finish',
+  detector: detector([], ['npm run lint']),
+};
+const PROMPT: ScanPrompt = { seq: 9, at: Date.parse('2026-11-24T20:00:09.000Z'), text: 'typed' };
+const said = (content: string, own: Detector | null = null): Correction => ({ content, prompt: PROMPT, detector: own });
+const ranBefore = (...commands: string[]): ValidityScan => ({ prompts: [PROMPT], before: () => scan({ commands }) });
+
+describe('mentionsCommand', () => {
+  it.each([
+    [Q118, 'pytest -m not notebooks'],
+    ['Every pytest call takes -m \u201cnot notebooks\u201d.', 'pytest -m "not notebooks"'],
+    ['Please always run `npm test`.', 'npm test'],
+    ['Run ruff check . before you push.', 'ruff check .'],
+  ])('finds the command words of %s in order', (text, command) => {
+    expect(mentionsCommand(text, command)).toBe(true);
+  });
+
+  it.each([
+    ['npm run build must pass before you hand back.', 'npm run lint'],
+    ['Every call takes -m "not notebooks".', 'pytest -m not notebooks'],
+    ['Keep notebooks out: not -m, pytest.', 'pytest -m not notebooks'],
+    ['Use pytest.', ''],
+  ])('finds no command words in %s', (text, command) => {
+    expect(mentionsCommand(text, command)).toBe(false);
+  });
+});
+
+describe('corrects', () => {
+  it('matches the rule text, the rule command in the prose, or an own command that runs it', () => {
+    expect(corrects(said(MARKER_RULE.content), MARKER_RULE)).toBe(true);
+    expect(corrects(said(Q118), MARKER_RULE)).toBe(true);
+    expect(
+      corrects(said('Single tests need the marker too.', detector([], ['pytest -m not notebooks'])), MARKER_RULE),
+    ).toBe(true);
+  });
+
+  it('does not take an npm run build correction for an npm run lint rule', () => {
+    const build = said('npm run build must pass before you hand back', detector([], ['npm run build']));
+    expect(corrects(build, LINT_RULE)).toBe(false);
+  });
+});
+
+describe('brokeAfterDone', () => {
+  it.each([
+    [MARKER, ['pytest -m "not notebooks"', 'cd w && pytest tests/test_io.py'], true],
+    [MARKER, ['pytest -m "not notebooks"', 'pytest -m "not notebooks" tests/test_io.py'], false],
+    [MARKER, ['pytest tests/test_io.py', 'pytest -m "not notebooks"'], false],
+    [MARKER, ['pytest -m "not notebooks"', 'ruff check .'], false],
+    [detector([], ['uv run pytest']), ['uv run pytest -q', 'pytest -q'], true],
+  ])('%o after %o is %s', (rule, commands, broken) => {
+    expect(brokeAfterDone(rule, scan({ commands }))).toBe(broken);
+  });
+});
+
+describe('flaggedRules', () => {
+  const q118 = ranBefore('pytest -m "not notebooks"', 'pytest tests/test_io.py');
+
+  it('flags a rule that ran, then broke, then was corrected, and never a rule newer than the prompt', () => {
+    const fresh: DetectedRule = { ...MARKER_RULE, id: 'fresh', content: Q118, created: '2026-11-25T00:00:00.000Z' };
+    expect(flaggedRules([MARKER_RULE, fresh], [said(Q118)], q118)).toEqual(['marker']);
+  });
+
+  it('flags nothing for an approval with no break, or a rule not done before the prompt', () => {
+    const approval = 'Good, keep running pytest -m "not notebooks" for every run.';
+    expect(flaggedRules([MARKER_RULE], [said(approval)], ranBefore('pytest -m "not notebooks"'))).toEqual([]);
+    expect(flaggedRules([MARKER_RULE], [said(Q118)], ranBefore('pytest tests/test_io.py'))).toEqual([]);
+  });
+
+  it('flags an npm run lint rule only for a correction that names it', () => {
+    const lintThenBuild = ranBefore('npm run lint', 'npm run build');
+    const build = said('npm run build must pass before you hand back', detector([], ['npm run build']));
+    expect(flaggedRules([LINT_RULE], [build], lintThenBuild)).toEqual([]);
+    expect(flaggedRules([LINT_RULE], [said('Run npm run lint again after the build.')], lintThenBuild)).toEqual([
+      'lint',
+    ]);
+  });
+
+  it(`stops adding flags at ${MAX_FLAGS}`, () => {
+    expect(flaggedRules([{ ...MARKER_RULE, flags: MAX_FLAGS - 1 }], [said(Q118)], q118)).toEqual(['marker']);
+    expect(flaggedRules([{ ...MARKER_RULE, flags: MAX_FLAGS }], [said(Q118)], q118)).toEqual([]);
   });
 });

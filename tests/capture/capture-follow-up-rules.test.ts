@@ -1,12 +1,17 @@
 // Capture asks a model which sentences of the person's later turns state a lasting rule and stores those sentences.
 // Real SQLite stores in tmp dirs; the model is a fake Llm, so nothing leaves the machine.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { join } from 'node:path';
-import { runCapture } from '../../src/surface/capture/command.js';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { runCapture, type CaptureOptions } from '../../src/surface/capture/command.js';
 import type { Llm, LlmReply } from '../../src/base/ports/llm.js';
-import type { SessionTurn } from '../../src/surface/capture/transcript.js';
+import { collectSessionTurns, type SessionTurn } from '../../src/surface/capture/transcript.js';
 import { createMemory } from '../../src/entry/memory.js';
-import { Layer } from '../../src/base/memory/entry.js';
+import { Layer, USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import { MAX_FLAGS, detectorTags, flagCount, flagTag, type Detector } from '../../src/base/memory/detect-tags.js';
+import { resolveProjectIdentity } from '../../src/host/project-identity.js';
+import { projectId } from '../../src/base/scope/project-identity.js';
+import { captureTarget as hookCaptureTarget } from '../../src/surface/cli/hook-runtime.js';
 import { DEFAULT_HALF_LIFE_DAYS } from '../../src/base/memory/strength.js';
 import { log } from '../../src/base/util/log.js';
 import { captureTarget } from '../_helpers/cli-stores.js';
@@ -382,5 +387,212 @@ describe('capture stores the follow-up rules a model picks', () => {
     expect(lines.mock.calls.map(([line]) => String(line))).toContain(
       'follow-up rules: model=claude-sonnet-5-5 input_tokens=812 output_tokens=37',
     );
+  });
+});
+
+describe('capture flags a stored rule the agent followed and the person still corrected', () => {
+  const SESSION = '5b1c7e0a-6d2f-4a8e-9c3b-2f7d1e4a6b90';
+  const MARKER_RULE = 'Run tests with pytest -m "not notebooks"';
+  const MARKER: Detector = { applies: ['**/*.py'], commands: [['pytest -m not notebooks']] };
+  const CORRECTION = 'Every pytest call takes **-m "not notebooks"**,\nsingle tests too.';
+  const STORED = 'Every pytest call takes -m "not notebooks", single tests too';
+  const at = (s: number): string => new Date(Date.UTC(2026, 10, 24, 20, 0, s)).toISOString();
+  const typed = (text: string, s: number, entrypoint = 'cli') => ({
+    type: 'user',
+    entrypoint,
+    timestamp: at(s),
+    message: { role: 'user', content: text },
+  });
+  const reply = (text: string, s: number) => ({
+    type: 'assistant',
+    timestamp: at(s),
+    message: { role: 'assistant', content: [{ type: 'text', text }] },
+  });
+  const ran = (id: string, command: string, s: number) => [
+    {
+      type: 'assistant',
+      timestamp: at(s),
+      message: { role: 'assistant', content: [{ type: 'tool_use', id, name: 'Bash', input: { command } }] },
+    },
+    {
+      type: 'user',
+      timestamp: at(s + 1),
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id }] },
+    },
+  ];
+  const session = (correction: string, commands: readonly string[], entrypoint = 'cli') => [
+    typed(OPENER, 0, entrypoint),
+    ...commands.flatMap((command, k) => ran(`b${k}`, command, 1 + 2 * k)),
+    reply(REPLY, 20),
+    typed(correction, 21, entrypoint),
+    reply('Understood.', 22),
+  ];
+  const Q118_RUNS = ['pytest -m "not notebooks"', 'pytest tests/test_io.py'];
+  const HERE = resolveProjectIdentity(process.cwd());
+
+  let root: string;
+  let transcript: string;
+
+  const writeSession = <T>(rows: readonly T[]): string => {
+    const jsonl = rows.map((row) => JSON.stringify(row)).join('\n') + '\n';
+    writeFileSync(transcript, jsonl);
+    return jsonl;
+  };
+  const seedRule = (content: string, detector: Detector, flags: readonly string[] = []): string => {
+    const row = createMemory(content, {
+      baseHalfLifeDays: DEFAULT_HALF_LIFE_DAYS,
+      source: 'capture',
+      confidence: 'observed',
+      layer: Layer.Episodic,
+      pinned: true,
+      tags: ['rule', 'captured', USER_RULE_TAG, ...detectorTags(detector), ...flags],
+    });
+    writeEntry(root, { ...row, created: '2026-11-01T00:00:00.000Z', originProject: projectId(HERE) });
+    return row.id;
+  };
+  const answering = (detect = '[]'): Llm => ({
+    send: async ({ prompt }) => ({
+      ok: true,
+      text: prompt.startsWith(DETECTOR_PROMPT_LEAD) ? detect : '[{"i": 0, "s": [0]}]',
+    }),
+  });
+  const flagging = () => hookCaptureTarget(root, 'full', 'default').flagging;
+  const capture = (llm: Llm, over: Partial<CaptureOptions> = {}) =>
+    runCapture(
+      { ...captureTarget(root), llm, flagging: flagging() },
+      {
+        tenantId: 'default',
+        source: 'last-session',
+        transcriptPath: transcript,
+        sessionId: SESSION,
+        dryRun: false,
+        global: false,
+        ...over,
+      },
+    );
+  const rows = () => loadAllEntries(root, 'default');
+  const flagsOf = () => Object.fromEntries(rows().map((row) => [row.content, flagCount(row.tags)]));
+
+  beforeEach(() => {
+    root = join(makeRoot('validity-flags', { init: false }), '.hippo');
+    initTestStore(root);
+    transcript = join(dirname(root), `${SESSION}.jsonl`);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('flags the followed rule a wrapped, bold correction restates, and not the new rule', async () => {
+    const id = seedRule(MARKER_RULE, MARKER);
+    writeSession(session(CORRECTION, Q118_RUNS));
+    await capture(answering());
+    expect(flagsOf()).toEqual({ [MARKER_RULE]: 1, [STORED]: 0 });
+    expect(rows().find((row) => row.id === id)?.tags).toContain(flagTag(SESSION));
+  });
+
+  it('adds nothing on a replay of the same session', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    writeSession(session(CORRECTION, Q118_RUNS));
+    await capture(answering());
+    const first = rows().map((row) => [row.id, row.tags]);
+    await capture(answering());
+    expect(rows().map((row) => [row.id, row.tags])).toEqual(first);
+  });
+
+  it('never flags a rule the session itself taught, on the first capture or a replay', async () => {
+    const taught = 'Always run npm test before you finish';
+    writeSession(session(`${taught}.`, ['npm test', 'npm run build']));
+    const own = { originProject: HERE };
+    const detect = '[{"i": 0, "applies": [], "commands": [["npm test"]]}]';
+    await capture(answering(detect), own);
+    expect((await flagging()?.rules())?.map((rule) => rule.content)).toEqual([taught]);
+    await capture(answering(detect), own);
+    expect(flagsOf()).toEqual({ [taught]: 0 });
+  });
+
+  it('flags nothing for an approval with no break', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    writeSession(session('Good, keep running pytest -m "not notebooks" for every run.', ['pytest -m "not notebooks"']));
+    await capture(answering());
+    expect(flagsOf()[MARKER_RULE]).toBe(0);
+  });
+
+  it('does not flag an npm run lint rule for an npm run build correction', async () => {
+    const lint = 'Run npm run lint before you finish';
+    seedRule(lint, { applies: [], commands: [['npm run lint']] });
+    writeSession(session('npm run build must pass before you hand back.', ['npm run lint', 'npm run build']));
+    await capture(answering('[{"i": 0, "applies": [], "commands": [["npm run build"]]}]'));
+    const build = rows().find((row) => row.content === 'npm run build must pass before you hand back');
+    expect(build?.tags).toContain('detect:cmd:["npm run build"]');
+    expect(flagsOf()[lint]).toBe(0);
+  });
+
+  it('flags a held rule the person repeats from an earlier session', async () => {
+    const id = seedRule(STORED, MARKER);
+    writeSession(session(CORRECTION, Q118_RUNS));
+    await capture(answering());
+    expect(rows().map((row) => [row.id, flagCount(row.tags)])).toEqual([[id, 1]]);
+  });
+
+  it('writes no flag on a dry run or a --global capture', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    writeSession(session(CORRECTION, Q118_RUNS));
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    await capture(answering(), { dryRun: true });
+    await capture(answering(), { global: true, originProject: 'p' });
+    expect(flagsOf()[MARKER_RULE]).toBe(0);
+  });
+
+  it('flags in a scripted session only when its turns are read as the person', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    const jsonl = writeSession(session(CORRECTION, Q118_RUNS, 'sdk-cli'));
+    const sessionTurns = collectSessionTurns(jsonl, undefined, { scriptedIsHuman: true });
+    await capture(answering(), { sessionTurns });
+    expect(flagsOf()[MARKER_RULE]).toBe(0);
+    await capture(answering(), { sessionTurns, scriptedIsHuman: true });
+    expect(flagsOf()[MARKER_RULE]).toBe(1);
+  });
+
+  it('needs the picked turn to be the typed prompt at the same place from the end', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    const longer = [...session(CORRECTION, Q118_RUNS), typed('Thanks, that is all.', 23), reply('Glad to help.', 24)];
+    const sessionTurns = collectSessionTurns(writeSession(longer)).slice(0, -2);
+    await capture(answering(), { sessionTurns });
+    expect(flagsOf()[MARKER_RULE]).toBe(0);
+    await capture(answering());
+    expect(flagsOf()[MARKER_RULE]).toBe(1);
+  });
+
+  it(`adds no flag past ${MAX_FLAGS}`, async () => {
+    const full = ['s1', 's2', 's3'].map(flagTag);
+    seedRule(MARKER_RULE, MARKER, full);
+    seedRule('Always pass -m "not notebooks" to pytest', MARKER, full.slice(0, MAX_FLAGS - 1));
+    writeSession(session(CORRECTION, Q118_RUNS));
+    await capture(answering());
+    expect(flagsOf()).toMatchObject({
+      [MARKER_RULE]: MAX_FLAGS,
+      'Always pass -m "not notebooks" to pytest': MAX_FLAGS,
+    });
+  });
+
+  it('logs a failed rules read and still captures', async () => {
+    seedRule(MARKER_RULE, MARKER);
+    writeSession(session(CORRECTION, Q118_RUNS));
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+    const broken = { rules: () => Promise.reject(new Error('store busy')), tag: async () => {} };
+    await runCapture(
+      { ...captureTarget(root), llm: answering(), flagging: broken },
+      {
+        tenantId: 'default',
+        source: 'last-session',
+        transcriptPath: transcript,
+        sessionId: SESSION,
+        dryRun: false,
+        global: false,
+      },
+    );
+    expect(warn.mock.calls.map(([line]) => String(line))).toContain('validity flags skipped: store busy');
+    expect(flagsOf()).toEqual({ [MARKER_RULE]: 0, [STORED]: 0 });
   });
 });
