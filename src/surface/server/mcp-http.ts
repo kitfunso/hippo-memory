@@ -94,6 +94,7 @@ function mcpContextFor(
     scopes: ctx.actor.scopes,
     viaAuthResolver: ctx.actor.viaAuthResolver,
     hostAdmin: ctx.actor.hostAdmin,
+    localKey: ctx.actor.localKey,
     owner: ctx.actor.owner,
     clientKey: ctx.clientKey,
     store: ctx.store,
