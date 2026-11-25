@@ -19,6 +19,7 @@ import { detectSecret } from '../../base/util/secret-detect.js';
 import { embedMemoryDetached, folderEmbedTarget } from '../../domain/search/embed-memories.js';
 import { globalTargetOf } from '../infra.js';
 import { withDetached } from '../detached.js';
+import { admitOriginWrite } from '../project-write-gate.js';
 import { sharedStoreOf, type Context, type ContextWith } from '../types.js';
 import {
   assertCopyRight,
@@ -99,29 +100,23 @@ async function promoteInPlace(
   id: string,
   project: PromoteOptions['project'],
 ): Promise<PromoteResult> {
-  // A host admin names no project; every other caller must, before any row is read.
   if (!ctx.actor.hostAdmin) {
     if (project === undefined) {
       throw new BadRequestError("a shared store needs the caller's project");
     }
     assertCallerProject(project);
   }
-  const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
-  const ref =
-    project === undefined
-      ? undefined
-      : { name: project.name, legacyName: project.name, aliases: [...(project.aliases ?? [])] };
-  const admitted =
-    ctx.actor.hostAdmin === true ||
-    (entry !== undefined &&
-      ref !== undefined &&
-      classifyOriginProject(entry.originProject, ref) !== 'cross-project');
-  // An unadmitted row fails like a missing one, so the reply says nothing of other projects.
-  const row = admitted ? entry : undefined;
-  assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
-  assertPromotable(id, row);
-  // A shared store already serves the row to its project, so a copy would only be a duplicate the
-  // next dedupe deletes.
+  let row = await promotableRow(ctx, id, project);
+  if (ctx.projectWriteGate !== undefined) {
+    await admitOriginWrite(ctx, row.originProject);
+    const now = await promotableRow(ctx, id, project);
+    if ((now.originProject ?? null) !== (row.originProject ?? null)) {
+      throw new ConflictError(
+        `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+      );
+    }
+    row = now;
+  }
   await ctx.store.appendAuditEvents([
     {
       tenantId: ctx.tenantId,
@@ -132,6 +127,27 @@ async function promoteInPlace(
     },
   ]);
   return { ok: true, sourceId: id, globalId: id, originProject: row.originProject ?? null };
+}
+
+async function promotableRow(
+  ctx: Context,
+  id: string,
+  project: PromoteOptions['project'],
+): Promise<MemoryEntry> {
+  const [entry] = await ctx.store.entriesByIds([id], ctx.tenantId);
+  const ref =
+    project === undefined
+      ? undefined
+      : { name: project.name, legacyName: project.name, aliases: [...(project.aliases ?? [])] };
+  const admitted =
+    ctx.actor.hostAdmin === true ||
+    (entry !== undefined &&
+      ref !== undefined &&
+      classifyOriginProject(entry.originProject, ref) !== 'cross-project');
+  const row = admitted ? entry : undefined;
+  assertCopyRight(scopeReaderOf(ctx.actor), row, id, memoryNotFoundText(id));
+  assertPromotable(id, row);
+  return row;
 }
 
 function assertPromotable(id: string, entry: MemoryEntry): void {

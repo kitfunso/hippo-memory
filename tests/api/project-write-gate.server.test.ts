@@ -1,15 +1,17 @@
-// The project write gate: one hook asked before a write under a caller's project, at REST, MCP and add-on doors.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { HttpError, admitProjectWrite, serve, type ProjectWriteCall, type ServerHandle } from '../../src/server.js';
+import type { MemoryEntry } from '../../src/base/memory/entry.js';
 import type { AuthResolver } from '../../src/surface/server/types.js';
 import type { JsonValue } from '../../src/base/util/json.js';
 import { STORE_BUSY_MESSAGE, StoreBusyError } from '../../src/base/util/store-blocked.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
+import { createMemory } from '../_helpers/default-half-life-memory.js';
+import { deleteEntry, readEntry, writeEntry } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 
 afterAll(() => {
@@ -36,6 +38,7 @@ let gated: ServerHandle;
 let plain: ServerHandle;
 let keyM: Key;
 let keyO: Key;
+let keyA: Key;
 let calls: ProjectWriteCall[] = [];
 let answer: (c: ProjectWriteCall) => string | null | Promise<string | null> = () => null;
 
@@ -67,6 +70,11 @@ function queryAt<T>(root: string, sql: string, ...args: string[]): T[] {
 
 function rows(content: string): Array<{ origin_project: string | null }> {
   return query('SELECT origin_project FROM memories WHERE content = ?', content);
+}
+
+function promoteRows(id: string): number {
+  const found = query<{ n: number }>("SELECT count(*) AS n FROM audit_log WHERE op = 'promote' AND target_id = ?", id);
+  return found[0]?.n ?? 0;
 }
 
 async function http(
@@ -124,12 +132,10 @@ beforeAll(async () => {
   fs.writeFileSync(path.join(store, 'config.json'), JSON.stringify({ sharedStore: true }));
   keyM = mint('gate-m', 'member');
   keyO = mint('gate-o', 'member', 'oid-a');
-  mint('gate-adm', 'admin');
-  // One server per folder, so the no-gate server gets its own shared store.
+  keyA = mint('gate-adm', 'admin');
   plainStore = path.join(tmp, 'srv-plain', 'hippo-team');
   fs.mkdirSync(plainStore, { recursive: true });
   initTestStore(plainStore);
-  // Salience on, so case 17 has a write the gate-less path skips.
   fs.writeFileSync(
     path.join(plainStore, 'config.json'),
     JSON.stringify({ sharedStore: true, salience: { enabled: true } }),
@@ -165,6 +171,35 @@ afterAll(async () => {
 function set(next: typeof answer): void {
   calls = [];
   answer = next;
+}
+
+async function seed(
+  content: string,
+  project: string,
+  extra: Record<string, JsonValue> = {},
+  token: string = keyM.plaintext,
+): Promise<string> {
+  set(() => null);
+  const r = await write(gated.url, token, content, extra, { name: project });
+  expect(r.status, r.text).toBe(200);
+  // SAFETY: a 200 from POST /v1/memories carries the new row's id.
+  return (JSON.parse(r.text) as { id: string }).id;
+}
+
+function promote(token: string, id: string, project?: JsonValue): Promise<Reply> {
+  return http(gated.url, token, `/v1/memories/${id}/promote`, project === undefined ? {} : { project });
+}
+
+function seedWithOrigin(content: string, origin: string | null): string {
+  const row = { ...createMemory(content, { tenantId: 'default' }), originProject: origin };
+  writeEntry(store, row);
+  return row.id;
+}
+
+function rewrite(id: string, patch: Partial<MemoryEntry>): void {
+  const row = readEntry(store, id);
+  if (row === null) throw new Error(`no row ${id}`);
+  writeEntry(store, { ...row, ...patch });
 }
 
 describe('project write gate', () => {
@@ -467,5 +502,236 @@ describe('project write gate', () => {
     expect(text).not.toContain('upstream');
     expect(text).not.toBe('');
     expect(rows('case25')).toEqual([]);
+  });
+
+  it('26. a refusing gate stops a promote of a beta row and writes no audit row', async () => {
+    const id = await seed('case26', 'beta');
+    set(() => 'no beta for you');
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(403);
+    expect(JSON.parse(r.text)).toEqual({ error: 'no beta for you' });
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('27. the gate sees the row origin, not the body project or its aliases', async () => {
+    const id = await seed('case27', 'beta');
+    set(() => 'no beta for you');
+    const r = await promote(keyM.plaintext, id, { name: 'alpha', aliases: ['beta'] });
+    expect(r.status).toBe(403);
+    expect(JSON.parse(r.text)).toEqual({ error: 'no beta for you' });
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('28. a null answer lets the promote run; the one call saw tenant, member actor and beta', async () => {
+    const id = await seed('case28', 'beta');
+    set(() => null);
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status, r.text).toBe(200);
+    expect(JSON.parse(r.text)).toEqual({ ok: true, sourceId: id, globalId: id, originProject: 'beta' });
+    expect(calls).toEqual([
+      {
+        tenantId: 'default',
+        project: 'beta',
+        signal: expect.any(AbortSignal),
+        actor: expect.objectContaining({ subject: `api_key:${keyM.keyId}`, role: 'member' }),
+      },
+    ]);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('29. a user-global row reaches the gate as a null project', async () => {
+    const id = seedWithOrigin('case29', '');
+    set(() => 'no unscoped promotes');
+    const refused = await promote(keyM.plaintext, id, { name: 'alpha' });
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.text)).toEqual({ error: 'no unscoped promotes' });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+    set(() => null);
+    const ok = await promote(keyM.plaintext, id, { name: 'alpha' });
+    expect(ok.status, ok.text).toBe(200);
+    expect(JSON.parse(ok.text)).toEqual({ ok: true, sourceId: id, globalId: id, originProject: '' });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('30. a row of another project answers 404 and the gate is not asked', async () => {
+    const id = await seed('case30', 'beta');
+    set(() => 'refused');
+    const r = await promote(keyM.plaintext, id, { name: 'alpha' });
+    expect(r.status).toBe(404);
+    expect(errorOf(r)).toBe(`memory not found: ${id}`);
+    expect(calls).toHaveLength(0);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('31. a superseded row answers 409 and the gate is not asked', async () => {
+    const id = await seed('case31', 'beta');
+    const sup = await http(gated.url, keyA.plaintext, `/v1/memories/${id}/supersede`, { content: 'case31 next' });
+    expect(sup.status, sup.text).toBe(200);
+    set(() => 'refused');
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toContain(`Refusing to promote ${id}: it is superseded by`);
+    expect(calls).toHaveLength(0);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('32. the host admin key needs no body project and the gate sees the row origin', async () => {
+    const id = await seed('case32', 'beta');
+    set(() => 'no beta for you');
+    const refused = await promote(keyA.plaintext, id);
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.text)).toEqual({ error: 'no beta for you' });
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(calls[0]?.actor).toMatchObject({ subject: `api_key:${keyA.keyId}`, role: 'admin' });
+    expect(promoteRows(id)).toBe(0);
+    set(() => null);
+    const ok = await promote(keyA.plaintext, id);
+    expect(ok.status, ok.text).toBe(200);
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('33. a member with no body project answers 400 and the gate is not asked', async () => {
+    const id = await seed('case33', 'beta');
+    set(() => 'refused');
+    const r = await promote(keyM.plaintext, id);
+    expect(r.status).toBe(400);
+    expect(errorOf(r)).toBe("a shared store needs the caller's project");
+    expect(calls).toHaveLength(0);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('34. a personal row answers 400 and the gate is not asked', async () => {
+    const id = await seed('case34', 'alpha', { personal: true }, keyO.plaintext);
+    set(() => 'refused');
+    const r = await promote(keyO.plaintext, id, { name: 'alpha' });
+    expect(r.status).toBe(400);
+    expect(errorOf(r)).toContain(`Refusing to promote ${id}: it is a personal memory`);
+    expect(calls).toHaveLength(0);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('35. a stored origin with upper case reaches the gate unchecked and never answers 400', async () => {
+    const id = seedWithOrigin('case35', 'Beta');
+    set(() => 'no beta for you');
+    const refused = await promote(keyA.plaintext, id);
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.text)).toEqual({ error: 'no beta for you' });
+    expect(calls.map((c) => c.project)).toEqual(['Beta']);
+    expect(promoteRows(id)).toBe(0);
+    set(() => null);
+    const ok = await promote(keyA.plaintext, id);
+    expect(ok.status, ok.text).toBe(200);
+    expect(calls.map((c) => c.project)).toEqual(['Beta']);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('36. a row that changes project while the gate is asked answers 409 and writes no audit row', async () => {
+    const id = await seed('case36', 'beta');
+    set(() => {
+      rewrite(id, { originProject: 'alpha' });
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'alpha', aliases: ['beta'] });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('37. a row superseded while the gate is asked answers 409 and writes no audit row', async () => {
+    const id = await seed('case37', 'beta');
+    set(() => {
+      rewrite(id, { supersededBy: 'mem_case37_next' });
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: it is superseded by mem_case37_next; promote that one instead.`,
+    );
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('38. a row with no stored origin reaches the gate as a null project', async () => {
+    const id = seedWithOrigin('case38', null);
+    expect(rows('case38')).toEqual([{ origin_project: null }]);
+    set(() => 'no unscoped promotes');
+    const refused = await promote(keyA.plaintext, id);
+    expect(refused.status).toBe(403);
+    expect(JSON.parse(refused.text)).toEqual({ error: 'no unscoped promotes' });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+    set(() => null);
+    const ok = await promote(keyA.plaintext, id);
+    expect(ok.status, ok.text).toBe(200);
+    expect(JSON.parse(ok.text)).toEqual({ ok: true, sourceId: id, globalId: id, originProject: null });
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(1);
+  });
+
+  it('39. a gate that throws answers 500 and writes no audit row', async () => {
+    const id = await seed('case39', 'beta');
+    set(() => {
+      throw new Error('upstream detail');
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(500);
+    expect(r.text).not.toContain('upstream detail');
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('40. a row whose origin goes from user-global to none while the gate is asked answers 409', async () => {
+    const id = seedWithOrigin('case40', '');
+    set(() => {
+      rewrite(id, { originProject: null });
+      return null;
+    });
+    const r = await promote(keyA.plaintext, id);
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
+    expect(rows('case40')).toEqual([{ origin_project: null }]);
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('41. a row whose origin goes from none to user-global while the gate is asked answers 409', async () => {
+    const id = seedWithOrigin('case41', null);
+    set(() => {
+      rewrite(id, { originProject: '' });
+      return null;
+    });
+    const r = await promote(keyA.plaintext, id);
+    expect(r.status).toBe(409);
+    expect(errorOf(r)).toBe(
+      `Refusing to promote ${id}: its project changed while the project write gate was asked; retry`,
+    );
+    expect(rows('case41')).toEqual([{ origin_project: '' }]);
+    expect(calls.map((c) => c.project)).toEqual([null]);
+    expect(promoteRows(id)).toBe(0);
+  });
+
+  it('42. a row deleted while the gate is asked answers 404 and writes no audit row', async () => {
+    const id = await seed('case42', 'beta');
+    set(() => {
+      deleteEntry(store, id);
+      return null;
+    });
+    const r = await promote(keyM.plaintext, id, { name: 'beta' });
+    expect(r.status).toBe(404);
+    expect(errorOf(r)).toBe(`memory not found: ${id}`);
+    expect(rows('case42')).toEqual([]);
+    expect(calls.map((c) => c.project)).toEqual(['beta']);
+    expect(promoteRows(id)).toBe(0);
   });
 });
