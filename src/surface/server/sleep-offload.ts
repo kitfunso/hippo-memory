@@ -1,5 +1,3 @@
-// POST /v1/sleep and the MCP auto-sleep run their consolidation in a child process, so the server
-// keeps answering and a stuck run can be stopped.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Actor, type SleepOptions, type SleepResult, type Context } from '../../api/index.js';
@@ -173,26 +171,21 @@ const ownRun = <R>(answer: Promise<R>): ChildRun<R> => ({
   ),
 });
 
-/** A server's sleeps, one at a time in a child process: POST /v1/sleep and the auto-sleep a
- * write starts share it. */
 export interface SleepQueue {
   readonly sleep: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
-  /** The auto-sleep's consolidation; auto-sleep only starts on a hippo.db store. */
   readonly consolidate: () => Promise<void>;
-  /** Resolves once every sleep in line has ended, each by its deadline at the latest; it never
-   * rejects. */
   readonly settled: () => Promise<void>;
 }
 
 export function createSleepQueue(
   hippoRoot: string,
-  onHippoDb: boolean,
+  childSleeps: boolean,
   ownSleep?: ServeOptions['sleep'],
 ): SleepQueue {
   const { inTurn, settled } = sleepLine();
   return {
     sleep: (ctx, opts) => {
-      if (onHippoDb) {
+      if (childSleeps) {
         return inTurn<SleepResult>(
           () =>
             runInChild({

@@ -393,7 +393,8 @@ function servedOptsFor(
 ): ResolvedServeOptions {
   const { callerLimiter, failedAuthLimiter } = limiters;
   const { store } = runtime;
-  const sleeps = createSleepQueue(opts.hippoRoot, runtime.onHippoDb, opts.sleep);
+  const childSleeps = runtime.onHippoDb && hasGroup(store, 'consolidation');
+  const sleeps = createSleepQueue(opts.hippoRoot, childSleeps, opts.sleep);
   const counts: ServerCounts = { handlerDeadlines: 0, autoSleeps: 0 };
   const run = (): Promise<void> => {
     counts.autoSleeps += 1;
@@ -408,7 +409,7 @@ function servedOptsFor(
     routes,
     publicJsonBodies,
     oauthChallenge,
-    v1Routes: bindV1Routes(store, runtime.onHippoDb, runtime.onHippoDb || opts.sleep !== undefined),
+    v1Routes: bindV1Routes(store, runtime.onHippoDb, childSleeps || opts.sleep !== undefined),
     addonRoutes: bindAddonRoutes(routes, store, runtime.onHippoDb),
     mcpTools: bindMcpTools(store),
     store,
