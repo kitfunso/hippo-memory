@@ -177,7 +177,7 @@ function idOf(r: Reply, field: 'id' | 'newId'): string {
   return value;
 }
 
-function toolCall(name: string, args: Record<string, JsonValue>): Payload {
+function toolCall(name: string, args: Record<string, JsonValue>) {
   return { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } };
 }
 
