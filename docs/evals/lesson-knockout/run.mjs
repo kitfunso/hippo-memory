@@ -6,15 +6,15 @@ import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,read,pins,hash } from './plan.mjs';
-import { assertCheckerTools,gradeEnv } from './grading.mjs';
+import { assertCheckerTools,gradeEnv,guardedLesson } from './grading.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
-  entry,createStore,contents,capture,forkStore,files,checkProjectSettings } from './state.mjs';
+  entry,createStore,contents,capture,forkStore,files,checkProjectSettings,treeIds } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
 import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { archivedTarget,flagOf,evidence,permissionAudit } from './evidence.mjs';
+import { archivedAudit,flagOf,evidence,neutralClean,permissionAudit } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,continueUnit } from './continuation.mjs';
@@ -83,7 +83,7 @@ function prepare(task) {
   save(join(records,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
   runSetupScript(live,checkEnv,join(folder,'prepare.ps1'));
   checkProjectSettings(work);
-  assertCheckerTools(u,graderEnv());
+  assertCheckerTools(u,graderEnv(),work);
 }
 const graderEnv=()=>gradeEnv(checkEnv,u,live,join(records,'grade','checker.log'));
 async function session(task,prompt,session,id,resume=false) {
@@ -96,12 +96,14 @@ async function session(task,prompt,session,id,resume=false) {
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
   const result=read(join(records,id+'.json'));
+  const archived=archivedAudit(archives,id,session,u.lesson,{...task,work});
   if(!smoke) {
     const permissions=permissionAudit(transcript,prompt,result.permissionDenials);
-    assert(permissions.ok && result.apparatus===APPARATUS,'Session permission check failed for '+id+': '+JSON.stringify(permissions));
+    assert(permissions.ok && result.apparatus===APPARATUS && result.cutOff===false && archived.archivedPermissions,
+      'Session permission check failed for '+id+': '+JSON.stringify({...permissions,archivedPermissions:archived.archivedPermissions}));
   }
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');
-  return {transcript,archives,commands:commandLog(sessionFiles(projects,session)),result};
+  return {transcript,archived,archives,commands:commandLog(sessionFiles(projects,session)),result};
 }
 function settings(hook) {
   save(join(live,'settings.json'),{autoMemoryEnabled:true,autoMemoryDirectory:join(live,'home/.claude/projects/unit/memory'),
@@ -111,7 +113,9 @@ function settings(hook) {
 function grade(before,commands) {
   const post=stateCommit(work,before);
   holdPre(work,post,FIRST_REF);
-  return runCheck(u.lesson,{work,env:graderEnv(),preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
+  const env=graderEnv();
+  assertCheckerTools(u,env,work);
+  return runCheck(guardedLesson(u.lesson),{work,env,preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
 }
 function archive(name) {
   const dest=inside(join(unit,'evidence',name));
@@ -154,22 +158,28 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   assert.equal(hash(JSON.stringify(files(snap))),snapshotHash,'Frozen snapshot changed');
   const fork=forkStore(snap,baseStore,store,teachId,arm);
   const notes=contents(store);
-  const before=stateCommit(work,u.apply.baseRef), sid=randomUUID(), preTree=git('rev-parse',before+'^{tree}');
-  for(let i=0;i<index;i++) assert.equal(read(join(unit,'evidence','apply-'+i,'grade.json')).preTree,preTree,
-    'Apply work tree differs from arm '+i);
+  const before=stateCommit(work,u.apply.baseRef), sid=randomUUID(), {preTree,ignoredSetup}=treeIds(git,before);
+  for(let i=0;i<index;i++) {
+    const earlier=read(join(unit,'evidence','apply-'+i,'grade.json'));
+    assert(earlier.preTree===preTree && earlier.ignoredSetup===ignoredSetup,'Apply work tree differs from arm '+i);
+  }
   holdPre(work,before);
   const cue=await openCue(work,sid); settings(cue.hook);
-  const {commands,result,archives,transcript}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
+  const {commands,result,archives,archived,transcript}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
   const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
   const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=flagOf(u,verdict,commands);
-  const archivedTargetText=archivedTarget(archives.map(a=>join(path.dirname(a),'operator','bodies','apply')),u.lesson,{...u.apply,work});
+  const receipt={id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,ignoredSetup,
+    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...archived,...audit};
   const dest=archive('apply-'+index);
-  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,
-    resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,archivedTargetText,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
-  if(!smoke) assert(audit.complete && (arm!=='N' || (!audit.targetText && !archivedTargetText)),'Apply request evidence failed: '+arm);
+  if(!smoke && !(audit.complete && (arm!=='N' || neutralClean(receipt)))) {
+    save(join(dest,'rejected.json'),receipt);
+    throw Error('Apply request evidence failed: '+arm+' '+JSON.stringify({complete:audit.complete,targetText:audit.targetText,
+      archivedTargetText:archived.archivedTargetText,archivedUnauditable:archived.archivedUnauditable}));
+  }
+  save(join(dest,'grade.json'),receipt);
 }
 if(continuing) await continueUnit(design,applyArm);
 else {

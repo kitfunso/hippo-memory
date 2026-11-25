@@ -62,15 +62,14 @@ if (-not $p.WaitForExit(3600000)) { & taskkill /PID $p.Id /T /F | Out-Null; thro
 $p.WaitForExit()
 $result=$null
 try { $result=($out.Result.Trim() | ConvertFrom-Json) } catch { if(!$out.IsCompleted){throw} }
-if(!$call.smoke -and (!$result -or $result.is_error) -and $result.subtype -notlike 'error_max*' -and
-  (($out.Result + "`n" + $err.Result) -match 'usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error')) {
-  exit 75
-}
+$limited=(!$call.smoke -and (!$result -or $result.is_error) -and $result.subtype -notlike 'error_max*' -and
+  (($out.Result + "`n" + $err.Result) -match 'usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error'))
+if(!$result -and $limited){ exit 75 }
 if(!$result){throw "Claude Code returned no JSON (exit $($p.ExitCode))"}
 if ($result.session_id -ne $call.session) { throw 'Session id mismatch' }
-# The operator record contains counters and status only. The CLI owns transcript evidence.
-if ($null -eq $result.PSObject.Properties['permission_denials']) { throw 'Claude Code result lacks permission_denials' }
-$denials=@($result.permission_denials | Where-Object { $_ } | ForEach-Object { [ordered]@{tool=[string]$_.tool_name;id=[string]$_.tool_use_id} })
-$record=[ordered]@{session=$result.session_id;subtype=$result.subtype;isError=$result.is_error;turns=$result.num_turns;usage=$result.usage;models=@($result.modelUsage.PSObject.Properties.Name);exit=$p.ExitCode;apparatus=$call.apparatus;permissionDenials=$denials}
+. "$PSScriptRoot/denials.ps1"
+$denials=Get-PermissionDenials $result
+$record=[ordered]@{session=$result.session_id;subtype=$result.subtype;isError=$result.is_error;turns=$result.num_turns;usage=$result.usage;models=@($result.modelUsage.PSObject.Properties.Name);exit=$p.ExitCode;apparatus=$call.apparatus;cutOff=[bool]$limited;permissionDenials=$denials}
 [IO.File]::WriteAllText("$records/$($call.id).json",($record | ConvertTo-Json -Depth 12),(New-Object Text.UTF8Encoding($false)))
+if ($limited) { exit 75 }
 if (($p.ExitCode -ne 0 -or $result.is_error) -and -not ($call.smoke -and $result.subtype -eq 'error_max_turns')) { throw "Claude Code stopped ($($result.subtype), exit $($p.ExitCode))" }

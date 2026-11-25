@@ -107,14 +107,33 @@ def record(path: str) -> dict:
                       if os.path.isdir(os.path.join(path, name))}}
 
 
+def roots_ok() -> bool:
+    top = os.path.normcase(os.path.realpath(ROOT))
+    for path in (ROOT, TRIAL, PC):
+        if linked(path):
+            refuse(path, 'linked root')
+            return False
+    for path in (TRIAL, PC):
+        if os.path.normcase(os.path.realpath(path)) != os.path.join(top, os.path.normcase(os.path.basename(path))):
+            refuse(path, 'root outside the experiment')
+            return False
+    return True
+
+
 def trim_once(keep: frozenset) -> float:
     freed = 0
+    if not roots_ok():
+        return freed
     for name in sorted(os.listdir(TRIAL)):
         pair = os.path.join(TRIAL, name)
         if linked(pair) or not inside(pair, TRIAL):
             refuse(pair, 'linked pair')
             continue
-        if not os.path.isfile(os.path.join(pair, 'result.json')):
+        marker = os.path.join(pair, 'result.json')
+        if linked(marker):
+            refuse(marker, 'linked completion marker')
+            continue
+        if not os.path.isfile(marker):
             continue
         for slot in slots(pair):
             if linked(slot) or not inside(slot, pair):

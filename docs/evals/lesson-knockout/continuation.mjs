@@ -2,8 +2,25 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { findTranscript,listTranscripts } from '../../../scripts/token-eval/records.mjs';
+import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { APPARATUS,read,hash,pins } from './plan.mjs';
 import { files,inside,join,mkdir,stateRoot } from './state.mjs';
+import { permissionAudit } from './evidence.mjs';
+
+export function checkTeachReceipts(unit,freeze,u) {
+  const teach=join(unit,'evidence/teach');
+  const transcript=freeze.teachId && findTranscript(join(teach,'home/.claude/projects'),freeze.teachId);
+  assert(transcript,'Missing teach transcript');
+  assert(['correction','confirmation'].includes(freeze.form),'Invalid teach form');
+  const prompts={teach:u.teach.prompt,feedback:teachMessage(u.lesson,freeze.form)};
+  for(const id of ['teach','feedback']) {
+    const file=join(teach,'operator',id+'.json');
+    assert(fs.existsSync(file),'Missing frozen teach receipt: '+id);
+    const r=read(file);
+    assert(r.session===freeze.teachId && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.cutOff===false &&
+      permissionAudit(transcript,prompts[id],r.permissionDenials).ok,'Invalid frozen teach receipt: '+id);
+  }
+}
 
 function readFreeze(unit) {
   const freeze=read(inside(join(unit,'freeze.json')));
@@ -46,12 +63,7 @@ export function checkContinuation(design) {
   assert.equal(hash(JSON.stringify(files(inside(join(unit,'snapshot'))))),freeze.snapshotHash,'Frozen snapshot changed');
   assert(fs.statSync(inside(join(unit,'pre/store/hippo.db'))).isFile(),'Missing pre-teach store');
   assert.deepEqual(fs.readdirSync(inside(join(unit,'evidence'))),['teach'],'Apply evidence or intent already exists');
-  const teach=inside(join(unit,'evidence/teach'));
-  assert(freeze.teachId && findTranscript(join(teach,'home/.claude/projects'),freeze.teachId),'Missing teach transcript');
-  for(const id of ['teach','feedback']) {
-    const r=read(inside(join(teach,'operator',id+'.json')));
-    assert(r.session===freeze.teachId && r.exit===0 && r.isError===false && r.apparatus===APPARATUS,'Invalid frozen teach receipt: '+id);
-  }
+  checkTeachReceipts(unit,freeze,u);
   checkArchivedAttempts(u);
   const active=inside(join(stateRoot,'active')),live=inside(join(active,'live')),operator=inside(join(active,'operator'));
   if(!fs.existsSync(live) && !fs.existsSync(operator)) return {unit,freeze};

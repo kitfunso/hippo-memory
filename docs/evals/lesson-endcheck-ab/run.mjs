@@ -12,6 +12,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
 import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
+import { GUARD,guardedLesson } from '../checker-guard/lesson.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -71,7 +72,8 @@ function checks(u,work,env,dir,id,pre) {
   const file=findTranscript(projects,id);
   assert.ok(file,'missing apply transcript');
   const files=sessionFiles(projects,id);
-  const grade=(post,commands)=>runCheck(u.lesson,{work,env:graderEnv(env),preCommit:pre,postCommit:post,commands,scratch:dir});
+  const grade=(post,commands)=>runCheck(guardedLesson(u.lesson),{work,env:{...graderEnv(env),CHECK_LOG:path.join(dir,'checker.log')},
+    preCommit:pre,postCommit:post,commands,scratch:dir});
   const first=grade(stateCommit(work,pre),commandLog(files));
   const events=fs.existsSync(env.LESSON_EVENTS)?fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse):[];
   const transcript=fs.readFileSync(file,'utf8').trimEnd().split('\n').map(JSON.parse);
@@ -100,7 +102,7 @@ function checks(u,work,env,dir,id,pre) {
   assert.deepEqual(listings.map(x=>x.text),actual.map(x=>x.text),'emitted and delivered reminders differ');
   const lastTurn=lastAssistantTurn(transcript);
   const productionTimeouts=events.filter(e=>e.outcome==='production_timeout').length;
-  return {first,stops:events.length,productionTimeouts,nonStopTimeouts,
+  return {first,grader:GUARD,stops:events.length,productionTimeouts,nonStopTimeouts,
     listings:listings.map(({text,...rest},i)=>({...rest,continued:lastTurn>actual[i].index}))};
 }
 
@@ -310,6 +312,13 @@ if(mode==='probe') {
     const row=assess(smoke,dir,env,sessionId,arm);
     assert.equal(row.first,'pass');
     assert.equal(row.nonStopTimeouts,1);
+    assert.equal(row.grader,GUARD);
+    if(arm==='OFF') {
+      const crash=path.join(dir,'crash.mjs');
+      fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));\n");
+      assert.throws(()=>checks({...smoke,lesson:{...smoke.lesson,checkPath:crash}},work,env,dir,sessionId,env.LESSON_PRE),/exited 2/);
+      assert.match(fs.readFileSync(path.join(dir,'checker.log'),'utf8'),/checker crashed: Error: fixture crash/);
+    }
     if(arm==='ON') {
       assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
       assert.ok(qualifies({revision,rows:{ON:row}}));

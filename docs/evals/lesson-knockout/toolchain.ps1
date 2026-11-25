@@ -32,15 +32,54 @@ if($Chain -eq 'python') {
   $env:PIP_CONSTRAINT='C:/z0-runs/r4/pip-constraints.txt'
   $env:PATH="$Live/venv/Scripts;C:/z0-runs/r4/poetry-2.5.1/Scripts;$env:PATH"
 }
+$chainTools=@{ python=@('python','poetry'); maven=@('mvn'); dotnet=@('dotnet'); gradle=@('gradlew'); gradle17=@('gradlew');
+  'gradle-android'=@('gradlew'); elixir=@('mix','elixir','erl'); go=@('go'); pnpm=@('pnpm'); npm=@();
+  rust=@('cargo'); 'rust-ucrt'=@('cargo'); ruby=@('ruby','bundle'); julia=@('julia') }
+function Resolve-OnPath([string[]]$Dirs,[string]$Name) {
+  foreach ($dir in $Dirs) {
+    foreach ($ext in @('') + ($env:PATHEXT -split ';')) {
+      $file=Join-Path $dir ($Name+$ext)
+      if (Test-Path -LiteralPath $file -PathType Leaf) { return $file }
+    }
+  }
+  $null
+}
+$toolFolders=@{ poetry='C:\z0-runs\r4\poetry-2.5.1\Scripts' }
+function Get-ChainFolders([string]$Chain,[string]$Root) {
+  $root=[IO.Path]::GetFullPath($Root)
+  @((Get-S3xTool $Chain).path -replace '\{work\}',$root -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
+}
 function Assert-SessionPath([string]$PathValue,[string]$Chain,[string]$Root) {
   $dirs=@($PathValue -split ';' | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"')).TrimEnd('\','/') -replace '/','\' } | Where-Object { $_ })
-  $found={ param($name) foreach ($dir in $dirs) { foreach ($ext in @('') + ($env:PATHEXT -split ';')) { if (Test-Path -LiteralPath (Join-Path $dir ($name+$ext)) -PathType Leaf) { return $true } } }; $false }
-  if (& $found 'hippo') { throw 'A hippo launcher resolves on the session PATH' }
-  foreach ($tool in @('git','node','npm','npx')) { if (!(& $found $tool)) { throw "Session PATH lacks $tool" } }
-  $root=[IO.Path]::GetFullPath($Root)
-  foreach ($dir in @((Get-S3xTool $Chain).path -replace '\{work\}',$root -split ';' | Where-Object { $_ })) {
-    if ($dirs -notcontains $dir.TrimEnd('\')) { throw "Session PATH lacks toolchain folder $dir" }
+  if (Resolve-OnPath $dirs 'hippo') { throw 'A hippo launcher resolves on the session PATH' }
+  foreach ($tool in @('git','node','npm','npx')) { if (!(Resolve-OnPath $dirs $tool)) { throw "Session PATH lacks $tool" } }
+  if (!$chainTools.ContainsKey($Chain)) { throw "No expected tools for toolchain $Chain" }
+  $folders=@(Get-ChainFolders $Chain $Root)
+  foreach ($tool in $chainTools[$Chain]) {
+    $allowed=if ($toolFolders.ContainsKey($tool)) { @($toolFolders[$tool]) } else { $folders }
+    foreach ($dir in $allowed) { if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw "Toolchain folder $dir is missing" } }
+    $hit=Resolve-OnPath $dirs $tool
+    if (!$hit) { throw "Session PATH does not resolve $tool" }
+    if ($allowed -notcontains (Split-Path -Parent $hit)) { throw "$tool resolves to $hit, outside the $Chain toolchain" }
   }
+  foreach ($key in @('JAVA_HOME','GOROOT','DOTNET_ROOT','ANDROID_HOME')) {
+    $value=(Get-S3xTool $Chain).env[$key]
+    if ($value -and !(Test-Path -LiteralPath $value -PathType Container)) { throw "Toolchain $key folder $value is missing" }
+  }
+}
+function Copy-GradleProperties([string]$Chain,[string]$Live) {
+  $source=(Get-S3xTool $Chain).env['GRADLE_USER_HOME']
+  if (!$source) { return $null }
+  $private=[IO.Path]::GetFullPath("$Live/cache").TrimEnd('\') + '\'
+  $gradleHome=[IO.Path]::GetFullPath($env:GRADLE_USER_HOME).TrimEnd('\')
+  if (!$gradleHome.StartsWith($private,[StringComparison]::OrdinalIgnoreCase)) { throw "GRADLE_USER_HOME $gradleHome is outside the private cache" }
+  if ($gradleHome -eq [IO.Path]::GetFullPath($source).TrimEnd('\')) { throw 'GRADLE_USER_HOME is the shared Z0 home' }
+  $from=Join-Path $source 'gradle.properties'
+  $target=Join-Path $gradleHome 'gradle.properties'
+  New-Item -ItemType Directory -Force -Path $gradleHome | Out-Null
+  Copy-Item -LiteralPath $from -Destination $target -Force
+  if ((Get-FileHash -LiteralPath $target).Hash -ne (Get-FileHash -LiteralPath $from).Hash) { throw 'Private gradle.properties differs from the Z0 file' }
+  $target
 }
 $hippoLaunchers=@('hippo','hippo.cmd','hippo.ps1','hippo.exe','hippo.bat')
 $env:PATH=(@($env:PATH -split ';' | Where-Object {

@@ -24,7 +24,9 @@ def verify() -> None:
                               teachId=unit, snapshotHash=unit, resetHash=unit, targetCount=1, storeVerified=True,
                               verdict="fail" if arm == "N" else "pass", hookSeen=True, complete=True,
                               pathAudit={"transcripts": 1, "hits": []}, apparatus=analyze.APPARATUS,
-                              targetText=arm != "N", flagged=(arm == "N") if unit in labels["variant"] else None)
+                              targetText=arm != "N", flagged=(arm == "N") if unit in labels["variant"] else None,
+                              preTree="a" * 40, ignoredSetup="b" * 64, archivedTargetText=False, sideRequests=0,
+                              archivedAttempts=0, archivedRefused=0, archivedUnauditable=0, archivedPermissions=True)
                 path = analyze.ROOT / unit / "evidence" / f"apply-{index}" / "grade.json"
                 path.parent.mkdir(parents=True)
                 path.write_text(json.dumps(record), encoding="utf-8")
@@ -61,6 +63,26 @@ def verify() -> None:
         change(first, "N", pathAudit=clean, verdict="fail")
         change(first, "N", targetText=True)
         assert analyze.report()["status"] == "invalid"
+        change(first, "N", targetText=False, archivedTargetText=True)
+        assert analyze.report()["gates"]["neutralLeaks"] == 1
+        change(first, "N", archivedTargetText=False, archivedAttempts=1, archivedUnauditable=1)
+        assert analyze.report()["status"] == "invalid"
+        change(first, "N", archivedAttempts=0, archivedUnauditable=0, ignoredSetup="c" * 64)
+        report = analyze.report()
+        assert report["status"] == "invalid" and report["gates"]["treeErrors"] == 1
+        change(first, "N", ignoredSetup="b" * 64, preTree="d" * 40)
+        assert analyze.report()["gates"]["treeErrors"] == 1
+        change(first, "N", preTree="a" * 40)
+        for field, value in (("preTree", "tree"), ("ignoredSetup", None), ("archivedTargetText", None),
+                             ("archivedUnauditable", -1), ("archivedPermissions", False), ("sideRequests", None)):
+            saved = json.loads(files[first, "N"].read_text(encoding="utf-8"))
+            change(first, "N", **{field: value})
+            try:
+                analyze.report()
+                raise AssertionError(f"Accepted a receipt with {field}={value}")
+            except ValueError as error:
+                assert "audit fields" in str(error), error
+            files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
         change(first, "N", targetText=False, verdict="na", hookSeen=False)
         report = analyze.report()
         assert report["status"] == "audit-required" and report["excluded"]["pairs"] == len(plan["units"])-1
@@ -72,20 +94,23 @@ def verify() -> None:
             change(unit, "T", hookSeen=True, verdict="fail")
         report = analyze.report()
         assert report["status"] == "kill" and report["kill"] == ["content", "noise"]
+        assert analyze.APPARATUS == 3
         record = json.loads(files[first, "N"].read_text(encoding="utf-8"))
-        files[first, "N"].write_text(json.dumps({**record, "apparatus": analyze.APPARATUS - 1}), encoding="utf-8")
-        try:
-            analyze.report()
-            raise AssertionError("Accepted a receipt from before the apparatus fix")
-        except ValueError as error:
-            assert "apparatus fix" in str(error), error
+        stale = {k: v for k, v in record.items() if k != "apparatus"}
+        for receipt in ({**record, "apparatus": 2}, stale, {**record, "apparatus": "3"}):
+            files[first, "N"].write_text(json.dumps(receipt), encoding="utf-8")
+            try:
+                analyze.report()
+                raise AssertionError("Accepted a receipt from before the apparatus fix")
+            except ValueError as error:
+                assert "apparatus fix" in str(error), error
         files[first, "N"].write_text(json.dumps(record), encoding="utf-8")
         files[first, "T"].unlink()
         assert analyze.report()["status"] == "incomplete"
     finally:
         analyze.ROOT = original
         shutil.rmtree(directory)
-    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity, the protocol failure gate and the apparatus stamp.")
+    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity, the protocol failure gate, neutral and archived leaks, tree checks and the apparatus 3 stamp.")
 
 
 if __name__ == "__main__":

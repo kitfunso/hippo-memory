@@ -31,6 +31,14 @@ def contrast(units: list[dict], exclude_na: bool) -> dict:
                 high=point+margin if margin is not None else None)
 
 
+def is_hex(value: object, size: int) -> bool:
+    return isinstance(value, str) and len(value) == size and all(c in "0123456789abcdef" for c in value)
+
+
+def neutral_leak(r: dict) -> bool:
+    return r["targetText"] or r["archivedTargetText"] or r["archivedUnauditable"] > 0
+
+
 def read_roster() -> tuple[dict, dict]:
     plan = json.loads(subprocess.check_output(["node", str(PLAN)], encoding="utf-8"))
     if plan["sha256"] != DIGEST:
@@ -57,6 +65,12 @@ def read_roster() -> tuple[dict, dict]:
         if (type(audit.get("transcripts")) is not int or audit["transcripts"] < 1
                 or not isinstance(audit.get("hits"), list)):
             raise ValueError(f"Missing transcript path audit {f}")
+        if not (is_hex(r.get("preTree"), 40) and is_hex(r.get("ignoredSetup"), 64)
+                and all(type(r.get(k)) is bool for k in ("targetText", "archivedTargetText", "hookSeen", "complete"))
+                and all(type(r.get(k)) is int and r[k] >= 0
+                        for k in ("sideRequests", "archivedAttempts", "archivedRefused", "archivedUnauditable"))
+                and r.get("archivedPermissions") is True):
+            raise ValueError(f"Missing tree or request audit fields {f}")
         sessions.add(r["session"])
         found[key] = r
     return slots, found
@@ -87,7 +101,8 @@ def report() -> dict:
     contaminated = sum(by_arm.values())
     gates = dict(forkErrors=fork_errors, storeErrors=sum(not r["storeVerified"] for r in found.values()),
                  missingRequestEvidence=sum(not r["complete"] for r in found.values()),
-                 neutralLeaks=sum(u["N"]["targetText"] for u in units), hookLoss=loss,
+                 neutralLeaks=sum(neutral_leak(u["N"]) for u in units), hookLoss=loss,
+                 treeErrors=sum(len({(r["preTree"], r["ignoredSetup"]) for r in u.values()}) != 1 for u in units),
                  hookMissesByArm={a: sum(not u[a]["hookSeen"] for u in units) for a in ARMS},
                  contaminatedByArm=by_arm, contaminatedPairs=contaminated, scheduledPairs=len(found))
     if contaminated * 100 > 5 * len(found):
@@ -102,7 +117,8 @@ def report() -> dict:
         kills.append("content")
     if noise > .15:
         kills.append("noise")
-    bad = fork_errors or gates["storeErrors"] or gates["missingRequestEvidence"] or gates["neutralLeaks"] or loss >= .05
+    bad = (fork_errors or gates["storeErrors"] or gates["missingRequestEvidence"] or gates["neutralLeaks"]
+           or gates["treeErrors"] or loss >= .05)
     passes = all(x["low"] is not None and x["low"] > 0 and x["estimate"] >= .15
                  for x in [violation, excluded])
     status = "invalid" if bad else "kill" if kills else "audit-required" if passes else "inconclusive"
