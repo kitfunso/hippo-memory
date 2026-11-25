@@ -444,6 +444,17 @@ describe('project write gate', () => {
     expect(r.status, r.text).toBe(200);
     expect(calls.at(-1)?.actor.subject).toBe('localhost:cli');
     expect(calls.at(-1)?.actor.owner).toBeUndefined();
+    expect(calls.at(-1)?.actor.localKey).toBe(true);
+  });
+
+  it('24b. over MCP, the local CLI key reaches the gate with its flag and the write lands', async () => {
+    const token = readLocalKey(store);
+    expect(token).toBeDefined();
+    set(() => null);
+    await mcpRemember(gated.url, token ?? '', 'case24b');
+    expect(calls.at(-1)?.actor.subject).toBe('localhost:cli');
+    expect(calls.at(-1)?.actor.localKey).toBe(true);
+    expect(rows('case24b')).toEqual([{ origin_project: 'alpha' }]);
   });
 
   it('25. over MCP, a gate that throws an HttpError leaks none of its text', async () => {

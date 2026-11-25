@@ -158,6 +158,15 @@ describe('a member key writes through a served store', () => {
     expect(await (await get('/v1/memories?q=zanzibar', mintKey('admin'))).text()).toContain('zanzibar echo deploy');
   });
 
+  it('(j) does not hold the operator local key over MCP, and recalls the row', async () => {
+    const local = readLocalKey(home)!;
+    const text = await rememberTool(local, flagged('juliet'));
+
+    expect(text).toContain('Remembered [');
+    expect(text).not.toContain('Quarantined [');
+    expect(await (await get('/v1/memories?q=zanzibar', mintKey('admin'))).text()).toContain('zanzibar juliet deploy');
+  });
+
   it('(f) holds a resolver bearer that claims the local key', async () => {
     const { status, json } = await remember(FORGED, flagged('foxtrot'));
 

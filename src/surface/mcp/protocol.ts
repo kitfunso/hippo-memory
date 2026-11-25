@@ -96,6 +96,7 @@ export interface McpCaller<S extends RequiredStore = RequiredStore> {
   viaAuthResolver?: true;
   /** Set by the HTTP transport for the host's operator; never implied by the role. */
   hostAdmin?: true;
+  localKey?: true;
   owner?: string; // copied by mcpActor so MCP task state keys the same as REST
   project?: CallerProject; // from X-Hippo-Project on a shared store: stamps writes, filters reads, keys outcomes
   /** The store this transport's calls run on. */
@@ -158,6 +159,7 @@ export function mcpActor(ctx: McpCaller | undefined): ApiActor {
   };
   if (ctx.viaAuthResolver) actor.viaAuthResolver = true;
   if (ctx.hostAdmin) actor.hostAdmin = true;
+  if (ctx.localKey) actor.localKey = true;
   if (ctx.owner !== undefined) actor.owner = ctx.owner;
   return actor;
 }
