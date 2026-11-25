@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {loadPlan,read,root} from './paths.mjs';
+import {loadPlan,read,revision,root} from './paths.mjs';
 import {schedule,signP} from './design.mjs';
 import {upperNet} from './safety.mjs';
 
@@ -69,7 +69,7 @@ for(const p of schedule) {
   assert.equal(row.pair,p.key);assert.equal(row.id,p.id);
   assert.match(row.seedHash,/^[0-9a-f]{64}$/);
   const {ON:on,OFF:off}=row.rows;
-  assert.equal(row.revision,'neon-1');
+  assert.equal(row.revision,revision);
   assert.ok(on===null?row.missing.ON:valid(on) && on.stops>0);
   assert.ok(off===null?row.missing.OFF:valid(off) && !off.listings.length && !off.stops);
   results.push({p,u,off,on});

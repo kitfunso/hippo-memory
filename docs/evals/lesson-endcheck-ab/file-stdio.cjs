@@ -4,14 +4,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {syncBuiltinESMExports} = require('node:module');
 const spawn = cp.spawnSync;
-const base = 'C:/z0-lessons/lesson-endcheck-ab/io';
-if (process.platform === 'win32' && spawn('git',['--version']).error?.code === 'EPERM') {
-  fs.mkdirSync(base,{recursive:true});
+const mode = process.env.LESSON_STDIO ??
+  (process.platform === 'win32' && spawn('git',['--version']).error?.code === 'EPERM' ? 'file' : 'pipe');
+module.exports = mode;
+if (mode === 'file') {
   cp.spawnSync = function(file,args,options={}) {
     const io = options.stdio ?? 'pipe';
     const streams = Array.isArray(io) ? io : Array(3).fill(io);
     if (!streams.includes('pipe')) return spawn(file,args,options);
-    const dir=fs.mkdtempSync(path.join(base,'p-'));
+    const dir=fs.mkdtempSync(path.join(options.env?.TEMP ?? require('node:os').tmpdir(),'p-'));
     const names=['in','out','err'].map(n=>path.join(dir,n));
     const fds=[];
     try {

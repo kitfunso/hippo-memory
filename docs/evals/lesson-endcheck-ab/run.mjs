@@ -9,10 +9,10 @@ import { assertNoAncestorInstructions } from '../../../scripts/token-eval/homes.
 import { cleanPath } from '../../../scripts/token-eval/arms.mjs';
 import net from 'node:net';
 import { setTimeout as wait } from 'node:timers/promises';
-import { binary,corpus,digest,dist,freeze,json,loadPlan,read,root,slice } from './paths.mjs';
+import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
 import { checkout,install,privateEnv,run,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
-import { pins } from './pins.mjs';
+import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const modes=['check','probe','smoke','qualify','pair','full'];
@@ -44,9 +44,23 @@ function toolEnv(u,dir,initial=true) {
   if(initial && u.toolchain==='python') run('python',['-m','venv',path.join(dir,'venv')],dir,env);
   return env;
 }
-const armCmd=(id,tokenName,settings,work,env,prompt)=>run('powershell.exe',
+const armCmd=({id,token,slot,arm,seedHash,prompt,intent})=>run('powershell.exe',
   ['-NoProfile','-ExecutionPolicy','Bypass','-File',path.join(here,'claude.ps1'),'-Mode','apply',
-    '-SessionId',id,'-Settings',settings,'-PromptFile',prompt,'-TokenVar',tokenName],work,env);
+    '-SessionId',id,'-Settings',slot.settings,'-PromptFile',prompt,'-TokenVar',token,
+    '-Arm',arm,'-SeedHash',seedHash,'-Intent',intent],slot.work,slot.env);
+
+function lastAssistantTurn(transcript) {
+  const seen=new Set();
+  let last=-1;
+  for(const [index,row] of transcript.entries()) {
+    const message=row.message;
+    if(row.type!=='assistant' || message?.role!=='assistant' || row.isApiErrorMessage || row.isSidechain) continue;
+    if(!message.id || seen.has(message.id) || message.model==='<synthetic>') continue;
+    seen.add(message.id);
+    last=index;
+  }
+  return last;
+}
 
 function checks(u,work,env,dir,id,pre) {
   const projects=path.join(env.CLAUDE_CONFIG_DIR,'projects');
@@ -67,10 +81,11 @@ function checks(u,work,env,dir,id,pre) {
   if(failedHooks.length) json(path.join(dir,'hook-faults.json'),failedHooks.map(h=>({
     event:h.hookEvent,type:h.type,exit:h.exitCode,timedOut:h.timedOut,durationMs:h.durationMs})));
   if(failedHooks.some(h=>!routine(h))) throw new Error('Unclassified hook failure; see hook-faults.json');
-  const actual=transcript
-    .filter(x=>x.attachment?.hookEvent==='Stop' && x.attachment.type==='hook_additional_context')
-    .map(x=>[x.attachment.content].flat().join('\n'))
-    .filter(s=>typeof s==='string' && s.includes(END_CHECK_LEAD));
+  const actual=transcript.flatMap(({attachment},index)=>{
+    if(attachment?.hookEvent!=='Stop' || attachment.type!=='hook_additional_context') return [];
+    const text=[attachment.content].flat().join('\n');
+    return text.includes(END_CHECK_LEAD)?[{text,index}]:[];
+  });
   const listings=events.filter(e=>e.response).map(e=>{
     const text=JSON.parse(e.response).hookSpecificOutput.additionalContext;
     const lines=text.split('\n').filter(s=>/^\d+\. /.test(s));
@@ -78,9 +93,11 @@ function checks(u,work,env,dir,id,pre) {
     const target=lines.filter(s=>norm(s).includes(norm(u.lesson.rule).slice(0,40))||s.includes(u.lesson.keyPhrase));
     return {text,target:target.length,other:lines.length-target.length,atStop:grade(e.post,e.commands)};
   });
-  assert.deepEqual(listings.map(x=>x.text),actual,'emitted and delivered reminders differ');
+  assert.deepEqual(listings.map(x=>x.text),actual.map(x=>x.text),'emitted and delivered reminders differ');
+  const lastTurn=lastAssistantTurn(transcript);
   const productionTimeouts=events.filter(e=>e.outcome==='production_timeout').length;
-  return {first,stops:events.length,productionTimeouts,nonStopTimeouts,listings:listings.map(({text,...rest})=>rest)};
+  return {first,stops:events.length,productionTimeouts,nonStopTimeouts,
+    listings:listings.map(({text,...rest},i)=>({...rest,continued:lastTurn>actual[i].index}))};
 }
 
 async function prepareSlot(u,dir,template,arm) {
@@ -102,10 +119,13 @@ function graderEnv(env) {
   return {...env,NODE_OPTIONS:'--require "'+path.join(here,'file-stdio.cjs').replaceAll('\\','/')+'"'};
 }
 const limitWaitMs=15*60_000, maxWaits=8*96;
-const revision='neon-1';
+function qualifies(result) {
+  return result.revision===revision && result.rows.ON?.listings.some(l=>l.target>0 && l.continued===true);
+}
 const qualificationPrompt='Create Qualification.kt in the repository root using Write, containing only class Qualification. Finish immediately after that edit without running commands.';
 function boxGate(slot) {
-  const output=run(slot.env.CLAUDE_CODE_GIT_BASH_PATH,['C:/z0-runs/s7/box-check.sh'],slot.work,slot.env);
+  verifyBoxCheck();
+  const output=run(slot.env.CLAUDE_CODE_GIT_BASH_PATH,[boxCheck],slot.work,slot.env);
   console.log(output.trim());
 }
 function record(file,value) {
@@ -137,13 +157,15 @@ async function collectArm({pair,u,base,arm,template,slot,seedHash,promptText},
         assert.deepEqual(fresh.common,slot.common);
         slot={...fresh,dir};
       }
-      const {dir,work,settings,env}=slot,id=randomUUID(),prompt=path.join(dir,'prompt.txt');
+      const id=randomUUID(),prompt=path.join(slot.dir,'prompt.txt');
       freeze(prompt,promptText);
       gate(slot);
-      record(intent,{id,dir,pre:env.LESSON_PRE,arm,seedHash,tokenVar:token});
       let reply;
-      try { reply=launch(id,token,settings,work,env,prompt).trim(); }
-      catch(e) { return missing('launcher failure '+(e.status??e.code??e.name),dir); }
+      try { reply=launch({id,token,slot,prompt,arm,seedHash,intent}).trim(); }
+      catch(e) {
+        throw new Error('Schedule paused at '+pair+' '+arm+' ('+
+          (fs.existsSync(intent)?'dispatch unconfirmed':'did not start')+', launcher '+(e.status??e.code??e.name)+')');
+      }
       assert.ok(reply==='LIMITED' || reply===id,'unrecognised launcher reply');
       record(status,{limited:reply==='LIMITED',at:Date.now()});
     }
@@ -169,7 +191,7 @@ async function collectArm({pair,u,base,arm,template,slot,seedHash,promptText},
 }
 async function execute(pair,u,base,arms,promptText=u.task.prompt) {
   const result=path.join(base,'result.json');
-  if(fs.existsSync(result)) return;
+  if(fs.existsSync(result)) return read(result);
   fs.mkdirSync(base,{recursive:true});
   const prep=fs.mkdtempSync(path.join(base,'prep-'));
   const template=path.join(prep,'template');
@@ -197,6 +219,7 @@ async function execute(pair,u,base,arms,promptText=u.task.prompt) {
   }
   record(result,{revision,pair,id:u.id,seedHash,rows,missing});
   console.log(pair+(Object.keys(missing).length?' closed with missing evidence':' complete'));
+  return read(result);
 }
 
 async function hashFile(f) {
@@ -205,7 +228,9 @@ async function hashFile(f) {
   return h.digest('hex');
 }
 assertNoAncestorInstructions(root);
-process.env.TEMP=process.env.TMP=path.join(root,'tmp');
+const checkRoot=['probe','check'].includes(mode) && process.env.LESSON_CHECK_ROOT
+  ? path.resolve(process.env.LESSON_CHECK_ROOT) : root;
+process.env.TEMP=process.env.TMP=path.join(checkRoot,'tmp');
 fs.mkdirSync(process.env.TEMP,{recursive:true});
 assert.deepEqual(pins(),{
   sliceJs:'67dd3ff715de52ac73b33675cd7e2be778d378b906205d8099880b78082dabfa',
@@ -213,23 +238,24 @@ assert.deepEqual(pins(),{
   checkerTree:'b1d0fd269223f89acf3c1975c648edc6e3e507f69fe0ab3f2e9a45a796a35dbd',
   runner:'8e155d5ea4dcbffaa299c4fefea8c6b49a2ce663e620ef6064c415758c516de6',
   tools:'4837370c0932bfbe9197f174eb19fdec2ddc7ceaf2ffea545dcad6df9a7951c9',
+  boxCheck:boxCheckSha,
   round3:'824d752205057f81f6e3f00df41552925b4848cce1ea6e860928dbdec101194c'
 });
 assert.equal(await hashFile(binary),'5064e6e0572dca86257363ca04d48653eef20ef27f1bd04b504ed7199ed3fd13');
 assert.equal(run('git',['rev-parse','HEAD'],slice,process.env).trim(),'70eb87c0fdabdcc96754c80ccb4f975df87213ca');
 assert.equal(digest(fs.readFileSync(path.join(corpus,'plan.json'))),'fdc2911c1d908c101327348a56d1c302141ae8cdaa9c1056ed0d9dfd3d7c5471');
 if(mode!=='check') {
-  const dir=path.join(root,'shell-probe');
+  const dir=path.join(checkRoot,'shell-probe');
   const env=mode==='probe'?toolEnv(smoke,dir):privateEnv(dir);
   const js="const r=require('node:child_process').spawnSync(process.env.CLAUDE_CODE_GIT_BASH_PATH,['--noprofile','--norc','-c','exit 0']);if(r.status!==0){console.error('Git Bash unavailable: '+(r.error?.code??r.status));process.exit(1)}";
   run(process.execPath,['-e',js],dir,env);
 }
 if(mode==='probe') {
-  const work=path.join(root,'shell-probe');
+  const work=path.join(checkRoot,'shell-probe');
   boxGate({work,env:toolEnv(smoke,work)});
   console.log('Git Bash and Z0 box gate passed; no model call');
 } else if(mode==='check') {
-  const d=fs.mkdtempSync(path.join(root,'offline-'));
+  const d=fs.mkdtempSync(path.join(checkRoot,'offline-'));
   const {checkRecovery,checkTimeout}=await import('./offline.mjs');
   await checkRecovery(d,collectArm);
   checkTimeout(d);
@@ -248,9 +274,10 @@ if(mode==='probe') {
     assert.ok(rules.includes(rule.content),'seed did not reach the real session-start reader');
     const sessionId=randomUUID();
     const t=path.join(env.CLAUDE_CONFIG_DIR,'projects','fixture',sessionId+'.jsonl');
-    const message=(type,content)=>JSON.stringify({type,message:{role:type,content}});
+    const message=(type,content)=>JSON.stringify({type,message:{role:type,content,id:randomUUID()}});
     fs.writeFileSync(path.join(work,'Example.kt'),'class Example {}\n');
-    freeze(t,[message('user','Fix the example'),message('assistant',[{type:'tool_use',id:'w',name:'Write',input:{file_path:'Example.kt',content:'class Example {}'}}]),
+    const edit=message('assistant',[{type:'tool_use',id:'w',name:'Write',input:{file_path:'Example.kt',content:'class Example {}'}}]);
+    freeze(t,[message('user','Fix the example'),edit,
       message('user',[{type:'tool_result',tool_use_id:'w',content:'done'}])].join('\n')+'\n');
     const output=run(process.execPath,[hippo,'end-check'],work,env,{input:JSON.stringify({transcript_path:t})});
     assert.ok(output.includes('spotlessApply'),'real Stop missed seeded detector');
@@ -266,13 +293,21 @@ if(mode==='probe') {
       assert.throws(()=>checks(smoke,work,env,dir,sessionId,env.LESSON_PRE),/emitted and delivered/);
       fs.appendFileSync(t,JSON.stringify({attachment:{type:'hook_additional_context',hookEvent:'Stop',
         content:[JSON.parse(emitted).hookSpecificOutput.additionalContext]}})+'\n');
+      fs.appendFileSync(t,edit+'\n'+JSON.stringify({type:'assistant',
+        message:{role:'assistant',model:'<synthetic>',id:randomUUID(),content:[]}})+'\n');
+      const stopped=assess(smoke,dir,env,sessionId,arm);
+      assert.ok(stopped.listings.some(l=>l.target>0 && l.continued===false));
+      assert.equal(qualifies({revision,rows:{ON:stopped}}),false);
     }
     fs.appendFileSync(t,JSON.stringify({attachment:{hookEvent:'UserPromptSubmit',type:'hook_cancelled',timedOut:true}})+'\n'
       +message('assistant',[{type:'tool_use',id:'g',name:'Bash',input:{command:'./gradlew spotlessApply'}}])+'\n');
     const row=assess(smoke,dir,env,sessionId,arm);
     assert.equal(row.first,'pass');
     assert.equal(row.nonStopTimeouts,1);
-    if(arm==='ON') assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
+    if(arm==='ON') {
+      assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
+      assert.ok(qualifies({revision,rows:{ON:row}}));
+    }
     assert.equal(run('git',['rev-parse','refs/z0/pre'],work,env).trim(),env.LESSON_PRE);
     console.log(arm+' seed, retained timeout and final grade passed');
   }
@@ -289,19 +324,20 @@ if(mode==='probe') {
   assert.ok(!fs.existsSync(smokeDir) || key==='new-attempt','Preserve the historical smoke; use new-attempt for an authorised smoke');
   // Keep the original smoke evidence when a later operator has a new launch authorisation.
   const dest=fs.existsSync(smokeDir) && key==='new-attempt' ? fs.mkdtempSync(path.join(root,'smoke-retry-')) : null;
-  await execute('smoke',smoke,dest?path.join(dest,'attempt'):smokeDir,['ON']);
+  assert.ok(qualifies(await execute('smoke',smoke,dest?path.join(dest,'attempt'):smokeDir,['ON'])),
+    'Smoke did not show continuation after a delivered target listing');
   } else if(mode==='qualify') {
-    await execute('qualify',smoke,path.join(root,'qualification-'+revision),['ON'],qualificationPrompt);
+    assert.ok(qualifies(await execute('qualify',smoke,path.join(root,'qualification-'+revision),['ON'],qualificationPrompt)),
+      'Qualification did not show continuation after a delivered target listing');
   } else {
   const smokeRoots=[path.join(root,'smoke'),...fs.readdirSync(root).filter(n=>/^smoke-retry-[\w-]+$/.test(n)).map(n=>path.join(root,n,'attempt'))];
   smokeRoots.push(path.join(root,'qualification-'+revision));
   assert.ok(smokeRoots.some(d=>{
     const f=path.join(d,'result.json');
     if(!fs.existsSync(f)) return false;
-    const r=read(f);
-    return r.revision===revision && r.rows.ON?.listings.some(l=>l.target>0);
+    return qualifies(read(f));
   }),
-    'A completed live smoke with a delivered Stop listing is required before scored launches');
+    'A completed live control must show continuation after a delivered target listing');
   const todo=mode==='full'?schedule:schedule.filter(p=>p.key===key);
   assert.ok(todo.length,'unknown pair');
   for(const p of todo) await execute(p.key,byId.get(p.id),path.join(root,'trial',p.key),p.order);

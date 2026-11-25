@@ -1,4 +1,4 @@
-import './file-stdio.cjs';
+import stdioMode from './file-stdio.cjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -21,6 +21,7 @@ export function privateEnv(dir) {
     env[k]=path.join(dir,v); fs.mkdirSync(env[k],{recursive:true});
   }
   return {...env,HIPPO_CAPTURE_SCRIPTED:'1',HIPPO_AGENT_MEMORY_TOOLS:'claude-code,codex',
+    LESSON_STDIO:stdioMode,LESSON_HIPPO:hippo,LESSON_STOP_TIMEOUT_MS:String(HOOK_MEDIUM_TIMEOUT_SECONDS*1000),
     CLAUDE_CODE_DISABLE_AUTO_MEMORY:'0',DISABLE_AUTOUPDATER:'1',CLAUDE_CODE_GIT_BASH_PATH:'C:/Program Files/Git/bin/bash.exe',
     GIT_CONFIG_NOSYSTEM:'1',GIT_CONFIG_GLOBAL:'NUL',CI:'true'};
 }

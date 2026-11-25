@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {corpus,digest,repo,scored,slice} from './paths.mjs';
+import {boxCheck,corpus,digest,repo,scored,slice} from './paths.mjs';
+import assert from 'node:assert/strict';
+
+export const boxCheckSha='4548084ad76f9eecc834a5eba5401dd1b32e0a91baec52fe2e9915c1c831cfb0';
+export function verifyBoxCheck(file=boxCheck) {
+  assert.equal(digest(fs.readFileSync(file)),boxCheckSha,'box-check.sh differs from the registered script');
+}
 
 function tree(root,keep) {
   const files=fs.readdirSync(root,{recursive:true,withFileTypes:true}).filter(f=>f.isFile()&&keep(f.name))
@@ -15,6 +21,7 @@ export function pins() {
     checkerTree:tree(path.join(corpus,'checks'),()=>true),
     runner:tree(path.join(repo,'scripts/token-eval'),f=>f.endsWith('.mjs')),
     tools:digest(fs.readFileSync('C:/eval-authors/s3x-env.ps1')),
+    boxCheck:digest(fs.readFileSync(boxCheck)),
     round3:digest(fs.readFileSync(path.join(scored,'pins-r3c.json'))),
   };
 }

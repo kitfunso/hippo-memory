@@ -9,11 +9,17 @@ export const slice = path.resolve(repo, '../wt-slice1');
 export const experiments = 'C:/Users/skf_s/Documents/hippo-mechanisms-2026-11-24/experiment1';
 export const scored = 'C:/z0-runs/scored';
 export const binary = path.join(scored, 'bin/claude.exe');
+export const boxCheck = 'C:/z0-runs/s7/box-check.sh';
+export const revision = 'neon-2';
 export const study = 'lesson-endcheck-ab-2026-11-25';
 export const dist = name => import(pathToFileURL(path.join(slice, 'dist', name)).href);
 export const read = f => JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, ''));
 export const digest = x => createHash('sha256').update(x).digest('hex');
 export function freeze(file, bytes) {
+  if (fs.existsSync(file)) {
+    if (!fs.readFileSync(file).equals(Buffer.from(bytes))) throw new Error('Frozen file changed: '+file);
+    return;
+  }
   fs.mkdirSync(path.dirname(file), {recursive: true});
   try { fs.writeFileSync(file, bytes, {flag: 'wx'}); }
   catch (e) {

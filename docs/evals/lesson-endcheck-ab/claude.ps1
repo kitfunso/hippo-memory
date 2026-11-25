@@ -3,7 +3,10 @@ param(
   [Parameter(Mandatory)][ValidateSet('apply','pick')][string]$Mode,
   [Parameter(Mandatory)][string]$SessionId,
   [Parameter(Mandatory)][string]$Settings,
-  [Parameter(Mandatory)][string]$PromptFile
+  [Parameter(Mandatory)][string]$PromptFile,
+  [Parameter(Mandatory)][ValidateSet('ON','OFF')][string]$Arm,
+  [Parameter(Mandatory)][string]$SeedHash,
+  [Parameter(Mandatory)][string]$Intent
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'limit.ps1')
@@ -28,16 +31,25 @@ foreach ($name in @($info.EnvironmentVariables.Keys)) {
     $info.EnvironmentVariables.Remove($name)
   }
 }
+$promptBytes = [IO.File]::ReadAllBytes($PromptFile)
+if (!$promptBytes.Length) { throw 'Empty prompt' }
+if (![IO.File]::Exists($info.FileName)) { throw 'Claude Code executable unavailable' }
+$null = [IO.File]::ReadAllText($Settings) | ConvertFrom-Json
 $info.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] = [Environment]::GetEnvironmentVariable($TokenVar,'User')
-if (!$info.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']) { throw 'Selected User credential unavailable' }
-$child = [Diagnostics.Process]::Start($info)
+if ([string]::IsNullOrWhiteSpace($info.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'])) { throw 'Selected User credential unavailable' }
+$slot = [IO.Path]::GetDirectoryName($PromptFile)
+$dispatch = @{id=$SessionId;dir=$slot;pre=$env:LESSON_PRE;arm=$Arm;seedHash=$SeedHash;tokenVar=$TokenVar}
+$staged = [IO.Path]::Combine($slot,"$SessionId.pending.json")
+[IO.File]::WriteAllText($staged,($dispatch | ConvertTo-Json -Compress))
+[IO.File]::Move($staged,$Intent)
+try { $child = [Diagnostics.Process]::Start($info) }
+catch { [IO.File]::Move($Intent,$staged); throw }
 $info.EnvironmentVariables.Remove('CLAUDE_CODE_OAUTH_TOKEN')
 $out = $child.StandardOutput.ReadToEndAsync()
 $errStream = $child.StandardError.ReadToEndAsync()
-$promptBytes = [IO.File]::ReadAllBytes($PromptFile)
 $child.StandardInput.BaseStream.Write($promptBytes,0,$promptBytes.Length)
 $child.StandardInput.Close()
-if (!$child.WaitForExit(1800000)) {
+if (!$child.WaitForExit($SessionTimeoutMs)) {
   & "$env:SystemRoot\System32\taskkill.exe" /PID $child.Id /T /F | Out-Null
   throw 'Owned Claude Code session timed out'
 }
