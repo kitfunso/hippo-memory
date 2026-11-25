@@ -1,4 +1,3 @@
-// The project write gate: one hook asked before a write under a caller's project, at REST, MCP and add-on doors.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
