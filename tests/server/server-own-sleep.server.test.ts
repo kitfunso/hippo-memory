@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { SleepOptions, SleepResult } from '../../src/api/index.js';
 import type { SleepEvent } from '../../src/api/sleep/events.js';
 import { OTHER_STORE_MARKER } from '../../src/db/index.js';
-import { STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
+import { INTERNAL_ERROR_MESSAGE, STORE_NOT_PORTED_MESSAGE } from '../../src/base/errors/http-errors.js';
 import type { ServeOptions, ServerHandle } from '../../src/server.js';
 import { readLocalKey } from '../../src/surface/server/local-key.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -106,6 +106,27 @@ describe('serve({ sleep }) on a store that is not hippo.db', () => {
     } finally {
       open();
     }
+  });
+
+  it('answers 500 when the sleep throws before it returns a promise, and the next sleep still runs', async () => {
+    let calls = 0;
+    const server = await start((_ctx, opts) => {
+      calls += 1;
+      if (calls === 1) throw new Error('the sleep could not start');
+      return Promise.resolve(resultFor(opts));
+    });
+
+    const failed = await postSleep(server, bearer(admin));
+    const failedBody = (await failed.json()) as { error: string };
+    const next = await postSleep(server, bearer(admin));
+
+    expect({ status: failed.status, error: failedBody.error }).toEqual({
+      status: 500,
+      error: INTERNAL_ERROR_MESSAGE,
+    });
+    expect(next.status).toBe(200);
+    expect(calls).toBe(2);
+    await expect(server.stop()).resolves.toBeUndefined();
   });
 
   it('answers 501 store_not_ported when the server was given no sleep', async () => {

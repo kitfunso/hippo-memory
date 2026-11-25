@@ -243,7 +243,10 @@ function sleepLine(): SleepLine {
     inLine += 1;
     const child = turn.then(start);
     turn = child
-      .then((run) => run.ended)
+      .then(
+        (run) => run.ended,
+        () => undefined,
+      )
       .finally(() => {
         inLine -= 1;
       });
