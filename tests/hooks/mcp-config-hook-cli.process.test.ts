@@ -65,7 +65,9 @@ function machine(extraEnv: NodeJS.ProcessEnv = {}): Machine {
   for (const dir of [home, project, emptyPath]) fs.mkdirSync(dir, { recursive: true });
   const env: NodeJS.ProcessEnv = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (/^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)) {
+    if (
+      /^(path|codex_home|claude_config_dir|hippo_skip_auto_integrations|xdg_config_home|vscode_portable)$/i.test(key)
+    ) {
       delete env[key];
     }
   }

@@ -78,7 +78,11 @@ const VSCODE_HOOKS_LINE =
   'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); ' +
   'older versions get the MCP server and the instructions file only.';
 
-function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpConfigHost): string {
+function mcpInstallLine(
+  file: string,
+  mcp: McpMergeStatus | McpFailure,
+  host: McpConfigHost,
+): string {
   return isMcpFailure(mcp)
     ? mcpFailureLine(file, mcp, addByHand(host))
     : MCP_MERGE_LINES[mcp](file, host);

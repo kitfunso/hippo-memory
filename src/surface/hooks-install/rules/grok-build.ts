@@ -110,7 +110,9 @@ export function planGrokInstall(text: string, command: string): string {
   if (grokStatus(text) !== 'absent') return text;
   const lines = splitLines(text);
   const eol = lines.find((line) => line.eol !== '')?.eol ?? '\n';
-  const table = grokTableLines(command).map((line) => line + eol).join('');
+  const table = grokTableLines(command)
+    .map((line) => line + eol)
+    .join('');
   if (lines.length === 0) return text + table;
   const endsOpen = lines[lines.length - 1].eol === '';
   return text + (endsOpen ? eol : '') + eol + table;

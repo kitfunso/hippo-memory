@@ -10,11 +10,7 @@ import {
   uninstallMcpConfigHost,
 } from '../../src/surface/hooks-install/mcp-config.js';
 import { grokStatus } from '../../src/surface/hooks-install/rules/grok-build.js';
-import {
-  isMcpFailure,
-  MCP_CONFIG_HOSTS,
-  type McpConfigRow,
-} from '../../src/surface/hooks-install/rules/mcp-config.js';
+import { isMcpFailure, MCP_CONFIG_HOSTS, type McpConfigRow } from '../../src/surface/hooks-install/rules/mcp-config.js';
 
 const CMD = process.platform === 'win32' ? 'hippo.cmd' : 'hippo';
 const BOM = String.fromCodePoint(0xfeff);
@@ -64,12 +60,7 @@ function write(file: string, text: string): void {
 
 describe('the host rows', () => {
   it('name the four hosts and the files hippo edits', () => {
-    expect(MCP_CONFIG_HOSTS.map((row) => row.name)).toEqual([
-      'junie',
-      'antigravity',
-      'grok-build',
-      'muse-code',
-    ]);
+    expect(MCP_CONFIG_HOSTS.map((row) => row.name)).toEqual(['junie', 'antigravity', 'grok-build', 'muse-code']);
     expect(fileOf('junie')).toBe(path.join(home, '.junie', 'mcp', 'mcp.json'));
     expect(fileOf('antigravity')).toBe(path.join(home, '.gemini', 'config', 'mcp_config.json'));
     expect(fileOf('grok-build')).toBe(path.join(home, '.grok', 'config.toml'));
@@ -313,7 +304,7 @@ describe('grok-build TOML', () => {
     ['hippo.cmd', '[mcp_servers.hippo]\ncommand = "hippo.cmd"\nargs = ["mcp"]\n'],
     ['an indented table', '  [mcp_servers.hippo]\n\tcommand = "hippo"\n  args = ["mcp"]\n'],
     ['a quoted table key', '["mcp_servers".hippo]\ncommand = "hippo"\nargs = ["mcp"]\n'],
-    ['a single-quoted dotted header', "['mcp_servers'.'hippo']\ncommand = \"hippo\"\nargs = [\"mcp\"]\n"],
+    ['a single-quoted dotted header', '[\'mcp_servers\'.\'hippo\']\ncommand = "hippo"\nargs = ["mcp"]\n'],
     ['spaces around the dot', '[ mcp_servers . hippo ]\ncommand = "hippo"\nargs = ["mcp"]\n'],
     ['a BOM first line', `${BOM}${TABLE}`],
     ['comments and blank lines in the body', '[mcp_servers.hippo]\n# note\ncommand = "hippo"\n\nargs = ["mcp"]\n'],

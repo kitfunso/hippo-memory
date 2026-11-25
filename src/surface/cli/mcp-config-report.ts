@@ -70,10 +70,7 @@ function mcpConfigInstallLines(result: McpConfigInstallResult, row: McpConfigRow
     : INSTALL_LINES[status](file, row);
 }
 
-function mcpConfigUninstallLines(
-  result: McpConfigUninstallResult,
-  row: McpConfigRow,
-): string[] {
+function mcpConfigUninstallLines(result: McpConfigUninstallResult, row: McpConfigRow): string[] {
   const { file, status } = result;
   return isMcpFailure(status)
     ? failureLines(file, status, ['remove the "hippo" server by hand if hippo added it'])
@@ -88,9 +85,6 @@ export function printMcpConfigInstall(
   for (const line of mcpConfigInstallLines(result, row)) console.log(`${indent}${line}`);
 }
 
-export function printMcpConfigUninstall(
-  result: McpConfigUninstallResult,
-  row: McpConfigRow,
-): void {
+export function printMcpConfigUninstall(result: McpConfigUninstallResult, row: McpConfigRow): void {
   for (const line of mcpConfigUninstallLines(result, row)) console.log(line);
 }
