@@ -28,6 +28,22 @@ const SERVER = {
 const USER_SERVER = { command: 'npx', args: ['their-server'] };
 const TABLE = `[mcp_servers.hippo]\ncommand = "${CMD}"\nargs = ["mcp"]\n`;
 const tableWith = (eol: string): string => TABLE.replace(/\n/g, eol);
+const HAND_WRITTEN: [string, JsonObject][] = [
+  ['hippo with mcp', { command: 'hippo', args: ['mcp'] }],
+  ['a Windows path to hippo.cmd', { command: 'C:\\Users\\me\\AppData\\Roaming\\npm\\hippo.cmd', args: ['mcp'] }],
+  ['npx with the package', { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] }],
+  ['npx with a pinned version', { command: 'npx', args: ['-y', 'hippo-memory@3.16.0', 'mcp'] }],
+];
+const NOT_HIPPO_MCP: [string, JsonObject][] = [
+  ['hippo serve', { command: 'hippo', args: ['serve'] }],
+  ['hippo recall', { command: 'hippo', args: ['recall'] }],
+  ['npx with another package', { command: 'npx', args: ['-y', 'other-memory', 'mcp'] }],
+];
+const FILE_STYLES: [string, string, string, string, string][] = [
+  ['a BOM, CRLF and four spaces', BOM, '\r\n', '    ', '\r\n'],
+  ['tabs', '', '\n', '\t', '\n'],
+  ['no final line break', '', '\n', '  ', ''],
+];
 
 let home: string;
 let homes: Homes;
@@ -51,7 +67,7 @@ const fileOf = (name: string): string => rowNamed(name).file(homes);
 const install = (name: string) => installMcpConfigHost(rowNamed(name), homes);
 const uninstall = (name: string) => uninstallMcpConfigHost(rowNamed(name), homes);
 const read = (file: string): string => fs.readFileSync(file, 'utf8');
-const readJson = (file: string): JsonValue => parseJson(read(file));
+const readJson = (file: string): JsonValue => parseJson(read(file).replace(/^﻿/, ''));
 
 function write(file: string, text: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -118,12 +134,56 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
     expect(read(fileOf(name))).toBe(text);
   });
 
-  it('keeps an entry with a key hippo did not write', () => {
+  it('keeps an entry with a key hippo did not write that still runs hippo mcp', () => {
     const text = JSON.stringify({ [KEY[name]]: { hippo: { ...SERVER[name], env: { A: 'b' } } } });
     write(fileOf(name), text);
-    expect(install(name).status).toBe('user-owned');
-    expect(uninstall(name).status).toBe('user-owned');
+    expect(install(name).status).toBe('kept');
+    expect(uninstall(name).status).toBe('kept');
     expect(read(fileOf(name))).toBe(text);
+  });
+
+  it.each(HAND_WRITTEN)(
+    'counts a "hippo-memory" entry with %s as hippo\'s: kept, no byte changed',
+    (_label, server) => {
+      const text = JSON.stringify({ [KEY[name]]: { 'hippo-memory': server } });
+      write(fileOf(name), text);
+      expect(install(name).status).toBe('kept');
+      expect(uninstall(name).status).toBe('kept');
+      expect(read(fileOf(name))).toBe(text);
+    },
+  );
+
+  it.each(HAND_WRITTEN.slice(1))(
+    'counts a "hippo" entry with %s as hippo\'s: kept, no byte changed',
+    (_label, server) => {
+      const text = JSON.stringify({ [KEY[name]]: { hippo: server } });
+      write(fileOf(name), text);
+      expect(install(name).status).toBe('kept');
+      expect(uninstall(name).status).toBe('kept');
+      expect(read(fileOf(name))).toBe(text);
+    },
+  );
+
+  it.each(NOT_HIPPO_MCP)('does not count a "hippo-memory" entry running %s: install adds "hippo"', (_label, server) => {
+    const before = { [KEY[name]]: { 'hippo-memory': server } };
+    write(fileOf(name), JSON.stringify(before));
+    expect(install(name).status).toBe('added');
+    expect(readJson(fileOf(name))).toMatchObject({ [KEY[name]]: { 'hippo-memory': server, hippo: SERVER[name] } });
+    expect(uninstall(name).status).toBe('removed');
+    expect(readJson(fileOf(name))).toEqual(before);
+  });
+
+  it.each(FILE_STYLES)('keeps the file style on install and uninstall: %s', (_label, bom, eol, indent, end) => {
+    const dress = (value: JsonObject): string => bom + JSON.stringify(value, null, indent).replace(/\n/g, eol) + end;
+    const original = dress({ theme: 'dark', [KEY[name]]: { theirs: USER_SERVER } });
+    write(fileOf(name), original);
+    expect(install(name).status).toBe('added');
+    expect(read(fileOf(name))).toBe(
+      dress({ theme: 'dark', [KEY[name]]: { theirs: USER_SERVER, hippo: SERVER[name] } }),
+    );
+    expect(install(name).status).toBe('present');
+    expect(uninstall(name).status).toBe('removed');
+    expect(read(fileOf(name))).toBe(original);
   });
 
   it('reports unreadable for a file with comments', () => {
@@ -324,13 +384,9 @@ describe('grok-build TOML', () => {
   });
 
   const USER_OWNED: [string, string][] = [
-    ['an added startup_timeout_sec', `${TABLE}startup_timeout_sec = 60\n`],
-    ['an added env', `${TABLE}env = { A = "b" }\n`],
     ['another command', '[mcp_servers.hippo]\ncommand = "npx"\nargs = ["mcp"]\n'],
     ['other args', '[mcp_servers.hippo]\ncommand = "hippo"\nargs = ["mcp", "--x"]\n'],
     ['a missing args line', '[mcp_servers.hippo]\ncommand = "hippo"\n'],
-    ['a trailing comment on a key line', `[mcp_servers.hippo]\ncommand = "hippo" # mine\nargs = ["mcp"]\n`],
-    ['a trailing comment on the header', `[mcp_servers.hippo] # mine\ncommand = "hippo"\nargs = ["mcp"]\n`],
     ['a sub-table next to the table', `${TABLE}\n[mcp_servers.hippo.env]\nA = "b"\n`],
     ['a sub-table alone', '[mcp_servers.hippo.env]\nA = "b"\n'],
     ['an array of tables', '[[mcp_servers.hippo]]\ncommand = "hippo"\nargs = ["mcp"]\n'],
@@ -352,6 +408,68 @@ describe('grok-build TOML', () => {
     expect(install('grok-build').status).toBe('user-owned');
     expect(uninstall('grok-build').status).toBe('user-owned');
     expect(read(file())).toBe(text);
+  });
+
+  const KEPT: [string, string][] = [
+    ['hippo-memory with hippo and mcp', '[mcp_servers.hippo-memory]\ncommand = "hippo"\nargs = ["mcp"]\n'],
+    ['a quoted server name', '[mcp_servers."my memory"]\ncommand = "hippo"\nargs = ["mcp"]\n'],
+    ['npx with the package', '[mcp_servers.memory]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n'],
+    [
+      'npx with a pinned version',
+      '[mcp_servers.memory]\ncommand = "npx"\nargs = ["-y", "hippo-memory@3.16.0", "mcp"]\n',
+    ],
+    [
+      'a Windows path to hippo.cmd',
+      '[mcp_servers.memory]\ncommand = "C:\\\\Users\\\\me\\\\hippo.cmd"\nargs = ["mcp"]\n',
+    ],
+    [
+      'comments on the header and the key lines',
+      '[mcp_servers.memory] # mine\ncommand = "hippo" # mine\nargs = ["mcp"] # mine\n',
+    ],
+    [
+      'other servers around it',
+      '[mcp_servers.a]\ncommand = "x"\n\n[mcp_servers.memory]\ncommand = "hippo"\nargs = ["mcp"]\n\n[mcp_servers.b]\ncommand = "y"\n',
+    ],
+    [
+      'the hippo table with the npx form',
+      '[mcp_servers.hippo]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n',
+    ],
+    ['an added startup_timeout_sec', `${TABLE}startup_timeout_sec = 60\n`],
+    ['an added env', `${TABLE}env = { A = "b" }\n`],
+    ['a trailing comment on a key line', `[mcp_servers.hippo]\ncommand = "hippo" # mine\nargs = ["mcp"]\n`],
+    ['a trailing comment on the header', `[mcp_servers.hippo] # mine\ncommand = "hippo"\nargs = ["mcp"]\n`],
+  ];
+
+  it.each(KEPT)('kept: %s', (_label, text) => {
+    expect(grokStatus(text)).toBe('kept');
+    seeded(text);
+    expect(install('grok-build').status).toBe('kept');
+    expect(uninstall('grok-build').status).toBe('kept');
+    expect(read(file())).toBe(text);
+  });
+
+  const NOT_KEPT: [string, string][] = [
+    ['hippo serve', '[mcp_servers.memory]\ncommand = "hippo"\nargs = ["serve"]\n'],
+    ['hippo with mcp and more', '[mcp_servers.memory]\ncommand = "hippo"\nargs = ["mcp", "--x"]\n'],
+    ['npx with another package', '[mcp_servers.memory]\ncommand = "npx"\nargs = ["-y", "other", "mcp"]\n'],
+    ['a non-string args array', '[mcp_servers.memory]\ncommand = "hippo"\nargs = [1]\n'],
+    ['single-quoted args', `[mcp_servers.memory]\ncommand = "hippo"\nargs = ['mcp']\n`],
+    ['a multi-line args array', '[mcp_servers.memory]\ncommand = "hippo"\nargs = [\n  "mcp",\n]\n'],
+    ['no args line', '[mcp_servers.memory]\ncommand = "hippo"\n'],
+    ['two command lines', '[mcp_servers.memory]\ncommand = "hippo"\ncommand = "hippo"\nargs = ["mcp"]\n'],
+    [
+      'the keys in another table',
+      '[mcp_servers.memory]\ncommand = "x"\n\n[other]\ncommand = "hippo"\nargs = ["mcp"]\n',
+    ],
+  ];
+
+  it.each(NOT_KEPT)('not kept: %s', (_label, text) => {
+    expect(grokStatus(text)).toBe('absent');
+    seeded(text);
+    expect(uninstall('grok-build').status).toBe('absent');
+    expect(read(file())).toBe(text);
+    expect(install('grok-build').status).toBe('added');
+    expect(grokStatus(read(file()))).toBe('present');
   });
 
   const ABSENT: [string, string][] = [

@@ -64,7 +64,7 @@ function hookList(): void {
 
 function hookInstall(target: string | undefined, force: boolean): void {
   const home = target === undefined ? undefined : homeTarget(target);
-  if (home) return home.install('');
+  if (home) return home.install('', true);
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
     const available = [...Object.keys(HOOKS), ...HOME_TARGETS.map((t) => t.name)];

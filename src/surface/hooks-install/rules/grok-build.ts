@@ -1,4 +1,6 @@
-export type GrokStatus = 'absent' | 'present' | 'user-owned';
+import { runsHippoMcp } from './mcp-config.js';
+
+export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned';
 
 interface GrokLine {
   readonly content: string;
@@ -7,6 +9,7 @@ interface GrokLine {
 
 interface GrokScan {
   readonly tables: readonly number[];
+  readonly servers: readonly number[];
   readonly otherForm: boolean;
 }
 
@@ -36,8 +39,16 @@ const MCP_SERVERS_HEADER = new RegExp(`^${WS}\\[${MCP_SERVERS}\\]${WS}(?:#.*)?$`
 const ROOT_HIPPO_KEY = new RegExp(`^${MCP_SERVERS}\\.${HIPPO}[=.]`);
 const ROOT_INLINE_TABLE = new RegExp(`^${MCP_SERVERS}=`);
 const SERVER_HIPPO_KEY = new RegExp(`^${HIPPO}[=.]`);
+const SERVER_NAME = `(?:[A-Za-z0-9_-]+|"[^"]*"|'[^']*')`;
+const SERVER_HEADER = new RegExp(
+  `^${WS}\\[${MCP_SERVERS}\\.${WS}${SERVER_NAME}${WS}\\]${WS}(?:#.*)?$`,
+);
+const COMMAND_ENTRY = new RegExp(`^${WS}command${WS}=${WS}"([^"]*)"${WS}(?:#.*)?$`);
+const ARGS_ENTRY = new RegExp(`^${WS}args${WS}=${WS}\\[(.*)\\]${WS}(?:#.*)?$`);
 
 const USER_OWNED: GrokInspection = { status: 'user-owned', drop: [] };
+const KEPT: GrokInspection = { status: 'kept', drop: [] };
+const ABSENT: GrokInspection = { status: 'absent', drop: [] };
 
 function splitLines(text: string): GrokLine[] {
   const body = text.startsWith(BOM) ? text.slice(BOM.length) : text;
@@ -59,6 +70,7 @@ function isOtherHippoForm(line: string, section: Section): boolean {
 
 function scan(contents: readonly string[]): GrokScan {
   const tables: number[] = [];
+  const servers: number[] = [];
   let section: Section = 'root';
   let otherForm = false;
   contents.forEach((line, index) => {
@@ -67,9 +79,10 @@ function scan(contents: readonly string[]): GrokScan {
       return;
     }
     if (HIPPO_HEADER.test(line)) tables.push(index);
+    if (SERVER_HEADER.test(line)) servers.push(index);
     section = sectionAfterHeader(line);
   });
-  return { tables, otherForm };
+  return { tables, servers, otherForm };
 }
 
 function bodyLineIndexes(contents: readonly string[], header: number): number[] {
@@ -86,16 +99,39 @@ function isOwnBody(contents: readonly string[], body: readonly number[]): boolea
   return OWN_COMMANDS.some((own) => command === `command = "${own}"`) && args === ARGS_LINE;
 }
 
+function parseArgs(inner: string): string[] | null {
+  if (inner.trim() === '') return [];
+  const items = inner.trim().replace(/,$/, '').split(',');
+  const values = items.map((item) => /^"([^"]*)"$/.exec(item.trim())?.[1]);
+  return values.every((value) => value !== undefined) ? values : null;
+}
+
+const captures = (lines: readonly string[], pattern: RegExp): string[] =>
+  lines.flatMap((line) => pattern.exec(line)?.[1] ?? []);
+
+function runsHippoTable(contents: readonly string[], header: number): boolean {
+  const body = bodyLineIndexes(contents, header).map((i) => contents[i]);
+  const commands = captures(body, COMMAND_ENTRY);
+  const argLists = captures(body, ARGS_ENTRY);
+  if (commands.length !== 1 || argLists.length !== 1) return false;
+  const args = parseArgs(argLists[0]);
+  return args !== null && runsHippoMcp(commands[0], args);
+}
+
 function inspect(lines: readonly GrokLine[]): GrokInspection {
   const contents = lines.map((line) => line.content);
-  const { tables, otherForm } = scan(contents);
-  if (tables.length === 0) return otherForm ? USER_OWNED : { status: 'absent', drop: [] };
+  const { tables, servers, otherForm } = scan(contents);
+  if (tables.length === 0 && !otherForm) {
+    return servers.some((server) => runsHippoTable(contents, server)) ? KEPT : ABSENT;
+  }
+  if (tables.length !== 1 || otherForm) return USER_OWNED;
   const header = tables[0];
-  if (tables.length > 1 || otherForm || !OWN_HEADER.test(contents[header])) return USER_OWNED;
   const body = bodyLineIndexes(contents, header);
-  if (!isOwnBody(contents, body)) return USER_OWNED;
-  const blankBefore = header > 0 && BLANK.test(contents[header - 1]) ? [header - 1] : [];
-  return { status: 'present', drop: [header, ...body, ...blankBefore] };
+  if (OWN_HEADER.test(contents[header]) && isOwnBody(contents, body)) {
+    const blankBefore = header > 0 && BLANK.test(contents[header - 1]) ? [header - 1] : [];
+    return { status: 'present', drop: [header, ...body, ...blankBefore] };
+  }
+  return servers.includes(header) && runsHippoTable(contents, header) ? KEPT : USER_OWNED;
 }
 
 export function grokStatus(text: string): GrokStatus {

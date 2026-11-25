@@ -14,8 +14,9 @@ import { printMcpConfigInstall, printMcpConfigUninstall } from './mcp-config-rep
 export interface HomeTarget {
   readonly name: string;
   readonly listLine: () => string;
+  readonly dryRunLine?: () => string;
   readonly initPresent?: () => boolean;
-  readonly install: (indent: string) => void;
+  readonly install: (indent: string, explicit: boolean) => void;
   readonly uninstall: () => void;
 }
 
@@ -34,9 +35,10 @@ function mcpConfigTarget(row: McpConfigRow): HomeTarget {
     name: row.name,
     listLine: () =>
       `  ${row.name.padEnd(15)} -> ${row.file(processHomes())} (${row.label}: the hippo MCP server)`,
+    dryRunLine: () => `would add the MCP server to ${row.file(processHomes())}`,
     initPresent: () => isMcpConfigHostPresent(row, processHomes()),
-    install: (indent) =>
-      printMcpConfigInstall(installMcpConfigHost(row, processHomes()), row, indent),
+    install: (indent, explicit) =>
+      printMcpConfigInstall(installMcpConfigHost(row, processHomes()), row, indent, explicit),
     uninstall: () => printMcpConfigUninstall(uninstallMcpConfigHost(row, processHomes()), row),
   };
 }
@@ -53,7 +55,7 @@ export function homeTarget(name: string): HomeTarget | undefined {
 function installForInit(target: HomeTarget, indent: string): void {
   try {
     if (target.initPresent?.() !== true) return;
-    target.install(indent);
+    target.install(indent, false);
   } catch (err) {
     if (!isFileSystemError(err)) throw err;
     log.warn(

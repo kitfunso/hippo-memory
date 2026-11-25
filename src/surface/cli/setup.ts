@@ -6,8 +6,7 @@ import { detectInstalledTools } from '../hooks-install/detect.js';
 import { ensureCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin, resolveOpencodePluginPath } from '../hooks-install/opencode.js';
 import { copilotPaths, installCopilot, isCopilotCliPresent } from '../hooks-install/copilot.js';
-import { MCP_CONFIG_HOSTS } from '../hooks-install/rules/mcp-config.js';
-import { hippoHomeDir, processHomes } from '../../host/agent-homes.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { cliSyncOptions } from './api-context.js';
@@ -34,7 +33,8 @@ function setupDetectedTools(
   const mcpConfigTools = tools.filter((t) => t.kind === 'mcp-config');
   const pluginTools = tools.filter((t) => t.kind === 'plugin' && t.detected);
 
-  if (jsonTools.length === 0 && !forceAll) {
+  const mcpConfigDetected = mcpConfigTools.some((tool) => tool.detected);
+  if (jsonTools.length === 0 && !mcpConfigDetected && !forceAll) {
     console.log('No JSON-hook-capable tools detected (checked: claude-code, copilot).');
     console.log('Run with --all to install hooks anyway.');
   }
@@ -120,18 +120,15 @@ function setupCopilot(dryRun: boolean): void {
   }
 }
 
-function mcpConfigFile(name: string): string {
-  const row = MCP_CONFIG_HOSTS.find((candidate) => candidate.name === name);
-  if (row === undefined) throw new Error(`no MCP config host named ${name}`);
-  return row.file(processHomes());
-}
-
 function setupMcpConfigTool(tool: ToolDetection, dryRun: boolean): void {
+  const target = homeTarget(tool.name);
+  if (target === undefined) throw new Error(`no home target named ${tool.name}`);
   if (dryRun) {
-    console.log(`[dry-run] would add the MCP server to ${mcpConfigFile(tool.name)}`);
+    const line = target.dryRunLine?.();
+    if (line !== undefined) console.log(`[dry-run] ${line}`);
     return;
   }
-  homeTarget(tool.name)?.install(`  ${tool.name.padEnd(14)} `);
+  target.install(`  ${tool.name.padEnd(14)} `, true);
 }
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {

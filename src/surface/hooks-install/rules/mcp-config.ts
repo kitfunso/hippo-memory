@@ -1,9 +1,16 @@
 import { isDeepStrictEqual } from 'node:util';
 import * as path from 'node:path';
 import { userHome, type Homes } from '../../../base/util/agent-homes.js';
-import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
+import {
+  type JsonValue,
+  isJsonObjectLiteral,
+  isJsonString,
+  type JsonObject,
+} from '../../../base/util/json.js';
 
 const MCP_KEY = 'hippo';
+const HIPPO_PACKAGE = 'hippo-memory';
+const BOM = '\uFEFF';
 
 export interface McpConfigHost {
   readonly key: 'mcpServers' | 'servers' | 'mcp_servers';
@@ -15,17 +22,17 @@ export function hippoCommand(): string {
   return process.platform === 'win32' ? 'hippo.cmd' : 'hippo';
 }
 
-export const JUNIE_MCP: McpConfigHost = {
+const JUNIE_MCP: McpConfigHost = {
   key: 'mcpServers',
   server: () => ({ command: hippoCommand(), args: ['mcp'] }),
 };
 
-export const ANTIGRAVITY_MCP: McpConfigHost = {
+const ANTIGRAVITY_MCP: McpConfigHost = {
   key: 'mcpServers',
   server: () => ({ command: hippoCommand(), args: ['mcp'] }),
 };
 
-export const MUSE_CODE_MCP: McpConfigHost = {
+const MUSE_CODE_MCP: McpConfigHost = {
   key: 'mcp_servers',
   seed: () => ({ schema_version: 1 }),
   server: () => ({ transport: 'stdio', command: hippoCommand(), args: ['mcp'], mode: 'optional' }),
@@ -39,6 +46,27 @@ function isHipposServer(entry: JsonValue | undefined, host: McpConfigHost): bool
       ? value === 'hippo' || value === 'hippo.cmd'
       : isDeepStrictEqual(value, ours[key]),
   );
+}
+
+function commandName(command: string): string {
+  const base = command.split(/[\\/]/).pop() ?? '';
+  return base.toLowerCase().replace(/\.(?:cmd|exe|ps1)$/, '');
+}
+
+const isHippoPackage = (arg: string): boolean =>
+  arg === HIPPO_PACKAGE || arg.startsWith(`${HIPPO_PACKAGE}@`);
+
+export function runsHippoMcp(command: string, args: readonly string[]): boolean {
+  const name = commandName(command);
+  if (name === 'hippo') return args.length === 1 && args[0] === 'mcp';
+  return name === 'npx' && args.some((arg, i) => isHippoPackage(arg) && args[i + 1] === 'mcp');
+}
+
+function entryRunsHippoMcp(entry: JsonValue | undefined): boolean {
+  if (!isJsonObjectLiteral(entry)) return false;
+  const { command, args } = entry;
+  if (!isJsonString(command) || !Array.isArray(args)) return false;
+  return args.every(isJsonString) && runsHippoMcp(command, args);
 }
 
 export function mcpServerSnippet(host: McpConfigHost): string {
@@ -57,30 +85,58 @@ export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig |
   return isJsonObjectLiteral(servers) ? { config, servers } : null;
 }
 
-export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
+export type McpMergeStatus = 'added' | 'present' | 'kept' | 'user-owned' | 'unreadable';
 
 export function addHippoServer(
   read: McpConfig,
   host: McpConfigHost,
 ): Exclude<McpMergeStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
-  if (existing !== undefined) return isHipposServer(existing, host) ? 'present' : 'user-owned';
+  if (existing !== undefined) {
+    if (isHipposServer(existing, host)) return 'present';
+    return entryRunsHippoMcp(existing) ? 'kept' : 'user-owned';
+  }
+  if (Object.values(read.servers).some(entryRunsHippoMcp)) return 'kept';
   read.servers[MCP_KEY] = host.server();
   return 'added';
 }
 
-export type McpRemoveStatus = 'removed' | 'absent' | 'user-owned' | 'unreadable';
+export type McpRemoveStatus = 'removed' | 'absent' | 'kept' | 'user-owned' | 'unreadable';
 
 export function removeHippoServer(
   read: McpConfig,
   host: McpConfigHost,
 ): Exclude<McpRemoveStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
-  if (existing === undefined) return 'absent';
-  if (!isHipposServer(existing, host)) return 'user-owned';
+  if (existing === undefined) {
+    return Object.values(read.servers).some(entryRunsHippoMcp) ? 'kept' : 'absent';
+  }
+  if (!isHipposServer(existing, host)) return entryRunsHippoMcp(existing) ? 'kept' : 'user-owned';
   delete read.servers[MCP_KEY];
   if (Object.keys(read.servers).length === 0) delete read.config[host.key];
   return 'removed';
+}
+
+export interface JsonTextStyle {
+  readonly bom: boolean;
+  readonly eol: string;
+  readonly indent: string;
+  readonly finalEol: boolean;
+}
+
+export function jsonTextStyle(text: string | null): JsonTextStyle {
+  const source = text ?? '';
+  return {
+    bom: source.startsWith(BOM),
+    eol: /\r?\n/.exec(source)?.[0] === '\r\n' ? '\r\n' : '\n',
+    indent: /^[ \t]+(?=\S)/m.exec(source)?.[0] ?? '  ',
+    finalEol: source.trim() === '' || /[\r\n]$/.test(source),
+  };
+}
+
+export function jsonText(value: JsonValue, style: JsonTextStyle): string {
+  const body = JSON.stringify(value, null, style.indent).replace(/\n/g, style.eol);
+  return `${style.bom ? BOM : ''}${body}${style.finalEol ? style.eol : ''}`;
 }
 
 export interface McpFailure {

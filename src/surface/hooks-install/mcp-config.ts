@@ -2,12 +2,13 @@ import * as fs from 'node:fs';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { isFileSystemError } from '../../base/util/expected-errors.js';
 import type { Homes } from '../../base/util/agent-homes.js';
-import { type JsonValue } from '../../base/util/json.js';
-import { readJsonFile } from '../../host/json-file.js';
+import { tryParseJson, type JsonValue } from '../../base/util/json.js';
 import { grokStatus, planGrokInstall, planGrokRemoval } from './rules/grok-build.js';
 import {
   addHippoServer,
   hippoCommand,
+  jsonText,
+  jsonTextStyle,
   mcpConfigOf,
   removeHippoServer,
   type McpConfig,
@@ -18,7 +19,6 @@ import {
   type McpMergeStatus,
   type McpRemoveStatus,
 } from './rules/mcp-config.js';
-import { writeSettingsFile } from './json-hooks.js';
 
 export interface McpConfigInstallResult {
   readonly name: string;
@@ -32,33 +32,36 @@ export interface McpConfigUninstallResult {
   readonly status: McpRemoveStatus | McpFailure;
 }
 
-export function readMcpConfig(file: string, host: McpConfigHost): McpConfig | null {
+function readText(file: string): string | null {
+  return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+}
+
+function readMcpConfig(text: string | null, host: McpConfigHost): McpConfig | null {
   let config: JsonValue = host.seed?.() ?? {};
-  if (fs.existsSync(file)) {
-    try {
-      config = readJsonFile(file);
-    } catch (err) {
-      if (!(err instanceof SyntaxError)) throw err;
-      if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
-    }
+  if (text !== null) {
+    const parsed = tryParseJson(jsonTextStyle(text).bom ? text.slice(1) : text);
+    if (parsed !== undefined) config = parsed;
+    else if (text.trim() !== '') return null;
   }
   return mcpConfigOf(config, host);
 }
 
 export function mergeMcpServer(file: string, host: McpConfigHost): McpMergeStatus {
-  const read = readMcpConfig(file, host);
+  const text = readText(file);
+  const read = readMcpConfig(text, host);
   if (read === null) return 'unreadable';
   const status = addHippoServer(read, host);
-  if (status === 'added') writeSettingsFile(file, read.config);
+  if (status === 'added') writeFileAtomic(file, jsonText(read.config, jsonTextStyle(text)));
   return status;
 }
 
 export function removeMcpServer(file: string, host: McpConfigHost): McpRemoveStatus {
-  if (!fs.existsSync(file)) return 'absent';
-  const read = readMcpConfig(file, host);
+  const text = readText(file);
+  if (text === null) return 'absent';
+  const read = readMcpConfig(text, host);
   if (read === null) return 'unreadable';
   const status = removeHippoServer(read, host);
-  if (status === 'removed') writeSettingsFile(file, read.config);
+  if (status === 'removed') writeFileAtomic(file, jsonText(read.config, jsonTextStyle(text)));
   return status;
 }
 
@@ -87,7 +90,8 @@ function removeGrokBlock(file: string): McpRemoveStatus {
     writeFileAtomic(file, next);
     return 'removed';
   }
-  return grokStatus(text) === 'user-owned' ? 'user-owned' : 'absent';
+  const status = grokStatus(text);
+  return status === 'user-owned' || status === 'kept' ? status : 'absent';
 }
 
 function mergeInFormat(file: string, format: McpConfigFormat): McpMergeStatus {

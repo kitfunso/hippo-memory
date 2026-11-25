@@ -486,7 +486,7 @@
       "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
       "claims": ["README.md"],
       "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
-      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "upstream": { "preLossEvent": "PreCompact, a Muse Code user hook in settings.json", "beforeTrimOrReset": null },
       "setup": "hippo init and hippo setup, when $XDG_CONFIG_HOME/muse or ~/.config/muse exists, add the hippo server to $XDG_CONFIG_HOME/muse/settings.json or ~/.config/muse/settings.json; hippo hook install muse-code does the same and hippo hook uninstall muse-code removes only that entry",
       "store": null,
       "maxSaveDelay": null,
@@ -495,7 +495,7 @@
         { "name": "Muse Code agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],
       "owner": "maintainer",
-      "nextAction": "Start a live Muse Code session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "nextAction": "Build a native Muse Code hook adapter on its user hooks (SessionStart, UserPromptSubmit, PreCompact, SessionEnd) and test it against the save/restore contract; first confirm in a live session that the hippo_recall tool loads.",
       "roadmap": "AZ4"
     },
     {

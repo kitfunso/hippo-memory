@@ -168,6 +168,55 @@ describe.each(HOSTS)('hippo hook with $name', (host) => {
     expect(uninstall.stdout).toContain(`Left the "hippo" MCP server in ${file}`);
     expect(readText(file)).toBe(own);
   });
+
+  it('prints the entry to paste for hook install and setup, and only a hint for init', () => {
+    const m = machine();
+    const file = fileOf(m, host);
+    presentDirs(m, host);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const own =
+      host.key === null
+        ? '[mcp_servers.hippo]\ncommand = "node"\nargs = ["my-server.js"]\n'
+        : JSON.stringify({ [host.key]: { hippo: { command: 'node', args: ['my-server.js'] } } });
+    fs.writeFileSync(file, own);
+    const left = `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`;
+    const paste = host.key === null ? '[mcp_servers.hippo]' : `under "${host.key}"`;
+
+    const init = hippo(m, 'init', ...INIT_FLAGS);
+    expect(init.stdout).toContain(`${left}; run \`hippo hook install ${host.name}\` to see the entry to paste\n`);
+    expect(init.stdout).not.toContain(paste);
+
+    const install = hippo(m, 'hook', 'install', host.name);
+    expect(install.stdout).toContain(`${left}; replace the entry with this`);
+    expect(install.stdout).toContain(paste);
+
+    const setup = hippo(m, 'setup', ...FLAGS);
+    expect(setup.stdout).toContain(`${left}; replace the entry with this`);
+    expect(setup.stdout).toContain(paste);
+    expect(readText(file)).toBe(own);
+  });
+
+  it('counts a hippo-memory entry that runs hippo mcp as set up by hand, and changes no byte', () => {
+    const m = machine();
+    const file = fileOf(m, host);
+    presentDirs(m, host);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const own =
+      host.key === null
+        ? '[mcp_servers.hippo-memory]\ncommand = "hippo"\nargs = ["mcp"]\n'
+        : JSON.stringify({ [host.key]: { 'hippo-memory': { command: 'hippo', args: ['mcp'] } } });
+    fs.writeFileSync(file, own);
+
+    const init = hippo(m, 'init', ...INIT_FLAGS);
+    expect(init.stdout).toContain(`hippo's MCP server is already in ${file}, set up by hand; left as it is`);
+    const install = hippo(m, 'hook', 'install', host.name);
+    expect(install.stdout).toContain(`hippo's MCP server is already in ${file}, set up by hand; left as it is`);
+    const uninstall = hippo(m, 'hook', 'uninstall', host.name);
+    expect(uninstall.stdout).toContain(
+      `Left hippo's MCP server in ${file}: it was set up by hand, so remove it by hand if you want it gone`,
+    );
+    expect(readText(file)).toBe(own);
+  });
 });
 
 describe('hippo hook with an unknown target', () => {
@@ -205,6 +254,25 @@ describe('hippo setup with the MCP hosts', () => {
 
     const second = hippo(m, 'setup', ...FLAGS);
     expect(second.stdout.match(/The "hippo" MCP server is already in/g)).toHaveLength(HOSTS.length);
+  });
+
+  it('does not say no tools were detected when only an MCP config host is present', () => {
+    const m = machine();
+    presentDirs(m, HOSTS[0]);
+
+    const { stdout } = hippo(m, 'setup', ...FLAGS);
+
+    expect(stdout).not.toContain('No JSON-hook-capable tools detected');
+    expect(stdout).not.toContain('Run with --all to install hooks anyway.');
+  });
+
+  it('says no tools were detected when no host is present', () => {
+    const m = machine();
+
+    const { stdout } = hippo(m, 'setup', ...FLAGS);
+
+    expect(stdout).toContain('No JSON-hook-capable tools detected');
+    expect(stdout).toContain('Run with --all to install hooks anyway.');
   });
 
   it('--all writes every host even with no folder present', () => {
