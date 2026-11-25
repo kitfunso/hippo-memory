@@ -14,6 +14,7 @@ if ($scored -eq $call.smoke) { throw 'Unexpected session mode for this directory
 if ($call.smoke -and $TokenVar -ne 'Z0_SUB_TOKEN') { throw 'Smoke requires Z0_SUB_TOKEN' }
 if ($scored -and !$BoxChecked) { throw 'Scored attempts require the unit runner box check' }
 . "$PSScriptRoot/toolchain.ps1" $call.toolchain $Live
+. "$PSScriptRoot/record.ps1"
 $pi=New-Object Diagnostics.ProcessStartInfo
 $pi.FileName='C:/z0-runs/scored/bin/claude.exe'
 $pi.WorkingDirectory="$Live/work"
@@ -35,7 +36,7 @@ $private=@{ HOME="$Live/home"; USERPROFILE="$Live/home"; CLAUDE_CONFIG_DIR="$Liv
   CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'; DISABLE_AUTOUPDATER='1';
   OTEL_LOG_RAW_API_BODIES="file:$records/bodies/$($call.id)"; GIT_TERMINAL_PROMPT='0'; EVAL_SEED='1' }
 foreach ($k in $private.Keys) { $pi.EnvironmentVariables[$k]=$private[$k] }
-Assert-SessionPath $pi.EnvironmentVariables['PATH'] $call.toolchain $Live
+if ($call.smoke) { Assert-SmokePath $pi.EnvironmentVariables['PATH'] } else { Assert-SessionPath $pi.EnvironmentVariables['PATH'] $call.toolchain $Live }
 $pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']=[Environment]::GetEnvironmentVariable($TokenVar,'User')
 if ($pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] -notlike 'sk-ant-oat*') { throw 'Missing subscription credential or unexpected credential type' }
 $argv=@('-p','--output-format','json','--setting-sources','','--strict-mcp-config','--settings',"$Live/settings.json",'--model',$call.model,'--effort',$call.effort)
@@ -64,12 +65,14 @@ $result=$null
 try { $result=($out.Result.Trim() | ConvertFrom-Json) } catch { if(!$out.IsCompleted){throw} }
 $limited=(!$call.smoke -and (!$result -or $result.is_error) -and $result.subtype -notlike 'error_max*' -and
   (($out.Result + "`n" + $err.Result) -match 'usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error'))
-if(!$result -and $limited){ exit 75 }
+if(!$result -and $limited){
+  Write-CallRecord "$records/$($call.id).json" (New-CallRecord $call $bytes $p.ExitCode $null $true $null)
+  exit 75
+}
 if(!$result){throw "Claude Code returned no JSON (exit $($p.ExitCode))"}
 if ($result.session_id -ne $call.session) { throw 'Session id mismatch' }
 . "$PSScriptRoot/denials.ps1"
 $denials=Get-PermissionDenials $result
-$record=[ordered]@{session=$result.session_id;subtype=$result.subtype;isError=$result.is_error;turns=$result.num_turns;usage=$result.usage;models=@($result.modelUsage.PSObject.Properties.Name);exit=$p.ExitCode;apparatus=$call.apparatus;cutOff=[bool]$limited;permissionDenials=$denials}
-[IO.File]::WriteAllText("$records/$($call.id).json",($record | ConvertTo-Json -Depth 12),(New-Object Text.UTF8Encoding($false)))
+Write-CallRecord "$records/$($call.id).json" (New-CallRecord $call $bytes $p.ExitCode $result $limited $denials)
 if ($limited) { exit 75 }
 if (($p.ExitCode -ne 0 -or $result.is_error) -and -not ($call.smoke -and $result.subtype -eq 'error_max_turns')) { throw "Claude Code stopped ($($result.subtype), exit $($p.ExitCode))" }

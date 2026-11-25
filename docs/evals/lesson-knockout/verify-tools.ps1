@@ -13,6 +13,20 @@ function Assert-Throws([scriptblock]$Block,[string]$Pattern) {
   try { & $Block } catch { if ($_.Exception.Message -match $Pattern) { return }; throw "Expected /$Pattern/, got: $($_.Exception.Message)" }
   throw "Expected a refusal matching /$Pattern/"
 }
+function Test-GradleRefusal([string]$Name,[string]$LinkRelative,[string]$HomeRelative) {
+  $jlive=(Join-Path $scratch "j-$Name/live") -replace '\\','/'
+  $outside=Join-Path $scratch "j-$Name/outside"
+  $link=Join-Path $jlive $LinkRelative
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $link),$outside | Out-Null
+  New-Item -ItemType Junction -Path $link -Target $outside | Out-Null
+  $env:GRADLE_USER_HOME=Join-Path $jlive $HomeRelative
+  try { Assert-Throws { Copy-GradleProperties gradle $jlive } 'reparse point' }
+  finally { [IO.Directory]::Delete($link) }
+  if (@(Get-ChildItem -LiteralPath $outside -Recurse -Force).Count) { throw "Gradle copy escaped through the $Name junction" }
+}
+function Remove-PathEntry([string]$PathValue,[string[]]$Drop) {
+  (($PathValue -split ';') | Where-Object { $Drop -notcontains (($_ -replace '/','\').TrimEnd('\')) }) -join ';'
+}
 $cases=@{
   npm=@('npm_config_cache'); pnpm=@('PNPM_HOME','npm_config_store_dir'); python=@('PIP_CACHE_DIR','UV_CACHE_DIR','POETRY_CACHE_DIR')
   gradle=@('GRADLE_USER_HOME'); gradle17=@('GRADLE_USER_HOME'); 'gradle-android'=@('GRADLE_USER_HOME')
@@ -46,6 +60,36 @@ try {
   $empty=(Join-Path $scratch 'empty') -replace '\\','/'
   . "$PSScriptRoot/toolchain.ps1" python $empty
   Assert-Throws { Assert-SessionPath $env:PATH python $empty } 'python resolves to .*outside|does not resolve python'
+  Assert-SmokePath $env:PATH
+  Assert-Throws { Assert-SmokePath "$scratch\planted;$env:PATH" } 'hippo launcher'
+  Assert-Throws { Assert-SmokePath "$scratch\empty" } 'Session PATH lacks git'
+  Restore-Env
+  . "$PSScriptRoot/toolchain.ps1" ruby $live
+  $rubyDirs=@(Get-ChainFolders ruby $live)
+  $rubyLast=[regex]::Escape($rubyDirs[-1])
+  Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @($rubyDirs[-1])) ruby $live } "$rubyLast is not on the session PATH"
+  $variant=(($env:PATH -split ';') | ForEach-Object { if ($rubyDirs -contains $_.TrimEnd('\')) { ($_.ToUpperInvariant() -replace '\\','/') + '/' } else { $_ } }) -join ';'
+  Assert-SessionPath $variant ruby $live
+  Restore-Env
+  . "$PSScriptRoot/toolchain.ps1" rust $live
+  $rustDirs=@(Get-ChainFolders rust $live)
+  $rustLast=[regex]::Escape($rustDirs[-1])
+  Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @($rustDirs[-1])) rust $live } "$rustLast is not on the session PATH"
+  Restore-Env
+  . "$PSScriptRoot/toolchain.ps1" python $live
+  Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @('C:\z0-runs\r4\poetry-2.5.1\Scripts')) python $live } 'poetry-2.5.1.Scripts is not on the session PATH'
+  Restore-Env
+  . "$PSScriptRoot/toolchain.ps1" gradle $live
+  foreach ($refusal in @(@('home','cache/GRADLE_USER_HOME','cache/GRADLE_USER_HOME'),@('parent','cache/linked','cache/linked/GRADLE_USER_HOME'),@('cache','cache','cache/GRADLE_USER_HOME'))) {
+    Test-GradleRefusal $refusal[0] $refusal[1] $refusal[2]
+  }
+  $existing=(Join-Path $scratch 'j-existing/live') -replace '\\','/'
+  $env:GRADLE_USER_HOME=Join-Path $existing 'cache/GRADLE_USER_HOME'
+  New-Item -ItemType Directory -Force -Path $env:GRADLE_USER_HOME | Out-Null
+  $planted=Join-Path $env:GRADLE_USER_HOME 'gradle.properties'
+  Set-Content -LiteralPath $planted -Value 'planted'
+  Assert-Throws { Copy-GradleProperties gradle $existing } 'already exists'
+  if ((Get-Content -LiteralPath $planted -Raw).Trim() -ne 'planted') { throw 'Existing gradle.properties was overwritten' }
   Restore-Env
   . "$PSScriptRoot/denials.ps1"
   $parse={ param($text) Get-PermissionDenials ($text | ConvertFrom-Json) }
@@ -59,8 +103,48 @@ try {
     '{"permission_denials":[null]}','{"permission_denials":[{"tool_name":"Edit"}]}','{"permission_denials":[{"tool_use_id":"t"}]}')) {
     Assert-Throws { & $parse $bad } 'permission_denials'
   }
+  foreach ($bad in @('{"permission_denials":[{"tool_name":5,"tool_use_id":"t"}]}','{"permission_denials":[{"tool_name":"Edit","tool_use_id":{"a":1}}]}',
+    '{"permission_denials":[{"tool_name":["Edit"],"tool_use_id":"t"}]}','{"permission_denials":[{"tool_name":"Edit","tool_use_id":true}]}',
+    '{"permission_denials":[{"tool_name":"","tool_use_id":"t"}]}')) {
+    Assert-Throws { & $parse $bad } 'Malformed permission_denials entry'
+  }
+  . "$PSScriptRoot/record.ps1"
+  $prompt="line one`nunicode: caf$([char]0xE9) $([char]0x4E2D) $([char]0xD83D)$([char]0xDE00)"
+  $promptBytes=[Text.Encoding]::UTF8.GetBytes($prompt)
+  $promptFile=Join-Path $scratch 'prompt.bin'
+  [IO.File]::WriteAllBytes($promptFile,$promptBytes)
+  $digest=(Get-FileHash -Algorithm SHA256 -LiteralPath $promptFile).Hash.ToLowerInvariant()
+  $call=[pscustomobject]@{id='apply';session='11111111-1111-1111-1111-111111111111';apparatus=3;prompt=$prompt}
+  $cut=New-CallRecord $call $promptBytes 1 $null $true $null
+  if ($cut.promptSha256 -cne $digest) { throw 'Prompt digest differs from an independent SHA-256 of the UTF-8 bytes' }
+  $cutJson=$cut | ConvertTo-Json -Compress -Depth 12
+  $cutWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":false,"exit":1,"apparatus":3,"cutOff":true,"permissionDenials":null}'
+  if ($cutJson -cne $cutWant) { throw "No-JSON record saved as $cutJson" }
+  $reply='{"session_id":"11111111-1111-1111-1111-111111111111","subtype":"success","is_error":false,"num_turns":2,"usage":{"input_tokens":5},"modelUsage":{"m1":{"x":1}},"permission_denials":[]}' | ConvertFrom-Json
+  $full=New-CallRecord $call $promptBytes 0 $reply $false (Get-PermissionDenials $reply)
+  $fullJson=$full | ConvertTo-Json -Compress -Depth 12
+  $fullWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":true,"subtype":"success","isError":false,"turns":2,"usage":{"input_tokens":5},"models":["m1"],"exit":0,"apparatus":3,"cutOff":false,"permissionDenials":[]}'
+  if ($fullJson -cne $fullWant) { throw "Normal record saved as $fullJson" }
+  if ((New-CallRecord $call $promptBytes 75 $reply $true @()).cutOff -ne $true) { throw 'Cut-off flag lost' }
+  $recordFile=Join-Path $scratch 'record.json'
+  Write-CallRecord $recordFile $cut
+  $recordBytes=[IO.File]::ReadAllBytes($recordFile)
+  if ($recordBytes[0] -eq 0xEF) { throw 'Call record has a byte-order mark' }
+  if (([Text.Encoding]::UTF8.GetString($recordBytes) | ConvertFrom-Json).promptSha256 -cne $digest) { throw 'Saved call record lost the prompt digest' }
+  $tokens=$null
+  $errors=$null
+  $launch=[Management.Automation.Language.Parser]::ParseFile("$PSScriptRoot/launch.ps1",[ref]$tokens,[ref]$errors)
+  if ($errors.Count) { throw "launch.ps1 does not parse: $($errors[0].Message)" }
+  $ifs=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.IfStatementAst] },$true))
+  $smokeIf=@($ifs | Where-Object { $_.Clauses[0].Item1.Extent.Text -eq '$call.smoke' -and $_.Clauses[0].Item2.Extent.Text -match 'Assert-SmokePath' -and $_.ElseClause.Extent.Text -match 'Assert-SessionPath' })
+  if ($smokeIf.Count -ne 1) { throw 'launch.ps1 does not pick Assert-SmokePath for a smoke call' }
+  $cutIf=@($ifs | Where-Object { $_.Clauses[0].Item1.Extent.Text -eq '!$result -and $limited' })
+  $cutText=if ($cutIf.Count -eq 1) { $cutIf[0].Clauses[0].Item2.Extent.Text } else { '' }
+  if ($cutText -notmatch 'Write-CallRecord[\s\S]*New-CallRecord[^\r\n]*\$null \$true \$null[\s\S]*exit 75') { throw 'launch.ps1 does not record a cut-off call without JSON before exit 75' }
+  $writes=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-CallRecord' },$true))
+  if ($writes.Count -ne 2) { throw 'launch.ps1 must write both call record shapes through Write-CallRecord' }
 } finally {
   Restore-Env
   Remove-Item -LiteralPath $scratch -Recurse -Force
 }
-Write-Output "Passed private cache paths, Gradle copy, planted launcher, tool resolution and denial parsing for $($cases.Count) declared toolchains."
+Write-Output "Passed private cache paths, Gradle copy and junction refusal, planted launcher, tool resolution, smoke path, call records and denial parsing for $($cases.Count) declared toolchains."
