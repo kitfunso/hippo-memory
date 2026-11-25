@@ -444,21 +444,21 @@ describe('project write gate on an existing row', () => {
   });
 
   it('14b. outcome never applies an id that became reachable while the gate was being asked', async () => {
-    const alpha = await seed(gated, keyO, { project: 'alpha' });
-    const held = await seed(gated, keyO, { project: 'beta', content: RACE_INJECTION });
+    const alpha = await seed(patient, keyP, { project: 'alpha' });
+    const held = await seed(patient, keyP, { project: 'beta', content: RACE_INJECTION });
     const heldScope = "SELECT COUNT(*) AS n FROM memories WHERE id = ? AND scope LIKE 'quarantine:private:%'";
-    expect(countAt(gated, heldScope, held)).toBe(1);
-    const admin = apiCtx(gated.root, 'default', adminActor('test'));
+    expect(countAt(patient, heldScope, held)).toBe(1);
+    const admin = apiCtx(patient.root, 'default', adminActor('test'));
     await quarantineList(admin);
-    arm(gated, async (c) => {
+    arm(patient, async (c) => {
       if (c.project === 'alpha') await quarantineApprove(admin, held);
       return null;
     });
-    const r = await http(gated, keyO, 'POST', '/v1/outcome', { good: true, ids: [alpha, held] });
+    const r = await http(patient, keyP, 'POST', '/v1/outcome', { good: true, ids: [alpha, held] });
     expect([r.status, json(r)]).toEqual([200, { applied: 1 }]);
-    expect(asked(gated)).toEqual(['alpha']);
-    expect(countAt(gated, heldScope, held)).toBe(0);
-    expect([alpha, held].map((id) => row(gated, id)?.outcome_positive)).toEqual([1, 0]);
+    expect(asked(patient)).toEqual(['alpha']);
+    expect(countAt(patient, heldScope, held)).toBe(0);
+    expect([alpha, held].map((id) => row(patient, id)?.outcome_positive)).toEqual([1, 0]);
   });
 
   it('15. outcome where every reached id is refused answers 200 and applies nothing', async () => {
