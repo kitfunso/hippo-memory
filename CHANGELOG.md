@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.17.2 - 2026-11-25
+
+### Security
+
+- **Promote on a shared store now asks the project write gate, with the row's own project.** `POST /v1/memories/:id/promote` asks `projectWriteGate` with the row's stored origin project, or null when it has none, after the row checks and before the audit row. A refusal answers 403 and writes no audit row. Before, promote trusted the project in the request body, so a key allowed one project could promote a row of another by naming that project, or by listing it as an alias. A row the caller cannot read answers 404 first and the gate is not asked. A personal row is never asked, because promote refuses it with 400. A user-global row asks with null, so a gate that refuses null for a bound key now refuses that promote too. `ProjectWriteCall.project` can now be a memory's stored origin, which never passed the caller-project name check (for example an older name with upper case). A gate should compare it as an opaque string. A row that changes project, is superseded or is deleted while the gate is asked answers 409, or 404 when the caller can no longer read it, or 400 when it turned personal, quarantined or secret, with no audit row. A server with no gate, and promote on a store that is not shared, work as before.
+
 ## 3.17.1 - 2026-11-25
 
 ### Fixed
