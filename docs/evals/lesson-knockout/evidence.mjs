@@ -2,6 +2,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { read,root } from './plan.mjs';
 
+const WORK_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell']);
+export function permissionAudit(transcript) {
+  const modes=new Set(),uses=new Map();
+  let denied=0;
+  for(const line of fs.readFileSync(transcript,'utf8').split(/\r?\n/)) {
+    if(!line.trim()) continue;
+    const row=JSON.parse(line);
+    if(row.permissionMode) modes.add(row.permissionMode);
+    for(const b of Array.isArray(row.message?.content) ? row.message.content : []) {
+      if(b.type==='tool_use') uses.set(b.id,b.name);
+      if(b.type==='tool_result' && b.is_error && WORK_TOOLS.has(uses.get(b.tool_use_id)) &&
+        /requested permissions/i.test(JSON.stringify(b.content))) denied++;
+    }
+  }
+  return {modes:[...modes],denied};
+}
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
 export const flagOf=(u,verdict,commands)=>u.cls==='variant' ?
   verdict==='fail' && commands.some(c=>normalize(c).includes(normalize(u.lesson.keyPhrase))) : null;

@@ -13,7 +13,7 @@ export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const pins = read('C:/z0-runs/r4/pins-r4.json');
 export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
-export const GRADER = 'checker-env-2';
+export const APPARATUS = 2;
 export function checkerEnv(extra) {
   const env = {...process.env};
   for (const key of Object.keys(env)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete env[key];

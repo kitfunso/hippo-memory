@@ -5,7 +5,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { checkedRoster,checkerEnv,GRADER,background,folder,root,read,pins,hash } from './plan.mjs';
+import { checkedRoster,checkerEnv,APPARATUS,background,folder,root,read,pins,hash } from './plan.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
@@ -13,7 +13,7 @@ import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-e
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { flagOf,evidence } from './evidence.mjs';
+import { flagOf,evidence,permissionAudit } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,continueUnit } from './continuation.mjs';
@@ -92,6 +92,11 @@ async function session(task,prompt,session,id,resume=false) {
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
+  if(!smoke) {
+    const permissions=permissionAudit(transcript);
+    assert(permissions.modes.length && permissions.modes.every(m=>m==='bypassPermissions') && !permissions.denied,
+      'Session permission check failed for '+id+': '+JSON.stringify(permissions));
+  }
   const result=read(join(records,id+'.json'));
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');
   return {transcript,archives,commands:commandLog(sessionFiles(projects,session)),result};
@@ -155,7 +160,7 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=flagOf(u,verdict,commands);
   const dest=archive('apply-'+index);
-  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,grader:GRADER,
+  save(join(dest,'grade.json'),{id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...audit});
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
   if(!smoke) assert(audit.complete && (arm!=='N' || !audit.targetText),'Apply request evidence failed: '+arm);
