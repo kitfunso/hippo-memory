@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.17.0 - 2026-11-25
+
+### Added
+
+- **Four audit ops for SCIM group writes: `scim_group_create`, `scim_group_replace`, `scim_group_patch` and `scim_group_delete`.** An add-on that provisions groups over SCIM can write them, and `hippo audit list --op` and `GET /v1/audit?op=` accept them. Core writes none of them itself.
+
+### Changed
+
+- **A `latest` release now sends a `core-release` dispatch to a downstream CI.** The `release-dispatch` job in `npm-publish.yml` posts it after publish, from a `release-dispatch` environment limited to `v*.*.*` tags, and skips when its repo or token secret is unset. A failed dispatch never marks the release red.
+
 ## 3.16.0 - 2026-11-24
 
 ### Added
