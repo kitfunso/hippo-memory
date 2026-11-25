@@ -256,9 +256,10 @@ if(mode==='probe') {
   console.log('Git Bash and Z0 box gate passed; no model call');
 } else if(mode==='check') {
   const d=fs.mkdtempSync(path.join(checkRoot,'offline-'));
-  const {checkRecovery,checkTimeout}=await import('./offline.mjs');
+  const {checkRecovery,checkTimeout,checkProfile}=await import('./offline.mjs');
   await checkRecovery(d,collectArm);
   checkTimeout(d);
+  checkProfile(d);
   const template=path.join(d,'template');
   const stamp=await seed(smoke,template);
   const arms=[];

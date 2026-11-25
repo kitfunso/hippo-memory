@@ -20,6 +20,7 @@ export function privateEnv(dir) {
     APPDATA:'appdata',LOCALAPPDATA:'local',TEMP:'tmp',TMP:'tmp',XDG_CACHE_HOME:'cache'})) {
     env[k]=path.join(dir,v); fs.mkdirSync(env[k],{recursive:true});
   }
+  for (const sub of ['Local','Roaming']) fs.mkdirSync(path.join(env.USERPROFILE,'AppData',sub),{recursive:true});
   return {...env,HIPPO_CAPTURE_SCRIPTED:'1',HIPPO_AGENT_MEMORY_TOOLS:'claude-code,codex',
     LESSON_STDIO:stdioMode,LESSON_HIPPO:hippo,LESSON_STOP_TIMEOUT_MS:String(HOOK_MEDIUM_TIMEOUT_SECONDS*1000),
     CLAUDE_CODE_DISABLE_AUTO_MEMORY:'0',DISABLE_AUTOUPDATER:'1',CLAUDE_CODE_GIT_BASH_PATH:'C:/Program Files/Git/bin/bash.exe',

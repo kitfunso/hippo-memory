@@ -87,3 +87,15 @@ require('node:module').syncBuiltinESMExports();`);
   assert.deepEqual(events.map(e=>e.outcome),['production_timeout','completed']);
   assert.equal(events[1].response,'');
 }
+
+export function checkProfile(root) {
+  const dir=path.join(root,'profile'),work=path.join(dir,'work');
+  fs.mkdirSync(work,{recursive:true});
+  const env=privateEnv(dir),venv=path.join(dir,'venv');
+  run('python',['-m','venv',venv],dir,env);
+  const cache=run(path.join(venv,'Scripts','python.exe'),
+    ['-c','from pip._internal.locations import USER_CACHE_DIR;print(USER_CACHE_DIR)'],work,env).trim();
+  const home=path.join(dir,'home')+path.sep;
+  assert.ok(path.isAbsolute(cache) && cache.toLowerCase().startsWith(home.toLowerCase()),
+    'pip cache resolves outside the private home: '+cache);
+}
