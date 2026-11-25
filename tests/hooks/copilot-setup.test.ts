@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { copilotHomeDir } from '../../src/surface/hooks-install/rules/shared.js';
 import { processHomes } from '../../src/host/agent-homes.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
-import { VSCODE_MCP, copilotMcpSnippet } from '../../src/surface/hooks-install/rules/copilot.js';
+import { COPILOT_CLI_MCP, VSCODE_MCP } from '../../src/surface/hooks-install/rules/copilot.js';
+import { mcpServerSnippet } from '../../src/surface/hooks-install/rules/mcp-config.js';
 import { copilotPaths, installCopilot, uninstallCopilot } from '../../src/surface/hooks-install/copilot.js';
 import { HOOKS } from '../../src/surface/hooks-install/rules/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -212,7 +213,7 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(read(files.mcp)).toBe(text);
     expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'removed' });
     expect(read(files.mcp)).toBe(text);
-    expect(JSON.parse(`{${copilotMcpSnippet()}}`)).toEqual({ hippo: HIPPO_SERVER });
+    expect(JSON.parse(`{${mcpServerSnippet(COPILOT_CLI_MCP)}}`)).toEqual({ hippo: HIPPO_SERVER });
   });
 
   it('reports a filesystem error on mcp-config.json with its own message, not as unreadable JSON, and still installs the rest', () => {
@@ -449,7 +450,7 @@ describe('installCopilot and uninstallCopilot', () => {
       expect(installCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'written' });
       expect(uninstallCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'removed' });
       expect(read(user.mcp)).toBe(text);
-      expect(JSON.parse(`{${copilotMcpSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
+      expect(JSON.parse(`{${mcpServerSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
     },
   );
 
@@ -581,7 +582,7 @@ describe('hippo setup and hippo hook with Copilot', () => {
     const text = '{\n  // mine\n  "mcpServers": {}\n}\n';
     writeFile(path.join(m.copilot, 'mcp-config.json'), text);
     const out = await hippo(m, 'setup', '--no-schedule', '--no-learn');
-    expect(out).toContain(`add this under "mcpServers" by hand: ${copilotMcpSnippet()}`);
+    expect(out).toContain(`add this under "mcpServers" by hand: ${mcpServerSnippet(COPILOT_CLI_MCP)}`);
     expect(read(path.join(m.copilot, 'mcp-config.json'))).toBe(text);
   });
 
@@ -636,7 +637,7 @@ describe('hippo setup and hippo hook with Copilot', () => {
     );
     expect(fs.existsSync(m.copilot)).toBe(false);
     expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(
-      `add this under "servers" by hand: ${copilotMcpSnippet(VSCODE_MCP)}`,
+      `add this under "servers" by hand: ${mcpServerSnippet(VSCODE_MCP)}`,
     );
     expect(read(path.join(user, 'mcp.json'))).toBe(text);
   });

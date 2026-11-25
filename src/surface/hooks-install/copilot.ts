@@ -4,18 +4,12 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { writeFileAtomic } from '../../host/atomic-write.js';
-import { isFileSystemError } from '../../base/util/expected-errors.js';
-import { type JsonValue } from '../../base/util/json.js';
-import { readJsonFile } from '../../host/json-file.js';
 import {
-  addHippoServer,
   COPILOT_CLI_MCP,
   isHipposVscodeInstructions,
-  mcpConfigOf,
   planInstructionsBlock,
   planInstructionsRemoval,
   planVscodeInstructions,
-  removeHippoServer,
   VSCODE_INSTRUCTIONS,
   VSCODE_MCP,
   type CopilotInstallResult,
@@ -23,26 +17,16 @@ import {
   type CopilotUninstallResult,
   type InstructionsInstallStatus,
   type InstructionsRemoveStatus,
-  type McpConfig,
-  type McpFailure,
-  type McpHost,
-  type McpMergeStatus,
-  type McpRemoveStatus,
   type VscodeInstructionsInstallStatus,
   type VscodeInstructionsRemoveStatus,
 } from './rules/copilot.js';
 import { copilotHomeDir } from './rules/shared.js';
+import { mcpStep, mergeMcpServer, removeMcpServer } from './mcp-config.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { vscodeUserDirs } from './detect.js';
-import {
-  installJsonHooks,
-  resolveJsonHookPaths,
-  uninstallJsonHooks,
-  writeSettingsFile,
-} from './json-hooks.js';
+import { installJsonHooks, resolveJsonHookPaths, uninstallJsonHooks } from './json-hooks.js';
 
-// The MCP hosts the installer merges into, and the snippet and failure test its caller prints from.
-export { COPILOT_CLI_MCP, VSCODE_MCP, copilotMcpSnippet, isMcpFailure } from './rules/copilot.js';
+export { COPILOT_CLI_MCP, VSCODE_MCP } from './rules/copilot.js';
 
 function profileDirs(userDir: string): string[] {
   const dir = path.join(userDir, 'profiles');
@@ -67,52 +51,6 @@ export function copilotPaths(): CopilotPaths {
       profiles: profileDirs(userDir),
     })),
   };
-}
-
-/** Null for a file with comments, one that is not JSON, or one whose shape a merge would
- * overwrite; a missing file reads as empty. */
-function readMcpConfig(file: string, host: McpHost): McpConfig | null {
-  let config: JsonValue = {};
-  if (fs.existsSync(file)) {
-    try {
-      config = readJsonFile(file);
-    } catch (err) {
-      // Only a parse failure means the text is not JSON hippo can merge; EACCES or EISDIR is thrown
-      // with its own message.
-      if (!(err instanceof SyntaxError)) throw err;
-      // An empty file is a new one with no servers yet, not one with comments.
-      if (fs.readFileSync(file, 'utf8').trim() !== '') return null;
-    }
-  }
-  return mcpConfigOf(config, host);
-}
-
-function mergeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpMergeStatus {
-  const read = readMcpConfig(file, host);
-  if (read === null) return 'unreadable';
-  const status = addHippoServer(read, host);
-  if (status === 'added') writeSettingsFile(file, read.config);
-  return status;
-}
-
-function removeMcpServer(file: string, host: McpHost = COPILOT_CLI_MCP): McpRemoveStatus {
-  if (!fs.existsSync(file)) return 'absent';
-  const read = readMcpConfig(file, host);
-  if (read === null) return 'unreadable';
-  const status = removeHippoServer(read, host);
-  if (status === 'removed') writeSettingsFile(file, read.config);
-  return status;
-}
-
-/** One MCP config step; a filesystem error comes back as a failure, so the hooks file and the
- * instructions still install. */
-function mcpStep<S extends string>(step: () => S): S | McpFailure {
-  try {
-    return step();
-  } catch (err) {
-    if (isFileSystemError(err)) return { failed: err.message };
-    throw err;
-  }
 }
 
 /** Creates the file when missing. */
@@ -161,7 +99,7 @@ export function installCopilot(): CopilotInstallResult {
   return {
     paths,
     hooks: installJsonHooks('copilot').installedSessionStart,
-    mcp: cli ? mcpStep(() => mergeMcpServer(paths.mcpConfig)) : null,
+    mcp: cli ? mcpStep(() => mergeMcpServer(paths.mcpConfig, COPILOT_CLI_MCP)) : null,
     instructions: cli ? ensureInstructionsBlock(paths.instructions) : null,
     vscode: paths.vscode.map((dir) => ({
       paths: dir,
@@ -176,7 +114,7 @@ export function uninstallCopilot(): CopilotUninstallResult {
   return {
     paths,
     hooks: uninstallJsonHooks('copilot'),
-    mcp: mcpStep(() => removeMcpServer(paths.mcpConfig)),
+    mcp: mcpStep(() => removeMcpServer(paths.mcpConfig, COPILOT_CLI_MCP)),
     instructions: removeInstructionsBlock(paths.instructions),
     vscode: paths.vscode.map((dir) => ({
       paths: dir,

@@ -7,34 +7,33 @@ import {
   type CopilotUninstallResult,
   type InstructionsInstallStatus,
   type InstructionsRemoveStatus,
-  type McpFailure,
-  type McpHost,
-  type McpMergeStatus,
-  type McpRemoveStatus,
   type VscodeInstallResult,
   type VscodeInstructionsInstallStatus,
   type VscodeInstructionsRemoveStatus,
 } from '../hooks-install/rules/copilot.js';
 import {
-  COPILOT_CLI_MCP,
-  VSCODE_MCP,
-  copilotMcpSnippet,
   isMcpFailure,
-} from '../hooks-install/copilot.js';
+  mcpServerSnippet,
+  type McpConfigHost,
+  type McpFailure,
+  type McpMergeStatus,
+  type McpRemoveStatus,
+} from '../hooks-install/rules/mcp-config.js';
+import { COPILOT_CLI_MCP, VSCODE_MCP } from '../hooks-install/copilot.js';
 import { HOOK_MARKERS } from '../hooks-install/instructions.js';
 
-const addByHand = (host: McpHost): string =>
-  `add this under "${host.key}" by hand: ${copilotMcpSnippet(host)}`;
+const addByHand = (host: McpConfigHost): string =>
+  `add this under "${host.key}" by hand: ${mcpServerSnippet(host)}`;
 
 const MCP_MERGE_LINES = {
   added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
   present: (file: string) => `The "hippo" MCP server is already in ${file}`,
   'user-owned': (file: string) =>
     `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
-  unreadable: (file: string, host: McpHost) =>
+  unreadable: (file: string, host: McpConfigHost) =>
     `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ` +
     addByHand(host),
-} as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
+} as const satisfies Record<McpMergeStatus, (file: string, host: McpConfigHost) => string>;
 
 const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
   `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
@@ -79,7 +78,7 @@ const VSCODE_HOOKS_LINE =
   'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); ' +
   'older versions get the MCP server and the instructions file only.';
 
-function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
+function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpConfigHost): string {
   return isMcpFailure(mcp)
     ? mcpFailureLine(file, mcp, addByHand(host))
     : MCP_MERGE_LINES[mcp](file, host);
