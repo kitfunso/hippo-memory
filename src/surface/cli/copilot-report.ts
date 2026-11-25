@@ -35,7 +35,7 @@ const MCP_MERGE_LINES = {
     addByHand(host),
 } as const satisfies Record<McpMergeStatus, (file: string, host: McpConfigHost) => string>;
 
-const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
+export const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
   `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
 
 const unclosedLine = (file: string): string =>

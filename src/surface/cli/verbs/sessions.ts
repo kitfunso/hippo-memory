@@ -313,10 +313,11 @@ export const SESSION_VERBS = {
                            (~/.claude by default), opencode a plugin, codex 2 hooks in
                            its hooks.json plus a launcher wrapper, copilot 4 hooks, the
                            MCP server and an instructions block under $COPILOT_HOME
-                           (~/.copilot by default); other tools get a
-                           hint. Then imports each agent's
+                           (~/.copilot by default); junie, antigravity, grok-build and
+                           muse-code get the "hippo" MCP server in their own config file;
+                           other tools get a hint. Then imports each agent's
                            user-level memories into the global store
-    --all                  Install for every JSON-hook tool, even if not detected
+    --all                  Install for every JSON-hook and MCP-config tool, even if not detected
     --dry-run              Show what would be installed without writing
     --no-schedule          Skip installing or repairing the daily runner
     --no-learn             Skip the agent memory import`,
@@ -445,16 +446,19 @@ export const SESSION_VERBS = {
       `
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi)
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi|
+                           junie|antigravity|grok-build|muse-code)
                            claude-code adds 9 hooks to $CLAUDE_CONFIG_DIR/settings.json
                            (~/.claude by default); opencode installs a plugin; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; copilot writes
                            hooks/hippo.json, the "hippo" MCP server and an instructions
-                           block under $COPILOT_HOME (~/.copilot by default); all but
-                           claude-code and copilot also patch an existing AGENTS.md
+                           block under $COPILOT_HOME (~/.copilot by default); junie,
+                           antigravity, grok-build and muse-code add the "hippo" MCP server
+                           to their own config file; codex, cursor, openclaw, opencode
+                           and pi also patch an existing AGENTS.md
     hook install <target> --force  Also replace an edited hippo block and add back hooks you removed
-    hook uninstall <target> Remove hook; for copilot, only what hippo wrote`,
+    hook uninstall <target> Remove hook; for copilot and the MCP-config tools, only what hippo wrote`,
     ],
   }),
 } satisfies Record<string, VerbSpec>;

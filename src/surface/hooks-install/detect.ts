@@ -4,8 +4,15 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { processEnv } from '../../base/util/env.js';
-import { claudeConfigDir, codexHomeDir, vscodeDataFolders } from '../../base/util/agent-homes.js';
+import {
+  claudeConfigDir,
+  codexHomeDir,
+  vscodeDataFolders,
+  type Homes,
+} from '../../base/util/agent-homes.js';
 import { homeDir, processHomes } from '../../host/agent-homes.js';
+import { isMcpConfigHostPresent } from './mcp-config.js';
+import { MCP_CONFIG_HOSTS } from './rules/mcp-config.js';
 import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
 
 /** Codex counts as installed only when its config folder exists: Codex itself refuses a
@@ -46,7 +53,11 @@ const COPILOT_NOTES =
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
-  return [...detectClaudeToCodex(home, exists), ...detectCopilotToPi(exists)];
+  return [
+    ...detectClaudeToCodex(home, exists),
+    ...detectCopilotToPi(exists),
+    ...detectMcpConfigHosts(processHomes()),
+  ];
 }
 
 type HomeHas = (...parts: string[]) => boolean;
@@ -111,4 +122,14 @@ function detectCopilotToPi(exists: HomeHas): ToolDetection[] {
       notes: 'no hook API - patches AGENTS.md in the project',
     },
   ];
+}
+
+function detectMcpConfigHosts(homes: Homes): ToolDetection[] {
+  return MCP_CONFIG_HOSTS.map((row) => ({
+    name: row.name,
+    configDir: row.dirs(homes)[0],
+    detected: isMcpConfigHostPresent(row, homes),
+    kind: 'mcp-config',
+    notes: `the hippo MCP server in ${row.file(homes)}`,
+  }));
 }

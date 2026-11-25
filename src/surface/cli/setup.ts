@@ -6,7 +6,8 @@ import { detectInstalledTools } from '../hooks-install/detect.js';
 import { ensureCodexWrapperInstalled } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin, resolveOpencodePluginPath } from '../hooks-install/opencode.js';
 import { copilotPaths, installCopilot, isCopilotCliPresent } from '../hooks-install/copilot.js';
-import { hippoHomeDir } from '../../host/agent-homes.js';
+import { MCP_CONFIG_HOSTS } from '../hooks-install/rules/mcp-config.js';
+import { hippoHomeDir, processHomes } from '../../host/agent-homes.js';
 import { importUserMemories } from '../../api/agent-memories.js';
 import { currentMachine } from '../../infra/machine.js';
 import { cliSyncOptions } from './api-context.js';
@@ -19,6 +20,7 @@ import {
   warnClaudeSettingsUnusable,
 } from './install-steps.js';
 import { printCopilotInstall } from './copilot-report.js';
+import { homeTarget } from './home-targets.js';
 
 function setupDetectedTools(
   tools: ReturnType<typeof detectInstalledTools>,
@@ -29,6 +31,7 @@ function setupDetectedTools(
   const wrapperTools = tools.filter((t) => t.kind === 'wrapper' && (t.detected || forceAll));
   const skipped = tools.filter((t) => t.kind === 'json-hook' && !t.detected && !forceAll);
   const markdownTools = tools.filter((t) => t.kind === 'markdown-instruction' && t.detected);
+  const mcpConfigTools = tools.filter((t) => t.kind === 'mcp-config');
   const pluginTools = tools.filter((t) => t.kind === 'plugin' && t.detected);
 
   if (jsonTools.length === 0 && !forceAll) {
@@ -40,6 +43,11 @@ function setupDetectedTools(
 
   for (const tool of skipped) {
     console.log(`  ${tool.name.padEnd(14)} not detected at ${tool.configDir} -- skipping`);
+  }
+
+  for (const tool of mcpConfigTools) {
+    if (tool.detected || forceAll) setupMcpConfigTool(tool, dryRun);
+    else console.log(`  ${tool.name.padEnd(14)} not detected at ${tool.configDir} -- skipping`);
   }
 
   for (const tool of wrapperTools) setupWrapperTool(tool, dryRun);
@@ -110,6 +118,20 @@ function setupCopilot(dryRun: boolean): void {
       `[dry-run] would add the MCP server to ${dir.mcpConfig} and write ${dir.instructions}`,
     );
   }
+}
+
+function mcpConfigFile(name: string): string {
+  const row = MCP_CONFIG_HOSTS.find((candidate) => candidate.name === name);
+  if (row === undefined) throw new Error(`no MCP config host named ${name}`);
+  return row.file(processHomes());
+}
+
+function setupMcpConfigTool(tool: ToolDetection, dryRun: boolean): void {
+  if (dryRun) {
+    console.log(`[dry-run] would add the MCP server to ${mcpConfigFile(tool.name)}`);
+    return;
+  }
+  homeTarget(tool.name)?.install(`  ${tool.name.padEnd(14)} `);
 }
 
 function setupJsonTool(tool: ToolDetection, dryRun: boolean): void {

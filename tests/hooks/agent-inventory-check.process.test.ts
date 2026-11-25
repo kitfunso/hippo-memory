@@ -205,6 +205,7 @@ describe('check-agent-inventory', () => {
       plugin: 'native-plugin',
       wrapper: 'wrapper',
       'markdown-instruction': 'instruction-file',
+      'mcp-config': 'mcp-recipe',
     } as const;
     for (const tool of detectInstalledTools()) {
       const entry = inventory.entries.find((e) => e.id === tool.name);

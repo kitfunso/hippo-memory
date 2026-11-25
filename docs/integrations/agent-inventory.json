@@ -419,6 +419,86 @@
       "roadmap": "AZ4"
     },
     {
+      "id": "junie",
+      "checked": "2026-11-25",
+      "names": ["Junie"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when ~/.junie exists, add the hippo server to ~/.junie/mcp/mcp.json; hippo hook install junie does the same and hippo hook uninstall junie removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in ~/.junie/mcp/mcp.json",
+      "modes": [
+        { "name": "Junie agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Junie session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "antigravity",
+      "checked": "2026-11-25",
+      "names": ["Antigravity"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when ~/.gemini/antigravity or ~/.gemini/antigravity-cli exists, add the hippo server to ~/.gemini/config/mcp_config.json; hippo hook install antigravity does the same and hippo hook uninstall antigravity removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in ~/.gemini/config/mcp_config.json",
+      "modes": [
+        { "name": "Antigravity agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Antigravity session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "grok-build",
+      "checked": "2026-11-25",
+      "names": ["Grok Build"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when ~/.grok exists, add the hippo server to ~/.grok/config.toml; hippo hook install grok-build does the same and hippo hook uninstall grok-build removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in ~/.grok/config.toml",
+      "modes": [
+        { "name": "Grok Build agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Grok Build session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "muse-code",
+      "checked": "2026-11-25",
+      "names": ["Muse Code"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when $XDG_CONFIG_HOME/muse or ~/.config/muse exists, add the hippo server to $XDG_CONFIG_HOME/muse/settings.json or ~/.config/muse/settings.json; hippo hook install muse-code does the same and hippo hook uninstall muse-code removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in $XDG_CONFIG_HOME/muse/settings.json or ~/.config/muse/settings.json",
+      "modes": [
+        { "name": "Muse Code agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Muse Code session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
       "id": "devin-cli",
       "checked": "2026-10-03",
       "names": ["Devin CLI"],
