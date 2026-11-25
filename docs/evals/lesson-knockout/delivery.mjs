@@ -3,10 +3,10 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { spawn } from 'node:child_process';
+import { spawn,spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as wait } from 'node:timers/promises';
-import { folder } from './plan.mjs';
+import { folder,hash } from './plan.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
 
 export async function openCue(work,sid) {
@@ -32,15 +32,35 @@ export async function openCue(work,sid) {
   return {hook:{type:'http',url:'http://127.0.0.1:'+server.address().port+route,timeout:5},
     close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
 }
-async function invoke(live,token,env) {
+async function invoke(live,token,env,boxChecked=false) {
   const proc=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
-    path.join(folder,'launch.ps1'),'-Live',live,'-TokenVar',token],
+    path.join(folder,'launch.ps1'),'-Live',live,'-TokenVar',token,...(boxChecked?['-BoxChecked']:[])],
     {cwd:path.dirname(live),env,windowsHide:true,stdio:'inherit'});
   const [code]=await once(proc,'exit');
   return code;
 }
 
-export async function retryLimited(live,invokeOnce,delay=wait,maxWaits=8*96) {
+function runBoxCheck(live,env) {
+  const script='C:/z0-runs/s7/box-check.sh';
+  if(hash(fs.readFileSync(script))!=='4548084ad76f9eecc834a5eba5401dd1b32e0a91baec52fe2e9915c1c831cfb0')
+    throw Error('box-check.sh differs from the registered script');
+  return spawnSync('C:/Program Files/Git/bin/bash.exe',[script],{
+    cwd:path.dirname(live),env,windowsHide:true,encoding:'utf8',stdio:['ignore','pipe','inherit']});
+}
+
+async function waitForBox(checkBox,delay) {
+  for (;;) {
+    const {status,stdout,error}=checkBox();
+    if(error) throw error;
+    if(stdout) process.stdout.write(stdout);
+    if(status===0) return;
+    const median=/; median (\d+) \(limit 150\)$/.exec(stdout?.trimEnd());
+    if(status!==1 || !median || Number(median[1])<=150) throw Error('box-check.sh failed (exit '+status+')');
+    await delay(5*60_000);
+  }
+}
+
+export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96}={}) {
   const ticket=randomUUID(),checkpoint=inside(path.join(stateRoot,'checkpoints',ticket));
   const archives=[];
   const records=inside(path.join(path.dirname(live),'operator'));
@@ -49,8 +69,10 @@ export async function retryLimited(live,invokeOnce,delay=wait,maxWaits=8*96) {
     fs.mkdirSync(dest);
     for(const [name,src] of locations) copy(src,path.join(dest,name));
   };
-  snapshot(checkpoint);
   for(let i=0;;i++) {
+    await waitForBox(checkBox,delay);
+    if(i===0) snapshot(checkpoint);
+    fs.writeFileSync(path.join(records,'call.json'),JSON.stringify(call));
     const code=await invokeOnce();
     if(code===0) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
     if(code!==75) throw Error('Claude Code launcher exited '+code);
@@ -65,10 +87,10 @@ export async function retryLimited(live,invokeOnce,delay=wait,maxWaits=8*96) {
     }
   }
 }
-export async function launch(live,token,env,scored=false) {
-  const once=()=>invoke(live,token,env);
-  if(scored) return retryLimited(live,once);
-  const code=await once();
+export async function launch(live,token,env,call) {
+  if(!call.smoke) return retryLimited(live,call,()=>invoke(live,token,env,true),()=>runBoxCheck(live,env));
+  fs.writeFileSync(path.join(live,'call.json'),JSON.stringify(call));
+  const code=await invoke(live,token,env);
   if(code!==0) throw Error('Smoke launcher exited '+code);
   return [];
 }

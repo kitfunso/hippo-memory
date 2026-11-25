@@ -136,3 +136,5 @@ Before scored collection, the audit flagged both planted reads and found no hits
 Scored collection requires separate launch approval, an available operator subscription, passing pins and a passing box check at launch. The smoke budget is exhausted.
 
 25 Nov 2026: Keith authorised scored collection on Z0_SUB_TOKEN ("use the subscription key").
+
+**25 Nov 2026.** At this amendment, there were zero scored knockout observations. If the pinned box check reports a median above 150 ms, the runner waits five minutes and checks again at the same invocation. The refusal leaves unit state intact. It records no intent or call and uses no assignment or subscription wait.

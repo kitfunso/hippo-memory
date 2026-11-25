@@ -1,6 +1,7 @@
 param(
   [Parameter(Mandatory)][string]$Live,
-  [ValidateSet('Z0_SUB_TOKEN','Z0_SUB_TOKEN_1','Z0_SUB_TOKEN_2','Z0_SUB_TOKEN_3')][string]$TokenVar='Z0_SUB_TOKEN'
+  [ValidateSet('Z0_SUB_TOKEN','Z0_SUB_TOKEN_1','Z0_SUB_TOKEN_2','Z0_SUB_TOKEN_3')][string]$TokenVar='Z0_SUB_TOKEN',
+  [switch]$BoxChecked
 )
 $ErrorActionPreference='Stop'
 $base=[IO.Path]::GetFullPath('C:/z0-lessons/lesson-knockout') + '\'
@@ -11,10 +12,7 @@ $records=if ($scored) { Join-Path $base 'active\operator' } else { $Live }
 $call=Get-Content -Encoding UTF8 -Raw -LiteralPath "$records/call.json" | ConvertFrom-Json
 if ($scored -eq $call.smoke) { throw 'Unexpected session mode for this directory' }
 if ($call.smoke -and $TokenVar -ne 'Z0_SUB_TOKEN') { throw 'Smoke requires Z0_SUB_TOKEN' }
-if ($scored) {
-  & 'C:/Program Files/Git/bin/bash.exe' 'C:/z0-runs/s7/box-check.sh'
-  if ($LASTEXITCODE) { throw 'Z0 box check refused launch' }
-}
+if ($scored -and !$BoxChecked) { throw 'Scored attempts require the unit runner box check' }
 . "$PSScriptRoot/toolchain.ps1" $call.toolchain $Live
 $pi=New-Object Diagnostics.ProcessStartInfo
 $pi.FileName='C:/z0-runs/scored/bin/claude.exe'

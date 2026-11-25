@@ -78,9 +78,8 @@ function prepare(task) {
 async function session(task,prompt,session,id,resume=false) {
   const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain};
   if(reuse) call.frozenSmoke=true;
-  fs.writeFileSync(join(records,'call.json'),JSON.stringify(call));
   checkProjectSettings(work);
-  const archives=await launch(live,token,checkEnv,!smoke);
+  const archives=await launch(live,token,checkEnv,call);
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);

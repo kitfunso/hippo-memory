@@ -2,7 +2,7 @@ import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { folder,root,checkTaskPins,roster,hash,read } from './plan.mjs';
-import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy } from './state.mjs';
+import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
 import { evidence } from './evidence.mjs';
 import { openCue,retryLimited } from './delivery.mjs';
@@ -73,19 +73,57 @@ assert(audited([user,msg('system',txt(cueText))]).hookSeen);
 assert(!audited([user,answer,result('id',cueText)]).hookSeen);
 assert(audited([user,msg('system',txt('UserPromptSubmit hook additional context: check-it'))]).targetText);
 const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
-const records=join(dir,'operator');mkdir(records);put(records,'call.json','reserved');
+const records=join(dir,'operator');mkdir(records);
 for(const name of ['checkpoints','limit-archives']) mkdir(join(dir,name));
-let attempts=0,waits=0;
-await retryLimited(state,async()=>{
+const ready={status:0,stdout:'bare launch ms: 63 63 63 63 63 63 63; median 63 (limit 150)\n'};
+const refused={status:1,stdout:'bare launch ms: 411 91 391 84 366 74 688; median 366 (limit 150)\n'};
+const feedback={id:'feedback',session:'teach-session',resume:true,prompt:'Teaching turn'};
+const fork={id:'apply',session:'fork-session',resume:false,prompt:'Apply task'};
+const unitState=()=>[files(state),files(records),...['checkpoints','limit-archives'].map(n=>fs.readdirSync(join(dir,n)))];
+put(records,'call.json',JSON.stringify({id:'teach',session:feedback.session}));
+put(records,'teach.json',JSON.stringify({session:feedback.session}));
+for(const call of [feedback,fork]) {
+  const before=unitState();
+  const checks=[refused,refused,ready];
+  let pauses=0,calls=0;
+  const archives=await retryLimited(state,call,()=>{
+    assert.equal(checks.length,0);
+    assert.deepEqual(read(join(records,'call.json')),call);
+    put(records,call.id+'.json',JSON.stringify({session:call.session}));
+    calls++;
+    return 0;
+  },()=>checks.shift(),{maxWaits:0,delay:ms=>{
+    assert.equal(ms,300000);
+    assert.equal(calls,0);
+    assert.deepEqual(unitState(),before);
+    pauses++;
+  }});
+  assert.deepEqual([pauses,calls,archives],[2,1,[]]);
+  assert.equal(read(join(records,call.id+'.json')).session,call.session);
+  if(call===feedback) { fs.renameSync(records,join(dir,'collected-teach')); mkdir(records); }
+}
+const unexpectedWait=()=>assert.fail('Unexpected wait');
+await assert.rejects(retryLimited(state,fork,()=>assert.fail('Unexpected dispatch'),
+  ()=>({status:1,stdout:'script error'}),{delay:unexpectedWait}),/box-check.sh failed/);
+let attempts=0;
+const checks=[ready,refused,ready],delays=[];
+await retryLimited(state,feedback,async()=>{
   assert.equal(fs.readFileSync(join(state,'pre'),'utf8'),'original');
   assert(!fs.existsSync(join(state,'partial')));
-  assert.equal(fs.readFileSync(join(records,'call.json'),'utf8'),'reserved');
+  assert.deepEqual(read(join(records,'call.json')),feedback);
   if(attempts++===0){put(state,'partial','cut off');put(state,'pre','changed');put(records,'call.json','cut off');return 75;}
   return 0;
-},async ms=>{assert.equal(ms,900000);waits++;},1);
-assert.equal(attempts,2);assert.equal(waits,1);
-await assert.rejects(retryLimited(state,async()=>1,async()=>assert.fail('Unexpected wait')),/exited 1/);
-await assert.rejects(retryLimited(state,async()=>75,async()=>assert.fail('Unexpected wait'),0),/wait exhausted/);
+},()=>checks.shift(),{maxWaits:1,delay:ms=>{
+  if(ms===300000) {
+    assert.deepEqual(read(join(records,'call.json')),fork);
+    assert.equal(attempts,1);
+  }
+  delays.push(ms);
+}});
+assert.equal(attempts,2);assert.deepEqual(delays,[900000,300000]);assert.equal(checks.length,0);
+await assert.rejects(retryLimited(state,fork,()=>1,()=>ready,{delay:unexpectedWait}),/exited 1/);
+await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,maxWaits:0}),/wait exhausted/);
+console.log('Passed box refusals before teach resume, fork apply and subscription retry.');
 const unit=join(root,'smoke',roster()[0].id);
 const live=join(root,'active/live'),project='home/.claude/projects/unit';
 const sibling=join(root,'unit/sibling/snapshot/hippo.db'),checker=roster()[0].lesson.checkPath;

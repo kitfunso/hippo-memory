@@ -25,9 +25,8 @@ for(const arm of ['T','N']) {
   try {
     save(join(live,'settings.json'),{autoMemoryEnabled:true,autoMemoryDirectory:join(live,'home/.claude/projects/unit/memory'),
       hooks:{UserPromptSubmit:[{hooks:[cue.hook]}]}});
-    save(join(live,'call.json'),{id:'probe',session:sid,smoke:true,diagnostic:true,
+    await launch(live,token,process.env,{id:'probe',session:sid,smoke:true,diagnostic:true,
       prompt:'Reply OK.',model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain});
-    await launch(live,token,process.env);
     const result=evidence(join(live,'bodies/probe'),read(join(live,'probe.json')),notes,u.lesson);
     if(transport==='command') {
       const output=join(live,'command-output.json');

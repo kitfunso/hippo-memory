@@ -148,3 +148,5 @@ Get-ChildItem "$slot/cache/gradle" -Name
 Test-Path "$slot/../result.json"
 ```
 
+**25 Nov 2026.** After five completed pairs, the box check paused collection before intent (median 366 ms, limit 150 ms). The operator resumed the registered `full` command under `C:/z0-lessons/supervise.mjs`, which restarts it five minutes after each box-check refusal and stops on any other failure.
+
