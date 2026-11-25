@@ -10,7 +10,7 @@ import { cleanPath } from '../../../scripts/token-eval/arms.mjs';
 import net from 'node:net';
 import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
-import { checkout,install,privateEnv,run,runSetup,seed } from './prepare.mjs';
+import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
@@ -41,6 +41,10 @@ function toolEnv(u,dir,initial=true) {
   const combined=[tc.path && sub(tc.path),env[pk],tc.tail && sub(tc.tail)].filter(Boolean).join(path.delimiter);
   env[pk]=[path.join(dir,'bin'),cleanPath(combined,{env,cwd:dir}).value].join(path.delimiter);
   env.EVAL_SEED=String(u.seed);
+  if(u.toolchain==='python') {
+    env.POETRY_CACHE_DIR=poetryCache(dir);
+    fs.mkdirSync(env.POETRY_CACHE_DIR,{recursive:true});
+  }
   if(initial && u.toolchain==='python') run('python',['-m','venv',path.join(dir,'venv')],dir,env);
   return env;
 }

@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {privateEnv,run,runSetup} from './prepare.mjs';
+import {poetryCache,privateEnv,run,runSetup} from './prepare.mjs';
+import {root} from './paths.mjs';
 import {upperNet} from './safety.mjs';
 import {verifyBoxCheck} from './pins.mjs';
 
@@ -109,4 +110,8 @@ export function checkSetup(root) {
   runSetup(write('a.txt')+'"%LESSON_Q%-boot" && '+write('b.txt')+'"%LESSON_Q%'+tool+'"',work,env);
   assert.equal(fs.readFileSync(path.join(work,'a.txt'),'utf8'),env.LESSON_Q+'-boot');
   assert.equal(fs.readFileSync(path.join(work,'b.txt'),'utf8'),env.LESSON_Q+tool);
+  const slot=path.join(root,'trial','cd61dc64-b761-4498-9e1c-e19bc0ce2936-1','prep-BcxPeS','s1');
+  const artifact=path.join('artifacts','ef','37','56','47464454e2b8c4410c3a9c89fbc49886dc1150b292e5e42d303317bc59',
+    'winrt_Windows.Devices.Bluetooth.GenericAttributeProfile-2.3.0-cp312-cp312-win_amd64.whl');
+  assert.ok(path.join(poetryCache(slot),artifact).length<=230,'Poetry cache path too long for MAX_PATH');
 }

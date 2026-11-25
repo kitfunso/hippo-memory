@@ -53,8 +53,13 @@ def slots(pair: str) -> list[str]:
     return found
 
 
+def poetry_cache(slot: str) -> str:
+    prep, pair = os.path.basename(os.path.dirname(slot)), os.path.basename(os.path.dirname(os.path.dirname(slot)))
+    return os.path.join(ROOT, 'pc', pair[:8] + '-' + prep[-6:] + '-' + os.path.basename(slot))
+
+
 def targets(slot: str) -> list[str]:
-    out = [os.path.join(slot, 'cache')]
+    out = [os.path.join(slot, 'cache'), poetry_cache(slot)]
     venv = os.path.join(slot, 'venv')
     if os.path.isfile(os.path.join(venv, 'pyvenv.cfg')):
         out.append(venv)

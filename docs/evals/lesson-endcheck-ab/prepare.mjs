@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { restoreInstructions } from '../../../scripts/token-eval/workspace.mjs';
-import { corpus, digest, dist, json, read, slice } from './paths.mjs';
+import { corpus, digest, dist, json, read, root, slice } from './paths.mjs';
 
 export const hippo = path.join(slice,'bin','hippo.js');
 export const {HOOK_MEDIUM_TIMEOUT_SECONDS} = await dist('surface/hooks-install/rules/install-plan.js');
@@ -15,6 +15,10 @@ export const run = (file,args,cwd,env,opts={}) => execFileSync(file,args,{cwd,en
   encoding:'utf8',stdio:['pipe','pipe','pipe'],maxBuffer:32*1024*1024,...opts});
 export const runSetup = (setup,work,env) => run('cmd.exe',['/d','/s','/c','"'+setup+'"'],work,env,
   {timeout:1800000,windowsVerbatimArguments:true});
+export function poetryCache(dir) {
+  const [pair,prep,slot]=path.resolve(dir).split(path.sep).slice(-3);
+  return path.join(root,'pc',pair.slice(0,8)+'-'+prep.slice(-6)+'-'+slot);
+}
 export function privateEnv(dir) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
     /^(SystemRoot|windir|ComSpec|Path|PATHEXT|ProgramFiles(?:\(x86\))?|ProgramW6432|SystemDrive|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(k)));
