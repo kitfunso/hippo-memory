@@ -137,7 +137,8 @@ export interface ServeOptions {
   autoSleep?: false;
   /** How POST /v1/sleep runs on a store that is not hippo.db with its `consolidation` group: run it in
    * another process and resolve once that process has ended. One runs at a time, and stop() waits for
-   * it, so it stops its own work at its deadline and settles. Unset, the route answers 501 there. */
+   * it. Core sets no deadline on it, so the promise must settle by the host's own deadline. Unset, the route
+   * answers 501 there. */
   sleep?: (ctx: Context, opts: SleepOptions) => Promise<SleepResult>;
   routes?: readonly AddonRoute[];
   mintBodyDeadlineMs?: number;
