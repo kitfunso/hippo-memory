@@ -10,6 +10,7 @@ import { schedule } from './design.mjs';
 import { loadPlan } from './paths.mjs';
 import { armBinding,auditCalls,audited,auditFile,boundIntent,classify,readAudits,replayed } from './crash-audit.mjs';
 
+const INFRA_CODES=new Set(['EBUSY','EPERM','ENOSPC','ENOMEM','EMFILE','EADDRINUSE','ENOENT']);
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ab-audit-'));
 const write=(name,rows)=>{
   fs.writeFileSync(path.join(dir,name),rows.map(r=>JSON.stringify(r)).join('\n')+'\n');
@@ -100,6 +101,12 @@ try {
   assert.deepEqual(JSON.parse(probed({...unset,CHECK_STATUS_KEY:'secret',CHECK_STATUS:'status'})),['PATH','SystemRoot'],
     'The stdio mode probe saw more than SystemRoot and PATH');
   assert.equal(probed({...unset,LESSON_STDIO:'file'}),'','A child with a stdio mode probed again');
+} catch(e) {
+  const msg=String(e?.message ?? e).split(/\r?\n/)[0].trim();
+  if(INFRA_CODES.has(e?.code)) console.error('VERIFY_INFRA: '+e.code+': '+msg);
+  else console.error('VERIFY_FAIL: '+msg);
+  console.error(e);
+  process.exit(1);
 } finally {
   fs.rmSync(dir,{recursive:true,force:true});
 }

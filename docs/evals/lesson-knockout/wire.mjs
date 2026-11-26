@@ -169,11 +169,11 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM,port=0,token=random
   proxy.on('clientError',(e,socket)=>socket.destroy());
   proxy.on('connect',(req,socket,head)=>{
     socket.on('error',()=>{});
-    if(closing) { row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'closing'}); return socket.destroy(); }
     if(auth && req.headers['proxy-authorization']!==auth) {
       row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'proxy-auth'});
       return socket.end('HTTP/1.1 407 Proxy Authentication Required\r\n\r\n');
     }
+    if(closing) { row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'closing'}); return socket.destroy(); }
     const target=authority(req.url);
     if(!target) { row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'authority'}); return socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }
     if(target.host===API_HOST && target.port===443) {

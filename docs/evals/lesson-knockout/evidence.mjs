@@ -146,7 +146,7 @@ export function wireLedger(dir) {
     if(route==='generate' && !CLASSES.has(q.cls)) return fail('request '+q.seq+' class '+q.cls);
     const request=savedRequest(dir,q,route),answer=request.reason ? {} : savedReply(dir,q,route,response,end);
     if(request.reason || answer.reason) return fail(request.reason ?? answer.reason);
-    exchanges.push({seq:q.seq,route,cls:route==='generate' ? q.cls : null,status:response?.status ?? null,requestId:response?.requestId ?? null,
+    exchanges.push({seq:q.seq,route,cls:route==='generate' ? q.cls : null,aux:q.aux ?? null,status:response?.status ?? null,requestId:response?.requestId ?? null,
       ended:end.ended,body:request.body,reply:answer.reply,complete:finished(route,response,end,answer.reply,request.body),
       limit:limitOf(route,response,answer.reply),start,end:ends[0]});
   }
@@ -191,11 +191,11 @@ function readsDelivery(tool,work) {
   });
 }
 
-const CONTINUED='This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.';
+const CONT_HEAD=/^This session is being continued from a previous conversation that ran out of context\. The summary below covers the earlier portion of the conversation\.\n\n<system-reminder>\n<tools-used-before-summary>[^<\n]*<\/tools-used-before-summary>\n<\/system-reminder>\n/;
 const REREAD=/^<system-reminder>\nCalled the (\w+) tool with the following input: (\{[\s\S]*\})\n<\/system-reminder>$/;
 const REREAD_RESULT=/^<system-reminder>\nResult of calling the (\w+) tool:\n([\s\S]*?)\n<\/system-reminder>([\s\S]*)$/;
-const QUOTED=/<exchanges>\n([\s\S]*?)\n<\/exchanges>/;
-const escapeRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const FIRST_LOOK_HEAD=/^((?:<tools-used-before-summary>[^<\n]*<\/tools-used-before-summary>\n)?(?:<artifact-content-authored-by-others\/>\n)?(?:<remote-control-device-report\/>\n)?)<exchanges>\n/;
+const FIRST_LOOK_TAIL='\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.';
 export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
   .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
 function priorWords(exchanges,index) {
@@ -203,15 +203,16 @@ function priorWords(exchanges,index) {
   for(let j=0;j<exchanges.length;j++) {
     const x=exchanges[j];
     const doneBefore=curr.start!==undefined ? x.complete && x.end<curr.start : j<index && x.complete;
-    const sentBefore=curr.start!==undefined ? x.start<curr.start : j<index;
     if(doneBefore && x.route==='generate' && x.cls==='main') {
-      const joined=(x.reply?.texts ?? []).join('\n').trim();
+      const replyTexts=x.reply?.texts ?? [];
+      if(x.reply?.sse) for(const t of replyTexts) if(t.trim()) blocks.push(t.trim());
+      const joined=replyTexts.join('\n').trim();
       if(joined) blocks.push(joined);
-    }
-    if(sentBefore && x.route==='generate' && x.cls==='main') {
       for(const m of x.body?.messages ?? []) if(m.role==='assistant') {
-        const joined=textBlocks(m.content).join('\n').trim();
-        if(joined) blocks.push(joined);
+        const mtexts=textBlocks(m.content);
+        for(const t of mtexts) if(t.trim()) blocks.push(t.trim());
+        const mjoined=mtexts.join('\n').trim();
+        if(mjoined) blocks.push(mjoined);
       }
     }
     if(doneBefore && x.route==='generate' && x.cls==='compaction') {
@@ -222,49 +223,54 @@ function priorWords(exchanges,index) {
   return {blocks:[...new Set(blocks)].sort((a,b)=>b.length-a.length),summaries:[...new Set(summaries)].sort((a,b)=>b.length-a.length)};
 }
 function quotedHistory(text,task,said) {
-  const m=QUOTED.exec(text);
-  if(!m) return null;
-  const strict=[text.slice(0,m.index)+text.slice(m.index+m[0].length)],prompt=[],inner=m[1];
+  if(!text.endsWith(FIRST_LOOK_TAIL)) return null;
+  const m=FIRST_LOOK_HEAD.exec(text),closeAt=text.length-FIRST_LOOK_TAIL.length;
+  if(!m || closeAt<m[0].length) return null;
+  const strict=m[1] ? [m[1]] : [],prompt=[],inner=text.slice(m[0].length,closeAt);
   const userText=typeof task.prompt==='string' ? task.prompt.trim() : null;
   const ends=[];
   for(let k=inner.indexOf('\n\n');k>=0;k=inner.indexOf('\n\n',k+2)) ends.push(k);
   ends.push(inner.length);
   const atBoundary=end=>end===inner.length || inner.startsWith('\n\n',end);
+  let strictStart=null;
+  const flushStrict=at=>{ if(strictStart!==null) { strict.push(inner.slice(strictStart,at)); strictStart=null; } };
   for(let pos=0;pos<inner.length;) {
-    let matched=false;
+    let nextPos=null;
     if(userText && inner.startsWith('User: ',pos)) {
       if(inner.startsWith(userText,pos+6) && atBoundary(pos+6+userText.length)) {
-        prompt.push(userText); pos+=6+userText.length+2; matched=true;
+        prompt.push(userText); nextPos=pos+6+userText.length+2;
       } else if(inner.startsWith('User: …',pos)) {
         for(let i=ends.length-1;i>=0;i--) {
           const end=ends[i];
           if(end<=pos+7) break;
           const tail=inner.slice(pos+7,end);
-          if(userText.endsWith(tail)) { prompt.push(tail); pos=end+2; matched=true; break; }
+          if(userText.endsWith(tail)) { prompt.push(tail); nextPos=end+2; break; }
         }
       }
     } else if(inner.startsWith('Assistant: ',pos)) {
       const exact=said.blocks.find(b=>inner.startsWith(b,pos+11) && atBoundary(pos+11+b.length));
-      if(exact) { pos+=11+exact.length+2; matched=true; }
+      if(exact) nextPos=pos+11+exact.length+2;
       else if(inner.startsWith('Assistant: …',pos)) {
         for(let i=ends.length-1;i>=0;i--) {
           const end=ends[i];
           if(end<=pos+12) break;
           const tail=inner.slice(pos+12,end);
-          if(said.blocks.some(b=>b.endsWith(tail))) { pos=end+2; matched=true; break; }
+          if(said.blocks.some(b=>b.endsWith(tail))) { nextPos=end+2; break; }
         }
       }
     }
-    if(matched) continue;
+    if(nextPos!==null) { flushStrict(pos-2); pos=nextPos; continue; }
+    if(strictStart===null) strictStart=pos;
     const next=inner.indexOf('\n\n',pos),end=next<0 ? inner.length : next;
-    strict.push(inner.slice(pos,end));
     pos=end+2;
   }
+  flushStrict(inner.length);
   return {strict,prompt};
 }
-const callSurfaces=(exchanges,task)=>exchanges.map((x,i)=>deliverySurfaces(x.body,task,priorWords(exchanges,i)));
+const isFirstLook=x=>x.route==='generate' && x.cls==='auxiliary' && x.aux==='memory_save';
+const callSurfaces=(exchanges,task)=>exchanges.map((x,i)=>deliverySurfaces(x.body,task,priorWords(exchanges,i),isFirstLook(x)));
 
-export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]}) {
+export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]},firstLook=false) {
   const system=textBlocks(body.system), prompt=[], opening=[], results=[], tools=new Map();
   const work=task.work??root+'/active/live/work';
   let assistant=false,called=null;
@@ -302,14 +308,17 @@ export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]}) {
       if(reread) try { input=JSON.parse(reread[2]); } catch {}
       if(input && typeof input==='object') { called={name:reread[1],input,text:s}; continue; }
       if(s===task.prompt) { prompt.push(s); continue; }
-      if(s.startsWith(CONTINUED)) {
-        const after=s.slice(CONTINUED.length);
-        const summary=said.summaries.find(x=>new RegExp('(?:^|\\n)'+escapeRe(x)+'(?=\\n|$)').test(after));
-        opening.push(summary ? CONTINUED+after.replace(summary,'') : s);
+      const cm=CONT_HEAD.exec(s);
+      if(cm) {
+        const head=cm[0],rest=s.slice(head.length);
+        const summary=said.summaries.find(x=>rest.startsWith(x) && (rest.length===x.length || rest[x.length]==='\n'));
+        opening.push(summary ? head+rest.slice(summary.length) : s);
         continue;
       }
-      const quoted=quotedHistory(s,task,said);
-      if(quoted) { opening.push(...quoted.strict); prompt.push(...quoted.prompt); continue; }
+      if(firstLook && body.messages.length===1 && content.length===1) {
+        const quoted=quotedHistory(s,task,said);
+        if(quoted) { opening.push(...quoted.strict); prompt.push(...quoted.prompt); continue; }
+      }
       opening.push(s);
     }
   }

@@ -26,7 +26,14 @@ import { runSetupScript } from './setup.mjs';
 import { assertSameTree,continueUnit } from './continuation.mjs';
 import { collectRemaining } from './collect.mjs';
 
-const failOut=e=>{ console.error('VERIFY_FAIL: '+(e?.message ?? String(e))); console.error(e); process.exit(1); };
+const INFRA_CODES=new Set(['EBUSY','EPERM','ENOSPC','ENOMEM','EMFILE','EADDRINUSE','ENOENT']);
+const failOut=e=>{
+  const msg=String(e?.message ?? e).split(/\r?\n/)[0].trim();
+  if(INFRA_CODES.has(e?.code)) console.error('VERIFY_INFRA: '+e.code+': '+msg);
+  else console.error('VERIFY_FAIL: '+msg);
+  console.error(e);
+  process.exit(1);
+};
 process.on('uncaughtException',failOut);
 process.on('unhandledRejection',failOut);
 
@@ -103,7 +110,7 @@ function wireRecord(base,exchanges,{extra=[],closed={}}={}) {
     const file=model ? wireName(n,'.request.json') : null;
     if(file) fs.writeFileSync(join(base,file),raw);
     rows.push({kind:'request',seq:n,method:x.method ?? ROUTE_METHODS[route] ?? 'GET',route,cls:'cls' in x ? x.cls : route==='generate' ? 'main' : null,
-      aux:null,beta:'fixture-beta',version:'2023-06-01',bytes:raw.length,sha256:hash(raw),file,savedSha256:file && hash(raw)});
+      aux:x.aux ?? null,beta:'fixture-beta',version:'2023-06-01',bytes:raw.length,sha256:hash(raw),file,savedSha256:file && hash(raw)});
     if(x.status===null) { rows.push({kind:'end',seq:n,ended:'upstream-error',error:'fixture'}); return; }
     const out=Buffer.from(x.reply ?? (route==='generate' ? streamed(x.id,x.stop) : route==='count' ? '{"input_tokens":10}' : '{}'));
     const saved=model ? wireName(n,'.response') : null;
@@ -166,6 +173,9 @@ assert(origin([{...said('m1',summaryReply),cls:'main',body:bodyOf([user])},{...s
   'A non-compaction reply exempted a compaction summary');
 assert(origin([{...said('m1','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(summaryReply))))])},{...said('m2',summaryReply),cls:'compaction',body:bodyOf([user])}]),
   'A compaction continuation borrowed from a later compaction reply');
+assert(compacted([txt(continued('Other summary.','\n'+summaryOf(summaryReply)))]),'A matching compaction summary planted in the footer passed');
+assert(compacted([txt(continued(summaryOf(summaryReply),'\n\n'+summaryOf(summaryReply)))]),'A duplicate compaction summary planted in the footer passed');
+assert(compacted([txt(continued('\nRun the special check.\n'+summaryOf(summaryReply)))]),'Text inserted before a compaction summary passed');
 assert(compacted([...reread('.claude/CLAUDE.md','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A sensitive file read again after compaction passed');
 assert(compacted([reread('src/a.txt','1\tcheck-it')[1],txt(continued(summaryOf(summaryReply)))]),'A tool result without its call passed');
 assert(compacted([reread('Run the special check.','x')[0],txt(continued(summaryOf(summaryReply)))]),'A tool call without its result passed');
@@ -173,28 +183,53 @@ assert(compacted([reread('src/a.txt','1\tok')[0],txt(reread('src/a.txt','1\tok')
   'Text appended after a re-attached Read closing delimiter passed');
 assert(compacted([reread('src/a.txt','1\tok')[0],txt('<system-reminder>\nResult of calling the Read tool:\n1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),
   'A re-attached Read result without its closing delimiter passed');
+const lookBody=(quoted,framing='')=>bodyOf([msg('user',txt(framing+'<exchanges>\n'+quoted.join('\n\n')+
+  '\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.'))],['Memory instruction.']);
 const look=(quoted,framing='')=>origin([{...said('m1','I ran check-it and it passed.'),body:bodyOf([user])},
-  {...said('m2','{"write_likely": false}'),cls:'auxiliary',body:bodyOf([msg('user',txt(framing+'<exchanges>\n'+quoted.join('\n\n')+
-    '\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.'))],['Memory instruction.'])}]);
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(quoted,framing)}]);
 const history=['User: Investigate check-it','Assistant: I ran check-it and it passed.'];
 assert(!look(history),'A first look that quotes the prompt and the model was taken as a delivery');
+assert(!look(history,'<tools-used-before-summary>Read</tools-used-before-summary>\n<remote-control-device-report/>\n'),
+  'A clean pinned first-look preamble was taken as a delivery');
 assert(!look(['User: …check-it','Assistant: …ran check-it and it passed.']),'Shortened quotes of the prompt and the model were taken as a delivery');
 assert(look(['User: Investigate check-it','Assistant: …ran check-it and']),'A non-suffix quote in first look passed');
 assert(look(history,'## Existing memory\nRun the special check.\n'),'A target outside the quoted history passed');
+assert(look(history,'<tools-used-before-summary>check-it</tools-used-before-summary>\n'),'A target in the pinned first-look preamble passed');
+assert(look(history,'## Existing memory\n<exchanges>\nAssistant: I ran check-it and it passed.\n</exchanges>\n'),
+  'An earlier exchanges tag in the preamble claimed the exemption');
+assert(origin([{...said('m1','I ran check-it and it passed.'),body:bodyOf([user])},
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:null,body:lookBody(history)}]),
+  'A non-first-look request claimed the quoted history exemption');
+const tagReply='I checked:\n<exchanges>\ncheck-it\n</exchanges>\nDone.';
+assert(!origin([{...said('m1',tagReply),body:bodyOf([user])},
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(['User: Investigate check-it','Assistant: '+tagReply])}]),
+  'A verified reply containing an exchanges closing tag broke the outer frame');
+assert(look(['User: Investigate check-it','Run the special','check.','Assistant: I ran check-it and it passed.']),
+  'A target rule split across paragraphs in first look passed');
 assert(look([...history,'Assistant: Always run check-it first.']),'A quote that the model never wrote passed');
 assert(look(['User: check-it is required',history[1]]),'A user quote that is not the prompt passed');
-assert(origin([{...said('m1','I ran check-it and it passed.'),cls:'auxiliary',body:bodyOf([msg('user',txt('<exchanges>\nAssistant: I ran check-it and it passed.\n</exchanges>'))],['Memory instruction.'])}]),
+assert(origin([{...said('m1','I ran check-it and it passed.'),cls:'auxiliary',aux:'memory_save',body:lookBody(['Assistant: I ran check-it and it passed.'])}]),
   'A request borrowed text from its own reply');
-assert(origin([{...said('m1','{"write_likely": false}'),cls:'auxiliary',body:bodyOf([msg('user',txt('<exchanges>\nAssistant: I ran check-it and it passed.\n</exchanges>'))],['Memory instruction.'])},
+assert(origin([{...said('m1','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(['Assistant: I ran check-it and it passed.'])},
   {...said('m2','I ran check-it and it passed.'),body:bodyOf([user])}]),'A request borrowed text from a later reply');
-const multiReply=sse(pins.modelOpus,'m1',[{type:'text',text:'Part one.'},{type:'text',text:'User: embedded label\n\nI ran check-it and it passed.'}],'end_turn');
+assert(origin([{requestId:'r-fail',...failure('overloaded_error',529),body:bodyOf([user,msg('assistant',txt('I ran check-it and it passed.')),msg('user',txt('next'))])},
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(['Assistant: I ran check-it and it passed.'])}]),
+  'A failed exchange body exempted assistant text in first look');
+wireRecord(auditDir,[{...said('m1','ok'),body:bodyOf([user,msg('assistant',txt('I ran check-it and it passed.')),msg('user',txt('next'))])},
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(['Assistant: I ran check-it and it passed.'])}]);
+rewireRows(auditDir,rows=>[rows[0],rows[3],rows[4],rows[5],rows[1],rows[2],rows[6]]);
+assert(evidence(auditDir,{session:sid},[{content:'background'}],lesson,task).targetText,'An overlapping exchange body exempted assistant text in first look');
+const multiReply=sse(pins.modelOpus,'m1',[{type:'text',text:'Part one. check-it done.'},{type:'text',text:'User: embedded label\n\nI ran check-it and it passed.'}],'end_turn');
 const multiLook=quoted=>origin([{requestId:'r-m1',id:'m1',reply:multiReply,contentType:'text/event-stream',body:bodyOf([user])},
-  {...said('m2','{"write_likely": false}'),cls:'auxiliary',body:bodyOf([msg('user',txt('<exchanges>\n'+quoted.join('\n\n')+
-    '\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.'))],['Memory instruction.'])}]);
-assert(!multiLook(['User: Investigate check-it','Assistant: Part one.\nUser: embedded label\n\nI ran check-it and it passed.']),
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',aux:'memory_save',body:lookBody(quoted)}]);
+assert(!multiLook(['User: Investigate check-it','Assistant: Part one. check-it done.','Assistant: User: embedded label\n\nI ran check-it and it passed.']),
+  'Separate streamed assistant blocks were taken as a delivery');
+assert(!multiLook(['User: Investigate check-it','Assistant: Part one. check-it done.\nUser: embedded label\n\nI ran check-it and it passed.']),
   'A multi-block assistant reply with an embedded role label was taken as a delivery');
-assert(!multiLook(['User: …check-it','Assistant: …User: embedded label\n\nI ran check-it and it passed.']),
+assert(!multiLook(['User: …check-it','Assistant: …one. check-it done.','Assistant: …User: embedded label\n\nI ran check-it and it passed.']),
   'A suffix-truncated multi-block reply with an embedded role label was taken as a delivery');
+assert(multiLook(['User: Investigate check-it','Assistant: …Part one. check-it']),
+  'A non-suffix of a separate streamed block passed');
 function checkCallWire() {
   const series=join(dir,'final-request'),wire=join(series,'wire'),trace=join(series,'projects/unit',sid+'.jsonl');
   const done={session:sid,subtype:'success',isError:false,exit:0};
@@ -699,7 +734,8 @@ const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
 const records=join(dir,'operator');mkdir(records);
 for(const name of ['checkpoints','limit-archives']) mkdir(join(dir,name));
 const testCa=makeWireCa(join(dir,'wire-ca'),2);
-const record=base=>openWire(base,{ca:testCa}).then(w=>({...w,close:()=>w.close(300)}));
+const retryApi=await startScriptedApi(testCa);
+const record=base=>openWire(base,{ca:testCa,upstream:retryApi.upstream}).then(w=>({...w,close:()=>w.close(300)}));
 const clearWire=()=>fs.rmSync(join(records,'wire'),{recursive:true,force:true});
 const wireRows=id=>fs.readFileSync(join(records,'wire',id,'wire.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));
 function sentCall() {
@@ -857,6 +893,7 @@ assert.deepEqual(wireRows('apply').map(r=>[r.kind,r.stage]),[['fault','close'],[
   'An unfinished upload did not invalidate the attempt');
 assert.equal(fs.readdirSync(join(dir,'limit-archives')).length,archivedBefore,'A late upload reached the cut-off snapshot');
 clearWire();
+const failedWriteSeen=retryApi.seen.length;
 await assert.rejects(retryLimited(state,fork,async()=>{
   await fs.promises.mkdir(join(records,'wire','apply','00001.request.json'));
   const socket=await connectThrough(proxyPort(),proxyToken());
@@ -866,6 +903,7 @@ await assert.rejects(retryLimited(state,fork,async()=>{
   assert.equal(status,'502','A request the wire could not save was forwarded');
   return 0;
 },()=>ready,{delay:unexpectedWait,record}),/Wire record failed/,'A failed body write did not stop the attempt');
+assert.equal(retryApi.seen.length,failedWriteSeen,'A request the wire could not save reached the upstream');
 assert.deepEqual(wireRows('apply').map(r=>r.kind),['fault','closed'],'A failed body write did not latch the wire');
 clearWire();
 fs.mkdirSync(join(records,'wire','apply'),{recursive:true});
@@ -898,6 +936,7 @@ await launch(state,'NO_TOKEN_VAR',{},{...fork,smoke:false},{checkBox:()=>ready,r
 echo.close();
 assert.deepEqual(wireRows('apply').map(r=>[r.kind,r.host]),[['tunnel','127.0.0.1'],['closed',undefined]],'A tunnel to another host was not recorded');
 clearWire();
+await retryApi.close();
 await checkLiveWire();
 console.log('Passed box refusals before teach resume, fork apply and subscription retry, one wire per attempt, and wire close failures.');
 async function checkLiveWire() {
@@ -957,13 +996,30 @@ async function checkLiveWire() {
       late.destroy();
     }
     assert.equal(fs.readFileSync(join(order,'wire.jsonl'),'utf8'),sealedLog,'A late request wrote to the closed wire log');
-    const nextState=await next.close(500);
-    assert(nextState.ok && nextState.exchanges===0 && wireLedger(replacement).ok,'A late request reached the replacement attempt');
-    const hold=join(base,'hold'),h=await openWire(hold,{ca:testCa,upstream:api.upstream});
+    const beforeNextHold=api.seen.length;
+    const nextHold=await connectThrough(next.port,next.token),nextHeldBody=body('CASE:hold auth');
+    nextHold.write(head(nextHeldBody.length)+nextHeldBody);
+    for(let i=0;i<100 && !api.seen.slice(beforeNextHold).some(x=>x.kind==='hold');i++) await wait(20);
+    assert(api.seen.slice(beforeNextHold).some(x=>x.kind==='hold'),'The replacement hold request did not reach the upstream');
+    const staleSock=net.connect(next.port,'127.0.0.1');
+    await once(staleSock,'connect');
+    const nextClosing=next.close(2000);
+    await wait(20);
+    staleSock.write('CONNECT api.anthropic.com:443 HTTP/1.1\r\nHost: api.anthropic.com:443\r\n'+wAuth+'\r\n');
+    const staleResp=await new Promise(r=>{ staleSock.once('data',d=>r(String(d))); staleSock.once('close',()=>r('')); });
+    assert.match(staleResp,/^HTTP\/1\.1 407/,
+      'A stale unauthenticated socket during close was not refused with 407');
+    staleSock.destroy();
+    nextHold.destroy();
+    const nextState=await nextClosing;
+    assert(nextState.ok && nextState.exchanges===1 && wireLedger(replacement).ok &&
+      !rows(replacement).some(r=>r.kind==='refused' && r.reason==='closing'),
+      'A stale unauthenticated socket during close poisoned the replacement ledger');
+    const hold=join(base,'hold'),h=await openWire(hold,{ca:testCa,upstream:api.upstream}),beforeHold=api.seen.length;
     const c=await connectThrough(h.port,h.token),held=body('CASE:hold now');
     c.write(head(held.length)+held);
-    for(let i=0;i<100 && !api.seen.some(x=>x.kind==='hold');i++) await wait(20);
-    assert(api.seen.some(x=>x.kind==='hold'),'The held request did not reach the upstream');
+    for(let i=0;i<100 && !api.seen.slice(beforeHold).some(x=>x.kind==='hold');i++) await wait(20);
+    assert(api.seen.slice(beforeHold).some(x=>x.kind==='hold'),'The held request did not reach the upstream');
     const beside=await connectThrough(h.port,h.token),other=body('CASE:final beside'),besideReply=reply(beside);
     beside.write(head(other.length)+other);
     assert.match(await Promise.race([besideReply,wait(3000).then(()=>assert.fail('A second connection waited for a held reply'))]),/message_stop/,'A second connection waited for a held reply');
@@ -1025,7 +1081,7 @@ async function checkLiveWire() {
     const savedValid=fs.readFileSync(join(cleaned.dir,'00001.request.json'),'utf8');
     assert(!/u-canary|d-canary|a-canary|m-canary|metadata|user_id|device_id|account_uuid/.test(savedValid),'An identity field in a valid body was saved to disk');
     assert.deepEqual(Object.keys(JSON.parse(savedValid)).sort(),['messages','model','stream','system'],'Saved request kept unapproved fields');
-    for(const [name,raw] of [['json-null','null'],['identity-object','{"user_id":"u-1","device_id":"d-1","messages":"x"}'],
+    for(const [name,raw] of [['json-null','null'],['identity-object','{"model":"m","system":"s","user_id":"u-1","device_id":"d-1","messages":"x"}'],
       ['bad-model','{"model":1,"system":"s","messages":[]}'],['no-system','{"model":"m","messages":[]}']]) {
       const r=await oneShot(name,request(raw));
       assert(r.forwarded.length===0 && !fs.readdirSync(r.dir).some(f=>f.endsWith('.request.json')) &&
@@ -1093,19 +1149,54 @@ async function checkLiveWire() {
     assert.deepEqual(rows(slow).filter(r=>r.kind==='end').map(r=>r.ended),['complete'],'The slow reply was not recorded as complete');
     assert(drainWaits>10 && maxDrain<=1 && maxClose<=3 && warnings.length===0 && endRes && endRes.listenerCount('drain')===0,
       'Backpressure leaked response listeners: '+JSON.stringify({drainWaits,maxDrain,maxClose,warnings}));
-    const endClose=join(base,'end-close'),ec=await openWire(endClose,{ca:testCa,upstream:api.upstream});
+    const endFinish=join(base,'end-finish'),ef=await openWire(endFinish,{ca:testCa,upstream:api.upstream});
     const origEnd=http.ServerResponse.prototype.end;
-    let armEndClose=true,ecRes=null,ecFinishBefore=0;
+    let armEndFinish=true,efRes=null,efArgs=null,efFinishBefore=0,efReady;
+    const efHeld=new Promise(r=>{ efReady=r; });
     http.ServerResponse.prototype.end=function(...args) {
-      if(armEndClose && this.statusCode===200 && this.socket?.localPort===ec.port) { armEndClose=false; ecRes=this; ecFinishBefore=this.listenerCount('finish'); setImmediate(()=>this.destroy()); return this; }
+      if(armEndFinish && this.statusCode===200 && this.socket?.localPort===ef.port) {
+        armEndFinish=false; efRes=this; efArgs=args; efFinishBefore=this.listenerCount('finish'); efReady(); return this;
+      }
       return origEnd.apply(this,args);
     };
+    let efSock;
     try {
-      const ecSock=await connectThrough(ec.port,ec.token),ecPayload=body('CASE:final ec');
+      efSock=await connectThrough(ef.port,ef.token);
+      const efPayload=body('CASE:final ef'),efReply=reply(efSock);
+      efSock.write(head(efPayload.length)+efPayload);
+      await efHeld;
+      await wait(50);
+      assert(!rows(endFinish).some(r=>r.kind==='end'),'The wire wrote an end row before the response finished flushing');
+      origEnd.apply(efRes,efArgs);
+      assert.match(await efReply,/message_stop/,'The held response did not finish after release');
+      for(let i=0;i<200 && !rows(endFinish).some(r=>r.kind==='end');i++) await wait(10);
+      efSock.destroy();
+    } finally { http.ServerResponse.prototype.end=origEnd; efSock?.destroy(); }
+    const efState=await ef.close(1000);
+    assert(efState.ok && rows(endFinish).filter(r=>r.kind==='end').map(r=>r.ended)[0]==='complete',
+      'The held response was not recorded as complete after finish');
+    assert(efRes && efRes.listenerCount('finish')===efFinishBefore,'Backpressure leaked response listeners: finish remained after finish');
+    const endClose=join(base,'end-close'),ec=await openWire(endClose,{ca:testCa,upstream:api.upstream});
+    let armEndClose=true,ecRes=null,ecFinishBefore=0,ecReady;
+    const ecHeld=new Promise(r=>{ ecReady=r; });
+    http.ServerResponse.prototype.end=function(...args) {
+      if(armEndClose && this.statusCode===200 && this.socket?.localPort===ec.port) {
+        armEndClose=false; ecRes=this; ecFinishBefore=this.listenerCount('finish'); ecReady(); return this;
+      }
+      return origEnd.apply(this,args);
+    };
+    let ecSock;
+    try {
+      ecSock=await connectThrough(ec.port,ec.token);
+      const ecPayload=body('CASE:final ec');
       ecSock.write(head(ecPayload.length)+ecPayload);
-      for(let i=0;i<200 && !(fs.existsSync(join(endClose,'wire.jsonl')) && rows(endClose).some(r=>r.kind==='end'));i++) await wait(10);
+      await ecHeld;
+      await wait(50);
+      assert(!rows(endClose).some(r=>r.kind==='end'),'The wire wrote an end row before the response closed');
+      ecRes.destroy();
+      for(let i=0;i<200 && !rows(endClose).some(r=>r.kind==='end');i++) await wait(10);
       ecSock.destroy();
-    } finally { http.ServerResponse.prototype.end=origEnd; }
+    } finally { http.ServerResponse.prototype.end=origEnd; ecSock?.destroy(); }
     const ecState=await ec.close(1000);
     assert(ecState.ok && rows(endClose).filter(r=>r.kind==='end').map(r=>r.ended)[0]==='client-closed',
       'A response closed between end and finish was recorded as complete');

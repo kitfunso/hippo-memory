@@ -2,6 +2,7 @@
 import json
 import subprocess
 import shutil
+import sys
 from uuid import uuid4
 from pathlib import Path
 
@@ -123,4 +124,13 @@ def verify() -> None:
 
 
 if __name__ == "__main__":
-    verify()
+    try:
+        verify()
+    except (OSError, MemoryError) as err:
+        msg = str(err).splitlines()[0].strip() if str(err) else type(err).__name__
+        print(f"VERIFY_INFRA: {type(err).__name__}: {msg}", file=sys.stderr)
+        sys.exit(1)
+    except BaseException as err:
+        msg = str(err).splitlines()[0].strip() if str(err) else type(err).__name__
+        print(f"VERIFY_FAIL: {msg}", file=sys.stderr)
+        sys.exit(1)

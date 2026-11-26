@@ -167,6 +167,9 @@ try {
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://proxy.example:8080' }) } 'not a local listener'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://127.0.0.1:50123' }) } 'not a local listener'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@proxy.example:8080' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:0' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:65536' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']=@('http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:50123') }) } 'not a local listener'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NO_PROXY']='*' }) } 'Unexpected wire bypass list'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NODE_EXTRA_CA_CERTS']='C:/other/ca.pem' }) } 'Unexpected wire CA'
   Assert-Throws { Get-WireEnv ([pscustomobject]@{id='probe'}) } 'Unexpected wire settings'
@@ -180,6 +183,15 @@ try {
     Assert-Throws { Assert-WireOnly $applied } 'Unexpected network setting'
     $applied.Remove($k)
   }
+} catch {
+  $ex=$_.Exception
+  $msg=($ex.Message -split "\r?\n")[0].Trim()
+  if ($ex -is [IO.IOException] -or $ex -is [UnauthorizedAccessException] -or $ex -is [OutOfMemoryException]) {
+    [Console]::Error.WriteLine("VERIFY_INFRA: $($ex.GetType().Name): $msg")
+  } else {
+    [Console]::Error.WriteLine("VERIFY_FAIL: $msg")
+  }
+  throw
 } finally {
   Restore-Env
   Remove-Item -LiteralPath $scratch -Recurse -Force
