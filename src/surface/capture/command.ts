@@ -297,22 +297,19 @@ async function storedKeysInView(
   return { keys: heldKeysOf(rows, twins), ruleKeys: ruleHeldKeysOf(rows, twins, ruleProject) };
 }
 
-/** The rows a capture's dedup reads, as data, so the store's write can read them again in its
- * own transaction, and the project a stated rule is written for. */
 async function captureDedup(
   folderFiles: StoreGroups['folderFiles'],
   options: CaptureOptions,
 ): Promise<CaptureDedup> {
   const tenantId = options.global ? ALL_TENANTS : options.tenantId;
   const origin = options.originProject;
-  // classifyOriginProject in SQL: a project with no id sees every row, any other its own names and
-  // user-global rows.
   if (origin !== undefined && projectId(origin) !== '') {
     const names = projectNames(origin);
     return { tenantId, everyScope: true, project: names, ruleProject: names };
   }
   const ruleProject = origin === undefined ? await stampedProject(folderFiles) : [];
-  return { tenantId, everyScope: true, ruleProject };
+  const noRuleHome = options.global && ruleProject.length === 0;
+  return { tenantId, everyScope: true, ruleProject, noRuleHome };
 }
 
 /** The names of the project the store stamps on a row that names none: none for a shared or a
@@ -559,20 +556,16 @@ function captureEntry(
   baseHalfLifeDays: number,
 ): MemoryEntry {
   if (isUserMessage(item)) return userMessageEntry(item, options, baseHalfLifeDays);
-  // kind stays 'distilled': these are curated items, not raw transcript (see MEMORY_ENVELOPE.md).
-  // The write tenant must match the dedup read's, or scoped dedup passes and the row lands in
-  // 'default'. A rule the person stated is pinned, so it injects even when a later prompt shares
-  // none of its words. SHORTCUT: every stated rule pins; cap or age these pins if a store's pins
-  // outgrow the hook budget. The from-user tag marks the same pin as the person's rule for the hooks.
-  const stated = isStatedRule(item);
+  // SHORTCUT: every stated rule with a home project pins; cap or age these pins if pins outgrow the hook budget.
+  const pinned = isStatedRule(item) && options.dedup.noRuleHome !== true;
   const created = createMemory(
     item.content,
     {
       layer: Layer.Episodic,
-      tags: stated ? [...item.tags, USER_RULE_TAG] : item.tags,
+      tags: pinned ? [...item.tags, USER_RULE_TAG] : item.tags,
       source: 'capture',
       confidence: 'observed',
-      pinned: stated,
+      pinned,
       tenantId: options.tenantId,
       sourceSessionId: options.sessionId,
       baseHalfLifeDays,

@@ -236,4 +236,38 @@ describe('capture pins the rules a person states', () => {
       expect(stored()).toEqual([['Always write the plan to a file before you start', true, false]]);
     });
   });
+
+  describe('into the global store', () => {
+    const globalRoot = () => join(scratch, 'global');
+    const captureGlobal = (turns: SessionTurn[], originProject?: string) =>
+      runCapture(captureTarget(globalRoot()), {
+        tenantId: 'default',
+        source: 'last-session',
+        sessionTurns: turns,
+        dryRun: false,
+        global: true,
+        originProject,
+      });
+    const injectedInto = async (currentProject: string) =>
+      (await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject, prompt: LATER_PROMPT })).entries.map(
+        ({ entry }) => entry.content,
+      );
+
+    it.each([undefined, ''])('a capture that names no project (%j) pins no rule', async (originProject) => {
+      await captureGlobal([{ role: 'user', text: TAUGHT }], originProject);
+      expect(
+        loadAllEntries(globalRoot(), 'default').map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)]),
+      ).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false, false]]);
+      expect(await injectedInto('elsewhere')).toEqual([]);
+    });
+
+    it('a capture that names a project pins and tags the rule, stamped with that project', async () => {
+      await captureGlobal([{ role: 'user', text: TAUGHT }], 'project');
+      expect(
+        loadAllEntries(globalRoot(), 'default').map((e) => [e.pinned, e.tags.includes(USER_RULE_TAG), e.originProject]),
+      ).toEqual([[true, true, 'project']]);
+      expect(await injectedInto('project')).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+      expect(await injectedInto('elsewhere')).toEqual([]);
+    });
+  });
 });
