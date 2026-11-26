@@ -230,7 +230,8 @@ export async function checkLauncher() {
   try {
     const probe=path.join(parent,'env-probe.cjs'),seenEnv=path.join(parent,'child-env.json'),keys=[...Object.keys(LAUNCHER_PRIVATE),...WIRE_KEYS];
     fs.writeFileSync(probe,PROBE);
-    const hook={UserPromptSubmit:[{hooks:[{type:'command',command:['node',probe,seenEnv,sha(TOKEN),keys.join(',')].map(a=>a.replaceAll('\\','/')).join(' ')}]}]};
+    const hookFor=out=>({UserPromptSubmit:[{hooks:[{type:'command',command:['node',probe,out,sha(TOKEN),keys.join(',')].map(a=>a.replaceAll('\\','/')).join(' ')}]}]});
+    const hook=hookFor(seenEnv);
     const parentEnv={...process.env,Z0_WIRE_DUMMY:TOKEN,HTTPS_PROXY:'http://127.0.0.1:9',ANTHROPIC_BASE_URL:'http://127.0.0.1:9',Z0_LAUNCH_SENTINEL:'parent'};
     let wireInfo=null;
     const record=async dir=>{ const w=await openWire(dir,{ca:WIRE_CA,upstream:api.upstream}); wireInfo=w; return w; };
@@ -243,15 +244,15 @@ export async function checkLauncher() {
     const callOf=(prompt,extra={})=>({id:'probe',session:randomUUID(),smoke:true,diagnostic:true,prompt,model:pins.modelOpus,effort:pins.effort,
       toolchain:roster()[0].toolchain,...extra});
     const CRED_MISSING=/Missing subscription credential or unexpected credential type/;
-    for(const [name,call,env] of [['wrong-mode',callOf('Reply OK.',{diagnostic:false}),parentEnv],
-      ['wrong-canary',callOf('Reply OK.'),{...parentEnv,Z0_WIRE_DUMMY:'sk-ant-oat01-notacanary'}]]) {
-      const live=prepare(name,hook),before=api.seen.length;
+    const checkEarlyRefusal=async (name,call,env,wantErr)=>{
+      const earlyEnv=path.join(parent,name+'-env.json'),live=prepare(name,hookFor(earlyEnv)),before=api.seen.length;
       let errText='';
       await assert.rejects(launch(live,'Z0_WIRE_DUMMY',env,call,{record,onStderr:s=>{ errText+=s; }}),/Claude Code launcher exited 1/,'The launcher did not refuse the '+name+' call');
-      assert(!CRED_MISSING.test(errText),'An unrelated early refusal matched the credential-read failure reason: '+name);
-      assert(api.seen.length===before && !fs.existsSync(seenEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
+      assert(wantErr.test(errText) && !CRED_MISSING.test(errText),'An unrelated early refusal matched the credential-read failure reason: '+name);
+      assert(api.seen.length===before && !fs.existsSync(earlyEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
         'The launcher started Claude Code for the '+name+' call');
-    }
+    };
+    await checkEarlyRefusal('wrong-mode',callOf('Reply OK.',{diagnostic:false}),parentEnv,/The dummy credential runs only a diagnostic smoke/);
     const live=prepare('live',hook),call=callOf('Reply OK.'),beforeLive=api.seen.length;
     let liveErr='';
     try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record,onStderr:s=>{ liveErr+=s; }}); }
@@ -276,6 +277,7 @@ export async function checkLauncher() {
     const result=evidence(path.join(live,'wire','probe'),read(path.join(live,'probe.json')),[],{rule:'none',keyPhrase:'none'},{prompt:call.prompt},
       path.join(live,'home/.claude/projects/unit',call.session+'.jsonl'));
     assert(result.complete && result.requests===1,'The launched call did not match its wire record');
+    await checkEarlyRefusal('wrong-canary',callOf('Reply OK.'),{...parentEnv,Z0_WIRE_DUMMY:'sk-ant-oat01-notacanary'},/Unexpected dummy credential/);
     const decided=async (name,prompt)=>{
       const live=prepare(name),call=callOf(prompt);
       let error=null;
