@@ -434,6 +434,8 @@ if(mode==='probe') {
     const slot=await prepareSlot(smoke,dir,template,arm);
     arms.push(slot);
     const {env,work}=slot;
+    assert.deepEqual(fs.readdirSync(path.join(work,'.git','objects','pack')).filter(n=>n.endsWith('.pack')),['pack-base.pack'],
+      'The slot pack must stay where pack-objects wrote it');
     const rule=smoke.history.flatMap(h=>h.rules).find(r=>r.detector);
     const {hippo}=await import('./prepare.mjs');
     const rules=run(process.execPath,[hippo,'session-rules'],work,env,{input:'{}'});

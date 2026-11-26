@@ -91,15 +91,12 @@ export function checkout(u,dir,env,template) {
   git(['init','-q']);
   for (const [k,v] of [['user.name','eval'],['user.email','eval@localhost'],['core.autocrlf','false'],['core.longpaths','true']])
     git(['config',k,v]);
-  const pack=path.join(dir,'base.pack');
+  const pack=path.join(work,'.git','objects','pack','pack-base.pack');
   const out=fs.openSync(pack,'wx');
   try {
     run('git',['pack-objects','--revs','--stdout'],u.repo,env,{input:u.task.baseRef+'\n',stdio:['pipe',out,'pipe']});
   } finally {fs.closeSync(out);}
-  const input=fs.openSync(pack,'r');
-  try {
-    run('git',['index-pack','--stdin'],work,env,{stdio:[input,'pipe','pipe']});
-  } finally {fs.closeSync(input);fs.unlinkSync(pack);}
+  git(['index-pack',pack]);
   git(['checkout','--quiet','--detach',u.task.baseRef]);
   fs.appendFileSync(path.join(work,'.git/info/exclude'),'\n.hippo/\n');
   for (const f of u.files.filter(f=>!f.surface.startsWith('hippo') && f.surface!=='instructions')) {
