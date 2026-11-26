@@ -293,7 +293,6 @@ async function main(
     printUsage();
     return;
   }
-  // Before every other step, so help never opens a store, installs a hook or starts a server.
   if (Object.hasOwn(flags, 'help')) {
     printHelp(command, args);
     return;

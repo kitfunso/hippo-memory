@@ -13,7 +13,6 @@ import {
 } from '../connectors/ingest.js';
 import { cliApiContext, cliStore } from './api-context.js';
 
-/** Where a slack or github verb reads and writes: the CLI's hippo.db, or a store a published entry was handed. */
 export interface ConnectorSource {
   readonly tenantId: string;
   readonly store: () => ConnectorStore;

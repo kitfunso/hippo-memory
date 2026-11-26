@@ -40,18 +40,10 @@ export const githubDlq: ConnectorDlq<'github', GitHubOwnColumns, DlqBucket> = {
 };
 
 export interface ReplayDlqOptions {
-  /** Current webhook secret. If omitted, signature check is skipped (force-only path). */
   webhookSecret?: string;
-  /** Previous webhook secret during rotation, passed to verifyGitHubSignature.previousSecret so
-   * old-secret DLQ rows need no --force. */
   previousSecret?: string;
-  /** When true, skip signature verification (used for legacy entries after secret rotation). */
   force?: boolean;
-  /** Today's GITHUB_ENTERPRISE_URL site. A row replays only when the server its signed payload
-   * names is the site's, and a host_mismatch row also when the webhook's header check would take
-   * its sender now; --force skips neither. */
   site?: GitHubSite;
-  /** The GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK escape hatch, as the CLI read it. */
   allowUnknownInstallationFallback?: boolean;
 }
 
@@ -80,9 +72,6 @@ function hostRefusal(row: DlqItem, site: GitHubSite): string | null {
   return payloadHostRefusal(payloadHost(tryParseJson(row.rawPayload)), site);
 }
 
-/** Replay a DLQ row through the normal ingest path; a failed signature, parse or envelope check
- * bumps retry_count. No `ingestHook` (dry-run): bumps retry_count, returns `replayed` with
- * memoryId=null. Replays use today's routing. */
 export async function replayGithubDlqEntry(
   ctx: ConnectorContext,
   id: number,
