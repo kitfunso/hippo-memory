@@ -94,7 +94,6 @@ export function isCopilotCliPresent(home: string = copilotHomeDir(processHomes()
 
 export function installCopilot(): CopilotInstallResult {
   const paths = copilotPaths();
-  // Read before the hooks install, which makes the folder on a machine with only VS Code.
   const cli = isCopilotCliPresent();
   return {
     paths,

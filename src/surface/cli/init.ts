@@ -519,15 +519,11 @@ function installOpencodeUserPlugin(): void {
 
 function installUserLevelHooks(agents: readonly string[], codexHint: boolean): void {
   for (const hook of agents) {
-    // The Codex capture wrapper swaps the codex launcher binary, so init only points at the opt-in.
     if (hook === 'codex' && codexHint && !isCodexWrapperInstalled()) {
       console.log('   Codex detected. To capture Codex sessions: hippo hook install codex');
     }
-    // Checked first so init never creates ~/.codex on a machine without Codex.
     if (hook === 'codex' && isCodexPresent()) installCodexMemoryHooks('   ');
 
-    // For Claude Code, also install SessionEnd+SessionStart entries in settings.json, keeping
-    // `hippo init` in lockstep with `hippo hook install claude-code` and `hippo setup`.
     if (hook === 'claude-code') installClaudeCodeSettingsHooks(hook);
     else if (hook === 'opencode') installOpencodeUserPlugin();
   }

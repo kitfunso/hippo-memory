@@ -73,18 +73,14 @@ function hookInstall(target: string | undefined, force: boolean): void {
   const hook = HOOKS[target];
   patchAgentFile(hook, target, force);
 
-  // The record of installed hooks is what keeps a removed hook out, so --force forgets it first.
   if (force && (target === 'claude-code' || target === 'codex')) forgetInstalledHooks(target);
 
-  // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
     printClaudeHookInstall(installJsonHooks(target));
   } else if (target === 'opencode') {
     installOpencodeHook();
   } else if (target === 'codex') {
     installCodexMemoryHooks('');
-    // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is
-    // not an error.
     if (detectRealCodexPath()) {
       const result = installCodexWrapper();
       console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
@@ -212,7 +208,6 @@ function hookUninstall(target: string | undefined): void {
   }
   unpatchAgentFile(HOOKS[target], target);
 
-  // For Claude Code, also strip its SessionEnd/SessionStart entries.
   if (target === 'claude-code') {
     if (uninstallJsonHooks(target)) {
       console.log(`Removed hippo hooks from ${target} settings`);
@@ -220,8 +215,6 @@ function hookUninstall(target: string | undefined): void {
       warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
-    // opencode uses a TS plugin; uninstall removes the plugin file and also runs the legacy-hooks
-    // migration, so remove leaves opencode launchable.
     if (uninstallOpencodePlugin()) {
       console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
     }

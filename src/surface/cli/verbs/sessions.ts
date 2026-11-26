@@ -94,8 +94,6 @@ export const SESSION_VERBS = {
   }),
   card: verb(() => import('../card.js'), 'handleCard', {
     needs: ['cards'],
-    // Every card subcommand's flags together; card.ts then refuses the ones its subcommand does not
-    // read.
     flags: {
       switches: ['json'],
       values: [
@@ -342,7 +340,6 @@ export const SESSION_VERBS = {
   }),
   'session-end': verb(() => import('../hooks/session-end.js'), 'handleSessionEnd', {
     readOnly: 'skip',
-    // Its sleep step reads --dry-run, but the capture after it writes for real.
     dryRun: false,
     flags: {
       switches: ['dry-run', 'no-learn', 'no-share', 'turn'],
