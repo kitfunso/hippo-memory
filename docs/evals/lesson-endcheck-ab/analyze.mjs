@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
 import {loadPlan,read,revision,root} from './paths.mjs';
 import {schedule,signP} from './design.mjs';
 import {upperNet} from './safety.mjs';
@@ -53,30 +54,31 @@ export function summarize(results) {
     infra,
   ];
 }
-const args=process.argv.slice(2);
-assert.ok(!args.length || (args.length===1 && ['--fixture','--fixture-missing'].includes(args[0])),'unexpected argument');
-const results=[];
-const audits=args.length?new Map():readAudits(auditFile(root));
-for(const p of schedule) {
-  const u=units.get(p.id);
-  if(args.length) {
-    const clean={first:'pass',stops:0,productionTimeouts:0,nonStopTimeouts:0,listings:[]};
-    const on={...clean,stops:1,productionTimeouts:results.length===0?1:0};
-    results.push({p,u,off:{...clean,first:u.historicalPass?'pass':'fail'},on:args[0]==='--fixture-missing' && !results.length?null:on});
-    continue;
+if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+  const args=process.argv.slice(2);
+  assert.ok(!args.length || (args.length===1 && ['--fixture','--fixture-missing'].includes(args[0])),'unexpected argument');
+  const results=[];
+  const audits=args.length?new Map():readAudits(auditFile(root));
+  for(const p of schedule) {
+    const u=units.get(p.id);
+    if(args.length) {
+      const clean={first:'pass',stops:0,productionTimeouts:0,nonStopTimeouts:0,listings:[]};
+      const on={...clean,stops:1,productionTimeouts:results.length===0?1:0};
+      results.push({p,u,off:{...clean,first:u.historicalPass?'pass':'fail'},on:args[0]==='--fixture-missing' && !results.length?null:on});
+      continue;
+    }
+    const f=path.join(root,'trial',p.key,'result.json');
+    if(!fs.existsSync(f))continue;
+    const row=read(f);
+    assert.equal(row.pair,p.key);assert.equal(row.id,p.id);
+    assert.match(row.seedHash,/^[0-9a-f]{64}$/);
+    const {ON:on,OFF:off}=row.rows;
+    assert.equal(row.revision,revision);
+    assert.ok(on===null?row.missing.ON:valid(on) && on.stops>0);
+    assert.ok(off===null?row.missing.OFF:valid(off) && !off.listings.length && !off.stops);
+    const base=path.join(root,'trial',p.key);
+    results.push({p,u,off:audited(off,p.key,'OFF',audits,armBinding(base,'OFF')),on:audited(on,p.key,'ON',audits,armBinding(base,'ON'))});
   }
-  const f=path.join(root,'trial',p.key,'result.json');
-  if(!fs.existsSync(f))continue;
-  const row=read(f);
-  assert.equal(row.pair,p.key);assert.equal(row.id,p.id);
-  assert.match(row.seedHash,/^[0-9a-f]{64}$/);
-  const {ON:on,OFF:off}=row.rows;
-  assert.equal(row.revision,revision);
-  assert.ok(on===null?row.missing.ON:valid(on) && on.stops>0);
-  assert.ok(off===null?row.missing.OFF:valid(off) && !off.listings.length && !off.stops);
-  const base=path.join(root,'trial',p.key);
-  results.push({p,u,off:audited(off,p.key,'OFF',audits,armBinding(base,'OFF')),on:audited(on,p.key,'ON',audits,armBinding(base,'ON'))});
+  console.log(summarize(results).join('\n'));
+  if(results.length!==schedule.length)process.exitCode=2;
 }
-console.log(summarize(results).join('\n'));
-if(results.length!==schedule.length)process.exitCode=2;
-

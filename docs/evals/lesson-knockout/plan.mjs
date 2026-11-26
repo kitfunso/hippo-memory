@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { drawOrder } from '../../../scripts/token-eval/lessons.mjs';
+import stdioMode from './local-stdio.cjs';
 
 export const root = 'C:/z0-lessons/lesson-knockout';
 export const tasks = 'C:/z0-runs/r4/tasks';
@@ -15,6 +16,9 @@ export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
 export const APPARATUS = 3;
 export const DENIED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'];
+export const DISPATCH_LOG = 'dispatch.jsonl';
+export const dispatchEnv = url => ({CLAUDE_CODE_ENABLE_TELEMETRY:'1',OTEL_LOGS_EXPORTER:'otlp',OTEL_METRICS_EXPORTER:'none',
+  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL:'http/json',OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:url,OTEL_LOGS_EXPORT_INTERVAL:'500'});
 export const preload = name => '--require "'+path.join(folder,name).replaceAll('\\','/')+'"';
 export function assertNodeStarts(env, label) {
   const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});
@@ -24,7 +28,7 @@ export function checkerEnv(extra) {
   const env = {...process.env};
   for (const key of Object.keys(env)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete env[key];
   Object.assign(env, {GIT_CONFIG_NOSYSTEM:'1', GIT_CONFIG_GLOBAL:'NUL', GIT_TERMINAL_PROMPT:'0', GIT_OPTIONAL_LOCKS:'0',
-    NODE_OPTIONS:preload('local-stdio.cjs')}, extra);
+    NODE_OPTIONS:preload('local-stdio.cjs'), LESSON_STDIO:stdioMode}, extra);
   assertNodeStarts(env, 'Checker environment');
   return env;
 }

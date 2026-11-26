@@ -154,8 +154,19 @@ try {
   if ($cutText -notmatch 'Write-CallRecord[\s\S]*New-CallRecord[^\r\n]*\$null \$true \$null[\s\S]*exit 75') { throw 'launch.ps1 does not record a cut-off call without JSON before exit 75' }
   $writes=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-CallRecord' },$true))
   if ($writes.Count -ne 2) { throw 'launch.ps1 must write both call record shapes through Write-CallRecord' }
+  $dispatchCalls=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Get-DispatchEnv' },$true))
+  if ($dispatchCalls.Count -ne 1) { throw 'launch.ps1 does not take its dispatch log settings through Get-DispatchEnv' }
+  $settings=[ordered]@{CLAUDE_CODE_ENABLE_TELEMETRY='1';OTEL_LOGS_EXPORTER='otlp';OTEL_METRICS_EXPORTER='none';OTEL_EXPORTER_OTLP_LOGS_PROTOCOL='http/json'
+    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="http://127.0.0.1:4318/$([guid]::NewGuid())/v1/logs";OTEL_LOGS_EXPORT_INTERVAL='500'}
+  $callWith={ param([scriptblock]$Change) $d=[ordered]@{}; foreach ($k in $settings.Keys) { $d[$k]=$settings[$k] }; & $Change $d; [pscustomobject]@{dispatchEnv=[pscustomobject]$d} }
+  if (@(Get-DispatchEnv (& $callWith {})).Count -ne 6) { throw 'Valid dispatch log settings were refused' }
+  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d['OTEL_TRACES_EXPORTER']='otlp' }) } 'Unexpected dispatch log settings'
+  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d.Remove('OTEL_METRICS_EXPORTER') }) } 'Unexpected dispatch log settings'
+  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d.Remove('OTEL_LOGS_EXPORT_INTERVAL'); $d['ANTHROPIC_BASE_URL']='http://127.0.0.1:1' }) } 'Unexpected dispatch log settings'
+  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT']='https://collector.example/v1/logs' }) } 'not a local collector'
+  Assert-Throws { Get-DispatchEnv ([pscustomobject]@{id='probe'}) } 'Unexpected dispatch log settings'
 } finally {
   Restore-Env
   Remove-Item -LiteralPath $scratch -Recurse -Force
 }
-Write-Output "Passed private cache paths, Gradle copy and junction refusal, planted launcher, tool resolution, smoke path, call records and denial parsing for $($cases.Count) declared toolchains."
+Write-Output "Passed private cache paths, Gradle copy and junction refusal, planted launcher, tool resolution, smoke path, call records, dispatch log settings and denial parsing for $($cases.Count) declared toolchains."

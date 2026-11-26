@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { APPARATUS,hash,read,root } from './plan.mjs';
+import { APPARATUS,DISPATCH_LOG,hash,read,root } from './plan.mjs';
 import { listTranscripts } from '../../../scripts/token-eval/records.mjs';
 
 const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
@@ -37,65 +37,18 @@ const pairOf=r=>r.request_id+'\n'+r.message_id;
 
 export const sourceKind=s=>typeof s!=='string' || !s ? null :
   s.startsWith('repl_main_thread') || s==='sdk' ? 'main' : s.startsWith('agent:') || s==='hook_agent' ? 'subagent' : 'auxiliary';
-const replayed=s=>['main','subagent'].includes(sourceKind(s));
 export function sessionInventory(projects,sid) {
-  const files=listTranscripts(projects).map(f=>path.resolve(f)).sort();
   const parts=f=>path.relative(path.resolve(projects),f).split(path.sep);
+  const files=listTranscripts(projects).map(f=>path.resolve(f)).sort();
   const mains=files.filter(f=>{ const p=parts(f); return p.length===2 && p[1]===sid+'.jsonl'; });
-  const subs=files.filter(f=>{ const p=parts(f); return p.length===4 && p[1]===sid && p[2]==='subagents'; });
-  return {main:mains.length===1?mains[0]:null,subs,files};
+  const subs=files.filter(f=>{ const p=parts(f); return p.length>=4 && p[1]===sid && p[2]==='subagents'; });
+  const main=mains.length===1?mains[0]:null;
+  return {main,subs,files:main?[main,...subs]:subs};
 }
-const apiRows=rows=>rows.filter(r=>r.type==='api-request');
 function callRows(inventory,prompt) {
   if(!inventory?.main) return null;
   const rows=rowsOf(inventory.main),start=promptStart(rows,prompt);
-  if(start<0 || typeof rows[start].timestamp!=='string') return null;
-  const since=rows[start].timestamp,sub=apiRows(inventory.subs.flatMap(rowsOf));
-  if(sub.some(r=>typeof r.timestamp!=='string')) return null;
-  return {rows:rows.slice(start),sub:sub.filter(r=>r.timestamp>=since),chain:[...apiRows(rows),...sub]};
-}
-const canon=v=>v===null || typeof v!=='object' ? JSON.stringify(v)??'null' :
-  Array.isArray(v) ? '['+v.map(canon).join(',')+']' :
-  '{'+Object.keys(v).sort().filter(k=>v[k]!==undefined && k!=='cache_control').map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}';
-const billing=b=>typeof b?.text==='string' && b.text.startsWith('x-anthropic-billing-header:');
-export const shapeOf=body=>{
-  const system=Array.isArray(body.system)?body.system.filter(b=>!billing(b)):body.system;
-  return hash(canon({...(system!==undefined && {system}),...(body.tools!==undefined && {tools:body.tools})}));
-};
-const unredacted=m=>m.role==='assistant' && Array.isArray(m.content) ?
-  {...m,content:m.content.map(b=>b.type==='thinking' && b.thinking==='<REDACTED>' ? {...b,thinking:''} : b)} : m;
-export const messageHash=m=>hash(canon(typeof m.content==='string' ? {...m,content:[{type:'text',text:m.content}]} : unredacted(m)));
-const bodyKey=body=>shapeOf(body)+':'+body.messages.map(messageHash).join(',');
-function rowKeys(chain) {
-  const byId=new Map(chain.map(r=>[r.id,r])),memo=new Map();
-  const hashes=(r,seen=new Set())=>{
-    if(memo.has(r)) return memo.get(r);
-    if(seen.has(r) || !Array.isArray(r.tail)) return null;
-    seen.add(r);
-    const base=r.base!==undefined && byId.has(r.base) ? hashes(byId.get(r.base),seen) : [];
-    const all=base && [...base.slice(0,r.keep),...r.tail];
-    memo.set(r,all);
-    return all;
-  };
-  return r=>{
-    const all=typeof r.shapeHash==='string' ? hashes(r) : null;
-    return all && r.shapeHash+':'+all.join(',');
-  };
-}
-function bind(api,chain,bodies,source) {
-  const keyOf=rowKeys(chain),free=[...bodies].map(([name,body])=>({name,key:bodyKey(body)})),bound=new Set();
-  const take=(key,fits)=>{
-    const i=free.findIndex(b=>b.key===key && fits(b));
-    if(i<0) return false;
-    bound.add(free[i].name);
-    free.splice(i,1);
-    return true;
-  };
-  const all=api.every(r=>{
-    const key=keyOf(r);
-    return !!key && (take(key,b=>source.get(b.name)===r.querySource) || take(key,b=>!source.has(b.name)));
-  });
-  return all && [...source].every(([name,s])=>!replayed(s) || bound.has(name));
+  return start<0 ? null : {rows:rows.slice(start)};
 }
 const indexRows=dir=>{
   const index=path.join(dir,'index.jsonl');
@@ -104,15 +57,27 @@ const indexRows=dir=>{
 const requestNames=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(n=>n.endsWith('.request.json')).sort():[];
 const ownFile=name=>typeof name==='string' && path.basename(name)===name;
 const valid=b=>Array.isArray(b?.messages) && !!b.system && !b.not_recorded;
+export function dispatched(dir,sid) {
+  const log=path.join(dir,DISPATCH_LOG),names=requestNames(dir);
+  if(!fs.existsSync(log)) return {ok:false,sources:new Map()};
+  const events=rowsOf(log),sources=new Map();
+  const ok=events.every(e=>{
+    const name=typeof e.request_body_id==='string' && e.request_body_id+'.request.json',file=name && path.join(dir,name);
+    if(!name || sources.has(name) || e['event.name']!=='api_request_body' || e['session.id']!==sid || !sourceKind(e.query_source) ||
+      e.body_withheld!==undefined || path.win32.basename(String(e.body_ref))!==name || !fs.existsSync(file) ||
+      fs.statSync(file).size!==Number(e.body_length)) return false;
+    sources.set(name,e.query_source);
+    return true;
+  }) && names.length===sources.size && names.every(n=>sources.has(n));
+  return {ok,sources};
+}
 function ledger(dir,sid,call) {
-  const names=requestNames(dir),rows=indexRows(dir),files=new Set(names),indexed=rows.map(r=>r.request_file);
+  const names=requestNames(dir),rows=indexRows(dir),indexed=rows.map(r=>r.request_file),sent=dispatched(dir,sid);
   const bodies=new Map(names.map(n=>[n,read(path.join(dir,n))]));
-  const api=call?[...apiRows(call.rows),...call.sub]:[];
-  const ok=!!call && new Set(indexed).size===indexed.length &&
-    rows.every(r=>r.session_id===sid && sourceKind(r.query_source) && ownFile(r.request_file) && ownFile(r.response_file) &&
-      files.has(r.request_file) && fs.existsSync(path.join(dir,r.response_file))) &&
-    api.every(r=>r.sessionId===sid && replayed(r.querySource)) && names.every(n=>valid(bodies.get(n))) &&
-    bind(api,call.chain,bodies,new Map(rows.map(r=>[r.request_file,r.query_source])));
+  const ok=!!call && sent.ok && new Set(indexed).size===indexed.length &&
+    rows.every(r=>r.session_id===sid && ownFile(r.request_file) && ownFile(r.response_file) &&
+      sent.sources.get(r.request_file)===r.query_source && fs.existsSync(path.join(dir,r.response_file))) &&
+    names.every(n=>valid(bodies.get(n)));
   const main=rows.filter(r=>sourceKind(r.query_source)==='main');
   const ordered=[...main.map(r=>r.request_file),...names.filter(n=>!main.some(r=>r.request_file===n))];
   return {ok,rows,main,byName:bodies,bodies:ordered.filter(n=>bodies.has(n)).map(n=>bodies.get(n)),unanswered:names.length-rows.length};

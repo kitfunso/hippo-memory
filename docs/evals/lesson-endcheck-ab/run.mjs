@@ -12,7 +12,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
 import { checkout,install,poetryCache,privateEnv,pythonTemp,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
-import { GUARD,guardedRun } from '../checker-guard/lesson.mjs';
+import { GUARD,guardState,guardedRun } from '../checker-guard/lesson.mjs';
 import { AUDITED_GRADERS,GUARDED_GRADERS,armBinding,auditCalls,audited,auditFile,boundIntent,readAudits } from './crash-audit.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
@@ -483,8 +483,13 @@ if(mode==='probe') {
     assert.deepEqual(read(path.join(dir,'first-commands.json')),commandLog(sessionFiles(path.join(env.CLAUDE_CONFIG_DIR,'projects'),sessionId)));
     assert.ok(!fs.existsSync(path.join(dir,'checker-status.json')),'The guard record stayed in the slot');
     if(arm==='OFF') {
-      assert.throws(()=>checks(lessonAt(crash),work,env,dir,sessionId,env.LESSON_PRE),/exited 2/);
+      assert.throws(()=>checks(lessonAt(crash),work,env,dir,sessionId,env.LESSON_PRE),e=>/exited 2/.test(e.message) && guardState(e)==='crash');
       assert.match(fs.readFileSync(path.join(dir,'checker.log'),'utf8'),/checker crashed: Error: fixture crash/);
+      const fileEnv={...env,LESSON_STDIO:'file'};
+      assert.throws(()=>checks(lessonAt(crash),work,fileEnv,dir,sessionId,env.LESSON_PRE),e=>guardState(e)==='crash',
+        'The file stdio guard channel lost a crash');
+      assert.throws(()=>checks(lessonAt(odd),work,fileEnv,dir,sessionId,env.LESSON_PRE),e=>e.guard?.state==='exit' && e.guard.code===7,
+        'The file stdio guard channel lost an ordinary exit');
     }
     if(arm==='ON') {
       assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));

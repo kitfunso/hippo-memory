@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { GUARD } from '../checker-guard/lesson.mjs';
+import { summarize } from './analyze.mjs';
+import { schedule } from './design.mjs';
+import { loadPlan } from './paths.mjs';
 import { armBinding,auditCalls,audited,auditFile,boundIntent,classify,readAudits } from './crash-audit.mjs';
 
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ab-audit-'));
@@ -21,7 +26,8 @@ try {
   assert.equal(audited(row('pass'),'q','OFF',audits,bind),null);
   assert.equal(audited(row('pass'),'s','ON',audits,bind),null);
   assert.deepEqual(audited(row('fail',{grader:'crash-guard-1'}),'g','ON',audits,bind),row('fail',{grader:'crash-guard-1'}));
-  assert.deepEqual(audited(row('fail',{grader:GUARD}),'r','ON',audits,bind),row('fail',{grader:GUARD}));
+  assert.equal(GUARD,'crash-guard-3','The guard stamp changed without a new audit rule');
+  assert.deepEqual(audited(row('fail',{grader:'crash-guard-3'}),'r','ON',audits,bind),row('fail',{grader:'crash-guard-3'}));
   assert.deepEqual(audited(row('fail',{grader:'crash-guard-2'}),'r','ON',audits,bind),row('fail',{grader:'crash-guard-2'}),
     'The rows the running A/B collector stamps crash-guard-2 changed meaning');
   assert.equal(audited(null,'r','ON',audits,bind),null);
@@ -48,19 +54,40 @@ try {
   assert.equal(boundIntent(base,'ON','slot-b'),null);
   const fault=guard=>()=>{ const error=Error('checker for lesson x exited 2'); error.guard=guard; throw error; };
   assert.equal(classify(()=>'fail'),'ran');
-  assert.equal(classify(fault({guard:GUARD,state:'crash',code:2})),'crash');
+  assert.equal(classify(fault({guard:'crash-guard-3',state:'crash',code:2})),'crash');
   for(const state of ['timeout','signal','error','wrapper-error','exit'])
-    assert.equal(classify(fault({guard:GUARD,state})),'error',state);
+    assert.equal(classify(fault({guard:'crash-guard-3',state})),'error',state);
   assert.equal(classify(fault({guard:'crash-guard-1',state:'crash'})),'error');
-  assert.equal(classify(fault({forged:{guard:GUARD,state:'crash'}})),'error');
+  assert.equal(classify(fault({forged:{guard:'crash-guard-3',state:'crash'}})),'error');
   assert.equal(classify(fault(null)),'error');
   assert.equal(classify(()=>{ throw Error('checker crashed: imitation'); }),'error');
   const seen=[];
-  const call=(i,crash)=>()=>{ seen.push(i); if(crash) fault({guard:GUARD,state:'crash'})(); return 'pass'; };
+  const call=(i,crash)=>()=>{ seen.push(i); if(crash) fault({guard:'crash-guard-3',state:'crash'})(); return 'pass'; };
   assert.deepEqual(auditCalls([call(0),call(1)]),{calls:2,status:'ran'});
   assert.deepEqual(auditCalls([call(2),call(3,true),call(4)]),{calls:3,status:'crash',call:1});
   assert.deepEqual(seen,[0,1,2,3]);
+  const units=new Map(loadPlan().units.map(u=>[u.id,u]));
+  const clean={first:'pass',stops:0,productionTimeouts:0,nonStopTimeouts:0,listings:[]};
+  const pairs=schedule.map(p=>({p,u:units.get(p.id)}));
+  const plain=pairs.map(({p,u},i)=>({p,u,off:{...clean,first:u.historicalPass?'pass':'fail'},on:{...clean,stops:1,productionTimeouts:i===0?1:0}}));
+  const stamped=plain.map(({p,u,off,on})=>({p,u,off:audited({...off,grader:'crash-guard-2'},p.key,'OFF',new Map(),bind),
+    on:audited({...on,grader:'crash-guard-3'},p.key,'ON',new Map(),bind)}));
+  assert(stamped.every(r=>r.off.grader==='crash-guard-2' && r.on.grader==='crash-guard-3'),'A guarded row was dropped at selection');
+  const lines=summarize(stamped);
+  assert.deepEqual(lines,summarize(plain),'Guard 2 and guard 3 rows changed the analysis');
+  assert.match(lines[0],new RegExp('^CLOSED pairs='+schedule.length+'/'+schedule.length+'$'));
+  assert.match(lines.at(-1),/ missing_OFF=0 missing_ON=0$/);
+  assert.throws(()=>audited({...clean,grader:'crash-guard-4'},schedule[0].key,'ON',new Map(),bind),/Unknown grader stamp/);
+  const spy=path.join(dir,'probe-spy.cjs'),adapter=fileURLToPath(new URL('./file-stdio.cjs',import.meta.url));
+  fs.writeFileSync(spy,"const cp=require('node:child_process'),o=cp.spawnSync;cp.spawnSync=(f,a,opt={})=>{"+
+    "if(f==='git')process.stdout.write(JSON.stringify(Object.keys(opt.env??process.env).sort()));return o(f,a,opt);};"+
+    "require("+JSON.stringify(adapter)+");");
+  const {LESSON_STDIO:parentMode,...unset}=process.env;
+  const probed=env=>execFileSync(process.execPath,['--require',spy,'-e',''],{env,encoding:'utf8'});
+  assert.deepEqual(JSON.parse(probed({...unset,CHECK_STATUS_KEY:'secret',CHECK_STATUS:'status'})),['PATH','SystemRoot'],
+    'The stdio mode probe saw more than SystemRoot and PATH');
+  assert.equal(probed({...unset,LESSON_STDIO:'file'}),'','A child with a stdio mode probed again');
 } finally {
   fs.rmSync(dir,{recursive:true,force:true});
 }
-console.log('Passed crash audit records, the missing rule for unguarded rows, blind classification and first-failure stop.');
+console.log('Passed crash audit records, the missing rule for unguarded rows, blind classification, first-failure stop, guard 2 and 3 rows through the analysis and the stdio mode probe.');

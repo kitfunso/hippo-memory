@@ -6,7 +6,7 @@ import { once } from 'node:events';
 import { spawn,spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as wait } from 'node:timers/promises';
-import { folder,hash } from './plan.mjs';
+import { DISPATCH_LOG,dispatchEnv,folder,hash } from './plan.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
 
 export async function openCue(work,sid) {
@@ -30,6 +30,33 @@ export async function openCue(work,sid) {
   server.listen(0,'127.0.0.1');
   await once(server,'listening');
   return {hook:{type:'http',url:'http://127.0.0.1:'+server.address().port+route,timeout:5},
+    close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
+}
+export async function openDispatchLog(dir) {
+  const route='/'+randomUUID()+'/v1/logs',log=path.join(dir,DISPATCH_LOG);
+  const server=http.createServer(async (req,res)=>{
+    try {
+      if(req.url!==route || req.method!=='POST') throw Error('Unexpected request');
+      let raw='';
+      for await(const chunk of req) { raw+=chunk; if(raw.length>16*1024*1024) throw Error('Oversized export'); }
+      const events=[];
+      for(const r of JSON.parse(raw).resourceLogs??[]) for(const s of r.scopeLogs??[]) for(const record of s.logRecords??[]) {
+        const a=Object.fromEntries((record.attributes??[]).map(x=>[x.key,Object.values(x.value??{})[0]]));
+        if(a['event.name']==='api_request_body') events.push(JSON.stringify(a)+'\n');
+      }
+      fs.mkdirSync(dir,{recursive:true});
+      if(events.length) fs.appendFileSync(log,events.join(''));
+      res.writeHead(200,{'Content-Type':'application/json'});
+      res.end('{}');
+    } catch(error) {
+      fs.mkdirSync(dir,{recursive:true});
+      fs.appendFileSync(log,JSON.stringify({'event.name':'export_error',error:String(error)})+'\n');
+      res.writeHead(400); res.end('Invalid export');
+    }
+  });
+  server.listen(0,'127.0.0.1');
+  await once(server,'listening');
+  return {env:dispatchEnv('http://127.0.0.1:'+server.address().port+route),
     close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
 }
 async function invoke(live,token,env,boxChecked=false) {
@@ -91,11 +118,16 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
     }
   }
 }
-export async function launch(live,token,env,call,{gate,onFirstCall}={}) {
-  if(!call.smoke) return retryLimited(live,call,()=>invoke(live,token,env,true),()=>runBoxCheck(live,env),{gate,onFirstCall});
-  gate?.();
-  fs.writeFileSync(path.join(live,'call.json'),JSON.stringify(call));
-  const code=await invoke(live,token,env);
-  if(code!==0) throw Error('Smoke launcher exited '+code);
-  return [];
+export async function launch(live,token,env,call,{gate,onFirstCall,dispatch=()=>invoke(live,token,env,true),
+  checkBox=()=>runBoxCheck(live,env)}={}) {
+  const records=call.smoke?live:inside(path.join(path.dirname(live),'operator'));
+  const log=await openDispatchLog(path.join(records,'bodies',call.id)),sent={...call,dispatchEnv:log.env};
+  try {
+    if(!call.smoke) return await retryLimited(live,sent,dispatch,checkBox,{gate,onFirstCall});
+    gate?.();
+    fs.writeFileSync(path.join(live,'call.json'),JSON.stringify(sent));
+    const code=await invoke(live,token,env);
+    if(code!==0) throw Error('Smoke launcher exited '+code);
+    return [];
+  } finally { await log.close(); }
 }

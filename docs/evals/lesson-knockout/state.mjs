@@ -22,6 +22,12 @@ const linkTarget=(live,full)=>{
   const target=path.resolve(path.dirname(full),fs.readlinkSync(full)),rel=path.relative(path.resolve(live),target);
   return (rel.startsWith('..') || path.isAbsolute(rel) ? target : rel).split(path.sep).join('/');
 };
+const packageId=dir=>{
+  const manifest=join(dir,'package.json');
+  if(!fs.existsSync(manifest)) return null;
+  const {name,version}=JSON.parse(fs.readFileSync(manifest,'utf8'));
+  return [name,version];
+};
 export function installedPackages(live) {
   const out=[];
   const walk=(dir,rel)=>{
@@ -30,13 +36,10 @@ export function installedPackages(live) {
       const full=join(dir,e.name),r=rel ? rel+'/'+e.name : e.name;
       if(e.isFile() && e.name==='project.assets.json')
         out.push(r+' '+Object.keys(JSON.parse(fs.readFileSync(full,'utf8')).libraries??{}).sort().join(','));
-      if(modules && e.isSymbolicLink()) out.push(r+' -> '+linkTarget(live,full));
+      if(modules && e.isSymbolicLink()) out.push(r+' -> '+linkTarget(live,full)+' '+JSON.stringify(packageId(full)));
       if(!e.isDirectory() || e.name==='.git' || (!rel && OUTSIDE_INSTALL.has(e.name))) continue;
       if(e.name.endsWith('.dist-info')) { out.push(r); continue; }
-      if(modules && fs.existsSync(join(full,'package.json'))) {
-        const {name,version}=JSON.parse(fs.readFileSync(join(full,'package.json'),'utf8'));
-        out.push(r+' '+JSON.stringify([name,version]));
-      }
+      if(modules && fs.existsSync(join(full,'package.json'))) out.push(r+' '+JSON.stringify(packageId(full)));
       walk(full,r);
     }
   };
