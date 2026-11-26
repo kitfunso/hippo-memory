@@ -14,7 +14,7 @@ import { isCertainReason, storedDefect } from '../../base/memory/memory-quality.
 import { maskEmails, redactSecretsStrict } from '../../base/util/secret-detect.js';
 import type { HippoConfig } from '../../base/config/config.js';
 import { projectId, projectNames, type ProjectRef } from '../../base/scope/project-identity.js';
-import { isInitialized } from '../../host/project-identity.js';
+import { isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
 import { errorMessage, log, errorFields, type LineLog } from '../../base/util/log.js';
 import { teeStdStreams } from '../../host/stream-tee.js';
 import { ALL_TENANTS } from '../../base/util/tenant.js';
@@ -134,7 +134,6 @@ function writeLogBanner(logFile: string): boolean {
   return true;
 }
 
-// Console lines here are the `hippo capture` command's printed result, so they stay off the logger.
 async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): Promise<void> {
   if (options.global) {
     await target.store.folderFiles.ensure();
@@ -143,7 +142,6 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
       `No hippo store at ${target.root} (searched ${process.cwd()} and its parents up to your home directory). ` +
         `Run \`hippo init\` first.`,
     );
-    // Set, not exit, so runCapture's finally restores the tee'd stdio.
     process.exitCode = 1;
     return;
   }
@@ -157,14 +155,11 @@ async function runCaptureCore(target: CaptureTarget, options: CaptureOptions): P
     return;
   }
 
-  // Scrub the texts and again each item: bold removal can rebuild an address or key the first
-  // pass could not see (AGENTS.md: no secrets in memories).
   const scrub = (text: string): string => maskEmails(redactSecretsStrict(text));
   const scrubbed = texts.map(scrub);
-  const dedup = await captureDedup(target.store.folderFiles, options);
+  const dedup = await captureDedup(target, options);
   const rules = await modelRules(target, dedup, followUps);
   const patterned = extractFromTexts(scrubbed, userTexts, firstFollowUp);
-  // A message dedupes only against messages, so a rule it states is kept as a rule too.
   const keepsMessages = options.saveMessages === true && target.config.capture.userMessages;
   const messages = keepsMessages ? userMessageItems(turns, scrub) : [];
   const extracted = [
@@ -298,7 +293,7 @@ async function storedKeysInView(
 }
 
 async function captureDedup(
-  folderFiles: StoreGroups['folderFiles'],
+  { root, store }: CaptureTarget,
   options: CaptureOptions,
 ): Promise<CaptureDedup> {
   const tenantId = options.global ? ALL_TENANTS : options.tenantId;
@@ -307,8 +302,8 @@ async function captureDedup(
     const names = projectNames(origin);
     return { tenantId, everyScope: true, project: names, ruleProject: names };
   }
-  const ruleProject = origin === undefined ? await stampedProject(folderFiles) : [];
-  const noRuleHome = options.global && ruleProject.length === 0;
+  const ruleProject = origin === undefined ? await stampedProject(store.folderFiles) : [];
+  const noRuleHome = isGlobalStoreRoot(root) && ruleProject.length === 0;
   return { tenantId, everyScope: true, ruleProject, noRuleHome };
 }
 

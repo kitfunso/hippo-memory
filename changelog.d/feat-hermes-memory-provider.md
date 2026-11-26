@@ -9,4 +9,4 @@
 ### Fixed
 
 - **`--x=` with an empty value on a repeatable flag now counts as given with no value, as `--x` does.** `hippo outcome --good --id=` fails with "--id requires a value" again, where it marked the last recall's memories. A missing global store now says `No global hippo store at <root>. Run \`hippo init --global\` first.`
-- **A capture into the global store with no project no longer pins the rules it finds.** Those rules used to reach every project's prompts. They are now stored as plain captured items, so recall still finds them. A capture that names a project, and a capture into a project's own store, pin as before.
+- **A capture into the global store with no project no longer pins the rules it finds.** This holds for `hippo capture --global`, and for a Claude Code or Codex session end in a folder with no project and no store of its own. Those rules used to reach every project's prompts. They are now stored as plain captured items, so recall still finds them. A capture that names a project, and a capture into a project's own store, pin as before.
