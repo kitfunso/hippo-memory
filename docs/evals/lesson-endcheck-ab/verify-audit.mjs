@@ -106,8 +106,8 @@ try {
   if(INFRA_CODES.has(e?.code)) console.error('VERIFY_INFRA: '+e.code+': '+msg);
   else console.error('VERIFY_FAIL: '+msg);
   console.error(e);
-  process.exit(1);
+  process.exitCode=1;
 } finally {
   fs.rmSync(dir,{recursive:true,force:true});
 }
-console.log('Passed crash audit records, the missing rule for unguarded rows, blind classification, first-failure stop, guard 2 and 3 rows through the analysis and the stdio mode probe.');
+if(!process.exitCode) console.log('Passed crash audit records, the missing rule for unguarded rows, blind classification, first-failure stop, guard 2 and 3 rows through the analysis and the stdio mode probe.');

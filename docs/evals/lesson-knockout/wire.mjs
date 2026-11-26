@@ -84,7 +84,7 @@ function upstreamRequest(upstream,agent,method,pathname,headers,body,signal) {
   });
 }
 
-export async function openWire(dir,{ca,upstream=API_UPSTREAM,port=0,token=randomBytes(16).toString('hex')}) {
+export async function openWire(dir,{ca,upstream=API_UPSTREAM,port=0,token=randomBytes(16).toString('hex'),connect=net.connect}) {
   fs.mkdirSync(dir,{recursive:true});
   const auth=token ? 'Basic '+Buffer.from('wire:'+token).toString('base64') : null;
   const log=path.join(dir,WIRE_LOG),open=new Map(),sockets=new Set(),agents=new Map();
@@ -191,7 +191,7 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM,port=0,token=random
     }
     row({kind:'tunnel',host:target.host,port:target.port});
     let out;
-    try { out=net.connect(target.port,target.host); }
+    try { out=connect(target.port,target.host); }
     catch { return socket.destroy(); }
     out.on('connect',()=>{ socket.write('HTTP/1.1 200 Connection Established\r\n\r\n'); if(head?.length) out.write(head); out.pipe(socket); socket.pipe(out); });
     out.on('error',()=>socket.destroy());

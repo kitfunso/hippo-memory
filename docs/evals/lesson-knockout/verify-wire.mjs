@@ -249,8 +249,13 @@ export async function checkLauncher() {
       assert(api.seen.length===before && !fs.existsSync(seenEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
         'The launcher started Claude Code for the '+name+' call');
     }
-    const live=prepare('live',hook),call=callOf('Reply OK.');
-    await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record});
+    const live=prepare('live',hook),call=callOf('Reply OK.'),beforeLive=api.seen.length;
+    try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record}); }
+    catch(e) {
+      if(api.seen.length===beforeLive && !fs.existsSync(seenEnv))
+        assert.fail('Launcher failed before starting child with dummy credential: '+e.message);
+      throw e;
+    }
     assert(!fs.readFileSync(seenEnv,'utf8').includes(TOKEN.slice(13)),'The probe wrote the credential to disk');
     const seen=read(seenEnv),want=Object.fromEntries(Object.entries(LAUNCHER_PRIVATE).map(([k,v])=>[k,v.replaceAll('$Live',live)]));
     assert.deepEqual(Object.keys(seen).sort(),['leaked','network','settings','token'],'The probe wrote unexpected fields to disk');

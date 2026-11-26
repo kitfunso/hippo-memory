@@ -9,9 +9,10 @@ function Restore-Env {
   foreach ($key in @([Environment]::GetEnvironmentVariables('Process').Keys)) { if (!$saved.Contains($key)) { [Environment]::SetEnvironmentVariable($key,$null) } }
   foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key,$saved[$key]) }
 }
-function Assert-Throws([scriptblock]$Block,[string]$Pattern) {
-  try { & $Block } catch { if ($_.Exception.Message -match $Pattern) { return }; throw "Expected /$Pattern/, got: $($_.Exception.Message)" }
-  throw "Expected a refusal matching /$Pattern/"
+function Assert-Throws([scriptblock]$Block,[string]$Pattern,[string]$Label='') {
+  $tag=if ($Label) { " [$Label]" } else { '' }
+  try { & $Block } catch { if ($_.Exception.Message -match $Pattern) { return }; throw "Expected /$Pattern/$tag, got: $($_.Exception.Message)" }
+  throw "Expected a refusal matching /$Pattern/$tag"
 }
 function Test-GradleRefusal([string]$Name,[string]$LinkRelative,[string]$HomeRelative) {
   $jlive=(Join-Path $scratch "j-$Name/live") -replace '\\','/'
@@ -164,12 +165,13 @@ try {
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTP_PROXY']='http://127.0.0.1:1' }) } 'Unexpected wire settings'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY') }) } 'Unexpected wire settings'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY'); $d['ANTHROPIC_UNIX_SOCKET']='C:/pipe' }) } 'Unexpected wire settings'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://proxy.example:8080' }) } 'not a local listener'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://127.0.0.1:50123' }) } 'not a local listener'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@proxy.example:8080' }) } 'not a local listener'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:0' }) } 'not a local listener'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:65536' }) } 'not a local listener'
-  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']=@('http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:50123') }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://proxy.example:8080' }) } 'not a local listener' 'proxy-host'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://127.0.0.1:50123' }) } 'not a local listener' 'proxy-no-auth'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@proxy.example:8080' }) } 'not a local listener' 'proxy-remote-host'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:0' }) } 'not a local listener' 'proxy-port-zero'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:65536' }) } 'not a local listener' 'proxy-port-high'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']=@('http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:50123') }) } 'not a local listener' 'proxy-array'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']="http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:50123`n" }) } 'not a local listener' 'proxy-trailing-lf'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NO_PROXY']='*' }) } 'Unexpected wire bypass list'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NODE_EXTRA_CA_CERTS']='C:/other/ca.pem' }) } 'Unexpected wire CA'
   Assert-Throws { Get-WireEnv ([pscustomobject]@{id='probe'}) } 'Unexpected wire settings'

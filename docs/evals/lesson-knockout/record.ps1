@@ -7,7 +7,7 @@ function Get-WireEnv($Call) {
   $pairs=@($Call.wireEnv.PSObject.Properties)
   if ($pairs.Count -ne $WireKeys.Count -or ($pairs | Where-Object { $WireKeys -cnotcontains $_.Name })) { throw 'Unexpected wire settings' }
   $proxy=$Call.wireEnv.HTTPS_PROXY
-  if ($proxy -isnot [string] -or $proxy -cnotmatch '^http://wire:[0-9a-f]{32}@127\.0\.0\.1:([1-9]\d{0,4})$' -or [int]$Matches[1] -gt 65535) { throw 'Wire proxy is not a local listener' }
+  if ($proxy -isnot [string] -or $proxy -cnotmatch '^http://wire:[0-9a-f]{32}@127\.0\.0\.1:([1-9]\d{0,4})\z' -or [int]$Matches[1] -gt 65535) { throw 'Wire proxy is not a local listener' }
   if ($Call.wireEnv.NO_PROXY -cne '127.0.0.1,localhost') { throw 'Unexpected wire bypass list' }
   if ($Call.wireEnv.NODE_EXTRA_CA_CERTS -cne 'C:/z0-lessons/lesson-knockout/wire-ca/ca.pem') { throw 'Unexpected wire CA' }
   $pairs
