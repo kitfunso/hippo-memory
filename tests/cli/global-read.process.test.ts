@@ -65,6 +65,33 @@ describe('--global on recall, context and outcome (built CLI, project folder wit
     expect(store.rows('global').map((row) => row['outcome_positive'])).toEqual([1, 1]);
     expect(store.rows('local').map((row) => row['outcome_positive'])).toEqual([0]);
   });
+
+  it('outcome with an empty --id= exits 1 and marks nothing, even after a recall', async () => {
+    const store = await seeded();
+    await hippo(store, ['recall', 'deploy', '--global']);
+    const before = store.rows('global').map((row) => row['outcome_positive']);
+    const ran = await hippoRunAsync(['outcome', '--global', '--good', '--id='], {
+      cwd: store.cwd,
+      env: store.env,
+      timeout: SPAWN_MS,
+    });
+    expect(ran.status).toBe(1);
+    expect(ran.stderr).toContain('--id requires a value');
+    expect(store.rows('global').map((row) => row['outcome_positive'])).toEqual(before);
+  });
+});
+
+describe('--global with no global store', () => {
+  it('recall exits 1 and names the global store and the command that makes it', async () => {
+    const store = new Store();
+    const ran = await hippoRunAsync(['recall', 'deploy', '--global'], {
+      cwd: store.cwd,
+      env: store.env,
+      timeout: SPAWN_MS,
+    });
+    expect(ran.status).toBe(1);
+    expect(ran.stderr).toContain(`No global hippo store at ${store.home}. Run \`hippo init --global\` first.`);
+  });
 });
 
 describe('--global holds to the tenant of the caller', () => {

@@ -67,6 +67,7 @@ function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKin
     flags[key] = value;
   } else if (kind === 'list') {
     if (value !== '') pushRepeatableFlag(flags, key, value);
+    else if (!Array.isArray(flags[key])) flags[key] = true;
   } else {
     flags[key] = value === '' ? true : value;
   }

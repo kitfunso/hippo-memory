@@ -62,9 +62,9 @@ describe('parseArgs: --flag=value (glued form)', () => {
     expect(flags['tag']).toEqual(['a']);
   });
 
-  it('case 10: --tag= alone leaves the flag unset, not an array holding an empty string', () => {
+  it('case 10: --tag= alone gives true, as --tag does, not an array holding an empty string', () => {
     const { flags, args } = parseArgs(argv('remember', '--tag='));
-    expect(flags['tag']).toBeUndefined();
+    expect(flags['tag']).toBe(true);
     expect(args).toEqual([]);
   });
 
