@@ -60,6 +60,16 @@ export async function startScriptedApi(ca) {
     if(toolResult(body)) return sent([{type:'text',text:'Done.'}],'end_turn','final');
     if(text.includes('CASE:tool')) return sent([{type:'tool_use',id:'toolu_'+k,name:'Read',input:{file_path:'a.txt'}}],'tool_use','tool');
     if(text.includes('CASE:gzip')) return sent([{type:'text',text:'Done.'}],'end_turn','final',true);
+    if(text.includes('CASE:wording')) { record('wording'); return json(400,{type:'error',error:{type:'invalid_request_error',
+      message:'Claude AI usage limit reached; you hit your limit (rate_limit_error, overloaded_error).'}}); }
+    if(text.includes('CASE:big')) return sent([{type:'text',text:'x'.repeat(2_000_000)}],'end_turn','big');
+    if(text.includes('CASE:trailers')) {
+      record('trailers');
+      res.writeHead(200,{'content-type':'text/event-stream','request-id':rid,'trailer':'x-check'});
+      res.write(sse(model,id,[{type:'text',text:'Done.'}],'end_turn'));
+      res.addTrailers({'x-check':'1'});
+      return res.end();
+    }
     if(text.includes('CASE:limit')) { record('limit'); return json(429,{type:'error',error:{type:'rate_limit_error',
       message:'This request would exceed your account usage limit.'}},{'x-should-retry':'false'}); }
     if(text.includes('CASE:retry') && first('retry')) { record('overloaded'); return json(529,{type:'error',error:{type:'overloaded_error',

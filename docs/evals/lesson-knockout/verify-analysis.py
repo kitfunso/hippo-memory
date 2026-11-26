@@ -74,7 +74,8 @@ def verify() -> None:
         assert analyze.report()["gates"]["treeErrors"] == 1
         change(first, "N", preTree="a" * 40)
         for field, value in (("preTree", "tree"), ("ignoredSetup", None), ("archivedTargetText", None),
-                             ("archivedUnauditable", -1), ("archivedPermissions", False), ("sideRequests", None)):
+                             ("archivedUnauditable", -1), ("archivedPermissions", False), ("sideRequests", None),
+                             ("auxiliaryRequests", None), ("auxiliaryRequests", -1), ("auxiliaryRequests", "1")):
             saved = json.loads(files[first, "N"].read_text(encoding="utf-8"))
             change(first, "N", **{field: value})
             try:
@@ -83,6 +84,14 @@ def verify() -> None:
             except ValueError as error:
                 assert "audit fields" in str(error), error
             files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
+        saved = json.loads(files[first, "N"].read_text(encoding="utf-8"))
+        files[first, "N"].write_text(json.dumps({k: v for k, v in saved.items() if k != "auxiliaryRequests"}), encoding="utf-8")
+        try:
+            analyze.report()
+            raise AssertionError("Accepted a receipt without auxiliaryRequests")
+        except ValueError as error:
+            assert "audit fields" in str(error), error
+        files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
         change(first, "N", targetText=False, verdict="na", hookSeen=False)
         report = analyze.report()
         assert report["status"] == "audit-required" and report["excluded"]["pairs"] == len(plan["units"])-1

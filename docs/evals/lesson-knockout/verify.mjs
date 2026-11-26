@@ -8,7 +8,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
-import { archivedAudit,bodyAudit,callComplete,evidence,mainPairs,permissionAudit,sessionInventory,wireLedger } from './evidence.mjs';
+import { archivedAudit,bodyAudit,callComplete,evidence,mainPairs,permissionAudit,sessionInventory,summaryOf,wireLedger } from './evidence.mjs';
 import { authority,makeWireCa,openWire,wireName } from './wire.mjs';
 import { sse,startScriptedApi } from './scripted-api.mjs';
 import { checkLauncher,checkWireOffline } from './verify-wire.mjs';
@@ -19,7 +19,7 @@ import { runCheck,stateCommit } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { launch,openCallWire,openCue,retryLimited } from './delivery.mjs';
+import { cutOff,launch,limitBound,openCallWire,openCue,retryLimited } from './delivery.mjs';
 import net from 'node:net';
 import { runSetupScript } from './setup.mjs';
 import { assertSameTree,continueUnit } from './continuation.mjs';
@@ -139,6 +139,35 @@ const cueText='UserPromptSubmit hook additional context: Project notes\n- backgr
 assert(audited([user,msg('system',txt(cueText))]).hookSeen);
 assert(!audited([user,answer,result('id',cueText)]).hookSeen);
 assert(audited([user,msg('system',txt('UserPromptSubmit hook additional context: check-it'))]).targetText);
+assert(audited([msg('user',txt('<system-reminder>\n'+cueText+'\n</system-reminder>'),txt(task.prompt))]).hookSeen,'A hook block in the opening user message was not seen');
+const bodyOf=(messages,system=['base'])=>JSON.stringify({model:pins.modelOpus,system:system.map(txt),messages,stream:true});
+const said=(id,text)=>({requestId:'r-'+id,id,reply:sse(pins.modelOpus,id,[{type:'text',text}],'end_turn'),contentType:'text/event-stream'});
+const origin=exchanges=>{ wireRecord(auditDir,exchanges); return evidence(auditDir,{session:sid},[{content:'background'}],lesson,task).targetText; };
+const summaryReply='<analysis>Think about check-it.</analysis>\n<summary>The user asked to Investigate check-it.\n\n\nI ran check-it.</summary>';
+assert.equal(summaryOf(summaryReply),'Summary:\nThe user asked to Investigate check-it.\n\nI ran check-it.','summaryOf does not match the pinned CLI summary format');
+const continued=(summary,extra='')=>'This session is being continued from a previous conversation that ran out of context. The summary below covers '+
+  'the earlier portion of the conversation.\n\n<system-reminder>\n<tools-used-before-summary>Read</tools-used-before-summary>\n</system-reminder>\n'+
+  summary+extra+'\n\nIf you need specific details from before compaction, read the full transcript.';
+const reread=(file,content)=>[txt('<system-reminder>\nCalled the Read tool with the following input: '+JSON.stringify({file_path:file})+'\n</system-reminder>'),
+  txt('<system-reminder>\nResult of calling the Read tool:\n'+content+'\n</system-reminder>')];
+const compacted=(blocks,reply=summaryReply)=>origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',reply),cls:'compaction',body:bodyOf([user,msg('assistant',txt('I will run check-it.')),msg('user',txt('Summarize.'))])},
+  {...said('m3','Done.'),body:bodyOf([msg('user',...blocks)])}]);
+assert(!compacted([...reread('src/a.txt','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A compaction summary of the call was taken as a delivery');
+assert(compacted([txt(continued(summaryOf(summaryReply),'\nRun the special check.'))]),'Text added around a compaction summary was not audited');
+assert(compacted([txt(continued(summaryOf(summaryReply)))],'<summary>Another summary.</summary>'),'A summary that no compaction reply wrote passed');
+assert(compacted([...reread('.claude/CLAUDE.md','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A sensitive file read again after compaction passed');
+assert(compacted([reread('src/a.txt','1\tcheck-it')[1],txt(continued(summaryOf(summaryReply)))]),'A tool result without its call passed');
+assert(compacted([reread('Run the special check.','x')[0],txt(continued(summaryOf(summaryReply)))]),'A tool call without its result passed');
+const look=(quoted,framing='')=>origin([{...said('m1','I ran check-it and it passed.'),body:bodyOf([user])},
+  {...said('m2','{"write_likely": false}'),cls:'auxiliary',body:bodyOf([msg('user',txt(framing+'<exchanges>\n'+quoted.join('\n\n')+
+    '\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.'))],['Memory instruction.'])}]);
+const history=['User: Investigate check-it','Assistant: I ran check-it and it passed.'];
+assert(!look(history),'A first look that quotes the prompt and the model was taken as a delivery');
+assert(!look(['User: …check-it','Assistant: …ran check-it and']),'Shortened quotes of the prompt and the model were taken as a delivery');
+assert(look(history,'## Existing memory\nRun the special check.\n'),'A target outside the quoted history passed');
+assert(look([...history,'Assistant: Always run check-it first.']),'A quote that the model never wrote passed');
+assert(look(['User: check-it is required',history[1]]),'A user quote that is not the prompt passed');
 function checkCallWire() {
   const series=join(dir,'final-request'),wire=join(series,'wire'),trace=join(series,'projects/unit',sid+'.jsonl');
   const done={session:sid,subtype:'success',isError:false,exit:0};
@@ -175,11 +204,13 @@ function checkCallWire() {
   fails([one,{...two,status:201}],'A reply with another status passed');
   const flip=(d,f)=>{ const b=fs.readFileSync(join(d,f)); b[b.length>>1]^=1; fs.writeFileSync(join(d,f),b); };
   const point=(kind,seq,file)=>d=>rewireRows(d,rows=>rows.map(r=>r.kind===kind && r.seq===seq ? {...r,file} : r));
+  const moved=(kind,seq,from,to)=>d=>{ fs.mkdirSync(join(d,to,'..'),{recursive:true}); fs.copyFileSync(join(d,from),join(d,to)); point(kind,seq,to)(d); };
   for(const [name,change] of [['changed reply',d=>fs.appendFileSync(join(d,'00002.response'),' ')],
     ['changed request',d=>fs.appendFileSync(join(d,'00001.request.json'),' ')],
     ['same-length reply',d=>flip(d,'00002.response')],['same-length request',d=>flip(d,'00002.request.json')],
-    ['request in another folder',point('request',2,'../other/00002.request.json')],
-    ['reply of another exchange',point('response',2,'00001.response')],
+    ['request in another folder',moved('request',2,'00002.request.json','../other/00002.request.json')],
+    ['request under another number',moved('request',2,'00002.request.json','00003.request.json')],
+    ['reply under another number',moved('response',2,'00002.response','00003.response')],
     ['lost request',d=>fs.unlinkSync(join(d,'00002.request.json'))],
     ['lost reply',d=>fs.unlinkSync(join(d,'00001.response'))]]) {
     wireRecord(wire,[one,two]); change(wire);
@@ -210,6 +241,9 @@ function checkCallWire() {
   wireRecord(wire,[one,two]);
   rewireRows(wire,rows=>rows.filter(r=>r.kind!=='request' || r.seq!==1));
   assert.equal(check().complete,false,'A missing request row passed');
+  wireRecord(wire,[{route:'count'},one,two]);
+  rewireRows(wire,rows=>rows.filter(r=>r.kind!=='response' || r.seq!==1));
+  assert.equal(check().complete,false,'A complete exchange without its response row passed');
   const tunnelled=passes([one,two],'A tunnel to another host failed',{extra:[{kind:'tunnel',host:'statsig.example',port:443}]});
   assert.deepEqual(tunnelled.wireHosts,['statsig.example']);
   fails([one,{...two,route:'other',method:'POST'}],'An unknown model route passed');
@@ -222,6 +256,7 @@ function checkCallWire() {
     assert(aux.auxiliaryRequests===1 && aux.requests===2 && aux.sideRequests===1 && aux.targetText,'An auxiliary body was not audited apart: '+cls);
   }
   fails([one,{requestId:'two',id:'msg-two',cls:'compaction'}],'A transcript turn answered by an auxiliary request passed');
+  passes([one,two,{requestId:'aux-last',id:'msg-aux-last',cls:'auxiliary'}],'An auxiliary request after the final turn stopped the call');
   fails([one,{...two,body:'not json'}],'An undecodable request passed');
   fails([one,{...two,body:JSON.stringify({messages:[user]})}],'A request without a system prompt passed');
   const side=passes([{route:'settings'},{route:'policy'},one,{route:'count',body:plainBody(lesson.rule)},{...two,body:plainBody('base')}],
@@ -310,7 +345,7 @@ function checkArchives() {
   const overloaded={requestId:'r-limit',...failure('overloaded_error',529)};
   const zero={input_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0,output_tokens:0};
   const cut={session:sid,call:'apply',promptSha256:hash(prompt),json:true,subtype:'success',isError:true,turns:1,usage:zero,
-    models:[],exit:1,apparatus:APPARATUS,cutOff:true,permissionDenials:[]};
+    models:[],exit:1,apparatus:APPARATUS,stopped:true,permissionDenials:[]};
   const attempt=(name,{turns=[],wire,options,record=cut,mode='bypassPermissions',transcript=true,lead=prompt,before=[],subagent,id='apply',change}={})=>{
     const live=join(base,name,'live'),operator=join(base,name,'operator'),project=join(live,'home/.claude/projects/unit');
     mkdir(live);
@@ -373,7 +408,7 @@ function checkArchives() {
     ['aux-limit-last',{...later,wire:[answered,{...limited,cls:'auxiliary'}]}],
     ['unindexed-turn',{...later,wire:[limited]}],
     ['no-record',{...later,record:null}],['other-call',{...later,record:{...cut,call:'teach'}}],
-    ['other-session',{...later,record:{...cut,session:'other'}}],['not-cut-off',{...later,record:{...cut,cutOff:false}}],
+    ['other-session',{...later,record:{...cut,session:'other'}}],['not-stopped',{...later,record:{...cut,stopped:false}}],
     ['other-prompt',{...later,record:{...cut,promptSha256:hash('Another prompt')}}],
     ['other-apparatus',{...later,record:{...cut,apparatus:APPARATUS-1}}],
     ['other-lead',{...later,lead:'Another prompt'}]]) {
@@ -385,7 +420,7 @@ function checkArchives() {
     ['denied',{...later,record:{...cut,permissionDenials:[{tool:'Write',id:'x'}]}}],
     ['malformed',{...later,record:{...cut,permissionDenials:null}}],
     ['partial',{...later,record:{...cut,permissionDenials:[{tool:'Edit'}]}}],
-    ['no-json',{...later,record:{session:sid,call:'apply',promptSha256:hash(prompt),json:false,exit:1,apparatus:APPARATUS,cutOff:true,permissionDenials:null}}],
+    ['no-json',{...later,record:{session:sid,call:'apply',promptSha256:hash(prompt),json:false,exit:1,apparatus:APPARATUS,stopped:true,permissionDenials:null}}],
     ['lead',{...later,lead:'Another prompt'}],['unrecorded',{...later,record:null}],['untranscribed',{...later,transcript:false}]]) {
     assert.equal(audit([attempt('perm-'+name,spec)]).archivedPermissions,false,name);
   }
@@ -715,7 +750,7 @@ await retryLimited(state,feedback,async()=>{
   assert.deepEqual(sentCall(),feedback);
   if(attempts++===0){put(state,'partial','cut off');put(state,'pre','changed');put(records,'call.json','{"cut":"off"}');return 75;}
   return 0;
-},()=>checks.shift(),{maxWaits:1,record,delay:ms=>{
+},()=>checks.shift(),{maxWaits:1,record,bound:()=>true,delay:ms=>{
   if(ms===300000) {
     assert.deepEqual(sentCall(),fork);
     assert(!fs.existsSync(join(records,'wire','feedback')),'The restored attempt kept the cut-off wire record');
@@ -729,20 +764,31 @@ assert.equal(cutoffArchives.length,1);
 assert.deepEqual(fs.readdirSync(join(dir,'limit-archives',cutoffArchives[0],'operator/wire/feedback')),['wire.jsonl'],
   'The cut-off snapshot lost its wire record');
 clearWire();
-await assert.rejects(retryLimited(state,fork,()=>1,()=>ready,{delay:unexpectedWait,record}),/exited 1/);
+await assert.rejects(retryLimited(state,fork,()=>1,()=>ready,{delay:unexpectedWait,record}),/exited 1/,'A launcher exit 1 was not a failure');
 clearWire();
-await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,maxWaits:0,record}),/wait exhausted/);
+await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,maxWaits:0,record,bound:()=>true}),/wait exhausted/,'A bound stop did not exhaust the waits');
 clearWire();
+const unboundBefore=fs.readdirSync(join(dir,'limit-archives')).length;
+await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,record}),/stopped without a usage limit/,'A retry ran on a stop without a usage limit');
+clearWire();
+await assert.rejects(launch(state,'NO_TOKEN_VAR',{},{...fork,smoke:false},{checkBox:()=>ready,record,dispatch:()=>75}),/stopped without a usage limit/,'A scored launch retried a stop without a usage limit');
+clearWire();
+assert.equal(fs.readdirSync(join(dir,'limit-archives')).length,unboundBefore,'A stop without a usage limit reached the cut-off snapshot');
+assert.equal(cutOff(0,records,state,fork,()=>assert.fail('A success read the wire')),false);
+assert.equal(cutOff(75,records,state,fork,()=>true),true);
+assert.throws(()=>cutOff(1,records,state,fork,()=>true),/launcher exited 1/);
+assert.throws(()=>cutOff(75,records,state,fork,()=>false),/stopped without a usage limit/);
+assert.equal(limitBound(records,state,fork),false,'A call with no wire or transcript was bound as a cut-off');
 const archivedBefore=fs.readdirSync(join(dir,'limit-archives')).length;
 const brokenClose=async()=>({port:1,close:async()=>({ok:false,failure:'fixture',open:1,exchanges:1})});
-await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,record:brokenClose}),/Wire record failed/);
+await assert.rejects(retryLimited(state,fork,()=>75,()=>ready,{delay:unexpectedWait,record:brokenClose}),/Wire record failed/,'A failed wire close did not stop the attempt');
 assert.equal(fs.readdirSync(join(dir,'limit-archives')).length,archivedBefore,'A failed wire close reached the cut-off snapshot');
 await assert.rejects(retryLimited(state,fork,async()=>{
   const socket=await connectThrough(proxyPort());
   socket.write('POST /v1/messages?beta=true HTTP/1.1\r\nHost: api.anthropic.com\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{"model":');
   await wait(200);
   return 75;
-},()=>ready,{delay:unexpectedWait,record}),/Wire record failed/);
+},()=>ready,{delay:unexpectedWait,record}),/Wire record failed/,'An unfinished upload did not stop the attempt');
 assert.deepEqual(wireRows('apply').map(r=>[r.kind,r.stage]),[['fault','close'],['fault','exchange'],['closed',undefined]],
   'An unfinished upload did not invalidate the attempt');
 assert.equal(fs.readdirSync(join(dir,'limit-archives')).length,archivedBefore,'A late upload reached the cut-off snapshot');
@@ -750,23 +796,23 @@ clearWire();
 await assert.rejects(retryLimited(state,fork,async()=>{
   await fs.promises.mkdir(join(records,'wire','apply','00001.request.json'));
   const socket=await connectThrough(proxyPort());
-  const body='{"model":"x"}';
+  const body='{"model":"x","system":"s","messages":[]}';
   socket.write('POST /v1/messages?beta=true HTTP/1.1\r\nHost: api.anthropic.com\r\nContent-Type: application/json\r\nContent-Length: '+body.length+'\r\n\r\n'+body);
   const status=await new Promise(resolve=>socket.once('data',d=>resolve(/^HTTP\/1\.1 (\d+)/.exec(String(d))?.[1])));
   assert.equal(status,'502','A request the wire could not save was forwarded');
   return 0;
-},()=>ready,{delay:unexpectedWait,record}),/Wire record failed/);
+},()=>ready,{delay:unexpectedWait,record}),/Wire record failed/,'A failed body write did not stop the attempt');
 assert.deepEqual(wireRows('apply').map(r=>r.kind),['fault','closed'],'A failed body write did not latch the wire');
 clearWire();
 fs.mkdirSync(join(records,'wire','apply'),{recursive:true});
-await assert.rejects(retryLimited(state,fork,()=>0,()=>ready,{delay:unexpectedWait,record}),/Stale wire record for apply/);
+await assert.rejects(retryLimited(state,fork,()=>0,()=>ready,{delay:unexpectedWait,record}),/Stale wire record for apply/,'A stale wire record was reused');
 clearWire();
 await assert.rejects(retryLimited(state,fork,async()=>{ throw Error('invoke fixture'); },()=>ready,{delay:unexpectedWait,record}),/invoke fixture/);
 assert.deepEqual(wireRows('apply').map(r=>r.kind),['closed'],'A failed invocation left its wire open');
 clearWire();
 const shortCa=makeWireCa(join(dir,'short-ca'),1);
-await assert.rejects(async()=>openCallWire(join(dir,'short-wire'),shortCa),/expires within a day/);
-await assert.rejects(async()=>openCallWire(join(dir,'no-wire'),join(dir,'no-ca')),/Missing wire CA/);
+await assert.rejects(async()=>openCallWire(join(dir,'short-wire'),shortCa),/expires within a day/,'A wire certificate that expires within a day was used');
+await assert.rejects(async()=>openCallWire(join(dir,'no-wire'),join(dir,'no-ca')),/Missing wire CA/,'A wire opened without its CA');
 assert((await (await openCallWire(join(dir,'long-wire'),testCa)).close(100)).ok,'A valid wire CA was refused');
 await launch(state,'NO_TOKEN_VAR',{},{...fork,smoke:false},{checkBox:()=>ready,record,dispatch:async()=>{
   const response=await new Promise((resolve,reject)=>http.get({host:'127.0.0.1',port:proxyPort(),path:'http://example.invalid/',agent:false},resolve).on('error',reject));
@@ -792,8 +838,10 @@ await checkLiveWire();
 console.log('Passed box refusals before teach resume, fork apply and subscription retry, one wire per attempt, and wire close failures.');
 async function checkLiveWire() {
   for(const [text,want] of [['[::1]:443',{host:'::1',port:443}],['API.Anthropic.com.:443',{host:'api.anthropic.com',port:443}],
-    ['registry.npmjs.org:443',{host:'registry.npmjs.org',port:443}]]) assert.deepEqual(authority(text),want,'CONNECT authority '+text);
-  for(const text of ['api.anthropic.com','[::1]','host:0','host:65536','host:99999',':443','a b:1','[::1]:x','host:443/path'])
+    ['registry.npmjs.org:443',{host:'registry.npmjs.org',port:443}],['[::ffff:127.0.0.1]:443',{host:'::ffff:127.0.0.1',port:443}]])
+    assert.deepEqual(authority(text),want,'CONNECT authority '+text);
+  for(const text of ['api.anthropic.com','[::1]','host:0','host:65536','host:99999',':443','a b:1','[::1]:x','host:443/path',
+    '[.]:443','[1.2.3.4]:443','[::1::]:443','[:]:443'])
     assert.equal(authority(text),null,'A bad CONNECT authority parsed: '+text);
   const broken=join(dir,'broken-ca');
   mkdir(join(broken,'leaf.pem'));
@@ -834,17 +882,27 @@ async function checkLiveWire() {
     rewireRows(order,all=>all.filter(r=>!(r.kind==='refused' && r.reason==='anthropic-host')));
     assert.deepEqual(wireLedger(order).exchanges.map(x=>[x.seq,x.complete]),[[1,true],[2,true]],'The ledger lost an overlapped exchange');
     const sealedLog=fs.readFileSync(join(order,'wire.jsonl'),'utf8');
+    const replacement=join(base,'replacement'),next=await openWire(replacement,{ca:testCa,upstream:api.upstream});
+    assert.notEqual(next.port,w.port,'The replacement attempt listens on the closed port');
     await assert.rejects(connectThrough(w.port),/ECONNREFUSED/,'A late request reached the closed wire');
     assert.equal(fs.readFileSync(join(order,'wire.jsonl'),'utf8'),sealedLog,'A late request wrote to the closed wire log');
+    const nextState=await next.close(500);
+    assert(nextState.ok && nextState.exchanges===0,'A late request reached the replacement attempt');
     const hold=join(base,'hold'),h=await openWire(hold,{ca:testCa,upstream:api.upstream});
     const c=await connectThrough(h.port),held=body('CASE:hold now');
     c.write(head(held.length)+held);
     for(let i=0;i<100 && !api.seen.some(x=>x.kind==='hold');i++) await wait(20);
     assert(api.seen.some(x=>x.kind==='hold'),'The held request did not reach the upstream');
+    const beside=await connectThrough(h.port),other=body('CASE:final beside'),besideReply=reply(beside);
+    beside.write(head(other.length)+other);
+    assert.match(await besideReply,/message_stop/,'A second connection waited for a held reply');
+    const [heldAt,besideAt]=['hold','final'].map(k=>api.seen.findLast(x=>x.kind===k));
+    assert.notEqual(heldAt.socket,besideAt.socket,'Two client connections shared one upstream connection');
+    beside.destroy();
     c.destroy();
     const started=Date.now(),holdState=await h.close(3000);
     assert(holdState.ok && Date.now()-started<2500,'A caller that left before the reply headers kept the exchange open');
-    assert.deepEqual(rows(hold).filter(r=>r.kind==='end').map(r=>r.ended),['client-closed'],'The abandoned exchange was not recorded');
+    assert.deepEqual(rows(hold).filter(r=>r.kind==='end').map(r=>[r.seq,r.ended]),[[2,'complete'],[1,'client-closed']],'The abandoned exchange was not recorded');
     const dirty=join(base,'dirty'),d=await openWire(dirty,{ca:testCa,upstream:api.upstream}),before=api.seen.length;
     const e=await connectThrough(d.port),junk='not json at all';
     const junkReply=reply(e);
@@ -860,8 +918,52 @@ async function checkLiveWire() {
     const text=fs.readFileSync(join(dirty,'wire.jsonl'),'utf8');
     assert(!text.includes('secret') && !text.includes('token=abc') && !text.includes(junk),'A refused request kept its URL or body');
     for(const r of dirtyRows.filter(r=>r.kind==='fault')) assert.match(r.error,/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
+    const oneShot=async (name,request)=>{
+      const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port),got=reply(t);
+      t.write(request);
+      const text=await got;
+      t.destroy();
+      return {text,state:await one.close(1000),rows:rows(d),forwarded:api.seen.slice(from),dir:d};
+    };
+    const fields='Content-Type: application/json\r\nx-claude-code-request-class: main\r\nanthropic-version: 2023-06-01\r\n';
+    const request=(payload,host='Host: api.anthropic.com\r\n')=>'POST /v1/messages?beta=true HTTP/1.1\r\n'+host+fields+'Content-Length: '+payload.length+'\r\n\r\n'+payload;
+    const ported=await oneShot('host-port',request(body('CASE:final ported'),'Host: api.anthropic.com:443\r\n'));
+    assert(ported.state.ok && /message_stop/.test(ported.text) && ported.forwarded[0]?.headers.includes('api.anthropic.com:443'),
+      'The wire refused or rewrote an explicit API port in Host');
+    for(const [name,host] of [['host-other','Host: other.example\r\n'],['host-port-other','Host: api.anthropic.com:8443\r\n'],
+      ['host-twice','Host: api.anthropic.com\r\nHost: api.anthropic.com\r\n']]) {
+      const r=await oneShot(name,request(body('CASE:final '+name),host));
+      assert(r.forwarded.length===0 && /^HTTP\/1\.1 [45]/.test(r.text),'The wire forwarded a request with '+name);
+    }
+    const payload=body('CASE:final chunked');
+    const chunked=trailer=>'POST /v1/messages?beta=true HTTP/1.1\r\nHost: api.anthropic.com\r\n'+fields+'Transfer-Encoding: chunked\r\n'+
+      (trailer ? 'Trailer: x-extra\r\n' : '')+'\r\n'+payload.length.toString(16)+'\r\n'+payload+'\r\n0\r\n'+(trailer ? 'x-extra: 1\r\n' : '')+'\r\n';
+    const plainChunks=await oneShot('chunked',chunked(false));
+    assert(plainChunks.state.ok && /message_stop/.test(plainChunks.text) && plainChunks.forwarded[0]?.sha256===hash(payload) &&
+      /transfer-encoding\nchunked/i.test(plainChunks.forwarded[0].headers.join('\n')),'A chunked upload lost its body or its framing');
+    const trailed=await oneShot('request-trailers',chunked(true));
+    assert(trailed.forwarded.length===0 && /^HTTP\/1\.1 502/.test(trailed.text) && trailed.rows.some(r=>r.kind==='fault' && r.stage==='trailers'),
+      'A request with trailers was forwarded');
+    const answered=await oneShot('response-trailers',request(body('CASE:trailers now')));
+    assert(!answered.state.ok && answered.rows.some(r=>r.kind==='fault' && r.stage==='trailers' && r.error==='response'),'A reply with trailers passed the wire');
+    const shaped=await oneShot('identity-object',request('{"user_id":"u-1","device_id":"d-1","messages":"x"}'));
+    assert(shaped.forwarded.length===0 && !fs.readdirSync(shaped.dir).some(f=>f.endsWith('.request.json')) &&
+      !fs.readFileSync(join(shaped.dir,'wire.jsonl'),'utf8').includes('u-1'),'A malformed body with identity data was saved or forwarded');
+    const slow=join(base,'slow'),sw=await openWire(slow,{ca:testCa,upstream:api.upstream}),reader=await connectThrough(sw.port),big=body('CASE:big now');
+    let received=0,tail='';
+    const drained=new Promise(resolve=>{
+      reader.on('data',d=>{ received+=d.length; tail=(tail+d.toString('latin1')).slice(-300); reader.pause(); setTimeout(()=>reader.resume(),5).unref(); if(tail.includes('message_stop')) resolve(); });
+      reader.on('close',resolve);
+    });
+    reader.write(head(big.length)+big);
+    for(let i=0;i<500 && !(fs.existsSync(join(slow,'wire.jsonl')) && rows(slow).some(r=>r.kind==='response'));i++) await wait(10);
+    const slowState=await sw.close(30000);
+    await drained;
+    reader.destroy();
+    assert(slowState.ok && received>2_000_000 && tail.includes('message_stop'),'The wire cut a slow reader off: '+JSON.stringify({slowState,received}));
+    assert.deepEqual(rows(slow).filter(r=>r.kind==='end').map(r=>r.ended),['complete'],'The slow reply was not recorded as complete');
   } finally { await api.close(); }
-  console.log('Passed the live wire: overlapping uploads, bad and Anthropic CONNECT targets, a late request after close, a caller that left before the reply, an unsanitizable body, and CA key clean-up.');
+  console.log('Passed the live wire: overlapping uploads, bad and Anthropic CONNECT targets, a late request beside the next attempt, a held reply beside a second connection, Host and trailer rules, chunked uploads, malformed bodies, a slow reader, and CA key clean-up.');
 }
 const unit=join(root,'smoke',roster()[0].id);
 const live=join(root,'active/live'),project='home/.claude/projects/unit';
@@ -975,7 +1077,7 @@ const active=join(dir,'active'),design={unit:first,mode:'unit',roster:rosterHash
 const frozen={preHash:hash(JSON.stringify(manifest)),snapshotHash:hash(JSON.stringify(files(snap))),teachId:sid,targetRows:[],
   apparatus:APPARATUS,form:'correction'};
 const json=(base,file,value)=>put(base,file,JSON.stringify(value));
-function teachFixture(dest,u,{apparatus=APPARATUS,mode='bypassPermissions',cutOff=false,record={},wires=true}={}) {
+function teachFixture(dest,u,{apparatus=APPARATUS,mode='bypassPermissions',stopped=false,record={},wires=true}={}) {
   const prompts=[u.teach.prompt,teachMessage(u.lesson,frozen.form)],ids=['teach','feedback'];
   const turn=id=>({type:'assistant',sessionId:sid,requestId:'r-'+id,message:{id:'m-'+id,type:'message',role:'assistant',
     stop_reason:'end_turn',usage:{output_tokens:2},content:[txt('Done.')]}});
@@ -984,7 +1086,7 @@ function teachFixture(dest,u,{apparatus=APPARATUS,mode='bypassPermissions',cutOf
   put(dest,'evidence/teach/home/.claude/projects/unit/'+sid+'.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
   for(const [i,id] of ids.entries()) {
     json(dest,'evidence/teach/operator/'+id+'.json',{session:sid,call:id,promptSha256:hash(prompts[i]),json:true,subtype:'success',exit:0,
-      isError:false,apparatus,cutOff,permissionDenials:[],...record});
+      isError:false,apparatus,stopped,permissionDenials:[],...record});
     const wire=join(dest,'evidence/teach/operator/wire',id);
     if(wires) wireRecord(wire,[{requestId:'r-'+id,id:'m-'+id}]);
     else fs.rmSync(wire,{recursive:true,force:true});
@@ -1000,7 +1102,7 @@ json(active,'operator/setup.json',{toolchain:first.toolchain,setup:first.apply.s
 put(active,'live/cache/raw.bin',Buffer.from([0,255,10]));
 const interrupted=files(active);
 async function refuse(pattern) {
-  await assert.rejects(()=>continueUnit(design,()=>assert.fail('Unexpected apply')),pattern);
+  await assert.rejects(()=>continueUnit(design,()=>assert.fail('Unexpected apply')),pattern,'Continuation did not refuse with '+pattern);
   assert.deepEqual(fs.readdirSync(partial).filter(n=>n.startsWith('interrupted-')),[]);
 }
 await refuse(/freeze\.json/);
@@ -1008,7 +1110,7 @@ json(partial,'freeze.json',{...frozen,preHash:'changed'}); await refuse(/manifes
 json(partial,'freeze.json',{...frozen,snapshotHash:'changed'}); await refuse(/snapshot changed/);
 json(partial,'freeze.json',{...frozen,apparatus:APPARATUS-1}); await refuse(/another apparatus/);
 json(partial,'freeze.json',frozen);
-for(const change of [{apparatus:2},{mode:'default'},{cutOff:true},{record:{json:false}},{record:{call:'other'}},
+for(const change of [{apparatus:2},{mode:'default'},{stopped:true},{record:{json:false}},{record:{call:'other'}},
   {record:{promptSha256:hash('other')}}]) {
   teachFixture(partial,first,change); await refuse(/Invalid frozen teach receipt/);
 }
@@ -1095,15 +1197,17 @@ for(const [i,change,pattern] of [[0,{preTree:'c'.repeat(40)},/different work tre
   [2,{ignoredSetup:'c'.repeat(64)},/different work trees/],[1,{preTree:'tree'},/Invalid scored receipt/],
   [neutral,{archivedTargetText:true},/Invalid scored receipt/],[neutral,{archivedUnauditable:1},/Invalid scored receipt/],
   [neutral,{targetText:true},/Invalid scored receipt/],[0,{archivedPermissions:false},/Invalid scored receipt/],
-  [1,{apparatus:2},/Invalid scored receipt/],[1,{apparatus:undefined},/Invalid scored receipt/]]) {
+  [1,{apparatus:2},/Invalid scored receipt/],[1,{apparatus:undefined},/Invalid scored receipt/],
+  [1,{auxiliaryRequests:undefined},/Invalid scored receipt/],[1,{auxiliaryRequests:-1},/Invalid scored receipt/],
+  [1,{auxiliaryRequests:'1'},/Invalid scored receipt/]]) {
   const file='evidence/apply-'+i+'/grade.json',saved=read(join(unitRoot,third.id,file));
   json(join(unitRoot,third.id),file,{...saved,...change});
-  assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),pattern);
+  assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),pattern,'Collection accepted a receipt with '+JSON.stringify(change));
   json(join(unitRoot,third.id),file,saved);
 }
 const teachDir=join(unitRoot,third.id,'evidence/teach/operator');
 for(const [change,pattern] of [[{apparatus:2},/Invalid frozen teach receipt/],[{mode:'default'},/Invalid frozen teach receipt/],
-  [{cutOff:true},/Invalid frozen teach receipt/],[{record:{json:false}},/Invalid frozen teach receipt/],
+  [{stopped:true},/Invalid frozen teach receipt/],[{record:{json:false}},/Invalid frozen teach receipt/],
   [{record:{promptSha256:hash('other')}},/Invalid frozen teach receipt/]]) {
   teachFixture(join(unitRoot,third.id),third,change);
   assert.throws(()=>collect(()=>assert.fail('Unexpected relaunch')),pattern);

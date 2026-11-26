@@ -22,7 +22,10 @@ const ALPN=['http/1.1'];
 const MAX_BODY=64*1024*1024;
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const forward=headers=>Object.fromEntries(Object.entries(headers).filter(([k])=>!HOP.has(k.toLowerCase())));
-const passOn=raw=>raw.flatMap((v,i)=>i%2 ? [] : PROXY_ONLY.has(v.toLowerCase()) ? [] : [v,v.toLowerCase()==='host' ? API_HOST : raw[i+1]]);
+const passOn=raw=>raw.flatMap((v,i)=>i%2 || PROXY_ONLY.has(v.toLowerCase()) ? [] : [v,raw[i+1]]);
+const apiHost=req=>req.rawHeaders.filter((v,i)=>!(i%2) && v.toLowerCase()==='host').length===1 && /^api\.anthropic\.com(?::443)?$/i.test(req.headers.host ?? '');
+const waitEither=(res,a,b)=>new Promise(resolve=>{ const done=()=>{ res.off(a,done); res.off(b,done); resolve(); }; res.once(a,done); res.once(b,done); });
+const flushed=res=>res.writableFinished || res.destroyed ? Promise.resolve() : waitEither(res,'finish','close');
 const label=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.:-]{1,128}$/i.test(v) ? v : 'invalid';
 const listed=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.,: -]{0,1024}$/i.test(v) ? v : 'invalid';
 const codeOf=e=>String(typeof e==='string' ? e : e?.code ?? e?.name ?? 'error').replace(/[^a-z0-9_.-]/gi,'').slice(0,48) || 'error';
@@ -31,8 +34,9 @@ export const wireName=(n,suffix)=>String(n).padStart(5,'0')+suffix;
 export const hostOf=h=>String(h??'').toLowerCase().replace(/^\[|\]$/g,'').replace(/\.+$/,'');
 export function authority(text) {
   const m=/^(?:\[([0-9a-f:.]+)\]|([a-z0-9][a-z0-9.-]*)):(\d{1,5})$/i.exec(String(text));
-  const port=m ? Number(m[3]) : 0;
-  return m && port>=1 && port<=65535 ? {host:hostOf(m[1]??m[2]),port} : null;
+  const port=m ? Number(m[3]) : 0,host=m ? hostOf(m[1]??m[2]) : '';
+  if(!m || port<1 || port>65535 || !host || (m[1]!==undefined && !net.isIPv6(m[1]))) return null;
+  return {host,port};
 }
 
 export function makeWireCa(dir,days=60) {
@@ -53,10 +57,11 @@ export function makeWireCa(dir,days=60) {
   return dir;
 }
 
-function savedBody(raw) {
+function savedBody(raw,route) {
   let body;
   try { body=JSON.parse(raw.toString('utf8')); } catch { return null; }
   if(!body || typeof body!=='object' || Array.isArray(body)) return null;
+  if(!Array.isArray(body.messages) || typeof body.model!=='string' || (route==='generate' && !body.system)) return null;
   delete body.metadata;
   return Buffer.from(JSON.stringify(body));
 }
@@ -106,7 +111,9 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM}) {
       const chunks=[];
       let size=0;
       for await(const c of req) { size+=c.length; if(size>MAX_BODY) throw Object.assign(Error('Oversized request'),{code:'EBIG'}); chunks.push(c); }
-      const raw=Buffer.concat(chunks),model=MODEL_ROUTES.has(route),saved=model?savedBody(raw):null;
+      if(!apiHost(req)) { fault(n,'host','unexpected'); return refuse(res,502); }
+      if(req.rawTrailers.length) { fault(n,'trailers','request'); return refuse(res,502); }
+      const raw=Buffer.concat(chunks),model=MODEL_ROUTES.has(route),saved=model?savedBody(raw,route):null;
       if(model && !saved) { fault(n,'body','unsanitizable'); return refuse(res,502); }
       const file=model?wireName(n,'.request.json'):null;
       if(file) fs.writeFileSync(path.join(dir,file),saved);
@@ -129,13 +136,14 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM}) {
             if(fd!==null) try { writeAll(fd,c); } catch(e) { fault(n,'response-file',e); ended='fault'; res.destroy(); break; }
             hash.update(c); bytes+=c.length;
             if(gone) break;
-            if(!res.write(c)) await Promise.race([once(res,'drain'),once(res,'close')]);
+            if(!res.write(c) && !res.destroyed && !gone) await waitEither(res,'drain','close');
           }
         } catch { if(!gone) { ended='upstream-error'; res.destroy(); } }
       }
+      if(ended==='complete' && !gone && up.rawTrailers.length) { fault(n,'trailers','response'); ended='fault'; res.destroy(); }
       if(ended==='fault') up.destroy();
       else if(gone) ended='client-closed';
-      else if(ended==='complete') res.end();
+      else if(ended==='complete') { res.end(); await flushed(res); if(!res.writableFinished) ended='client-closed'; }
       row({kind:'end',seq:n,ended,bytes,sha256:hash.digest('hex')});
     } catch(e) { fault(n,'exchange',e); if(!res.headersSent) refuse(res,502); else res.destroy(); }
     finally {

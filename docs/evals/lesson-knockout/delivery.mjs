@@ -9,6 +9,17 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { WIRE_CA,folder,hash,wireEnv } from './plan.mjs';
 import { openWire } from './wire.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
+import { cutOffBound } from './evidence.mjs';
+
+export const STOPPED=75;
+export const limitBound=(records,live,call)=>
+  cutOffBound(path.join(records,'wire',call.id),path.join(live,'home/.claude/projects'),call.session,call.prompt).bound;
+export function cutOff(code,records,live,call,bound=limitBound) {
+  if(code===0) return false;
+  if(code!==STOPPED) throw Error('Claude Code launcher exited '+code);
+  if(!bound(records,live,call)) throw Error('Claude Code stopped without a usage limit on the wire and in the transcript: '+call.id);
+  return true;
+}
 
 export async function openCue(work,sid) {
   const route='/'+randomUUID();
@@ -81,7 +92,7 @@ async function waitForBox(checkBox,delay) {
   }
 }
 
-export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall,record=openCallWire}={}) {
+export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall,record=openCallWire,bound=limitBound}={}) {
   gate?.();
   const ticket=randomUUID(),checkpoint=inside(path.join(stateRoot,'checkpoints',ticket));
   const archives=[];
@@ -98,8 +109,7 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
       onFirstCall?.();
     }
     const code=await recorded(records,call,invokeOnce,record);
-    if(code===0) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
-    if(code!==75) throw Error('Claude Code launcher exited '+code);
+    if(!cutOff(code,records,live,call,bound)) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
     const dest=inside(path.join(stateRoot,'limit-archives',ticket+'-'+i));
     snapshot(dest);
     archives.push(path.join(dest,'live'));
@@ -116,6 +126,6 @@ export async function launch(live,token,env,call,{gate,onFirstCall,dispatch=()=>
   if(!call.smoke) return retryLimited(live,call,dispatch,checkBox,{gate,onFirstCall,record});
   gate?.();
   const code=await recorded(live,call,()=>invoke(live,token,env),record);
-  if(code!==0) throw Error('Smoke launcher exited '+code);
+  if(cutOff(code,live,live,call)) throw Error('Smoke cut off by a usage limit: '+call.id);
   return [];
 }

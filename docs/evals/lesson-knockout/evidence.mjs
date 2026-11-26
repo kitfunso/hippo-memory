@@ -70,15 +70,19 @@ function replyOf(text,contentType) {
       .map(l=>l.slice(5).trimStart()).join('\n')).filter(Boolean).map(data=>{
         try { return JSON.parse(data); } catch { return {type:'unparsed'}; }
       });
-    const error=events.find(e=>e?.type==='error' || e?.type==='unparsed');
+    const error=events.find(e=>e?.type==='error' || e?.type==='unparsed'),texts=new Map();
+    for(const e of events) {
+      if(e?.type==='content_block_start' && e.content_block?.type==='text') texts.set(e.index,String(e.content_block.text ?? ''));
+      else if(e?.type==='content_block_delta' && e.delta?.type==='text_delta' && texts.has(e.index)) texts.set(e.index,texts.get(e.index)+String(e.delta.text ?? ''));
+    }
     return {sse:true,id:events.find(e=>e?.type==='message_start')?.message?.id ?? null,stop:events.some(e=>e?.type==='message_stop'),
-      error:error ? error.error?.type ?? error.type : null};
+      error:error ? error.error?.type ?? error.type : null,texts:[...texts.values()]};
   }
   try {
     const body=JSON.parse(text);
-    if(body?.type==='message') return {sse:false,id:body.id ?? null,stop:true,error:null};
-    return {sse:false,id:null,stop:false,error:body?.type==='error' ? body.error?.type ?? 'error' : null,json:body};
-  } catch { return {sse:false,id:null,stop:false,error:'unparsed'}; }
+    if(body?.type==='message') return {sse:false,id:body.id ?? null,stop:true,error:null,texts:textBlocks(body.content)};
+    return {sse:false,id:null,stop:false,error:body?.type==='error' ? body.error?.type ?? 'error' : null,json:body,texts:[]};
+  } catch { return {sse:false,id:null,stop:false,error:'unparsed',texts:[]}; }
 }
 function savedRequest(dir,q,route) {
   if(!MODEL_ROUTES.has(route)) return q.file===null ? {body:null} : {reason:'a non-model request file'};
@@ -151,6 +155,7 @@ export function wireLedger(dir) {
 const mainTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls==='main');
 const auxiliaryTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls!=='main');
 const modelBodies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.body);
+const modelReplies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.reply?.texts ?? []);
 function matched(w,inventory,call,{success}) {
   if(!w.ok || !call || inventory.subs.length) return false;
   const pairs=pairsOf(call.rows),sent=mainTurns(w),done=sent.filter(x=>x.complete).map(x=>x.requestId+'\n'+x.reply.id);
@@ -187,13 +192,42 @@ function readsDelivery(tool,work) {
   });
 }
 
-export function deliverySurfaces(body,task={}) {
-  const system=textBlocks(body.system), prompt=[], results=[], tools=new Map();
+const CONTINUED='This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.';
+const REREAD=/^<system-reminder>\nCalled the (\w+) tool with the following input: (\{[\s\S]*\})\n<\/system-reminder>$/;
+const REREAD_RESULT=/^<system-reminder>\nResult of calling the (\w+) tool:/;
+const QUOTED=/<exchanges>\n([\s\S]*)\n<\/exchanges>/;
+export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
+  .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
+function modelWords(bodies,replies) {
+  const blocks=replies.flat();
+  for(const body of bodies) for(const m of body?.messages ?? []) if(m.role==='assistant') blocks.push(...textBlocks(m.content));
+  const summaries=[...new Set(replies.flatMap(t=>[t.join('\n'),...t]).map(summaryOf).filter(Boolean))].sort((a,b)=>b.length-a.length);
+  return {blocks:blocks.map(s=>String(s).trim()).filter(Boolean),summaries};
+}
+function quotedHistory(text,task,said) {
+  const m=QUOTED.exec(text);
+  if(!m) return null;
+  const strict=[text.slice(0,m.index)+text.slice(m.index+m[0].length)],prompt=[];
+  for(const part of m[1].split(/\n\n(?=(?:User|Assistant): )/)) {
+    const q=/^(User|Assistant): (…)?([\s\S]+)$/.exec(part),words=q?.[3];
+    const from=list=>list.some(s=>q[2] ? s.includes(words) : s===words);
+    if(q?.[1]==='Assistant' && from(said.blocks)) continue;
+    if(q?.[1]==='User' && typeof task.prompt==='string' && from([task.prompt.trim()])) { prompt.push(words); continue; }
+    strict.push(part);
+  }
+  return {strict,prompt};
+}
+const callSurfaces=(bodies,replies,task)=>{ const said=modelWords(bodies,replies); return bodies.map(b=>deliverySurfaces(b,task,said)); };
+
+export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]}) {
+  const system=textBlocks(body.system), prompt=[], opening=[], results=[], tools=new Map();
   const work=task.work??root+'/active/live/work';
-  let assistant=false;
+  let assistant=false,called=null;
+  const settle=()=>{ if(called) opening.push(called.text); called=null; };
   for(const message of body.messages) {
     const content=typeof message.content==='string'?[{type:'text',text:message.content}]:message.content;
     if(message.role==='assistant') {
+      settle();
       assistant=true;
       for(const tool of content) if(tool.type==='tool_use') tools.set(tool.id,tool);
     } else if(message.role==='system') system.push(...textBlocks(content));
@@ -208,11 +242,24 @@ export function deliverySurfaces(body,task={}) {
           }
         }
       }
-      if(block.type==='text' && !assistant) prompt.push(block.text);
-      else if(block.type==='text' && /^<system-reminder>\s*UserPromptSubmit hook/i.test(block.text)) system.push(block.text);
+      if(block.type!=='text') continue;
+      const s=block.text;
+      if(assistant) { if(/^<system-reminder>\s*UserPromptSubmit hook/i.test(s)) system.push(s); continue; }
+      const reread=REREAD.exec(s),answer=REREAD_RESULT.exec(s);
+      if(answer && called?.name===answer[1]) { if(readsDelivery(called,work)) results.push(s); called=null; continue; }
+      settle();
+      let input=null;
+      if(reread) try { input=JSON.parse(reread[2]); } catch {}
+      if(input && typeof input==='object') { called={name:reread[1],input,text:s}; continue; }
+      if(s===task.prompt) { prompt.push(s); continue; }
+      if(s.includes(CONTINUED)) { const summary=said.summaries.find(x=>s.includes(x)); opening.push(summary ? s.replace(summary,'') : s); continue; }
+      const quoted=quotedHistory(s,task,said);
+      if(quoted) { opening.push(...quoted.strict); prompt.push(...quoted.prompt); continue; }
+      opening.push(s);
     }
   }
-  return {system,prompt,results};
+  settle();
+  return {system,prompt,opening,results};
 }
 
 function finalMessage(call,result,w) {
@@ -230,25 +277,25 @@ export function callComplete(dir,result,prompt,transcript,{maxTurns=false,until}
   const ended=!!call && (maxTurns && result.subtype==='error_max_turns' ? true : finalMessage(call,result,w));
   return {w,complete:ended && matched(w,inventory,call,{success:true})};
 }
-export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0]) {
+export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0],replies=[]) {
   const block=normalize('Project notes\n'+notes.map(e=>'- '+e.content).join('\n'));
   const opening=first ? deliverySurfaces(first,task) : null;
-  const hookSeen=!!opening && [...opening.system,...opening.prompt].some(s=>s!==task.prompt && hook.test(s) &&
+  const hookSeen=!!opening && [...opening.system,...opening.opening].some(s=>hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {hookSeen,targetText:targetIn(bodies.map(b=>deliverySurfaces(b,task)),lesson,task)};
+  return {hookSeen,targetText:targetIn(callSurfaces(bodies,replies,task),lesson,task)};
 }
 export function evidence(dir,result,notes,lesson,task={},transcript) {
   const {w,complete}=callComplete(dir,result,task.prompt,transcript,{maxTurns:task.maxTurns});
   const sent=mainTurns(w);
   return {requests:sent.length,sideRequests:w.exchanges.length-sent.length,auxiliaryRequests:auxiliaryTurns(w).length,
-    retries:sent.filter(x=>!x.complete).length,complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body),wireHosts:w.hosts};
+    retries:sent.filter(x=>!x.complete).length,complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body,modelReplies(w)),wireHosts:w.hosts};
 }
 
 function targetIn(surfaces,lesson,task) {
   const target=(s,allow=false)=>normalize(s).includes(normalize(lesson.rule)) ||
     (!allow && normalize(s).includes(normalize(lesson.keyPhrase)));
-  return surfaces.some(({system,prompt,results})=>
-    [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
+  return surfaces.some(({system,prompt,opening,results})=>
+    [...system,...opening,...results].some(s=>target(s)) || prompt.some(s=>target(s,!!task.keyPhraseAllowed)));
 }
 
 export function cutOffBound(dir,projects,sid,prompt) {
@@ -261,11 +308,11 @@ function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const transcript=inventory.main;
   const recordFile=path.join(operator,id+'.json'),record=fs.existsSync(recordFile)?read(recordFile):null;
   const own=record?.session===sid && record.call===id && record.promptSha256===hash(prompt) &&
-    record.apparatus===APPARATUS && record.cutOff===true;
+    record.apparatus===APPARATUS && record.stopped===true;
   const inspectable=own && bound;
   const permissions=own && !!call && permissionAudit(transcript,prompt,record.permissionDenials).ok;
   return {status:inspectable?'dispatched':'unauditable',
-    target:inspectable && targetIn(modelBodies(w).map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
+    target:inspectable && targetIn(callSurfaces(modelBodies(w),modelReplies(w),task),lesson,task),permissions};
 }
 
 export function archivedAudit(archives,id,sid,prompt,lesson,task) {

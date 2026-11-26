@@ -108,7 +108,7 @@ async function session(task,prompt,session,id,resume=false,gate) {
   const archived=archivedAudit(archives,id,session,prompt,u.lesson,{...task,work});
   if(!smoke) {
     const permissions=permissionAudit(transcript,prompt,result.permissionDenials);
-    assert(permissions.ok && result.apparatus===APPARATUS && result.cutOff===false && archived.archivedPermissions,
+    assert(permissions.ok && result.apparatus===APPARATUS && result.stopped===false && archived.archivedPermissions,
       'Session permission check failed for '+id+': '+JSON.stringify({...permissions,archivedPermissions:archived.archivedPermissions}));
   }
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');

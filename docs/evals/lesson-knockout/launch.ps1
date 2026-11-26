@@ -69,16 +69,10 @@ if (-not $p.WaitForExit(3600000)) { & taskkill /PID $p.Id /T /F | Out-Null; thro
 $p.WaitForExit()
 $result=$null
 try { $result=($out.Result.Trim() | ConvertFrom-Json) } catch { if(!$out.IsCompleted){throw} }
-$limited=(!$call.smoke -and (!$result -or $result.is_error) -and $result.subtype -notlike 'error_max*' -and
-  (($out.Result + "`n" + $err.Result) -match 'usage limit|hit your (?:[\w-]+ )*limit|limit reached|rate_limit_error|overloaded_error'))
-if(!$result -and $limited){
-  Write-CallRecord "$records/$($call.id).json" (New-CallRecord $call $bytes $p.ExitCode $null $true $null)
-  exit 75
-}
-if(!$result){throw "Claude Code returned no JSON (exit $($p.ExitCode))"}
-if ($result.session_id -ne $call.session) { throw 'Session id mismatch' }
-. "$PSScriptRoot/denials.ps1"
-$denials=Get-PermissionDenials $result
-Write-CallRecord "$records/$($call.id).json" (New-CallRecord $call $bytes $p.ExitCode $result $limited $denials)
-if ($limited) { exit 75 }
-if (($p.ExitCode -ne 0 -or $result.is_error) -and -not ($call.smoke -and $result.subtype -eq 'error_max_turns')) { throw "Claude Code stopped ($($result.subtype), exit $($p.ExitCode))" }
+if ($result -and $result.session_id -ne $call.session) { throw 'Session id mismatch' }
+$capped=$call.smoke -and $result.subtype -eq 'error_max_turns'
+$stopped=!$result -or (($p.ExitCode -ne 0 -or $result.is_error) -and !$capped)
+$denials=$null
+if ($result) { . "$PSScriptRoot/denials.ps1"; $denials=Get-PermissionDenials $result }
+Write-CallRecord "$records/$($call.id).json" (New-CallRecord $call $bytes $p.ExitCode $result $stopped $denials)
+if ($stopped) { exit 75 }

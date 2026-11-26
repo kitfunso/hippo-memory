@@ -129,14 +129,14 @@ try {
   $cut=New-CallRecord $call $promptBytes 1 $null $true $null
   if ($cut.promptSha256 -cne $digest) { throw 'Prompt digest differs from an independent SHA-256 of the UTF-8 bytes' }
   $cutJson=$cut | ConvertTo-Json -Compress -Depth 12
-  $cutWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":false,"exit":1,"apparatus":3,"cutOff":true,"permissionDenials":null}'
+  $cutWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":false,"exit":1,"apparatus":3,"stopped":true,"permissionDenials":null}'
   if ($cutJson -cne $cutWant) { throw "No-JSON record saved as $cutJson" }
   $reply='{"session_id":"11111111-1111-1111-1111-111111111111","subtype":"success","is_error":false,"num_turns":2,"usage":{"input_tokens":5},"modelUsage":{"m1":{"x":1}},"permission_denials":[]}' | ConvertFrom-Json
   $full=New-CallRecord $call $promptBytes 0 $reply $false (Get-PermissionDenials $reply)
   $fullJson=$full | ConvertTo-Json -Compress -Depth 12
-  $fullWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":true,"subtype":"success","isError":false,"turns":2,"usage":{"input_tokens":5},"models":["m1"],"exit":0,"apparatus":3,"cutOff":false,"permissionDenials":[]}'
+  $fullWant='{"session":"11111111-1111-1111-1111-111111111111","call":"apply","promptSha256":"'+$digest+'","json":true,"subtype":"success","isError":false,"turns":2,"usage":{"input_tokens":5},"models":["m1"],"exit":0,"apparatus":3,"stopped":false,"permissionDenials":[]}'
   if ($fullJson -cne $fullWant) { throw "Normal record saved as $fullJson" }
-  if ((New-CallRecord $call $promptBytes 75 $reply $true @()).cutOff -ne $true) { throw 'Cut-off flag lost' }
+  if ((New-CallRecord $call $promptBytes 75 $reply $true @()).stopped -ne $true) { throw 'Stop flag lost' }
   $recordFile=Join-Path $scratch 'record.json'
   Write-CallRecord $recordFile $cut
   $recordBytes=[IO.File]::ReadAllBytes($recordFile)
@@ -149,11 +149,12 @@ try {
   $ifs=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.IfStatementAst] },$true))
   $smokeIf=@($ifs | Where-Object { $_.Clauses[0].Item1.Extent.Text -eq '$call.smoke' -and $_.Clauses[0].Item2.Extent.Text -match 'Assert-SmokePath' -and $_.ElseClause.Extent.Text -match 'Assert-SessionPath' })
   if ($smokeIf.Count -ne 1) { throw 'launch.ps1 does not pick Assert-SmokePath for a smoke call' }
-  $cutIf=@($ifs | Where-Object { $_.Clauses[0].Item1.Extent.Text -eq '!$result -and $limited' })
-  $cutText=if ($cutIf.Count -eq 1) { $cutIf[0].Clauses[0].Item2.Extent.Text } else { '' }
-  if ($cutText -notmatch 'Write-CallRecord[\s\S]*New-CallRecord[^\r\n]*\$null \$true \$null[\s\S]*exit 75') { throw 'launch.ps1 does not record a cut-off call without JSON before exit 75' }
+  $stopIf=@($ifs | Where-Object { $_.Clauses[0].Item1.Extent.Text -eq '$stopped' -and $_.Clauses[0].Item2.Extent.Text -match '^\{\s*exit 75\s*\}$' })
+  if ($stopIf.Count -ne 1) { throw 'launch.ps1 does not exit 75 on a stopped call' }
+  if ($launch.Extent.Text -match 'usage limit|limit reached|hit your|rate_limit_error|overloaded_error') { throw 'launch.ps1 still reads limit wording' }
   $writes=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-CallRecord' },$true))
-  if ($writes.Count -ne 2) { throw 'launch.ps1 must write both call record shapes through Write-CallRecord' }
+  if ($writes.Count -ne 1) { throw 'launch.ps1 must write one call record through Write-CallRecord' }
+  if ($writes[0].Extent.StartOffset -gt $stopIf[0].Extent.StartOffset) { throw 'launch.ps1 exits before it writes the call record' }
   $named={ param($Name) @($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq $Name },$true)) }
   if ((& $named 'Get-WireEnv').Count -ne 1 -or (& $named 'Assert-WireOnly').Count -ne 1) { throw 'launch.ps1 does not take and check its wire settings once' }
   if ($launch.Extent.Text -match 'OTEL_|Get-DispatchEnv') { throw 'launch.ps1 still sets a telemetry or dispatch log setting' }

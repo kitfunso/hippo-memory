@@ -17,7 +17,7 @@ export function checkTeachReceipts(unit,freeze,u) {
     const file=join(teach,'operator',id+'.json');
     assert(fs.existsSync(file),'Missing frozen teach receipt: '+id);
     const r=read(file);
-    assert(r.session===freeze.teachId && r.call===id && r.promptSha256===hash(prompts[id]) && r.json===true && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.cutOff===false &&
+    assert(r.session===freeze.teachId && r.call===id && r.promptSha256===hash(prompts[id]) && r.json===true && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.stopped===false &&
       permissionAudit(transcript,prompts[id],r.permissionDenials).ok,'Invalid frozen teach receipt: '+id);
     const until=id==='teach' ? prompts.feedback : undefined;
     assert(callComplete(join(teach,'operator','wire',id),r,prompts[id],transcript,{until}).complete,'Unmatched frozen teach wire record: '+id);

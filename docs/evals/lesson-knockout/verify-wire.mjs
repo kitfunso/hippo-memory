@@ -20,6 +20,13 @@ const sha=text=>createHash('sha256').update(text).digest('hex');
 const wireRows=dir=>fs.readFileSync(path.join(dir,'wire.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));
 const same=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
 
+const LAUNCHER_PRIVATE=Object.freeze({HOME:'$Live/home',USERPROFILE:'$Live/home',CLAUDE_CONFIG_DIR:'$Live/home/.claude',
+  APPDATA:'$Live/home/roaming',LOCALAPPDATA:'$Live/home/local',TEMP:'$Live/home/tmp',TMP:'$Live/home/tmp',HIPPO_HOME:'$Live/home/.hippo',
+  CLAUDE_CODE_PROJECT_DIR_NAME:'unit',CLAUDE_CODE_DISABLE_AUTO_MEMORY:'0',CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1',
+  CLAUDE_CODE_GATEWAY_HINT_HEADERS:'1',DISABLE_AUTOUPDATER:'1',GIT_TERMINAL_PROMPT:'0',EVAL_SEED:'1'});
+const WIRE_KEYS=['HTTPS_PROXY','NO_PROXY','NODE_EXTRA_CA_CERTS'];
+const NETWORK=/proxy|^ANTHROPIC_|^CLAUDE_CODE_USE_|^OTEL_|^NODE_TLS|^SSL_CERT|^REQUESTS_CA|^CURL_CA/i;
+
 function launcherPrivate() {
   const text=fs.readFileSync(path.join(folder,'launch.ps1'),'utf8');
   const block=/\$private=@\{([\s\S]*?)\}\r?\n/.exec(text)?.[1];
@@ -28,33 +35,50 @@ function launcherPrivate() {
 }
 
 function childEnv(home,port,ca) {
-  const env={SystemRoot:process.env.SystemRoot,PATH:process.env.PATH,HOME:home,USERPROFILE:home,CLAUDE_CONFIG_DIR:path.join(home,'.claude'),
-    APPDATA:path.join(home,'roaming'),LOCALAPPDATA:path.join(home,'local'),TEMP:path.join(home,'tmp'),TMP:path.join(home,'tmp'),
-    HIPPO_HOME:path.join(home,'.hippo'),CLAUDE_CODE_PROJECT_DIR_NAME:'unit',CLAUDE_CODE_DISABLE_AUTO_MEMORY:'0',
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1',CLAUDE_CODE_GATEWAY_HINT_HEADERS:'1',DISABLE_AUTOUPDATER:'1',GIT_TERMINAL_PROMPT:'0',EVAL_SEED:'1',
-    HTTPS_PROXY:'http://127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:path.join(ca,'ca.pem'),
-    CLAUDE_CODE_OAUTH_TOKEN:TOKEN};
-  const missing=Object.keys(launcherPrivate()).filter(k=>!(k in env));
-  assert.deepEqual(missing,[],'The offline check lacks launcher settings: '+missing.join(', '));
-  return env;
+  const own=Object.fromEntries(Object.entries(LAUNCHER_PRIVATE).map(([k,v])=>[k,v.replace('$Live/home',home)]));
+  return {SystemRoot:process.env.SystemRoot,PATH:process.env.PATH,...own,
+    HTTPS_PROXY:'http://127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:path.join(ca,'ca.pem'),CLAUDE_CODE_OAUTH_TOKEN:TOKEN};
 }
 
-function retainedClean(base) {
+function loose(raw,encoding) {
+  try {
+    if(encoding==='gzip') return zlib.gunzipSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
+    if(encoding==='deflate') return zlib.inflateSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
+    if(encoding==='br') return zlib.brotliDecompressSync(raw,{finishFlush:zlib.constants.BROTLI_OPERATION_FLUSH});
+  } catch {}
+  return null;
+}
+export function retainedClean(base) {
   const wire=path.join(base,'wire'),files=[];
   for(const name of fs.readdirSync(wire)) {
-    const dir=path.join(wire,name),rows=wireRows(dir);
-    for(const r of rows.filter(r=>r.kind==='request' && r.file)) files.push([path.join(dir,r.file),null]);
-    for(const r of rows.filter(r=>r.kind==='response' && r.file)) files.push([path.join(dir,r.file),r.encoding]);
-    files.push([path.join(dir,'wire.jsonl'),null]);
+    const dir=path.join(wire,name),encodings=new Map(wireRows(dir).filter(r=>r.kind==='response' && r.file).map(r=>[r.file,r.encoding]));
+    for(const f of fs.readdirSync(dir,{withFileTypes:true})) if(f.isFile()) files.push([path.join(dir,f.name),encodings.get(f.name) ?? null]);
   }
   for(const [file,encoding] of files) {
-    const raw=fs.readFileSync(file);
-    let text=raw.toString('latin1');
-    if(encoding==='gzip') try { text=zlib.gunzipSync(raw).toString('latin1'); } catch {}
-    assert(!text.includes(TOKEN.slice(13)) && !text.includes('"metadata"') && !/device_id|account_uuid|user_id/.test(text),
+    const raw=fs.readFileSync(file),texts=[raw.toString('latin1')];
+    if(encoding && encoding!=='identity' && raw.length) {
+      const text=loose(raw,encoding);
+      assert(text,'A retained compressed reply does not decode: '+path.relative(base,file));
+      texts.push(text.toString('latin1'));
+    }
+    for(const text of texts) assert(!text.includes(TOKEN.slice(13)) && !text.includes('"metadata"') && !/device_id|account_uuid|user_id/.test(text),
       'A retained wire file holds the credential or identity fields: '+path.relative(base,file));
   }
   return files.length;
+}
+function checkRetainedScan(parent) {
+  const base=fs.mkdtempSync(path.join(parent,'scan-')),dir=path.join(base,'wire','cut');
+  fs.mkdirSync(dir,{recursive:true});
+  const rows=[{kind:'response',seq:1,file:'00001.response',encoding:'gzip'}].map(r=>JSON.stringify(r)).join('\n')+'\n';
+  fs.writeFileSync(path.join(dir,'wire.jsonl'),rows);
+  const cut=text=>zlib.gzipSync(text).subarray(0,-8);
+  fs.writeFileSync(path.join(dir,'00001.response'),cut('data: {"type":"text","text":"clean"}\n\n'.repeat(50)));
+  assert.equal(retainedClean(base),2,'The retained scan skipped a wire file');
+  fs.writeFileSync(path.join(dir,'00001.response'),cut('data: {"metadata":{"user_id":"x"}}\n\n'.repeat(50)));
+  assert.throws(()=>retainedClean(base),/holds the credential or identity fields/,'The scan missed identity data in an interrupted gzip reply');
+  fs.writeFileSync(path.join(dir,'00001.response'),cut('clean\n'.repeat(50)));
+  fs.writeFileSync(path.join(dir,'stray.json'),'{"metadata":{}}');
+  assert.throws(()=>retainedClean(base),/stray\.json/,'The scan missed a wire file that no row names');
 }
 
 async function openTunnel(upstream) {
@@ -77,6 +101,8 @@ function parity(o) {
 
 export async function checkWireOffline(parent) {
   fs.mkdirSync(parent,{recursive:true});
+  assert.deepEqual(launcherPrivate(),LAUNCHER_PRIVATE,'The launcher settings differ from the pinned list');
+  checkRetainedScan(parent);
   const base=fs.mkdtempSync(path.join(parent,'run-'));
   const work=path.join(base,'work'),settings=path.join(base,'settings.json');
   const fresh=name=>{ const h=path.join(base,name); for(const d of ['tmp','roaming','local','.claude']) fs.mkdirSync(path.join(h,d),{recursive:true}); return h; };
@@ -189,40 +215,74 @@ export async function checkWireOffline(parent) {
   return {cases:Object.keys(outcomes).length,requests:forwarded.length,files:retainedClean(base)};
 }
 
+const PROBE=`const fs=require('fs'),crypto=require('crypto');
+const [out,want,keys]=process.argv.slice(2),e=process.env,t=e.CLAUDE_CODE_OAUTH_TOKEN;
+fs.writeFileSync(out,JSON.stringify({settings:Object.fromEntries(keys.split(',').filter(k=>e[k]!==undefined).map(k=>[k,e[k]])),
+  network:Object.keys(e).filter(k=>${NETWORK}.test(k)).sort(),leaked:['ANTHROPIC_BASE_URL','Z0_LAUNCH_SENTINEL','Z0_WIRE_DUMMY'].filter(k=>e[k]!==undefined),
+  token:t===undefined ? 'absent' : crypto.createHash('sha256').update(t).digest('hex')===want ? 'dummy' : 'other'}));
+`;
+
 export async function checkLauncher() {
+  assert.deepEqual(launcherPrivate(),LAUNCHER_PRIVATE,'The launcher settings differ from the pinned list');
   const parent=fs.mkdtempSync(path.join(root,'verify-launch-'));
   const api=await startScriptedApi(WIRE_CA);
   try {
-    const live=path.join(parent,'live'),work=path.join(live,'work'),probe=path.join(parent,'env-probe.cjs'),seenEnv=path.join(parent,'child-env.json');
-    for(const d of ['home/tmp','home/roaming','home/local','home/.claude',
-      'home/.claude/projects/unit/memory','work']) fs.mkdirSync(path.join(live,d),{recursive:true});
-    fs.writeFileSync(probe,"require('fs').writeFileSync(process.argv[2],JSON.stringify(process.env));\n");
-    fs.writeFileSync(path.join(live,'settings.json'),JSON.stringify({hooks:{UserPromptSubmit:[{hooks:[{type:'command',
-      command:'node '+probe.replaceAll('\\','/')+' '+seenEnv.replaceAll('\\','/')}]}]},permissions:{deny:DENIED_TOOLS},sandbox:{enabled:false}}));
-    const sid=randomUUID(),prompt='Reply OK.';
-    const call={id:'probe',session:sid,smoke:true,diagnostic:true,prompt,model:pins.modelOpus,effort:pins.effort,toolchain:roster()[0].toolchain};
+    const probe=path.join(parent,'env-probe.cjs'),seenEnv=path.join(parent,'child-env.json'),keys=[...Object.keys(LAUNCHER_PRIVATE),...WIRE_KEYS];
+    fs.writeFileSync(probe,PROBE);
+    const hook={UserPromptSubmit:[{hooks:[{type:'command',command:['node',probe,seenEnv,sha(TOKEN),keys.join(',')].map(a=>a.replaceAll('\\','/')).join(' ')}]}]};
     const parentEnv={...process.env,Z0_WIRE_DUMMY:TOKEN,HTTPS_PROXY:'http://127.0.0.1:9',ANTHROPIC_BASE_URL:'http://127.0.0.1:9',Z0_LAUNCH_SENTINEL:'parent'};
     let port=null;
-    await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record:async dir=>{ const w=await openWire(dir,{ca:WIRE_CA,upstream:api.upstream}); port=w.port; return w; }});
-    const env=read(seenEnv),expected=launcherPrivate();
-    const resolved=v=>v.replaceAll('$Live',live);
-    for(const [k,v] of Object.entries(expected)) {
-      const want=resolved(v);
-      assert(k in env && (/[\\/]/.test(want) ? same(env[k],want) : env[k]===want),'The child did not get launcher setting '+k);
+    const record=async dir=>{ const w=await openWire(dir,{ca:WIRE_CA,upstream:api.upstream}); port=w.port; return w; };
+    const prepare=(name,hooks={})=>{
+      const live=path.join(parent,name);
+      for(const d of ['home/tmp','home/roaming','home/local','home/.claude/projects/unit/memory','work']) fs.mkdirSync(path.join(live,d),{recursive:true});
+      fs.writeFileSync(path.join(live,'settings.json'),JSON.stringify({hooks,permissions:{deny:DENIED_TOOLS},sandbox:{enabled:false}}));
+      return live;
+    };
+    const callOf=(prompt,extra={})=>({id:'probe',session:randomUUID(),smoke:true,diagnostic:true,prompt,model:pins.modelOpus,effort:pins.effort,
+      toolchain:roster()[0].toolchain,...extra});
+    for(const [name,call,env] of [['wrong-mode',callOf('Reply OK.',{diagnostic:false}),parentEnv],
+      ['wrong-canary',callOf('Reply OK.'),{...parentEnv,Z0_WIRE_DUMMY:'sk-ant-oat01-notacanary'}]]) {
+      const live=prepare(name,hook),before=api.seen.length;
+      await assert.rejects(launch(live,'Z0_WIRE_DUMMY',env,call,{record}),/Claude Code launcher exited 1/,'The launcher did not refuse the '+name+' call');
+      assert(api.seen.length===before && !fs.existsSync(seenEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
+        'The launcher started Claude Code for the '+name+' call');
     }
-    assert.deepEqual([env.HTTPS_PROXY,env.NO_PROXY,env.NODE_EXTRA_CA_CERTS],['http://127.0.0.1:'+port,'127.0.0.1,localhost',WIRE_CA+'/ca.pem'],
-      'The child did not get the wire settings');
-    assert(!('ANTHROPIC_BASE_URL' in env) && !('Z0_LAUNCH_SENTINEL' in env) && !('Z0_WIRE_DUMMY' in env),'The parent environment reached the child');
-    const network=Object.keys(env).filter(k=>/proxy|^ANTHROPIC_|^CLAUDE_CODE_USE_|^OTEL_|^NODE_TLS|^SSL_CERT|^REQUESTS_CA|^CURL_CA/i.test(k));
-    assert.deepEqual(network.sort(),['HTTPS_PROXY','NO_PROXY'],'The child got other network settings: '+network.join(', '));
-    assert(!('CLAUDE_CODE_OAUTH_TOKEN' in env) || env.CLAUDE_CODE_OAUTH_TOKEN===TOKEN,'The child got another credential');
+    const live=prepare('live',hook),call=callOf('Reply OK.');
+    await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record});
+    assert(!fs.readFileSync(seenEnv,'utf8').includes(TOKEN.slice(13)),'The probe wrote the credential to disk');
+    const seen=read(seenEnv),want=Object.fromEntries(Object.entries(LAUNCHER_PRIVATE).map(([k,v])=>[k,v.replaceAll('$Live',live)]));
+    for(const [k,v] of Object.entries(want))
+      assert(k in seen.settings && (/[\\/]/.test(v) ? same(seen.settings[k],v) : seen.settings[k]===v),'The child did not get launcher setting '+k);
+    assert.deepEqual(WIRE_KEYS.map(k=>seen.settings[k]),['http://127.0.0.1:'+port,'127.0.0.1,localhost',WIRE_CA+'/ca.pem'],'The child did not get the wire settings');
+    assert.deepEqual(seen.leaked,[],'The parent environment reached the child');
+    assert.deepEqual(seen.network,['HTTPS_PROXY','NO_PROXY'],'The child got other network settings: '+seen.network.join(', '));
+    assert(['absent','dummy'].includes(seen.token),'The child got another credential');
     const generate=api.seen.filter(s=>s.path.startsWith('/v1/messages'));
     assert(generate.length===1 && generate[0].requestClass==='main' && generate[0].authSha256===sha('Bearer '+TOKEN),
       'The launched call did not reach the upstream with the dummy credential and a class header');
-    const result=evidence(path.join(live,'wire','probe'),read(path.join(live,'probe.json')),[],{rule:'none',keyPhrase:'none'},{prompt},
-      path.join(live,'home/.claude/projects/unit',sid+'.jsonl'));
+    const result=evidence(path.join(live,'wire','probe'),read(path.join(live,'probe.json')),[],{rule:'none',keyPhrase:'none'},{prompt:call.prompt},
+      path.join(live,'home/.claude/projects/unit',call.session+'.jsonl'));
     assert(result.complete && result.requests===1,'The launched call did not match its wire record');
-    return {requests:api.seen.length,keys:Object.keys(expected).length};
+    const decided=async (name,prompt)=>{
+      const live=prepare(name),call=callOf(prompt);
+      let error=null;
+      try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record}); } catch(e) { error=e.message; }
+      const main=wireLedger(path.join(live,'wire','probe')).exchanges.filter(x=>x.route==='generate' && x.cls==='main');
+      return {error,stopped:read(path.join(live,'probe.json')).stopped,limits:main.map(x=>x.limit)};
+    };
+    const busy=await decided('busy','CASE:busy Reply done.');
+    assert.deepEqual(busy,{error:null,stopped:false,limits:['rate_limit_error',null]},'A retried 429 was not a success');
+    const limit=await decided('limit','CASE:limit Reply done.');
+    assert(limit.stopped && /Smoke cut off by a usage limit/.test(limit.error),'A 429 usage limit was not a cut-off: '+limit.error);
+    const wording=await decided('wording','CASE:wording Reply done.');
+    assert(wording.stopped && /stopped without a usage limit/.test(wording.error),'A 400 with limit wording was taken as a cut-off: '+wording.error);
+    const exhaust=await decided('exhaust','CASE:exhaust Reply done.');
+    assert(exhaust.stopped && /Smoke cut off by a usage limit/.test(exhaust.error) && exhaust.limits.length>2 && exhaust.limits.every(l=>l==='overloaded_error'),
+      'Exhausted 529 retries were not a cut-off: '+exhaust.error);
+    const capped=await decided('capped','CASE:tool Read a.txt and reply.');
+    assert.deepEqual([capped.error,capped.stopped],[null,false],'A smoke that stopped at its turn cap was taken as a stop: '+capped.error);
+    return {requests:api.seen.length,keys:Object.keys(want).length,decisions:5};
   } finally {
     await api.close();
     fs.rmSync(parent,{recursive:true,force:true});
