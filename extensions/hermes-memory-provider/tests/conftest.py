@@ -3,11 +3,11 @@ from __future__ import annotations
 import atexit
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
+from subprocess import Popen
 from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
@@ -60,17 +60,20 @@ def fake(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeHippo:
 
 
 @pytest.fixture
-def started(monkeypatch: pytest.MonkeyPatch) -> list[SimpleNamespace]:
+def started(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[SimpleNamespace]]:
     seen: list[SimpleNamespace] = []
-    real = subprocess.Popen
+    real = hippo.Popen
 
-    def spy(*args: Any, **kwargs: Any) -> subprocess.Popen:
+    def spy(*args: Any, **kwargs: Any) -> Popen:
         proc = real(*args, **kwargs)
         seen.append(SimpleNamespace(proc=proc, argv=args[0], kwargs=kwargs))
         return proc
 
-    monkeypatch.setattr(subprocess, "Popen", spy)
-    return seen
+    monkeypatch.setattr(hippo, "Popen", spy)
+    yield seen
+    for entry in seen:
+        if entry.proc.poll() is None:
+            entry.proc.kill()
 
 
 @pytest.fixture

@@ -96,7 +96,7 @@ def test_each_verb_stops_at_its_time_limit(verb, fake, monkeypatch):
 
 
 @pytest.mark.parametrize("name", ["hippo.cmd.", "hippo.cmd. .", "HIPPO.CMD", "hippo.bat", "hippo.com",
-                                  "hippo.cmd::$DATA", "hippo"])
+                                  "hippo.cmd::$DATA", "hippo.cmd:x.exe", "hippo.cmd:.exe", "hippo"])
 def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
     monkeypatch.setenv("HIPPO_BIN", str(tmp_path / name))
     monkeypatch.setattr(sys, "platform", "win32")
@@ -107,12 +107,13 @@ def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
     assert started == []
 
 
-@pytest.mark.parametrize("name", ["hippo.js", "hippo.exe", "HIPPO.EXE."])
-def test_windows_allows_a_js_or_an_exe(name, tmp_path, monkeypatch):
+@pytest.mark.parametrize(("name", "under_node"), [("hippo.js", True), ("hippo.js.", True), ("HIPPO.JS. .", True),
+                                                  ("hippo.exe", False), ("HIPPO.EXE.", False)])
+def test_windows_allows_a_js_or_an_exe(name, under_node, tmp_path, monkeypatch):
     path = str(tmp_path / name)
     monkeypatch.setenv("HIPPO_BIN", path)
     monkeypatch.setattr(sys, "platform", "win32")
-    assert hippo.launcher() == (["node", path] if name.endswith(".js") else [path])
+    assert hippo.launcher() == (["node", path] if under_node else [path])
 
 
 @pytest.mark.parametrize(("found", "available"), [("C:\\bin\\hippo.cmd.", False), ("C:\\bin\\HIPPO.CMD", False),
@@ -122,6 +123,14 @@ def test_windows_judges_a_path_hit_like_a_set_bin(found, available, tmp_path, mo
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(hippo.shutil, "which", lambda name: found)
     assert hippo.HippoProvider().is_available() is available
+
+
+def test_the_spy_records_the_plugin_launches_and_no_other_process(fake, started):
+    with subprocess.Popen([sys.executable, "-c", "pass"], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as other:
+        other.communicate()
+    assert started == []
+    assert hippo.run_hippo("recall", [], text="x") is not None
+    assert len(started) == 1 and "--global" in started[0].argv
 
 
 def test_a_js_bin_runs_under_node(tmp_path, monkeypatch):

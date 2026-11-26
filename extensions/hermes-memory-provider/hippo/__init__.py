@@ -16,6 +16,7 @@ import threading
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from pathlib import Path
+from subprocess import Popen
 from types import SimpleNamespace
 from typing import Any, Callable, Optional
 
@@ -96,13 +97,20 @@ def capture_deadline_s() -> float:
         watchdog = EXIT_WATCHDOG_DEFAULT_S
     if not 0 < watchdog < math.inf:
         return NO_WATCHDOG_DEADLINE_S
-    return max(1.0, watchdog - HERMES_PRE_SHUTDOWN_S - SHUTDOWN_MARGIN_S)
+    return min(max(1.0, watchdog - HERMES_PRE_SHUTDOWN_S - SHUTDOWN_MARGIN_S), threading.TIMEOUT_MAX)
+
+
+def _launcher_name(path: str) -> str:
+    if sys.platform == "win32":
+        return ntpath.basename(path).rstrip(" .").lower()
+    return path.lower()
 
 
 def _launcher_allowed(path: str) -> bool:
     if sys.platform != "win32":
         return True
-    return ntpath.basename(path).rstrip(" .").lower().endswith((".js", ".exe"))
+    name = _launcher_name(path)
+    return ":" not in name and name.endswith((".js", ".exe"))
 
 
 def launcher() -> list[str]:
@@ -112,7 +120,7 @@ def launcher() -> list[str]:
     if override:
         if not _launcher_allowed(override):
             raise ValueError("HIPPO_BIN must name hippo.js or a hippo .exe on Windows")
-        return [node, override] if override.lower().endswith(".js") else [override]
+        return [node, override] if _launcher_name(override).endswith(".js") else [override]
     if rec and Path(rec["script"]).exists():
         return [node, rec["script"]]
     return ["hippo"]
@@ -139,7 +147,7 @@ def run_hippo(verb: str, args: list[str], text: Optional[str] = None, stdin: Opt
     if text is not None:
         argv += ["--", text]
     try:
-        proc = subprocess.Popen(
+        proc = Popen(
             argv, cwd=str(Path.home()),
             stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace",

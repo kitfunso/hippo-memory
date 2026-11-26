@@ -16,11 +16,16 @@ from hippo_cases import PLUGIN_ROOT, capture_names, recall_reply, session, trans
 
 HERMES_FLUSH_PENDING_S = 10
 STUCK_GUARD_S = 30
+EXIT_RUN_GUARD_S = 60
+CAPTURE_TIMEOUT_S = 300
+CAPTURE_SLEEP_S = 600
+assert STUCK_GUARD_S < EXIT_RUN_GUARD_S < CAPTURE_TIMEOUT_S < CAPTURE_SLEEP_S
 
 EXIT_SCRIPT = """
 import logging, sys, time
 logging.basicConfig(level=logging.WARNING)
 import hippo
+hippo.TIMEOUTS["capture"] = int(sys.argv[3])
 provider = hippo.HippoProvider()
 provider.initialize("s1", platform="cli", hermes_home=sys.argv[1])
 provider.on_session_end([{"role": "user", "content": "first ask"}])
@@ -115,12 +120,22 @@ def test_the_capture_deadline_ends_before_the_hermes_exit_watchdog(watchdog, mon
     assert spent <= watchdog
 
 
+@pytest.mark.parametrize("watchdog", ["1e7", "1e12", "1e300"])
+def test_a_huge_exit_watchdog_never_gives_a_deadline_the_os_refuses(watchdog, monkeypatch):
+    monkeypatch.setenv("HERMES_EXIT_WATCHDOG_S", watchdog)
+    deadline = hippo.capture_deadline_s()
+    held_back = hippo.HERMES_PRE_SHUTDOWN_S + hippo.SHUTDOWN_MARGIN_S
+    assert deadline == min(float(watchdog) - held_back, threading.TIMEOUT_MAX)
+    assert threading.Lock().acquire(timeout=deadline)
+
+
 def test_the_pre_shutdown_allowance_covers_the_hermes_flush_and_drain():
     assert hippo.HERMES_PRE_SHUTDOWN_S >= HERMES_FLUSH_PENDING_S + _SYNC_DRAIN_TIMEOUT_S
 
 
 def test_shutdown_stops_a_stuck_capture_and_drops_the_queue(fake, start, started, submitted, monkeypatch, caplog):
     monkeypatch.setenv("HERMES_EXIT_WATCHDOG_S", "19")
+    monkeypatch.setitem(hippo.TIMEOUTS, "capture", CAPTURE_TIMEOUT_S)
     waits = []
     real_wait = hippo.wait
 
@@ -129,7 +144,7 @@ def test_shutdown_stops_a_stuck_capture_and_drops_the_queue(fake, start, started
         return real_wait(futures, timeout=timeout)
 
     monkeypatch.setattr(hippo, "wait", recording_wait)
-    fake.answer("capture", sleep=60)
+    fake.answer("capture", sleep=CAPTURE_SLEEP_S)
     provider = start()
     provider.on_session_end(session("first ask"))
     wait_for(lambda: len(fake.calls("capture")) == 1)
@@ -149,6 +164,7 @@ def test_shutdown_stops_a_stuck_capture_and_drops_the_queue(fake, start, started
 def test_shutdown_counts_a_capture_that_reaches_its_process_after_the_deadline(
         fake, start, started, submitted, monkeypatch, caplog):
     monkeypatch.setenv("HERMES_EXIT_WATCHDOG_S", "19")
+    monkeypatch.setitem(hippo.TIMEOUTS, "capture", CAPTURE_TIMEOUT_S)
     entered, release = threading.Event(), threading.Event()
     real_write = hippo.write_chat_lines
 
@@ -158,7 +174,7 @@ def test_shutdown_counts_a_capture_that_reaches_its_process_after_the_deadline(
         real_write(lines, path)
 
     monkeypatch.setattr(hippo, "write_chat_lines", held_write)
-    fake.answer("capture", sleep=60)
+    fake.answer("capture", sleep=CAPTURE_SLEEP_S)
     provider = start()
     provider.on_session_end(session("first ask"))
     assert entered.wait(timeout=STUCK_GUARD_S)
@@ -185,10 +201,10 @@ def test_a_capture_job_that_crashes_is_logged(fake, start, monkeypatch, caplog):
 
 
 def test_exit_without_shutdown_still_runs_the_deadline(fake, env):
-    fake.answer("capture", sleep=60)
+    fake.answer("capture", sleep=CAPTURE_SLEEP_S)
     path = os.pathsep.join([str(PLUGIN_ROOT), os.environ.get("PYTHONPATH", "")])
-    done = subprocess.run([sys.executable, "-c", EXIT_SCRIPT, str(env.hermes_home), str(fake.log)],
-                          capture_output=True, text=True, timeout=60,
+    args = [sys.executable, "-c", EXIT_SCRIPT, str(env.hermes_home), str(fake.log), str(CAPTURE_TIMEOUT_S)]
+    done = subprocess.run(args, capture_output=True, text=True, timeout=EXIT_RUN_GUARD_S,
                           env={**os.environ, "PYTHONPATH": path, "HERMES_EXIT_WATCHDOG_S": "20"})
     assert done.returncode == 0, done.stderr
     assert "stopped 1 running and dropped 1 queued" in done.stderr
