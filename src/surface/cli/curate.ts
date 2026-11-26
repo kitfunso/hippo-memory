@@ -44,7 +44,6 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
     fail('Specify --good or --bad');
   }
 
-  // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
   const ctx = cliApiContext(root, tenantId);
   const ids = outcomeIds(flags);
 

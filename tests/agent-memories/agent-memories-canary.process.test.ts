@@ -110,7 +110,6 @@ const openclawTree = (workspace: string, label: string): void =>
 const hermesTree = (hermesHome: string, label: string): void =>
   plain(join(hermesHome, 'memories', 'MEMORY.md'), `CANARY ${label} hermes memory.\n`);
 
-/** Canaries at every tool's home default and at every variable's folder; returns the variables. */
 function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessEnv {
   const home = join(root, 'home');
   const env = (name: string): string => join(root, 'env', name);

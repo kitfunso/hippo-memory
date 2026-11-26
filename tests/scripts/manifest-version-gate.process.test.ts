@@ -26,7 +26,6 @@ interface LockFixture {
   version?: string;
 }
 
-/** A minimal repo the gate accepts: every manifest it reads, all at `version`. */
 function makeRepo(version: string, overrides: Overrides = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'hippo-vgate-'));
   mkdirSync(join(root, 'extensions', 'openclaw-plugin'), { recursive: true });
@@ -206,7 +205,6 @@ describe('check-manifest-versions.mjs and the Hermes plugin.yaml', () => {
 
 describe('sync-version.mjs', () => {
   it('sets every site `npm version` leaves behind, so the gate passes', () => {
-    // npm version has already moved package.json and both lockfile fields to 2.1.0.
     const root = makeRepo('2.0.0', { lockVersion: '2.1.0', lockRootVersion: '2.1.0' });
     try {
       writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'fixture', version: '2.1.0' }));

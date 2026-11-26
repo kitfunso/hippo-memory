@@ -374,7 +374,6 @@ export async function handleContext({
   args,
   flags,
 }: CommandContext): Promise<void> {
-  // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
   const storeRoot = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(root);

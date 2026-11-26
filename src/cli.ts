@@ -61,8 +61,6 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its own branch here instead of
-  // the swallow-avoidance short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {

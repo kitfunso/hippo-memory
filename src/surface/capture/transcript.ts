@@ -138,7 +138,6 @@ export function collectSessionTurns(
   let scriptedCodex = false;
 
   for (const line of lines) {
-    // A torn or partial transcript line carries no turn.
     const entry: unknown = tryParseJson(line);
     if (!isObjectLike(entry)) continue;
     if (!('type' in entry)) {

@@ -29,42 +29,30 @@ const AGENT_HOME_KEYS = [
 ];
 const SCRUBBED_ENV_KEYS = ENV_SCRUBBED_IN_TESTS;
 
-// Runs at module scope on purpose: the process.env writes must land before the store guard loads or a worker spawns,
-// and vitest evaluates this file once per project.
 function isolateTestEnvironment() {
-  // Scratch dirs a test forgets to delete land in this run folder, which the guard's teardown removes.
   process.env.HIPPO_TEST_REAL_TMP ??= tmpdir();
   const runTmp = mkdtempSync(join(tmpdir(), 'hippo-test-tmp-'));
   process.env.HIPPO_TEST_TMP_RUN = runTmp;
   for (const k of TMP_KEYS) process.env[k] = runTmp;
 
-  // The developer's own hooks write the real ~/.hippo mid-run, so every process resolves this dir.
-  // HIPPO_TEST_TMP_HOME marks it so the guard's teardown removes exactly it.
   const isolatedHippoHome = mkdtempSync(join(tmpdir(), 'hippo-test-home-'));
   process.env.HIPPO_HOME = isolatedHippoHome;
   process.env.HIPPO_TEST_TMP_HOME = isolatedHippoHome;
-  // Fake the home folder too, or `hippo init` imports the developer's ~/.claude memories into test stores.
   process.env.HIPPO_TEST_REAL_HOME ??= homedir();
   const isolatedUserHome = mkdtempSync(join(tmpdir(), 'hippo-test-userhome-'));
   process.env.HIPPO_TEST_TMP_USERHOME = isolatedUserHome;
   process.env.HOME = isolatedUserHome;
   process.env.USERPROFILE = isolatedUserHome;
-  // Agent memory folders the import finds through the environment rather than the home folder (Copilot's VS Code data, and each tool's override).
   const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
   process.env.APPDATA = isolatedAppData;
   const isolatedLocalAppData = join(isolatedUserHome, 'AppData', 'Local');
   process.env.LOCALAPPDATA = isolatedLocalAppData;
   for (const k of AGENT_HOME_KEYS) delete process.env[k];
   delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
-  // This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
   delete process.env.CLAUDE_CODE_SESSION_ID;
-  // A shell that runs hippo read-only would make every test's store refuse its writes.
   delete process.env.HIPPO_READ_ONLY;
-  // check-test-env.mjs fails a secret, endpoint or path that src/base/util/env.ts reads and this list lacks.
   for (const k of SCRUBBED_ENV_KEYS) delete process.env[k];
-  // No test may reach the real schtasks or crontab, whatever flags it passes; a test of the schedule clears this and fakes the scheduler.
   process.env.HIPPO_SKIP_SCHEDULE = '1';
-  // No test may run a real `npm install -g`; a test of the embedder install clears this and fakes npm.
   process.env.HIPPO_SKIP_EMBEDDER_INSTALL = '1';
 
   return { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData, isolatedLocalAppData };
