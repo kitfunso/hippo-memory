@@ -226,6 +226,33 @@ describe.each(OUTPUT_FORMS)('hippo hook output with $name', (host) => {
     expect(readText(file)).toBe(own);
   });
 
+  it.each([
+    ['another server name', 'my-hippo'],
+    ['the hippo key', 'hippo'],
+  ])('warns and leaves the file unchanged when an npx entry mentions hippo-memory under %s', (_label, key) => {
+    const m = machine();
+    const file = fileOf(m, host);
+    presentDirs(m, host);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const own =
+      host.key === null
+        ? `[mcp_servers.${key}]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n`
+        : JSON.stringify({ [host.key]: { [key]: { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } } });
+    fs.writeFileSync(file, own);
+    const installLine = `A server named "${key}" in ${file} may already run hippo; the file is left as it is`;
+    const removeLine = `Left "${key}" in ${file}: it may run hippo via npx, so remove it by hand if you want it gone`;
+
+    const init = hippo(m, 'init', ...INIT_FLAGS);
+    expect(init.stdout).toContain(installLine);
+    const install = hippo(m, 'hook', 'install', host.name);
+    expect(install.stdout).toContain(installLine);
+    const setup = hippo(m, 'setup', ...FLAGS);
+    expect(setup.stdout).toContain(installLine);
+    const uninstall = hippo(m, 'hook', 'uninstall', host.name);
+    expect(uninstall.stdout).toContain(removeLine);
+    expect(readText(file)).toBe(own);
+  });
+
   it('leaves a file it cannot read unchanged and names the entry to add if there is no hippo server', () => {
     const m = machine();
     const file = fileOf(m, host);

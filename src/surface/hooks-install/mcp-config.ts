@@ -68,7 +68,7 @@ export function removeMcpServer(file: string, host: McpConfigHost): McpRemoveSta
   return status;
 }
 
-export function mcpStep<S extends string>(step: () => S): S | McpFailure {
+export function mcpStep<S>(step: () => S): S | McpFailure {
   try {
     return step();
   } catch (err) {

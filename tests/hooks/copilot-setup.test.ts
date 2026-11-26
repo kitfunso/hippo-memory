@@ -494,6 +494,36 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(read(user.mcp)).toBe(text);
   });
 
+  it.each([
+    ['another server name', 'my-hippo'],
+    ['the hippo key', 'hippo'],
+  ])(
+    'reports maybeHippo and leaves Copilot CLI and VS Code MCP files untouched when npx mentions hippo-memory under %s',
+    (_label, key) => {
+      const user = vscodeUser();
+      const cliText = JSON.stringify({
+        mcpServers: { [key]: { type: 'local', command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } },
+      });
+      const vscodeText = JSON.stringify({
+        servers: { [key]: { type: 'stdio', command: 'npx', args: ['-p', 'hippo-memory@3.16.0', 'hippo', 'mcp'] } },
+      });
+      writeFile(files.mcp, cliText);
+      writeFile(user.mcp, vscodeText);
+
+      const installed = installCopilot();
+      expect(installed.mcp).toEqual({ maybeHippo: key });
+      expect(installed.vscode[0].mcp).toEqual({ maybeHippo: key });
+      expect(read(files.mcp)).toBe(cliText);
+      expect(read(user.mcp)).toBe(vscodeText);
+
+      const removed = uninstallCopilot();
+      expect(removed.mcp).toEqual({ maybeHippo: key });
+      expect(removed.vscode[0].mcp).toEqual({ maybeHippo: key });
+      expect(read(files.mcp)).toBe(cliText);
+      expect(read(user.mcp)).toBe(vscodeText);
+    },
+  );
+
   it('with only VS Code writes the hooks and the VS Code files but neither Copilot CLI file, on every run', () => {
     fs.rmSync(copilotHome, { recursive: true });
     const user = vscodeUser();

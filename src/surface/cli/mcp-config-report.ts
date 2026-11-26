@@ -6,10 +6,12 @@ import { grokTableLines } from '../hooks-install/rules/grok-build.js';
 import {
   hippoCommand,
   isMcpFailure,
+  isMcpMaybeHippo,
   mcpServerSnippet,
   type McpConfigFormat,
   type McpConfigRow,
   type McpFailure,
+  type McpMaybeHippo,
   type McpMergeStatus,
   type McpRemoveStatus,
 } from '../hooks-install/rules/mcp-config.js';
@@ -74,7 +76,7 @@ const INSTALL_LINES = {
     `WARNING: ${file} was left unchanged: it ${invalidReason(target.format)}. ` +
       `Then run \`hippo hook install ${target.name}\``,
   ],
-} as const satisfies Record<McpMergeStatus, Lines>;
+} as const satisfies Record<Exclude<McpMergeStatus, McpMaybeHippo>, Lines>;
 
 const REMOVE_BY_HAND = 'remove the "hippo" server by hand if hippo added it';
 
@@ -89,7 +91,7 @@ const REMOVE_LINES = {
   unreadable: (file, target) => [
     `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged; ${REMOVE_BY_HAND}`,
   ],
-} as const satisfies Record<McpRemoveStatus, Lines>;
+} as const satisfies Record<Exclude<McpRemoveStatus, McpMaybeHippo>, Lines>;
 
 export function mcpInstallLines(
   file: string,
@@ -97,9 +99,16 @@ export function mcpInstallLines(
   target: McpReportTarget,
   paste: McpPaste,
 ): string[] {
-  if (!isMcpFailure(status)) return INSTALL_LINES[status](file, target, paste);
-  const fix = snippetLines(target.format, 'add');
-  return [mcpFailureLine(file, status, fix[0]), ...fix.slice(1)];
+  if (isMcpFailure(status)) {
+    const fix = snippetLines(target.format, 'add');
+    return [mcpFailureLine(file, status, fix[0]), ...fix.slice(1)];
+  }
+  if (isMcpMaybeHippo(status)) {
+    return [
+      `A server named ${JSON.stringify(status.maybeHippo)} in ${file} may already run hippo; the file is left as it is`,
+    ];
+  }
+  return INSTALL_LINES[status](file, target, paste);
 }
 
 export function mcpRemoveLines(
@@ -108,6 +117,11 @@ export function mcpRemoveLines(
   target: McpReportTarget,
 ): string[] {
   if (isMcpFailure(status)) return [mcpFailureLine(file, status, REMOVE_BY_HAND)];
+  if (isMcpMaybeHippo(status)) {
+    return [
+      `Left ${JSON.stringify(status.maybeHippo)} in ${file}: it may run hippo via npx, so remove it by hand if you want it gone`,
+    ];
+  }
   return REMOVE_LINES[status](file, target);
 }
 

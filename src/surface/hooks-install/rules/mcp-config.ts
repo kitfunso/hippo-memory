@@ -7,7 +7,6 @@ import {
   isJsonString,
   type JsonObject,
 } from '../../../base/util/json.js';
-import { NPX_NOT_RUN, NPX_SHORTHANDS, NPX_SWITCHES, NPX_VALUED } from './npx-options.js';
 
 const MCP_KEY = 'hippo';
 const HIPPO_PACKAGE = 'hippo-memory';
@@ -66,74 +65,31 @@ function commandName(command: string): string {
   return base.toLowerCase().replace(/\.(?:cmd|exe|ps1)$/, '');
 }
 
-const isHippoPackage = (arg: string): boolean =>
-  arg === HIPPO_PACKAGE || arg.startsWith(`${HIPPO_PACKAGE}@`);
-
-interface NpxWalk {
-  readonly packages: readonly string[];
-  readonly rest: readonly string[];
-}
-
-interface NpxOption {
-  readonly key: string;
-  readonly inline: string | undefined;
-}
-
-const bareName = (flag: string): string => flag.replace(/^-+/, '');
-
-function readOption(option: string): NpxOption {
-  const equals = option.indexOf('=');
-  const name = bareName(equals === -1 ? option : option.slice(0, equals));
-  const given = equals === -1 ? undefined : option.slice(equals + 1);
-  const expansion = NPX_SHORTHANDS.get(name);
-  if (expansion === undefined) return { key: name, inline: given };
-  return { key: bareName(expansion[0]), inline: given ?? expansion[1] };
-}
-
-const valueAfter = (next: string | undefined): string | null =>
-  next !== undefined && !next.startsWith('-') ? next : null;
-
-const takesNoValue = (key: string, inline: string | undefined): boolean =>
-  inline !== undefined || key.startsWith('no-') || NPX_SWITCHES.has(key);
-
-function walkNpx(args: readonly string[]): NpxWalk | null {
-  const packages: string[] = [];
-  let at = 0;
-  while (at < args.length && args[at].startsWith('-')) {
-    const option = args[at];
-    at += 1;
-    if (option === '--') break;
-    const { key, inline } = readOption(option);
-    if (NPX_NOT_RUN.has(key)) return null;
-    const isPackage = key === 'package';
-    if (!isPackage && takesNoValue(key, inline)) continue;
-    if (!isPackage && !NPX_VALUED.has(key)) return null;
-    const value = inline ?? valueAfter(args[at]);
-    if (value === null) return null;
-    if (inline === undefined) at += 1;
-    if (isPackage) packages.push(value);
-  }
-  return { packages, rest: args.slice(at) };
-}
-
-function npxRunsHippoMcp(args: readonly string[]): boolean {
-  const walk = walkNpx(args);
-  if (walk === null || walk.rest.length !== 2 || walk.rest[1] !== 'mcp') return false;
-  if (walk.packages.length === 0) return isHippoPackage(walk.rest[0]);
-  return walk.rest[0] === 'hippo' && walk.packages.some(isHippoPackage);
-}
-
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {
-  const name = commandName(command);
-  if (name === 'hippo') return args.length === 1 && args[0] === 'mcp';
-  return name === 'npx' && npxRunsHippoMcp(args);
+  return commandName(command) === 'hippo' && args.length === 1 && args[0] === 'mcp';
+}
+
+export function npxMentionsHippo(command: string, args: readonly string[]): boolean {
+  return commandName(command) === 'npx' && args.some((arg) => arg.includes(HIPPO_PACKAGE));
+}
+
+function entryCommandAndArgs(
+  entry: JsonValue | undefined,
+): { readonly command: string; readonly args: readonly string[] } | null {
+  if (!isJsonObjectLiteral(entry)) return null;
+  const { command, args } = entry;
+  if (!isJsonString(command) || !Array.isArray(args) || !args.every(isJsonString)) return null;
+  return { command, args };
 }
 
 function entryRunsHippoMcp(entry: JsonValue | undefined): boolean {
-  if (!isJsonObjectLiteral(entry)) return false;
-  const { command, args } = entry;
-  if (!isJsonString(command) || !Array.isArray(args)) return false;
-  return args.every(isJsonString) && runsHippoMcp(command, args);
+  const pair = entryCommandAndArgs(entry);
+  return pair !== null && runsHippoMcp(pair.command, pair.args);
+}
+
+function entryMayRunHippo(entry: JsonValue | undefined): boolean {
+  const pair = entryCommandAndArgs(entry);
+  return pair !== null && npxMentionsHippo(pair.command, pair.args);
 }
 
 export function mcpServerSnippet(host: McpConfigHost): string {
@@ -152,7 +108,18 @@ export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig |
   return isJsonObjectLiteral(servers) ? { config, servers } : null;
 }
 
-export type McpMergeStatus = 'added' | 'present' | 'kept' | 'user-owned' | 'unreadable' | 'invalid';
+export interface McpMaybeHippo {
+  readonly maybeHippo: string;
+}
+
+export type McpMergeStatus =
+  | 'added'
+  | 'present'
+  | 'kept'
+  | 'user-owned'
+  | 'unreadable'
+  | 'invalid'
+  | McpMaybeHippo;
 
 export function addHippoServer(
   read: McpConfig,
@@ -161,14 +128,24 @@ export function addHippoServer(
   const existing = read.servers[MCP_KEY];
   if (existing !== undefined) {
     if (isHipposServer(existing, host)) return 'present';
-    return entryRunsHippoMcp(existing) ? 'kept' : 'user-owned';
+    if (entryRunsHippoMcp(existing)) return 'kept';
+    if (entryMayRunHippo(existing)) return { maybeHippo: MCP_KEY };
+    return 'user-owned';
   }
   if (Object.values(read.servers).some(entryRunsHippoMcp)) return 'kept';
+  const maybe = Object.entries(read.servers).find(([, entry]) => entryMayRunHippo(entry));
+  if (maybe !== undefined) return { maybeHippo: maybe[0] };
   read.servers[MCP_KEY] = host.server();
   return 'added';
 }
 
-export type McpRemoveStatus = 'removed' | 'absent' | 'kept' | 'user-owned' | 'unreadable';
+export type McpRemoveStatus =
+  | 'removed'
+  | 'absent'
+  | 'kept'
+  | 'user-owned'
+  | 'unreadable'
+  | McpMaybeHippo;
 
 export function removeHippoServer(
   read: McpConfig,
@@ -176,9 +153,14 @@ export function removeHippoServer(
 ): Exclude<McpRemoveStatus, 'unreadable'> {
   const existing = read.servers[MCP_KEY];
   if (existing === undefined) {
-    return Object.values(read.servers).some(entryRunsHippoMcp) ? 'kept' : 'absent';
+    if (Object.values(read.servers).some(entryRunsHippoMcp)) return 'kept';
+    const maybe = Object.entries(read.servers).find(([, entry]) => entryMayRunHippo(entry));
+    return maybe !== undefined ? { maybeHippo: maybe[0] } : 'absent';
   }
-  if (!isHipposServer(existing, host)) return entryRunsHippoMcp(existing) ? 'kept' : 'user-owned';
+  if (!isHipposServer(existing, host)) {
+    if (entryRunsHippoMcp(existing)) return 'kept';
+    return entryMayRunHippo(existing) ? { maybeHippo: MCP_KEY } : 'user-owned';
+  }
   delete read.servers[MCP_KEY];
   if (Object.keys(read.servers).length === 0) delete read.config[host.key];
   return 'removed';
@@ -210,8 +192,14 @@ export interface McpFailure {
   readonly failed: string;
 }
 
-export function isMcpFailure(status: string | McpFailure): status is McpFailure {
-  return typeof status !== 'string';
+export function isMcpFailure(status: McpMergeStatus | McpRemoveStatus | McpFailure): status is McpFailure {
+  return typeof status === 'object' && status !== null && 'failed' in status;
+}
+
+export function isMcpMaybeHippo(
+  status: McpMergeStatus | McpRemoveStatus | McpFailure,
+): status is McpMaybeHippo {
+  return typeof status === 'object' && status !== null && 'maybeHippo' in status;
 }
 
 export type McpConfigFormat =

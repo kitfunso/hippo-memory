@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import { runsHippoMcp } from './mcp-config.js';
+import { npxMentionsHippo, runsHippoMcp, type McpMaybeHippo } from './mcp-config.js';
 import {
   isTomlTable,
   readToml,
@@ -8,7 +8,7 @@ import {
   type TomlValue,
 } from './toml-read.js';
 
-export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned' | 'unreadable';
+export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned' | 'unreadable' | McpMaybeHippo;
 
 interface GrokLine {
   readonly content: string;
@@ -84,14 +84,27 @@ function valueAt(facts: readonly Fact[], path: readonly string[]): TomlValue | u
   return found.length === 1 ? found[0].value : undefined;
 }
 
-function serverRunsHippoMcp(facts: readonly Fact[], name: string): boolean {
+function serverCommandAndArgs(
+  facts: readonly Fact[],
+  name: string,
+): { readonly command: string; readonly args: readonly string[] } | null {
   const server = [MCP_SERVERS, name];
   const isArrayTable = (fact: Fact): boolean =>
     fact.statement.kind === 'array-table' && isDeepStrictEqual(fact.path, server);
-  if (facts.some(isArrayTable)) return false;
+  if (facts.some(isArrayTable)) return null;
   const command = valueAt(facts, [...server, 'command']);
   const args = valueAt(facts, [...server, 'args']);
-  return isString(command) && isStringList(args) && runsHippoMcp(command, args);
+  return isString(command) && isStringList(args) ? { command, args } : null;
+}
+
+function serverRunsHippoMcp(facts: readonly Fact[], name: string): boolean {
+  const pair = serverCommandAndArgs(facts, name);
+  return pair !== null && runsHippoMcp(pair.command, pair.args);
+}
+
+function serverMayRunHippo(facts: readonly Fact[], name: string): boolean {
+  const pair = serverCommandAndArgs(facts, name);
+  return pair !== null && npxMentionsHippo(pair.command, pair.args);
 }
 
 const trimmedLine = (lines: readonly GrokLine[], statement: TomlStatement): string =>
@@ -165,11 +178,15 @@ function inspectRead(text: string, read: TomlRead): GrokInspection {
   const hippo = facts.filter(isHippoFact);
   if (hippo.length === 0) {
     if (serverNames(facts).some((name) => serverRunsHippoMcp(facts, name))) return KEPT;
+    const maybeHippo = serverNames(facts).find((name) => serverMayRunHippo(facts, name));
+    if (maybeHippo !== undefined) return { status: { maybeHippo }, drop: [] };
     return appendedIfHolds(text, read, OWN_COMMANDS[0]) === null ? UNREADABLE : ABSENT;
   }
   const lines = splitLines(text);
   if (isOwnTable(hippo, lines)) return ownInspection(text, read, lines, hippo);
-  return serverRunsHippoMcp(facts, HIPPO) ? KEPT : USER_OWNED;
+  if (serverRunsHippoMcp(facts, HIPPO)) return KEPT;
+  if (serverMayRunHippo(facts, HIPPO)) return { status: { maybeHippo: HIPPO }, drop: [] };
+  return USER_OWNED;
 }
 
 function inspect(text: string): GrokInspection {
