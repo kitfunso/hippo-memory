@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.18.0 - 2026-11-26
+
+### Added
+
+- **`serve({ sleep })`: a server whose store is not hippo.db can run POST /v1/sleep its own way.** One runs at a time; a second call gets 503 with Retry-After 30. Unset, the route answers 501 on such a store, as before.
+
+### Changed
+
+- **POST /v1/sleep and auto-sleep run the hippo.db child only on a store that has the `consolidation` group.** A store spread from `sqliteStore()` without `consolidation` now answers 501 on POST /v1/sleep, or runs the host's own `sleep` when one is given, and starts no auto-sleep after writes; it used to start the hippo.db child. A store that is not hippo.db but holds `consolidation`, with no sleep given, now answers 501 before the role check, so a member key gets 501 where it got 403.
+
 ## 3.17.2 - 2026-11-25
 
 ### Security
