@@ -57,9 +57,9 @@ describe('parseArgs: --flag=value (glued form)', () => {
     expect(flags['reason']).toBe('--weird');
   });
 
-  it('case 9: --tag=a --tag= (empty glued value on a repeatable key) pushes nothing, keeps prior entries', () => {
+  it('case 9: --tag=a --tag= (empty glued value after a repeatable key) marks it valueless, as bare --tag does', () => {
     const { flags } = parseArgs(argv('remember', '--tag=a', '--tag='));
-    expect(flags['tag']).toEqual(['a']);
+    expect(flags['tag']).toBe(true);
   });
 
   it('case 10: --tag= alone gives true, as --tag does, not an array holding an empty string', () => {

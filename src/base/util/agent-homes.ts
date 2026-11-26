@@ -93,13 +93,34 @@ function activeHermesProfile(files: Pick<AgentFiles, 'readText'>, root: string):
   return name !== 'default' && HERMES_PROFILE_ID.test(name) ? name : null;
 }
 
+function lookupEnv(env: Env, name: string, platform: NodeJS.Platform): string | undefined {
+  if (Object.hasOwn(env, name)) return env[name];
+  if (platform !== 'win32') return undefined;
+  const upper = name.toUpperCase();
+  for (const [key, val] of Object.entries(env)) {
+    if (key.toUpperCase() === upper) return val;
+  }
+  return undefined;
+}
+
+function expandEnvVars(raw: string, env: Env, platform: NodeJS.Platform): string {
+  const pattern =
+    platform === 'win32'
+      ? /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)|%([^%]+)%/g
+      : /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
+  return raw.replace(pattern, (match, braced?: string, bare?: string, pct?: string) => {
+    const name = braced ?? bare ?? pct ?? '';
+    return lookupEnv(env, name, platform) ?? match;
+  });
+}
+
 export function hermesHomeDir(
   home: string,
   env: Env,
   platform: NodeJS.Platform,
   files: Pick<AgentFiles, 'readText'>,
 ): HermesHome {
-  const set = expandHome((env.HERMES_HOME ?? '').trim(), home);
+  const set = expandHome(expandEnvVars((env.HERMES_HOME ?? '').trim(), env, platform), home);
   if (set !== '' && path.basename(path.dirname(set)) === 'profiles') {
     return { home: set, profile: path.basename(set) };
   }

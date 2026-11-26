@@ -11,6 +11,7 @@ import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js'
 import {
   hermesPluginPaths,
   installHermes,
+  isHermesFailure,
   isHermesPresent,
   uninstallHermes,
 } from '../../src/surface/hooks-install/hermes.js';
@@ -329,6 +330,48 @@ describe('installHermes and uninstallHermes', () => {
     expect(uninstallHermes(homes).status).toEqual({ failed: `${pluginDir} is not a directory` });
     expect(fs.readFileSync(outsideFile, 'utf8')).toBe('precious\n');
     expect(fs.existsSync(path.join(outsideDir, 'launcher.json'))).toBe(false);
+  });
+
+  it('refuses linked managed files inside pluginDir without touching external targets', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const first = installHermes(homes);
+    expect(first.status).toBe('installed');
+
+    const outside = path.join(root, 'outside-init.py');
+    fs.writeFileSync(outside, fs.readFileSync(path.join(SOURCE_DIR, '__init__.py')));
+    const initPath = path.join(first.pluginDir, '__init__.py');
+    fs.unlinkSync(initPath);
+    try {
+      fs.symlinkSync(outside, initPath);
+    } catch {
+      fs.mkdirSync(initPath);
+    }
+
+    expect(installHermes(homes).status).toEqual({ failed: `${initPath} is not a regular file` });
+    expect(uninstallHermes(homes).status).toEqual({ failed: `${initPath} is not a regular file` });
+    expect(fs.readFileSync(outside).equals(fs.readFileSync(path.join(SOURCE_DIR, '__init__.py')))).toBe(true);
+  });
+
+  it('stages a fresh install cleanly and stays retryable after a blocked parent directory', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const pluginsDir = path.join(hermesHome, 'plugins');
+    fs.writeFileSync(pluginsDir, 'blocking file');
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const blocked = installHermes(homes);
+    expect(isHermesFailure(blocked.status)).toBe(true);
+    fs.unlinkSync(pluginsDir);
+
+    const retried = installHermes(homes);
+    expect(retried.status).toBe('installed');
+    expect(fs.readdirSync(pluginsDir)).toEqual(['hippo']);
+    expect(fs.existsSync(path.join(retried.pluginDir, 'launcher.json'))).toBe(true);
   });
 });
 

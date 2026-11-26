@@ -176,9 +176,25 @@ describe('hermesHomeDir', () => {
     expect(resolve(env, platform)).toEqual({ home: expected, profile: null });
   });
 
-  it('expands ~ in HERMES_HOME against the home folder', () => {
+  it('expands ~ and environment references in HERMES_HOME', () => {
     expect(resolve({ HERMES_HOME: '~/hh' }, 'linux')).toEqual({ home: path.join(user, 'hh'), profile: null });
     expect(resolve({ HERMES_HOME: '~' }, 'linux')).toEqual({ home: user, profile: null });
+    expect(resolve({ HERMES_HOME: '$XDG_DATA_HOME/hermes', XDG_DATA_HOME: custom }, 'linux')).toEqual({
+      home: `${custom}/hermes`,
+      profile: null,
+    });
+    expect(resolve({ HERMES_HOME: '${XDG_DATA_HOME}/hermes', XDG_DATA_HOME: '~/data' }, 'linux')).toEqual({
+      home: path.join(user, 'data', 'hermes'),
+      profile: null,
+    });
+    expect(resolve({ HERMES_HOME: '%localappdata%/hermes-alt', LOCALAPPDATA: custom }, 'win32')).toEqual({
+      home: `${custom}/hermes-alt`,
+      profile: null,
+    });
+    expect(resolve({ HERMES_HOME: '$UNSET_VAR/hermes' }, 'linux')).toEqual({
+      home: '$UNSET_VAR/hermes',
+      profile: null,
+    });
   });
 
   it('HERMES_HOME at a profile folder is that profile, and no active_profile is read', () => {

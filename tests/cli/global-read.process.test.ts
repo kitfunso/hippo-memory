@@ -66,18 +66,21 @@ describe('--global on recall, context and outcome (built CLI, project folder wit
     expect(store.rows('local').map((row) => row['outcome_positive'])).toEqual([0]);
   });
 
-  it('outcome with an empty --id= exits 1 and marks nothing, even after a recall', async () => {
+  it('outcome with an empty --id= or trailing --id= exits 1 and marks nothing, even after a recall', async () => {
     const store = await seeded();
+    const [globalId] = idsOf(store.rows('global'));
     await hippo(store, ['recall', 'deploy', '--global']);
     const before = store.rows('global').map((row) => row['outcome_positive']);
-    const ran = await hippoRunAsync(['outcome', '--global', '--good', '--id='], {
-      cwd: store.cwd,
-      env: store.env,
-      timeout: SPAWN_MS,
-    });
-    expect(ran.status).toBe(1);
-    expect(ran.stderr).toContain('--id requires a value');
-    expect(store.rows('global').map((row) => row['outcome_positive'])).toEqual(before);
+    for (const extra of [['--id='], ['--id', globalId!, '--id='], ['--id', globalId!, '--id']]) {
+      const ran = await hippoRunAsync(['outcome', '--global', '--good', ...extra], {
+        cwd: store.cwd,
+        env: store.env,
+        timeout: SPAWN_MS,
+      });
+      expect(ran.status).toBe(1);
+      expect(ran.stderr).toContain('--id requires a value');
+      expect(store.rows('global').map((row) => row['outcome_positive'])).toEqual(before);
+    }
   });
 });
 

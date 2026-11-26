@@ -218,6 +218,31 @@ def _session_source() -> Optional[Callable[[Optional[str]], str]]:
 
 
 @functools.cache
+def _policy_helpers() -> Optional[tuple[Callable[[], Any], Callable[[Any], Optional[str]]]]:
+    try:
+        from gateway.session_policy import active_policy, created_surface
+    except ImportError as exc:
+        logger.warning("hippo is off: gateway.session_policy did not import: %s", exc)
+        return None
+    return active_policy, created_surface
+
+
+def _resolve_source(platform: str) -> str:
+    source_for = _session_source()
+    policy_helpers = _policy_helpers()
+    if source_for is None or policy_helpers is None:
+        return ""
+    active_policy, created_surface = policy_helpers
+    policy = active_policy()
+    policy_source = getattr(policy, "source", None) if policy is not None else None
+    if isinstance(policy_source, str) and policy_source.strip():
+        mapped = created_surface(policy_source.strip())
+        if mapped is not None:
+            return mapped
+    return source_for(platform)
+
+
+@functools.cache
 def row_helpers() -> Optional[SimpleNamespace]:
     try:
         from agent.conversation_compression_scaffolding import has_scaffolding_flag, is_user_role_scaffolding
@@ -346,8 +371,7 @@ class HippoProvider(MemoryProvider):
         context = kwargs.get("agent_context")
         self._agent_context = context.strip() if isinstance(context, str) and context.strip() else "primary"
         self._opt_in_platforms = opt_in_platforms()
-        source_for = _session_source()
-        self._source = source_for(self._platform) if source_for else ""
+        self._source = _resolve_source(self._platform)
         self._initialized = True
         self._capture_on = self.allowed("capture") and row_helpers() is not None
         if self._capture_on and not capture_tenant_ok():
@@ -389,6 +413,7 @@ class HippoProvider(MemoryProvider):
         query = _text_arg(args, "query")
         if not query:
             return _error("query is required")
+        self._last_recall_ids = []
         out = _ok("recall", run_hippo("recall", list(RECALL_ARGS), text=query))
         try:
             data = json.loads(out) if out is not None else None

@@ -142,7 +142,6 @@ interface Item {
   readonly positional?: string;
   readonly set?: readonly [string, string | boolean];
   readonly push?: readonly [string, string];
-  readonly mark?: string;
 }
 
 // parseArgs reads a number flag like a value flag: the entry point refuses a bad number later.
@@ -188,7 +187,7 @@ function namesOn(command: string, family: Family, own: boolean): string[] {
 function itemOf({ family, form, value }: FlagDraw, key: string): Item {
   if (form === 'bare') return { tokens: [`--${key}`], set: [key, true] };
   const tokens = form === 'glued' ? [`--${key}=${value}`] : [`--${key}`, value];
-  if (family === 'list') return value === '' ? { tokens, mark: key } : { tokens, push: [key, value] };
+  if (family === 'list') return value === '' ? { tokens, set: [key, true] } : { tokens, push: [key, value] };
   return { tokens, set: [key, family === 'plain' && value === '' ? true : value] };
 }
 
@@ -234,14 +233,13 @@ const BARE_LAST: Gen<FlagDraw[]> = oneOf<FlagDraw[]>([
 function parseOf(items: readonly Item[]) {
   const args: string[] = [];
   const flags: CliFlags = {};
-  for (const { positional, set, push, mark } of items) {
+  for (const { positional, set, push } of items) {
     if (positional !== undefined) args.push(positional);
     if (set) flags[set[0]] = set[1];
     if (push) {
       const sofar = flags[push[0]];
       flags[push[0]] = [...(Array.isArray(sofar) ? sofar : []), push[1]];
     }
-    if (mark !== undefined && !Array.isArray(flags[mark])) flags[mark] = true;
   }
   return { args, flags };
 }

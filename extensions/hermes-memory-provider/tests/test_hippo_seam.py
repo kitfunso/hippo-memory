@@ -85,6 +85,17 @@ def test_a_failed_verb_gives_an_error_and_no_recall_ids(fake, start):
     assert len(fake.calls("recall")) == 1
 
 
+def test_a_failed_recall_clears_previous_recall_ids(fake, start):
+    fake.answer("recall", out=recall_reply("mem_old"))
+    provider = start()
+    first = json.loads(provider.handle_tool_call("hippo_recall", {"query": "first"}))
+    assert first["total"] == 1
+    fake.answer("recall", out="", code=1)
+    assert "error" in json.loads(provider.handle_tool_call("hippo_recall", {"query": "second"}))
+    assert "error" in json.loads(provider.handle_tool_call("hippo_outcome", {"good": True}))
+    assert fake.calls("outcome") == []
+
+
 @pytest.mark.parametrize("verb", list(hippo.TIMEOUTS))
 def test_each_verb_stops_at_its_time_limit(verb, fake, monkeypatch):
     monkeypatch.setitem(hippo.TIMEOUTS, verb, 1)

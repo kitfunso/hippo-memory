@@ -159,17 +159,43 @@ function writeLauncher(pluginDir: string, sources: PackageSources): void {
   writeFileAtomic(path.join(pluginDir, LAUNCHER_NAME), `${JSON.stringify(payload, null, 2)}\n`);
 }
 
+function checkManagedEntries(pluginDir: string): HermesFailure | null {
+  for (const name of [...PLUGIN_FILES, LAUNCHER_NAME]) {
+    const file = path.join(pluginDir, name);
+    const stat = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (stat !== undefined && !stat.isFile()) {
+      return { failed: `${file} is not a regular file` };
+    }
+  }
+  return null;
+}
+
+function stageFreshInstall(pluginDir: string, sources: PackageSources): void {
+  const parent = path.dirname(pluginDir);
+  fs.mkdirSync(parent, { recursive: true });
+  const stageDir = fs.mkdtempSync(path.join(parent, '.hippo-install-'));
+  try {
+    for (const file of sources.files) {
+      writeFileAtomic(path.join(stageDir, file.name), file.content);
+    }
+    writeLauncher(stageDir, sources);
+    fs.renameSync(stageDir, pluginDir);
+  } catch (err) {
+    fs.rmSync(stageDir, { recursive: true, force: true });
+    throw err;
+  }
+}
+
 function installIntoDir(pluginDir: string): HermesInstallStatus {
   const state = pluginDirState(pluginDir);
   if (state === 'not-dir') return { failed: `${pluginDir} is not a directory` };
   const sources = loadPackageSources();
   if (state === 'missing') {
-    for (const file of sources.files) {
-      writeFileAtomic(path.join(pluginDir, file.name), file.content);
-    }
-    writeLauncher(pluginDir, sources);
+    stageFreshInstall(pluginDir, sources);
     return 'installed';
   }
+  const badEntry = checkManagedEntries(pluginDir);
+  if (badEntry !== null) return badEntry;
   const record = readLauncherRecord(path.join(pluginDir, LAUNCHER_NAME));
   if (record === null) return 'user-owned';
   const onDisk = diskHashes(pluginDir);
@@ -195,6 +221,8 @@ function removeFromDir(pluginDir: string): HermesUninstallStatus {
   const state = pluginDirState(pluginDir);
   if (state === 'missing') return 'absent';
   if (state === 'not-dir') return { failed: `${pluginDir} is not a directory` };
+  const badEntry = checkManagedEntries(pluginDir);
+  if (badEntry !== null) return badEntry;
   const record = readLauncherRecord(path.join(pluginDir, LAUNCHER_NAME));
   if (record === null) return 'user-owned';
   const sources = loadPackageSources();

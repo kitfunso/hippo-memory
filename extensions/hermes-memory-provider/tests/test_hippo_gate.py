@@ -124,3 +124,39 @@ def test_the_default_tenant_keeps_capture_on(fake, start, monkeypatch):
     provider.on_session_end(session("an ask"))
     provider.shutdown()
     assert len(fake.calls("capture")) == 1
+
+
+@pytest.mark.parametrize(("policy_source", "platform", "opt_in", "expected"), [
+    ("tool", "cli", [], NONE),
+    ("tool", "cli", ["tool"], ALL),
+    ("acp", "cli", [], NONE),
+    ("gui", "desktop", [], ALL),
+    ("oneshot", "cli", [], ALL),
+])
+def test_gateway_session_policy_gates_global_memory(policy_source, platform, opt_in, expected, env, start, started):
+    from gateway import session_policy
+
+    write_config(env.hermes_home, f"memory:\n  hippo:\n    platforms: {json.dumps(opt_in)}\n")
+    policy = session_policy.LocalSessionPolicy(
+        source=policy_source,
+        platform=platform,
+        cwd=str(env.home),
+        model=None,
+        toolsets=(),
+        config_json="{}",
+        request_json=json.dumps({"source": policy_source}),
+        terminal_json="{}",
+    )
+    token = session_policy._ACTIVE_POLICY.set(policy)
+    try:
+        provider = start(platform=platform)
+        assert {op: provider.allowed(op) for op in hippo.OPS} == expected
+        shown = {hippo.TOOL_OPS[name] for name in names(provider.get_tool_schemas())}
+        assert shown == {op for op in ("recall", "remember", "outcome") if expected[op]}
+        if expected == NONE:
+            assert provider.prefetch("deploy") == ""
+            provider.on_session_end(session("gateway tool turn"))
+            provider.shutdown()
+            assert started == []
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
