@@ -24,6 +24,8 @@ const AGENT_HOME_KEYS = [
   'OPENCLAW_STATE_DIR',
   'OPENCLAW_HOME',
   'OPENCLAW_PROFILE',
+  'HERMES_HOME',
+  'HERMES_DATA_DIR_SUFFIX',
 ];
 const SCRUBBED_ENV_KEYS = ENV_SCRUBBED_IN_TESTS;
 
@@ -50,6 +52,8 @@ function isolateTestEnvironment() {
   // Agent memory folders the import finds through the environment rather than the home folder (Copilot's VS Code data, and each tool's override).
   const isolatedAppData = join(isolatedUserHome, 'AppData', 'Roaming');
   process.env.APPDATA = isolatedAppData;
+  const isolatedLocalAppData = join(isolatedUserHome, 'AppData', 'Local');
+  process.env.LOCALAPPDATA = isolatedLocalAppData;
   for (const k of AGENT_HOME_KEYS) delete process.env[k];
   delete process.env.HIPPO_AGENT_MEMORY_TOOLS;
   // This shell may itself be a Claude Code session; the var would leak into every spawned CLI child and falsify null-session_id trace assertions.
@@ -63,9 +67,10 @@ function isolateTestEnvironment() {
   // No test may run a real `npm install -g`; a test of the embedder install clears this and fakes npm.
   process.env.HIPPO_SKIP_EMBEDDER_INSTALL = '1';
 
-  return { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData };
+  return { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData, isolatedLocalAppData };
 }
-const { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData } = isolateTestEnvironment();
+const { runTmp, isolatedHippoHome, isolatedUserHome, isolatedAppData, isolatedLocalAppData } =
+  isolateTestEnvironment();
 
 // token-eval.yml runs these through vitest.eval.config.ts, which reads them from here.
 export { EVAL_TESTS };
@@ -138,6 +143,7 @@ export default defineConfig({
       HOME: isolatedUserHome,
       USERPROFILE: isolatedUserHome,
       APPDATA: isolatedAppData,
+      LOCALAPPDATA: isolatedLocalAppData,
       HIPPO_SKIP_SCHEDULE: '1',
       HIPPO_SKIP_EMBEDDER_INSTALL: '1',
       HIPPO_READ_ONLY: '',

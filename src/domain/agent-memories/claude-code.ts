@@ -3,9 +3,9 @@
 import path from 'node:path';
 import { type ProjectIdentity } from '../../base/scope/project-identity.js';
 import { isStringValue } from '../../base/session/capture-contract.js';
-import { claudeConfigDir } from '../../base/util/agent-homes.js';
+import { claudeConfigDir, expandHome } from '../../base/util/agent-homes.js';
 import type { AgentFiles } from '../../base/util/agent-files.js';
-import { expandHome, frontmatterField, itemTime, splitFrontmatter } from './files.js';
+import { frontmatterField, itemTime, splitFrontmatter } from './files.js';
 import { markdownNotes, readFolderStore, uniqueFolders, type FolderRules } from './folder-store.js';
 import { gitLayout, type GitLayout } from './git.js';
 import type { Adapter, AdapterContext, Container, Listing } from './types.js';

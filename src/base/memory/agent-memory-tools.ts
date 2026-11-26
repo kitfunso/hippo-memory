@@ -8,6 +8,7 @@ export const AGENT_MEMORY_TOOLS = [
   { id: 'copilot', tag: 'copilot-memory', label: 'Copilot' },
   { id: 'openclaw', tag: 'openclaw-memory', label: 'OpenClaw' },
   { id: 'qwen-code', tag: 'qwen-code-memory', label: 'Qwen Code' },
+  { id: 'hermes', tag: 'hermes-memory', label: 'Hermes Agent' },
 ] as const;
 
 export type AgentMemoryTool = (typeof AGENT_MEMORY_TOOLS)[number];

@@ -267,7 +267,7 @@ export const SESSION_VERBS = {
                              (Obsidian/Foam/Dendron). Requires --name <vault>.
                              [--scope <scope>]
     --agents               Sync every coding agent's own memories (Claude Code, Codex,
-                             Gemini CLI, Copilot, OpenClaw, Qwen Code) now; with
+                             Gemini CLI, Copilot, OpenClaw, Qwen Code, Hermes Agent) now; with
                              --dry-run, print each tool's folders and what would change.
                              HIPPO_AGENT_MEMORY_TOOLS=<ids> or config agentMemories.tools
                              picks the tools; "none" or [] turns the import off

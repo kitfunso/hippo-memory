@@ -436,6 +436,7 @@ What is read, per tool (each tool's own environment variables and settings decid
 - **GitHub Copilot Chat in VS Code:** the memory tool's user memories and the repository memories of this project's workspace.
 - **OpenClaw:** the workspace's `MEMORY.md`.
 - **Qwen Code:** the project's auto memory folder and your user memories.
+- **Hermes Agent:** the entries of the active profile's `memories/MEMORY.md` and `memories/USER.md`.
 
 Each imported memory follows its note. It stays while the note exists, is replaced when the note changes, and is set aside as dormant when the note is deleted (`hippo dormant` lists it and can restore it). A note shorter than 10 characters, one that looks like it holds a secret (an API key, a password, an auth header or a token), and one whose text you rejected with `hippo reject` are skipped. Email addresses are stored masked, and notes are cut at 1,500 characters.
 

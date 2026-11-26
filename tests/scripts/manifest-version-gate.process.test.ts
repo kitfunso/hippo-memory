@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -9,12 +9,14 @@ import { spawnSync } from 'node:child_process';
 
 const SCRIPT = join(import.meta.dirname, '..', '..', 'scripts', 'checks', 'check-manifest-versions.mjs');
 const SYNC = join(import.meta.dirname, '..', '..', 'scripts', 'sync-version.mjs');
+const PLUGIN_YAML = 'extensions/hermes-memory-provider/hippo/plugin.yaml';
 
 interface Overrides {
   lockVersion?: string | null;
   lockRootVersion?: string | null;
   omitLockfile?: boolean;
   rawLockfile?: string;
+  pluginYaml?: string | null;
 }
 
 interface LockFixture {
@@ -31,6 +33,7 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
   mkdirSync(join(root, 'extensions', 'kiro-power'), { recursive: true });
   mkdirSync(join(root, 'extensions', 'cursor-plugin', '.cursor-plugin'), { recursive: true });
   mkdirSync(join(root, 'extensions', 'vscode'), { recursive: true });
+  mkdirSync(join(root, 'extensions', 'hermes-memory-provider', 'hippo'), { recursive: true });
   mkdirSync(join(root, 'src', 'base', 'util'), { recursive: true });
   for (const path of [
     'package.json',
@@ -44,6 +47,10 @@ function makeRepo(version: string, overrides: Overrides = {}): string {
     'extensions/vscode/package.json',
   ]) {
     writeFileSync(join(root, path), JSON.stringify({ name: 'fixture', version }));
+  }
+  if (overrides.pluginYaml !== null) {
+    const yaml = overrides.pluginYaml ?? `name: hippo\nversion: ${version}\ndescription: "fixture"\n`;
+    writeFileSync(join(root, PLUGIN_YAML), yaml);
   }
   writeFileSync(join(root, 'src', 'base', 'util', 'version.ts'), `export const PACKAGE_VERSION = '${version}';\n`);
   if (overrides.rawLockfile !== undefined) {
@@ -161,6 +168,42 @@ describe('check-manifest-versions.mjs and the lockfile', () => {
   });
 });
 
+describe('check-manifest-versions.mjs and the Hermes plugin.yaml', () => {
+  it('fails when plugin.yaml still names the previous release', () => {
+    const root = makeRepo('2.0.0', { pluginYaml: 'name: hippo\nversion: 1.9.9\n' });
+    try {
+      const r = runGate(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(`${PLUGIN_YAML}: 1.9.9 (expected 2.0.0)`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ['is missing', null, '(missing)'],
+    ['has no version line', 'name: hippo\n', '(no version line)'],
+  ])('fails when plugin.yaml %s', (_name, pluginYaml, found) => {
+    const root = makeRepo('2.0.0', { pluginYaml });
+    try {
+      const r = runGate(root);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain(`${PLUGIN_YAML}: ${found} (expected 2.0.0)`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads a quoted version', () => {
+    const root = makeRepo('2.0.0', { pluginYaml: 'name: hippo\nversion: "2.0.0"\n' });
+    try {
+      expect(runGate(root).status).toBe(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('sync-version.mjs', () => {
   it('sets every site `npm version` leaves behind, so the gate passes', () => {
     // npm version has already moved package.json and both lockfile fields to 2.1.0.
@@ -171,6 +214,18 @@ describe('sync-version.mjs', () => {
       expect(sync.status, sync.stderr).toBe(0);
       const r = runGate(root);
       expect(r.status, r.stderr).toBe(0);
+      expect(readFileSync(join(root, PLUGIN_YAML), 'utf8')).toBe('name: hippo\nversion: 2.1.0\ndescription: "fixture"\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('stops when plugin.yaml has no top-level version line', () => {
+    const root = makeRepo('2.0.0', { pluginYaml: 'name: hippo\nmeta:\n  version: 2.0.0\n' });
+    try {
+      const sync = spawnSync(process.execPath, [SYNC], { cwd: root, encoding: 'utf-8' });
+      expect(sync.status).not.toBe(0);
+      expect(sync.stderr).toContain(`${PLUGIN_YAML}: top-level "version:" not found`);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

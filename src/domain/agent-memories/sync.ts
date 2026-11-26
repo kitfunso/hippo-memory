@@ -16,6 +16,7 @@ import { claudeCodeAdapter } from './claude-code.js';
 import { codexAdapter } from './codex.js';
 import { copilotAdapter } from './copilot.js';
 import { geminiAdapter } from './gemini.js';
+import { hermesAdapter } from './hermes.js';
 import { legacyWork, type LegacyWork } from './legacy.js';
 import { splitContainer } from './note-parts.js';
 import { openclawAdapter } from './openclaw.js';
@@ -45,6 +46,7 @@ export const ADAPTERS: readonly Adapter[] = [
   copilotAdapter,
   openclawAdapter,
   qwenCodeAdapter,
+  hermesAdapter,
 ];
 
 /** Overrides config because `hippo init` creates the store in the same command that imports. */

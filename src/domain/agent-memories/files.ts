@@ -1,6 +1,5 @@
-// Text rules shared by the adapters: frontmatter, item times and home-relative paths. The reads are
+// Text rules shared by the adapters: frontmatter and item times. The reads are
 // Machine.files.
-import path from 'node:path';
 
 export interface Frontmatter {
   /** The YAML between the fences, or null when the file has none. */
@@ -32,13 +31,4 @@ export function itemTime(
   const parsed = dateText === null ? NaN : Date.parse(dateText);
   const t = Number.isFinite(parsed) ? parsed : fallbackMs;
   return Math.min(t, nowMs);
-}
-
-/** `~/x` against the given home; anything else unchanged. */
-export function expandHome(p: string, home: string): string {
-  return p === '~'
-    ? home
-    : p.startsWith('~/') || p.startsWith('~\\')
-      ? path.join(home, p.slice(2))
-      : p;
 }

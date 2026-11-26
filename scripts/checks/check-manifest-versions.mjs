@@ -105,6 +105,18 @@ if (!existsSync(VERSION_TS)) {
   }
 }
 
+const PLUGIN_YAML = 'extensions/hermes-memory-provider/hippo/plugin.yaml';
+if (!existsSync(PLUGIN_YAML)) {
+  drifts.push({ path: PLUGIN_YAML, found: '(missing)', expected: expectedVersion });
+} else {
+  const m = readFileSync(PLUGIN_YAML, 'utf8').match(/^version:[ \t]*["']?([^"'\s]+)/m);
+  if (!m) {
+    drifts.push({ path: PLUGIN_YAML, found: '(no version line)', expected: expectedVersion });
+  } else if (m[1] !== expectedVersion) {
+    drifts.push({ path: PLUGIN_YAML, found: m[1], expected: expectedVersion });
+  }
+}
+
 // The lockfile was excluded wholesale for a property only part of it has. Its
 // `packages["node_modules/..."]` entries do carry independent dependency
 // versions, but `.version` and `.packages[""].version` mirror the root package
@@ -155,5 +167,5 @@ if (drifts.length > 0) {
 }
 
 console.log(
-  `All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/base/util/version.ts + the two package-lock.json root fields at version ${expectedVersion}. OK.`,
+  `All ${LOCKSTEP_MANIFESTS.length} lockstep manifests + src/base/util/version.ts + the Hermes plugin.yaml + the two package-lock.json root fields at version ${expectedVersion}. OK.`,
 );
