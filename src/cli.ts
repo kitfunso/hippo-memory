@@ -4,15 +4,17 @@
 
 import { envReadOnly, envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import { READ_ONLY_REFUSAL } from './base/errors/read-only.js';
+import { assertTenantId } from './base/scope/tenant-id.js';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
 import { getHippoRoot } from './host/project-identity.js';
 import { readPackageVersion } from './host/package-version.js';
-import { printGitHubBackfillUsage } from './surface/cli/github.js';
+import { printGitHubBackfillUsage, runGitHub } from './surface/cli/github.js';
 import { printError } from './surface/cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
-import { isStoreBusy, STORE_BUSY_MESSAGE } from './base/ports/store.js';
+import { hasGroup, isStoreBusy, OPTIONAL_GROUPS, STORE_BUSY_MESSAGE } from './base/ports/store.js';
+import type { InfraPorts } from './base/ports/infra.js';
 import { type CliFlags, boolFlag, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
 import {
   USAGE_HEADER,
@@ -28,7 +30,11 @@ import {
   isKnownFlag,
   undeclaredFlags,
 } from './surface/cli/flags.js';
-import { assertVerbPorted, CLI_STORE, COMMANDS } from './surface/cli/verbs.js';
+import { assertVerbPorted, CLI_STORE, COMMANDS, type ServedGroups } from './surface/cli/verbs.js';
+import {
+  type ConnectorEntryContext,
+  entryConnectorSource,
+} from './surface/cli/connector-source.js';
 import type { VerbSpec } from './surface/cli/verb-row.js';
 import { CliExit, fail } from './surface/cli/exit.js';
 import { runCliCommand } from './surface/cli/cli-runtime.js';
@@ -249,33 +255,12 @@ function checkUnknownFlags(command: string, flags: CliFlags, spec: VerbSpec | un
   }
 }
 
-// Before the verb reads stdin or opens a store, so a hook leaves no row, mirror file or worker.
-function stopReadOnly(command: string, mode: 'refuse' | 'skip'): void {
-  if (mode === 'skip') {
-    log.warn(`hippo ${command}: skipped under HIPPO_READ_ONLY=1`);
-    return;
-  }
-  fail(READ_ONLY_REFUSAL);
-}
-
-async function main(
+function refuseBadFlags(
   command: string,
   args: string[],
   flags: CliFlags,
-  hippoRoot: string,
-): Promise<void> {
-  if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
-  if (command === '' || command === 'help' || command === '--help' || command === '-h') {
-    printUsage();
-    return;
-  }
-  // Before every other step, so help never opens a store, installs a hook or starts a server.
-  if (Object.hasOwn(flags, 'help')) {
-    printHelp(command, args);
-    return;
-  }
-  const spec = COMMAND_INDEX.get(command);
-  maybeRepairCodexWrapper(command, flags);
+  spec: VerbSpec | undefined,
+): void {
   rejectEmptyScope(flags);
   rejectNonNumericFlags(flags, spec?.flags);
   rejectValuedSwitches(flags, spec?.flags);
@@ -287,6 +272,43 @@ async function main(
     printError(refusal);
     throw new CliExit(2);
   }
+}
+
+// Before the verb reads stdin or opens a store, so a hook leaves no row, mirror file or worker.
+function stopReadOnly(command: string, mode: 'refuse' | 'skip'): void {
+  if (mode === 'skip') {
+    log.warn(`hippo ${command}: skipped under HIPPO_READ_ONLY=1`);
+    return;
+  }
+  fail(READ_ONLY_REFUSAL);
+}
+
+function wantsVersion(command: string, flags: CliFlags): boolean {
+  return command === '--version' || command === '-v' || boolFlag(flags, 'version');
+}
+
+function wantsUsage(command: string): boolean {
+  return command === '' || command === 'help' || command === '--help' || command === '-h';
+}
+
+async function main(
+  command: string,
+  args: string[],
+  flags: CliFlags,
+  hippoRoot: string,
+): Promise<void> {
+  if (wantsVersion(command, flags)) printVersion();
+  if (wantsUsage(command)) {
+    printUsage();
+    return;
+  }
+  if (Object.hasOwn(flags, 'help')) {
+    printHelp(command, args);
+    return;
+  }
+  const spec = COMMAND_INDEX.get(command);
+  maybeRepairCodexWrapper(command, flags);
+  refuseBadFlags(command, args, flags, spec);
   if (!spec) {
     printError(`Unknown command: ${command}`);
     printUsage();
@@ -300,6 +322,55 @@ async function main(
   const run = (): void | Promise<void> =>
     spec.run({ hippoRoot, tenantId: envTenant(), args, flags });
   await (spec.scoped ? (await import('./surface/cli/api-context.js')).cliRequest(run) : run());
+}
+
+function servedGroupsOf(store: ConnectorEntryContext['store']): ServedGroups {
+  return { kind: store.kind, groups: OPTIONAL_GROUPS.filter((group) => hasGroup(store, group)) };
+}
+
+async function runConnectorVerb(
+  command: 'slack' | 'github',
+  ctx: ConnectorEntryContext & { readonly infra: InfraPorts },
+  args: string[],
+  flags: CliFlags,
+): Promise<void> {
+  const spec = COMMANDS[command];
+  refuseBadFlags(command, args, flags, spec);
+  assertVerbPorted(spec, servedGroupsOf(ctx.store));
+  const source = entryConnectorSource(ctx);
+  if (command === 'github') return runGitHub(source, args, flags);
+  return (await import('./surface/cli/slack.js')).runSlack(source, args, flags);
+}
+
+export async function runConnectorCommandIn(
+  ctx: ConnectorEntryContext & { readonly infra: InfraPorts },
+  argv: readonly string[],
+): Promise<number> {
+  const { command, args, flags } = parseArgs(['', '', ...argv]);
+  try {
+    if (wantsVersion(command, flags)) printVersion();
+    if (wantsUsage(command)) {
+      console.log(verbUsage('slack'));
+      console.log(verbUsage('github'));
+      return 0;
+    }
+    assertTenantId('runConnectorCommand', ctx.tenantId);
+    if (ctx.tenantId.trim() !== ctx.tenantId) {
+      throw new Error(
+        'runConnectorCommand: tenantId must not be blank or start or end with spaces',
+      );
+    }
+    if (command !== 'slack' && command !== 'github') {
+      printError(`runConnectorCommand runs only slack and github, not ${command}`);
+      return 1;
+    }
+    if (Object.hasOwn(flags, 'help')) printHelp(command, args);
+    else await runConnectorVerb(command, ctx, args, flags);
+    return 0;
+  } catch (err) {
+    if (err instanceof CliExit) return err.code;
+    throw err;
+  }
 }
 
 /** One warning per on/off variable set to an unknown spelling; the CLI carries on with the safe

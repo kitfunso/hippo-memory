@@ -4,7 +4,12 @@
  * X-GitHub-Event header so a misrouted payload cannot satisfy a guard for the wrong event type.
  */
 
-import { type JsonValue, isJsonString, isJsonNumber } from '../../../base/util/json.js';
+import {
+  type JsonValue,
+  isJsonString,
+  isJsonNumber,
+  isJsonObject,
+} from '../../../base/util/json.js';
 
 /**
  * `private` MUST stay optional: scope.ts maps `private: undefined` to private, and a strict boolean
@@ -91,10 +96,27 @@ function isGitHubSender(x: JsonValue): x is JsonValue & GitHubSender {
   return isJsonString(x.login) && isJsonNumber(x.id);
 }
 
+function isInstallationId(id: JsonValue | undefined): boolean {
+  if (id === undefined || id === null) return true;
+  return isJsonString(id) ? id !== '' : isJsonNumber(id) && Number.isFinite(id);
+}
+
+function hasRoutableInstallation(installation: JsonValue | undefined): boolean {
+  if (installation === undefined || installation === null) return true;
+  return isJsonObject(installation) && isInstallationId(installation.id);
+}
+
+function hasNamedRepository(repository: JsonValue | undefined): boolean {
+  if (repository === undefined) return true;
+  return (
+    isJsonObject(repository) && isJsonString(repository.full_name) && repository.full_name !== ''
+  );
+}
+
 export function isGitHubWebhookEnvelope(x: JsonValue): x is JsonValue & GitHubWebhookEnvelope {
   if (!isObjectOrArray(x)) return false;
-  // Duck-type: an envelope must at least carry an action OR a repository field.
-  return isJsonString(x.action) || isObjectOrArray(x.repository);
+  if (!isJsonString(x.action) && !isObjectOrArray(x.repository)) return false;
+  return hasRoutableInstallation(x.installation) && hasNamedRepository(x.repository);
 }
 
 export function isGitHubIssueEvent(

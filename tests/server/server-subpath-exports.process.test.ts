@@ -28,6 +28,7 @@ const SERVER_VALUES = [
   'preCompactForCaller',
   'promptHookContext',
   'roleFromGroups',
+  'runConnectorCommand',
   'saveCompactionItemsForCaller',
   'serve',
   'sessionEndHandoffForCaller',
@@ -60,6 +61,7 @@ const SERVER_TYPES = [
   'CallerSessionEndRequest',
   'CallerSessionEndResult',
   'CaptureContext',
+  'ConnectorCommandContext',
   'Context',
   'DetachedWork',
   'HippoStore',
@@ -361,5 +363,43 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
       cli: false,
       authCreate: 'function',
     });
+  });
+
+  it('loads the cli entry on the first connector command, never when server is imported', () => {
+    const text = readFileSync(resolve(root, 'dist/server.js'), 'utf-8');
+    expect(text).not.toMatch(/^\s*(?:import|export)\s+(?:[^;'"(]*\sfrom\s+)?['"]\.\/cli\.js['"]/m);
+    expect(text).toMatch(/await import\(['"]\.\/cli\.js['"]\)/);
+  });
+
+  it('runs a connector verb on a store opened through store-kit, with no exit code set', () => {
+    const script = [
+      "import { mkdtempSync, rmSync } from 'node:fs';",
+      "import { tmpdir } from 'node:os';",
+      "import { join } from 'node:path';",
+      "const { runConnectorCommand } = await import('hippo-memory/server');",
+      "const { sqliteStore, initStore, loadConfig } = await import('hippo-memory/store-kit');",
+      "const root = mkdtempSync(join(tmpdir(), 'hippo-run-connector-'));",
+      'initStore(root);',
+      'const store = sqliteStore(root);',
+      'const ctx = { tenantId: "default", store, config: loadConfig(root) };',
+      'const lines = [];',
+      'const log = console.log;',
+      "console.log = (...args) => lines.push(args.join(' '));",
+      "const slack = await runConnectorCommand(ctx, ['slack', 'dlq', 'list']);",
+      'const slackLines = lines.splice(0);',
+      "const github = await runConnectorCommand(ctx, ['github', 'dlq', 'list']);",
+      'console.log = log;',
+      'await store.close();',
+      'rmSync(root, { recursive: true, force: true, maxRetries: 5 });',
+      'console.log(JSON.stringify({ slack, slackLines, github, githubLines: lines, exitCode: process.exitCode ?? null }));',
+    ].join('\n');
+    const out = runModuleScript<{
+      slack: number;
+      slackLines: string[];
+      github: number;
+      githubLines: string[];
+      exitCode: number | null;
+    }>(script);
+    expect(out).toEqual({ slack: 0, slackLines: [], github: 0, githubLines: ['no entries'], exitCode: null });
   });
 });
