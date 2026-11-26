@@ -32,7 +32,9 @@
     "dist-ui",
     "bin",
     "openclaw.plugin.json",
-    "extensions/openclaw-plugin"
+    "extensions/openclaw-plugin",
+    "extensions/hermes-memory-provider/hippo",
+    "!extensions/hermes-memory-provider/hippo/__pycache__"
   ],
   "scripts": {
     "baseline": "npm run build && npm test",
