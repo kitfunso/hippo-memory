@@ -1,7 +1,11 @@
 /** `hippo github` subcommands, split out of cli.ts so tests can import them without triggering
  * main(); the verb table in verbs/health.ts dispatches to handleGitHub. */
 
-import { envGitHubToken, envGitHubWebhookSecret } from '../../base/util/env.js';
+import {
+  envGitHubAllowUnknownInstallationFallback,
+  envGitHubToken,
+  envGitHubWebhookSecret,
+} from '../../base/util/env.js';
 import { adminActor } from '../../api/index.js';
 import { backfillRepo } from '../connectors/github/backfill.js';
 import { realGitHubFetcher } from '../connectors/github/octokit-client.js';
@@ -27,7 +31,7 @@ import {
 import type { JsonValue } from '../../base/util/json.js';
 import { type CliFlags, type CommandContext, stringFlag } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
-import { cliApiContext, cliStore } from './api-context.js';
+import { cliConnectorSource, type ConnectorSource } from './connector-source.js';
 import { CliExit } from './exit.js';
 import { errorFields, errorMessage, log } from '../../base/util/log.js';
 
@@ -87,7 +91,7 @@ function githubSiteOrExit(): GitHubSite {
   }
 }
 
-async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function backfillGitHub(source: ConnectorSource, flags: CliFlags): Promise<void> {
   const repo = stringFlag(flags, 'repo');
   if (repo === undefined || !isGitHubRepoFullName(repo)) {
     printGitHubBackfillUsage();
@@ -103,10 +107,9 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   const site = githubSiteOrExit();
   const maxPerStream = maxPerStreamFlag(flags);
   const sinceIso = stringFlag(flags, 'since');
-  // Backfill fetches from site.apiBase, so every item is from the configured site.
   const trustedUserIds = githubTrustedUserIds();
 
-  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-backfill') };
+  const ctx = source.context(adminActor('cli:github-backfill'));
   try {
     const result = await backfillRepo(ctx, {
       repoFullName: repo,
@@ -125,12 +128,8 @@ async function backfillGitHub(hippoRoot: string, tenantId: string, flags: CliFla
   }
 }
 
-export async function listGitHubDlq(
-  hippoRoot: string,
-  tenantId: string,
-  _flags: CliFlags,
-): Promise<void> {
-  const items = await listDlq(githubDlq, cliStore(hippoRoot), { tenantId });
+export async function listGitHubDlq(source: ConnectorSource): Promise<void> {
+  const items = await listDlq(githubDlq, source.store(), { tenantId: source.tenantId });
   if (items.length === 0) {
     console.log('no entries');
     return;
@@ -210,17 +209,13 @@ function reingestParkedDelivery(site: GitHubSite, trustedUserIds: ReadonlySet<nu
 }
 
 export async function replayGitHubDlq(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
+  source: ConnectorSource,
+  args: readonly string[],
   flags: CliFlags,
 ): Promise<void> {
   const site = githubSiteOrExit();
-  // A bad entry throws here, before any row is touched, as it refuses serve and backfill.
   const trustedUserIds = githubTrustedUserIds();
-  const ctx = { ...cliApiContext(hippoRoot, tenantId), actor: adminActor('cli:github-dlq-replay') };
-  // Without an ingestHook replay only bumps retry_count while printing "replay ok"; the real hook
-  // re-runs ingest.
+  const ctx = source.context(adminActor('cli:github-dlq-replay'));
   await runDlqReplay('github', args[0], flags, (id, force) =>
     replayGithubDlqEntry(ctx, id, {
       force,
@@ -228,29 +223,33 @@ export async function replayGitHubDlq(
       previousSecret: githubPreviousSecret(),
       ingestHook: reingestParkedDelivery(site, trustedUserIds),
       site,
+      allowUnknownInstallationFallback: envGitHubAllowUnknownInstallationFallback(),
     }),
   );
 }
 
-export async function handleGitHub({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function runGitHub(
+  source: ConnectorSource,
+  args: readonly string[],
+  flags: CliFlags,
+): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    await backfillGitHub(hippoRoot, tenantId, flags);
+    await backfillGitHub(source, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    await listGitHubDlq(hippoRoot, tenantId, flags);
+    await listGitHubDlq(source);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await replayGitHubDlq(hippoRoot, tenantId, args.slice(2), flags);
+    await replayGitHubDlq(source, args.slice(2), flags);
     return;
   }
   console.error('Usage: hippo github <backfill|dlq list|dlq replay <id> [--force]> [...]');
   throw new CliExit(1);
+}
+
+export function handleGitHub({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+  return runGitHub(cliConnectorSource(hippoRoot, tenantId), args, flags);
 }

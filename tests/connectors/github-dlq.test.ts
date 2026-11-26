@@ -1,8 +1,15 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
-import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
+import {
+  githubDlq,
+  replayGithubDlqEntry,
+  type DlqBucket,
+  type IngestHook,
+} from '../../src/surface/connectors/github/dlq.js';
+import type { ConnectorContext } from '../../src/surface/connectors/ingest.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
+import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
 
@@ -238,5 +245,106 @@ describe('github DLQ', () => {
       retryCount: 0,
     });
     expect((await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
+  });
+
+  function routeInstallation(installationId: string, tenantId: string): void {
+    const db = openHippoDb(root);
+    try {
+      db.prepare('INSERT INTO github_installations (installation_id, tenant_id, added_at) VALUES (?, ?, ?)').run(
+        installationId,
+        tenantId,
+        '2026-01-01T00:00:00.000Z',
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  const envelope = (installationId: number, repo: string): string =>
+    JSON.stringify({
+      action: 'opened',
+      repository: { full_name: repo },
+      installation: { id: installationId },
+    });
+
+  function parkEnvelope(body: string, columns: { installationId: string; repoFullName: string }): Promise<number> {
+    return parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: body,
+      error: 'unroutable',
+      bucket: 'unroutable',
+      eventName: 'issues',
+      deliveryId: 'd-1',
+      ...columns,
+    });
+  }
+
+  function recordingHook() {
+    const seen: ConnectorContext[] = [];
+    const ingestHook: IngestHook = async (hookCtx) => {
+      seen.push(hookCtx);
+      return { memoryId: 'mem-1' };
+    };
+    return { ingestHook, seen };
+  }
+
+  const retryCountOf = async (id: number): Promise<number | undefined> =>
+    (await sqliteStore(root).connectorEvents.deadLetters('github', 'default', { id }))[0]?.retryCount;
+
+  it("replays into the tenant today's routes name for the payload's installation, under the caller's actor", async () => {
+    routeInstallation('42', 'acme');
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(ctx, id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: true, status: 'replayed', memoryId: 'mem-1' });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.tenantId).toBe('acme');
+    expect(seen[0]?.actor).toBe(ctx.actor);
+  });
+
+  it('routes from the payload, not from the columns a raw park took by regex', async () => {
+    routeInstallation('42', 'acme');
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '7', repoFullName: 'fork/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    await replayGithubDlqEntry(ctx, id, { ingestHook });
+
+    expect(seen.map((c) => c.tenantId)).toEqual(['acme']);
+  });
+
+  it("leaves a row unroutable when routes exist and none match, naming the payload's installation and repository", async () => {
+    routeInstallation('7', 'acme');
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(ctx, id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: false, status: 'unroutable', retryCount: 1 });
+    expect(result.reason).toContain('42');
+    expect(result.reason).toContain('octo/repo');
+    expect(seen).toEqual([]);
+    expect(await retryCountOf(id)).toBe(1);
+  });
+
+  it("replays an unmatched row into the caller's tenant when the unknown-installation fallback is set", async () => {
+    routeInstallation('7', 'acme');
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(ctx, id, { ingestHook, allowUnknownInstallationFallback: true });
+
+    expect(result).toMatchObject({ ok: true, status: 'replayed' });
+    expect(seen.map((c) => c.tenantId)).toEqual(['default']);
+  });
+
+  it('answers unroutable on a dry run, not replayed, for a row no route matches', async () => {
+    routeInstallation('7', 'acme');
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+
+    const result = await replayGithubDlqEntry(ctx, id);
+
+    expect(result).toMatchObject({ ok: false, status: 'unroutable' });
   });
 });

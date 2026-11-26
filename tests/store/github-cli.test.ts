@@ -17,7 +17,10 @@ import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../..
 import type { JsonValue } from '../../src/base/util/json.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
-import { makeStore } from '../_helpers/make-root.js';
+import { loadConfig } from '../../src/host/config-file.js';
+import { runConnectorCommand } from '../../src/server.js';
+import { makeRoot, makeStore } from '../_helpers/make-root.js';
+import { testInfra } from '../_helpers/infra.js';
 import { runCliAs } from '../_helpers/run-cli-as.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 
@@ -649,6 +652,75 @@ describe('hippo github CLI', () => {
       e.artifactRef?.startsWith('github://acme/widgets/issue/'),
     );
     expect(stored).toHaveLength(expected);
+  });
+});
+
+describe('runConnectorCommand github verbs on a handed store', () => {
+  const SECRET = 'handed-store-secret';
+  const body = JSON.stringify({
+    action: 'opened',
+    issue: {
+      number: 5,
+      title: 'Bug',
+      body: 'broken',
+      user: { login: 'alice', id: 1 },
+      author_association: 'MEMBER',
+    },
+    repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
+    sender: { login: 'alice', id: 1 },
+  });
+  let handed: string;
+  let printed: string[];
+  let failed: string[];
+
+  const ctx = () => ({
+    tenantId: 'acme',
+    store: sqliteStore(handed),
+    config: loadConfig(handed),
+    infra: testInfra(),
+  });
+
+  beforeEach(() => {
+    handed = makeRoot('github-runner');
+    printed = [];
+    failed = [];
+    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void printed.push(a.join(' ')));
+    vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => void failed.push(a.join(' ')));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('dlq replay <id> writes the memory into the handed store under its tenant and prints the CLI line', async () => {
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', '');
+    const id = await parkInDlq(githubDlq, sqliteStore(handed), {
+      tenantId: 'acme',
+      rawPayload: body,
+      error: 'unroutable',
+      bucket: 'unroutable',
+      eventName: 'issues',
+      deliveryId: 'delivery-1',
+      signature: `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`,
+    });
+
+    const code = await runConnectorCommand(ctx(), ['github', 'dlq', 'replay', String(id)]);
+
+    expect(code).toBe(0);
+    const raws = loadAllEntries(handed, 'acme').filter((e) => e.artifactRef === 'github://acme/repo/issue/5');
+    expect(raws).toHaveLength(1);
+    expect(printed.join('\n')).toContain(`replay ok: status=replayed memory_id=${raws[0].id} retry_count=1`);
+  });
+
+  it('backfill with no --repo returns 2 with the usage text', async () => {
+    const code = await runConnectorCommand(ctx(), ['github', 'backfill']);
+
+    expect(code).toBe(2);
+    expect(printed.join('\n')).toMatch(/--repo/);
+    expect(printed.join('\n')).toMatch(/owner\/name/);
+    expect(failed).toEqual([]);
   });
 });
 

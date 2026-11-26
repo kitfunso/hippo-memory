@@ -2,9 +2,12 @@ import type { ConnectorContext } from '../ingest.js';
 import {
   replayParked,
   type ConnectorDlq,
+  type Reingest,
   type ReplayResult,
   type SignatureRefusal,
 } from '../dlq.js';
+import { resolveTenant } from '../tenant-route.js';
+import { routingOf } from './routing.js';
 import { verifyGitHubSignature } from './signature.js';
 import {
   GITHUB_COM,
@@ -48,6 +51,8 @@ export interface ReplayDlqOptions {
    * names is the site's, and a host_mismatch row also when the webhook's header check would take
    * its sender now; --force skips neither. */
   site?: GitHubSite;
+  /** The GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK escape hatch, as the CLI read it. */
+  allowUnknownInstallationFallback?: boolean;
 }
 
 /** Hook the webhook route injects to re-ingest a row, which keeps this module free of every event-type handler.
@@ -83,39 +88,56 @@ export async function replayGithubDlqEntry(
   id: number,
   opts: ReplayDlqOptions & { ingestHook?: IngestHook } = {},
 ): Promise<ReplayResult> {
-  const { webhookSecret, previousSecret, ingestHook, site } = opts;
+  const { webhookSecret, previousSecret } = opts;
   return replayParked<'github', JsonValue & GitHubWebhookEnvelope>(
     {
       dlq: githubDlq,
-      // The secret in effect now, not the one in effect when the row was parked.
       refuseSignature: (row) =>
         webhookSecret ? refuseSignature(row, webhookSecret, previousSecret) : null,
       isEnvelope: isGitHubWebhookEnvelope,
       notEnvelope: 'not a GitHub webhook envelope',
-      reingest: async (row) => {
-        const refused = hostRefusal(row, site ?? GITHUB_COM);
-        if (refused !== null) return { ok: false, status: 'unroutable', reason: refused };
-        if (!ingestHook) {
-          return {
-            ok: true,
-            status: 'replayed',
-            memoryId: null,
-            reason: 'dry-run: no ingest hook supplied',
-          };
-        }
-        // The hook owns routing, idempotency and the memory write, and re-derives the key from the
-        // parsed event.
-        const { memoryId } = await ingestHook(ctx, {
-          rawPayload: row.rawPayload,
-          eventName: row.eventName ?? '',
-          deliveryId: row.deliveryId ?? '',
-        });
-        return { ok: true, status: 'replayed', memoryId };
-      },
+      reingest: (row, envelope) => reingest(ctx, row, envelope, opts),
     },
     ctx.store,
     { tenantId: ctx.tenantId, id, force: opts.force === true },
   );
+}
+
+async function reingest(
+  ctx: ConnectorContext,
+  row: DlqItem,
+  envelope: JsonValue & GitHubWebhookEnvelope,
+  opts: ReplayDlqOptions & { ingestHook?: IngestHook },
+): Promise<Reingest> {
+  const refused = hostRefusal(row, opts.site ?? GITHUB_COM);
+  if (refused !== null) return { ok: false, status: 'unroutable', reason: refused };
+  const routing = routingOf(envelope);
+  const tenantId = await resolveTenant(
+    ctx.store,
+    { connector: 'github', ...routing },
+    { hostTenant: ctx.tenantId, allowUnknown: opts.allowUnknownInstallationFallback === true },
+  );
+  if (tenantId === null) {
+    const where = `installation ${routing.installationId ?? 'none'} (repo ${routing.repoFullName ?? 'none'})`;
+    return { ok: false, status: 'unroutable', reason: `${where} still unroutable` };
+  }
+  if (!opts.ingestHook) {
+    return {
+      ok: true,
+      status: 'replayed',
+      memoryId: null,
+      reason: 'dry-run: no ingest hook supplied',
+    };
+  }
+  const { memoryId } = await opts.ingestHook(
+    { ...ctx, tenantId },
+    {
+      rawPayload: row.rawPayload,
+      eventName: row.eventName ?? '',
+      deliveryId: row.deliveryId ?? '',
+    },
+  );
+  return { ok: true, status: 'replayed', memoryId };
 }
 
 function refuseSignature(
