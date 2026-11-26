@@ -37,12 +37,13 @@ for(const [name,fd,data] of [['stdout',1,r.stdout],['stderr',2,r.stderr]]) {
   note(data);
   forward(fd,data);
 }
-const crashed=fs.existsSync(mark);
+const seen=fs.existsSync(mark) ? fs.readFileSync(mark,'utf8') : null;
 fs.rmSync(mark,{force:true});
 const outcome=r.error?.code==='ETIMEDOUT' ? ['timeout',{limitMs:limit}] :
   r.error ? ['error',{message:r.error.message}] :
   r.status===null ? ['signal',{signal:r.signal}] :
-  crashed ? ['crash',{code:r.status}] : ['exit',{code:r.status}];
+  seen==='crash' ? ['crash',{code:r.status}] :
+  seen==='started' ? ['exit',{code:r.status}] : ['unguarded',{code:r.status}];
 if(outcome[0]!=='exit') note('checker did not finish: '+outcome[0]+'\n');
 record(...outcome);
 process.exit(outcome[0]==='exit' ? r.status : 2);

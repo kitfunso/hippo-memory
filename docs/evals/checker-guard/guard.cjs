@@ -15,3 +15,4 @@ const crash = error => {
 };
 process.on('uncaughtException', crash);
 process.on('unhandledRejection', crash);
+if (mark) fs.writeFileSync(mark, 'started');

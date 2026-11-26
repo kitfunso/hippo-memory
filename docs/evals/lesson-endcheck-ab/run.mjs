@@ -13,11 +13,12 @@ import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,r
 import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { GUARD,guardedRun } from '../checker-guard/lesson.mjs';
-import { auditCalls,auditFile,readAudits } from './crash-audit.mjs';
+import { AUDITED_GRADERS,armBinding,auditCalls,audited,auditFile,boundIntent,readAudits } from './crash-audit.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const FIRST_GRADE_REF='refs/z0/hold/grade-first';
+const COLLECTOR_LOCK='\\\\.\\pipe\\lesson-endcheck-ab-collector';
 const modes=['check','probe','smoke','qualify','pair','full','audit'];
 const [mode,token='Z0_SUB_TOKEN',key] = process.argv.slice(2);
 assert.ok(modes.includes(mode),'usage: node run.mjs check|probe|smoke|qualify|pair|full|audit [TokenVar] [pair key]');
@@ -75,7 +76,7 @@ function checks(u,work,env,dir,id,pre) {
   assert.ok(file,'missing apply transcript');
   const files=sessionFiles(projects,id);
   const grade=(post,commands)=>guardedRun(runCheck,u.lesson,{work,env:{...graderEnv(env),CHECK_LOG:path.join(dir,'checker.log')},
-    preCommit:pre,postCommit:post,commands,scratch:dir,status:path.join(dir,'checker-status.json')});
+    preCommit:pre,postCommit:post,commands,scratch:dir});
   const firstPost=stateCommit(work,pre),firstCommands=commandLog(files);
   holdPre(work,firstPost,FIRST_GRADE_REF);
   fs.writeFileSync(path.join(dir,'first-commands.json'),JSON.stringify(firstCommands)+'\n');
@@ -150,37 +151,149 @@ function assess(u,dir,env,id,arm) {
   return row;
 }
 function auditArm(top,pair,u,base,arm) {
-  const {dir}=read(path.join(base,arm+'.json'));
-  const intents=fs.readdirSync(base).filter(n=>new RegExp('^'+arm+'-\\d+\\.json$').test(n))
-    .map(n=>read(path.join(base,n))).filter(i=>i.dir===dir);
-  assert.equal(intents.length,1,'Expected one intent for the graded '+arm+' slot of '+pair);
-  const {id,pre}=intents[0],work=path.join(dir,'work');
+  const completed=path.join(base,arm+'.json'),{row,dir}=read(completed),intent=boundIntent(base,arm,dir);
+  const record={pair,arm,dir,grader:row.grader,id:intent?.id,pre:intent?.pre};
+  const refuse=reason=>({...record,status:'unverifiable',reason});
+  if(!intent) return refuse('no single intent for the graded slot');
+  const returnedFile=path.join(base,intent.name.slice(0,-'.json'.length)+'.returned.json');
+  if(!fs.existsSync(returnedFile)) return refuse('no confirmed return');
+  const returned=read(returnedFile);
+  if(returned.limited!==false || !Number.isFinite(returned.at)) return refuse('the return record is not a finished session');
+  const {id,pre}=intent,work=path.join(dir,'work');
   const env={...toolEnv(u,dir,false),LESSON_WORK:work,LESSON_PRE:pre,LESSON_EVENTS:path.join(dir,'stops.jsonl')};
-  const files=sessionFiles(path.join(env.CLAUDE_CONFIG_DIR,'projects'),id);
-  const events=fs.existsSync(env.LESSON_EVENTS)?fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse):[];
-  const first=stateCommit(work,pre);
-  const inputs=[{post:first,commands:commandLog(files)},...events.filter(e=>e.response).map(e=>({post:e.post,commands:e.commands}))];
+  const projects=path.join(env.CLAUDE_CONFIG_DIR,'projects');
+  if(!findTranscript(projects,id)) return refuse('no transcript');
+  const files=sessionFiles(projects,id),hasEvents=fs.existsSync(env.LESSON_EVENTS),returnWritten=fs.statSync(returnedFile).mtimeMs;
+  if([...files,...(hasEvents?[env.LESSON_EVENTS]:[])].some(f=>fs.statSync(f).mtimeMs>returnWritten))
+    return refuse('an input changed after the return');
+  const events=hasEvents?fs.readFileSync(env.LESSON_EVENTS,'utf8').split('\n').filter(Boolean).map(JSON.parse):[];
+  const listed=events.filter(e=>e.response);
+  if(events.length!==row.stops || listed.length!==row.listings.length) return refuse('the stop events differ from the row');
+  const git=(...args)=>run('git',args,work,env).trim();
+  const isCommit=sha=>{ try { return git('cat-file','-t',sha)==='commit'; } catch(error) { return false; } };
+  if(!listed.every(e=>isCommit(e.post))) return refuse('a stop commit is missing');
+  let unreachable;
+  try {
+    unreachable=git('fsck','--connectivity-only','--unreachable','--no-reflogs').split('\n').map(l=>l.trim().split(' '))
+      .filter(f=>f[0]==='unreachable' && f[1]==='commit').map(f=>f[2]);
+  } catch(error) { return refuse('git fsck failed: '+error.message.split('\n')[0]); }
+  const low=Math.floor(returned.at/1000),high=Math.floor(fs.statSync(completed).mtimeMs/1000),posts=new Set(events.map(e=>e.post));
+  const firsts=(unreachable.length?git('log','--no-walk=unsorted','--format=%H %T %P %ct %s',...unreachable).split('\n'):[])
+    .map(l=>l.trim().split(' ')).filter(f=>f.length===5 && f[2]===pre && f[4]==='snapshot' &&
+      Number(f[3])>=low && Number(f[3])<=high && !posts.has(f[0]));
+  const trees=new Set(firsts.map(f=>f[1]));
+  if(trees.size!==1) return refuse(trees.size?'more than one first-grade tree':'no first-grade commit');
+  const [[firstCommit,firstTree]]=firsts;
+  if(git('rev-parse',stateCommit(work,pre)+'^{tree}')!==firstTree) return refuse('the work tree changed after grading');
+  const graded=[{post:firstCommit,commands:commandLog(files)},...listed.map(e=>({post:e.post,commands:e.commands}))];
   const scratch=path.join(top,'crash-audit',pair,arm);
   fs.mkdirSync(scratch,{recursive:true});
   const {CHECK_LOG,...blind}=graderEnv(env);
-  const calls=inputs.map(({post,commands})=>()=>guardedRun(runCheck,u.lesson,
-    {work,env:blind,preCommit:pre,postCommit:post,commands,scratch,status:path.join(scratch,'checker-status.json')}));
-  const outcome=auditCalls(calls);
-  return {pair,arm,dir,id,grader:GUARD,firstTree:run('git',['rev-parse',first+'^{tree}'],work,env).trim(),...outcome};
+  const calls=graded.map(({post,commands})=>()=>guardedRun(runCheck,u.lesson,
+    {work,env:blind,preCommit:pre,postCommit:post,commands,scratch}));
+  return {...record,firstCommit,firstTree,posts:listed.map(e=>e.post),...auditCalls(calls)};
 }
-function auditArms() {
-  const file=auditFile(root),audits=readAudits(file);
-  let added=0;
-  for(const p of schedule) {
-    const base=path.join(root,'trial',p.key),result=path.join(base,'result.json');
-    if(!fs.existsSync(result)) continue;
-    for(const [arm,row] of Object.entries(read(result).rows)) {
-      if(row===null || row.grader===GUARD || audits.has(p.key+' '+arm)) continue;
-      fs.appendFileSync(file,JSON.stringify({...auditArm(root,p.key,byId.get(p.id),base,arm),at:new Date().toISOString()})+'\n');
-      added++;
+const alive=pid=>{
+  try { process.kill(pid,0); return true; } catch(error) { return error.code==='EPERM'; }
+};
+async function auditArms({top=root,pairs=schedule,units=byId,lock=COLLECTOR_LOCK}={}) {
+  for(const p of pairs) assert.ok(fs.existsSync(path.join(top,'trial',p.key,'result.json')),'The schedule is not closed at '+p.key);
+  const pidFile=path.join(top,'trim-loop.pid');
+  const trimPid=fs.existsSync(pidFile)?Number(fs.readFileSync(pidFile,'utf8').replace(/[^0-9]/g,'')):0;
+  assert.ok(!trimPid || !alive(trimPid),'Stop the trim loop (pid '+trimPid+') before the crash audit');
+  const server=net.createServer(s=>s.end());
+  await new Promise((ok,fail)=>server.once('error',fail).listen(lock,ok));
+  try {
+    const file=auditFile(top),audits=readAudits(file);
+    let added=0;
+    for(const p of pairs) {
+      const base=path.join(top,'trial',p.key);
+      for(const [arm,row] of Object.entries(read(path.join(base,'result.json')).rows)) {
+        if(row===null || row.grader===GUARD || audits.has(p.key+' '+arm)) continue;
+        assert.ok(AUDITED_GRADERS.includes(row.grader),'Unknown grader stamp on the '+arm+' row of '+p.key);
+        fs.appendFileSync(file,JSON.stringify({...auditArm(top,p.key,units.get(p.id),base,arm),at:new Date().toISOString()})+'\n');
+        added++;
+      }
     }
+    return added;
+  } finally {
+    server.close();
   }
-  console.log('Crash audit added '+added+' arm records; '+readAudits(file).size+' in '+file);
+}
+async function checkAudit(d,graded,crashing,odd) {
+  const top=path.join(d,'audit-root'),key='audit-pair',base=path.join(top,'trial',key),rows={};
+  const pairs=[{key,id:smoke.id}],units=new Map([[smoke.id,smoke]]),lock=COLLECTOR_LOCK+'-check-'+randomUUID();
+  for(const [arm,g] of Object.entries(graded)) {
+    run('git',['update-ref','-d',FIRST_GRADE_REF],g.work,g.env);
+    json(path.join(base,arm+'-0.json'),{id:g.sessionId,pre:g.env.LESSON_PRE,dir:g.dir});
+    const returnedFile=path.join(base,arm+'-0.returned.json');
+    json(returnedFile,{limited:false,at:g.returnedAt-2});
+    fs.utimesSync(returnedFile,new Date(),g.returnedAt/1000);
+    fs.utimesSync(findTranscript(path.join(g.env.CLAUDE_CONFIG_DIR,'projects'),g.sessionId),new Date(),(g.returnedAt-1)/1000);
+    json(path.join(base,arm+'-1.json'),{id:randomUUID(),pre:g.env.LESSON_PRE,dir:path.join(base,'retry-x')});
+    rows[arm]={...g.row,grader:undefined};
+    const completed=path.join(base,arm+'.json');
+    json(completed,{row:rows[arm],dir:g.dir});
+    fs.utimesSync(completed,new Date(),new Date(g.gradedAt));
+  }
+  await wait(1500);
+  const audit=(arm,u=smoke)=>auditArm(top,key,u,base,arm);
+  const tree=(g,commit)=>run('git',['rev-parse',commit+'^{tree}'],g.work,g.env).trim();
+  for(const [arm,g] of Object.entries(graded)) {
+    const a=audit(arm);
+    assert.deepEqual([a.status,a.id,a.calls,a.firstTree],['ran',g.sessionId,1+g.row.listings.length,tree(g,g.row.firstPost)],arm+' '+(a.reason??''));
+  }
+  const on=graded.ON;
+  assert.ok(on.row.listings.length>0);
+  const refused=pattern=>{
+    const a=audit('ON');
+    assert.equal(a.status,'unverifiable');
+    assert.match(a.reason,pattern);
+  };
+  const extra=path.join(on.work,'after-grade.txt');
+  fs.writeFileSync(extra,'changed after grading');
+  refused(/work tree changed/);
+  fs.unlinkSync(extra);
+  const events=on.env.LESSON_EVENTS,text=fs.readFileSync(events,'utf8'),{atime,mtime}=fs.statSync(events);
+  const restore=()=>{ fs.writeFileSync(events,text); fs.utimesSync(events,atime,mtime); };
+  fs.writeFileSync(events,text.split('\n').filter(Boolean).slice(0,-1).map(l=>l+'\n').join(''));
+  fs.utimesSync(events,atime,mtime);
+  refused(/stop events differ/);
+  restore();
+  fs.utimesSync(events,atime,new Date(on.returnedAt+60_000));
+  refused(/changed after the return/);
+  restore();
+  const returned=path.join(base,'ON-0.returned.json');
+  fs.renameSync(returned,returned+'.away');
+  refused(/no confirmed return/);
+  fs.renameSync(returned+'.away',returned);
+  const crashed=audit('ON',crashing);
+  assert.deepEqual([crashed.status,crashed.call],['crash',0]);
+  assert.equal(audit('ON',odd).status,'error');
+  assert.equal(audit('ON').status,'ran');
+  assert.deepEqual(fs.readdirSync(path.join(top,'crash-audit',key,'ON')).filter(n=>/log|status|mark/i.test(n)),[],
+    'The audit kept a log or a guard record');
+  await assert.rejects(auditArms({top,pairs,units,lock}),/not closed/);
+  json(path.join(base,'result.json'),{revision,pair:key,id:smoke.id,seedHash:'0'.repeat(64),rows,missing:{}});
+  const pidFile=path.join(top,'trim-loop.pid');
+  fs.writeFileSync(pidFile,String(process.pid));
+  await assert.rejects(auditArms({top,pairs,units,lock}),/trim loop/);
+  fs.unlinkSync(pidFile);
+  const holder=net.createServer(s=>s.end());
+  await new Promise(ok=>holder.listen(lock,ok));
+  await assert.rejects(auditArms({top,pairs,units,lock}),/EADDRINUSE/);
+  await new Promise(ok=>holder.close(ok));
+  assert.equal(await auditArms({top,pairs,units,lock}),2);
+  assert.equal(await auditArms({top,pairs,units,lock}),0);
+  const audits=readAudits(auditFile(top));
+  for(const arm of ['OFF','ON']) {
+    const binding=armBinding(base,arm);
+    assert.equal(audits.get(key+' '+arm).status,'ran');
+    assert.deepEqual(audited(rows[arm],key,arm,audits,binding),rows[arm]);
+    assert.throws(()=>audited(rows[arm],key,arm,audits,{...binding,dir:'elsewhere'}),/does not match/);
+    assert.throws(()=>audited(rows[arm],key,arm,audits,{...binding,id:'other'}),/does not match/);
+  }
+  console.log('Crash audit passed: original first-grade commit, input refusals, crash and error classes, closure, lock and analysis binding');
 }
 async function collectArm({pair,u,base,arm,template,slot,seedHash,promptText},
   {launch=armCmd,gate=boxGate,prepare=prepareSlot,grade=assess,sleep=wait}={}) {
@@ -299,7 +412,8 @@ if(mode==='probe') {
   boxGate({work,env:toolEnv(smoke,work)});
   console.log('Git Bash and Z0 box gate passed; no model call');
 } else if(mode==='audit') {
-  auditArms();
+  const added=await auditArms();
+  console.log('Crash audit added '+added+' arm records; '+readAudits(auditFile(root)).size+' in '+auditFile(root));
 } else if(mode==='check') {
   const d=fs.mkdtempSync(path.join(checkRoot,'offline-'));
   const {checkRecovery,checkTimeout,checkProfile,checkSetup}=await import('./offline.mjs');
@@ -309,7 +423,11 @@ if(mode==='probe') {
   checkSetup(d);
   const template=path.join(d,'template');
   const stamp=await seed(smoke,template);
-  const arms=[];
+  const arms=[],graded={};
+  const crash=path.join(d,'crash.mjs'),odd=path.join(d,'odd.mjs');
+  fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));"+'\n');
+  fs.writeFileSync(odd,'process.exit(7);'+'\n');
+  const lessonAt=checkPath=>({...smoke,lesson:{...smoke.lesson,checkPath}});
   for(const arm of ['OFF','ON']) {
     const dir=path.join(d,arm);
     fs.mkdirSync(dir);
@@ -349,17 +467,18 @@ if(mode==='probe') {
     }
     fs.appendFileSync(t,JSON.stringify({attachment:{hookEvent:'UserPromptSubmit',type:'hook_cancelled',timedOut:true}})+'\n'
       +message('assistant',[{type:'tool_use',id:'g',name:'Bash',input:{command:'./gradlew spotlessApply'}}])+'\n');
+    const returnClock=path.join(process.env.TEMP,'return-'+randomUUID());
+    fs.writeFileSync(returnClock,'');
+    const returnedAt=fs.statSync(returnClock).mtimeMs;
+    fs.unlinkSync(returnClock);
     const row=assess(smoke,dir,env,sessionId,arm);
+    graded[arm]={row,returnedAt,gradedAt:Date.now(),sessionId,dir,env,work};
     assert.equal(row.first,'pass');
     assert.equal(row.nonStopTimeouts,1);
     assert.equal(row.grader,GUARD);
     assert.equal(run('git',['rev-parse',FIRST_GRADE_REF],work,env).trim(),row.firstPost);
     assert.deepEqual(read(path.join(dir,'first-commands.json')),commandLog(sessionFiles(path.join(env.CLAUDE_CONFIG_DIR,'projects'),sessionId)));
     assert.ok(!fs.existsSync(path.join(dir,'checker-status.json')),'The guard record stayed in the slot');
-    const crash=path.join(d,'crash.mjs'),odd=path.join(d,'odd.mjs');
-    fs.writeFileSync(crash,"await Promise.reject(new Error('fixture crash'));\n");
-    fs.writeFileSync(odd,'process.exit(7);\n');
-    const lessonAt=checkPath=>({...smoke,lesson:{...smoke.lesson,checkPath}});
     if(arm==='OFF') {
       assert.throws(()=>checks(lessonAt(crash),work,env,dir,sessionId,env.LESSON_PRE),/exited 2/);
       assert.match(fs.readFileSync(path.join(dir,'checker.log'),'utf8'),/checker crashed: Error: fixture crash/);
@@ -367,34 +486,18 @@ if(mode==='probe') {
     if(arm==='ON') {
       assert.ok(row.listings.some(l=>l.target>0 && l.atStop==='fail'));
       assert.ok(qualifies({revision,rows:{ON:row}}));
-      const base=path.join(d,'audit-pair');
-      json(path.join(base,'ON.json'),{row,dir});
-      json(path.join(base,'ON-0.json'),{id:sessionId,pre:env.LESSON_PRE,dir});
-      json(path.join(base,'ON-1.json'),{id:randomUUID(),pre:env.LESSON_PRE,dir:path.join(base,'retry-x')});
-      const stops=fs.readFileSync(env.LESSON_EVENTS,'utf8').trim().split('\n').map(JSON.parse).filter(e=>e.response).length;
-      const audit=(name,u)=>auditArm(d,name,u,base,'ON');
-      const ran=audit('ran',smoke);
-      assert.ok(stops>0);
-      assert.equal(ran.status,'ran');
-      assert.equal(ran.calls,1+stops);
-      assert.equal(ran.id,sessionId);
-      assert.equal(ran.firstTree,run('git',['rev-parse',stateCommit(work,env.LESSON_PRE)+'^{tree}'],work,env).trim());
-      assert.deepEqual(fs.readdirSync(path.join(d,'crash-audit','ran','ON')).filter(n=>/log|status|mark/i.test(n)),[],
-        'The audit kept a log or a guard record');
-      const crashed=audit('crash',lessonAt(crash));
-      assert.deepEqual([crashed.status,crashed.call,crashed.log],['crash',0,undefined]);
-      assert.equal(audit('odd',lessonAt(odd)).status,'error');
     }
     assert.equal(run('git',['rev-parse','refs/z0/pre'],work,env).trim(),env.LESSON_PRE);
     console.log(arm+' seed, retained timeout and final grade passed');
   }
   assert.deepEqual(arms[0].common,arms[1].common);
   assert.equal(arms[0].preTree,arms[1].preTree);
+  await checkAudit(d,graded,lessonAt(crash),lessonAt(odd));
   console.log('same baseline '+stamp);
 } else {
   // A named pipe releases on process exit and serialises recovery across operator restarts.
   const lock=net.createServer(s=>s.end());
-  await new Promise((ok,fail)=>lock.once('error',fail).listen('\\\\.\\pipe\\lesson-endcheck-ab-collector',ok));
+  await new Promise((ok,fail)=>lock.once('error',fail).listen(COLLECTOR_LOCK,ok));
   try {
   if(mode==='smoke') {
   const smokeDir=path.join(root,'smoke');

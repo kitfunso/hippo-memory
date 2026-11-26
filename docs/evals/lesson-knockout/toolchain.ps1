@@ -45,9 +45,9 @@ function Resolve-OnPath([string[]]$Dirs,[string]$Name) {
   $null
 }
 $toolFolders=@{ poetry='C:\z0-runs\r4\poetry-2.5.1\Scripts' }
-function Get-ChainFolders([string]$Chain,[string]$Root) {
+function Get-ChainFolders([string]$Chain,[string]$Root,[ValidateSet('path','tail')][string]$Part='path') {
   $root=[IO.Path]::GetFullPath($Root)
-  @((Get-S3xTool $Chain).path -replace '\{work\}',$root -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
+  @((Get-S3xTool $Chain).$Part -replace '\{work\}',$root -split ';' | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') })
 }
 function ConvertTo-PathDir([string]$Value) {
   [Environment]::ExpandEnvironmentVariables($Value.Trim().Trim('"')).TrimEnd('\','/') -replace '/','\'
@@ -67,9 +67,12 @@ function Assert-SessionPath([string]$PathValue,[string]$Chain,[string]$Root) {
   Assert-BasePath $dirs @('git','node','npm','npx')
   if (!$chainTools.ContainsKey($Chain)) { throw "No expected tools for toolchain $Chain" }
   $folders=@(Get-ChainFolders $Chain $Root)
-  $required=@($folders)
+  $required=@($folders)+@(Get-ChainFolders $Chain $Root 'tail')
   foreach ($tool in $chainTools[$Chain]) { if ($toolFolders.ContainsKey($tool)) { $required+=$toolFolders[$tool] } }
-  foreach ($dir in $required) { if ($dirs -notcontains (ConvertTo-PathDir $dir)) { throw "Toolchain folder $dir is not on the session PATH" } }
+  foreach ($dir in $required) {
+    if ($dirs -notcontains (ConvertTo-PathDir $dir)) { throw "Toolchain folder $dir is not on the session PATH" }
+    if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw "Toolchain folder $dir is missing" }
+  }
   foreach ($tool in $chainTools[$Chain]) {
     $allowed=if ($toolFolders.ContainsKey($tool)) { @($toolFolders[$tool]) } else { $folders }
     foreach ($dir in $allowed) { if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw "Toolchain folder $dir is missing" } }

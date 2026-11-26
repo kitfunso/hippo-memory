@@ -94,6 +94,10 @@ def main() -> None:
             _winapi.CreateJunction(os.path.join(tmp, 'fresh', name.lower()), link)
             untouched(**{name: link})
             os.unlink(link)
+        root_link = os.path.join(tmp, 'link-ROOT')
+        _winapi.CreateJunction(os.path.join(tmp, 'fresh'), root_link)
+        untouched(ROOT=root_link, TRIAL=os.path.join(root_link, 'trial'), PC=os.path.join(root_link, 'pc'))
+        os.unlink(root_link)
     print('Passed trim selection from the enrolled q256-f5 unit, kept checker venv, open pair, linked pair, slot, cache, '
           'completion marker and root refusals.')
 

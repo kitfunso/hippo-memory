@@ -2,10 +2,11 @@ import './local-stdio.cjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
-import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing } from './state.mjs';
+import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
-import { archivedAudit,evidence,mainPairs,pathAttempts,permissionAudit } from './evidence.mjs';
+import { archivedAudit,evidence,mainPairs,permissionAudit,sourceKind } from './evidence.mjs';
 import { assertCheckerTools,checkerModules,gradeEnv,guardedRun } from './grading.mjs';
+import { CHECK_MS } from '../checker-guard/lesson.mjs';
 import { runCheck,stateCommit } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { execFileSync } from 'node:child_process';
@@ -80,6 +81,7 @@ function audited(messages,system=['base'],testTask=task) {
   return evidence(auditDir,{session:sid},[{content:'background'}],lesson,testTask);
 }
 const user=msg('user',txt(task.prompt)),answer=msg('assistant',txt('check-it'));
+const promptRow={type:'user',message:{role:'user',content:task.prompt}};
 const tool=(id,name,input)=>({type:'tool_use',id,name,input});
 const result=(id,text)=>msg('user',{type:'tool_result',tool_use_id:id,content:[txt(text)]});
 function toolLeak(name,input) {
@@ -109,7 +111,7 @@ function checkFinalResponse() {
   const check=()=>evidence(series,result,[],lesson,task,trace);
   const firstTurn={...final,uuid:'row-one',requestId:'one',message:{...final.message,id:'msg-one',stop_reason:'tool_use'}};
   const apis=rows.map(r=>({type:'api-request',sessionId:sid,querySource:r.query_source}));
-  const lines=(...turns)=>put(series,sid+'.jsonl',[...apis,...turns].map(r=>JSON.stringify(r)).join('\n'));
+  const lines=(...turns)=>put(series,sid+'.jsonl',[promptRow,...apis,...turns].map(r=>JSON.stringify(r)).join('\n'));
   const transcript=last=>lines(firstTurn,last);
   for(const row of rows) put(series,row.request_file,JSON.stringify({system:[txt('base')],messages:[user]}));
   put(series,rows[1].request_file,JSON.stringify({system:[txt(lesson.rule)],messages:[user]}));
@@ -153,9 +155,9 @@ function checkRequestSeries() {
   const body=text=>JSON.stringify({system:[txt(text)],messages:[user]});
   const turns=[turn('one'),turn('one'),turn('two'),turn('three','end_turn')];
   const apiOf=r=>({type:'api-request',sessionId:sid,querySource:r.query_source});
-  const write=(rows,bodies={},trail=turns,api=rows)=>{
+  const write=(rows,bodies={},trail=turns,api=rows.filter(r=>sourceKind(r.query_source)!=='auxiliary'))=>{
     fs.rmSync(series,{recursive:true,force:true});
-    put(series,sid+'.jsonl',[...api.map(apiOf),...trail].map(r=>JSON.stringify(r)).join('\n'));
+    put(series,sid+'.jsonl',[promptRow,...api.map(apiOf),...trail].map(r=>JSON.stringify(r)).join('\n'));
     for(const r of rows) {
       put(series,r.request_file,bodies[r.request_file] ?? body('base'));
       put(series,r.response_file,JSON.stringify({id:r.message_id}));
@@ -176,6 +178,18 @@ function checkRequestSeries() {
   const withSide=check();
   assert(withSide.complete && withSide.sideRequests===1 && withSide.requests===4 && !withSide.targetText);
   assert(withSide.hookSeen,'The hook check must read the first main request, not side traffic');
+  write([side,...main],{},turns,[side,...main]);
+  assert.equal(check().complete,false,'An auxiliary source with a replay row passed; the pinned CLI writes none');
+  write([side,...main]);
+  put(series,side.response_file,JSON.stringify({id:'other'}));
+  assert.equal(check().complete,false,'An auxiliary response for another message passed');
+  write(main,{},turns,[main[0],...main]);
+  assert.equal(check().complete,false,'A replay row without a request body passed');
+  put(series,'retry.request.json',body('base'));
+  const retried=check();
+  assert(retried.complete && retried.unanswered===1 && retried.requests===4 && !retried.targetText,'A retried request without a response failed');
+  put(series,'retry.request.json',body(lesson.rule));
+  assert(check().targetText,'An unanswered request body was not audited');
   write([main[0],side,main[1],main[2]],{'title.request.json':body(lesson.rule)});
   assert(check().complete && check().targetText,'Side request bodies must be audited');
   write([main[0],{...side,query_source:undefined},main[1],main[2]]);
@@ -204,54 +218,77 @@ function checkArchives() {
   const base=join(dir,'archives'),prompt=task.prompt;
   const clean=JSON.stringify({system:[txt('base')],messages:[user]});
   const leaked=JSON.stringify({system:[txt(lesson.rule)],messages:[user]});
-  const turn={type:'assistant',requestId:'r1',message:{id:'m1'}};
+  const turn={type:'assistant',sessionId:sid,requestId:'r1',message:{id:'m1'}};
+  const limit={type:'assistant',sessionId:sid,isApiErrorMessage:true,message:{id:'s1',model:'<synthetic>',content:[txt("You've hit your weekly limit")]}};
   const row={session_id:sid,query_source:'sdk',request_id:'r1',message_id:'m1',request_file:'a.request.json',response_file:'r1.response.json'};
   const api={type:'api-request',sessionId:sid,querySource:'sdk'};
-  const refusal={session:sid,call:'apply',cutOff:true,json:true,turns:0,usage:{input_tokens:0,output_tokens:0},permissionDenials:[]};
-  const sentRecord={...refusal,turns:1,usage:{input_tokens:5,output_tokens:2}};
-  const attempt=(name,{turns=[],bodies={},rows,record=refusal,mode='bypassPermissions',transcript=true,lead=prompt}={})=>{
-    const live=join(base,name,'live'),operator=join(base,name,'operator');
+  const zero={input_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0,output_tokens:0};
+  const cut={session:sid,call:'apply',promptSha256:hash(prompt),json:true,subtype:'success',isError:true,turns:1,usage:zero,
+    models:[],exit:1,apparatus:APPARATUS,cutOff:true,permissionDenials:[]};
+  const attempt=(name,{turns=[],bodies={},rows,record=cut,mode='bypassPermissions',transcript=true,lead=prompt,before=[],subagent,elsewhere=false,id='apply'}={})=>{
+    const live=join(base,name,'live'),operator=join(base,name,'operator'),project=join(live,'home/.claude/projects/unit');
+    const calls=join(operator,'bodies',id);
     mkdir(live);
-    const lines=[{type:'user',permissionMode:mode,message:{role:'user',content:lead}},...turns];
-    if(transcript) put(join(live,'home/.claude/projects/unit'),sid+'.jsonl',lines.map(r=>JSON.stringify(r)).join('\n'));
-    for(const [file,content] of Object.entries(bodies)) put(join(operator,'bodies/apply'),file,content);
-    if(rows) put(join(operator,'bodies/apply'),'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
-    if(record) put(operator,'apply.json',JSON.stringify(record));
+    const lines=[...before,{type:'user',permissionMode:mode,timestamp:'2026-11-25T10:00:02.000Z',message:{role:'user',content:lead}},...turns];
+    if(transcript) put(project,sid+'.jsonl',lines.map(r=>JSON.stringify(r)).join('\n'));
+    if(subagent) put(join(live,'home/.claude/projects',elsewhere?'other':'unit',sid,'subagents'),'agent-a.jsonl',subagent.map(r=>JSON.stringify(r)).join('\n'));
+    for(const r of rows??[]) put(calls,r.response_file,JSON.stringify({id:r.message_id}));
+    for(const [file,content] of Object.entries(bodies)) put(calls,file,content);
+    if(rows) put(calls,'index.jsonl',rows.map(r=>JSON.stringify(r)).join('\n'));
+    if(record) put(operator,id+'.json',JSON.stringify(record));
     return live;
   };
-  const dispatched={turns:[api,turn],bodies:{'a.request.json':clean},rows:[row],record:sentRecord};
-  const audit=(...lives)=>archivedAudit(lives,'apply',sid,prompt,lesson,task);
-  const refused=attempt('refused'),silent=attempt('silent',{transcript:false}),sent=attempt('sent',dispatched);
-  assert.deepEqual(audit(refused,silent,sent),{archivedAttempts:3,archivedRefused:2,archivedUnauditable:0,
-    archivedTargetText:false,archivedPermissions:true,archivedStatuses:['refused','refused','dispatched']});
-  assert.throws(()=>auditApply([silent,sent],sid,sent),/Missing apply transcript/);
-  assert.deepEqual(pathAttempts([silent],audit(silent),sent),[sent]);
-  assert.equal(auditApply(pathAttempts([silent],audit(silent),sent),sid,sent).transcripts,1);
-  assert.equal(audit(attempt('leak',{...dispatched,bodies:{'a.request.json':leaked}})).archivedTargetText,true);
+  const audit=(lives,id='apply')=>archivedAudit(lives,id,sid,prompt,lesson,task);
+  const passes=(live,name,target=false,id)=>assert.deepEqual(
+    Object.values(audit([live],id)).slice(1),[0,target,true],name);
+  const first={turns:[api,limit],bodies:{'a.request.json':clean}};
+  const later={turns:[api,turn,api,limit],bodies:{'a.request.json':clean,'b.request.json':clean},rows:[row]};
+  const firstLive=attempt('limit-first',first),laterLive=attempt('limit-later',later);
+  assert.deepEqual(audit([firstLive,laterLive]),{archivedAttempts:2,archivedUnauditable:0,archivedTargetText:false,archivedPermissions:true});
+  passes(attempt('limit-leak',{...later,bodies:{'a.request.json':clean,'b.request.json':leaked}}),'limit-leak',true);
+  passes(attempt('extra-body',{...later,turns:[api,turn,limit]}),'extra-body');
+  passes(attempt('extra-leak',{...later,turns:[api,turn,limit],bodies:{'a.request.json':clean,'b.request.json':leaked}}),'extra-leak',true);
+  const teachRows=[{type:'user',permissionMode:'default',timestamp:'2026-11-25T10:00:00.000Z',message:{role:'user',content:'Teach first'}},
+    {...api,timestamp:'2026-11-25T10:00:01.000Z'},{...turn,requestId:'t1',message:{id:'tm1'}}];
+  const explore={type:'api-request',sessionId:sid,querySource:'agent:builtin:Explore'};
+  const resumed={...later,id:'feedback',record:{...cut,call:'feedback'},before:teachRows,
+    subagent:[{...explore,timestamp:'2026-11-25T10:00:01.000Z'}]};
+  passes(attempt('resumed',resumed),'Teach rows leaked into the resumed feedback audit',false,'feedback');
+  assert.equal(audit([attempt('resumed-sub',{...resumed,subagent:[{...explore,timestamp:'2026-11-25T10:00:03.000Z'}]})],'feedback')
+    .archivedUnauditable,1,'A subagent request after the feedback prompt was not counted');
+  const silent=attempt('silent',{...first,transcript:false});
+  assert.throws(()=>auditApply([silent,laterLive],sid,laterLive),/Missing apply transcript/);
+  assert.equal(auditApply([firstLive,laterLive],sid,laterLive).transcripts,2);
   for(const [name,spec] of [
-    ['withheld',{...dispatched,bodies:{'a.request.json':JSON.stringify({not_recorded:true})}}],
-    ['lost',{...dispatched,bodies:{},rows:undefined}],['unindexed',{...dispatched,rows:[]}],
-    ['foreign',{...dispatched,rows:[{...row,session_id:'other'}]}],['untranscribed',{...dispatched,transcript:false}],
-    ['rejected',{bodies:{'a.request.json':leaked},record:sentRecord}],
-    ['extra-body',{...dispatched,bodies:{'a.request.json':clean,'b.request.json':clean}}],
-    ['unmatched-source',{...dispatched,turns:[{...api,querySource:'compact'},turn]}],
-    ['no-api-row',{...dispatched,turns:[turn]}],
-    ['unbodied-row',{...dispatched,turns:[api,api,turn],rows:[row,{...row,request_id:'r2',message_id:'m2',request_file:'c.request.json',response_file:'r2.response.json'}]}],['sent-unrecorded',{...dispatched,record:null}],
-    ['api-only',{turns:[api]}],['no-record',{record:null}],['other-call',{record:{...refusal,call:'teach'}}],
-    ['other-session',{record:{...refusal,session:'other'}}],['not-cut-off',{record:{...refusal,cutOff:false}}],
-    ['no-json',{record:{session:sid,call:'apply',cutOff:true,json:false,permissionDenials:null}}],
-    ['used-tokens',{record:{...refusal,usage:{input_tokens:3,output_tokens:0}}}],
-    ['no-usage',{record:{...refusal,usage:undefined}}],['took-turns',{record:{...refusal,turns:1}}]]) {
-    const r=audit(attempt(name,spec));
-    assert(r.archivedUnauditable===1 && r.archivedRefused===0 && r.archivedTargetText===false,name);
+    ['withheld',{...later,bodies:{'a.request.json':clean,'b.request.json':JSON.stringify({not_recorded:true})}}],
+    ['api-only',{turns:[api,limit]}],['empty',{}],
+    ['foreign',{...later,rows:[{...row,session_id:'other'}]}],
+    ['foreign-api',{...later,turns:[api,turn,{...api,sessionId:'other'},limit]}],
+    ['untranscribed',{...later,transcript:false}],
+    ['subagent-only',{...first,transcript:false,subagent:[{...api,timestamp:'2026-11-25T10:00:03.000Z'}]}],
+    ['subagent-elsewhere',{...first,elsewhere:true,subagent:[{...api,querySource:'agent:builtin:Explore',timestamp:'2026-11-25T10:00:03.000Z'}]}],
+    ['no-api-row',{...later,turns:[turn,limit]}],
+    ['unmatched-source',{...later,turns:[{...api,querySource:'compact'},turn,api,limit]}],
+    ['unbodied-row',{...later,turns:[api,turn,api,{...turn,requestId:'r2',message:{id:'m2'}},limit],
+      rows:[row,{...row,request_id:'r2',message_id:'m2',request_file:'c.request.json',response_file:'r2.response.json'}]}],
+    ['unindexed-turn',{...later,rows:[]}],
+    ['wrong-response',{...later,bodies:{...later.bodies,'r1.response.json':JSON.stringify({id:'other'})}}],
+    ['no-record',{...later,record:null}],['other-call',{...later,record:{...cut,call:'teach'}}],
+    ['other-session',{...later,record:{...cut,session:'other'}}],['not-cut-off',{...later,record:{...cut,cutOff:false}}],
+    ['other-prompt',{...later,record:{...cut,promptSha256:hash('Another prompt')}}],
+    ['other-apparatus',{...later,record:{...cut,apparatus:APPARATUS-1}}],
+    ['other-lead',{...later,lead:'Another prompt'}]]) {
+    const r=audit([attempt(name,spec)]);
+    assert(r.archivedUnauditable===1 && r.archivedTargetText===false,name);
   }
-  for(const [name,spec] of [['default',{...dispatched,mode:'default'}],
-    ['denied',{...dispatched,record:{...sentRecord,permissionDenials:[{tool:'Write',id:'x'}]}}],
-    ['malformed',{...dispatched,record:{...sentRecord,permissionDenials:null}}],
-    ['partial',{...dispatched,record:{...sentRecord,permissionDenials:[{tool:'Edit'}]}}],
-    ['no-mode',{...dispatched,mode:null}],['other-prompt',{...dispatched,lead:'Another prompt'}],
-    ['unrecorded',{...dispatched,record:null}]]) {
-    assert.equal(audit(attempt(name,spec)).archivedPermissions,false,name);
+  for(const [name,spec] of [['default',{...later,mode:'default'}],
+    ['no-prompt-mode',{...later,mode:null,turns:[{...api,permissionMode:'bypassPermissions'},turn,api,limit]}],
+    ['denied',{...later,record:{...cut,permissionDenials:[{tool:'Write',id:'x'}]}}],
+    ['malformed',{...later,record:{...cut,permissionDenials:null}}],
+    ['partial',{...later,record:{...cut,permissionDenials:[{tool:'Edit'}]}}],
+    ['no-json',{...later,record:{session:sid,call:'apply',promptSha256:hash(prompt),json:false,exit:1,apparatus:APPARATUS,cutOff:true,permissionDenials:null}}],
+    ['lead',{...later,lead:'Another prompt'}],['unrecorded',{...later,record:null}],['untranscribed',{...later,transcript:false}]]) {
+    assert.equal(audit([attempt('perm-'+name,spec)]).archivedPermissions,false,name);
   }
 }
 function checkTrees() {
@@ -277,10 +314,46 @@ function checkTrees() {
   assertSameTree(gate,1,a);
   assert.throws(()=>assertSameTree(gate,1,b),/differs from arm 0/);
   assert.throws(()=>assertSameTree(gate,1,c),/differs from arm 0/);
+  assert.throws(()=>assertSameTree(gate,1,{...a,installedSetup:'x'}),/differs from arm 0/);
   const arm=fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function applyArm')[1];
-  const at=text=>arm.indexOf(text);
-  assert(at('assertSameTree(')>0 && at('assertSameTree(')<at('holdPre(') && at('holdPre(')<at('openCue(') &&
-    at('openCue(')<at('await session('),'The tree gate must run before the apply session');
+  assert(arm.includes('const gate=()=>assertSameTree(unit,index,{preTree,ignoredSetup,installedSetup});') &&
+    arm.includes("session(u.apply,u.apply.prompt,sid,'apply',false,gate)"),'The apply session does not carry the tree gate');
+  assert(/gate\?\.\(\);\s*fs\.writeFileSync\(path\.join\(live,'call\.json'\)/.test(fs.readFileSync(join(folder,'delivery.mjs'),'utf8')),
+    'The smoke launch does not run the gate before it dispatches');
+  const installed=name=>{
+    const live=join(dir,'installed',name);
+    put(live,'work/node_modules/a/package.json','{"name":"a","version":"1.0.0"}');
+    put(live,'work/node_modules/@s/b/package.json','{"name":"@s/b","version":"2.0.0"}');
+    put(live,'work/node_modules/a/node_modules/c/package.json','{"name":"c","version":"3.0.0"}');
+    put(live,'venv/Lib/site-packages/pytest-8.0.0.dist-info/METADATA','Name: pytest');
+    put(live,'work/obj/project.assets.json','{"libraries":{"N/1.0.0":{}}}');
+    put(live,'work/build/out.txt','built at 1');
+    put(live,'cache/node_modules/d/package.json','{"version":"1"}');
+    put(live,'home/node_modules/e/package.json','{"version":"1"}');
+    return live;
+  };
+  const fingerprint=installedPackages(installed('same'));
+  assert(/^[0-9a-f]{64}$/.test(fingerprint) && installedPackages(installed('same-2'))===fingerprint);
+  for(const [name,file,text] of [['nested','work/node_modules/a/node_modules/c/package.json','{"name":"c","version":"3.0.1"}'],
+    ['scoped','work/node_modules/@s/b/package.json','{"name":"@s/b","version":"2.1.0"}'],
+    ['assets','work/obj/project.assets.json','{"libraries":{"N/1.0.1":{}}}']]) {
+    const live=installed(name);
+    put(live,file,text);
+    assert.notEqual(installedPackages(live),fingerprint,name+' version change was not fingerprinted');
+  }
+  const pip=installed('pip'),site=join(pip,'venv/Lib/site-packages');
+  fs.renameSync(join(site,'pytest-8.0.0.dist-info'),join(site,'pytest-8.0.1.dist-info'));
+  assert.notEqual(installedPackages(pip),fingerprint,'A Python version change was not fingerprinted');
+  for(const [name,file] of [['build','work/build/out.txt'],['cache','cache/node_modules/d/package.json'],['home','home/node_modules/e/package.json'],
+    ['metadata','venv/Lib/site-packages/pytest-8.0.0.dist-info/METADATA']]) {
+    const live=installed(name);
+    put(live,file,'{"changed":true}');
+    assert.equal(installedPackages(live),fingerprint,name+' changed the fingerprint');
+  }
+  const linked=installed('linked'),outside=join(dir,'installed','outside');
+  put(outside,'package.json','{"version":"9"}');
+  fs.symlinkSync(outside,join(linked,'work/node_modules/z'),'junction');
+  assert.equal(installedPackages(linked),fingerprint,'A linked package folder was followed');
 }
 function checkPermissions() {
   const folderPath=join(dir,'permissions'),trace=join(folderPath,'t.jsonl');
@@ -311,16 +384,28 @@ function checkGrading() {
   const git=(...args)=>execFileSync('git',['-c','user.name=t','-c','user.email=t@t',...args],{cwd:work,env,encoding:'utf8'}).trim();
   git('init','-q'); put(work,'a.txt','a'); git('add','a.txt'); git('commit','-q','-m','a');
   const head=git('rev-parse','HEAD'),log=join(base,'checker.log'),graded=gradeEnv(env,{toolchain:'npm'},live,log);
-  const status=join(base,'checker-status.json');
+  const statuses=[];
+  const spied=(lesson,options)=>{ statuses.push(options.env.CHECK_STATUS); return runCheck(lesson,options); };
   const grade=(name,source,options={})=>{
     put(base,name,source);
-    return guardedRun(runCheck,{id:name,checkPath:join(base,name),check:{}},
-      {work,env:graded,preCommit:head,postCommit:head,commands:[],scratch:join(base,'scratch'),status,...options});
+    return guardedRun(spied,{id:name,checkPath:join(base,name),check:{}},
+      {work,env:graded,preCommit:head,postCommit:head,commands:[],scratch:join(base,'scratch'),...options});
   };
   const stateOf=fn=>{ try { fn(); } catch(error) { return error.guard?.state ?? error.name; } return 'returned'; };
   assert.equal(grade('rule.mjs',"console.log('broken: rule');process.exit(1);"),'fail');
   assert.match(fs.readFileSync(log,'utf8'),/broken: rule/);
-  assert(!fs.existsSync(status),'The guard record stayed on disk');
+  assert(statuses.length===1 && !fs.existsSync(path.dirname(statuses[0])),'The guard record stayed on disk');
+  assert(path.relative(base,statuses[0]).startsWith('..'),'The guard record sits inside the checker scratch');
+  const forge=mark=>"import fs from 'node:fs';import path from 'node:path';const s=path.dirname(process.env.CHECK_COMMANDS);"+
+    "for(const n of ['checker-status.json','status.json']){fs.writeFileSync(path.join(s,n),JSON.stringify({guard:'crash-guard-2',state:'exit',code:0}));"+
+    "fs.writeFileSync(path.join(s,n+'.mark'),'"+mark+"');}";
+  assert.equal(grade('forge-exit.mjs',forge('crash')+"process.exit(1);"),'fail','A scratch file changed the verdict');
+  assert.equal(stateOf(()=>grade('forge-crash.mjs',forge('started')+"throw new Error('real crash');")),'crash','A scratch file hid a crash');
+  assert.equal(stateOf(()=>grade('preload.mjs',"process.exit(1);",{env:{...graded,NODE_OPTIONS:'--require='+join(base,'absent.cjs')}})),
+    'GuardError','A wrapper that never started gave a verdict');
+  put(base,'inner-fails.cjs',"if(process.env.CHECK_GUARD_MARK) throw new Error('preload failed');");
+  assert.equal(stateOf(()=>grade('inner.mjs',"process.exit(1);",{env:{...graded,NODE_OPTIONS:'--require='+join(base,'inner-fails.cjs')}})),
+    'unguarded','A checker that never reached the guard gave a verdict');
   assert.equal(stateOf(()=>grade('git.mjs',"import {execFileSync} from 'node:child_process';"+
     "execFileSync('git',['rev-parse','--verify','refs/absent']);process.exit(0);")),'crash');
   assert.throws(()=>grade('async.mjs',"await Promise.reject(new Error('lost'));"),/exited 2/);
@@ -336,8 +421,14 @@ function checkGrading() {
   const logDir=join(base,'log-is-a-folder');
   mkdir(logDir);
   assert.equal(stateOf(()=>grade('noisy.mjs',"console.log('x');process.exit(1);",{env:{...graded,CHECK_LOG:logDir}})),'wrapper-error');
-  assert.throws(()=>guardedRun(()=>'pass',{id:'stub',checkPath:join(base,'rule.mjs'),check:{}},{env:graded,status}),
+  assert.throws(()=>guardedRun(()=>'pass',{id:'stub',checkPath:join(base,'rule.mjs'),check:{}},{env:graded}),
     /without a matching guard record/);
+  assert.throws(()=>guardedRun(()=>'pass',{id:'stub',checkPath:join(base,'rule.mjs'),check:{}},{env:graded,status:join(base,'s.json')}),
+    /keeps its status record private/);
+  let deadline;
+  assert.throws(()=>guardedRun((lesson,options)=>{ deadline=[options.timeoutMs,options.env.CHECK_DEADLINE_MS]; return 'pass'; },
+    {id:'stub',checkPath:join(base,'rule.mjs'),check:{}},{env:graded}),/without a matching guard record/);
+  assert.deepEqual([CHECK_MS,deadline],[120_000,[125_000,'120000']],'Production checker deadlines changed');
   assert.equal(grade('quick.mjs',"setTimeout(()=>process.exit(0),200);",{deadlineMs:3000}),'pass');
   assert.equal(stateOf(()=>grade('slow.mjs',"setTimeout(()=>process.exit(0),6000);",{deadlineMs:1500})),'timeout');
   const python=gradeEnv(env,{toolchain:'python'},live,log),scripts=join(live,'venv','Scripts');
@@ -376,9 +467,9 @@ console.log('Passed final response transcript match, request coverage, leak scan
 checkRequestSeries();
 console.log('Passed ordered main requests, duplicate and reordered pairs, side requests by recorded source and their body audit.');
 checkArchives();
-console.log('Passed cut-off attempt audit: refusals, inspectable bodies, withheld or lost bodies, leaks and permission evidence.');
+console.log('Passed cut-off attempt audit: saved 429 shapes, resumed feedback boundary, unanswered bodies, leaks, unauditable records and permission evidence.');
 checkTrees();
-console.log('Passed work tree and ignored setup listing with different setup files.');
+console.log('Passed work tree, ignored setup listing, installed package versions and the apply tree gate.');
 const state=join(dir,'retry');mkdir(state);put(state,'pre','original');
 const records=join(dir,'operator');mkdir(records);
 for(const name of ['checkpoints','limit-archives']) mkdir(join(dir,name));
@@ -414,6 +505,13 @@ for(const call of [feedback,fork]) {
 const unexpectedWait=()=>assert.fail('Unexpected wait');
 await assert.rejects(retryLimited(state,fork,()=>assert.fail('Unexpected dispatch'),
   ()=>({status:1,stdout:'script error'}),{delay:unexpectedWait}),/box-check.sh failed/);
+let dispatched=0,boxed=0;
+await assert.rejects(retryLimited(state,fork,()=>{dispatched++;return 0;},()=>{boxed++;return ready;},
+  {gate:()=>{throw Error('Apply work tree differs from arm 0');},delay:unexpectedWait}),/differs from arm 0/);
+assert.deepEqual([dispatched,boxed],[0,0],'A failed tree gate let the apply session start');
+const order=[];
+await retryLimited(state,fork,()=>{order.push('dispatch');return 0;},()=>ready,{gate:()=>order.push('gate'),delay:unexpectedWait});
+assert.deepEqual(order,['gate','dispatch'],'The tree gate ran after dispatch');
 let attempts=0;
 const checks=[ready,refused,ready],delays=[];
 await retryLimited(state,feedback,async()=>{
@@ -480,7 +578,7 @@ function savedNotes(receipt) {
 if(fs.existsSync(join(unit,'delivery-check/N/delivery.json'))) {
   for(const arm of ['T','N']) {
     const p=join(unit,'delivery-check',arm), result=evidence(join(p,'bodies/probe'),read(join(p,'probe.json')),
-      savedNotes(p),roster()[0].lesson,{},savedTranscript(p,'probe.json'));
+      savedNotes(p),roster()[0].lesson,{prompt:read(join(p,'call.json')).prompt},savedTranscript(p,'probe.json'));
     assert(result.complete && result.hookSeen && result.targetText===(arm==='T'));
   }
 }

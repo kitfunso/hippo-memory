@@ -71,11 +71,14 @@ try {
   $variant=(($env:PATH -split ';') | ForEach-Object { if ($rubyDirs -contains $_.TrimEnd('\')) { ($_.ToUpperInvariant() -replace '\\','/') + '/' } else { $_ } }) -join ';'
   Assert-SessionPath $variant ruby $live
   Restore-Env
-  . "$PSScriptRoot/toolchain.ps1" rust $live
-  $rustDirs=@(Get-ChainFolders rust $live)
-  $rustLast=[regex]::Escape($rustDirs[-1])
-  Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @($rustDirs[-1])) rust $live } "$rustLast is not on the session PATH"
-  Restore-Env
+  foreach ($chain in @('rust','go')) {
+    . "$PSScriptRoot/toolchain.ps1" $chain $live
+    $tail=@(Get-ChainFolders $chain $live 'tail')
+    if ($tail.Count -ne 1 -or $tail[0] -notmatch 'rust-as$|ucrt64\\bin$') { throw "Unexpected $chain tail folders: $($tail -join ';')" }
+    Assert-SessionPath $env:PATH $chain $live
+    Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH $tail) $chain $live } "$([regex]::Escape($tail[0])) is not on the session PATH"
+    Restore-Env
+  }
   . "$PSScriptRoot/toolchain.ps1" python $live
   Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @('C:\z0-runs\r4\poetry-2.5.1\Scripts')) python $live } 'poetry-2.5.1.Scripts is not on the session PATH'
   Restore-Env

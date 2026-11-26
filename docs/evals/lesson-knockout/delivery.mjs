@@ -60,7 +60,8 @@ async function waitForBox(checkBox,delay) {
   }
 }
 
-export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,onFirstCall}={}) {
+export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall}={}) {
+  gate?.();
   const ticket=randomUUID(),checkpoint=inside(path.join(stateRoot,'checkpoints',ticket));
   const archives=[];
   const records=inside(path.join(path.dirname(live),'operator'));
@@ -90,8 +91,9 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
     }
   }
 }
-export async function launch(live,token,env,call,onFirstCall) {
-  if(!call.smoke) return retryLimited(live,call,()=>invoke(live,token,env,true),()=>runBoxCheck(live,env),{onFirstCall});
+export async function launch(live,token,env,call,{gate,onFirstCall}={}) {
+  if(!call.smoke) return retryLimited(live,call,()=>invoke(live,token,env,true),()=>runBoxCheck(live,env),{gate,onFirstCall});
+  gate?.();
   fs.writeFileSync(path.join(live,'call.json'),JSON.stringify(call));
   const code=await invoke(live,token,env);
   if(code!==0) throw Error('Smoke launcher exited '+code);

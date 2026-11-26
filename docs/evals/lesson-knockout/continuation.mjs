@@ -25,7 +25,8 @@ export function checkTeachReceipts(unit,freeze,u) {
 export function assertSameTree(unit,index,tree) {
   for(let i=0;i<index;i++) {
     const earlier=read(join(unit,'evidence','apply-'+i,'grade.json'));
-    assert(earlier.preTree===tree.preTree && earlier.ignoredSetup===tree.ignoredSetup,'Apply work tree differs from arm '+i);
+    assert(earlier.preTree===tree.preTree && earlier.ignoredSetup===tree.ignoredSetup && earlier.installedSetup===tree.installedSetup,
+      'Apply work tree differs from arm '+i);
   }
 }
 

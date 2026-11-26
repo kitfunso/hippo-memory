@@ -8,13 +8,13 @@ import { execFileSync } from 'node:child_process';
 import { checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,read,pins,hash } from './plan.mjs';
 import { assertCheckerTools,gradeEnv,guardedRun } from './grading.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
-  entry,createStore,contents,capture,forkStore,files,checkProjectSettings,treeOf,ignoredListing } from './state.mjs';
+  entry,createStore,contents,capture,forkStore,files,checkProjectSettings,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
 import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { archivedAudit,flagOf,evidence,neutralClean,pathAttempts,permissionAudit } from './evidence.mjs';
+import { archivedAudit,flagOf,evidence,neutralClean,permissionAudit } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,assertSameTree,continueUnit } from './continuation.mjs';
@@ -83,20 +83,20 @@ function prepare(task) {
     save(join(records,'setup.json'),{toolchain:u.toolchain,setup:task.setup,constraintHash:pins['sha256:pip-constraint']});
     runSetupScript(live,checkEnv,join(folder,'prepare.ps1'));
   }
-  const ignored=ignoredListing(git);
+  const ignored=ignoredListing(git),installed=installedPackages(live);
   if(!smoke) {
     checkProjectSettings(work);
     assertCheckerTools(u,graderEnv());
   }
-  return ignored;
+  return {ignored,installed};
 }
 const graderEnv=()=>gradeEnv(checkEnv,u,live,join(records,'grade','checker.log'));
-async function session(task,prompt,session,id,resume=false) {
+async function session(task,prompt,session,id,resume=false,gate) {
   const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain,apparatus:APPARATUS};
   if(reuse) call.frozenSmoke=true;
   checkProjectSettings(work);
   const onFirstCall=!smoke && id==='apply' ? ()=>save(join(unit,'evidence','intent-'+session+'.json'),{session}) : undefined;
-  const archives=await launch(live,token,checkEnv,call,onFirstCall);
+  const archives=await launch(live,token,checkEnv,call,{gate,onFirstCall});
   const projects=join(live,'home/.claude/projects');
   const transcript=findTranscript(projects,session);
   assert(transcript,'Missing CLI transcript for '+task.id);
@@ -122,8 +122,7 @@ function grade(before,commands) {
   holdPre(work,post,FIRST_REF);
   const env=graderEnv();
   assertCheckerTools(u,env);
-  return guardedRun(runCheck,u.lesson,{work,env,preCommit:before,postCommit:post,commands,scratch:join(records,'grade'),
-    status:join(records,'grade','checker-status.json')});
+  return guardedRun(runCheck,u.lesson,{work,env,preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
 }
 function archive(name) {
   const dest=inside(join(unit,'evidence',name));
@@ -160,22 +159,22 @@ async function teach() {
 const smokeChecks=[];
 async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   checkout(u.apply);
-  const ignoredSetup=prepare(u.apply);
+  const {ignored:ignoredSetup,installed:installedSetup}=prepare(u.apply);
   const resetHash=resetBuiltIn(live,pre,expected);
   for(const d of ['tmp','roaming','local']) mkdir(join(live,'home',d));
   assert.equal(hash(JSON.stringify(files(snap))),snapshotHash,'Frozen snapshot changed');
   const fork=forkStore(snap,baseStore,store,teachId,arm);
   const notes=contents(store);
   const before=stateCommit(work,u.apply.baseRef), sid=randomUUID(), preTree=treeOf(git,before);
-  assertSameTree(unit,index,{preTree,ignoredSetup});
   holdPre(work,before);
   const cue=await openCue(work,sid); settings(cue.hook);
-  const {commands,result,archives,archived,transcript}=await session(u.apply,u.apply.prompt,sid,'apply').finally(cue.close);
-  const pathAudit=auditApply(pathAttempts(archives,archived,live),sid,live);
+  const gate=()=>assertSameTree(unit,index,{preTree,ignoredSetup,installedSetup});
+  const {commands,result,archives,archived,transcript}=await session(u.apply,u.apply.prompt,sid,'apply',false,gate).finally(cue.close);
+  const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
   const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=flagOf(u,verdict,commands);
-  const receipt={id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,ignoredSetup,
+  const receipt={id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,ignoredSetup,installedSetup,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...archived,...audit};
   const dest=archive('apply-'+index);
   smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));

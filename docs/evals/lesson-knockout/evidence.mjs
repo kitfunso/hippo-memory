@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { read,root } from './plan.mjs';
+import { APPARATUS,hash,read,root } from './plan.mjs';
 import { findTranscript } from '../../../scripts/token-eval/records.mjs';
 
 const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
@@ -21,11 +21,10 @@ export function permissionAudit(transcript,prompt,denials) {
     Array.isArray(denied) && denied.length===0;
   return {ok,modes,promptMode,denied};
 }
-const mainTurns=transcript=>rowsOf(transcript).filter(r=>r.type==='assistant' && !r.isSidechain &&
-  !r.isApiErrorMessage && r.message?.model!=='<synthetic>');
-export function mainPairs(transcript) {
+function pairsOf(rows) {
   const pairs=[];
-  for(const r of mainTurns(transcript)) {
+  for(const r of rows) {
+    if(r.type!=='assistant' || r.isSidechain || r.isApiErrorMessage || r.message?.model==='<synthetic>') continue;
     if(!r.requestId || !r.message?.id) return null;
     const key=r.requestId+'\n'+r.message.id;
     if(pairs.at(-1)===key) continue;
@@ -34,19 +33,63 @@ export function mainPairs(transcript) {
   }
   return pairs;
 }
+export const mainPairs=transcript=>pairsOf(rowsOf(transcript));
 const pairOf=r=>r.request_id+'\n'+r.message_id;
-function sessionTranscripts(transcript) {
-  const sid=path.basename(transcript,'.jsonl'),sub=path.join(path.dirname(transcript),sid,'subagents');
-  const subs=fs.existsSync(sub)?fs.readdirSync(sub).filter(f=>f.endsWith('.jsonl')).sort().map(f=>path.join(sub,f)):[];
-  return [transcript,...subs];
+
+export const sourceKind=s=>typeof s!=='string' || !s ? null :
+  s.startsWith('repl_main_thread') || s==='sdk' ? 'main' : s.startsWith('agent:') || s==='hook_agent' ? 'subagent' : 'auxiliary';
+const replayed=s=>['main','subagent'].includes(sourceKind(s));
+const jsonl=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(f=>f.endsWith('.jsonl')).sort().map(f=>path.join(dir,f)):[];
+const ownSubagents=(transcript,sid)=>jsonl(path.join(path.dirname(transcript),sid,'subagents'));
+const anySubagents=(projects,sid)=>fs.existsSync(projects) ?
+  fs.readdirSync(projects).sort().flatMap(p=>jsonl(path.join(projects,p,sid,'subagents'))) : [];
+function callRows(main,subs,prompt) {
+  if(!main || !fs.existsSync(main)) return null;
+  const rows=rowsOf(main),start=promptStart(rows,prompt);
+  if(start<0) return null;
+  const since=rows[start].timestamp;
+  const later=r=>since===undefined || (typeof r.timestamp==='string' && r.timestamp>=since);
+  return {rows:rows.slice(start),sub:subs.flatMap(rowsOf).filter(later)};
 }
-const apiRows=transcript=>sessionTranscripts(transcript).flatMap(rowsOf).filter(r=>r.type==='api-request');
-const sorted=list=>JSON.stringify([...list].sort());
-export const sourcesMatch=(rows,transcript)=>rows.every(r=>typeof r.query_source==='string' && r.query_source.length>0) &&
-  sorted(rows.map(r=>r.query_source))===sorted(apiRows(transcript).map(r=>r.querySource));
-function reconciled(main,transcript) {
-  if(!transcript || !fs.existsSync(transcript) || !main.length) return false;
-  const pairs=mainPairs(transcript),sent=main.map(pairOf);
+function covers(have,need) {
+  const left=[...have];
+  return need.every(s=>{
+    const i=left.indexOf(s);
+    if(i<0) return false;
+    left.splice(i,1);
+    return true;
+  });
+}
+const indexRows=dir=>{
+  const index=path.join(dir,'index.jsonl');
+  return fs.existsSync(index)?rowsOf(index):[];
+};
+const requestNames=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(n=>n.endsWith('.request.json')).sort():[];
+const ownFile=name=>typeof name==='string' && path.basename(name)===name;
+const valid=b=>Array.isArray(b?.messages) && !!b.system && !b.not_recorded;
+function ledger(dir,sid,call) {
+  const names=requestNames(dir),rows=indexRows(dir),files=new Set(names),indexed=rows.map(r=>r.request_file);
+  const bodies=new Map(names.map(n=>[n,read(path.join(dir,n))]));
+  const api=call?[...call.rows,...call.sub].filter(r=>r.type==='api-request'):[];
+  const eligible=rows.filter(r=>replayed(r.query_source)).map(r=>r.query_source);
+  const ok=!!call && new Set(indexed).size===indexed.length &&
+    rows.every(r=>r.session_id===sid && sourceKind(r.query_source) && ownFile(r.request_file) && ownFile(r.response_file) &&
+      files.has(r.request_file) && fs.existsSync(path.join(dir,r.response_file))) &&
+    api.every(r=>r.sessionId===sid && replayed(r.querySource)) && covers(api.map(r=>r.querySource),eligible) &&
+    names.length-rows.length>=api.length-eligible.length && names.every(n=>valid(bodies.get(n)));
+  const main=rows.filter(r=>r.query_source===MAIN_SOURCE);
+  const ordered=[...main.map(r=>r.request_file),...names.filter(n=>!main.some(r=>r.request_file===n))];
+  return {ok,rows,main,byName:bodies,bodies:ordered.filter(n=>bodies.has(n)).map(n=>bodies.get(n)),unanswered:names.length-rows.length};
+}
+function answered(dir,rows,lastMain,emptyLast) {
+  return rows.every(r=>{
+    const raw=fs.readFileSync(path.join(dir,r.response_file));
+    if(raw.length) return JSON.parse(raw).id===r.message_id;
+    return r===lastMain && emptyLast(r);
+  });
+}
+function reconciled(main,pairs) {
+  const sent=main.map(pairOf);
   return !!pairs && new Set(sent).size===sent.length && sent.length===pairs.length && sent.every((k,i)=>k===pairs[i]);
 }
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
@@ -108,49 +151,30 @@ function finalMessageMatches(file,row,result) {
   if(!file || result.exit!==0 || result.isError!==false || result.subtype!=='success' ||
     !row.request_id || !row.message_id || !row.message_uuid || row.response_file!==row.request_id+'.response.json' ||
     path.basename(file)!==result.session+'.jsonl' || !fs.existsSync(file)) return false;
-  const transcript=fs.readFileSync(file,'utf8').trim().split(/\r?\n/).filter(Boolean).map(line=>JSON.parse(line));
-  const last=transcript.filter(r=>r.type==='assistant').at(-1),m=last?.message;
+  const last=rowsOf(file).filter(r=>r.type==='assistant').at(-1),m=last?.message;
   return last?.sessionId===result.session && last.requestId===row.request_id && last.uuid===row.message_uuid &&
     m?.id===row.message_id && m.type==='message' && m.role==='assistant' && m.stop_reason==='end_turn' &&
     m.usage?.output_tokens>0 && Array.isArray(m.content) &&
     m.content.some(b=>b.type==='text' && typeof b.text==='string' && b.text.trim());
 }
 
-const indexRows=dir=>{
-  const index=path.join(dir,'index.jsonl');
-  return fs.existsSync(index)?rowsOf(index):[];
-};
-const requestNames=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(n=>n.endsWith('.request.json')):[];
-const ownFile=name=>typeof name==='string' && path.basename(name)===name;
-
 export function evidence(dir,result,notes,lesson,task={},transcript) {
-  const names=requestNames(dir),rows=indexRows(dir);
-  const indexed=new Set(rows.map(r=>r.request_file));
-  const main=rows.filter(r=>r.query_source===MAIN_SOURCE),side=rows.filter(r=>r.query_source!==MAIN_SOURCE);
-  let transcriptResponse;
-  const complete=names.length>0 && names.length===rows.length && indexed.size===rows.length && names.every(n=>indexed.has(n)) &&
-    !!transcript && fs.existsSync(transcript) && sourcesMatch(rows,transcript) &&
-    rows.every(r=>r.session_id===result.session && ownFile(r.request_file) && ownFile(r.response_file)) &&
-    main.every((r,i)=>{
-      const raw=fs.readFileSync(path.join(dir,r.response_file));
-      if(raw.length) return JSON.parse(raw).id===r.message_id;
-      if(i!==main.length-1 || !finalMessageMatches(transcript,r,result)) return false;
-      transcriptResponse=r.request_id;
-      return true;
-    });
-  const bodyOf=r=>names.includes(r.request_file)?read(path.join(dir,r.request_file)):{};
-  const mainBodies=main.map(bodyOf),bodies=[...mainBodies,...side.map(bodyOf)];
-  const surfaces=bodies.filter(valid).map(b=>deliverySurfaces(b,task));
+  const call=transcript && fs.existsSync(transcript) ? callRows(transcript,ownSubagents(transcript,result.session),task.prompt) : null;
+  const l=ledger(dir,result.session,call);
+  const last=l.main.at(-1);
+  const complete=l.ok && !!last && answered(dir,l.rows,last,r=>finalMessageMatches(transcript,r,result)) &&
+    reconciled(l.main,pairsOf(call.rows));
+  const transcriptResponse=complete && fs.statSync(path.join(dir,last.response_file)).size===0 ? last.request_id : undefined;
+  const surfaces=l.bodies.filter(valid).map(b=>deliverySurfaces(b,task));
   const block=normalize('Project notes\n'+notes.map(e=>'- '+e.content).join('\n'));
-  const first=valid(mainBodies[0]??{}) ? deliverySurfaces(mainBodies[0],task) : null;
+  const firstMain=l.byName.get(l.main[0]?.request_file);
+  const first=valid(firstMain) ? deliverySurfaces(firstMain,task) : null;
   const hookSeen=!!first && [...first.system,...first.prompt].some(s=>s!==task.prompt && hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {requests:bodies.length,sideRequests:side.length,
-    complete:!!complete && bodies.every(valid) && reconciled(main,transcript),hookSeen,
+  return {requests:l.bodies.length,sideRequests:l.rows.length-l.main.length,unanswered:l.unanswered,complete:!!complete,hookSeen,
     targetText:targetIn(surfaces,lesson,task),...(transcriptResponse && {transcriptResponse})};
 }
 
-const valid=b=>Array.isArray(b?.messages) && !!b.system && !b.not_recorded;
 function targetIn(surfaces,lesson,task) {
   const target=(s,allow=false)=>normalize(s).includes(normalize(lesson.rule)) ||
     (!allow && normalize(s).includes(normalize(lesson.keyPhrase)));
@@ -158,35 +182,23 @@ function targetIn(surfaces,lesson,task) {
     [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
 }
 
-const USAGE_KEYS=['input_tokens','output_tokens','cache_creation_input_tokens','cache_read_input_tokens'];
-const zeroUsage=usage=>!!usage && USAGE_KEYS.every(k=>usage[k]===0 || usage[k]===undefined);
 function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const operator=path.join(path.dirname(live),'operator'),dir=path.join(operator,'bodies',id);
-  const transcript=findTranscript(path.join(live,'home/.claude/projects'),sid);
-  const pairs=transcript?mainPairs(transcript):[],api=transcript?apiRows(transcript):[];
-  const names=requestNames(dir),rows=indexRows(dir),recordFile=path.join(operator,id+'.json');
-  const record=fs.existsSync(recordFile)?read(recordFile):null;
-  const own=record?.session===sid && record.call===id && record.cutOff===true;
-  const lines=transcript?rowsOf(transcript):[],start=promptStart(lines,prompt);
-  const modes=start<0?[]:lines.slice(start).map(r=>r.permissionMode).filter(Boolean);
-  if(own && record.json===true && record.turns===0 && zeroUsage(record.usage) && cleanDenials(record.permissionDenials) &&
-    !names.length && !rows.length && !api.length && !!pairs && !pairs.length)
-    return {status:'refused',target:false,permissions:true};
-  const bodies=names.map(n=>read(path.join(dir,n))),indexed=new Set(rows.map(r=>r.request_file)),sent=new Set(rows.map(pairOf));
-  const inspectable=own && !!transcript && !!pairs && names.length>0 && names.length===rows.length && indexed.size===rows.length &&
-    names.every(n=>indexed.has(n)) && bodies.every(valid) && rows.every(r=>r.session_id===sid) &&
-    sourcesMatch(rows,transcript) && pairs.every(p=>sent.has(p));
-  const permissions=own && cleanDenials(record.permissionDenials) && modes.length>0 && modes.every(m=>m==='bypassPermissions');
+  const projects=path.join(live,'home/.claude/projects'),transcript=findTranscript(projects,sid);
+  const call=callRows(transcript,anySubagents(projects,sid),prompt),l=ledger(dir,sid,call);
+  const recordFile=path.join(operator,id+'.json'),record=fs.existsSync(recordFile)?read(recordFile):null;
+  const own=record?.session===sid && record.call===id && record.promptSha256===hash(prompt) &&
+    record.apparatus===APPARATUS && record.cutOff===true;
+  const inspectable=own && l.ok && l.bodies.length>0 && reconciled(l.main,pairsOf(call.rows)) &&
+    answered(dir,l.rows,l.main.at(-1),()=>true);
+  const permissions=own && !!call && permissionAudit(transcript,prompt,record.permissionDenials).ok;
   return {status:inspectable?'dispatched':'unauditable',
-    target:inspectable && targetIn(bodies.map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
+    target:inspectable && targetIn(l.bodies.map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
 }
 
 export function archivedAudit(archives,id,sid,prompt,lesson,task) {
   const attempts=archives.map(live=>archivedAttempt(live,id,sid,prompt,lesson,task));
-  const count=status=>attempts.filter(a=>a.status===status).length;
-  return {archivedAttempts:attempts.length,archivedRefused:count('refused'),archivedUnauditable:count('unauditable'),
-    archivedTargetText:attempts.some(a=>a.target),archivedPermissions:attempts.every(a=>a.permissions),
-    archivedStatuses:attempts.map(a=>a.status)};
+  return {archivedAttempts:attempts.length,archivedUnauditable:attempts.filter(a=>a.status==='unauditable').length,
+    archivedTargetText:attempts.some(a=>a.target),archivedPermissions:attempts.every(a=>a.permissions)};
 }
-export const pathAttempts=(archives,archived,live)=>[...archives.filter((_,i)=>archived.archivedStatuses[i]!=='refused'),live];
 export const neutralClean=r=>r.targetText===false && r.archivedTargetText===false && r.archivedUnauditable===0;

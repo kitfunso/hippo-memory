@@ -16,6 +16,25 @@ if(verifying) process.on('exit',()=>fs.rmSync(stateRoot,{recursive:true,force:tr
 export const mkdir = dir => fs.mkdirSync(dir,{recursive:true});
 export const treeOf=(git,commit)=>git('rev-parse',commit+'^{tree}');
 export const ignoredListing=git=>hash(git('ls-files','--others','--ignored','--exclude-standard','--directory'));
+const OUTSIDE_INSTALL=new Set(['home','setup-home','cache']);
+const byName=(a,b)=>a.name<b.name ? -1 : a.name>b.name ? 1 : 0;
+export function installedPackages(live) {
+  const out=[];
+  const walk=(dir,rel)=>{
+    for(const e of fs.readdirSync(dir,{withFileTypes:true}).sort(byName)) {
+      const full=join(dir,e.name),r=rel ? rel+'/'+e.name : e.name;
+      if(e.isFile() && e.name==='project.assets.json')
+        out.push(r+' '+Object.keys(JSON.parse(fs.readFileSync(full,'utf8')).libraries??{}).sort().join(','));
+      if(!e.isDirectory() || e.name==='.git' || (!rel && OUTSIDE_INSTALL.has(e.name))) continue;
+      if(e.name.endsWith('.dist-info')) { out.push(r); continue; }
+      const parent=path.basename(dir),modules=parent==='node_modules' || (parent.startsWith('@') && path.basename(path.dirname(dir))==='node_modules');
+      if(modules && fs.existsSync(join(full,'package.json'))) out.push(r+' '+hash(fs.readFileSync(join(full,'package.json'))));
+      walk(full,r);
+    }
+  };
+  walk(live,'');
+  return hash(out.join('\n'));
+}
 export const save = (f,v) => fs.writeFileSync(f,JSON.stringify(v,null,2)+'\n',{flag:'wx'});
 export function inside(p) {
   const rel=path.relative(path.resolve(stateRoot),path.resolve(p));

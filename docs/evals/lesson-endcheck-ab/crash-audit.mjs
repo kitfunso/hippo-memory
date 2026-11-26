@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { GUARD,guardState } from '../checker-guard/lesson.mjs';
+import { read } from './paths.mjs';
 
-export const STATUSES=['ran','crash','error'];
+export const STATUSES=['ran','crash','error','unverifiable'];
 export const auditFile=root=>path.join(root,'crash-audit.jsonl');
 export const AUDITED_GRADERS=[undefined,'crash-guard-1'];
 
@@ -19,12 +20,29 @@ export function readAudits(file) {
   return audits;
 }
 
-export function audited(row,pair,arm,audits) {
+export function boundIntent(base,arm,dir) {
+  const isIntent=name=>{
+    const index=name.startsWith(arm+'-') && name.endsWith('.json') ? name.slice(arm.length+1,-'.json'.length) : '';
+    return index!=='' && String(Number(index))===index;
+  };
+  const found=fs.readdirSync(base).filter(isIntent).map(name=>({name,...read(path.join(base,name))})).filter(i=>i.dir===dir);
+  return found.length===1?found[0]:null;
+}
+
+export function armBinding(base,arm) {
+  const {dir}=read(path.join(base,arm+'.json'));
+  return {dir,id:boundIntent(base,arm,dir)?.id};
+}
+
+export function audited(row,pair,arm,audits,binding) {
   if(row===null || row.grader===GUARD) return row;
   assert.ok(AUDITED_GRADERS.includes(row.grader),'Unknown grader stamp on the '+arm+' row of '+pair);
   const a=audits.get(pair+' '+arm);
   assert.ok(a,'The unguarded '+arm+' row of '+pair+' has no crash audit record');
-  return a.status==='ran'?row:null;
+  const ran=a.status==='ran';
+  assert.ok(a.dir===binding.dir && a.grader===row.grader && (!ran || (a.id===binding.id && a.calls===1+row.listings.length)),
+    'The crash audit record for the '+arm+' row of '+pair+' does not match that row');
+  return ran?row:null;
 }
 
 export function classify(grade) {
