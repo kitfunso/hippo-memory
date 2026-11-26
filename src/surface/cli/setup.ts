@@ -193,8 +193,18 @@ function setupWrapperTool(tool: ToolDetection, dryRun: boolean): void {
 }
 
 function setupPluginTool(tool: ToolDetection, dryRun: boolean): void {
+  if (tool.name === 'hermes') {
+    const target = homeTarget('hermes');
+    if (target === undefined) throw new Error('no home target named hermes');
+    if (dryRun) {
+      const line = target.dryRunLine?.();
+      if (line !== undefined) console.log(`  ${tool.name.padEnd(14)} [dry-run] ${line}`);
+      return;
+    }
+    target.install(`  ${tool.name.padEnd(14)} `, true);
+    return;
+  }
   if (tool.name !== 'opencode') {
-    // Other plugin tools (openclaw) have their own installer; the notes line points the user at it.
     console.log(`  ${tool.name.padEnd(14)} ${tool.notes}`);
     return;
   }

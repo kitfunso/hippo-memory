@@ -3,12 +3,19 @@ import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { installCopilot, isCopilotCliPresent, uninstallCopilot } from '../hooks-install/copilot.js';
 import {
+  hermesPluginPaths,
+  installHermes,
+  isHermesPresent,
+  uninstallHermes,
+} from '../hooks-install/hermes.js';
+import {
   installMcpConfigHost,
   isMcpConfigHostPresent,
   uninstallMcpConfigHost,
 } from '../hooks-install/mcp-config.js';
 import { MCP_CONFIG_HOSTS, type McpConfigRow } from '../hooks-install/rules/mcp-config.js';
 import { printCopilotInstall, printCopilotUninstall } from './copilot-report.js';
+import { printHermesInstall, printHermesUninstall } from './hermes-report.js';
 import { printMcpConfigInstall, printMcpConfigUninstall } from './mcp-config-report.js';
 
 export interface HomeTarget {
@@ -43,9 +50,22 @@ function mcpConfigTarget(row: McpConfigRow): HomeTarget {
   };
 }
 
+const HERMES_TARGET: HomeTarget = {
+  name: 'hermes',
+  listLine: () =>
+    `  ${'hermes'.padEnd(15)} -> ${hermesPluginPaths(processHomes()).pluginDir} ` +
+    '(Hermes Agent: memory provider plugin)',
+  dryRunLine: () =>
+    `would copy the hippo memory provider to ${hermesPluginPaths(processHomes()).pluginDir}`,
+  initPresent: () => isHermesPresent(processHomes()),
+  install: (indent) => printHermesInstall(installHermes(processHomes()), indent),
+  uninstall: () => printHermesUninstall(uninstallHermes(processHomes())),
+};
+
 export const HOME_TARGETS: readonly HomeTarget[] = [
   COPILOT_TARGET,
   ...MCP_CONFIG_HOSTS.map(mcpConfigTarget),
+  HERMES_TARGET,
 ];
 
 export function homeTarget(name: string): HomeTarget | undefined {

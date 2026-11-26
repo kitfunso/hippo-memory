@@ -1,9 +1,10 @@
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi|
-                           junie|antigravity|grok-build|muse-code)
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|hermes|openclaw|
+                           opencode|pi|junie|antigravity|grok-build|muse-code)
                            claude-code adds 9 hooks to $CLAUDE_CONFIG_DIR/settings.json
-                           (~/.claude by default); opencode installs a plugin; codex
+                           (~/.claude by default); opencode installs a plugin; hermes copies
+                           the memory provider plugin into the active Hermes profile; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; copilot writes
                            hooks/hippo.json, the "hippo" MCP server and an instructions
@@ -12,4 +13,4 @@
                            to their own config file; codex, cursor, openclaw, opencode
                            and pi also patch an existing AGENTS.md
     hook install <target> --force  Also replace an edited hippo block and add back hooks you removed
-    hook uninstall <target> Remove hook; for copilot and the MCP-config tools, only what hippo wrote
+    hook uninstall <target> Remove hook; for copilot, hermes and the MCP-config tools, only what hippo wrote

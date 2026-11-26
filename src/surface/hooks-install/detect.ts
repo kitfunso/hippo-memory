@@ -11,6 +11,7 @@ import {
   type Homes,
 } from '../../base/util/agent-homes.js';
 import { homeDir, processHomes } from '../../host/agent-homes.js';
+import { hermesPluginPaths, isHermesPresent } from './hermes.js';
 import { isMcpConfigHostPresent } from './mcp-config.js';
 import { MCP_CONFIG_HOSTS } from './rules/mcp-config.js';
 import { copilotHomeDir, type ToolDetection } from './rules/shared.js';
@@ -50,11 +51,13 @@ const COPILOT_NOTES =
 
 export function detectInstalledTools(): ToolDetection[] {
   const home = homeDir();
+  const homes = processHomes();
   const exists = (...parts: string[]) => fs.existsSync(path.join(home, ...parts));
   return [
     ...detectClaudeToCodex(home, exists),
     ...detectCopilotToPi(exists),
-    ...detectMcpConfigHosts(processHomes()),
+    ...detectMcpConfigHosts(homes),
+    detectHermes(homes),
   ];
 }
 
@@ -130,4 +133,15 @@ function detectMcpConfigHosts(homes: Homes): ToolDetection[] {
     kind: 'mcp-config',
     notes: `the hippo MCP server in ${row.file(homes)}`,
   }));
+}
+
+function detectHermes(homes: Homes): ToolDetection {
+  const { home, pluginDir } = hermesPluginPaths(homes);
+  return {
+    name: 'hermes',
+    configDir: home,
+    detected: isHermesPresent(homes),
+    kind: 'plugin',
+    notes: `copies the hippo memory provider to ${pluginDir}`,
+  };
 }
