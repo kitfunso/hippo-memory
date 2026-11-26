@@ -400,7 +400,7 @@ function servedOptsFor(
     counts.autoSleeps += 1;
     return sleeps.consolidate();
   };
-  const sleepsHere = opts.autoSleep !== false && runtime.onHippoDb;
+  const sleepsHere = opts.autoSleep !== false && childSleeps;
   const counted = sleepsHere && hasGroup(store, 'reports') ? store : undefined;
   const autoSleep = counted && { run, hostTenantId: envTenant(), newSince: newRowsOn(counted) };
   const callers = createCallerState(autoSleep);
