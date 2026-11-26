@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { APPARATUS,DISPATCH_LOG,hash,read,root } from './plan.mjs';
+import zlib from 'node:zlib';
+import { APPARATUS,hash,read,root } from './plan.mjs';
+import { WIRE_LOG,wireName } from './wire.mjs';
 import { listTranscripts } from '../../../scripts/token-eval/records.mjs';
 
 const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
@@ -33,10 +35,6 @@ function pairsOf(rows) {
   return pairs;
 }
 export const mainPairs=transcript=>pairsOf(rowsOf(transcript));
-const pairOf=r=>r.request_id+'\n'+r.message_id;
-
-export const sourceKind=s=>typeof s!=='string' || !s ? null :
-  s.startsWith('repl_main_thread') || s==='sdk' ? 'main' : s.startsWith('agent:') || s==='hook_agent' ? 'subagent' : 'auxiliary';
 export function sessionInventory(projects,sid) {
   const parts=f=>path.relative(path.resolve(projects),f).split(path.sep);
   const files=listTranscripts(projects).map(f=>path.resolve(f)).sort();
@@ -50,48 +48,102 @@ function callRows(inventory,prompt) {
   const rows=rowsOf(inventory.main),start=promptStart(rows,prompt);
   return start<0 ? null : {rows:rows.slice(start)};
 }
-const indexRows=dir=>{
-  const index=path.join(dir,'index.jsonl');
-  return fs.existsSync(index)?rowsOf(index):[];
-};
-const requestNames=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(n=>n.endsWith('.request.json')).sort():[];
-const ownFile=name=>typeof name==='string' && path.basename(name)===name;
-const valid=b=>Array.isArray(b?.messages) && !!b.system && !b.not_recorded;
-export function dispatched(dir,sid) {
-  const log=path.join(dir,DISPATCH_LOG),names=requestNames(dir);
-  if(!fs.existsSync(log)) return {ok:false,sources:new Map()};
-  const events=rowsOf(log),sources=new Map();
-  const ok=events.every(e=>{
-    const name=typeof e.request_body_id==='string' && e.request_body_id+'.request.json',file=name && path.join(dir,name);
-    if(!name || sources.has(name) || e['event.name']!=='api_request_body' || e['session.id']!==sid || !sourceKind(e.query_source) ||
-      e.body_withheld!==undefined || path.win32.basename(String(e.body_ref))!==name || !fs.existsSync(file) ||
-      fs.statSync(file).size!==Number(e.body_length)) return false;
-    sources.set(name,e.query_source);
-    return true;
-  }) && names.length===sources.size && names.every(n=>sources.has(n));
-  return {ok,sources};
+const ROUTES=new Map([['GET /api/claude_code/settings','settings'],['GET /api/claude_code/policy_limits','policy'],
+  ['POST /v1/messages?beta=true','generate'],['POST /v1/messages/count_tokens?beta=true','count']]);
+const MODEL_ROUTES=new Set(['generate','count']);
+const ROW_KINDS=new Set(['request','response','end','tunnel','refused','closed']);
+const ANTHROPIC_HOST=/(?:^|\.)(?:anthropic\.com|claude\.ai|claude\.com)$/i;
+function decoded(raw,encoding) {
+  if(!encoding || encoding==='identity') return raw;
+  if(encoding==='gzip') return zlib.gunzipSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
+  if(encoding==='deflate') return zlib.inflateSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
+  if(encoding==='br') return zlib.brotliDecompressSync(raw,{finishFlush:zlib.constants.BROTLI_OPERATION_FLUSH});
+  throw Error('Unknown content encoding '+encoding);
 }
-function ledger(dir,sid,call) {
-  const names=requestNames(dir),rows=indexRows(dir),indexed=rows.map(r=>r.request_file),sent=dispatched(dir,sid);
-  const bodies=new Map(names.map(n=>[n,read(path.join(dir,n))]));
-  const ok=!!call && sent.ok && new Set(indexed).size===indexed.length &&
-    rows.every(r=>r.session_id===sid && ownFile(r.request_file) && ownFile(r.response_file) &&
-      sent.sources.get(r.request_file)===r.query_source && fs.existsSync(path.join(dir,r.response_file))) &&
-    names.every(n=>valid(bodies.get(n)));
-  const main=rows.filter(r=>sourceKind(r.query_source)==='main');
-  const ordered=[...main.map(r=>r.request_file),...names.filter(n=>!main.some(r=>r.request_file===n))];
-  return {ok,rows,main,byName:bodies,bodies:ordered.filter(n=>bodies.has(n)).map(n=>bodies.get(n)),unanswered:names.length-rows.length};
+function replyOf(text,contentType) {
+  if(/text\/event-stream/i.test(contentType??'')) {
+    const events=text.split(/\r?\n\r?\n/).map(block=>block.split(/\r?\n/).filter(l=>l.startsWith('data:'))
+      .map(l=>l.slice(5).trimStart()).join('\n')).filter(Boolean).map(data=>{
+        try { return JSON.parse(data); } catch { return {type:'unparsed'}; }
+      });
+    const error=events.find(e=>e?.type==='error' || e?.type==='unparsed');
+    return {id:events.find(e=>e?.type==='message_start')?.message?.id ?? null,stop:events.some(e=>e?.type==='message_stop'),
+      error:error ? error.error?.type ?? error.type : null};
+  }
+  try {
+    const body=JSON.parse(text);
+    if(body?.type==='message') return {id:body.id ?? null,stop:true,error:null};
+    return {id:null,stop:false,error:body?.type==='error' ? body.error?.type ?? 'error' : null,json:body};
+  } catch { return {id:null,stop:false,error:'unparsed'}; }
 }
-function answered(dir,rows,lastMain,emptyLast) {
-  return rows.every(r=>{
-    const raw=fs.readFileSync(path.join(dir,r.response_file));
-    if(raw.length) return JSON.parse(raw).id===r.message_id;
-    return r===lastMain && emptyLast(r);
-  });
+function savedRequest(dir,q,route) {
+  if(!MODEL_ROUTES.has(route)) return q.file===null ? {body:null} : {reason:'a non-model request file'};
+  if(q.file!==wireName(q.seq,'.request.json')) return {reason:'request '+q.seq+' file name'};
+  const file=path.join(dir,q.file);
+  if(!fs.existsSync(file)) return {reason:'request '+q.seq+' file missing'};
+  const saved=fs.readFileSync(file);
+  if(hash(saved)!==q.savedSha256) return {reason:'request '+q.seq+' file changed'};
+  let body;
+  try { body=JSON.parse(saved.toString('utf8')); } catch { return {reason:'request '+q.seq+' is not JSON'}; }
+  if(!Array.isArray(body?.messages) || (route==='generate' && !body.system)) return {reason:'request '+q.seq+' is not a model request'};
+  return {body};
 }
-function reconciled(main,pairs) {
-  const sent=main.map(pairOf);
-  return !!pairs && new Set(sent).size===sent.length && sent.length===pairs.length && sent.every((k,i)=>k===pairs[i]);
+function savedReply(dir,q,route,response,end) {
+  if(!response) return end.ended==='upstream-error' ? {reply:null} : {reason:'exchange '+q.seq+' has no response'};
+  if(!MODEL_ROUTES.has(route)) return response.file===null ? {reply:null} : {reason:'a non-model response file'};
+  if(response.file!==wireName(q.seq,'.response')) return {reason:'response '+q.seq+' file name'};
+  const file=path.join(dir,response.file);
+  if(!fs.existsSync(file)) return {reason:'response '+q.seq+' file missing'};
+  const raw=fs.readFileSync(file);
+  if(raw.length!==end.bytes || hash(raw)!==end.sha256) return {reason:'response '+q.seq+' file changed'};
+  let text='';
+  try { text=decoded(raw,response.encoding).toString('utf8'); }
+  catch { if(end.ended==='complete') return {reason:'response '+q.seq+' does not decode'}; }
+  return {reply:replyOf(text,response.contentType)};
+}
+function finished(route,response,end,reply) {
+  if(response?.status!==200 || end.ended!=='complete') return false;
+  if(route==='generate') return !!reply.id && reply.stop && !reply.error;
+  return route==='count' ? Number.isInteger(reply.json?.input_tokens) : true;
+}
+export function wireLedger(dir) {
+  const fail=reason=>({ok:false,reason,exchanges:[],hosts:[]});
+  const log=path.join(dir,WIRE_LOG);
+  if(!fs.existsSync(log)) return fail('no wire log');
+  let rows;
+  try { rows=rowsOf(log); } catch { return fail('unreadable wire log'); }
+  const closed=rows.at(-1),hosts=rows.filter(r=>r.kind==='tunnel').map(r=>String(r.host));
+  if(closed?.kind!=='closed' || closed.open!==0 || rows.filter(r=>r.kind==='closed').length!==1) return fail('wire not closed');
+  if(rows.some(r=>!ROW_KINDS.has(r.kind))) return fail('fault or unknown wire row');
+  if(rows.some(r=>r.kind==='refused' && r.reason!=='plain')) return fail('refused request');
+  if(hosts.some(h=>ANTHROPIC_HOST.test(h))) return fail('tunnel to an Anthropic host');
+  const requests=rows.filter(r=>r.kind==='request');
+  if(requests.length!==closed.exchanges || requests.some((r,i)=>r.seq!==i+1)) return fail('wire sequence');
+  const exchanges=[];
+  for(const q of requests) {
+    const at=kind=>rows.flatMap((r,i)=>r.kind===kind && r.seq===q.seq ? [i] : []);
+    const [responses,ends]=[at('response'),at('end')],start=rows.indexOf(q);
+    if(responses.length>1 || ends.length!==1 || ends[0]<start || (responses.length && !(start<responses[0] && responses[0]<ends[0])))
+      return fail('exchange '+q.seq+' rows');
+    const route=ROUTES.get(q.method+' '+q.path),response=rows[responses[0]],end=rows[ends[0]];
+    if(!route) return fail('unknown route '+q.method+' '+q.path);
+    const request=savedRequest(dir,q,route),answer=request.reason ? {} : savedReply(dir,q,route,response,end);
+    if(request.reason || answer.reason) return fail(request.reason ?? answer.reason);
+    exchanges.push({seq:q.seq,route,status:response?.status ?? null,requestId:response?.requestId ?? null,ended:end.ended,
+      body:request.body,reply:answer.reply,complete:finished(route,response,end,answer.reply)});
+  }
+  return {ok:true,reason:null,exchanges,hosts};
+}
+const generated=w=>w.exchanges.filter(x=>x.route==='generate');
+const modelBodies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.body);
+function matched(w,inventory,call,{success}) {
+  if(!w.ok || !call || inventory.subs.length) return false;
+  const pairs=pairsOf(call.rows),sent=generated(w),done=sent.filter(x=>x.complete).map(x=>x.requestId+'\n'+x.reply.id);
+  const last=sent.at(-1);
+  if(!pairs || !last || pairs.length!==done.length || pairs.some((k,i)=>k!==done[i])) return false;
+  if(success) return last.complete;
+  const error=call.rows.filter(r=>r.type==='assistant' && !r.isSidechain).at(-1);
+  return !last.complete && !!last.requestId && error?.isApiErrorMessage===true && error.requestId===last.requestId;
 }
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
 export const flagOf=(u,verdict,commands)=>u.cls==='variant' ?
@@ -148,33 +200,33 @@ export function deliverySurfaces(body,task={}) {
   return {system,prompt,results};
 }
 
-function finalMessageMatches(file,row,result) {
-  if(!file || result.exit!==0 || result.isError!==false || result.subtype!=='success' ||
-    !row.request_id || !row.message_id || !row.message_uuid || row.response_file!==row.request_id+'.response.json' ||
-    path.basename(file)!==result.session+'.jsonl' || !fs.existsSync(file)) return false;
-  const last=rowsOf(file).filter(r=>r.type==='assistant').at(-1),m=last?.message;
-  return last?.sessionId===result.session && last.requestId===row.request_id && last.uuid===row.message_uuid &&
-    m?.id===row.message_id && m.type==='message' && m.role==='assistant' && m.stop_reason==='end_turn' &&
-    m.usage?.output_tokens>0 && Array.isArray(m.content) &&
-    m.content.some(b=>b.type==='text' && typeof b.text==='string' && b.text.trim());
+function finalMessage(call,result,w) {
+  if(result.exit!==0 || result.isError!==false || result.subtype!=='success') return false;
+  const last=call.rows.filter(r=>r.type==='assistant' && !r.isSidechain).at(-1),m=last?.message,sent=generated(w).at(-1);
+  return !!sent && last?.sessionId===result.session && last.requestId===sent.requestId && m?.id===sent.reply?.id &&
+    m.type==='message' && m.role==='assistant' && m.stop_reason==='end_turn' && m.usage?.output_tokens>0 &&
+    Array.isArray(m.content) && m.content.some(b=>b.type==='text' && typeof b.text==='string' && b.text.trim());
 }
-
-export function evidence(dir,result,notes,lesson,task={},transcript) {
-  const inventory=transcript && fs.existsSync(transcript) ? sessionInventory(path.dirname(path.dirname(transcript)),result.session) : null;
-  const call=inventory?.main===path.resolve(transcript ?? '') ? callRows(inventory,task.prompt) : null;
-  const l=ledger(dir,result.session,call);
-  const last=l.main.at(-1);
-  const complete=l.ok && !!last && answered(dir,l.rows,last,r=>finalMessageMatches(transcript,r,result)) &&
-    reconciled(l.main,pairsOf(call.rows));
-  const transcriptResponse=complete && fs.statSync(path.join(dir,last.response_file)).size===0 ? last.request_id : undefined;
-  const surfaces=l.bodies.filter(valid).map(b=>deliverySurfaces(b,task));
+export function callComplete(dir,result,prompt,transcript,{maxTurns=false}={}) {
+  const w=wireLedger(dir);
+  if(!transcript || !fs.existsSync(transcript) || path.basename(transcript)!==result.session+'.jsonl') return {w,complete:false};
+  const inventory=sessionInventory(path.dirname(path.dirname(transcript)),result.session);
+  const call=inventory.main===path.resolve(transcript) ? callRows(inventory,prompt) : null;
+  const ended=!!call && (maxTurns && result.subtype==='error_max_turns' ? true : finalMessage(call,result,w));
+  return {w,complete:ended && matched(w,inventory,call,{success:true})};
+}
+export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0]) {
   const block=normalize('Project notes\n'+notes.map(e=>'- '+e.content).join('\n'));
-  const firstMain=l.byName.get(l.main[0]?.request_file);
-  const first=valid(firstMain) ? deliverySurfaces(firstMain,task) : null;
-  const hookSeen=!!first && [...first.system,...first.prompt].some(s=>s!==task.prompt && hook.test(s) &&
+  const opening=first ? deliverySurfaces(first,task) : null;
+  const hookSeen=!!opening && [...opening.system,...opening.prompt].some(s=>s!==task.prompt && hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {requests:l.bodies.length,sideRequests:l.rows.length-l.main.length,unanswered:l.unanswered,complete:!!complete,hookSeen,
-    targetText:targetIn(surfaces,lesson,task),...(transcriptResponse && {transcriptResponse})};
+  return {hookSeen,targetText:targetIn(bodies.map(b=>deliverySurfaces(b,task)),lesson,task)};
+}
+export function evidence(dir,result,notes,lesson,task={},transcript) {
+  const {w,complete}=callComplete(dir,result,task.prompt,transcript,{maxTurns:task.maxTurns});
+  const sent=generated(w);
+  return {requests:sent.length,sideRequests:w.exchanges.length-sent.length,retries:sent.filter(x=>!x.complete).length,
+    complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body),wireHosts:w.hosts};
 }
 
 function targetIn(surfaces,lesson,task) {
@@ -184,18 +236,21 @@ function targetIn(surfaces,lesson,task) {
     [...system,...results].some(s=>target(s)) || prompt.some(s=>target(s,task.keyPhraseAllowed && s===task.prompt)));
 }
 
+export function cutOffBound(dir,projects,sid,prompt) {
+  const inventory=sessionInventory(projects,sid),call=callRows(inventory,prompt),w=wireLedger(dir);
+  return {w,inventory,call,bound:matched(w,inventory,call,{success:false})};
+}
 function archivedAttempt(live,id,sid,prompt,lesson,task) {
-  const operator=path.join(path.dirname(live),'operator'),dir=path.join(operator,'bodies',id);
-  const inventory=sessionInventory(path.join(live,'home/.claude/projects'),sid),transcript=inventory.main;
-  const call=callRows(inventory,prompt),l=ledger(dir,sid,call);
+  const operator=path.join(path.dirname(live),'operator');
+  const {w,inventory,call,bound}=cutOffBound(path.join(operator,'wire',id),path.join(live,'home/.claude/projects'),sid,prompt);
+  const transcript=inventory.main;
   const recordFile=path.join(operator,id+'.json'),record=fs.existsSync(recordFile)?read(recordFile):null;
   const own=record?.session===sid && record.call===id && record.promptSha256===hash(prompt) &&
     record.apparatus===APPARATUS && record.cutOff===true;
-  const inspectable=own && l.ok && l.bodies.length>0 && reconciled(l.main,pairsOf(call.rows)) &&
-    answered(dir,l.rows,l.main.at(-1),()=>true);
+  const inspectable=own && bound;
   const permissions=own && !!call && permissionAudit(transcript,prompt,record.permissionDenials).ok;
   return {status:inspectable?'dispatched':'unauditable',
-    target:inspectable && targetIn(l.bodies.map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
+    target:inspectable && targetIn(modelBodies(w).map(b=>deliverySurfaces(b,task)),lesson,task),permissions};
 }
 
 export function archivedAudit(archives,id,sid,prompt,lesson,task) {

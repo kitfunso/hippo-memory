@@ -1,12 +1,13 @@
 import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { randomUUID,X509Certificate } from 'node:crypto';
 import { once } from 'node:events';
 import { spawn,spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { setTimeout as wait } from 'node:timers/promises';
-import { DISPATCH_LOG,dispatchEnv,folder,hash } from './plan.mjs';
+import { WIRE_CA,folder,hash,wireEnv } from './plan.mjs';
+import { openWire } from './wire.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
 
 export async function openCue(work,sid) {
@@ -32,32 +33,25 @@ export async function openCue(work,sid) {
   return {hook:{type:'http',url:'http://127.0.0.1:'+server.address().port+route,timeout:5},
     close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
 }
-export async function openDispatchLog(dir) {
-  const route='/'+randomUUID()+'/v1/logs',log=path.join(dir,DISPATCH_LOG);
-  const server=http.createServer(async (req,res)=>{
-    try {
-      if(req.url!==route || req.method!=='POST') throw Error('Unexpected request');
-      let raw='';
-      for await(const chunk of req) { raw+=chunk; if(raw.length>16*1024*1024) throw Error('Oversized export'); }
-      const events=[];
-      for(const r of JSON.parse(raw).resourceLogs??[]) for(const s of r.scopeLogs??[]) for(const record of s.logRecords??[]) {
-        const a=Object.fromEntries((record.attributes??[]).map(x=>[x.key,Object.values(x.value??{})[0]]));
-        if(a['event.name']==='api_request_body') events.push(JSON.stringify(a)+'\n');
-      }
-      fs.mkdirSync(dir,{recursive:true});
-      if(events.length) fs.appendFileSync(log,events.join(''));
-      res.writeHead(200,{'Content-Type':'application/json'});
-      res.end('{}');
-    } catch(error) {
-      fs.mkdirSync(dir,{recursive:true});
-      fs.appendFileSync(log,JSON.stringify({'event.name':'export_error',error:String(error)})+'\n');
-      res.writeHead(400); res.end('Invalid export');
-    }
-  });
-  server.listen(0,'127.0.0.1');
-  await once(server,'listening');
-  return {env:dispatchEnv('http://127.0.0.1:'+server.address().port+route),
-    close:()=>new Promise(resolve=>{server.close(resolve);server.closeAllConnections();})};
+export function openCallWire(dir,ca=WIRE_CA) {
+  const leaf=path.join(ca,'leaf.pem');
+  if(!fs.existsSync(leaf)) throw Error('Missing wire CA; run node wire.mjs ca '+ca);
+  if(Date.parse(new X509Certificate(fs.readFileSync(leaf)).validTo)<Date.now()+86_400_000) throw Error('Wire certificate expires within a day');
+  return openWire(dir,{ca});
+}
+async function recorded(records,call,invokeOnce,record) {
+  const dir=path.join(records,'wire',call.id);
+  if(fs.existsSync(dir)) throw Error('Stale wire record for '+call.id);
+  const wire=await record(dir);
+  let code,error;
+  try {
+    fs.writeFileSync(path.join(records,'call.json'),JSON.stringify({...call,wireEnv:wireEnv(wire.port)}));
+    code=await invokeOnce();
+  } catch(e) { error=e; }
+  const state=await wire.close();
+  if(error) throw error;
+  if(!state.ok) throw Error('Wire record failed for '+call.id+': '+JSON.stringify(state));
+  return code;
 }
 async function invoke(live,token,env,boxChecked=false) {
   const proc=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
@@ -87,7 +81,7 @@ async function waitForBox(checkBox,delay) {
   }
 }
 
-export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall}={}) {
+export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall,record=openCallWire}={}) {
   gate?.();
   const ticket=randomUUID(),checkpoint=inside(path.join(stateRoot,'checkpoints',ticket));
   const archives=[];
@@ -103,8 +97,7 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
       snapshot(checkpoint);
       onFirstCall?.();
     }
-    fs.writeFileSync(path.join(records,'call.json'),JSON.stringify(call));
-    const code=await invokeOnce();
+    const code=await recorded(records,call,invokeOnce,record);
     if(code===0) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
     if(code!==75) throw Error('Claude Code launcher exited '+code);
     const dest=inside(path.join(stateRoot,'limit-archives',ticket+'-'+i));
@@ -119,15 +112,10 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
   }
 }
 export async function launch(live,token,env,call,{gate,onFirstCall,dispatch=()=>invoke(live,token,env,true),
-  checkBox=()=>runBoxCheck(live,env)}={}) {
-  const records=call.smoke?live:inside(path.join(path.dirname(live),'operator'));
-  const log=await openDispatchLog(path.join(records,'bodies',call.id)),sent={...call,dispatchEnv:log.env};
-  try {
-    if(!call.smoke) return await retryLimited(live,sent,dispatch,checkBox,{gate,onFirstCall});
-    gate?.();
-    fs.writeFileSync(path.join(live,'call.json'),JSON.stringify(sent));
-    const code=await invoke(live,token,env);
-    if(code!==0) throw Error('Smoke launcher exited '+code);
-    return [];
-  } finally { await log.close(); }
+  checkBox=()=>runBoxCheck(live,env),record=openCallWire}={}) {
+  if(!call.smoke) return retryLimited(live,call,dispatch,checkBox,{gate,onFirstCall,record});
+  gate?.();
+  const code=await recorded(live,call,()=>invoke(live,token,env),record);
+  if(code!==0) throw Error('Smoke launcher exited '+code);
+  return [];
 }

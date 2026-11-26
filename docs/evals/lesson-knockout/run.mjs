@@ -9,12 +9,12 @@ import { checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,
 import { assertCheckerTools,gradeEnv,guardedRun } from './grading.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings,treeOf,ignoredListing,installedPackages } from './state.mjs';
-import { commandLog,findTranscript,sessionFiles } from '../../../scripts/token-eval/records.mjs';
+import { commandLog,findTranscript } from '../../../scripts/token-eval/records.mjs';
 import { runCheck,stateCommit,holdPre,FIRST_REF } from '../../../scripts/token-eval/checks.mjs';
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
-import { archivedAudit,flagOf,evidence,neutralClean,permissionAudit } from './evidence.mjs';
+import { archivedAudit,callComplete,flagOf,evidence,neutralClean,permissionAudit,sessionInventory } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
 import { runSetupScript } from './setup.mjs';
 import { applyFrozen,assertSameTree,continueUnit } from './continuation.mjs';
@@ -103,6 +103,8 @@ async function session(task,prompt,session,id,resume=false,gate) {
   const result=read(join(records,id+'.json'));
   assert(result.session===session && result.call===id && result.promptSha256===hash(prompt) && result.json===true,
     'Call record does not match '+id);
+  const wire=callComplete(join(records,'wire',id),result,prompt,transcript,{maxTurns:smoke});
+  assert(wire.complete,'Wire record does not match the call '+id+': '+(wire.w.reason ?? 'unmatched model turns'));
   const archived=archivedAudit(archives,id,session,prompt,u.lesson,{...task,work});
   if(!smoke) {
     const permissions=permissionAudit(transcript,prompt,result.permissionDenials);
@@ -110,7 +112,7 @@ async function session(task,prompt,session,id,resume=false,gate) {
       'Session permission check failed for '+id+': '+JSON.stringify({...permissions,archivedPermissions:archived.archivedPermissions}));
   }
   assert(result.models.includes(pins.modelOpus),'Missing pinned model in result');
-  return {transcript,archived,archives,commands:commandLog(sessionFiles(projects,session)),result};
+  return {transcript,archived,archives,commands:commandLog(sessionInventory(projects,session).files),result};
 }
 function settings(hook) {
   save(join(live,'settings.json'),{autoMemoryEnabled:true,autoMemoryDirectory:join(live,'home/.claude/projects/unit/memory'),
@@ -172,7 +174,7 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const {commands,result,archives,archived,transcript}=await session(u.apply,u.apply.prompt,sid,'apply',false,gate).finally(cue.close);
   const pathAudit=auditApply([...archives,live],sid,live);
   const verdict=grade(before,commands);
-  const audit=evidence(join(records,'bodies/apply'),result,notes,u.lesson,{...u.apply,work},transcript);
+  const audit=evidence(join(records,'wire','apply'),result,notes,u.lesson,{...u.apply,work},transcript);
   const flagged=flagOf(u,verdict,commands);
   const receipt={id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,ignoredSetup,installedSetup,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...archived,...audit};

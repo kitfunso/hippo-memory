@@ -94,10 +94,10 @@ def verify() -> None:
             change(unit, "T", hookSeen=True, verdict="fail")
         report = analyze.report()
         assert report["status"] == "kill" and report["kill"] == ["content", "noise"]
-        assert analyze.APPARATUS == 3
+        assert analyze.APPARATUS == 4
         record = json.loads(files[first, "N"].read_text(encoding="utf-8"))
         stale = {k: v for k, v in record.items() if k != "apparatus"}
-        for receipt in ({**record, "apparatus": 2}, stale, {**record, "apparatus": "3"}):
+        for receipt in ({**record, "apparatus": 3}, stale, {**record, "apparatus": "4"}):
             files[first, "N"].write_text(json.dumps(receipt), encoding="utf-8")
             try:
                 analyze.report()
@@ -110,7 +110,7 @@ def verify() -> None:
     finally:
         analyze.ROOT = original
         shutil.rmtree(directory)
-    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity, the protocol failure gate, neutral and archived leaks, tree checks and the apparatus 3 stamp.")
+    print("Passed synthetic rosters, including pair exclusions, all-pair sensitivity, the protocol failure gate, neutral and archived leaks, tree checks and the apparatus 4 stamp.")
 
 
 if __name__ == "__main__":

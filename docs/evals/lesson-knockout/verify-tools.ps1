@@ -154,19 +154,31 @@ try {
   if ($cutText -notmatch 'Write-CallRecord[\s\S]*New-CallRecord[^\r\n]*\$null \$true \$null[\s\S]*exit 75') { throw 'launch.ps1 does not record a cut-off call without JSON before exit 75' }
   $writes=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-CallRecord' },$true))
   if ($writes.Count -ne 2) { throw 'launch.ps1 must write both call record shapes through Write-CallRecord' }
-  $dispatchCalls=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Get-DispatchEnv' },$true))
-  if ($dispatchCalls.Count -ne 1) { throw 'launch.ps1 does not take its dispatch log settings through Get-DispatchEnv' }
-  $settings=[ordered]@{CLAUDE_CODE_ENABLE_TELEMETRY='1';OTEL_LOGS_EXPORTER='otlp';OTEL_METRICS_EXPORTER='none';OTEL_EXPORTER_OTLP_LOGS_PROTOCOL='http/json'
-    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="http://127.0.0.1:4318/$([guid]::NewGuid())/v1/logs";OTEL_LOGS_EXPORT_INTERVAL='500'}
-  $callWith={ param([scriptblock]$Change) $d=[ordered]@{}; foreach ($k in $settings.Keys) { $d[$k]=$settings[$k] }; & $Change $d; [pscustomobject]@{dispatchEnv=[pscustomobject]$d} }
-  if (@(Get-DispatchEnv (& $callWith {})).Count -ne 6) { throw 'Valid dispatch log settings were refused' }
-  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d['OTEL_TRACES_EXPORTER']='otlp' }) } 'Unexpected dispatch log settings'
-  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d.Remove('OTEL_METRICS_EXPORTER') }) } 'Unexpected dispatch log settings'
-  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d.Remove('OTEL_LOGS_EXPORT_INTERVAL'); $d['ANTHROPIC_BASE_URL']='http://127.0.0.1:1' }) } 'Unexpected dispatch log settings'
-  Assert-Throws { Get-DispatchEnv (& $callWith { param($d) $d['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT']='https://collector.example/v1/logs' }) } 'not a local collector'
-  Assert-Throws { Get-DispatchEnv ([pscustomobject]@{id='probe'}) } 'Unexpected dispatch log settings'
+  $named={ param($Name) @($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq $Name },$true)) }
+  if ((& $named 'Get-WireEnv').Count -ne 1 -or (& $named 'Assert-WireOnly').Count -ne 1) { throw 'launch.ps1 does not take and check its wire settings once' }
+  if ($launch.Extent.Text -match 'OTEL_|Get-DispatchEnv') { throw 'launch.ps1 still sets a telemetry or dispatch log setting' }
+  $settings=[ordered]@{HTTPS_PROXY='http://127.0.0.1:50123';NO_PROXY='127.0.0.1,localhost';NODE_EXTRA_CA_CERTS='C:/z0-lessons/lesson-knockout/wire-ca/ca.pem'}
+  $callWith={ param([scriptblock]$Change) $d=[ordered]@{}; foreach ($k in $settings.Keys) { $d[$k]=$settings[$k] }; & $Change $d; [pscustomobject]@{wireEnv=[pscustomobject]$d} }
+  if (@(Get-WireEnv (& $callWith {})).Count -ne 3) { throw 'Valid wire settings were refused' }
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTP_PROXY']='http://127.0.0.1:1' }) } 'Unexpected wire settings'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY') }) } 'Unexpected wire settings'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY'); $d['ANTHROPIC_UNIX_SOCKET']='C:/pipe' }) } 'Unexpected wire settings'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://proxy.example:8080' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NO_PROXY']='*' }) } 'Unexpected wire bypass list'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NODE_EXTRA_CA_CERTS']='C:/other/ca.pem' }) } 'Unexpected wire CA'
+  Assert-Throws { Get-WireEnv ([pscustomobject]@{id='probe'}) } 'Unexpected wire settings'
+  $applied=(New-Object Diagnostics.ProcessStartInfo).EnvironmentVariables
+  $applied.Clear()
+  foreach ($k in @('PATH','SystemRoot','CLAUDE_CODE_OAUTH_TOKEN','CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC')) { $applied[$k]='x' }
+  foreach ($p in (Get-WireEnv (& $callWith {}))) { $applied[$p.Name]=[string]$p.Value }
+  Assert-WireOnly $applied
+  foreach ($k in @('ANTHROPIC_UNIX_SOCKET','ANTHROPIC_BASE_URL','http_proxy','ALL_PROXY','CLAUDE_CODE_USE_BEDROCK','OTEL_LOG_RAW_API_BODIES','NODE_TLS_REJECT_UNAUTHORIZED','SSL_CERT_FILE')) {
+    $applied[$k]='x'
+    Assert-Throws { Assert-WireOnly $applied } 'Unexpected network setting'
+    $applied.Remove($k)
+  }
 } finally {
   Restore-Env
   Remove-Item -LiteralPath $scratch -Recurse -Force
 }
-Write-Output "Passed private cache paths, Gradle copy and junction refusal, planted launcher, tool resolution, smoke path, call records, dispatch log settings and denial parsing for $($cases.Count) declared toolchains."
+Write-Output "Passed private cache paths, Gradle copy and junction refusal, planted launcher, tool resolution, smoke path, call records, wire settings and denial parsing for $($cases.Count) declared toolchains."

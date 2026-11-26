@@ -8,7 +8,7 @@ import { GUARD } from '../checker-guard/lesson.mjs';
 import { summarize } from './analyze.mjs';
 import { schedule } from './design.mjs';
 import { loadPlan } from './paths.mjs';
-import { armBinding,auditCalls,audited,auditFile,boundIntent,classify,readAudits } from './crash-audit.mjs';
+import { armBinding,auditCalls,audited,auditFile,boundIntent,classify,readAudits,replayed } from './crash-audit.mjs';
 
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'ab-audit-'));
 const write=(name,rows)=>{
@@ -78,6 +78,19 @@ try {
   assert.match(lines[0],new RegExp('^CLOSED pairs='+schedule.length+'/'+schedule.length+'$'));
   assert.match(lines.at(-1),/ missing_OFF=0 missing_ON=0$/);
   assert.throws(()=>audited({...clean,grader:'crash-guard-4'},schedule[0].key,'ON',new Map(),bind),/Unknown grader stamp/);
+  assert.deepEqual([null,{grader:'crash-guard-2'},{grader:'crash-guard-3'},{grader:GUARD},{},{grader:'crash-guard-1'}].map(r=>replayed(r,'p','ON')),
+    [false,false,false,false,true,true],'Replay selection read a grader stamp wrongly');
+  assert.throws(()=>replayed({grader:'crash-guard-4'},'p','OFF'),/Unknown grader stamp on the OFF row of p/);
+  assert(fs.readFileSync(fileURLToPath(new URL('./run.mjs',import.meta.url)),'utf8').includes('if(!replayed(row,p.key,arm) ||'),
+    'The replay pass does not select rows by the shared stamp rule');
+  const analyzer=fileURLToPath(new URL('./analyze.mjs',import.meta.url)),alias=path.join(dir,'alias');
+  fs.symlinkSync(path.dirname(analyzer),alias,'junction');
+  try {
+    for(const entry of [path.join(alias,'analyze.mjs'),analyzer.replace(/lesson-endcheck-ab/,'LESSON-ENDCHECK-AB')]) {
+      const out=execFileSync(process.execPath,[entry,'--fixture'],{encoding:'utf8'});
+      assert.match(out,new RegExp('^CLOSED pairs='+schedule.length+'/'+schedule.length+'$','m'),'The analysis did not run from '+entry);
+    }
+  } finally { fs.unlinkSync(alias); }
   const spy=path.join(dir,'probe-spy.cjs'),adapter=fileURLToPath(new URL('./file-stdio.cjs',import.meta.url));
   fs.writeFileSync(spy,"const cp=require('node:child_process'),o=cp.spawnSync;cp.spawnSync=(f,a,opt={})=>{"+
     "if(f==='git')process.stdout.write(JSON.stringify(Object.keys(opt.env??process.env).sort()));return o(f,a,opt);};"+

@@ -14,11 +14,10 @@ export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const pins = read('C:/z0-runs/r4/pins-r4.json');
 export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
-export const APPARATUS = 3;
+export const APPARATUS = 4;
 export const DENIED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'];
-export const DISPATCH_LOG = 'dispatch.jsonl';
-export const dispatchEnv = url => ({CLAUDE_CODE_ENABLE_TELEMETRY:'1',OTEL_LOGS_EXPORTER:'otlp',OTEL_METRICS_EXPORTER:'none',
-  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL:'http/json',OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:url,OTEL_LOGS_EXPORT_INTERVAL:'500'});
+export const WIRE_CA = root+'/wire-ca';
+export const wireEnv = port => ({HTTPS_PROXY:'http://127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:WIRE_CA+'/ca.pem'});
 export const preload = name => '--require "'+path.join(folder,name).replaceAll('\\','/')+'"';
 export function assertNodeStarts(env, label) {
   const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});

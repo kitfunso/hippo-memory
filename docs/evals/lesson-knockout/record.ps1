@@ -2,12 +2,20 @@ function Get-Sha256Hex([byte[]]$Bytes) {
   $sha=[Security.Cryptography.SHA256]::Create()
   try { -join ($sha.ComputeHash($Bytes) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
 }
-function Get-DispatchEnv($Call) {
-  $keys=@('CLAUDE_CODE_ENABLE_TELEMETRY','OTEL_LOGS_EXPORTER','OTEL_METRICS_EXPORTER','OTEL_EXPORTER_OTLP_LOGS_PROTOCOL','OTEL_EXPORTER_OTLP_LOGS_ENDPOINT','OTEL_LOGS_EXPORT_INTERVAL')
-  $pairs=@($Call.dispatchEnv.PSObject.Properties)
-  if ($pairs.Count -ne $keys.Count -or ($pairs | Where-Object { $keys -cnotcontains $_.Name })) { throw 'Unexpected dispatch log settings' }
-  if ($Call.dispatchEnv.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT -notmatch '^http://127\.0\.0\.1:\d+/[0-9a-f-]{36}/v1/logs$') { throw 'Dispatch log endpoint is not a local collector' }
+$WireKeys=@('HTTPS_PROXY','NO_PROXY','NODE_EXTRA_CA_CERTS')
+function Get-WireEnv($Call) {
+  $pairs=@($Call.wireEnv.PSObject.Properties)
+  if ($pairs.Count -ne $WireKeys.Count -or ($pairs | Where-Object { $WireKeys -cnotcontains $_.Name })) { throw 'Unexpected wire settings' }
+  if ($Call.wireEnv.HTTPS_PROXY -cnotmatch '^http://127\.0\.0\.1:\d{1,5}$') { throw 'Wire proxy is not a local listener' }
+  if ($Call.wireEnv.NO_PROXY -cne '127.0.0.1,localhost') { throw 'Unexpected wire bypass list' }
+  if ($Call.wireEnv.NODE_EXTRA_CA_CERTS -cne 'C:/z0-lessons/lesson-knockout/wire-ca/ca.pem') { throw 'Unexpected wire CA' }
   $pairs
+}
+function Assert-WireOnly($Variables) {
+  foreach ($k in @($Variables.Keys)) {
+    if ($WireKeys -contains $k) { continue }
+    if ($k -match '(?i)proxy|^ANTHROPIC_|^CLAUDE_CODE_USE_|^OTEL_|^NODE_TLS|^NODE_EXTRA_CA|^SSL_CERT|^REQUESTS_CA|^CURL_CA') { throw "Unexpected network setting $k" }
+  }
 }
 function New-CallRecord($Call,[byte[]]$PromptBytes,[int]$ExitCode,$Result,[bool]$Limited,$Denials) {
   $hash=Get-Sha256Hex $PromptBytes

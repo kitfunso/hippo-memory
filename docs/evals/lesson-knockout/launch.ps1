@@ -33,10 +33,10 @@ foreach ($key in ($system + @((Get-S3xTool $call.toolchain).env.Keys) + $toolKey
 $private=@{ HOME="$Live/home"; USERPROFILE="$Live/home"; CLAUDE_CONFIG_DIR="$Live/home/.claude";
   APPDATA="$Live/home/roaming"; LOCALAPPDATA="$Live/home/local"; TEMP="$Live/home/tmp"; TMP="$Live/home/tmp";
   HIPPO_HOME="$Live/home/.hippo"; CLAUDE_CODE_PROJECT_DIR_NAME='unit'; CLAUDE_CODE_DISABLE_AUTO_MEMORY='0';
-  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'; DISABLE_AUTOUPDATER='1';
-  OTEL_LOG_RAW_API_BODIES="file:$records/bodies/$($call.id)"; GIT_TERMINAL_PROMPT='0'; EVAL_SEED='1' }
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'; DISABLE_AUTOUPDATER='1'; GIT_TERMINAL_PROMPT='0'; EVAL_SEED='1' }
 foreach ($k in $private.Keys) { $pi.EnvironmentVariables[$k]=$private[$k] }
-foreach ($p in (Get-DispatchEnv $call)) { $pi.EnvironmentVariables[$p.Name]=[string]$p.Value }
+foreach ($p in (Get-WireEnv $call)) { $pi.EnvironmentVariables[$p.Name]=[string]$p.Value }
+Assert-WireOnly $pi.EnvironmentVariables
 if ($call.smoke) { Assert-SmokePath $pi.EnvironmentVariables['PATH'] } else { Assert-SessionPath $pi.EnvironmentVariables['PATH'] $call.toolchain $Live }
 $pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']=[Environment]::GetEnvironmentVariable($TokenVar,'User')
 if ($pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] -notlike 'sk-ant-oat*') { throw 'Missing subscription credential or unexpected credential type' }

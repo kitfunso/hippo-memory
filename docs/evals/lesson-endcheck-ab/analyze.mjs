@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {fileURLToPath} from 'node:url';
 import {loadPlan,read,revision,root} from './paths.mjs';
 import {schedule,signP} from './design.mjs';
 import {upperNet} from './safety.mjs';
@@ -54,7 +53,7 @@ export function summarize(results) {
     infra,
   ];
 }
-if(process.argv[1] && path.resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+if(import.meta.main) {
   const args=process.argv.slice(2);
   assert.ok(!args.length || (args.length===1 && ['--fixture','--fixture-missing'].includes(args[0])),'unexpected argument');
   const results=[];

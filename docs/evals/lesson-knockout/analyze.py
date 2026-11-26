@@ -12,7 +12,7 @@ ROOT = Path("C:/z0-lessons/lesson-knockout/unit")
 PLAN = Path(__file__).with_name("plan.mjs")
 ARMS = ("T", "Tp", "N")
 DIGEST = "7b3e3078f73cd6c11a2a6e50aabad48728016f5aae6f28a2db50daa1db8a2e42"
-APPARATUS = 3
+APPARATUS = 4
 
 
 def contrast(units: list[dict], exclude_na: bool) -> dict:

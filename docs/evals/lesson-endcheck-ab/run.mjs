@@ -13,7 +13,7 @@ import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,r
 import { checkout,install,poetryCache,privateEnv,pythonTemp,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { GUARD,guardState,guardedRun } from '../checker-guard/lesson.mjs';
-import { AUDITED_GRADERS,GUARDED_GRADERS,armBinding,auditCalls,audited,auditFile,boundIntent,readAudits } from './crash-audit.mjs';
+import { armBinding,auditCalls,audited,auditFile,boundIntent,readAudits,replayed } from './crash-audit.mjs';
 import { boxCheckSha,pins,verifyBoxCheck } from './pins.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -210,8 +210,7 @@ async function auditArms({top=root,pairs=schedule,units=byId,lock=COLLECTOR_LOCK
     for(const p of pairs) {
       const base=path.join(top,'trial',p.key);
       for(const [arm,row] of Object.entries(read(path.join(base,'result.json')).rows)) {
-        if(row===null || GUARDED_GRADERS.includes(row.grader) || audits.has(p.key+' '+arm)) continue;
-        assert.ok(AUDITED_GRADERS.includes(row.grader),'Unknown grader stamp on the '+arm+' row of '+p.key);
+        if(!replayed(row,p.key,arm) || audits.has(p.key+' '+arm)) continue;
         fs.appendFileSync(file,JSON.stringify({...auditArm(top,p.key,units.get(p.id),base,arm),at:new Date().toISOString()})+'\n');
         added++;
       }
