@@ -16,6 +16,9 @@ import {
   sign,
 } from '../_helpers/github-webhook-route.js';
 import { githubTrustedUserIds } from '../../src/surface/connectors/github/webhook.js';
+import { replayGithubDlqEntry } from '../../src/surface/connectors/github/dlq.js';
+import type { JsonObject } from '../../src/base/util/json.js';
+import { apiCtx } from '../_helpers/api-ctx.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -252,6 +255,89 @@ describe('POST /v1/connectors/github/events', () => {
     } finally {
       closeHippoDb(db);
     }
+  });
+
+  const issueEventWith = (part: JsonObject): string =>
+    JSON.stringify({
+      action: 'opened',
+      issue: {
+        number: 42,
+        title: 'Bug',
+        body: 'broken',
+        user: { login: 'alice', id: 1 },
+        author_association: 'MEMBER',
+      },
+      repository: { full_name: 'acme/repo', private: false, owner: { login: 'acme' }, name: 'repo' },
+      sender: { login: 'alice', id: 1 },
+      ...part,
+    });
+
+  const githubRefs = (): (string | null)[] =>
+    ['default', 'tenant-a'].flatMap((tenant) =>
+      loadAllEntries(root, tenant)
+        .filter((e) => e.tags.includes('source:github'))
+        .map((e) => e.artifactRef),
+    );
+
+  async function parkedAsNotAnEnvelope(part: JsonObject, deliveryId: string): Promise<number> {
+    const body = issueEventWith(part);
+    const res = await postWebhook(handle.port, body, defaultHeaders(body, 'issues', deliveryId));
+    expect(res.status).toBe(200);
+    expect(await jsonAs<{ ok: boolean; status: string }>(res)).toEqual({ ok: true, status: 'dlq' });
+    const db = openHippoDb(root);
+    try {
+      const row = queryOne<{ id: number; bucket: string; error: string; retry_count: number }>(
+        db,
+        `SELECT id, bucket, error, retry_count FROM github_dlq ORDER BY id DESC LIMIT 1`,
+      );
+      expect(row).toMatchObject({ bucket: 'parse_error', error: 'not a GitHub webhook envelope', retry_count: 0 });
+      return row.id;
+    } finally {
+      closeHippoDb(db);
+    }
+  }
+
+  async function replayCountsOneFailure(id: number): Promise<void> {
+    const ingested: string[] = [];
+    const ingestHook = async (): Promise<{ memoryId: string }> => {
+      ingested.push('ran');
+      return { memoryId: 'm1' };
+    };
+
+    const result = await replayGithubDlqEntry(apiCtx(root), id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: false, status: 'unhandled', retryCount: 1 });
+    expect(ingested).toEqual([]);
+    expect(githubRefs()).toEqual([]);
+  }
+
+  it('13b. an installation id that is an object parks as parse_error on an install that routes the repository, ingests nothing, and a replay counts one failure', async () => {
+    const db = openHippoDb(root);
+    try {
+      db.prepare(`INSERT INTO github_repositories (repo_full_name, tenant_id, added_at) VALUES (?, ?, ?)`).run(
+        'acme/repo',
+        'tenant-a',
+        new Date().toISOString(),
+      );
+    } finally {
+      closeHippoDb(db);
+    }
+
+    const id = await parkedAsNotAnEnvelope({ installation: { id: {} } }, 'd-13b');
+
+    expect(githubRefs()).toEqual([]);
+    await replayCountsOneFailure(id);
+  });
+
+  it('13c. a repository name that is not a string parks as parse_error on a store with no routes, stores no github://true/ ref, and a replay counts one failure', async () => {
+    const id = await parkedAsNotAnEnvelope(
+      { repository: { full_name: true, private: false, owner: { login: 'acme' }, name: 'repo' } },
+      'd-13c',
+    );
+
+    expect(githubRefs().filter((ref) => ref?.startsWith('github://true/'))).toEqual([]);
+    expect(githubRefs()).toEqual([]);
+    await replayCountsOneFailure(id);
   });
 
   it('14. the same signed body resent under a fresh delivery id is refused with 409 and adds no row', async () => {

@@ -262,7 +262,7 @@ describe('published runtime exports', () => {
         isCrossSite isLoopback isReservedActor
         ownerOrSubject
         preCompactForCaller promptHookContext
-        roleFromGroups
+        roleFromGroups runConnectorCommand
         saveCompactionItemsForCaller serve sessionEndHandoffForCaller",
           "./session-text": "COMPACTION_ITEM_MAX_CHARS COMPACTION_ITEM_ROW_CAP
         WORKING_STATE_CAPS

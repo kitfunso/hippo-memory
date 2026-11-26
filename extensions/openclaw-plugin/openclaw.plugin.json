@@ -2,7 +2,7 @@
   "id": "hippo-memory",
   "name": "Hippo Memory",
   "description": "One memory for every agent you'll ever use. Hippo writes what you teach a coding agent into a store in your repo, and your other agents read that same store.",
-  "version": "3.18.0",
+  "version": "3.19.0",
 
   "configSchema": {
     "type": "object",
