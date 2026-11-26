@@ -37,17 +37,25 @@ export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResul
   return authRevokeIn(withEntryInfra(ctx), keyId);
 }
 
-/** Runs one `slack` or `github` CLI verb on ctx's store and tenant, with the CLI's flags, help,
- * output and exit codes, and resolves to that exit code. `argv` omits the program name, as
- * `['github', 'dlq', 'replay', '12', '--force']`. Output goes to the process console. A store
- * without the connector groups rejects with StoreNotPortedError. ctx takes no actor: each verb
- * acts as its own CLI admin actor, so audit rows read the same on every store. A write starts
- * auto-sleep only when `ctx.callers` carries an auto-sleep host. The verbs read their secrets
- * and switches from the host's process.env (GITHUB_WEBHOOK_SECRET, GITHUB_WEBHOOK_SECRET_PREVIOUS,
- * GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, GITHUB_ENTERPRISE_URL,
- * GITHUB_TRUSTED_USER_IDS and the two unknown-route fallback switches), so a host without
- * GITHUB_WEBHOOK_SECRET skips the replay signature re-check. Any other command prints a message
- * and resolves to 1. */
+/** Runs one `slack` or `github` CLI verb on ctx's store, with the CLI's flags and help, and
+ * resolves to the exit code the CLI sets. `argv` omits the program name, as
+ * `['github', 'dlq', 'replay', '12', '--force']`. Only the argv shape and the exit codes 0, 1, 2
+ * and 3 are a semver promise: output goes to the process console and its text may change between
+ * releases. A store without the connector groups rejects with StoreNotPortedError. ctx takes no
+ * actor: each verb acts as its own CLI admin actor, so audit rows read the same on every store.
+ * These are operator calls: `ctx.tenantId` does not bound them, because a replay lands in the
+ * tenant today's routes name and `workspaces add`, `list` and `remove` read and change the
+ * store-wide team map, so a host must gate them as admin. A write starts auto-sleep only when
+ * `ctx.callers` carries an auto-sleep host. The runner never opens hippo.db, so it writes to ctx's
+ * store whatever HIPPO_READ_ONLY says; a host that wants no writes hands in a read-only store or
+ * does not call the write verbs. The verbs read their secrets and switches from the host's
+ * process.env (GITHUB_WEBHOOK_SECRET, GITHUB_WEBHOOK_SECRET_PREVIOUS, GITHUB_TOKEN,
+ * SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, SLACK_TEAM_ID, GITHUB_ENTERPRISE_URL,
+ * GITHUB_ENTERPRISE_BARE_REFS_HOST, GITHUB_TRUSTED_USER_IDS and the two unknown-route fallback
+ * switches), so a host without GITHUB_WEBHOOK_SECRET skips the replay signature re-check. The
+ * standalone `--version`, `-v`, `--help`, `-h`, `help` and an empty argv print the version or both
+ * verbs' usage and resolve to 0, as in the CLI. Any other command prints a message and resolves to
+ * 1. */
 export async function runConnectorCommand(
   ctx: ConnectorCommandContext,
   argv: readonly string[],

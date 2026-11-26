@@ -283,14 +283,22 @@ function stopReadOnly(command: string, mode: 'refuse' | 'skip'): void {
   fail(READ_ONLY_REFUSAL);
 }
 
+function wantsVersion(command: string, flags: CliFlags): boolean {
+  return command === '--version' || command === '-v' || boolFlag(flags, 'version');
+}
+
+function wantsUsage(command: string): boolean {
+  return command === '' || command === 'help' || command === '--help' || command === '-h';
+}
+
 async function main(
   command: string,
   args: string[],
   flags: CliFlags,
   hippoRoot: string,
 ): Promise<void> {
-  if (command === '--version' || command === '-v' || boolFlag(flags, 'version')) printVersion();
-  if (command === '' || command === 'help' || command === '--help' || command === '-h') {
+  if (wantsVersion(command, flags)) printVersion();
+  if (wantsUsage(command)) {
     printUsage();
     return;
   }
@@ -340,11 +348,17 @@ export async function runConnectorCommandIn(
 ): Promise<number> {
   const { command, args, flags } = parseArgs(['', '', ...argv]);
   try {
-    if (boolFlag(flags, 'version')) printVersion();
+    if (wantsVersion(command, flags)) printVersion();
+    if (wantsUsage(command)) {
+      console.log(verbUsage('slack'));
+      console.log(verbUsage('github'));
+      return 0;
+    }
     assertTenantId('runConnectorCommand', ctx.tenantId);
-    if (command === '') {
-      printError('runConnectorCommand needs a command: slack or github');
-      return 1;
+    if (ctx.tenantId.trim() !== ctx.tenantId) {
+      throw new Error(
+        'runConnectorCommand: tenantId must not be blank or start or end with spaces',
+      );
     }
     if (command !== 'slack' && command !== 'github') {
       printError(`runConnectorCommand runs only slack and github, not ${command}`);

@@ -17,13 +17,13 @@ hippo-enterprise serves hippo from Postgres. Its webhooks park dead letters ther
 - `ctx` carries `tenantId`, `store`, `config`, and optionally `infra`, `callers` and `detached`. It has no actor. The runner resolves to the exit code the CLI would set. A store without `connectorWrites` or `connectorEvents` rejects with `StoreNotPortedError`, as the verb table already says the verbs need them.
 - The handlers take a `ConnectorSource` in place of a folder. `cliConnectorSource` opens hippo.db lazily, on the line that opened it before. `entryConnectorSource` hands back the caller's store.
 - `server` imports `cli.js` on the first call to the runner, so importing `server` does not load `cli.js`.
-- The same PR makes GitHub dead-letter replay route the tenant again from the payload's installation and repository, as the webhook and Slack replay do. This is listed under Fixed in the changelog.
+- The same PR makes GitHub dead-letter replay route the tenant again from the payload's installation and repository, as the webhook and Slack replay do. `isGitHubWebhookEnvelope` now checks the types of those two fields once: an installation id that is not a finite number or a non-empty string, or a repository name that is not a non-empty string, is not an envelope. The webhook parks such a body as `parse_error`, and a replay counts it as a failed attempt with status `unhandled`. Both are listed under Fixed in the changelog.
 
 ## Guards the runner skips on purpose
-The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, `--version` and `--help` before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls. It also runs the tenant guard, `assertTenantId` on `ctx.tenantId`, which rejects a blank tenant, or one that starts with `sess-` or `sess_` as core's other tenant guards do, before any store call. The CLI's tenant is trimmed and never blank, so `envTenant()` needed no such guard.
-- The empty command and any command but `slack` and `github`: they are not connector verbs. The runner prints a message and resolves to 1.
+The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, the standalone `--version`, `-v`, `--help`, `-h`, `help` and empty forms through the same `wantsVersion` and `wantsUsage` predicates `main` calls, before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls. It also runs the tenant guard before any store call: `assertTenantId` on `ctx.tenantId`, which rejects an empty tenant, or one that starts with `sess-` or `sess_` as core's other tenant guards do, and a check that rejects a tenant that is blank or differs from its trim. `assertTenantId` itself is unchanged, as its other callers are outside this change. The CLI's tenant is trimmed and never blank, so `envTenant()` needed no such guard.
+- Any command but `slack` and `github`: it is not a connector verb. The runner prints a message and resolves to 1. The empty command is a usage request, as in `main`: the runner prints both verbs' usage and resolves to 0.
 - `maybeRepairCodexWrapper`: it edits the user's Codex install, which a library call must not.
-- The `HIPPO_READ_ONLY` stop: the slack and github rows set no `readOnly`, so `main` skips it for them too.
+- The `HIPPO_READ_ONLY` stop: the slack and github rows set no `readOnly`, so `main`'s up-front stop (src/cli.ts, `spec.readOnly`) does not apply to them. The CLI still refuses these verbs' writes under `HIPPO_READ_ONLY=1`, because `runCliCommand` opens hippo.db read-only (src/surface/cli/cli-runtime.ts). The runner never opens hippo.db, so it writes to the handed store whatever `HIPPO_READ_ONLY` says. A host that wants no writes hands in a read-only store or does not call the write verbs.
 - `cliRequest` scoping: neither row is `scoped`.
 - `runCliCommand`: it owns hippo.db's store runtime, and the caller's store has its own.
 - `envTenant()`: the tenant is `ctx.tenantId`, held by the guard above.
@@ -38,10 +38,11 @@ The CLI's `main` and `runCli` run these before or around a verb. The runner runs
 One parser, one help text and one exit-code table serve the CLI and every host that embeds it. A change to a flag or an exit code lands once, and the host sees it on its next core pin.
 
 ## Consequences
-- `runConnectorCommand` is a semver promise: the argv shape, the output text and the exit codes 0, 1, 2 and 3.
+- `runConnectorCommand` is a semver promise for the argv shape and the exit codes 0, 1, 2 and 3. The output text is not: usage text grows with subcommands, and `github backfill` prints its result object, so the text may change between releases.
 - Output goes to the process console. A host that wants it elsewhere must capture the console.
+- These are operator calls. `ctx.tenantId` does not bound them: a replay lands in the tenant today's routes name, and `slack workspaces add`, `list` and `remove` read and change the store-wide team map. A host must gate them as admin.
 - A write starts auto-sleep only when `ctx.callers` carries an auto-sleep host. No CLI write starts one, since the CLI's callers start empty.
-- The verbs read their secrets and switches from the host's `process.env`: `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET_PREVIOUS`, `GITHUB_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `GITHUB_ENTERPRISE_URL`, `GITHUB_TRUSTED_USER_IDS` and the two unknown-route fallback switches. A host without `GITHUB_WEBHOOK_SECRET` skips the replay signature re-check.
+- The verbs read their secrets and switches from the host's `process.env`: `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET_PREVIOUS`, `GITHUB_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_TEAM_ID`, `GITHUB_ENTERPRISE_URL`, `GITHUB_ENTERPRISE_BARE_REFS_HOST`, `GITHUB_TRUSTED_USER_IDS` and the two unknown-route fallback switches. A host without `GITHUB_WEBHOOK_SECRET` skips the replay signature re-check.
 
 ## Reconsider when
 - A third connector, or another verb family, needs a handed store: widen the runner to a table of verbs instead of the two names.

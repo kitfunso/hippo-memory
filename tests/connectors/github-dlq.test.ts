@@ -359,31 +359,35 @@ describe('github DLQ', () => {
     ['an installation id that is an object', { installation: { id: {} } }],
     ['an empty installation id', { installation: { id: '' } }],
   ] as const)(
-    'asks the store for no routing field from a payload with %s, and counts the retry',
+    'counts a replay of a payload with %s as unhandled, asks the store for no route and ingests nothing',
     async (_label, part) => {
-      const { routed, asked } = routedBy(OTHER_INSTALLATION_ONLY);
+      const { routed, asked } = routedBy(ACME);
       const id = await parkEnvelope(JSON.stringify({ action: 'opened', ...part }), {
         installationId: null,
         repoFullName: null,
       });
+      const { ingestHook, seen } = recordingHook();
 
-      const result = await replayGithubDlqEntry(routed, id, { ingestHook: recordingHook().ingestHook });
+      const result = await replayGithubDlqEntry(routed, id, { ingestHook });
 
-      expect(asked).toEqual([{ connector: 'github', installationId: null, repoFullName: null }]);
-      expect(result).toMatchObject({ ok: false, status: 'unroutable', retryCount: 1 });
+      expect(result).toMatchObject({ ok: false, status: 'unhandled', retryCount: 1 });
+      expect(asked).toEqual([]);
+      expect(seen).toEqual([]);
       expect(await retryCountOf(id)).toBe(1);
     },
   );
 
-  it('counts the retry of a payload with a non-string repository name on a store that routes by repository', async () => {
+  it('counts a replay of a payload with a non-string repository name as unhandled on the real store, and ingests nothing', async () => {
     const id = await parkEnvelope(JSON.stringify({ action: 'opened', repository: { full_name: true } }), {
       installationId: null,
       repoFullName: null,
     });
+    const { ingestHook, seen } = recordingHook();
 
-    const result = await replayGithubDlqEntry(ctx, id, { ingestHook: recordingHook().ingestHook });
+    const result = await replayGithubDlqEntry(ctx, id, { ingestHook });
 
-    expect(result).toMatchObject({ ok: true, status: 'replayed', retryCount: 1 });
+    expect(result).toMatchObject({ ok: false, status: 'unhandled', retryCount: 1 });
+    expect(seen).toEqual([]);
     expect(await retryCountOf(id)).toBe(1);
   });
 });

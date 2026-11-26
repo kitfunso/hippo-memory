@@ -7,6 +7,7 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runConnectorCommand } from '../../src/server.js';
+import { verbUsage } from '../../src/cli.js';
 import { createCallerState } from '../../src/api/callers.js';
 import { readPackageVersion } from '../../src/host/package-version.js';
 import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
@@ -152,12 +153,58 @@ describe('runConnectorCommand on a handed store', () => {
     expect(failed.join('\n')).toContain('has no --dry-run');
   });
 
-  it('returns 1 and names the missing command when argv is empty', async () => {
-    expect(await runConnectorCommand(ctx(), [])).toBe(1);
-    expect(failed).toEqual(['runConnectorCommand needs a command: slack or github']);
-  });
+  const untouchedStore = () =>
+    new Proxy(sqliteStore(handed), {
+      get: (_store, name) => {
+        throw new Error(`the runner touched the store: ${String(name)}`);
+      },
+    });
 
-  it('rejects a blank tenant before any store call, and writes nothing', async () => {
+  it.each([['--version'], ['-v']])(
+    'prints the version and returns 0 for the standalone %s, before the tenant check and any store call',
+    async (flag) => {
+      const code = await runConnectorCommand({ ...ctx(), store: untouchedStore(), tenantId: '   ' }, [flag]);
+
+      expect(code).toBe(0);
+      expect(printed).toEqual([readPackageVersion()]);
+      expect(failed).toEqual([]);
+    },
+  );
+
+  it.each([[['--help']], [['-h']], [['help']], [[]]])(
+    'prints both verb usages and returns 0 for %j, without touching the store',
+    async (argv) => {
+      const code = await runConnectorCommand({ ...ctx(), store: untouchedStore() }, argv);
+
+      expect(code).toBe(0);
+      expect(printed).toEqual([verbUsage('slack'), verbUsage('github')]);
+      expect(failed).toEqual([]);
+    },
+  );
+
+  it.each([['   '], [' acme'], ['acme ']])(
+    'rejects the tenant %j that is blank or padded before any store call, and writes nothing',
+    async (tenantId) => {
+      const run = runConnectorCommand({ ...ctx(), tenantId }, [
+        'slack',
+        'workspaces',
+        'add',
+        '--team',
+        'T1',
+        '--tenant',
+        't1',
+      ]);
+
+      await expect(run).rejects.toThrow('runConnectorCommand: tenantId must not be blank or start or end with spaces');
+      expect(await sqliteStore(handed).connectorEvents.route({ connector: 'slack', teamId: 'T1' })).toEqual({
+        tenantId: null,
+        routes: 0,
+      });
+      expect(printed).toEqual([]);
+    },
+  );
+
+  it('rejects an empty tenant before any store call, and writes nothing', async () => {
     const run = runConnectorCommand({ ...ctx(), tenantId: '' }, [
       'slack',
       'workspaces',
@@ -174,6 +221,18 @@ describe('runConnectorCommand on a handed store', () => {
       routes: 0,
     });
     expect(printed).toEqual([]);
+  });
+
+  it('writes to the handed store under HIPPO_READ_ONLY=1, which the CLI refuses, and creates no hippo.db', async () => {
+    vi.stubEnv('HIPPO_READ_ONLY', '1');
+
+    const code = await runConnectorCommand(ctx(), ['slack', 'workspaces', 'add', '--team', 'T1', '--tenant', 'acme']);
+
+    expect(code).toBe(0);
+    expect(await sqliteStore(handed).connectorEvents.route({ connector: 'slack', teamId: 'T1' })).toEqual({
+      tenantId: 'acme',
+    });
+    noHippoDbElsewhere();
   });
 
   it('replays a parked event with the host callers and detached, so the write starts the host auto-sleep', async () => {
