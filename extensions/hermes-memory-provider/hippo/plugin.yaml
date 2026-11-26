@@ -1,5 +1,5 @@
 name: hippo
-version: 3.18.0
+version: 3.19.0
 description: "hippo: one local memory store that Hermes shares with your other coding agents."
 config_keys:
   - memory.hippo
