@@ -7,6 +7,7 @@ import {
   isJsonString,
   type JsonObject,
 } from '../../../base/util/json.js';
+import { NPX_NOT_RUN, NPX_SHORTHANDS, NPX_SWITCHES, NPX_VALUED } from './npx-options.js';
 
 const MCP_KEY = 'hippo';
 const HIPPO_PACKAGE = 'hippo-memory';
@@ -68,65 +69,58 @@ function commandName(command: string): string {
 const isHippoPackage = (arg: string): boolean =>
   arg === HIPPO_PACKAGE || arg.startsWith(`${HIPPO_PACKAGE}@`);
 
-const NPX_FLAGS: ReadonlySet<string> = new Set([
-  '-y',
-  '--yes',
-  '--no',
-  '-q',
-  '--quiet',
-  '-s',
-  '--silent',
-  '--prefer-offline',
-  '--prefer-online',
-  '--offline',
-  '--ignore-existing',
-  '--include-workspace-root',
-  '--workspaces',
-  '-ws',
-]);
-const NPX_PACKAGE_OPTIONS: ReadonlySet<string> = new Set(['-p', '--package']);
-
 interface NpxWalk {
   readonly packages: readonly string[];
   readonly rest: readonly string[];
 }
 
-const isOptionValue = (arg: string | undefined): arg is string =>
-  arg !== undefined && !arg.startsWith('-') && !isHippoPackage(arg);
+interface NpxOption {
+  readonly key: string;
+  readonly inline: string | undefined;
+}
 
-const isValueless = (name: string, inline: string | undefined): boolean =>
-  inline !== undefined || name.startsWith('--no-') || NPX_FLAGS.has(name);
+const bareName = (flag: string): string => flag.replace(/^-+/, '');
 
-const isCallOption = (arg: string): boolean =>
-  arg === '-c' || arg === '--call' || arg.startsWith('--call=');
+function readOption(option: string): NpxOption {
+  const equals = option.indexOf('=');
+  const name = bareName(equals === -1 ? option : option.slice(0, equals));
+  const given = equals === -1 ? undefined : option.slice(equals + 1);
+  const expansion = NPX_SHORTHANDS.get(name);
+  if (expansion === undefined) return { key: name, inline: given };
+  return { key: bareName(expansion[0]), inline: given ?? expansion[1] };
+}
 
-function walkNpx(args: readonly string[]): NpxWalk {
+const valueAfter = (next: string | undefined): string | null =>
+  next !== undefined && !next.startsWith('-') ? next : null;
+
+const takesNoValue = (key: string, inline: string | undefined): boolean =>
+  inline !== undefined || key.startsWith('no-') || NPX_SWITCHES.has(key);
+
+function walkNpx(args: readonly string[]): NpxWalk | null {
   const packages: string[] = [];
   let at = 0;
   while (at < args.length && args[at].startsWith('-')) {
     const option = args[at];
     at += 1;
     if (option === '--') break;
-    const equals = option.indexOf('=');
-    const name = equals === -1 ? option : option.slice(0, equals);
-    const inline = equals === -1 ? undefined : option.slice(equals + 1);
-    if (NPX_PACKAGE_OPTIONS.has(name)) {
-      const value = inline ?? args[at];
-      if (inline === undefined) at += 1;
-      if (value !== undefined) packages.push(value);
-    } else if (!isValueless(name, inline) && isOptionValue(args[at])) {
-      at += 1;
-    }
+    const { key, inline } = readOption(option);
+    if (NPX_NOT_RUN.has(key)) return null;
+    const isPackage = key === 'package';
+    if (!isPackage && takesNoValue(key, inline)) continue;
+    if (!isPackage && !NPX_VALUED.has(key)) return null;
+    const value = inline ?? valueAfter(args[at]);
+    if (value === null) return null;
+    if (inline === undefined) at += 1;
+    if (isPackage) packages.push(value);
   }
   return { packages, rest: args.slice(at) };
 }
 
 function npxRunsHippoMcp(args: readonly string[]): boolean {
-  if (args.some(isCallOption)) return false;
-  const { packages, rest } = walkNpx(args);
-  if (rest.length !== 2 || rest[1] !== 'mcp') return false;
-  if (packages.length === 0) return isHippoPackage(rest[0]);
-  return rest[0] === 'hippo' && packages.some(isHippoPackage);
+  const walk = walkNpx(args);
+  if (walk === null || walk.rest.length !== 2 || walk.rest[1] !== 'mcp') return false;
+  if (walk.packages.length === 0) return isHippoPackage(walk.rest[0]);
+  return walk.rest[0] === 'hippo' && walk.packages.some(isHippoPackage);
 }
 
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {
