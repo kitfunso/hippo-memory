@@ -50,10 +50,9 @@ const HAND_WRITTEN: [string, JsonObject][] = [
 const MAYBE_HIPPO_NPX_ARGS: [string, string[]][] = [
   ['npx -y hippo-memory mcp', ['-y', 'hippo-memory', 'mcp']],
   ['npx with a pinned version', ['-y', 'hippo-memory@3.16.0', 'mcp']],
-  ['npx with no flag', ['hippo-memory', 'mcp']],
   ['npx --versions hippo-memory mcp', ['--versions', 'hippo-memory', 'mcp']],
-  ['npx --browser --loglevel silent hippo-memory mcp', ['--browser', '--loglevel', 'silent', 'hippo-memory', 'mcp']],
-  ['npx -p hippo-memory@3.16.0 hippo mcp', ['-p', 'hippo-memory@3.16.0', 'hippo', 'mcp']],
+  ['npx --browser --loglevel silent', ['--browser', '--loglevel', 'silent', 'hippo-memory', 'mcp']],
+  ['npx -p hippo-memory@3.16.0', ['-p', 'hippo-memory@3.16.0', 'hippo', 'mcp']],
   ['npx -y other-cli hippo-memory mcp', ['-y', 'other-cli', 'hippo-memory', 'mcp']],
 ];
 const MAYBE_HIPPO_NPX: [string, JsonObject][] = MAYBE_HIPPO_NPX_ARGS.map(([label, args]) => [
@@ -64,7 +63,7 @@ const NOT_HIPPO_MCP: [string, JsonObject][] = [
   ['hippo serve', { command: 'hippo', args: ['serve'] }],
   ['hippo recall', { command: 'hippo', args: ['recall'] }],
   ['npx with another package', { command: 'npx', args: ['-y', 'other-memory', 'mcp'] }],
-  ['npx with playwright', { command: 'npx', args: ['@playwright/mcp@latest'] }],
+  ['npx with a hyphenated sibling name', { command: 'npx', args: ['-y', 'my-hippo-memory-helper', 'mcp'] }],
 ];
 const FILE_STYLES: [string, string, string, string, string][] = [
   ['a BOM, CRLF and four spaces', BOM, '\r\n', '    ', '\r\n'],
@@ -107,15 +106,20 @@ function expectMaybeHippo(host: string, key: string, text: string): void {
   write(fileOf(host), text);
   const added = install(host);
   const removed = uninstall(host);
+  const row = rowNamed(host);
+  const head = `A server named ${JSON.stringify(key)} in ${added.file} may already run hippo; the file is left as it is`;
   expect(added.status).toEqual({ maybeHippo: key });
   expect(removed.status).toEqual({ maybeHippo: key });
   expect(isMcpMaybeHippo(added.status)).toBe(true);
   expect(isMcpFailure(added.status)).toBe(false);
-  expect(mcpInstallLines(added.file, added.status, rowNamed(host), 'snippet')).toEqual([
-    `A server named ${JSON.stringify(key)} in ${added.file} may already run hippo; the file is left as it is`,
+  expect(mcpInstallLines(added.file, added.status, row, 'none')).toEqual([head]);
+  expect(mcpInstallLines(added.file, added.status, row, 'hint')).toEqual([
+    `${head}; if it does not, run \`hippo hook install ${host}\` to see the entry to paste`,
   ]);
-  expect(mcpRemoveLines(removed.file, removed.status, rowNamed(host))).toEqual([
-    `Left ${JSON.stringify(key)} in ${removed.file}: it may run hippo via npx, so remove it by hand if you want it gone`,
+  expect(mcpInstallLines(added.file, added.status, row, 'snippet')[0]).toContain(`${head}; if it does not, add `);
+  expect(mcpRemoveLines(removed.file, removed.status, row)).toEqual([
+    `Left ${JSON.stringify(key)} in ${removed.file}: it may run hippo via npx; ` +
+      'check whether it starts hippo before removing it by hand',
   ]);
   expect(read(fileOf(host))).toBe(text);
 }
@@ -275,7 +279,7 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
     },
   );
 
-  it('prefers kept over maybeHippo when both an exact hippo mcp server and an npx hippo-memory server exist', () => {
+  it('prefers kept over maybeHippo when both exist', () => {
     const text = JSON.stringify({
       [KEY[name]]: {
         npxOne: { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] },
@@ -283,9 +287,7 @@ describe.each(JSON_HOSTS)('%s JSON host', (name) => {
       },
     });
     write(fileOf(name), text);
-    expect(install(name).status).toBe('kept');
-    expect(uninstall(name).status).toBe('kept');
-    expect(read(fileOf(name))).toBe(text);
+    expect([install(name).status, uninstall(name).status, read(fileOf(name))]).toEqual(['kept', 'kept', text]);
   });
 
   it.each(NOT_HIPPO_MCP)('does not count a "hippo-memory" entry running %s: install adds "hippo"', (_label, server) => {
@@ -648,7 +650,7 @@ describe('grok-build TOML', () => {
       `[mcp_servers.memory]\ncommand = "npx"\nargs = ${JSON.stringify(server.args)}\n`,
     ]),
     [
-      'the hippo table with the npx form',
+      'the hippo table with npx',
       'hippo',
       '[mcp_servers.hippo]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n',
     ],
@@ -665,15 +667,16 @@ describe('grok-build TOML', () => {
     expectMaybeHippo('grok-build', key, text);
   });
 
-  it('prefers kept over maybeHippo when both an npx hippo-memory server and an exact hippo mcp server exist', () => {
+  it('prefers kept over maybeHippo when both exist', () => {
     const text =
-      '[mcp_servers.a]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n\n' +
-      '[mcp_servers.b]\ncommand = "hippo"\nargs = ["mcp"]\n';
+      '[mcp_servers.a]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n\n[mcp_servers.b]\ncommand = "hippo"\nargs = ["mcp"]\n';
     expect(grokStatus(text)).toBe('kept');
     seeded(text);
-    expect(install('grok-build').status).toBe('kept');
-    expect(uninstall('grok-build').status).toBe('kept');
-    expect(read(file())).toBe(text);
+    expect([install('grok-build').status, uninstall('grok-build').status, read(file())]).toEqual([
+      'kept',
+      'kept',
+      text,
+    ]);
   });
 
   const NOT_KEPT: [string, string][] = [
@@ -741,35 +744,34 @@ describe('grok-build TOML', () => {
 });
 
 describe('runsHippoMcp and npxMentionsHippo', () => {
-  const npxArgLists = [...MAYBE_HIPPO_NPX_ARGS.map(([, args]) => args), ['--package=hippo-memory@3.16.0', 'hippo', 'mcp']];
+  const npxArgLists = [
+    ...MAYBE_HIPPO_NPX_ARGS.map(([, args]) => args),
+    ['hippo-memory', 'mcp'],
+    ['--package=hippo-memory@3.16.0', 'hippo', 'mcp'],
+  ];
 
-  it('runsHippoMcp matches exact hippo mcp only and rejects all npx commands', () => {
-    for (const cmd of ['hippo', 'hippo.cmd', 'C:\\Users\\me\\AppData\\Roaming\\npm\\hippo.cmd', '/usr/local/bin/hippo', 'HIPPO.EXE']) {
-      expect(runsHippoMcp(cmd, ['mcp'])).toBe(true);
-    }
+  it('matches exact hippo mcp only and detects npx mentions without flag parsing', () => {
+    const hippos = [
+      'hippo',
+      'hippo.cmd',
+      'C:\\Users\\me\\AppData\\Roaming\\npm\\hippo.cmd',
+      '/usr/local/bin/hippo',
+      'HIPPO.EXE',
+    ];
+    for (const cmd of hippos) expect(runsHippoMcp(cmd, ['mcp'])).toBe(true);
     for (const args of [['serve'], ['mcp', '--x'], []]) expect(runsHippoMcp('hippo', args)).toBe(false);
-    for (const cmd of ['npx', 'npx.cmd']) {
-      for (const args of npxArgLists) expect(runsHippoMcp(cmd, args)).toBe(false);
-    }
-  });
-
-  it('npxMentionsHippo matches npx args mentioning hippo-memory and rejects others', () => {
     for (const cmd of ['npx', 'npx.cmd', '/usr/local/bin/npx']) {
-      for (const args of npxArgLists) expect(npxMentionsHippo(cmd, args)).toBe(true);
+      for (const args of npxArgLists) {
+        expect([runsHippoMcp(cmd, args), npxMentionsHippo(cmd, args)]).toEqual([false, true]);
+      }
     }
-    for (const args of [['-y', 'other-memory', 'mcp'], ['@playwright/mcp@latest'], []]) {
+    for (const args of [['-y', 'other-memory', 'mcp'], ['-y', 'my-hippo-memory-helper', 'mcp'], []]) {
       expect(npxMentionsHippo('npx', args)).toBe(false);
     }
     for (const cmd of ['hippo', 'node']) expect(npxMentionsHippo(cmd, ['hippo-memory', 'mcp'])).toBe(false);
-  });
-
-  it('distinguishes McpFailure and McpMaybeHippo type guards', () => {
-    expect(isMcpFailure({ failed: 'EACCES' })).toBe(true);
-    expect(isMcpFailure({ maybeHippo: 'hippo' })).toBe(false);
-    expect(isMcpFailure('kept')).toBe(false);
-    expect(isMcpMaybeHippo({ maybeHippo: 'hippo' })).toBe(true);
-    expect(isMcpMaybeHippo({ failed: 'EACCES' })).toBe(false);
-    expect(isMcpMaybeHippo('kept')).toBe(false);
+    const vals = [{ failed: 'EACCES' }, { maybeHippo: 'hippo' }, 'kept'] as const;
+    expect(vals.map(isMcpFailure)).toEqual([true, false, false]);
+    expect(vals.map(isMcpMaybeHippo)).toEqual([false, true, false]);
   });
 });
 

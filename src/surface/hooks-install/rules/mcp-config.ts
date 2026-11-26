@@ -9,7 +9,7 @@ import {
 } from '../../../base/util/json.js';
 
 const MCP_KEY = 'hippo';
-const HIPPO_PACKAGE = 'hippo-memory';
+const HIPPO_PACKAGE_MENTION = /(?:^|[\s=/:])hippo-memory(?:$|[@/\s])/;
 const BOM = '\uFEFF';
 
 export interface McpConfigHost {
@@ -70,7 +70,7 @@ export function runsHippoMcp(command: string, args: readonly string[]): boolean 
 }
 
 export function npxMentionsHippo(command: string, args: readonly string[]): boolean {
-  return commandName(command) === 'npx' && args.some((arg) => arg.includes(HIPPO_PACKAGE));
+  return commandName(command) === 'npx' && args.some((arg) => HIPPO_PACKAGE_MENTION.test(arg));
 }
 
 function entryCommandAndArgs(
@@ -192,7 +192,9 @@ export interface McpFailure {
   readonly failed: string;
 }
 
-export function isMcpFailure(status: McpMergeStatus | McpRemoveStatus | McpFailure): status is McpFailure {
+export function isMcpFailure(
+  status: McpMergeStatus | McpRemoveStatus | McpFailure,
+): status is McpFailure {
   return typeof status === 'object' && status !== null && 'failed' in status;
 }
 

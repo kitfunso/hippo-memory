@@ -8,7 +8,13 @@ import {
   type TomlValue,
 } from './toml-read.js';
 
-export type GrokStatus = 'absent' | 'present' | 'kept' | 'user-owned' | 'unreadable' | McpMaybeHippo;
+export type GrokStatus =
+  | 'absent'
+  | 'present'
+  | 'kept'
+  | 'user-owned'
+  | 'unreadable'
+  | McpMaybeHippo;
 
 interface GrokLine {
   readonly content: string;

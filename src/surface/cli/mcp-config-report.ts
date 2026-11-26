@@ -93,6 +93,25 @@ const REMOVE_LINES = {
   ],
 } as const satisfies Record<Exclude<McpRemoveStatus, McpMaybeHippo>, Lines>;
 
+function maybeHippoInstallLines(
+  file: string,
+  key: string,
+  target: McpReportTarget,
+  paste: McpPaste,
+): string[] {
+  const head =
+    `A server named ${JSON.stringify(key)} in ${file} may already run hippo; ` +
+    'the file is left as it is';
+  if (paste === 'none') return [head];
+  if (paste === 'hint') {
+    return [
+      `${head}; if it does not, run \`hippo hook install ${target.name}\` to see the entry to paste`,
+    ];
+  }
+  const [add, ...snippet] = addIfNoServer(target.format);
+  return [`${head}; if it does not, ${add}`, ...snippet];
+}
+
 export function mcpInstallLines(
   file: string,
   status: McpMergeStatus | McpFailure,
@@ -104,9 +123,7 @@ export function mcpInstallLines(
     return [mcpFailureLine(file, status, fix[0]), ...fix.slice(1)];
   }
   if (isMcpMaybeHippo(status)) {
-    return [
-      `A server named ${JSON.stringify(status.maybeHippo)} in ${file} may already run hippo; the file is left as it is`,
-    ];
+    return maybeHippoInstallLines(file, status.maybeHippo, target, paste);
   }
   return INSTALL_LINES[status](file, target, paste);
 }
@@ -119,7 +136,8 @@ export function mcpRemoveLines(
   if (isMcpFailure(status)) return [mcpFailureLine(file, status, REMOVE_BY_HAND)];
   if (isMcpMaybeHippo(status)) {
     return [
-      `Left ${JSON.stringify(status.maybeHippo)} in ${file}: it may run hippo via npx, so remove it by hand if you want it gone`,
+      `Left ${JSON.stringify(status.maybeHippo)} in ${file}: it may run hippo via npx; ` +
+        'check whether it starts hippo before removing it by hand',
     ];
   }
   return REMOVE_LINES[status](file, target);

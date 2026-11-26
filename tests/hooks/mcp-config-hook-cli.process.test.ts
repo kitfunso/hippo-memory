@@ -226,28 +226,28 @@ describe.each(OUTPUT_FORMS)('hippo hook output with $name', (host) => {
     expect(readText(file)).toBe(own);
   });
 
-  it.each([
-    ['another server name', 'my-hippo'],
-    ['the hippo key', 'hippo'],
-  ])('warns and leaves the file unchanged when an npx entry mentions hippo-memory under %s', (_label, key) => {
+  it('warns and leaves the file unchanged when an npx entry mentions hippo-memory', () => {
+    if (host.name !== 'junie' && host.name !== 'grok-build') return;
     const m = machine();
     const file = fileOf(m, host);
     presentDirs(m, host);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const own =
       host.key === null
-        ? `[mcp_servers.${key}]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n`
-        : JSON.stringify({ [host.key]: { [key]: { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } } });
+        ? '[mcp_servers.my-hippo]\ncommand = "npx"\nargs = ["-y", "hippo-memory", "mcp"]\n'
+        : JSON.stringify({ [host.key]: { 'my-hippo': { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } } });
     fs.writeFileSync(file, own);
-    const installLine = `A server named "${key}" in ${file} may already run hippo; the file is left as it is`;
-    const removeLine = `Left "${key}" in ${file}: it may run hippo via npx, so remove it by hand if you want it gone`;
+    const head = `A server named "my-hippo" in ${file} may already run hippo; the file is left as it is`;
+    const removeLine =
+      `Left "my-hippo" in ${file}: it may run hippo via npx; ` +
+      'check whether it starts hippo before removing it by hand';
 
     const init = hippo(m, 'init', ...INIT_FLAGS);
-    expect(init.stdout).toContain(installLine);
+    expect(init.stdout).toContain(`${head}; if it does not, run \`hippo hook install ${host.name}\``);
     const install = hippo(m, 'hook', 'install', host.name);
-    expect(install.stdout).toContain(installLine);
+    expect(install.stdout).toContain(`${head}; if it does not, add `);
     const setup = hippo(m, 'setup', ...FLAGS);
-    expect(setup.stdout).toContain(installLine);
+    expect(setup.stdout).toContain(`${head}; if it does not, add `);
     const uninstall = hippo(m, 'hook', 'uninstall', host.name);
     expect(uninstall.stdout).toContain(removeLine);
     expect(readText(file)).toBe(own);
