@@ -4,6 +4,7 @@
 
 import { envReadOnly, envSkipAutoIntegrations, envTenant, validateFlags } from './base/util/env.js';
 import { READ_ONLY_REFUSAL } from './base/errors/read-only.js';
+import { assertTenantId } from './base/scope/tenant-id.js';
 import * as fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { repairCodexWrapperIfInstalled } from './surface/hooks-install/codex-wrapper.js';
@@ -338,11 +339,17 @@ export async function runConnectorCommandIn(
   argv: readonly string[],
 ): Promise<number> {
   const { command, args, flags } = parseArgs(['', '', ...argv]);
-  if (command !== 'slack' && command !== 'github') {
-    printError(`runConnectorCommand runs only slack and github, not ${command}`);
-    return 1;
-  }
   try {
+    if (boolFlag(flags, 'version')) printVersion();
+    assertTenantId('runConnectorCommand', ctx.tenantId);
+    if (command === '') {
+      printError('runConnectorCommand needs a command: slack or github');
+      return 1;
+    }
+    if (command !== 'slack' && command !== 'github') {
+      printError(`runConnectorCommand runs only slack and github, not ${command}`);
+      return 1;
+    }
     if (Object.hasOwn(flags, 'help')) printHelp(command, args);
     else await runConnectorVerb(command, ctx, args, flags);
     return 0;

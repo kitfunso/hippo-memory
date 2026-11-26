@@ -365,6 +365,12 @@ describe('hippo-memory/server and hippo-memory/store-kit published exports', () 
     });
   });
 
+  it('loads the cli entry on the first connector command, never when server is imported', () => {
+    const text = readFileSync(resolve(root, 'dist/server.js'), 'utf-8');
+    expect(text).not.toMatch(/^\s*(?:import|export)\s+(?:[^;'"(]*\sfrom\s+)?['"]\.\/cli\.js['"]/m);
+    expect(text).toMatch(/await import\(['"]\.\/cli\.js['"]\)/);
+  });
+
   it('runs a connector verb on a store opened through store-kit, with no exit code set', () => {
     const script = [
       "import { mkdtempSync, rmSync } from 'node:fs';",

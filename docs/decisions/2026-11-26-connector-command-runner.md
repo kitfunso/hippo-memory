@@ -20,13 +20,13 @@ hippo-enterprise serves hippo from Postgres. Its webhooks park dead letters ther
 - The same PR makes GitHub dead-letter replay route the tenant again from the payload's installation and repository, as the webhook and Slack replay do. This is listed under Fixed in the changelog.
 
 ## Guards the runner skips on purpose
-The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, `--help` before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls.
-- `--version` and the empty command: they are not connector verbs.
+The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, `--version` and `--help` before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls. It also runs the tenant guard, `assertTenantId` on `ctx.tenantId`, which rejects a blank tenant before any store call. The CLI's tenant is trimmed and never blank, so `envTenant()` needed no such guard.
+- The empty command and any command but `slack` and `github`: they are not connector verbs. The runner prints a message and resolves to 1.
 - `maybeRepairCodexWrapper`: it edits the user's Codex install, which a library call must not.
 - The `HIPPO_READ_ONLY` stop: the slack and github rows set no `readOnly`, so `main` skips it for them too.
 - `cliRequest` scoping: neither row is `scoped`.
 - `runCliCommand`: it owns hippo.db's store runtime, and the caller's store has its own.
-- `envTenant()`: the tenant is `ctx.tenantId`.
+- `envTenant()`: the tenant is `ctx.tenantId`, held by the guard above.
 - `warnUnknownFlagValues`: it warns once per process about on/off variables with an unknown spelling, which is the CLI's start-up, not a call a host makes many times.
 - The `isStoreBusy` to `STORE_BUSY_MESSAGE` mapping in `runCli`: the runner lets every error but `CliExit` reject as it was thrown, so the host decides how to show a busy store.
 
@@ -41,6 +41,7 @@ One parser, one help text and one exit-code table serve the CLI and every host t
 - `runConnectorCommand` is a semver promise: the argv shape, the output text and the exit codes 0, 1, 2 and 3.
 - Output goes to the process console. A host that wants it elsewhere must capture the console.
 - A write starts auto-sleep only when `ctx.callers` carries an auto-sleep host. No CLI write starts one, since the CLI's callers start empty.
+- The verbs read their secrets and switches from the host's `process.env`: `GITHUB_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET_PREVIOUS`, `GITHUB_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `GITHUB_ENTERPRISE_URL`, `GITHUB_TRUSTED_USER_IDS` and the two unknown-route fallback switches. A host without `GITHUB_WEBHOOK_SECRET` skips the replay signature re-check.
 
 ## Reconsider when
 - A third connector, or another verb family, needs a handed store: widen the runner to a table of verbs instead of the two names.

@@ -42,8 +42,12 @@ export function authRevoke(ctx: Context, keyId: string): Promise<AuthRevokeResul
  * `['github', 'dlq', 'replay', '12', '--force']`. Output goes to the process console. A store
  * without the connector groups rejects with StoreNotPortedError. ctx takes no actor: each verb
  * acts as its own CLI admin actor, so audit rows read the same on every store. A write starts
- * auto-sleep only when `ctx.callers` carries an auto-sleep host. Any other command prints a
- * message and resolves to 1. */
+ * auto-sleep only when `ctx.callers` carries an auto-sleep host. The verbs read their secrets
+ * and switches from the host's process.env (GITHUB_WEBHOOK_SECRET, GITHUB_WEBHOOK_SECRET_PREVIOUS,
+ * GITHUB_TOKEN, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, GITHUB_ENTERPRISE_URL,
+ * GITHUB_TRUSTED_USER_IDS and the two unknown-route fallback switches), so a host without
+ * GITHUB_WEBHOOK_SECRET skips the replay signature re-check. Any other command prints a message
+ * and resolves to 1. */
 export async function runConnectorCommand(
   ctx: ConnectorCommandContext,
   argv: readonly string[],

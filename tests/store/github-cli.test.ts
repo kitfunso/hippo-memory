@@ -10,11 +10,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { join } from 'node:path';
 import { createHmac } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { parkInDlq } from '../../src/surface/connectors/dlq.js';
 import { githubDlq } from '../../src/surface/connectors/github/dlq.js';
 import { hostMismatch, parseGitHubEnterpriseUrl } from '../../src/surface/connectors/github/site.js';
 import { GitHubPayloadParseError, handleGitHub, parseParkedPayload } from '../../src/surface/cli/github.js';
 import type { JsonValue } from '../../src/base/util/json.js';
+import type { TenantRoute } from '../../src/base/ports/store/connectors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { closeHippoDb, openHippoDb } from '../../src/db/index.js';
 import { loadConfig } from '../../src/host/config-file.js';
@@ -670,6 +672,9 @@ describe('runConnectorCommand github verbs on a handed store', () => {
     sender: { login: 'alice', id: 1 },
   });
   let handed: string;
+  let emptyHome: string;
+  let emptyCwd: string;
+  let savedCwd: string;
   let printed: string[];
   let failed: string[];
 
@@ -680,23 +685,17 @@ describe('runConnectorCommand github verbs on a handed store', () => {
     infra: testInfra(),
   });
 
-  beforeEach(() => {
-    handed = makeRoot('github-runner');
-    printed = [];
-    failed = [];
-    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void printed.push(a.join(' ')));
-    vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => void failed.push(a.join(' ')));
-  });
+  const ctxWhereRoutesNameAnotherInstall = () => {
+    const store = sqliteStore(handed);
+    const route = async (): Promise<TenantRoute> => ({ tenantId: null, routes: 1 });
+    return { ...ctx(), store: { ...store, connectorEvents: { ...store.connectorEvents, route } } };
+  };
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllEnvs();
-  });
+  const replay = (replayCtx: ReturnType<typeof ctx>, id: number): Promise<number> =>
+    runConnectorCommand(replayCtx, ['github', 'dlq', 'replay', String(id)]);
 
-  it('dlq replay <id> writes the memory into the handed store under its tenant and prints the CLI line', async () => {
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
-    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', '');
-    const id = await parkInDlq(githubDlq, sqliteStore(handed), {
+  const parkSigned = (): Promise<number> =>
+    parkInDlq(githubDlq, sqliteStore(handed), {
       tenantId: 'acme',
       rawPayload: body,
       error: 'unroutable',
@@ -706,12 +705,63 @@ describe('runConnectorCommand github verbs on a handed store', () => {
       signature: `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`,
     });
 
-    const code = await runConnectorCommand(ctx(), ['github', 'dlq', 'replay', String(id)]);
+  const memoriesOfIssue5 = () =>
+    loadAllEntries(handed, 'acme').filter((e) => e.artifactRef === 'github://acme/repo/issue/5');
+
+  const noHippoDbElsewhere = (): void => {
+    expect(existsSync(join(emptyHome, 'hippo.db'))).toBe(false);
+    expect(existsSync(join(emptyCwd, '.hippo', 'hippo.db'))).toBe(false);
+  };
+
+  beforeEach(() => {
+    handed = makeRoot('github-runner');
+    emptyHome = makeRoot('github-runner-home', { init: false });
+    emptyCwd = makeRoot('github-runner-cwd', { init: false });
+    savedCwd = process.cwd();
+    process.chdir(emptyCwd);
+    vi.stubEnv('HIPPO_HOME', emptyHome);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', SECRET);
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET_PREVIOUS', '');
+    printed = [];
+    failed = [];
+    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => void printed.push(a.join(' ')));
+    vi.spyOn(console, 'error').mockImplementation((...a: unknown[]) => void failed.push(a.join(' ')));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    process.chdir(savedCwd);
+  });
+
+  it('dlq replay <id> writes the memory into the handed store under its tenant and prints the CLI line', async () => {
+    const id = await parkSigned();
+
+    const code = await replay(ctx(), id);
 
     expect(code).toBe(0);
-    const raws = loadAllEntries(handed, 'acme').filter((e) => e.artifactRef === 'github://acme/repo/issue/5');
+    const raws = memoriesOfIssue5();
     expect(raws).toHaveLength(1);
     expect(printed.join('\n')).toContain(`replay ok: status=replayed memory_id=${raws[0].id} retry_count=1`);
+    noHippoDbElsewhere();
+  });
+
+  it('dlq replay keeps a row no route matches parked as unroutable, and replays it into the caller tenant when GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK is set', async () => {
+    const id = await parkSigned();
+
+    const refused = await replay(ctxWhereRoutesNameAnotherInstall(), id);
+
+    expect(refused).toBe(1);
+    expect(failed.join('\n')).toContain('replay failed: status=unroutable retry_count=1');
+    expect(memoriesOfIssue5()).toHaveLength(0);
+
+    vi.stubEnv('GITHUB_ALLOW_UNKNOWN_INSTALLATION_FALLBACK', 'true');
+    const allowed = await replay(ctxWhereRoutesNameAnotherInstall(), id);
+
+    expect(allowed).toBe(0);
+    expect(printed.join('\n')).toContain('replay ok: status=replayed');
+    expect(memoriesOfIssue5()).toHaveLength(1);
+    noHippoDbElsewhere();
   });
 
   it('backfill with no --repo returns 2 with the usage text', async () => {

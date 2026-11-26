@@ -50,11 +50,13 @@ export interface ReplayDlqOptions {
   allowUnknownTeamFallback?: boolean;
 }
 
-/** Replay a DLQ row via the normal ingest path (`hippo slack dlq replay <id> [--force]`),
- * re-verifying the signature with the CURRENT secret unless forced. A NULL signature needs
- * --force; replays use today's routing. */
+type ReplayContext = Pick<
+  ConnectorContext,
+  'tenantId' | 'store' | 'config' | 'infra' | 'callers' | 'detached'
+>;
+
 export async function replaySlackDlqEntry(
-  ctx: Pick<ConnectorContext, 'tenantId' | 'store' | 'config' | 'infra'>,
+  ctx: ReplayContext,
   id: number,
   opts: ReplayDlqOptions = {},
 ): Promise<ReplayResult> {
@@ -104,7 +106,7 @@ function refuseSignature(row: DlqItem, opts: ReplayDlqOptions): SignatureRefusal
 }
 
 async function reingest(
-  { store, config, infra }: Pick<ConnectorContext, 'store' | 'config' | 'infra'>,
+  { store, config, infra, callers, detached }: ReplayContext,
   envelope: JsonValue & SlackEventEnvelope,
   fallback: RouteFallback,
 ): Promise<Reingest> {
@@ -131,6 +133,8 @@ async function reingest(
     store,
     config,
     infra,
+    callers,
+    detached,
   };
   return replayMessage(replayCtx, envelope, inner);
 }

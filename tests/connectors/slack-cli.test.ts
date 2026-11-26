@@ -7,6 +7,8 @@ import { runCliOut } from '../_helpers/run-cli-as.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { loadConfig } from '../../src/host/config-file.js';
 import { runConnectorCommand } from '../../src/server.js';
+import { createCallerState } from '../../src/api/callers.js';
+import { readPackageVersion } from '../../src/host/package-version.js';
 import { StoreNotPortedError } from '../../src/base/util/store-blocked.js';
 import { makeRoot, makeStore } from '../_helpers/make-root.js';
 import { testInfra } from '../_helpers/infra.js';
@@ -78,6 +80,11 @@ describe('runConnectorCommand on a handed store', () => {
     process.chdir(savedCwd);
   });
 
+  const withoutConnectorGroups = () => {
+    const { connectorWrites: _writes, connectorEvents: _events, ...bare } = sqliteStore(handed);
+    return { ...ctx(), store: bare };
+  };
+
   const noHippoDbElsewhere = (): void => {
     expect(existsSync(join(emptyHome, 'hippo.db'))).toBe(false);
     expect(existsSync(join(emptyCwd, '.hippo', 'hippo.db'))).toBe(false);
@@ -107,11 +114,30 @@ describe('runConnectorCommand on a handed store', () => {
     noHippoDbElsewhere();
   });
 
-  it('prints the verb usage for --help and returns 0 before it touches the store', async () => {
-    expect(await runConnectorCommand(ctx(), ['slack', 'backfill', '--help'])).toBe(0);
+  it('prints the verb usage for --help and returns 0 before the connector groups are checked', async () => {
+    expect(await runConnectorCommand(withoutConnectorGroups(), ['slack', 'backfill', '--help'])).toBe(0);
     expect(printed.join('\n')).toMatch(/--channel/);
-    expect(await runConnectorCommand(ctx(), ['slack', '-h'])).toBe(0);
+    expect(await runConnectorCommand(withoutConnectorGroups(), ['slack', '-h'])).toBe(0);
     expect(printed.join('\n')).toMatch(/workspaces <add\|list\|remove>/);
+  });
+
+  it('prints the version and returns 0 for --version, before the verb writes anything', async () => {
+    const code = await runConnectorCommand(ctx(), [
+      'slack',
+      'workspaces',
+      'add',
+      '--team',
+      'T1',
+      '--tenant',
+      't1',
+      '--version',
+    ]);
+
+    expect(code).toBe(0);
+    expect(printed).toEqual([readPackageVersion()]);
+    expect(await runConnectorCommand(ctx(), ['slack', 'workspaces', 'list'])).toBe(0);
+    expect(printed.join('\n')).not.toContain('T1');
+    noHippoDbElsewhere();
   });
 
   it('returns 1 for a command that is not slack or github and for an unknown slack verb', async () => {
@@ -126,10 +152,78 @@ describe('runConnectorCommand on a handed store', () => {
     expect(failed.join('\n')).toContain('has no --dry-run');
   });
 
-  it('rejects with StoreNotPortedError naming connectorWrites on a store without the connector groups', async () => {
-    const { connectorWrites: _writes, connectorEvents: _events, ...bare } = sqliteStore(handed);
+  it('returns 1 and names the missing command when argv is empty', async () => {
+    expect(await runConnectorCommand(ctx(), [])).toBe(1);
+    expect(failed).toEqual(['runConnectorCommand needs a command: slack or github']);
+  });
 
-    const run = runConnectorCommand({ ...ctx(), store: bare }, ['slack', 'dlq', 'list']);
+  it('rejects a blank tenant before any store call, and writes nothing', async () => {
+    const run = runConnectorCommand({ ...ctx(), tenantId: '' }, [
+      'slack',
+      'workspaces',
+      'add',
+      '--team',
+      'T1',
+      '--tenant',
+      't1',
+    ]);
+
+    await expect(run).rejects.toThrow('runConnectorCommand: tenantId is required');
+    expect(await sqliteStore(handed).connectorEvents.route({ connector: 'slack', teamId: 'T1' })).toEqual({
+      tenantId: null,
+      routes: 0,
+    });
+    expect(printed).toEqual([]);
+  });
+
+  it('replays a parked event with the host callers and detached, so the write starts the host auto-sleep', async () => {
+    const body = JSON.stringify({
+      type: 'event_callback',
+      team_id: 'T1',
+      event_id: 'Ev1',
+      event_time: 1,
+      event: {
+        type: 'message',
+        channel: 'C1',
+        channel_type: 'channel',
+        ts: '1.0',
+        user: 'U1',
+        text: 'ship on tuesday',
+      },
+    });
+    const id = await parkInDlq(slackDlq, sqliteStore(handed), {
+      tenantId: 'default',
+      rawPayload: body,
+      error: 'unroutable',
+      teamId: 'T1',
+    });
+    const slept: string[] = [];
+    const callers = createCallerState({
+      run: async () => void slept.push('run'),
+      hostTenantId: 'default',
+      newSince: async () => 50,
+    });
+    const kept: Promise<unknown>[] = [];
+    const detached = { detach: (work: Promise<unknown>): void => void kept.push(work) };
+
+    const code = await runConnectorCommand({ ...ctx(), callers, detached }, [
+      'slack',
+      'dlq',
+      'replay',
+      String(id),
+      '--force',
+    ]);
+    await Promise.all(kept);
+
+    expect(code).toBe(0);
+    expect(printed.join('\n')).toContain('replay ok: status=ingested');
+    expect(slept).toEqual(['run']);
+    expect(kept.length).toBeGreaterThan(0);
+    noHippoDbElsewhere();
+  });
+
+  it('rejects with StoreNotPortedError naming connectorWrites on a store without the connector groups', async () => {
+    const run = runConnectorCommand(withoutConnectorGroups(), ['slack', 'dlq', 'list']);
 
     await expect(run).rejects.toBeInstanceOf(StoreNotPortedError);
     await expect(run).rejects.toMatchObject({ group: 'connectorWrites' });
