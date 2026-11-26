@@ -651,6 +651,10 @@ describe('grok-build TOML', () => {
       "[mcp_servers.fs]\ncommand = \"C:\\\\tools\\\\fs.exe\"\nargs = [\n  'C:\\a', 'b=c',\n]\n",
     ],
     ['a nested array with [1, 2], lines', 'matrix = [\n  [1, 2],\n  [3, 4],\n]\n'],
+    [
+      'a multi-line string holding a hippo table and ending on a [x] line',
+      'note = """\n[mcp_servers.hippo]\ncommand = "hippo"\n[x]"""\n',
+    ],
   ];
 
   it.each(ABSENT)('absent: %s', (_label, text) => {
@@ -676,6 +680,9 @@ const NPX_RUNS_HIPPO_MCP: string[][] = [
   ['--', 'hippo-memory', 'mcp'],
   ['-y', '-p', 'hippo-memory', 'hippo', 'mcp'],
   ['--package=hippo-memory@3.16.0', 'hippo', 'mcp'],
+  ['--force', 'hippo-memory', 'mcp'],
+  ['--cache', '/c', 'hippo-memory@3.16.0', 'mcp'],
+  ['--force', '-y', 'hippo-memory', 'mcp'],
 ];
 const NPX_RUNS_SOMETHING_ELSE: string[][] = [
   ['-y', 'other-cli', 'hippo-memory', 'mcp'],
@@ -684,6 +691,10 @@ const NPX_RUNS_SOMETHING_ELSE: string[][] = [
   ['other-cli', 'mcp'],
   ['--', 'other-cli', 'hippo-memory', 'mcp'],
   ['-p', 'other', 'hippo', 'mcp'],
+  ['-c', 'echo other', 'hippo-memory', 'mcp'],
+  ['--call=x', 'hippo-memory', 'mcp'],
+  ['--registry', 'other-cli', '-y', 'other', 'hippo-memory', 'mcp'],
+  ['-c', 'hippo-memory', 'mcp'],
 ];
 
 const npxCases = (list: string[][]): [string, string[]][] => list.map((args) => [args.join(' '), args]);

@@ -109,11 +109,38 @@ function readNpxCall(args: readonly string[]): NpxCall {
   return { packages, operand: i };
 }
 
-function npxRunsHippoMcp(args: readonly string[]): boolean {
+const isCallOption = (arg: string): boolean =>
+  arg === '-c' || arg === '--call' || arg.startsWith('--call=');
+
+const takesNext = (args: readonly string[], at: number): boolean =>
+  NPX_PACKAGE_OPTIONS.has(args[at]) || (takesValue(args[at]) && !isHippoPackage(args[at + 1]));
+
+const isOptionOrValue = (args: readonly string[], at: number): boolean =>
+  args[at].startsWith('-') || (at > 0 && args[at - 1].startsWith('-') && takesNext(args, at - 1));
+
+function packageAt(args: readonly string[], index: number): boolean {
+  if (!isHippoPackage(args[index]) || args.length !== index + 2 || args[index + 1] !== 'mcp') {
+    return false;
+  }
+  const dash = args.indexOf('--');
+  if (dash !== -1 && dash !== index - 1) return false;
+  if (NPX_PACKAGE_OPTIONS.has(args[index - 1])) return false;
+  return args.slice(0, index).every((_, at) => isOptionOrValue(args, at));
+}
+
+function packageOptionRunsHippoMcp(args: readonly string[]): boolean {
   const { packages, operand } = readNpxCall(args);
-  if (args.length !== operand + 2 || args[operand + 1] !== 'mcp') return false;
-  if (packages.length === 0) return isHippoPackage(args[operand]);
-  return packages.some(isHippoPackage) && args[operand] === 'hippo';
+  return (
+    packages.some(isHippoPackage) &&
+    args.length === operand + 2 &&
+    args[operand] === 'hippo' &&
+    args[operand + 1] === 'mcp'
+  );
+}
+
+function npxRunsHippoMcp(args: readonly string[]): boolean {
+  if (args.some(isCallOption)) return false;
+  return args.some((_, index) => packageAt(args, index)) || packageOptionRunsHippoMcp(args);
 }
 
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {
