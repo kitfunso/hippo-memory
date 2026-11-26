@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rmSync } from 'node:fs';
 import { openHippoDb, closeHippoDb } from '../../src/db/index.js';
+import { sqliteStore } from '../../src/entry/store-kit.js';
 import { createApiKey } from '../../src/store/sqlite/keys/auth.js';
 import type { ServerHandle, ServeOptions } from '../../src/server.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -97,6 +98,27 @@ describe('serve autoSleep option', () => {
       for (const note of NOTES) await rememberRest(url, key, note);
       for (const h of handles.splice(0)) await h.stop();
       expect(sleepRuns(root)).toBe(1);
+    },
+  );
+
+  it.skipIf(needsHippoDb('sleep'))(
+    'a hippo.db store without the consolidation group starts no consolidation run past the threshold',
+    async () => {
+      const root = makeRoot('serve-autosleep', { config: { autoSleep: { enabled: true, threshold: 2 } } });
+      roots.push(root);
+      const db = openHippoDb(root);
+      let key: string;
+      try {
+        key = createApiKey(db, { tenantId: 'default', label: 'auto-sleep-test' }).plaintext;
+      } finally {
+        closeHippoDb(db);
+      }
+      const { consolidation: _consolidation, ...store } = sqliteStore(root);
+      const handle = await serve({ hippoRoot: root, port: 0, store });
+      handles.push(handle);
+      for (const note of NOTES) await rememberRest(handle.url, key, note);
+      for (const h of handles.splice(0)) await h.stop();
+      expect(sleepRuns(root)).toBe(0);
     },
   );
 
