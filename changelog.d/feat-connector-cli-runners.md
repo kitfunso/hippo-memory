@@ -1,6 +1,6 @@
 ### Added
 
-- **`runConnectorCommand(ctx, argv)` on `hippo-memory/server` runs the `slack` and `github` CLI verbs on a store the caller hands in.** It takes the argv without the program name, such as `['github', 'dlq', 'replay', '12', '--force']`, and uses the CLI's own flags, help, output and exit codes. It resolves to that exit code. A store without the connector groups rejects with `StoreNotPortedError`. `--version` prints the version and resolves to 0 without running a verb, and a blank `tenantId` rejects before any store call. The type `ConnectorCommandContext` names what it takes: `tenantId`, `store`, `config`, and optionally `infra`, `callers` and `detached`.
+- **`runConnectorCommand(ctx, argv)` on `hippo-memory/server` runs the `slack` and `github` CLI verbs on a store the caller hands in.** It takes the argv without the program name, such as `['github', 'dlq', 'replay', '12', '--force']`, and uses the CLI's own flags, help, output and exit codes. It resolves to that exit code. A store without the connector groups rejects with `StoreNotPortedError`. `--version` prints the version and resolves to 0 without running a verb, and a blank `tenantId`, or one that starts with `sess-` or `sess_`, rejects before any store call. The type `ConnectorCommandContext` names what it takes: `tenantId`, `store`, `config`, and optionally `infra`, `callers` and `detached`.
 
 ### Fixed
 

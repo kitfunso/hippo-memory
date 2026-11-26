@@ -20,7 +20,7 @@ hippo-enterprise serves hippo from Postgres. Its webhooks park dead letters ther
 - The same PR makes GitHub dead-letter replay route the tenant again from the payload's installation and repository, as the webhook and Slack replay do. This is listed under Fixed in the changelog.
 
 ## Guards the runner skips on purpose
-The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, `--version` and `--help` before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls. It also runs the tenant guard, `assertTenantId` on `ctx.tenantId`, which rejects a blank tenant before any store call. The CLI's tenant is trimmed and never blank, so `envTenant()` needed no such guard.
+The CLI's `main` and `runCli` run these before or around a verb. The runner runs the others (`parseArgs`, `--version` and `--help` before any store is touched, the flag checks and the `--dry-run` refusal, the group check) through the same functions `main` calls. It also runs the tenant guard, `assertTenantId` on `ctx.tenantId`, which rejects a blank tenant, or one that starts with `sess-` or `sess_` as core's other tenant guards do, before any store call. The CLI's tenant is trimmed and never blank, so `envTenant()` needed no such guard.
 - The empty command and any command but `slack` and `github`: they are not connector verbs. The runner prints a message and resolves to 1.
 - `maybeRepairCodexWrapper`: it edits the user's Codex install, which a library call must not.
 - The `HIPPO_READ_ONLY` stop: the slack and github rows set no `readOnly`, so `main` skips it for them too.
