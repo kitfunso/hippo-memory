@@ -86,61 +86,47 @@ const NPX_FLAGS: ReadonlySet<string> = new Set([
 ]);
 const NPX_PACKAGE_OPTIONS: ReadonlySet<string> = new Set(['-p', '--package']);
 
-interface NpxCall {
+interface NpxWalk {
   readonly packages: readonly string[];
-  readonly operand: number;
+  readonly rest: readonly string[];
 }
 
-const takesValue = (option: string): boolean =>
-  !option.includes('=') && !option.startsWith('--no-') && !NPX_FLAGS.has(option);
+const isOptionValue = (arg: string | undefined): arg is string =>
+  arg !== undefined && !arg.startsWith('-') && !isHippoPackage(arg);
 
-function readNpxCall(args: readonly string[]): NpxCall {
-  const packages: string[] = [];
-  let i = 0;
-  while (i < args.length && args[i].startsWith('-')) {
-    const option = args[i];
-    if (option === '--') return { packages, operand: i + 1 };
-    const equals = option.indexOf('=');
-    const name = equals === -1 ? option : option.slice(0, equals);
-    const value = takesValue(option) ? args[i + 1] : option.slice(equals + 1);
-    if (NPX_PACKAGE_OPTIONS.has(name) && value !== undefined) packages.push(value);
-    i += takesValue(option) ? 2 : 1;
-  }
-  return { packages, operand: i };
-}
+const isValueless = (name: string, inline: string | undefined): boolean =>
+  inline !== undefined || name.startsWith('--no-') || NPX_FLAGS.has(name);
 
 const isCallOption = (arg: string): boolean =>
   arg === '-c' || arg === '--call' || arg.startsWith('--call=');
 
-const takesNext = (args: readonly string[], at: number): boolean =>
-  NPX_PACKAGE_OPTIONS.has(args[at]) || (takesValue(args[at]) && !isHippoPackage(args[at + 1]));
-
-const isOptionOrValue = (args: readonly string[], at: number): boolean =>
-  args[at].startsWith('-') || (at > 0 && args[at - 1].startsWith('-') && takesNext(args, at - 1));
-
-function packageAt(args: readonly string[], index: number): boolean {
-  if (!isHippoPackage(args[index]) || args.length !== index + 2 || args[index + 1] !== 'mcp') {
-    return false;
+function walkNpx(args: readonly string[]): NpxWalk {
+  const packages: string[] = [];
+  let at = 0;
+  while (at < args.length && args[at].startsWith('-')) {
+    const option = args[at];
+    at += 1;
+    if (option === '--') break;
+    const equals = option.indexOf('=');
+    const name = equals === -1 ? option : option.slice(0, equals);
+    const inline = equals === -1 ? undefined : option.slice(equals + 1);
+    if (NPX_PACKAGE_OPTIONS.has(name)) {
+      const value = inline ?? args[at];
+      if (inline === undefined) at += 1;
+      if (value !== undefined) packages.push(value);
+    } else if (!isValueless(name, inline) && isOptionValue(args[at])) {
+      at += 1;
+    }
   }
-  const dash = args.indexOf('--');
-  if (dash !== -1 && dash !== index - 1) return false;
-  if (NPX_PACKAGE_OPTIONS.has(args[index - 1])) return false;
-  return args.slice(0, index).every((_, at) => isOptionOrValue(args, at));
-}
-
-function packageOptionRunsHippoMcp(args: readonly string[]): boolean {
-  const { packages, operand } = readNpxCall(args);
-  return (
-    packages.some(isHippoPackage) &&
-    args.length === operand + 2 &&
-    args[operand] === 'hippo' &&
-    args[operand + 1] === 'mcp'
-  );
+  return { packages, rest: args.slice(at) };
 }
 
 function npxRunsHippoMcp(args: readonly string[]): boolean {
   if (args.some(isCallOption)) return false;
-  return args.some((_, index) => packageAt(args, index)) || packageOptionRunsHippoMcp(args);
+  const { packages, rest } = walkNpx(args);
+  if (rest.length !== 2 || rest[1] !== 'mcp') return false;
+  if (packages.length === 0) return isHippoPackage(rest[0]);
+  return rest[0] === 'hippo' && packages.some(isHippoPackage);
 }
 
 export function runsHippoMcp(command: string, args: readonly string[]): boolean {

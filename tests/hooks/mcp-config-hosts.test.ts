@@ -683,6 +683,12 @@ const NPX_RUNS_HIPPO_MCP: string[][] = [
   ['--force', 'hippo-memory', 'mcp'],
   ['--cache', '/c', 'hippo-memory@3.16.0', 'mcp'],
   ['--force', '-y', 'hippo-memory', 'mcp'],
+  ['--force', '-p', 'hippo-memory', 'hippo', 'mcp'],
+  ['-p', 'hippo-memory', '--', 'hippo', 'mcp'],
+  ['-p=hippo-memory', 'hippo', 'mcp'],
+  ['--no-install', 'hippo-memory', 'mcp'],
+  ['--loglevel', 'silent', 'hippo-memory', 'mcp'],
+  ['-p', 'other', '-p', 'hippo-memory', 'hippo', 'mcp'],
 ];
 const NPX_RUNS_SOMETHING_ELSE: string[][] = [
   ['-y', 'other-cli', 'hippo-memory', 'mcp'],
@@ -695,6 +701,12 @@ const NPX_RUNS_SOMETHING_ELSE: string[][] = [
   ['--call=x', 'hippo-memory', 'mcp'],
   ['--registry', 'other-cli', '-y', 'other', 'hippo-memory', 'mcp'],
   ['-c', 'hippo-memory', 'mcp'],
+  ['-p', 'other', 'hippo-memory', 'mcp'],
+  ['-p', 'hippo-memory', 'mcp'],
+  ['-p', 'hippo-memory', 'hippo-memory', 'mcp'],
+  ['-p', 'hippo-memory', 'hippo', 'mcp', 'extra'],
+  ['--force', 'hippo-memory'],
+  ['hippo-memory', 'mcp', '-c'],
 ];
 
 const npxCases = (list: string[][]): [string, string[]][] => list.map((args) => [args.join(' '), args]);
