@@ -102,16 +102,22 @@ function write(file: string, text: string): void {
   fs.writeFileSync(file, text);
 }
 
-function expectMaybeHippo(host: string, key: string, text: string): void {
+function expectMaybeHippo(host: string, key: string, text: string, tableKey?: string): void {
   write(fileOf(host), text);
   const added = install(host);
   const removed = uninstall(host);
   const row = rowNamed(host);
+  const expected =
+    row.format.kind === 'json' ? { maybeHippo: key, tableKey: tableKey ?? row.format.host.key } : { maybeHippo: key };
   const head = `A server named ${JSON.stringify(key)} in ${added.file} may already run hippo; the file is left as it is`;
-  const verb = key === 'hippo' ? 'replace the entry with this ' : 'add ';
+  const replace =
+    row.format.kind === 'json'
+      ? 'replace the entry with this '
+      : 'update the "hippo" server under mcp_servers in place ';
+  const verb = key === 'hippo' ? replace : 'add ';
   expect([added.status, removed.status, isMcpMaybeHippo(added.status), isMcpFailure(added.status)]).toEqual([
-    { maybeHippo: key },
-    { maybeHippo: key },
+    expected,
+    expected,
     true,
     false,
   ]);
@@ -119,7 +125,9 @@ function expectMaybeHippo(host: string, key: string, text: string): void {
   expect(mcpInstallLines(added.file, added.status, row, 'hint')).toEqual([
     `${head}; if it does not, run \`hippo hook install ${host}\` to see the entry to paste`,
   ]);
-  expect(mcpInstallLines(added.file, added.status, row, 'snippet')[0]).toContain(`${head}; if it does not, ${verb}`);
+  const snippet = mcpInstallLines(added.file, added.status, row, 'snippet');
+  expect(snippet[0]).toContain(`${head}; if it does not, ${verb}`);
+  if (tableKey !== undefined) expect(snippet[0]).toContain(`under "${tableKey}"`);
   expect(mcpRemoveLines(removed.file, removed.status, row)).toEqual([
     `Left ${JSON.stringify(key)} in ${removed.file}: it may run hippo via npx; ` +
       'check whether it starts hippo before removing it by hand',
@@ -400,7 +408,7 @@ describe('muse-code schema_version', () => {
     expect([uninstall('muse-code').status, read(fileOf('muse-code'))]).toEqual(['absent', '']);
   });
 
-  it('reuses legacy mcpServers and refuses files carrying both spellings', () => {
+  it('reuses legacy mcpServers and reports conflicting-keys when both spellings exist', () => {
     const legacy = { schema_version: 1, mcpServers: { theirs: USER_SERVER } };
     write(fileOf('muse-code'), JSON.stringify(legacy));
     expect(install('muse-code').status).toBe('added');
@@ -409,13 +417,27 @@ describe('muse-code schema_version', () => {
       mcpServers: { theirs: USER_SERVER, hippo: SERVER['muse-code'] },
     });
     expect([uninstall('muse-code').status, readJson(fileOf('muse-code'))]).toEqual(['removed', legacy]);
+    expectMaybeHippo(
+      'muse-code',
+      'mem',
+      JSON.stringify({
+        schema_version: 1,
+        mcpServers: { mem: { command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } },
+      }),
+      'mcpServers',
+    );
     const both = JSON.stringify({ schema_version: 1, mcp_servers: {}, mcpServers: {} });
     write(fileOf('muse-code'), both);
+    const row = rowNamed('muse-code');
     expect([install('muse-code').status, uninstall('muse-code').status, read(fileOf('muse-code'))]).toEqual([
-      'unreadable',
-      'unreadable',
+      'conflicting-keys',
+      'conflicting-keys',
       both,
     ]);
+    expect(mcpInstallLines(fileOf('muse-code'), 'conflicting-keys', row, 'snippet')[0]).toContain(
+      '"mcp_servers" and "mcpServers"',
+    );
+    expect(mcpRemoveLines(fileOf('muse-code'), 'conflicting-keys', row)[0]).toContain('"mcp_servers" and "mcpServers"');
   });
 });
 
@@ -423,41 +445,20 @@ describe('grok-build TOML', () => {
   const file = (): string => fileOf('grok-build');
   const seeded = (text: string): void => write(file(), text);
 
-  it('appends to a missing file with no blank line before the table', () => {
+  it.each([
+    ['missing', null, TABLE],
+    ['empty', '', TABLE],
+    ['no trailing newline', 'model = "x"', `model = "x"\n\n${TABLE}`],
+    ['CRLF', 'model = "x"\r\n', `model = "x"\r\n\r\n${tableWith('\r\n')}`],
+    ['BOM', `${BOM}model = "x"\n`, `${BOM}model = "x"\n\n${TABLE}`],
+    ['BOM-only', BOM, `${BOM}${TABLE}`],
+  ])('appends cleanly to a %s file', (_label, initial, expected) => {
+    if (initial !== null) seeded(initial);
     expect(install('grok-build')).toEqual({ name: 'grok-build', file: file(), status: 'added' });
-    expect(read(file())).toBe(TABLE);
-    expect(install('grok-build').status).toBe('present');
-  });
-
-  it('appends to an empty file with no blank line before the table', () => {
-    seeded('');
-    expect(install('grok-build').status).toBe('added');
-    expect(read(file())).toBe(TABLE);
-  });
-
-  it('appends after a file with no trailing newline', () => {
-    seeded('model = "x"');
-    install('grok-build');
-    expect(read(file())).toBe(`model = "x"\n\n${TABLE}`);
-  });
-
-  it('appends after a CRLF file in CRLF', () => {
-    seeded('model = "x"\r\n');
-    install('grok-build');
-    expect(read(file())).toBe(`model = "x"\r\n\r\n${tableWith('\r\n')}`);
-  });
-
-  it('keeps the BOM of a BOM file', () => {
-    seeded(`${BOM}model = "x"\n`);
-    install('grok-build');
-    expect(read(file())).toBe(`${BOM}model = "x"\n\n${TABLE}`);
-    expect(fs.readFileSync(file()).subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
-  });
-
-  it('puts the table right after the BOM of a BOM-only file', () => {
-    seeded(BOM);
-    install('grok-build');
-    expect(read(file())).toBe(`${BOM}${TABLE}`);
+    expect([read(file()), install('grok-build').status]).toEqual([expected, 'present']);
+    if (initial?.startsWith(BOM)) {
+      expect(fs.readFileSync(file()).subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    }
   });
 
   it.each([

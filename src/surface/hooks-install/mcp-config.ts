@@ -7,6 +7,7 @@ import { tryParseJson, type JsonValue } from '../../base/util/json.js';
 import { grokStatus, planGrokInstall, planGrokRemoval } from './rules/grok-build.js';
 import {
   addHippoServer,
+  hasConflictingServerKeys,
   hippoCommand,
   jsonText,
   jsonTextStyle,
@@ -37,13 +38,17 @@ function readText(file: string): string | null {
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
 }
 
-function readMcpConfig(text: string | null, host: McpConfigHost): McpConfig | null {
+function readMcpConfig(
+  text: string | null,
+  host: McpConfigHost,
+): McpConfig | 'conflicting-keys' | null {
   let config: JsonValue = host.seed?.() ?? {};
   if (text !== null) {
     const parsed = tryParseJson(jsonTextStyle(text).bom ? text.slice(1) : text);
     if (parsed !== undefined) config = parsed;
     else if (text.trim() !== '') return null;
   }
+  if (hasConflictingServerKeys(config, host)) return 'conflicting-keys';
   return mcpConfigOf(config, host);
 }
 
@@ -51,6 +56,7 @@ export function mergeMcpServer(file: string, host: McpConfigHost): McpMergeStatu
   const text = readText(file);
   const read = readMcpConfig(text, host);
   if (read === null) return 'unreadable';
+  if (read === 'conflicting-keys') return read;
   const status = addHippoServer(read, host);
   if (status !== 'added') return status;
   if ((host.invalid?.(read.config) ?? null) !== null) return 'invalid';
@@ -63,6 +69,7 @@ export function removeMcpServer(file: string, host: McpConfigHost): McpRemoveSta
   if (text === null) return 'absent';
   const read = readMcpConfig(text, host);
   if (read === null) return 'unreadable';
+  if (read === 'conflicting-keys') return read;
   const status = removeHippoServer(read, host);
   if (status === 'removed') writeFileAtomic(file, jsonText(read.config, jsonTextStyle(text)));
   return status;

@@ -104,11 +104,18 @@ export interface McpConfig {
   readonly servers: JsonObject;
 }
 
+export function hasConflictingServerKeys(config: JsonValue, host: McpConfigHost): boolean {
+  return (
+    isJsonObjectLiteral(config) &&
+    host.altKey !== undefined &&
+    config[host.key] !== undefined &&
+    config[host.altKey] !== undefined
+  );
+}
+
 export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig | null {
-  if (!isJsonObjectLiteral(config)) return null;
-  const hasMain = config[host.key] !== undefined;
+  if (!isJsonObjectLiteral(config) || hasConflictingServerKeys(config, host)) return null;
   const hasAlt = host.altKey !== undefined && config[host.altKey] !== undefined;
-  if (hasMain && hasAlt) return null;
   const key = hasAlt && host.altKey !== undefined ? host.altKey : host.key;
   if (config[key] === undefined) config[key] = {};
   const servers = config[key];
@@ -117,6 +124,7 @@ export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig |
 
 export interface McpMaybeHippo {
   readonly maybeHippo: string;
+  readonly tableKey?: McpConfigHost['key'];
 }
 
 export type McpMergeStatus =
@@ -126,22 +134,23 @@ export type McpMergeStatus =
   | 'user-owned'
   | 'unreadable'
   | 'invalid'
+  | 'conflicting-keys'
   | McpMaybeHippo;
 
 export function addHippoServer(
   read: McpConfig,
   host: McpConfigHost,
-): Exclude<McpMergeStatus, 'unreadable' | 'invalid'> {
+): Exclude<McpMergeStatus, 'unreadable' | 'invalid' | 'conflicting-keys'> {
   const existing = read.servers[MCP_KEY];
   if (existing !== undefined) {
     if (isHipposServer(existing, host)) return 'present';
     if (entryRunsHippoMcp(existing)) return 'kept';
-    if (entryMayRunHippo(existing)) return { maybeHippo: MCP_KEY };
+    if (entryMayRunHippo(existing)) return { maybeHippo: MCP_KEY, tableKey: read.key };
     return 'user-owned';
   }
   if (Object.values(read.servers).some(entryRunsHippoMcp)) return 'kept';
   const maybe = Object.entries(read.servers).find(([, entry]) => entryMayRunHippo(entry));
-  if (maybe !== undefined) return { maybeHippo: maybe[0] };
+  if (maybe !== undefined) return { maybeHippo: maybe[0], tableKey: read.key };
   read.servers[MCP_KEY] = host.server();
   return 'added';
 }
@@ -152,21 +161,22 @@ export type McpRemoveStatus =
   | 'kept'
   | 'user-owned'
   | 'unreadable'
+  | 'conflicting-keys'
   | McpMaybeHippo;
 
 export function removeHippoServer(
   read: McpConfig,
   host: McpConfigHost,
-): Exclude<McpRemoveStatus, 'unreadable'> {
+): Exclude<McpRemoveStatus, 'unreadable' | 'conflicting-keys'> {
   const existing = read.servers[MCP_KEY];
   if (existing === undefined) {
     if (Object.values(read.servers).some(entryRunsHippoMcp)) return 'kept';
     const maybe = Object.entries(read.servers).find(([, entry]) => entryMayRunHippo(entry));
-    return maybe !== undefined ? { maybeHippo: maybe[0] } : 'absent';
+    return maybe !== undefined ? { maybeHippo: maybe[0], tableKey: read.key } : 'absent';
   }
   if (!isHipposServer(existing, host)) {
     if (entryRunsHippoMcp(existing)) return 'kept';
-    return entryMayRunHippo(existing) ? { maybeHippo: MCP_KEY } : 'user-owned';
+    return entryMayRunHippo(existing) ? { maybeHippo: MCP_KEY, tableKey: read.key } : 'user-owned';
   }
   delete read.servers[MCP_KEY];
   if (Object.keys(read.servers).length === 0) delete read.config[read.key];

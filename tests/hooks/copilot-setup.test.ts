@@ -511,14 +511,14 @@ describe('installCopilot and uninstallCopilot', () => {
       writeFile(user.mcp, vscodeText);
 
       const installed = installCopilot();
-      expect(installed.mcp).toEqual({ maybeHippo: key });
-      expect(installed.vscode[0].mcp).toEqual({ maybeHippo: key });
+      expect(installed.mcp).toEqual({ maybeHippo: key, tableKey: 'mcpServers' });
+      expect(installed.vscode[0].mcp).toEqual({ maybeHippo: key, tableKey: 'servers' });
       expect(read(files.mcp)).toBe(cliText);
       expect(read(user.mcp)).toBe(vscodeText);
 
       const removed = uninstallCopilot();
-      expect(removed.mcp).toEqual({ maybeHippo: key });
-      expect(removed.vscode[0].mcp).toEqual({ maybeHippo: key });
+      expect(removed.mcp).toEqual({ maybeHippo: key, tableKey: 'mcpServers' });
+      expect(removed.vscode[0].mcp).toEqual({ maybeHippo: key, tableKey: 'servers' });
       expect(read(files.mcp)).toBe(cliText);
       expect(read(user.mcp)).toBe(vscodeText);
     },
