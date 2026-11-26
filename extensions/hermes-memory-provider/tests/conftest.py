@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterator
@@ -24,6 +25,7 @@ import hippo
 SCRUBBED_ENV = (
     "HIPPO_BIN", "HIPPO_TENANT", "XDG_DATA_HOME", "FAKE_HIPPO_LOG",
     "HERMES_SESSION_SOURCE", "HERMES_SINGLE_QUERY_SESSION", "HERMES_SESSION_SOURCE_EXPLICIT",
+    "HERMES_EXIT_WATCHDOG_S",
 )
 HOME_ENV = (
     ("HOME", "home"), ("USERPROFILE", "home"), ("APPDATA", "appdata"), ("LOCALAPPDATA", "localappdata"),
@@ -68,6 +70,20 @@ def started(monkeypatch: pytest.MonkeyPatch) -> list[SimpleNamespace]:
         return proc
 
     monkeypatch.setattr(subprocess, "Popen", spy)
+    return seen
+
+
+@pytest.fixture
+def submitted(monkeypatch: pytest.MonkeyPatch) -> list[Future]:
+    seen: list[Future] = []
+
+    class Recording(ThreadPoolExecutor):
+        def submit(self, fn: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Future:
+            future = super().submit(fn, *args, **kwargs)
+            seen.append(future)
+            return future
+
+    monkeypatch.setattr(hippo, "ThreadPoolExecutor", Recording)
     return seen
 
 

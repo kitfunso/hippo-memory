@@ -4,6 +4,8 @@ import copy
 import functools
 import json
 import logging
+import math
+import ntpath
 import os
 import re
 import shutil
@@ -22,7 +24,10 @@ from agent.memory_provider import MemoryProvider, ctx_bound
 logger = logging.getLogger(__name__)
 
 TIMEOUTS = {"context": 6, "recall": 6, "remember": 6, "outcome": 6, "capture": 30}
-CAPTURE_DEADLINE_S = 30
+EXIT_WATCHDOG_DEFAULT_S = 30.0
+NO_WATCHDOG_DEADLINE_S = 30.0
+HERMES_PRE_SHUTDOWN_S = 15.0
+SHUTDOWN_MARGIN_S = 3.0
 LAUNCHER_FILE = Path(__file__).with_name("launcher.json")
 CONTEXT_ARGS = ("--pinned-only", "--include-recent", "5", "--format", "additional-context")
 RECALL_ARGS = ("--json", "--budget", "1500")
@@ -84,15 +89,30 @@ def _launcher_record() -> Optional[dict[str, str]]:
     return None
 
 
+def capture_deadline_s() -> float:
+    try:
+        watchdog = float(os.environ.get("HERMES_EXIT_WATCHDOG_S", EXIT_WATCHDOG_DEFAULT_S))
+    except ValueError:
+        watchdog = EXIT_WATCHDOG_DEFAULT_S
+    if not 0 < watchdog < math.inf:
+        return NO_WATCHDOG_DEADLINE_S
+    return max(1.0, watchdog - HERMES_PRE_SHUTDOWN_S - SHUTDOWN_MARGIN_S)
+
+
+def _launcher_allowed(path: str) -> bool:
+    if sys.platform != "win32":
+        return True
+    return ntpath.basename(path).rstrip(" .").lower().endswith((".js", ".exe"))
+
+
 def launcher() -> list[str]:
     override = os.environ.get("HIPPO_BIN", "").strip()
     rec = _launcher_record()
     node = rec["node"] if rec and Path(rec["node"]).exists() else "node"
     if override:
-        low = override.lower()
-        if sys.platform == "win32" and low.endswith((".cmd", ".bat")):
+        if not _launcher_allowed(override):
             raise ValueError("HIPPO_BIN must name hippo.js or a hippo .exe on Windows")
-        return [node, override] if low.endswith(".js") else [override]
+        return [node, override] if override.lower().endswith(".js") else [override]
     if rec and Path(rec["script"]).exists():
         return [node, rec["script"]]
     return ["hippo"]
@@ -102,7 +122,7 @@ def _runnable(argv: list[str]) -> bool:
     if Path(argv[-1]).is_file():
         return True
     found = shutil.which(argv[0]) if len(argv) == 1 else None
-    return bool(found) and not (sys.platform == "win32" and found.lower().endswith((".cmd", ".bat")))
+    return bool(found) and _launcher_allowed(found)
 
 
 def _ignore(_: subprocess.Popen) -> None:
@@ -269,6 +289,14 @@ def _error(message: str) -> str:
     return json.dumps({"error": message}, ensure_ascii=False)
 
 
+def _log_capture_failure(future: Future) -> None:
+    if future.cancelled():
+        return
+    exc = future.exception()
+    if exc is not None:
+        logger.error("hippo capture crashed: %r", exc, exc_info=exc)
+
+
 def _text_arg(args: dict[str, Any], key: str) -> str:
     value = args.get(key)
     return value.strip() if isinstance(value, str) else ""
@@ -372,7 +400,8 @@ class HippoProvider(MemoryProvider):
         out = _ok("remember", run_hippo("remember", list(REMEMBER_ARGS), text=text))
         if out is None:
             return _error("hippo remember failed; the Hermes log says why")
-        return json.dumps({"result": out.strip()}, ensure_ascii=False)
+        first_line = (out.strip().splitlines() or [""])[0]
+        return json.dumps({"result": first_line}, ensure_ascii=False)
 
     def _outcome_tool(self, args: dict[str, Any]) -> str:
         good = args.get("good")
@@ -412,6 +441,7 @@ class HippoProvider(MemoryProvider):
                 self._captures = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hippo-capture")
                 self._run_shutdown_at_exit()
             future = self._captures.submit(ctx_bound(self._capture_job), lines, sid)
+            future.add_done_callback(_log_capture_failure)
             self._capture_futures = [f for f in self._capture_futures if not f.done()] + [future]
 
     def _run_shutdown_at_exit(self) -> None:
@@ -450,17 +480,17 @@ class HippoProvider(MemoryProvider):
         if executor is None:
             return
         executor.shutdown(wait=False, cancel_futures=False)
-        _, pending = wait(futures, timeout=CAPTURE_DEADLINE_S)
+        _, pending = wait(futures, timeout=capture_deadline_s())
         if not pending:
             return
         dropped = sum(future.cancel() for future in pending)
         with self._lock:
             self._stopping = True
             proc = self._capture_proc
-        stopped = proc is not None and proc.poll() is None
-        if stopped:
+        if proc is not None and proc.poll() is None:
             proc.kill()
-        logger.warning("hippo: shutdown stopped %d running and dropped %d queued capture(s)", int(stopped), dropped)
+        logger.warning("hippo: shutdown stopped %d running and dropped %d queued capture(s)",
+                       len(pending) - dropped, dropped)
 
 
 def register(ctx: Any) -> None:

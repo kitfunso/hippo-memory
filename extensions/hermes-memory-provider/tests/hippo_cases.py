@@ -66,6 +66,15 @@ def recall_reply(*ids: str) -> str:
     return json.dumps({"results": [{"id": one, "content": f"memory {one}"} for one in ids], "total": len(ids)})
 
 
+def remember_reply(memory_id: str) -> str:
+    lines = (
+        f"[global] Remembered [{memory_id}]",
+        "   Layer: episodic | Strength: 1.00 | Half-life: 365d | Confidence: verified",
+        "   Tags: hermes, path:home",
+    )
+    return "".join(f"{line}\n" for line in lines)
+
+
 def session(ask: str, reply: str = "Done.") -> list[dict[str, Any]]:
     return [
         {"role": "system", "content": "You are Hermes."},

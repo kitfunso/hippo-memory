@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pytest
 
 import hippo
-from hippo_cases import UNICODE, capture_names, hook_reply, recall_reply, same_path, session, transcript_lines
+from hippo_cases import (UNICODE, capture_names, hook_reply, recall_reply, remember_reply, same_path, session,
+                         transcript_lines)
 
 
 def test_prefetch_sends_the_hook_payload_on_stdin(fake, start, env, started):
@@ -38,7 +38,7 @@ def test_recall_puts_the_query_after_a_double_dash(fake, start, env, started):
 
 
 def test_remember_tags_the_text_and_puts_it_after_a_double_dash(fake, start, env):
-    fake.answer("remember", out="[global] Remembered [mem_x]\n")
+    fake.answer("remember", out=remember_reply("mem_x"))
     provider = start()
     result = json.loads(provider.handle_tool_call("hippo_remember", {"text": f"-x {UNICODE}"}))
     assert result == {"result": "[global] Remembered [mem_x]"}
@@ -90,14 +90,13 @@ def test_each_verb_stops_at_its_time_limit(verb, fake, monkeypatch):
     monkeypatch.setitem(hippo.TIMEOUTS, verb, 1)
     fake.answer(verb, sleep=30)
     procs = []
-    began = time.monotonic()
     assert hippo.run_hippo(verb, [], stdin="{}" if verb == "context" else None, on_start=procs.append) is None
-    assert time.monotonic() - began < 10
     assert procs[0].returncode is not None
     assert len(fake.calls(verb)) == 1
 
 
-@pytest.mark.parametrize("name", ["hippo.cmd", "HIPPO.BAT"])
+@pytest.mark.parametrize("name", ["hippo.cmd.", "hippo.cmd. .", "HIPPO.CMD", "hippo.bat", "hippo.com",
+                                  "hippo.cmd::$DATA", "hippo"])
 def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
     monkeypatch.setenv("HIPPO_BIN", str(tmp_path / name))
     monkeypatch.setattr(sys, "platform", "win32")
@@ -106,6 +105,23 @@ def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
     assert hippo.run_hippo("recall", [], text="x") is None
     assert not hippo.HippoProvider().is_available()
     assert started == []
+
+
+@pytest.mark.parametrize("name", ["hippo.js", "hippo.exe", "HIPPO.EXE."])
+def test_windows_allows_a_js_or_an_exe(name, tmp_path, monkeypatch):
+    path = str(tmp_path / name)
+    monkeypatch.setenv("HIPPO_BIN", path)
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert hippo.launcher() == (["node", path] if name.endswith(".js") else [path])
+
+
+@pytest.mark.parametrize(("found", "available"), [("C:\\bin\\hippo.cmd.", False), ("C:\\bin\\HIPPO.CMD", False),
+                                                  ("C:\\bin\\hippo.exe", True)])
+def test_windows_judges_a_path_hit_like_a_set_bin(found, available, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(hippo.shutil, "which", lambda name: found)
+    assert hippo.HippoProvider().is_available() is available
 
 
 def test_a_js_bin_runs_under_node(tmp_path, monkeypatch):

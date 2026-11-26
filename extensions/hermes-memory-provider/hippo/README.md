@@ -11,6 +11,8 @@ This plugin connects Hermes Agent to hippo. Hermes then uses the same memory sto
 - At the end of a session, and before each context compression, the plugin captures the text you typed and the
   assistant replies. It leaves out tool output, runtime notices, skill bodies and compaction summaries.
 - All reads and writes go to the global hippo store (`$HIPPO_HOME`, else `~/.hippo/`), in any folder.
+- The plugin reads that store from the home folder, so it gets the pinned rules of every project, as an agent
+  started in the home folder does.
 
 ## Turn it on
 
@@ -41,7 +43,7 @@ A delegated sub-agent can only recall. A cron job can recall and gets context, b
 
 ## Settings
 
-- `HIPPO_BIN`: the path to hippo's `bin/hippo.js` or to a hippo executable. On Windows, a `.cmd` or `.bat`
-  file is refused.
+- `HIPPO_BIN`: the path to hippo's `bin/hippo.js` or to a hippo executable. On Windows, only a `.js` or an
+  `.exe` file is accepted, and any other file, such as a `.cmd` or `.bat`, is refused.
 - `HIPPO_TENANT`: the tenant that context, recall, remember and outcome use. Capture stays off for any tenant
   other than `default`, because `hippo capture --global` writes the default tenant.
