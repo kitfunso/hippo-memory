@@ -15,7 +15,6 @@ import {
   uninstallCodexWrapper,
 } from '../hooks-install/codex-wrapper.js';
 import { installOpencodePlugin, uninstallOpencodePlugin } from '../hooks-install/opencode.js';
-import { installCopilot, uninstallCopilot } from '../hooks-install/copilot.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { printError } from './output.js';
 import { boolFlag, type CommandContext } from './flag-values.js';
@@ -35,7 +34,7 @@ import {
 } from '../hooks-install/instructions.js';
 import { escapeRegex } from '../../base/util/escape.js';
 import { fail } from './exit.js';
-import { printCopilotInstall, printCopilotUninstall } from './copilot-report.js';
+import { HOME_TARGETS, homeTarget } from './home-targets.js';
 
 export function handleHook({ args, flags }: CommandContext): void {
   const subcommand = args[0];
@@ -58,37 +57,30 @@ function hookList(): void {
   for (const [name, hook] of Object.entries(HOOKS)) {
     console.log(`  ${name.padEnd(15)} -> ${hook.file} (${hook.description})`);
   }
-  console.log(
-    `  ${'copilot'.padEnd(15)} -> $COPILOT_HOME or ~/.copilot, and each VS Code User folder ` +
-      '(GitHub Copilot: hooks, MCP server and instructions)',
-  );
+  for (const target of HOME_TARGETS) console.log(target.listLine());
   console.log('\nUsage: hippo hook install <name>');
   console.log('       hippo hook uninstall <name>');
 }
 
 function hookInstall(target: string | undefined, force: boolean): void {
-  // Copilot's instructions live in its home folder, not in a project file, so it has no HOOKS
-  // entry.
-  if (target === 'copilot') return printCopilotInstall(installCopilot(), '');
+  const home = target === undefined ? undefined : homeTarget(target);
+  if (home) return home.install('', true);
   if (!target || !HOOKS[target]) {
     printError(`Unknown hook target: ${target ?? '(none)'}`);
-    fail(`   Available: ${[...Object.keys(HOOKS), 'copilot'].join(', ')}`);
+    const available = [...Object.keys(HOOKS), ...HOME_TARGETS.map((t) => t.name)];
+    fail(`   Available: ${available.join(', ')}`);
   }
   const hook = HOOKS[target];
   patchAgentFile(hook, target, force);
 
-  // The record of installed hooks is what keeps a removed hook out, so --force forgets it first.
   if (force && (target === 'claude-code' || target === 'codex')) forgetInstalledHooks(target);
 
-  // For Claude Code, also install SessionEnd+SessionStart entries in its settings file.
   if (target === 'claude-code') {
     printClaudeHookInstall(installJsonHooks(target));
   } else if (target === 'opencode') {
     installOpencodeHook();
   } else if (target === 'codex') {
     installCodexMemoryHooks('');
-    // The wrapper stays the capture path; the hooks above work without it, so a missing launcher is
-    // not an error.
     if (detectRealCodexPath()) {
       const result = installCodexWrapper();
       console.log(`Installed Codex session-end integration -> ${result.metadataPath}`);
@@ -209,13 +201,13 @@ function installOpencodeHook(): void {
 }
 
 function hookUninstall(target: string | undefined): void {
-  if (target === 'copilot') return printCopilotUninstall(uninstallCopilot());
+  const home = target === undefined ? undefined : homeTarget(target);
+  if (home) return home.uninstall();
   if (!target || !HOOKS[target]) {
     fail(`Unknown hook target: ${target ?? '(none)'}`);
   }
   unpatchAgentFile(HOOKS[target], target);
 
-  // For Claude Code, also strip its SessionEnd/SessionStart entries.
   if (target === 'claude-code') {
     if (uninstallJsonHooks(target)) {
       console.log(`Removed hippo hooks from ${target} settings`);
@@ -223,8 +215,6 @@ function hookUninstall(target: string | undefined): void {
       warnClaudeSettingsUnusable(checkUninstallable(target), '', 'uninstall');
     }
   } else if (target === 'opencode') {
-    // opencode uses a TS plugin; uninstall removes the plugin file and also runs the legacy-hooks
-    // migration, so remove leaves opencode launchable.
     if (uninstallOpencodePlugin()) {
       console.log(`Removed hippo opencode plugin (and any legacy hooks block from opencode.json)`);
     }

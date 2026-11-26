@@ -452,6 +452,86 @@
       "roadmap": "AZ4"
     },
     {
+      "id": "junie",
+      "checked": "2026-11-25",
+      "names": ["Junie"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when ~/.junie exists, add the hippo server to ~/.junie/mcp/mcp.json; hippo hook install junie does the same and hippo hook uninstall junie removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in ~/.junie/mcp/mcp.json",
+      "modes": [
+        { "name": "Junie agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Junie session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "antigravity",
+      "checked": "2026-11-25",
+      "names": ["Antigravity"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when ~/.gemini/antigravity or ~/.gemini/antigravity-cli exists, add the hippo server to ~/.gemini/config/mcp_config.json; hippo hook install antigravity does the same and hippo hook uninstall antigravity removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in ~/.gemini/config/mcp_config.json",
+      "modes": [
+        { "name": "Antigravity agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Antigravity session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "grok-build",
+      "checked": "2026-11-25",
+      "names": ["Grok Build"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when $GROK_HOME (else ~/.grok) exists, add the hippo server to $GROK_HOME/config.toml (else ~/.grok/config.toml); hippo hook install grok-build does the same and hippo hook uninstall grok-build removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in $GROK_HOME/config.toml (else ~/.grok/config.toml)",
+      "modes": [
+        { "name": "Grok Build agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Start a live Grok Build session with the hippo server written by hippo setup and confirm the hippo_recall tool loads; MCP gives no pre-loss save, so a checkpoint route needs a host event.",
+      "roadmap": "AZ4"
+    },
+    {
+      "id": "muse-code",
+      "checked": "2026-11-25",
+      "names": ["Muse Code"],
+      "integration": ["mcp-recipe"],
+      "sources": ["src/surface/hooks-install/rules/mcp-config.ts", "src/surface/hooks-install/mcp-config.ts"],
+      "claims": ["README.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "upstream": { "preLossEvent": "PreCompact, a Muse Code user hook in settings.json", "beforeTrimOrReset": null },
+      "setup": "hippo init and hippo setup, when $XDG_CONFIG_HOME/muse or ~/.config/muse exists, add the hippo server to $XDG_CONFIG_HOME/muse/settings.json or ~/.config/muse/settings.json; hippo hook install muse-code does the same and hippo hook uninstall muse-code removes only that entry",
+      "store": null,
+      "maxSaveDelay": null,
+      "interface": "MCP, from the hippo server in $XDG_CONFIG_HOME/muse/settings.json or ~/.config/muse/settings.json",
+      "modes": [
+        { "name": "Muse Code agent", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Build a native Muse Code hook adapter on its user hooks (SessionStart, UserPromptSubmit, PreCompact, SessionEnd) and test it against the save/restore contract; first confirm in a live session that the hippo_recall tool loads.",
+      "roadmap": "AZ4"
+    },
+    {
       "id": "devin-cli",
       "checked": "2026-10-03",
       "names": ["Devin CLI"],
@@ -513,42 +593,42 @@
     },
     {
       "id": "grok-bot",
-      "checked": "2026-10-03",
+      "checked": "2026-11-25",
       "names": ["Grok Bot"],
-      "integration": ["none"],
-      "sources": [],
-      "claims": ["ROADMAP.md"],
-      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "integration": ["mcp-recipe"],
+      "sources": ["integrations/grok-bot-and-muse.md"],
+      "claims": ["README.md", "ROADMAP.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
       "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
-      "setup": null,
+      "setup": "integrations/grok-bot-and-muse.md: run hippo serve, mint a key with hippo auth create, open a cloudflared tunnel and add a Grok Bot custom connector with the tunnel URL and an Authorization header",
       "store": null,
       "maxSaveDelay": null,
-      "interface": null,
+      "interface": "MCP over HTTPS: hippo serve /mcp with a bearer key, through a tunnel",
       "modes": [
         { "name": "private, team, command and remote", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],
       "owner": "maintainer",
-      "nextAction": "Verify runtime and checkpoint sources on the Bot computer, with group and private isolation and identity mapping.",
+      "nextAction": "Add the custom connector in a live Grok Bot and confirm the hippo_recall tool loads; a native adapter waits for a Bot hook or checkpoint event.",
       "roadmap": "AZ3"
     },
     {
       "id": "muse",
-      "checked": "2026-10-03",
+      "checked": "2026-11-25",
       "names": ["Muse"],
-      "integration": ["none"],
-      "sources": [],
-      "claims": ["ROADMAP.md"],
-      "routes": { "promptContext": null, "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
+      "integration": ["mcp-recipe"],
+      "sources": ["integrations/grok-bot-and-muse.md"],
+      "claims": ["README.md", "ROADMAP.md"],
+      "routes": { "promptContext": "the hippo_recall MCP tool, which the agent calls", "toolFailureCapture": null, "preLossSave": null, "postCompactExtract": null, "sessionEndCapture": null, "compactResume": null },
       "upstream": { "preLossEvent": null, "beforeTrimOrReset": null },
-      "setup": null,
+      "setup": "integrations/grok-bot-and-muse.md: run hippo serve, mint a key with hippo auth create, open a cloudflared tunnel and ask Muse to build a Custom Connector to the tunnel URL, with the key entered in its credential prompt",
       "store": null,
       "maxSaveDelay": null,
-      "interface": null,
+      "interface": "MCP over HTTPS: hippo serve /mcp with a bearer key, through a tunnel",
       "modes": [
-        { "name": "unidentified", "checkpointBeforeLoss": "blocked", "lessonsBeforeLoss": "blocked", "fixtureEvidence": [], "liveEvidence": [] }
+        { "name": "Muse app custom connector", "checkpointBeforeLoss": "planned", "lessonsBeforeLoss": "planned", "fixtureEvidence": [], "liveEvidence": [] }
       ],
-      "owner": "Keith",
-      "nextAction": "Identify the exact product and runtime before allocating an adapter.",
+      "owner": "maintainer",
+      "nextAction": "Build the custom connector in a live Muse app and confirm the hippo_recall tool loads; a native adapter waits for a Muse hook or checkpoint event.",
       "roadmap": "AZ3"
     },
     {
