@@ -96,7 +96,8 @@ const INSTALL_LINES = {
   ],
   'conflicting-keys': (file, target) => [
     `WARNING: ${file} was left unchanged: it defines both ${conflictKeys(target.format)}. ` +
-      `Keep only one server map, then run \`hippo hook install ${target.name}\``,
+      'Merge any server entries into one map and remove the other key, ' +
+      `then run \`hippo hook install ${target.name}\``,
   ],
 } as const satisfies Record<Exclude<McpMergeStatus, McpMaybeHippo>, Lines>;
 
@@ -115,7 +116,8 @@ const REMOVE_LINES = {
   ],
   'conflicting-keys': (file, target) => [
     `WARNING: ${file} was left unchanged: it defines both ${conflictKeys(target.format)}. ` +
-      `Keep only one server map, then run \`hippo hook uninstall ${target.name}\``,
+      'Merge any server entries into one map and remove the other key, ' +
+      `then run \`hippo hook uninstall ${target.name}\``,
   ],
 } as const satisfies Record<Exclude<McpRemoveStatus, McpMaybeHippo>, Lines>;
 
