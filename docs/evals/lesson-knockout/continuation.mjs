@@ -5,7 +5,7 @@ import { findTranscript,listTranscripts } from '../../../scripts/token-eval/reco
 import { teachMessage } from '../../../scripts/token-eval/lessons.mjs';
 import { APPARATUS,read,hash,pins } from './plan.mjs';
 import { files,inside,join,mkdir,stateRoot } from './state.mjs';
-import { permissionAudit } from './evidence.mjs';
+import { callComplete,permissionAudit } from './evidence.mjs';
 
 export function checkTeachReceipts(unit,freeze,u) {
   const teach=join(unit,'evidence/teach');
@@ -19,6 +19,8 @@ export function checkTeachReceipts(unit,freeze,u) {
     const r=read(file);
     assert(r.session===freeze.teachId && r.call===id && r.promptSha256===hash(prompts[id]) && r.json===true && r.exit===0 && r.isError===false && r.apparatus===APPARATUS && r.cutOff===false &&
       permissionAudit(transcript,prompts[id],r.permissionDenials).ok,'Invalid frozen teach receipt: '+id);
+    const until=id==='teach' ? prompts.feedback : undefined;
+    assert(callComplete(join(teach,'operator','wire',id),r,prompts[id],transcript,{until}).complete,'Unmatched frozen teach wire record: '+id);
   }
 }
 

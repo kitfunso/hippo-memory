@@ -68,7 +68,7 @@ def read_roster() -> tuple[dict, dict]:
         if not (is_hex(r.get("preTree"), 40) and is_hex(r.get("ignoredSetup"), 64)
                 and all(type(r.get(k)) is bool for k in ("targetText", "archivedTargetText", "hookSeen", "complete"))
                 and all(type(r.get(k)) is int and r[k] >= 0
-                        for k in ("sideRequests", "archivedAttempts", "archivedRefused", "archivedUnauditable"))
+                        for k in ("sideRequests", "auxiliaryRequests", "archivedAttempts", "archivedUnauditable"))
                 and r.get("archivedPermissions") is True):
             raise ValueError(f"Missing tree or request audit fields {f}")
         sessions.add(r["session"])

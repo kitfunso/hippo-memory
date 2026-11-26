@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { APPARATUS,hash,read,root } from './plan.mjs';
-import { WIRE_LOG,wireName } from './wire.mjs';
+import { ANTHROPIC_HOST,MODEL_ROUTES,ROUTES,WIRE_LOG,hostOf,wireName } from './wire.mjs';
 import { listTranscripts } from '../../../scripts/token-eval/records.mjs';
 
 const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
@@ -43,21 +43,25 @@ export function sessionInventory(projects,sid) {
   const main=mains.length===1?mains[0]:null;
   return {main,subs,files:main?[main,...subs]:subs};
 }
-function callRows(inventory,prompt) {
+function callRows(inventory,prompt,until) {
   if(!inventory?.main) return null;
   const rows=rowsOf(inventory.main),start=promptStart(rows,prompt);
-  return start<0 ? null : {rows:rows.slice(start)};
+  if(start<0) return null;
+  if(until===undefined) return {rows:rows.slice(start)};
+  const end=rows.findIndex((r,i)=>i>start && r.type==='user' && promptText(r.message?.content)===until);
+  return end<0 ? null : {rows:rows.slice(start,end)};
 }
-const ROUTES=new Map([['GET /api/claude_code/settings','settings'],['GET /api/claude_code/policy_limits','policy'],
-  ['POST /v1/messages?beta=true','generate'],['POST /v1/messages/count_tokens?beta=true','count']]);
-const MODEL_ROUTES=new Set(['generate','count']);
+const ROUTE_METHODS=new Map([...ROUTES].map(([key,route])=>[route,key.split(' ')[0]]));
 const ROW_KINDS=new Set(['request','response','end','tunnel','refused','closed']);
-const ANTHROPIC_HOST=/(?:^|\.)(?:anthropic\.com|claude\.ai|claude\.com)$/i;
-function decoded(raw,encoding) {
+const HARMLESS_REFUSALS=new Set(['plain','authority']);
+const CLASSES=new Set(['main','compaction','auxiliary']);
+const LIMITS=new Map([[429,'rate_limit_error'],[529,'overloaded_error']]);
+function decoded(raw,encoding,strict) {
   if(!encoding || encoding==='identity') return raw;
-  if(encoding==='gzip') return zlib.gunzipSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
-  if(encoding==='deflate') return zlib.inflateSync(raw,{finishFlush:zlib.constants.Z_SYNC_FLUSH});
-  if(encoding==='br') return zlib.brotliDecompressSync(raw,{finishFlush:zlib.constants.BROTLI_OPERATION_FLUSH});
+  const flush=f=>strict ? {} : {finishFlush:f};
+  if(encoding==='gzip') return zlib.gunzipSync(raw,flush(zlib.constants.Z_SYNC_FLUSH));
+  if(encoding==='deflate') return zlib.inflateSync(raw,flush(zlib.constants.Z_SYNC_FLUSH));
+  if(encoding==='br') return zlib.brotliDecompressSync(raw,flush(zlib.constants.BROTLI_OPERATION_FLUSH));
   throw Error('Unknown content encoding '+encoding);
 }
 function replyOf(text,contentType) {
@@ -67,14 +71,14 @@ function replyOf(text,contentType) {
         try { return JSON.parse(data); } catch { return {type:'unparsed'}; }
       });
     const error=events.find(e=>e?.type==='error' || e?.type==='unparsed');
-    return {id:events.find(e=>e?.type==='message_start')?.message?.id ?? null,stop:events.some(e=>e?.type==='message_stop'),
+    return {sse:true,id:events.find(e=>e?.type==='message_start')?.message?.id ?? null,stop:events.some(e=>e?.type==='message_stop'),
       error:error ? error.error?.type ?? error.type : null};
   }
   try {
     const body=JSON.parse(text);
-    if(body?.type==='message') return {id:body.id ?? null,stop:true,error:null};
-    return {id:null,stop:false,error:body?.type==='error' ? body.error?.type ?? 'error' : null,json:body};
-  } catch { return {id:null,stop:false,error:'unparsed'}; }
+    if(body?.type==='message') return {sse:false,id:body.id ?? null,stop:true,error:null};
+    return {sse:false,id:null,stop:false,error:body?.type==='error' ? body.error?.type ?? 'error' : null,json:body};
+  } catch { return {sse:false,id:null,stop:false,error:'unparsed'}; }
 }
 function savedRequest(dir,q,route) {
   if(!MODEL_ROUTES.has(route)) return q.file===null ? {body:null} : {reason:'a non-model request file'};
@@ -89,7 +93,7 @@ function savedRequest(dir,q,route) {
   return {body};
 }
 function savedReply(dir,q,route,response,end) {
-  if(!response) return end.ended==='upstream-error' ? {reply:null} : {reason:'exchange '+q.seq+' has no response'};
+  if(!response) return ['upstream-error','client-closed'].includes(end.ended) ? {reply:null} : {reason:'exchange '+q.seq+' has no response'};
   if(!MODEL_ROUTES.has(route)) return response.file===null ? {reply:null} : {reason:'a non-model response file'};
   if(response.file!==wireName(q.seq,'.response')) return {reason:'response '+q.seq+' file name'};
   const file=path.join(dir,response.file);
@@ -97,14 +101,20 @@ function savedReply(dir,q,route,response,end) {
   const raw=fs.readFileSync(file);
   if(raw.length!==end.bytes || hash(raw)!==end.sha256) return {reason:'response '+q.seq+' file changed'};
   let text='';
-  try { text=decoded(raw,response.encoding).toString('utf8'); }
+  try { text=decoded(raw,response.encoding,end.ended==='complete').toString('utf8'); }
   catch { if(end.ended==='complete') return {reason:'response '+q.seq+' does not decode'}; }
   return {reply:replyOf(text,response.contentType)};
 }
-function finished(route,response,end,reply) {
+function finished(route,response,end,reply,body) {
   if(response?.status!==200 || end.ended!=='complete') return false;
-  if(route==='generate') return !!reply.id && reply.stop && !reply.error;
+  if(route==='generate') return !!reply.id && reply.stop && !reply.error && reply.sse===(body.stream===true);
   return route==='count' ? Number.isInteger(reply.json?.input_tokens) : true;
+}
+function limitOf(route,response,reply) {
+  if(route!=='generate' || !response || !reply) return null;
+  const expected=LIMITS.get(response.status);
+  if(expected) return reply.error===expected ? expected : null;
+  return response.status===200 && reply.sse && [...LIMITS.values()].includes(reply.error) ? reply.error : null;
 }
 export function wireLedger(dir) {
   const fail=reason=>({ok:false,reason,exchanges:[],hosts:[]});
@@ -112,38 +122,43 @@ export function wireLedger(dir) {
   if(!fs.existsSync(log)) return fail('no wire log');
   let rows;
   try { rows=rowsOf(log); } catch { return fail('unreadable wire log'); }
-  const closed=rows.at(-1),hosts=rows.filter(r=>r.kind==='tunnel').map(r=>String(r.host));
+  const closed=rows.at(-1),hosts=rows.filter(r=>r.kind==='tunnel').map(r=>hostOf(r.host));
   if(closed?.kind!=='closed' || closed.open!==0 || rows.filter(r=>r.kind==='closed').length!==1) return fail('wire not closed');
   if(rows.some(r=>!ROW_KINDS.has(r.kind))) return fail('fault or unknown wire row');
-  if(rows.some(r=>r.kind==='refused' && r.reason!=='plain')) return fail('refused request');
-  if(hosts.some(h=>ANTHROPIC_HOST.test(h))) return fail('tunnel to an Anthropic host');
-  const requests=rows.filter(r=>r.kind==='request');
+  if(rows.some(r=>r.kind==='refused' && !HARMLESS_REFUSALS.has(r.reason))) return fail('refused request');
+  if(hosts.some(h=>!h || ANTHROPIC_HOST.test(h))) return fail('tunnel to an Anthropic host');
+  const requests=rows.filter(r=>r.kind==='request').sort((a,b)=>a.seq-b.seq);
   if(requests.length!==closed.exchanges || requests.some((r,i)=>r.seq!==i+1)) return fail('wire sequence');
+  const known=new Set(requests.map(r=>r.seq));
+  if(rows.some(r=>(r.kind==='response' || r.kind==='end') && !known.has(r.seq))) return fail('orphan exchange row');
   const exchanges=[];
   for(const q of requests) {
     const at=kind=>rows.flatMap((r,i)=>r.kind===kind && r.seq===q.seq ? [i] : []);
     const [responses,ends]=[at('response'),at('end')],start=rows.indexOf(q);
     if(responses.length>1 || ends.length!==1 || ends[0]<start || (responses.length && !(start<responses[0] && responses[0]<ends[0])))
       return fail('exchange '+q.seq+' rows');
-    const route=ROUTES.get(q.method+' '+q.path),response=rows[responses[0]],end=rows[ends[0]];
-    if(!route) return fail('unknown route '+q.method+' '+q.path);
+    const route=q.route,response=rows[responses[0]],end=rows[ends[0]];
+    if(!ROUTE_METHODS.has(route) || ROUTE_METHODS.get(route)!==q.method) return fail('unknown route '+q.method+' '+route);
+    if(route==='generate' && !CLASSES.has(q.cls)) return fail('request '+q.seq+' class '+q.cls);
     const request=savedRequest(dir,q,route),answer=request.reason ? {} : savedReply(dir,q,route,response,end);
     if(request.reason || answer.reason) return fail(request.reason ?? answer.reason);
-    exchanges.push({seq:q.seq,route,status:response?.status ?? null,requestId:response?.requestId ?? null,ended:end.ended,
-      body:request.body,reply:answer.reply,complete:finished(route,response,end,answer.reply)});
+    exchanges.push({seq:q.seq,route,cls:route==='generate' ? q.cls : null,status:response?.status ?? null,requestId:response?.requestId ?? null,
+      ended:end.ended,body:request.body,reply:answer.reply,complete:finished(route,response,end,answer.reply,request.body),
+      limit:limitOf(route,response,answer.reply)});
   }
   return {ok:true,reason:null,exchanges,hosts};
 }
-const generated=w=>w.exchanges.filter(x=>x.route==='generate');
+const mainTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls==='main');
+const auxiliaryTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls!=='main');
 const modelBodies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.body);
 function matched(w,inventory,call,{success}) {
   if(!w.ok || !call || inventory.subs.length) return false;
-  const pairs=pairsOf(call.rows),sent=generated(w),done=sent.filter(x=>x.complete).map(x=>x.requestId+'\n'+x.reply.id);
+  const pairs=pairsOf(call.rows),sent=mainTurns(w),done=sent.filter(x=>x.complete).map(x=>x.requestId+'\n'+x.reply.id);
   const last=sent.at(-1);
   if(!pairs || !last || pairs.length!==done.length || pairs.some((k,i)=>k!==done[i])) return false;
   if(success) return last.complete;
   const error=call.rows.filter(r=>r.type==='assistant' && !r.isSidechain).at(-1);
-  return !last.complete && !!last.requestId && error?.isApiErrorMessage===true && error.requestId===last.requestId;
+  return !last.complete && !!last.limit && !!last.requestId && error?.isApiErrorMessage===true && error.requestId===last.requestId;
 }
 export const normalize=s=>s.replace(/\s+/g,' ').trim().toLowerCase();
 export const flagOf=(u,verdict,commands)=>u.cls==='variant' ?
@@ -202,16 +217,16 @@ export function deliverySurfaces(body,task={}) {
 
 function finalMessage(call,result,w) {
   if(result.exit!==0 || result.isError!==false || result.subtype!=='success') return false;
-  const last=call.rows.filter(r=>r.type==='assistant' && !r.isSidechain).at(-1),m=last?.message,sent=generated(w).at(-1);
+  const last=call.rows.filter(r=>r.type==='assistant' && !r.isSidechain).at(-1),m=last?.message,sent=mainTurns(w).at(-1);
   return !!sent && last?.sessionId===result.session && last.requestId===sent.requestId && m?.id===sent.reply?.id &&
     m.type==='message' && m.role==='assistant' && m.stop_reason==='end_turn' && m.usage?.output_tokens>0 &&
     Array.isArray(m.content) && m.content.some(b=>b.type==='text' && typeof b.text==='string' && b.text.trim());
 }
-export function callComplete(dir,result,prompt,transcript,{maxTurns=false}={}) {
+export function callComplete(dir,result,prompt,transcript,{maxTurns=false,until}={}) {
   const w=wireLedger(dir);
   if(!transcript || !fs.existsSync(transcript) || path.basename(transcript)!==result.session+'.jsonl') return {w,complete:false};
   const inventory=sessionInventory(path.dirname(path.dirname(transcript)),result.session);
-  const call=inventory.main===path.resolve(transcript) ? callRows(inventory,prompt) : null;
+  const call=inventory.main===path.resolve(transcript) ? callRows(inventory,prompt,until) : null;
   const ended=!!call && (maxTurns && result.subtype==='error_max_turns' ? true : finalMessage(call,result,w));
   return {w,complete:ended && matched(w,inventory,call,{success:true})};
 }
@@ -224,9 +239,9 @@ export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0]) {
 }
 export function evidence(dir,result,notes,lesson,task={},transcript) {
   const {w,complete}=callComplete(dir,result,task.prompt,transcript,{maxTurns:task.maxTurns});
-  const sent=generated(w);
-  return {requests:sent.length,sideRequests:w.exchanges.length-sent.length,retries:sent.filter(x=>!x.complete).length,
-    complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body),wireHosts:w.hosts};
+  const sent=mainTurns(w);
+  return {requests:sent.length,sideRequests:w.exchanges.length-sent.length,auxiliaryRequests:auxiliaryTurns(w).length,
+    retries:sent.filter(x=>!x.complete).length,complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body),wireHosts:w.hosts};
 }
 
 function targetIn(surfaces,lesson,task) {

@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory)][string]$Live,
-  [ValidateSet('Z0_SUB_TOKEN','Z0_SUB_TOKEN_1','Z0_SUB_TOKEN_2','Z0_SUB_TOKEN_3')][string]$TokenVar='Z0_SUB_TOKEN',
+  [ValidateSet('Z0_SUB_TOKEN','Z0_SUB_TOKEN_1','Z0_SUB_TOKEN_2','Z0_SUB_TOKEN_3','Z0_WIRE_DUMMY')][string]$TokenVar='Z0_SUB_TOKEN',
   [switch]$BoxChecked
 )
 $ErrorActionPreference='Stop'
@@ -11,7 +11,10 @@ $scored=$Live -eq (Join-Path $base 'active\live')
 $records=if ($scored) { Join-Path $base 'active\operator' } else { $Live }
 $call=Get-Content -Encoding UTF8 -Raw -LiteralPath "$records/call.json" | ConvertFrom-Json
 if ($scored -eq $call.smoke) { throw 'Unexpected session mode for this directory' }
-if ($call.smoke -and $TokenVar -ne 'Z0_SUB_TOKEN') { throw 'Smoke requires Z0_SUB_TOKEN' }
+$dummy=$TokenVar -eq 'Z0_WIRE_DUMMY'
+if ($dummy -and !($call.smoke -and $call.diagnostic)) { throw 'The dummy credential runs only a diagnostic smoke' }
+if ($call.smoke -and !$dummy -and $TokenVar -ne 'Z0_SUB_TOKEN') { throw 'Smoke requires Z0_SUB_TOKEN' }
+$credential=[Environment]::GetEnvironmentVariable($TokenVar,$(if ($dummy) { 'Process' } else { 'User' }))
 if ($scored -and !$BoxChecked) { throw 'Scored attempts require the unit runner box check' }
 . "$PSScriptRoot/toolchain.ps1" $call.toolchain $Live
 . "$PSScriptRoot/record.ps1"
@@ -33,13 +36,15 @@ foreach ($key in ($system + @((Get-S3xTool $call.toolchain).env.Keys) + $toolKey
 $private=@{ HOME="$Live/home"; USERPROFILE="$Live/home"; CLAUDE_CONFIG_DIR="$Live/home/.claude";
   APPDATA="$Live/home/roaming"; LOCALAPPDATA="$Live/home/local"; TEMP="$Live/home/tmp"; TMP="$Live/home/tmp";
   HIPPO_HOME="$Live/home/.hippo"; CLAUDE_CODE_PROJECT_DIR_NAME='unit'; CLAUDE_CODE_DISABLE_AUTO_MEMORY='0';
-  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'; DISABLE_AUTOUPDATER='1'; GIT_TERMINAL_PROMPT='0'; EVAL_SEED='1' }
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'; CLAUDE_CODE_GATEWAY_HINT_HEADERS='1'; DISABLE_AUTOUPDATER='1'; GIT_TERMINAL_PROMPT='0'; EVAL_SEED='1' }
 foreach ($k in $private.Keys) { $pi.EnvironmentVariables[$k]=$private[$k] }
 foreach ($p in (Get-WireEnv $call)) { $pi.EnvironmentVariables[$p.Name]=[string]$p.Value }
 Assert-WireOnly $pi.EnvironmentVariables
 if ($call.smoke) { Assert-SmokePath $pi.EnvironmentVariables['PATH'] } else { Assert-SessionPath $pi.EnvironmentVariables['PATH'] $call.toolchain $Live }
-$pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']=[Environment]::GetEnvironmentVariable($TokenVar,'User')
+$pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN']=$credential
+$credential=$null
 if ($pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] -notlike 'sk-ant-oat*') { throw 'Missing subscription credential or unexpected credential type' }
+if ($dummy -and $pi.EnvironmentVariables['CLAUDE_CODE_OAUTH_TOKEN'] -cnotmatch '^sk-ant-oat01-(wirecanary)+$') { throw 'Unexpected dummy credential' }
 $argv=@('-p','--output-format','json','--setting-sources','','--strict-mcp-config','--settings',"$Live/settings.json",'--model',$call.model,'--effort',$call.effort)
 if ($call.diagnostic) {
   if (!$call.smoke -or $call.resume) { throw 'Invalid diagnostic' }

@@ -26,7 +26,7 @@ def verify() -> None:
                               pathAudit={"transcripts": 1, "hits": []}, apparatus=analyze.APPARATUS,
                               targetText=arm != "N", flagged=(arm == "N") if unit in labels["variant"] else None,
                               preTree="a" * 40, ignoredSetup="b" * 64, archivedTargetText=False, sideRequests=0,
-                              archivedAttempts=0, archivedRefused=0, archivedUnauditable=0, archivedPermissions=True)
+                              auxiliaryRequests=0, archivedAttempts=0, archivedUnauditable=0, archivedPermissions=True)
                 path = analyze.ROOT / unit / "evidence" / f"apply-{index}" / "grade.json"
                 path.parent.mkdir(parents=True)
                 path.write_text(json.dumps(record), encoding="utf-8")
