@@ -7,7 +7,7 @@ export interface ToolDetection {
   name: string;
   configDir: string;
   detected: boolean;
-  kind: 'json-hook' | 'markdown-instruction' | 'plugin' | 'wrapper';
+  kind: 'json-hook' | 'markdown-instruction' | 'plugin' | 'wrapper' | 'mcp-config';
   notes?: string;
 }
 

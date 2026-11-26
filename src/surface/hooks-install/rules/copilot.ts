@@ -2,12 +2,16 @@
 // under the Copilot home and each VS Code User folder; surface/hooks-install/copilot.ts reads and
 // writes the files.
 
-import { isDeepStrictEqual } from 'node:util';
 import { type JsonValue, isJsonObjectLiteral, type JsonObject } from '../../../base/util/json.js';
 import { HOOK_MARKERS, hippoBlock } from './hook-blocks.js';
 import { HOOK_LONG_TIMEOUT_SECONDS, HOOK_MEDIUM_TIMEOUT_SECONDS } from './install-plan.js';
-
-const MCP_KEY = 'hippo';
+import {
+  hippoCommand,
+  type McpConfigHost,
+  type McpFailure,
+  type McpMergeStatus,
+  type McpRemoveStatus,
+} from './mcp-config.js';
 
 /** Copilot drops what a per-prompt hook prints, so per-task recall goes through the MCP tool the
  * block names. */
@@ -78,103 +82,17 @@ export interface CopilotPaths {
   readonly vscode: readonly VscodePaths[];
 }
 
-/** The app that reads an MCP config: where it keeps its servers, and hippo's entry there. */
-export interface McpHost {
-  readonly key: 'mcpServers' | 'servers';
-  server(): JsonObject;
-}
-
-/** Windows gets npm's .cmd shim, as the Codex hooks do, since a PowerShell execution policy can
- * block hippo.ps1. */
-function hippoCommand(): string {
-  return process.platform === 'win32' ? 'hippo.cmd' : 'hippo';
-}
-
-/** The Copilot CLI's mcp-config.json keeps servers under "mcpServers", each with an env and a
- * tool list. */
-export const COPILOT_CLI_MCP: McpHost = {
+export const COPILOT_CLI_MCP: McpConfigHost = {
   key: 'mcpServers',
+  subsetMatch: true,
   server: () => ({ type: 'local', command: hippoCommand(), args: ['mcp'], env: {}, tools: ['*'] }),
 };
 
-/** VS Code's mcp.json keeps stdio servers under "servers"; it has no "mcpServers" key. */
-export const VSCODE_MCP: McpHost = {
+export const VSCODE_MCP: McpConfigHost = {
   key: 'servers',
+  subsetMatch: true,
   server: () => ({ type: 'stdio', command: hippoCommand(), args: ['mcp'] }),
 };
-
-/** Only a server hippo wrote counts as hippo's: another command, other args, or any key or value
- * setup does not write (an env you added) makes it the user's. */
-function isHipposServer(entry: JsonValue | undefined, host: McpHost): boolean {
-  if (!isJsonObjectLiteral(entry) || !('command' in entry) || !('args' in entry)) return false;
-  const ours = host.server();
-  return Object.entries(entry).every(([key, value]) =>
-    key === 'command'
-      ? value === 'hippo' || value === 'hippo.cmd'
-      : isDeepStrictEqual(value, ours[key]),
-  );
-}
-
-/** What to paste under the host's key when hippo cannot edit the file itself. */
-export function copilotMcpSnippet(host: McpHost = COPILOT_CLI_MCP): string {
-  return `"${MCP_KEY}": ${JSON.stringify(host.server())}`;
-}
-
-/** An MCP config file's parsed object and the server table under the host's key, edited in
- * place. */
-export interface McpConfig {
-  readonly config: JsonObject;
-  readonly servers: JsonObject;
-}
-
-/** Null for text that is not a JSON object, or one whose shape a merge would overwrite; the
- * server table is made when absent. */
-export function mcpConfigOf(config: JsonValue, host: McpHost): McpConfig | null {
-  if (!isJsonObjectLiteral(config)) return null;
-  if (config[host.key] === undefined) config[host.key] = {};
-  const servers = config[host.key];
-  return isJsonObjectLiteral(servers) ? { config, servers } : null;
-}
-
-export type McpMergeStatus = 'added' | 'present' | 'user-owned' | 'unreadable';
-
-/** Adds hippo's server and keeps every other key; a "hippo" key hippo did not write stays as it
- * is. The caller writes the config on `added`. */
-export function addHippoServer(
-  read: McpConfig,
-  host: McpHost,
-): Exclude<McpMergeStatus, 'unreadable'> {
-  const existing = read.servers[MCP_KEY];
-  if (existing !== undefined) return isHipposServer(existing, host) ? 'present' : 'user-owned';
-  read.servers[MCP_KEY] = host.server();
-  return 'added';
-}
-
-export type McpRemoveStatus = 'removed' | 'absent' | 'user-owned' | 'unreadable';
-
-/** Removes the "hippo" key only when hippo wrote it, and the host's table once it is empty. The
- * caller writes the config on `removed`. */
-export function removeHippoServer(
-  read: McpConfig,
-  host: McpHost,
-): Exclude<McpRemoveStatus, 'unreadable'> {
-  const existing = read.servers[MCP_KEY];
-  if (existing === undefined) return 'absent';
-  if (!isHipposServer(existing, host)) return 'user-owned';
-  delete read.servers[MCP_KEY];
-  if (Object.keys(read.servers).length === 0) delete read.config[host.key];
-  return 'removed';
-}
-
-/** A filesystem error on an MCP config file (EACCES, EISDIR, EBUSY), kept as its own message so
- * setup can report it and go on. */
-export interface McpFailure {
-  readonly failed: string;
-}
-
-export function isMcpFailure(status: string | McpFailure): status is McpFailure {
-  return typeof status !== 'string';
-}
 
 function isCopilotBlock(inner: string): boolean {
   return SHIPPED_COPILOT_INSTRUCTIONS.includes(inner);

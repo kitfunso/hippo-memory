@@ -179,7 +179,7 @@ exports[`hippo exit codes and output of failing invocations (built CLI) > hook i
 --- stdout
 --- stderr
 Unknown hook target: bogus
-   Available: claude-code, codex, cursor, openclaw, opencode, pi, copilot
+   Available: claude-code, codex, cursor, openclaw, opencode, pi, copilot, junie, antigravity, grok-build, muse-code
 "
 `;
 

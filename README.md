@@ -15,7 +15,8 @@ Inspired by the human hippocampus, hippo saves what you teach one coding agent i
 </p>
 
 ```
-Works with:    Claude Code, Codex, Cursor, Pi, OpenClaw, OpenCode, any MCP client
+Works with:    Claude Code, Codex, Cursor, Pi, OpenClaw, OpenCode, Junie, Antigravity, Grok Build,
+               Muse Code, any MCP client
 Imports from:  ChatGPT, Claude (CLAUDE.md), Cursor (.cursorrules), Slack, markdown
 Storage:       SQLite with markdown mirrors you can read and commit
 Dependencies:  Zero runtime deps. Node.js 22.16+. Embeddings: `hippo init` installs the local Transformers.js embedder (`@huggingface/transformers@4.3.2`, about 480 MB) into a global npm install, and `--no-embeddings` skips it. An API embedder (OpenAI/Voyage/Cohere) is opt-in.
@@ -167,6 +168,11 @@ You, your team and your platform lead read the same store.
 | OpenCode | plugin |
 | Gemini CLI | extension: `gemini extensions install https://github.com/kitfunso/hippo-memory` |
 | Kiro | power: import `https://github.com/kitfunso/hippo-memory/tree/master/extensions/kiro-power` |
+| Junie | the hippo MCP server in `~/.junie/mcp/mcp.json`, written by `hippo init` |
+| Antigravity | the hippo MCP server in `~/.gemini/config/mcp_config.json`, written by `hippo init` |
+| Grok Build | the hippo MCP server in `$GROK_HOME/config.toml` (else `~/.grok/config.toml`), written by `hippo init` |
+| Muse Code | the hippo MCP server in `~/.config/muse/settings.json`, written by `hippo init` |
+| Grok Bot, Muse app | a key and an HTTPS tunnel: [integrations/grok-bot-and-muse.md](integrations/grok-bot-and-muse.md) |
 | Any MCP client | `hippo mcp`, 13 tools |
 
 `hippo dashboard` opens a local page with each project's memory health.
@@ -403,6 +409,7 @@ Run `hippo init` inside one project. This is everything it writes, in the projec
 - **OpenCode,** when the project has `.opencode/` or `opencode.json`: a plugin at `~/.config/opencode/plugins/hippo.ts`.
 - **Codex,** when the project has `AGENTS.md` or `.codex` and Codex is installed (`$CODEX_HOME`, else `~/.codex`, exists): 2 hook entries in Codex's `hooks.json`, one on UserPromptSubmit that sends your pinned memories plus up to 5 that match the prompt with every prompt and one on SessionStart after a compaction. **Codex runs them only after you trust them once in `/hooks`.** Init also prints `hippo hook install codex`, the opt-in that wraps the Codex launcher to capture sessions; `hippo hook uninstall codex` removes hippo's hooks and the wrapper.
 - **GitHub Copilot,** when the Copilot CLI is installed, whatever the project holds. Init takes `$COPILOT_HOME` (else `~/.copilot`) holding more than a `hooks` folder as the sign. It writes the same files as `hippo hook install copilot`: hippo's `hooks/hippo.json`, a `hippo` server in `mcp-config.json` and a block in `copilot-instructions.md`. When VS Code has a User folder, it also adds the server to that folder's `mcp.json` and writes `prompts/hippo.instructions.md`. With VS Code alone, run `hippo setup`. [integrations/copilot.md](integrations/copilot.md) lists each file and how to remove them.
+- **Junie, Antigravity, Grok Build and Muse Code,** when the host's folder exists on the machine, whatever the project holds: `~/.junie`, `~/.gemini/antigravity` or `~/.gemini/antigravity-cli`, `$GROK_HOME` (else `~/.grok`), or `$XDG_CONFIG_HOME/muse` (else `~/.config/muse`). Each gets a `hippo` MCP server in its own config file: `~/.junie/mcp/mcp.json`, `~/.gemini/config/mcp_config.json`, `$GROK_HOME/config.toml` (else `~/.grok/config.toml`) and `$XDG_CONFIG_HOME/muse/settings.json` (else `~/.config/muse/settings.json`). `hippo hook install <name>` writes the same entry for one host (`junie`, `antigravity`, `grok-build` or `muse-code`), and `hippo hook uninstall <name>` removes it. `hippo init --no-hooks` and `HIPPO_SKIP_AUTO_INTEGRATIONS=1` leave them out.
 - **A daily run at 6:15am,** one per machine: a crontab line on Linux and macOS, a scheduled task named `hippo-daily-runner` on Windows. It runs `hippo learn --git --days 1` and then `hippo sleep` in every project listed in `~/.hippo/workspaces.json`, and init adds this project to that list.
 - **The local embedder,** when hippo is a global npm install and no embedder is installed yet: `@huggingface/transformers@4.3.2` in the same global folder, about 480 MB. It goes in before anything else, can take a few minutes, and runs with `--ignore-scripts`, so no install script in that package tree runs. Its model (`Xenova/all-MiniLM-L6-v2`, 87 MB) downloads from Hugging Face the first time hippo embeds. Under npx, pnpm, yarn, bun or as a project dependency, init prints the command for that setup instead. `npm uninstall -g hippo-memory` leaves the embedder in place; `npm uninstall -g @huggingface/transformers` removes it.
 - **Agent memories.** On every run, the notes your coding agents keep about this project go into its store, and the ones about you go into the global store. [Agent memories](#agent-memories) lists what is read.
@@ -1122,6 +1129,10 @@ On `heartbeat`, `block`, `review` and `complete`, a given `--run` is checked aga
 | OpenCode | `.opencode/` or `opencode.json` | `AGENTS.md` + TS plugin at `~/.config/opencode/plugins/hippo.ts` (subscribes to `session.idle` + `session.created`) |
 | Pi | `.pi` or `.pi/agent` | `AGENTS.md`; copy the [Pi extension](https://github.com/kitfunso/hippo-memory/tree/master/extensions/pi-extension) for session hooks |
 | Copilot CLI | `$COPILOT_HOME` or `~/.copilot` holding more than `hooks/`, checked on the machine, not in the project | `hooks/hippo.json`, the `hippo` server in `mcp-config.json` and a block in `copilot-instructions.md`; with VS Code, its User `mcp.json` and `prompts/hippo.instructions.md` |
+| Junie | `~/.junie`, checked on the machine, not in the project | the `hippo` MCP server in `~/.junie/mcp/mcp.json` |
+| Antigravity | `~/.gemini/antigravity` or `~/.gemini/antigravity-cli`, checked on the machine, not in the project | the `hippo` MCP server in `~/.gemini/config/mcp_config.json` |
+| Grok Build | `$GROK_HOME` (else `~/.grok`), checked on the machine, not in the project | the `hippo` MCP server in `$GROK_HOME/config.toml` (else `~/.grok/config.toml`) |
+| Muse Code | `$XDG_CONFIG_HOME/muse` or `~/.config/muse`, checked on the machine, not in the project | the `hippo` MCP server in `$XDG_CONFIG_HOME/muse/settings.json` or `~/.config/muse/settings.json` |
 
 Init patches a project's instruction file only if it already exists. It also sets up a daily run and imports your coding agents' own memories; [What hippo init changes](#what-hippo-init-changes) lists everything.
 

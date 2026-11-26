@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { copilotHomeDir } from '../../src/surface/hooks-install/rules/shared.js';
 import { processHomes } from '../../src/host/agent-homes.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
-import { VSCODE_MCP, copilotMcpSnippet } from '../../src/surface/hooks-install/rules/copilot.js';
+import { COPILOT_CLI_MCP, VSCODE_MCP } from '../../src/surface/hooks-install/rules/copilot.js';
+import { mcpServerSnippet } from '../../src/surface/hooks-install/rules/mcp-config.js';
 import { copilotPaths, installCopilot, uninstallCopilot } from '../../src/surface/hooks-install/copilot.js';
 import { HOOKS } from '../../src/surface/hooks-install/rules/hook-blocks.js';
 import { withFakeHome, type FakeHomeHandle } from '../_helpers/with-fake-home.js';
@@ -193,11 +194,13 @@ describe('installCopilot and uninstallCopilot', () => {
     });
   });
 
-  it('reads an mcp-config.json saved with a byte order mark and writes it back without one', () => {
+  it('reads an mcp-config.json saved with a byte order mark and writes it back with the mark', () => {
     writeFile(files.mcp, BOM + JSON.stringify({ mcpServers: { playwright: USER_SERVER } }));
     expect(installCopilot().mcp).toBe('added');
-    expect(read(files.mcp).startsWith(BOM)).toBe(false);
-    expect(readJson(files.mcp)).toEqual({ mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER } });
+    expect(read(files.mcp).startsWith(BOM)).toBe(true);
+    expect(JSON.parse(read(files.mcp).slice(BOM.length))).toEqual({
+      mcpServers: { playwright: USER_SERVER, hippo: HIPPO_SERVER },
+    });
   });
 
   it.each([
@@ -212,7 +215,7 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(read(files.mcp)).toBe(text);
     expect(uninstallCopilot()).toMatchObject({ hooks: true, mcp: 'unreadable', instructions: 'removed' });
     expect(read(files.mcp)).toBe(text);
-    expect(JSON.parse(`{${copilotMcpSnippet()}}`)).toEqual({ hippo: HIPPO_SERVER });
+    expect(JSON.parse(`{${mcpServerSnippet(COPILOT_CLI_MCP)}}`)).toEqual({ hippo: HIPPO_SERVER });
   });
 
   it('reports a filesystem error on mcp-config.json with its own message, not as unreadable JSON, and still installs the rest', () => {
@@ -272,13 +275,22 @@ describe('installCopilot and uninstallCopilot', () => {
   it.each([
     ['another command', { command: 'node', args: ['C:/forks/hippo/mcp.js'], tools: ['*'] }],
     ['other args', { command: 'hippo', args: ['mcp', '--global'], tools: ['*'] }],
-    ['an env of its own', { ...HIPPO_SERVER, env: { HIPPO_HOME: '/srv/hippo' } }],
-    ['a key setup never writes', { ...HIPPO_SERVER, cwd: '/work' }],
   ])('never overwrites or removes a "hippo" MCP key with %s, which hippo did not write', (_label, server) => {
     const text = JSON.stringify({ mcpServers: { hippo: server } });
     writeFile(files.mcp, text);
     expect(installCopilot().mcp).toBe('user-owned');
     expect(uninstallCopilot().mcp).toBe('user-owned');
+    expect(read(files.mcp)).toBe(text);
+  });
+
+  it.each([
+    ['an env of its own', { ...HIPPO_SERVER, env: { HIPPO_HOME: '/srv/hippo' } }],
+    ['a key setup never writes', { ...HIPPO_SERVER, cwd: '/work' }],
+  ])('keeps a "hippo" MCP key with %s that runs hippo mcp, and never changes it', (_label, server) => {
+    const text = JSON.stringify({ mcpServers: { hippo: server } });
+    writeFile(files.mcp, text);
+    expect(installCopilot().mcp).toBe('kept');
+    expect(uninstallCopilot().mcp).toBe('kept');
     expect(read(files.mcp)).toBe(text);
   });
 
@@ -449,7 +461,7 @@ describe('installCopilot and uninstallCopilot', () => {
       expect(installCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'written' });
       expect(uninstallCopilot().vscode[0]).toMatchObject({ mcp: 'unreadable', instructions: 'removed' });
       expect(read(user.mcp)).toBe(text);
-      expect(JSON.parse(`{${copilotMcpSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
+      expect(JSON.parse(`{${mcpServerSnippet(VSCODE_MCP)}}`)).toEqual({ hippo: VSCODE_SERVER });
     },
   );
 
@@ -463,14 +475,54 @@ describe('installCopilot and uninstallCopilot', () => {
     expect(readJson(user.mcp)).toEqual({ servers: { hippo: VSCODE_SERVER } });
   });
 
-  it('leaves a VS Code "hippo" server carrying an env of its own on install and uninstall', () => {
+  it('keeps a VS Code "hippo" server carrying an env of its own on install and uninstall', () => {
     const user = vscodeUser();
     const text = JSON.stringify({ servers: { hippo: { ...VSCODE_SERVER, env: { HIPPO_HOME: '/srv/hippo' } } } });
     writeFile(user.mcp, text);
-    expect(installCopilot().vscode[0].mcp).toBe('user-owned');
-    expect(uninstallCopilot().vscode[0].mcp).toBe('user-owned');
+    expect(installCopilot().vscode[0].mcp).toBe('kept');
+    expect(uninstallCopilot().vscode[0].mcp).toBe('kept');
     expect(read(user.mcp)).toBe(text);
   });
+
+  it('keeps a VS Code "hippo-memory" server that runs hippo mcp, on install and uninstall, and changes no byte', () => {
+    const user = vscodeUser();
+    const text = JSON.stringify({ servers: { 'hippo-memory': { command: 'hippo', args: ['mcp'] } } });
+    writeFile(user.mcp, text);
+    expect(installCopilot().vscode[0].mcp).toBe('kept');
+    expect(read(user.mcp)).toBe(text);
+    expect(uninstallCopilot().vscode[0].mcp).toBe('kept');
+    expect(read(user.mcp)).toBe(text);
+  });
+
+  it.each([
+    ['another server name', 'my-hippo'],
+    ['the hippo key', 'hippo'],
+  ])(
+    'reports maybeHippo and leaves Copilot CLI and VS Code MCP files untouched when npx mentions hippo-memory under %s',
+    (_label, key) => {
+      const user = vscodeUser();
+      const cliText = JSON.stringify({
+        mcpServers: { [key]: { type: 'local', command: 'npx', args: ['-y', 'hippo-memory', 'mcp'] } },
+      });
+      const vscodeText = JSON.stringify({
+        servers: { [key]: { type: 'stdio', command: 'npx', args: ['-p', 'hippo-memory@3.16.0', 'hippo', 'mcp'] } },
+      });
+      writeFile(files.mcp, cliText);
+      writeFile(user.mcp, vscodeText);
+
+      const installed = installCopilot();
+      expect(installed.mcp).toEqual({ maybeHippo: key, tableKey: 'mcpServers' });
+      expect(installed.vscode[0].mcp).toEqual({ maybeHippo: key, tableKey: 'servers' });
+      expect(read(files.mcp)).toBe(cliText);
+      expect(read(user.mcp)).toBe(vscodeText);
+
+      const removed = uninstallCopilot();
+      expect(removed.mcp).toEqual({ maybeHippo: key, tableKey: 'mcpServers' });
+      expect(removed.vscode[0].mcp).toEqual({ maybeHippo: key, tableKey: 'servers' });
+      expect(read(files.mcp)).toBe(cliText);
+      expect(read(user.mcp)).toBe(vscodeText);
+    },
+  );
 
   it('with only VS Code writes the hooks and the VS Code files but neither Copilot CLI file, on every run', () => {
     fs.rmSync(copilotHome, { recursive: true });
@@ -581,7 +633,7 @@ describe('hippo setup and hippo hook with Copilot', () => {
     const text = '{\n  // mine\n  "mcpServers": {}\n}\n';
     writeFile(path.join(m.copilot, 'mcp-config.json'), text);
     const out = await hippo(m, 'setup', '--no-schedule', '--no-learn');
-    expect(out).toContain(`add this under "mcpServers" by hand: ${copilotMcpSnippet()}`);
+    expect(out).toContain(`add this under "mcpServers" by hand: ${mcpServerSnippet(COPILOT_CLI_MCP)}`);
     expect(read(path.join(m.copilot, 'mcp-config.json'))).toBe(text);
   });
 
@@ -636,7 +688,7 @@ describe('hippo setup and hippo hook with Copilot', () => {
     );
     expect(fs.existsSync(m.copilot)).toBe(false);
     expect(await hippo(m, 'setup', '--no-schedule', '--no-learn')).toContain(
-      `add this under "servers" by hand: ${copilotMcpSnippet(VSCODE_MCP)}`,
+      `add this under "servers" by hand: ${mcpServerSnippet(VSCODE_MCP)}`,
     );
     expect(read(path.join(user, 'mcp.json'))).toBe(text);
   });

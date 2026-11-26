@@ -1,0 +1,191 @@
+import type {
+  McpConfigInstallResult,
+  McpConfigUninstallResult,
+} from '../hooks-install/mcp-config.js';
+import { grokTableLines } from '../hooks-install/rules/grok-build.js';
+import {
+  hippoCommand,
+  isMcpFailure,
+  isMcpMaybeHippo,
+  mcpServerSnippet,
+  type McpConfigFormat,
+  type McpConfigHost,
+  type McpConfigRow,
+  type McpFailure,
+  type McpMaybeHippo,
+  type McpMergeStatus,
+  type McpRemoveStatus,
+} from '../hooks-install/rules/mcp-config.js';
+
+export type McpReportTarget = Pick<McpConfigRow, 'name' | 'format'>;
+export type McpPaste = 'snippet' | 'hint' | 'none';
+
+type Lines = (file: string, target: McpReportTarget, paste: McpPaste) => string[];
+
+function snippetLines(
+  format: McpConfigFormat,
+  verb: 'add' | 'replace',
+  tableKey?: McpConfigHost['key'],
+): string[] {
+  const what = verb === 'add' ? 'add this' : 'replace the entry with this';
+  return format.kind === 'json'
+    ? [`${what} under "${tableKey ?? format.host.key}" by hand: ${mcpServerSnippet(format.host)}`]
+    : [`${what} table by hand:`, ...grokTableLines(hippoCommand())];
+}
+
+function pasteLines(target: McpReportTarget, paste: McpPaste): string[] {
+  if (paste === 'snippet') return snippetLines(target.format, 'replace');
+  if (paste === 'hint') {
+    return [`run \`hippo hook install ${target.name}\` to see the entry to paste`];
+  }
+  return [];
+}
+
+const unreadableReason = (format: McpConfigFormat): string =>
+  format.kind === 'json'
+    ? 'has comments or is not a JSON object hippo can change'
+    : 'is not a TOML file hippo can change safely';
+
+const addIfNoServer = (format: McpConfigFormat, tableKey?: McpConfigHost['key']): string[] =>
+  format.kind === 'json'
+    ? snippetLines(format, 'add', tableKey)
+    : [
+        `add a "hippo" server under mcp_servers by hand, with command = "${hippoCommand()}" ` +
+          'and args = ["mcp"]',
+      ];
+
+const replaceMaybeEntry = (format: McpConfigFormat, tableKey?: McpConfigHost['key']): string[] =>
+  format.kind === 'json'
+    ? snippetLines(format, 'replace', tableKey)
+    : [
+        `update the "hippo" server under mcp_servers in place to command = "${hippoCommand()}" ` +
+          'and args = ["mcp"]',
+      ];
+
+const conflictKeys = (format: McpConfigFormat): string =>
+  format.kind === 'json' && format.host.altKey !== undefined
+    ? `"${format.host.key}" and "${format.host.altKey}"`
+    : 'conflicting';
+
+const invalidReason = (format: McpConfigFormat): string =>
+  (format.kind === 'json' ? format.host.invalid?.({}) : null) ?? 'is not a config the host accepts';
+
+const withTail = (head: string, tail: string[]): string[] =>
+  tail.length === 0 ? [head] : [`${head}; ${tail[0]}`, ...tail.slice(1)];
+
+export const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
+  `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+
+const INSTALL_LINES = {
+  added: (file) => [`Added the "hippo" MCP server -> ${file}`],
+  present: (file) => [`The "hippo" MCP server is already in ${file}`],
+  kept: (file) => [`hippo's MCP server is already in ${file}, set up by hand; left as it is`],
+  'user-owned': (file, target, paste) =>
+    withTail(
+      `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
+      pasteLines(target, paste),
+    ),
+  unreadable: (file, target) => {
+    const [add, ...snippet] = addIfNoServer(target.format);
+    const head = `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged`;
+    return [`${head}; if it has no hippo server, ${add}`, ...snippet];
+  },
+  invalid: (file, target) => [
+    `WARNING: ${file} was left unchanged: it ${invalidReason(target.format)}. ` +
+      `Then run \`hippo hook install ${target.name}\``,
+  ],
+  'conflicting-keys': (file, target) => [
+    `WARNING: ${file} was left unchanged: it defines both ${conflictKeys(target.format)}. ` +
+      'Merge any server entries into one map and remove the other key, ' +
+      `then run \`hippo hook install ${target.name}\``,
+  ],
+} as const satisfies Record<Exclude<McpMergeStatus, McpMaybeHippo>, Lines>;
+
+const REMOVE_BY_HAND = 'remove the "hippo" server by hand if hippo added it';
+
+const REMOVE_LINES = {
+  removed: (file) => [`Removed the "hippo" MCP server from ${file}`],
+  absent: (file) => [`No hippo MCP server found in ${file}`],
+  kept: (file) => [
+    `Left hippo's MCP server in ${file}: it was set up by hand, ` +
+      'so remove it by hand if you want it gone',
+  ],
+  'user-owned': (file) => [`Left the "hippo" MCP server in ${file}: hippo did not write it`],
+  unreadable: (file, target) => [
+    `WARNING: ${file} ${unreadableReason(target.format)}, so it was left unchanged; ${REMOVE_BY_HAND}`,
+  ],
+  'conflicting-keys': (file, target) => [
+    `WARNING: ${file} was left unchanged: it defines both ${conflictKeys(target.format)}. ` +
+      'Merge any server entries into one map and remove the other key, ' +
+      `then run \`hippo hook uninstall ${target.name}\``,
+  ],
+} as const satisfies Record<Exclude<McpRemoveStatus, McpMaybeHippo>, Lines>;
+
+function maybeHippoInstallLines(
+  file: string,
+  status: McpMaybeHippo,
+  target: McpReportTarget,
+  paste: McpPaste,
+): string[] {
+  const head =
+    `A server named ${JSON.stringify(status.maybeHippo)} in ${file} may already run hippo; ` +
+    'the file is left as it is';
+  if (paste === 'none') return [head];
+  if (paste === 'hint') {
+    return [
+      `${head}; if it does not, run \`hippo hook install ${target.name}\` to see the entry to paste`,
+    ];
+  }
+  const [fix, ...snippet] =
+    status.maybeHippo === 'hippo'
+      ? replaceMaybeEntry(target.format, status.tableKey)
+      : addIfNoServer(target.format, status.tableKey);
+  return [`${head}; if it does not, ${fix}`, ...snippet];
+}
+
+export function mcpInstallLines(
+  file: string,
+  status: McpMergeStatus | McpFailure,
+  target: McpReportTarget,
+  paste: McpPaste,
+): string[] {
+  if (isMcpFailure(status)) {
+    const fix = snippetLines(target.format, 'add');
+    return [mcpFailureLine(file, status, fix[0]), ...fix.slice(1)];
+  }
+  if (isMcpMaybeHippo(status)) {
+    return maybeHippoInstallLines(file, status, target, paste);
+  }
+  return INSTALL_LINES[status](file, target, paste);
+}
+
+export function mcpRemoveLines(
+  file: string,
+  status: McpRemoveStatus | McpFailure,
+  target: McpReportTarget,
+): string[] {
+  if (isMcpFailure(status)) return [mcpFailureLine(file, status, REMOVE_BY_HAND)];
+  if (isMcpMaybeHippo(status)) {
+    return [
+      `Left ${JSON.stringify(status.maybeHippo)} in ${file}: it may run hippo via npx; ` +
+        'check whether it starts hippo before removing it by hand',
+    ];
+  }
+  return REMOVE_LINES[status](file, target);
+}
+
+export function printMcpConfigInstall(
+  result: McpConfigInstallResult,
+  row: McpConfigRow,
+  indent: string,
+  explicit: boolean,
+): void {
+  const paste = explicit ? 'snippet' : 'hint';
+  for (const line of mcpInstallLines(result.file, result.status, row, paste)) {
+    console.log(`${indent}${line}`);
+  }
+}
+
+export function printMcpConfigUninstall(result: McpConfigUninstallResult, row: McpConfigRow): void {
+  for (const line of mcpRemoveLines(result.file, result.status, row)) console.log(line);
+}

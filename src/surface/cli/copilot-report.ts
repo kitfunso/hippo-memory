@@ -7,37 +7,24 @@ import {
   type CopilotUninstallResult,
   type InstructionsInstallStatus,
   type InstructionsRemoveStatus,
-  type McpFailure,
-  type McpHost,
-  type McpMergeStatus,
-  type McpRemoveStatus,
   type VscodeInstallResult,
   type VscodeInstructionsInstallStatus,
   type VscodeInstructionsRemoveStatus,
 } from '../hooks-install/rules/copilot.js';
-import {
-  COPILOT_CLI_MCP,
-  VSCODE_MCP,
-  copilotMcpSnippet,
-  isMcpFailure,
-} from '../hooks-install/copilot.js';
+import type {
+  McpConfigHost,
+  McpFailure,
+  McpMergeStatus,
+  McpRemoveStatus,
+} from '../hooks-install/rules/mcp-config.js';
+import { COPILOT_CLI_MCP, VSCODE_MCP } from '../hooks-install/copilot.js';
 import { HOOK_MARKERS } from '../hooks-install/instructions.js';
+import { mcpInstallLines, mcpRemoveLines, type McpReportTarget } from './mcp-config-report.js';
 
-const addByHand = (host: McpHost): string =>
-  `add this under "${host.key}" by hand: ${copilotMcpSnippet(host)}`;
-
-const MCP_MERGE_LINES = {
-  added: (file: string) => `Added the "hippo" MCP server -> ${file}`,
-  present: (file: string) => `The "hippo" MCP server is already in ${file}`,
-  'user-owned': (file: string) =>
-    `Left the "hippo" MCP server in ${file} as it is: hippo did not write it`,
-  unreadable: (file: string, host: McpHost) =>
-    `WARNING: ${file} has comments or is not a JSON object hippo can merge into, so it was left unchanged; ` +
-    addByHand(host),
-} as const satisfies Record<McpMergeStatus, (file: string, host: McpHost) => string>;
-
-const mcpFailureLine = (file: string, failure: McpFailure, fix: string): string =>
-  `WARNING: hippo could not use ${file} (${failure.failed}), so it was left unchanged; ${fix}`;
+const copilotTarget = (host: McpConfigHost): McpReportTarget => ({
+  name: 'copilot',
+  format: { kind: 'json', host },
+});
 
 const unclosedLine = (file: string): string =>
   `WARNING: ${file} has ${HOOK_MARKERS.start} with no ${HOOK_MARKERS.end}, so hippo left it unchanged; ` +
@@ -79,15 +66,20 @@ const VSCODE_HOOKS_LINE =
   'VS Code: hooks need VS Code 1.109.3 or later with chat.useHooks on (the default); ' +
   'older versions get the MCP server and the instructions file only.';
 
-function mcpInstallLine(file: string, mcp: McpMergeStatus | McpFailure, host: McpHost): string {
-  return isMcpFailure(mcp)
-    ? mcpFailureLine(file, mcp, addByHand(host))
-    : MCP_MERGE_LINES[mcp](file, host);
+function printMcpInstall(
+  file: string,
+  mcp: McpMergeStatus | McpFailure,
+  host: McpConfigHost,
+  indent: string,
+): void {
+  for (const line of mcpInstallLines(file, mcp, copilotTarget(host), 'none')) {
+    console.log(`${indent}${line}`);
+  }
 }
 
 function printVscodeInstall(result: VscodeInstallResult, indent: string): void {
   const { paths } = result;
-  console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, VSCODE_MCP)}`);
+  printMcpInstall(paths.mcpConfig, result.mcp, VSCODE_MCP, indent);
   console.log(
     `${indent}${VSCODE_INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`,
   );
@@ -113,7 +105,7 @@ export function printCopilotInstall(result: CopilotInstallResult, indent: string
         'so hippo skipped mcp-config.json and copilot-instructions.md, which only the Copilot CLI reads',
     );
   } else {
-    console.log(`${indent}${mcpInstallLine(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP)}`);
+    printMcpInstall(paths.mcpConfig, result.mcp, COPILOT_CLI_MCP, indent);
     console.log(`${indent}${INSTRUCTIONS_INSTALL_LINES[result.instructions](paths.instructions)}`);
   }
   for (const vscode of result.vscode) printVscodeInstall(vscode, indent);
@@ -121,32 +113,22 @@ export function printCopilotInstall(result: CopilotInstallResult, indent: string
   console.log(`${indent}VS Code Copilot runs new hooks in a new chat session.`);
 }
 
-/** The lines for one MCP config file; empty when hippo's server was not there. */
-function mcpRemoveLines(file: string, mcp: McpRemoveStatus | McpFailure): string[] {
-  if (isMcpFailure(mcp)) {
-    return [mcpFailureLine(file, mcp, 'remove the "hippo" server by hand if hippo added it')];
-  }
-  if (mcp === 'removed') return [`Removed the "hippo" MCP server from ${file}`];
-  if (mcp === 'user-owned') {
-    return [`Left the "hippo" MCP server in ${file}: hippo did not write it`];
-  }
-  if (mcp === 'unreadable') {
-    return [
-      `WARNING: ${file} has comments or is not a JSON object hippo can edit, so it was left unchanged; ` +
-        'remove the "hippo" server by hand if hippo added it',
-    ];
-  }
-  return [];
+function copilotMcpRemoveLines(
+  file: string,
+  mcp: McpRemoveStatus | McpFailure,
+  host: McpConfigHost,
+): string[] {
+  return mcp === 'absent' ? [] : mcpRemoveLines(file, mcp, copilotTarget(host));
 }
 
 export function printCopilotUninstall(result: CopilotUninstallResult): void {
   const { paths, mcp } = result;
   const lines: string[] = [];
   if (result.hooks) lines.push(`Removed hippo's Copilot hooks file ${paths.hooks}`);
-  lines.push(...mcpRemoveLines(paths.mcpConfig, mcp));
+  lines.push(...copilotMcpRemoveLines(paths.mcpConfig, mcp, COPILOT_CLI_MCP));
   lines.push(INSTRUCTIONS_REMOVE_LINES[result.instructions](paths.instructions));
   for (const vscode of result.vscode) {
-    lines.push(...mcpRemoveLines(vscode.paths.mcpConfig, vscode.mcp));
+    lines.push(...copilotMcpRemoveLines(vscode.paths.mcpConfig, vscode.mcp, VSCODE_MCP));
     lines.push(VSCODE_INSTRUCTIONS_REMOVE_LINES[vscode.instructions](vscode.paths.instructions));
   }
   const printed = lines.filter((line) => line !== '');
