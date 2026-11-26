@@ -199,8 +199,18 @@ const FIRST_LOOK_HEAD=/^((?:<tools-used-before-summary>(?:[A-Za-z0-9_.:-]{1,256}
 const FIRST_LOOK_TAIL='\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.';
 export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
   .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
+function summaryBlock(reply) {
+  const texts=reply?.texts ?? [];
+  if(!texts.length) return null;
+  const picked=reply.sse ? (texts.findLast(t=>t.includes('<summary>')) ?? texts.at(-1)) : texts[0];
+  return picked?.trim() || null;
+}
+function taggedSummary(text) {
+  const stripped=text.replace(/<analysis>[\s\S]*?<\/analysis>/,'');
+  return /<summary>[\s\S]*?<\/summary>/.test(stripped) || /^[ \t]*<summary>/m.test(stripped);
+}
 function priorWords(exchanges,index) {
-  const curr=exchanges[index],blocks=[],compactions=[];
+  const curr=exchanges[index],blocks=[],done=[];
   for(let j=0;j<exchanges.length;j++) {
     const x=exchanges[j];
     const doneBefore=curr.start!==undefined ? x.complete && x.end<curr.start : j<index && x.complete;
@@ -215,15 +225,26 @@ function priorWords(exchanges,index) {
         const mjoined=mtexts.join('\n').trim();
         if(mjoined) blocks.push(mjoined);
       }
+      done.push({at:x.end ?? j,cls:'main'});
     }
     if(doneBefore && x.route==='generate' && x.cls==='compaction') {
-      const s=summaryOf((x.reply?.texts ?? []).join('\n'));
-      if(s) compactions.push({at:x.end ?? j,summary:s});
+      const raw=summaryBlock(x.reply);
+      if(raw) done.push({at:x.end ?? j,cls:'compaction',raw});
     }
   }
-  compactions.sort((a,b)=>a.at-b.at);
-  const latest=compactions.at(-1)?.summary ?? null;
-  const disputed=latest ? compactions.slice(0,-1).map(c=>c.summary).filter(p=>latest.startsWith(p) && latest[p.length]==='\n').sort((a,b)=>a.length-b.length)[0] : null;
+  done.sort((a,b)=>a.at-b.at);
+  const selected=[];
+  let pending=null;
+  const pushSummary=raw=>{ const s=summaryOf(raw); if(s) selected.push(s); };
+  for(const item of done) {
+    if(item.cls==='main') { if(pending!==null) { pushSummary(pending); pending=null; } continue; }
+    if(pending!==null) { pushSummary(taggedSummary(item.raw) ? item.raw : pending); pending=null; }
+    else if(taggedSummary(item.raw)) pushSummary(item.raw);
+    else pending=item.raw;
+  }
+  if(pending!==null) pushSummary(pending);
+  const latest=selected.at(-1) ?? null;
+  const disputed=latest ? selected.slice(0,-1).filter(p=>latest.startsWith(p) && latest[p.length]==='\n').sort((a,b)=>a.length-b.length)[0] : null;
   const summaries=latest ? [disputed ?? latest] : [];
   return {blocks:[...new Set(blocks)].sort((a,b)=>b.length-a.length),summaries};
 }

@@ -242,18 +242,22 @@ export async function checkLauncher() {
     };
     const callOf=(prompt,extra={})=>({id:'probe',session:randomUUID(),smoke:true,diagnostic:true,prompt,model:pins.modelOpus,effort:pins.effort,
       toolchain:roster()[0].toolchain,...extra});
+    const CRED_MISSING=/Missing subscription credential or unexpected credential type/;
     for(const [name,call,env] of [['wrong-mode',callOf('Reply OK.',{diagnostic:false}),parentEnv],
       ['wrong-canary',callOf('Reply OK.'),{...parentEnv,Z0_WIRE_DUMMY:'sk-ant-oat01-notacanary'}]]) {
       const live=prepare(name,hook),before=api.seen.length;
-      await assert.rejects(launch(live,'Z0_WIRE_DUMMY',env,call,{record}),/Claude Code launcher exited 1/,'The launcher did not refuse the '+name+' call');
+      let errText='';
+      await assert.rejects(launch(live,'Z0_WIRE_DUMMY',env,call,{record,onStderr:s=>{ errText+=s; }}),/Claude Code launcher exited 1/,'The launcher did not refuse the '+name+' call');
+      assert(!CRED_MISSING.test(errText),'An unrelated early refusal matched the credential-read failure reason: '+name);
       assert(api.seen.length===before && !fs.existsSync(seenEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
         'The launcher started Claude Code for the '+name+' call');
     }
     const live=prepare('live',hook),call=callOf('Reply OK.'),beforeLive=api.seen.length;
-    try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record}); }
+    let liveErr='';
+    try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record,onStderr:s=>{ liveErr+=s; }}); }
     catch(e) {
-      if(api.seen.length===beforeLive && !fs.existsSync(seenEnv))
-        assert.fail('Launcher failed before starting child with dummy credential: '+e.message);
+      if(api.seen.length===beforeLive && !fs.existsSync(seenEnv) && CRED_MISSING.test(liveErr))
+        assert.fail('Launcher lost the dummy credential before starting child: '+e.message);
       throw e;
     }
     assert(!fs.readFileSync(seenEnv,'utf8').includes(TOKEN.slice(13)),'The probe wrote the credential to disk');

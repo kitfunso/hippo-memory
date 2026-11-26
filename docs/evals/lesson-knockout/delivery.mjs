@@ -65,10 +65,11 @@ async function recorded(records,call,invokeOnce,record) {
   if(!state.ok) throw Error('Wire record failed for '+call.id+': '+JSON.stringify(state));
   return code;
 }
-async function invoke(live,token,env,boxChecked=false) {
+async function invoke(live,token,env,boxChecked=false,onStderr) {
   const proc=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
     path.join(folder,'launch.ps1'),'-Live',live,'-TokenVar',token,...(boxChecked?['-BoxChecked']:[])],
-    {cwd:path.dirname(live),env,windowsHide:true,stdio:'inherit'});
+    {cwd:path.dirname(live),env,windowsHide:true,stdio:['inherit','inherit',onStderr ? 'pipe' : 'inherit']});
+  if(onStderr) proc.stderr.on('data',d=>{ process.stderr.write(d); onStderr(String(d)); });
   const [code]=await once(proc,'exit');
   return code;
 }
@@ -122,11 +123,11 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
     }
   }
 }
-export async function launch(live,token,env,call,{gate,onFirstCall,dispatch=()=>invoke(live,token,env,true),
-  checkBox=()=>runBoxCheck(live,env),record=openCallWire}={}) {
-  if(!call.smoke) return retryLimited(live,call,dispatch,checkBox,{gate,onFirstCall,record});
+export async function launch(live,token,env,call,{gate,onFirstCall,dispatch,
+  checkBox=()=>runBoxCheck(live,env),record=openCallWire,onStderr}={}) {
+  if(!call.smoke) return retryLimited(live,call,dispatch ?? (()=>invoke(live,token,env,true,onStderr)),checkBox,{gate,onFirstCall,record});
   gate?.();
-  const code=await recorded(live,call,()=>invoke(live,token,env),record);
+  const code=await recorded(live,call,()=>invoke(live,token,env,false,onStderr),record);
   if(cutOff(code,live,live,call)) throw Error('Smoke cut off by a usage limit: '+call.id);
   return [];
 }
