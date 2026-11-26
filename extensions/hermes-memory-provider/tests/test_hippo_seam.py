@@ -96,8 +96,9 @@ def test_each_verb_stops_at_its_time_limit(verb, fake, monkeypatch):
 
 
 @pytest.mark.parametrize("name", ["hippo.cmd.", "hippo.cmd. .", "HIPPO.CMD", "hippo.bat", "hippo.com",
-                                  "hippo.cmd::$DATA", "hippo.cmd:x.exe", "hippo.cmd:.exe", "hippo"])
-def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
+                                  "hippo.cmd::$DATA", "hippo.cmd:x.exe", "hippo.cmd:.exe", "hippo",
+                                  "hippo.js.", "HIPPO.JS. .", "HIPPO.EXE."])
+def test_windows_refuses_disallowed_launchers(name, tmp_path, monkeypatch, started):
     monkeypatch.setenv("HIPPO_BIN", str(tmp_path / name))
     monkeypatch.setattr(sys, "platform", "win32")
     with pytest.raises(ValueError):
@@ -107,8 +108,8 @@ def test_windows_refuses_a_batch_file(name, tmp_path, monkeypatch, started):
     assert started == []
 
 
-@pytest.mark.parametrize(("name", "under_node"), [("hippo.js", True), ("hippo.js.", True), ("HIPPO.JS. .", True),
-                                                  ("hippo.exe", False), ("HIPPO.EXE.", False)])
+@pytest.mark.parametrize(("name", "under_node"), [("hippo.js", True), ("HIPPO.JS", True),
+                                                  ("hippo.exe", False), ("HIPPO.EXE", False)])
 def test_windows_allows_a_js_or_an_exe(name, under_node, tmp_path, monkeypatch):
     path = str(tmp_path / name)
     monkeypatch.setenv("HIPPO_BIN", path)

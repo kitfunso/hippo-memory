@@ -102,7 +102,7 @@ def capture_deadline_s() -> float:
 
 def _launcher_name(path: str) -> str:
     if sys.platform == "win32":
-        return ntpath.basename(path).rstrip(" .").lower()
+        return ntpath.basename(path).lower()
     return path.lower()
 
 
