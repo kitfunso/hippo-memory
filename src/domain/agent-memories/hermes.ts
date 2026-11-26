@@ -20,7 +20,8 @@ export const hermesAdapter: Adapter = {
   tool: 'hermes',
   list(ctx, scope) {
     const { home } = hermesHomeDir(ctx.home, ctx.env, ctx.platform, ctx.files);
-    const containers = scope === 'user' ? userContainers(ctx.files, path.join(home, 'memories')) : [];
+    const containers =
+      scope === 'user' ? userContainers(ctx.files, path.join(home, 'memories')) : [];
     return { tool: 'hermes', home, containers, warnings: [] };
   },
 };

@@ -60,7 +60,13 @@ describe('hermes adapter', () => {
     const listing = hermesAdapter.list(ctxFor(env()), 'user');
     expect(listing).toMatchObject({ tool: 'hermes', home: home(), warnings: [] });
     expect(listing.containers.map((c) => c.path)).toEqual([memory, user]);
-    expect(listing.containers[0]).toMatchObject({ scope: 'user', readable: true, skipped: [], warnings: [], textKeyed: true });
+    expect(listing.containers[0]).toMatchObject({
+      scope: 'user',
+      readable: true,
+      skipped: [],
+      warnings: [],
+      textKeyed: true,
+    });
     expect(listing.containers[0].items.map((i) => i.text)).toEqual(['first', 'second']);
     expect(listing.containers[0].items.map((i) => i.key)).toEqual([`/${hash12('first')}`, `/${hash12('second')}`]);
     expect(listing.containers[1].items.map((i) => i.text)).toEqual(['likes tabs']);
@@ -155,7 +161,12 @@ describe('hermesHomeDir', () => {
     ['unset on linux', {}, 'linux', nativePosix],
     ['unset on darwin', {}, 'darwin', nativePosix],
     ['LOCALAPPDATA set on win32', { LOCALAPPDATA: path.join(root, 'lad') }, 'win32', path.join(root, 'lad', 'hermes')],
-    ['LOCALAPPDATA with padding on win32', { LOCALAPPDATA: `  ${path.join(root, 'lad')} ` }, 'win32', path.join(root, 'lad', 'hermes')],
+    [
+      'LOCALAPPDATA with padding on win32',
+      { LOCALAPPDATA: `  ${path.join(root, 'lad')} ` },
+      'win32',
+      path.join(root, 'lad', 'hermes'),
+    ],
     ['LOCALAPPDATA blank on win32', { LOCALAPPDATA: '  ' }, 'win32', nativeWin],
     ['LOCALAPPDATA ignored on linux', { LOCALAPPDATA: path.join(root, 'lad') }, 'linux', nativePosix],
     ['a suffix on win32', { HERMES_DATA_DIR_SUFFIX: '-dev' }, 'win32', `${nativeWin}-dev`],
@@ -186,7 +197,7 @@ describe('hermesHomeDir', () => {
     expect(resolve({ HERMES_HOME: profileHome }, 'win32')).toEqual({ home: profileHome, profile: 'work' });
   });
 
-  it('HERMES_HOME at a custom root reads that root\'s active_profile, not the default home\'s', () => {
+  it("HERMES_HOME at a custom root reads that root's active_profile, not the default home's", () => {
     const texts = {
       [path.join(nativePosix, 'active_profile')]: 'decoy',
       [path.join(custom, 'active_profile')]: 'work\n',
@@ -202,7 +213,7 @@ describe('hermesHomeDir', () => {
     expect(resolve({ HERMES_HOME: custom }, 'linux', texts)).toEqual({ home: custom, profile: null });
   });
 
-  it('HERMES_HOME inside the default home reads the default home\'s active_profile and keeps the profile under HERMES_HOME', () => {
+  it("HERMES_HOME inside the default home reads the default home's active_profile and keeps the profile under HERMES_HOME", () => {
     const inner = path.join(nativePosix, 'inner');
     const texts = {
       [path.join(nativePosix, 'active_profile')]: 'work',
@@ -212,10 +223,12 @@ describe('hermesHomeDir', () => {
       home: path.join(inner, 'profiles', 'work'),
       profile: 'work',
     });
-    expect(resolve({ HERMES_HOME: inner }, 'linux', { [path.join(nativePosix, 'active_profile')]: 'default' })).toEqual({
-      home: inner,
-      profile: null,
-    });
+    expect(resolve({ HERMES_HOME: inner }, 'linux', { [path.join(nativePosix, 'active_profile')]: 'default' })).toEqual(
+      {
+        home: inner,
+        profile: null,
+      },
+    );
   });
 
   it('HERMES_HOME equal to the default home is the default home', () => {

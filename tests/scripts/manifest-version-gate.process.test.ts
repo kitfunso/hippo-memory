@@ -212,7 +212,9 @@ describe('sync-version.mjs', () => {
       expect(sync.status, sync.stderr).toBe(0);
       const r = runGate(root);
       expect(r.status, r.stderr).toBe(0);
-      expect(readFileSync(join(root, PLUGIN_YAML), 'utf8')).toBe('name: hippo\nversion: 2.1.0\ndescription: "fixture"\n');
+      expect(readFileSync(join(root, PLUGIN_YAML), 'utf8')).toBe(
+        'name: hippo\nversion: 2.1.0\ndescription: "fixture"\n',
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
