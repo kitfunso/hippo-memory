@@ -9,15 +9,16 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { WIRE_CA,folder,hash,wireEnv } from './plan.mjs';
 import { openWire } from './wire.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
-import { cutOffBound } from './evidence.mjs';
+import { cutOffBound,cutOffPermissions } from './evidence.mjs';
 
 export const STOPPED=75;
 export const limitBound=(records,live,call)=>
   cutOffBound(path.join(records,'wire',call.id),path.join(live,'home/.claude/projects'),call.session,call.prompt).bound;
-export function cutOff(code,records,live,call,bound=limitBound) {
+export function cutOff(code,records,live,call,bound=limitBound,permissions=cutOffPermissions) {
   if(code===0) return false;
   if(code!==STOPPED) throw Error('Claude Code launcher exited '+code);
   if(!bound(records,live,call)) throw Error('Claude Code stopped without a usage limit on the wire and in the transcript: '+call.id);
+  if(!call.smoke && !permissions(records,live,call)) throw Error('Claude Code stopped without valid permission evidence: '+call.id);
   return true;
 }
 
@@ -56,7 +57,7 @@ async function recorded(records,call,invokeOnce,record) {
   const wire=await record(dir);
   let code,error;
   try {
-    fs.writeFileSync(path.join(records,'call.json'),JSON.stringify({...call,wireEnv:wireEnv(wire.port)}));
+    fs.writeFileSync(path.join(records,'call.json'),JSON.stringify({...call,wireEnv:wireEnv(wire.port,wire.token)}));
     code=await invokeOnce();
   } catch(e) { error=e; }
   const state=await wire.close();
@@ -92,7 +93,7 @@ async function waitForBox(checkBox,delay) {
   }
 }
 
-export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall,record=openCallWire,bound=limitBound}={}) {
+export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,maxWaits=8*96,gate,onFirstCall,record=openCallWire,bound=limitBound,permissions=cutOffPermissions}={}) {
   gate?.();
   const ticket=randomUUID(),checkpoint=inside(path.join(stateRoot,'checkpoints',ticket));
   const archives=[];
@@ -109,7 +110,7 @@ export async function retryLimited(live,call,invokeOnce,checkBox,{delay=wait,max
       onFirstCall?.();
     }
     const code=await recorded(records,call,invokeOnce,record);
-    if(!cutOff(code,records,live,call,bound)) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
+    if(!cutOff(code,records,live,call,bound,permissions)) { fs.rmSync(inside(checkpoint),{recursive:true}); return archives; }
     const dest=inside(path.join(stateRoot,'limit-archives',ticket+'-'+i));
     snapshot(dest);
     archives.push(path.join(dest,'live'));

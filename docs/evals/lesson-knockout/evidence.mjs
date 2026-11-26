@@ -53,7 +53,7 @@ function callRows(inventory,prompt,until) {
 }
 const ROUTE_METHODS=new Map([...ROUTES].map(([key,route])=>[route,key.split(' ')[0]]));
 const ROW_KINDS=new Set(['request','response','end','tunnel','refused','closed']);
-const HARMLESS_REFUSALS=new Set(['plain','authority']);
+const HARMLESS_REFUSALS=new Set(['plain','authority','proxy-auth']);
 const CLASSES=new Set(['main','compaction','auxiliary']);
 const LIMITS=new Map([[429,'rate_limit_error'],[529,'overloaded_error']]);
 function decoded(raw,encoding,strict) {
@@ -148,14 +148,13 @@ export function wireLedger(dir) {
     if(request.reason || answer.reason) return fail(request.reason ?? answer.reason);
     exchanges.push({seq:q.seq,route,cls:route==='generate' ? q.cls : null,status:response?.status ?? null,requestId:response?.requestId ?? null,
       ended:end.ended,body:request.body,reply:answer.reply,complete:finished(route,response,end,answer.reply,request.body),
-      limit:limitOf(route,response,answer.reply)});
+      limit:limitOf(route,response,answer.reply),start,end:ends[0]});
   }
   return {ok:true,reason:null,exchanges,hosts};
 }
 const mainTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls==='main');
 const auxiliaryTurns=w=>w.exchanges.filter(x=>x.route==='generate' && x.cls!=='main');
-const modelBodies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.body);
-const modelReplies=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route)).map(x=>x.reply?.texts ?? []);
+const modelExchanges=w=>w.exchanges.filter(x=>MODEL_ROUTES.has(x.route));
 function matched(w,inventory,call,{success}) {
   if(!w.ok || !call || inventory.subs.length) return false;
   const pairs=pairsOf(call.rows),sent=mainTurns(w),done=sent.filter(x=>x.complete).map(x=>x.requestId+'\n'+x.reply.id);
@@ -194,30 +193,76 @@ function readsDelivery(tool,work) {
 
 const CONTINUED='This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.';
 const REREAD=/^<system-reminder>\nCalled the (\w+) tool with the following input: (\{[\s\S]*\})\n<\/system-reminder>$/;
-const REREAD_RESULT=/^<system-reminder>\nResult of calling the (\w+) tool:/;
-const QUOTED=/<exchanges>\n([\s\S]*)\n<\/exchanges>/;
+const REREAD_RESULT=/^<system-reminder>\nResult of calling the (\w+) tool:\n([\s\S]*?)\n<\/system-reminder>([\s\S]*)$/;
+const QUOTED=/<exchanges>\n([\s\S]*?)\n<\/exchanges>/;
+const escapeRe=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
   .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
-function modelWords(bodies,replies) {
-  const blocks=replies.flat();
-  for(const body of bodies) for(const m of body?.messages ?? []) if(m.role==='assistant') blocks.push(...textBlocks(m.content));
-  const summaries=[...new Set(replies.flatMap(t=>[t.join('\n'),...t]).map(summaryOf).filter(Boolean))].sort((a,b)=>b.length-a.length);
-  return {blocks:blocks.map(s=>String(s).trim()).filter(Boolean),summaries};
+function priorWords(exchanges,index) {
+  const curr=exchanges[index],blocks=[],summaries=[];
+  for(let j=0;j<exchanges.length;j++) {
+    const x=exchanges[j];
+    const doneBefore=curr.start!==undefined ? x.complete && x.end<curr.start : j<index && x.complete;
+    const sentBefore=curr.start!==undefined ? x.start<curr.start : j<index;
+    if(doneBefore && x.route==='generate' && x.cls==='main') {
+      const joined=(x.reply?.texts ?? []).join('\n').trim();
+      if(joined) blocks.push(joined);
+    }
+    if(sentBefore && x.route==='generate' && x.cls==='main') {
+      for(const m of x.body?.messages ?? []) if(m.role==='assistant') {
+        const joined=textBlocks(m.content).join('\n').trim();
+        if(joined) blocks.push(joined);
+      }
+    }
+    if(doneBefore && x.route==='generate' && x.cls==='compaction') {
+      const s=summaryOf((x.reply?.texts ?? []).join('\n'));
+      if(s) summaries.push(s);
+    }
+  }
+  return {blocks:[...new Set(blocks)].sort((a,b)=>b.length-a.length),summaries:[...new Set(summaries)].sort((a,b)=>b.length-a.length)};
 }
 function quotedHistory(text,task,said) {
   const m=QUOTED.exec(text);
   if(!m) return null;
-  const strict=[text.slice(0,m.index)+text.slice(m.index+m[0].length)],prompt=[];
-  for(const part of m[1].split(/\n\n(?=(?:User|Assistant): )/)) {
-    const q=/^(User|Assistant): (…)?([\s\S]+)$/.exec(part),words=q?.[3];
-    const from=list=>list.some(s=>q[2] ? s.includes(words) : s===words);
-    if(q?.[1]==='Assistant' && from(said.blocks)) continue;
-    if(q?.[1]==='User' && typeof task.prompt==='string' && from([task.prompt.trim()])) { prompt.push(words); continue; }
-    strict.push(part);
+  const strict=[text.slice(0,m.index)+text.slice(m.index+m[0].length)],prompt=[],inner=m[1];
+  const userText=typeof task.prompt==='string' ? task.prompt.trim() : null;
+  const ends=[];
+  for(let k=inner.indexOf('\n\n');k>=0;k=inner.indexOf('\n\n',k+2)) ends.push(k);
+  ends.push(inner.length);
+  const atBoundary=end=>end===inner.length || inner.startsWith('\n\n',end);
+  for(let pos=0;pos<inner.length;) {
+    let matched=false;
+    if(userText && inner.startsWith('User: ',pos)) {
+      if(inner.startsWith(userText,pos+6) && atBoundary(pos+6+userText.length)) {
+        prompt.push(userText); pos+=6+userText.length+2; matched=true;
+      } else if(inner.startsWith('User: …',pos)) {
+        for(let i=ends.length-1;i>=0;i--) {
+          const end=ends[i];
+          if(end<=pos+7) break;
+          const tail=inner.slice(pos+7,end);
+          if(userText.endsWith(tail)) { prompt.push(tail); pos=end+2; matched=true; break; }
+        }
+      }
+    } else if(inner.startsWith('Assistant: ',pos)) {
+      const exact=said.blocks.find(b=>inner.startsWith(b,pos+11) && atBoundary(pos+11+b.length));
+      if(exact) { pos+=11+exact.length+2; matched=true; }
+      else if(inner.startsWith('Assistant: …',pos)) {
+        for(let i=ends.length-1;i>=0;i--) {
+          const end=ends[i];
+          if(end<=pos+12) break;
+          const tail=inner.slice(pos+12,end);
+          if(said.blocks.some(b=>b.endsWith(tail))) { pos=end+2; matched=true; break; }
+        }
+      }
+    }
+    if(matched) continue;
+    const next=inner.indexOf('\n\n',pos),end=next<0 ? inner.length : next;
+    strict.push(inner.slice(pos,end));
+    pos=end+2;
   }
   return {strict,prompt};
 }
-const callSurfaces=(bodies,replies,task)=>{ const said=modelWords(bodies,replies); return bodies.map(b=>deliverySurfaces(b,task,said)); };
+const callSurfaces=(exchanges,task)=>exchanges.map((x,i)=>deliverySurfaces(x.body,task,priorWords(exchanges,i)));
 
 export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]}) {
   const system=textBlocks(body.system), prompt=[], opening=[], results=[], tools=new Map();
@@ -246,13 +291,23 @@ export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]}) {
       const s=block.text;
       if(assistant) { if(/^<system-reminder>\s*UserPromptSubmit hook/i.test(s)) system.push(s); continue; }
       const reread=REREAD.exec(s),answer=REREAD_RESULT.exec(s);
-      if(answer && called?.name===answer[1]) { if(readsDelivery(called,work)) results.push(s); called=null; continue; }
+      if(answer && called?.name===answer[1]) {
+        if(readsDelivery(called,work)) results.push(answer[2]);
+        if(answer[3].trim()) opening.push(answer[3]);
+        called=null;
+        continue;
+      }
       settle();
       let input=null;
       if(reread) try { input=JSON.parse(reread[2]); } catch {}
       if(input && typeof input==='object') { called={name:reread[1],input,text:s}; continue; }
       if(s===task.prompt) { prompt.push(s); continue; }
-      if(s.includes(CONTINUED)) { const summary=said.summaries.find(x=>s.includes(x)); opening.push(summary ? s.replace(summary,'') : s); continue; }
+      if(s.startsWith(CONTINUED)) {
+        const after=s.slice(CONTINUED.length);
+        const summary=said.summaries.find(x=>new RegExp('(?:^|\\n)'+escapeRe(x)+'(?=\\n|$)').test(after));
+        opening.push(summary ? CONTINUED+after.replace(summary,'') : s);
+        continue;
+      }
       const quoted=quotedHistory(s,task,said);
       if(quoted) { opening.push(...quoted.strict); prompt.push(...quoted.prompt); continue; }
       opening.push(s);
@@ -277,18 +332,19 @@ export function callComplete(dir,result,prompt,transcript,{maxTurns=false,until}
   const ended=!!call && (maxTurns && result.subtype==='error_max_turns' ? true : finalMessage(call,result,w));
   return {w,complete:ended && matched(w,inventory,call,{success:true})};
 }
-export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0],replies=[]) {
+export function bodyAudit(bodies,notes,lesson,task={},first=bodies[0],exchanges=null) {
   const block=normalize('Project notes\n'+notes.map(e=>'- '+e.content).join('\n'));
   const opening=first ? deliverySurfaces(first,task) : null;
   const hookSeen=!!opening && [...opening.system,...opening.opening].some(s=>hook.test(s) &&
     normalize(s.split(hook).slice(1).join(' ')).includes(block));
-  return {hookSeen,targetText:targetIn(callSurfaces(bodies,replies,task),lesson,task)};
+  const list=exchanges ?? bodies.map(body=>({body,route:body?.system ? 'generate' : 'count',cls:'main',complete:true,reply:{texts:[]}}));
+  return {hookSeen,targetText:targetIn(callSurfaces(list,task),lesson,task)};
 }
 export function evidence(dir,result,notes,lesson,task={},transcript) {
   const {w,complete}=callComplete(dir,result,task.prompt,transcript,{maxTurns:task.maxTurns});
-  const sent=mainTurns(w);
+  const sent=mainTurns(w),exchanges=modelExchanges(w);
   return {requests:sent.length,sideRequests:w.exchanges.length-sent.length,auxiliaryRequests:auxiliaryTurns(w).length,
-    retries:sent.filter(x=>!x.complete).length,complete,...bodyAudit(modelBodies(w),notes,lesson,task,sent[0]?.body,modelReplies(w)),wireHosts:w.hosts};
+    retries:sent.filter(x=>!x.complete).length,complete,...bodyAudit(exchanges.map(x=>x.body),notes,lesson,task,sent[0]?.body,exchanges),wireHosts:w.hosts};
 }
 
 function targetIn(surfaces,lesson,task) {
@@ -302,6 +358,13 @@ export function cutOffBound(dir,projects,sid,prompt) {
   const inventory=sessionInventory(projects,sid),call=callRows(inventory,prompt),w=wireLedger(dir);
   return {w,inventory,call,bound:matched(w,inventory,call,{success:false})};
 }
+export function cutOffPermissions(records,live,call) {
+  const inventory=sessionInventory(path.join(live,'home/.claude/projects'),call.session);
+  const recordFile=path.join(records,call.id+'.json'),record=fs.existsSync(recordFile)?read(recordFile):null;
+  const own=!!inventory.main && record?.session===call.session && record.call===call.id &&
+    record.promptSha256===hash(call.prompt) && record.apparatus===APPARATUS && record.stopped===true;
+  return own && permissionAudit(inventory.main,call.prompt,record.permissionDenials).ok;
+}
 function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const operator=path.join(path.dirname(live),'operator');
   const {w,inventory,call,bound}=cutOffBound(path.join(operator,'wire',id),path.join(live,'home/.claude/projects'),sid,prompt);
@@ -312,7 +375,7 @@ function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const inspectable=own && bound;
   const permissions=own && !!call && permissionAudit(transcript,prompt,record.permissionDenials).ok;
   return {status:inspectable?'dispatched':'unauditable',
-    target:inspectable && targetIn(callSurfaces(modelBodies(w),modelReplies(w),task),lesson,task),permissions};
+    target:inspectable && targetIn(callSurfaces(modelExchanges(w),task),lesson,task),permissions};
 }
 
 export function archivedAudit(archives,id,sid,prompt,lesson,task) {

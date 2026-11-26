@@ -34,10 +34,11 @@ function launcherPrivate() {
   return Object.fromEntries([...block.matchAll(/(\w+)=(?:'([^']*)'|"([^"]*)")/g)].map(m=>[m[1],m[2] ?? m[3]]));
 }
 
-function childEnv(home,port,ca) {
+function childEnv(home,port,ca,token) {
   const own=Object.fromEntries(Object.entries(LAUNCHER_PRIVATE).map(([k,v])=>[k,v.replace('$Live/home',home)]));
+  const proxy=token ? 'http://wire:'+token+'@127.0.0.1:'+port : 'http://127.0.0.1:'+port;
   return {SystemRoot:process.env.SystemRoot,PATH:process.env.PATH,...own,
-    HTTPS_PROXY:'http://127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:path.join(ca,'ca.pem'),CLAUDE_CODE_OAUTH_TOKEN:TOKEN};
+    HTTPS_PROXY:proxy,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:path.join(ca,'ca.pem'),CLAUDE_CODE_OAUTH_TOKEN:TOKEN};
 }
 
 function loose(raw,encoding) {
@@ -118,7 +119,7 @@ export async function checkWireOffline(parent) {
     const wire=direct ? await openTunnel(api.upstream) : await openWire(dir,{ca,upstream:api.upstream}),before=api.seen.length,offered=api.offers.length;
     const argv=['-p','--output-format','json','--setting-sources','','--strict-mcp-config','--settings',settings,
       '--model',pins.modelOpus,'--effort',pins.effort,'--permission-mode','bypassPermissions',resume?'--resume':'--session-id',session];
-    const cli=spawn(CLI,argv,{cwd:work,env:childEnv(h,wire.port,ca),windowsHide:true,stdio:['pipe','pipe','ignore']});
+    const cli=spawn(CLI,argv,{cwd:work,env:childEnv(h,wire.port,ca,wire.token),windowsHide:true,stdio:['pipe','pipe','ignore']});
     let out='';
     cli.stdout.on('data',d=>out+=d);
     cli.stdin.end(prompt);
@@ -231,8 +232,8 @@ export async function checkLauncher() {
     fs.writeFileSync(probe,PROBE);
     const hook={UserPromptSubmit:[{hooks:[{type:'command',command:['node',probe,seenEnv,sha(TOKEN),keys.join(',')].map(a=>a.replaceAll('\\','/')).join(' ')}]}]};
     const parentEnv={...process.env,Z0_WIRE_DUMMY:TOKEN,HTTPS_PROXY:'http://127.0.0.1:9',ANTHROPIC_BASE_URL:'http://127.0.0.1:9',Z0_LAUNCH_SENTINEL:'parent'};
-    let port=null;
-    const record=async dir=>{ const w=await openWire(dir,{ca:WIRE_CA,upstream:api.upstream}); port=w.port; return w; };
+    let wireInfo=null;
+    const record=async dir=>{ const w=await openWire(dir,{ca:WIRE_CA,upstream:api.upstream}); wireInfo=w; return w; };
     const prepare=(name,hooks={})=>{
       const live=path.join(parent,name);
       for(const d of ['home/tmp','home/roaming','home/local','home/.claude/projects/unit/memory','work']) fs.mkdirSync(path.join(live,d),{recursive:true});
@@ -252,9 +253,11 @@ export async function checkLauncher() {
     await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record});
     assert(!fs.readFileSync(seenEnv,'utf8').includes(TOKEN.slice(13)),'The probe wrote the credential to disk');
     const seen=read(seenEnv),want=Object.fromEntries(Object.entries(LAUNCHER_PRIVATE).map(([k,v])=>[k,v.replaceAll('$Live',live)]));
+    assert.deepEqual(Object.keys(seen).sort(),['leaked','network','settings','token'],'The probe wrote unexpected fields to disk');
+    assert.deepEqual(Object.keys(seen.settings).sort(),[...Object.keys(LAUNCHER_PRIVATE),...WIRE_KEYS].sort(),'The probe wrote unexpected settings to disk');
     for(const [k,v] of Object.entries(want))
       assert(k in seen.settings && (/[\\/]/.test(v) ? same(seen.settings[k],v) : seen.settings[k]===v),'The child did not get launcher setting '+k);
-    assert.deepEqual(WIRE_KEYS.map(k=>seen.settings[k]),['http://127.0.0.1:'+port,'127.0.0.1,localhost',WIRE_CA+'/ca.pem'],'The child did not get the wire settings');
+    assert.deepEqual(WIRE_KEYS.map(k=>seen.settings[k]),['http://wire:'+wireInfo.token+'@127.0.0.1:'+wireInfo.port,'127.0.0.1,localhost',WIRE_CA+'/ca.pem'],'The child did not get the wire settings');
     assert.deepEqual(seen.leaked,[],'The parent environment reached the child');
     assert.deepEqual(seen.network,['HTTPS_PROXY','NO_PROXY'],'The child got other network settings: '+seen.network.join(', '));
     assert(['absent','dummy'].includes(seen.token),'The child got another credential');
@@ -269,10 +272,11 @@ export async function checkLauncher() {
       let error=null;
       try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record}); } catch(e) { error=e.message; }
       const main=wireLedger(path.join(live,'wire','probe')).exchanges.filter(x=>x.route==='generate' && x.cls==='main');
-      return {error,stopped:read(path.join(live,'probe.json')).stopped,limits:main.map(x=>x.limit)};
+      const rec=read(path.join(live,'probe.json'));
+      return {error,stopped:rec.stopped,subtype:rec.subtype,limits:main.map(x=>x.limit)};
     };
     const busy=await decided('busy','CASE:busy Reply done.');
-    assert.deepEqual(busy,{error:null,stopped:false,limits:['rate_limit_error',null]},'A retried 429 was not a success');
+    assert.deepEqual([busy.error,busy.stopped,busy.limits],[null,false,['rate_limit_error',null]],'A retried 429 was not a success');
     const limit=await decided('limit','CASE:limit Reply done.');
     assert(limit.stopped && /Smoke cut off by a usage limit/.test(limit.error),'A 429 usage limit was not a cut-off: '+limit.error);
     const wording=await decided('wording','CASE:wording Reply done.');
@@ -281,7 +285,7 @@ export async function checkLauncher() {
     assert(exhaust.stopped && /Smoke cut off by a usage limit/.test(exhaust.error) && exhaust.limits.length>2 && exhaust.limits.every(l=>l==='overloaded_error'),
       'Exhausted 529 retries were not a cut-off: '+exhaust.error);
     const capped=await decided('capped','CASE:tool Read a.txt and reply.');
-    assert.deepEqual([capped.error,capped.stopped],[null,false],'A smoke that stopped at its turn cap was taken as a stop: '+capped.error);
+    assert.deepEqual([capped.error,capped.stopped,capped.subtype],[null,false,'error_max_turns'],'A smoke that stopped at its turn cap was taken as a stop or did not hit max turns: '+JSON.stringify(capped));
     return {requests:api.seen.length,keys:Object.keys(want).length,decisions:5};
   } finally {
     await api.close();

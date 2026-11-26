@@ -17,7 +17,7 @@ export const arms = ['T', 'Tp', 'N'];
 export const APPARATUS = 4;
 export const DENIED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'];
 export const WIRE_CA = root+'/wire-ca';
-export const wireEnv = port => ({HTTPS_PROXY:'http://127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:WIRE_CA+'/ca.pem'});
+export const wireEnv = (port,token) => ({HTTPS_PROXY:'http://wire:'+token+'@127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:WIRE_CA+'/ca.pem'});
 export const preload = name => '--require "'+path.join(folder,name).replaceAll('\\','/')+'"';
 export function assertNodeStarts(env, label) {
   const probe = spawnSync(process.execPath, ['-e','process.exit(0)'], {env, windowsHide:true, stdio:['ignore','ignore','inherit']});

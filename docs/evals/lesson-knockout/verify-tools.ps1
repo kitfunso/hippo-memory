@@ -158,13 +158,15 @@ try {
   $named={ param($Name) @($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq $Name },$true)) }
   if ((& $named 'Get-WireEnv').Count -ne 1 -or (& $named 'Assert-WireOnly').Count -ne 1) { throw 'launch.ps1 does not take and check its wire settings once' }
   if ($launch.Extent.Text -match 'OTEL_|Get-DispatchEnv') { throw 'launch.ps1 still sets a telemetry or dispatch log setting' }
-  $settings=[ordered]@{HTTPS_PROXY='http://127.0.0.1:50123';NO_PROXY='127.0.0.1,localhost';NODE_EXTRA_CA_CERTS='C:/z0-lessons/lesson-knockout/wire-ca/ca.pem'}
+  $settings=[ordered]@{HTTPS_PROXY='http://wire:0123456789abcdef0123456789abcdef@127.0.0.1:50123';NO_PROXY='127.0.0.1,localhost';NODE_EXTRA_CA_CERTS='C:/z0-lessons/lesson-knockout/wire-ca/ca.pem'}
   $callWith={ param([scriptblock]$Change) $d=[ordered]@{}; foreach ($k in $settings.Keys) { $d[$k]=$settings[$k] }; & $Change $d; [pscustomobject]@{wireEnv=[pscustomobject]$d} }
   if (@(Get-WireEnv (& $callWith {})).Count -ne 3) { throw 'Valid wire settings were refused' }
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTP_PROXY']='http://127.0.0.1:1' }) } 'Unexpected wire settings'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY') }) } 'Unexpected wire settings'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d.Remove('NO_PROXY'); $d['ANTHROPIC_UNIX_SOCKET']='C:/pipe' }) } 'Unexpected wire settings'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://proxy.example:8080' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://127.0.0.1:50123' }) } 'not a local listener'
+  Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['HTTPS_PROXY']='http://wire:0123456789abcdef0123456789abcdef@proxy.example:8080' }) } 'not a local listener'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NO_PROXY']='*' }) } 'Unexpected wire bypass list'
   Assert-Throws { Get-WireEnv (& $callWith { param($d) $d['NODE_EXTRA_CA_CERTS']='C:/other/ca.pem' }) } 'Unexpected wire CA'
   Assert-Throws { Get-WireEnv ([pscustomobject]@{id='probe'}) } 'Unexpected wire settings'

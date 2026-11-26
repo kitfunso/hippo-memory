@@ -6,7 +6,7 @@ import tls from 'node:tls';
 import path from 'node:path';
 import { once } from 'node:events';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash,randomBytes } from 'node:crypto';
 
 export const API_HOST='api.anthropic.com';
 export const WIRE_LOG='wire.jsonl';
@@ -61,9 +61,13 @@ function savedBody(raw,route) {
   let body;
   try { body=JSON.parse(raw.toString('utf8')); } catch { return null; }
   if(!body || typeof body!=='object' || Array.isArray(body)) return null;
-  if(!Array.isArray(body.messages) || typeof body.model!=='string' || (route==='generate' && !body.system)) return null;
-  delete body.metadata;
-  return Buffer.from(JSON.stringify(body));
+  if(!Array.isArray(body.messages)) return null;
+  if(typeof body.model!=='string') return null;
+  if(route==='generate' && !body.system) return null;
+  const clean={model:body.model,messages:body.messages};
+  if(body.system!==undefined) clean.system=body.system;
+  if(body.stream!==undefined) clean.stream=body.stream;
+  return Buffer.from(JSON.stringify(clean));
 }
 function writeAll(fd,chunk) {
   for(let at=0;at<chunk.length;) {
@@ -80,8 +84,9 @@ function upstreamRequest(upstream,agent,method,pathname,headers,body,signal) {
   });
 }
 
-export async function openWire(dir,{ca,upstream=API_UPSTREAM}) {
+export async function openWire(dir,{ca,upstream=API_UPSTREAM,port=0,token=randomBytes(16).toString('hex')}) {
   fs.mkdirSync(dir,{recursive:true});
+  const auth=token ? 'Basic '+Buffer.from('wire:'+token).toString('base64') : null;
   const log=path.join(dir,WIRE_LOG),open=new Map(),sockets=new Set(),agents=new Map();
   const agentOf=socket=>{
     if(!agents.has(socket)) {
@@ -164,8 +169,12 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM}) {
   proxy.on('clientError',(e,socket)=>socket.destroy());
   proxy.on('connect',(req,socket,head)=>{
     socket.on('error',()=>{});
-    const target=authority(req.url);
     if(closing) { row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'closing'}); return socket.destroy(); }
+    if(auth && req.headers['proxy-authorization']!==auth) {
+      row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'proxy-auth'});
+      return socket.end('HTTP/1.1 407 Proxy Authentication Required\r\n\r\n');
+    }
+    const target=authority(req.url);
     if(!target) { row({kind:'refused',method:'CONNECT',route:'tunnel',reason:'authority'}); return socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); }
     if(target.host===API_HOST && target.port===443) {
       socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
@@ -188,9 +197,9 @@ export async function openWire(dir,{ca,upstream=API_UPSTREAM}) {
     out.on('error',()=>socket.destroy());
     track(out);
   });
-  proxy.listen(0,'127.0.0.1');
+  proxy.listen(port,'127.0.0.1');
   await once(proxy,'listening');
-  return {port:proxy.address().port,dir,
+  return {port:proxy.address().port,token,dir,
     close:async (grace=30_000)=>{
       closing=true;
       proxy.close();
