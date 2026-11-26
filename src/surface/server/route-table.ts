@@ -85,9 +85,6 @@ function webhook(
   };
 }
 
-/** The /v1 routes in dispatch order; the first entry whose method and path match handles the
- * request. Each row's `auth` is what the dispatch gate proves before its handler runs, so a
- * handler never checks the caller itself. */
 export const V1_ROUTES: readonly Route[] = [
   {
     method: 'POST',
@@ -138,8 +135,6 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     pattern: '/v1/memories/:id/promote',
     auth: 'editor',
-    // No group: a shared store promotes in place through base methods; elsewhere the copy needs
-    // folderFiles.
     handler: handlePromoteMemory,
   },
   {
@@ -171,7 +166,7 @@ export const V1_ROUTES: readonly Route[] = [
     method: 'POST',
     path: '/v1/sleep',
     auth: 'host-admin-local',
-    storeReady: 'consolidation',
+    runsSleep: true,
     handler: handleRunSleep,
   },
   {
@@ -189,8 +184,6 @@ export const V1_ROUTES: readonly Route[] = [
   {
     method: 'DELETE',
     pattern: '/v1/auth/keys/:keyId',
-    // authRevoke lets a resolver caller revoke only the keys it minted, so a demoted viewer can
-    // still revoke its own.
     auth: 'viewer',
     handler: handleRevokeAuthKey,
   },
@@ -345,12 +338,15 @@ async function notPorted(): Promise<void> {
   throw new HttpError(501, STORE_NOT_PORTED_MESSAGE);
 }
 
-/** A row whose store lacks what it needs is marked at boot, so its gate answers 501 and no
- * request checks a group. */
-function boundRoute(route: Route, store: HippoStore, onHippoDb: boolean): BoundRoute {
+function boundRoute(
+  route: Route,
+  store: HippoStore,
+  onHippoDb: boolean,
+  canSleep: boolean,
+): BoundRoute {
   if (route.auth === 'webhook-signature') return boundWebhook(route, store);
+  if (route.runsSleep === true) return canSleep ? route : { ...route, unported: true };
   if (route.storeReady !== undefined) return boundGroupRoute(route, store);
-  // A hippoDbOnly row needs hippo.db; a row naming no group runs on any store.
   return route.hippoDbOnly === undefined || onHippoDb ? route : { ...route, unported: true };
 }
 
@@ -414,11 +410,13 @@ function endpointOf(route: PathEndpoint<never>): { path: string } | { pattern: s
   return 'path' in route ? { path: route.path } : { pattern: route.pattern };
 }
 
-/** The /v1 lookup for one store: each row's store need is settled here, once, so a request
- * checks no group. */
-export function bindV1Routes(store: HippoStore, onHippoDb: boolean): RouteLookup<BoundRoute> {
+export function bindV1Routes(
+  store: HippoStore,
+  onHippoDb: boolean,
+  canSleep: boolean,
+): RouteLookup<BoundRoute> {
   return routeLookup(
-    V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb)),
+    V1_ROUTES.map((route) => boundRoute(route, store, onHippoDb, canSleep)),
     routeMatches,
   );
 }
