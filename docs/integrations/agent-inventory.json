@@ -233,6 +233,39 @@
       "roadmap": "AZ4"
     },
     {
+      "id": "hermes",
+      "checked": "2026-11-26",
+      "names": ["Hermes Agent", "hermes"],
+      "integration": ["native-plugin"],
+      "sources": ["extensions/hermes-memory-provider"],
+      "claims": ["README.md", "extensions/hermes-memory-provider/hippo/README.md"],
+      "routes": {
+        "promptContext": "prefetch runs hippo context before each local turn",
+        "toolFailureCapture": null,
+        "preLossSave": "on_session_end runs hippo capture --global on the turns before compression: Hermes calls it with the pre-compression messages, before it rotates the session id",
+        "postCompactExtract": null,
+        "sessionEndCapture": "on_session_end runs hippo capture --global at the end of a session and at /new",
+        "compactResume": null
+      },
+      "upstream": { "preLossEvent": "on_pre_compress", "beforeTrimOrReset": "on_session_end, ahead of on_session_switch on /new, /reset and compression" },
+      "setup": null,
+      "store": "the global store: $HIPPO_HOME, else ~/.hippo/",
+      "maxSaveDelay": null,
+      "interface": "Hermes MemoryProvider plugin",
+      "modes": [
+        {
+          "name": "local CLI, TUI and desktop sessions",
+          "checkpointBeforeLoss": "shipped",
+          "lessonsBeforeLoss": "planned",
+          "fixtureEvidence": ["extensions/hermes-memory-provider/tests/test_hippo_sessions.py", "extensions/hermes-memory-provider/tests/test_hippo_global_store.py"],
+          "liveEvidence": []
+        }
+      ],
+      "owner": "maintainer",
+      "nextAction": "Ship hippo hook install hermes, then record one live Hermes session as liveEvidence.",
+      "roadmap": "AZ4"
+    },
+    {
       "id": "pi",
       "checked": "2026-10-03",
       "names": ["Pi"],
