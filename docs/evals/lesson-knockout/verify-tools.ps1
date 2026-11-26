@@ -79,6 +79,14 @@ try {
     Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH $tail) $chain $live } "$([regex]::Escape($tail[0])) is not on the session PATH"
     Restore-Env
   }
+  . "$PSScriptRoot/toolchain.ps1" rust $live
+  $registry=${function:Get-S3xTool}
+  ${function:Get-S3xTool}={ param([string]$Toolchain) $tool=(& $registry $Toolchain).Clone(); $tool.tail='{work}\missing-tail'; $tool }
+  $missingTail=Join-Path ([IO.Path]::GetFullPath($live)) 'missing-tail'
+  if (Test-Path -LiteralPath $missingTail) { throw "Fixture folder $missingTail exists" }
+  Assert-Throws { Assert-SessionPath "$env:PATH;$missingTail" rust $live } "$([regex]::Escape($missingTail)) is missing"
+  ${function:Get-S3xTool}=$registry
+  Restore-Env
   . "$PSScriptRoot/toolchain.ps1" python $live
   Assert-Throws { Assert-SessionPath (Remove-PathEntry $env:PATH @('C:\z0-runs\r4\poetry-2.5.1\Scripts')) python $live } 'poetry-2.5.1.Scripts is not on the session PATH'
   Restore-Env

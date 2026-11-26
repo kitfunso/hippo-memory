@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { findTranscript,listTranscripts } from '../../../scripts/token-eval/records.mjs';
+import { sessionInventory } from './evidence.mjs';
 import { root,roster,guardPaths } from './plan.mjs';
 import { slice } from './slice.mjs';
 
@@ -92,10 +92,9 @@ export function auditApply(attempts,session,livePath) {
   const live=normalize(livePath,root),hits=[];
   let transcripts=0;
   for(const [index,attempt] of attempts.entries()) {
-    const main=findTranscript(win.join(attempt,'home/.claude/projects'),session);
+    const {main,files}=sessionInventory(win.join(attempt,'home/.claude/projects'),session);
     assert(main,'Missing apply transcript in '+attempt);
-    const sub=win.join(win.dirname(main),session,'subagents');
-    for(const file of [main,...listTranscripts(sub)]) {
+    for(const file of files) {
       const result=transcriptHits(file,live);
       if(file===main && index===attempts.length-1) assert(result.assistant,'Incomplete apply transcript '+file);
       transcripts++;

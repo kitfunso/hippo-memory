@@ -22,6 +22,8 @@ try {
   assert.equal(audited(row('pass'),'s','ON',audits,bind),null);
   assert.deepEqual(audited(row('fail',{grader:'crash-guard-1'}),'g','ON',audits,bind),row('fail',{grader:'crash-guard-1'}));
   assert.deepEqual(audited(row('fail',{grader:GUARD}),'r','ON',audits,bind),row('fail',{grader:GUARD}));
+  assert.deepEqual(audited(row('fail',{grader:'crash-guard-2'}),'r','ON',audits,bind),row('fail',{grader:'crash-guard-2'}),
+    'The rows the running A/B collector stamps crash-guard-2 changed meaning');
   assert.equal(audited(null,'r','ON',audits,bind),null);
   assert.throws(()=>audited(row('pass'),'r','ON',audits,bind),/no crash audit record/);
   assert.throws(()=>audited(row('pass',{grader:'crash-guard-0'}),'p','ON',audits,bind),/Unknown grader stamp/);
@@ -50,6 +52,7 @@ try {
   for(const state of ['timeout','signal','error','wrapper-error','exit'])
     assert.equal(classify(fault({guard:GUARD,state})),'error',state);
   assert.equal(classify(fault({guard:'crash-guard-1',state:'crash'})),'error');
+  assert.equal(classify(fault({forged:{guard:GUARD,state:'crash'}})),'error');
   assert.equal(classify(fault(null)),'error');
   assert.equal(classify(()=>{ throw Error('checker crashed: imitation'); }),'error');
   const seen=[];

@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { APPARATUS,hash,read,root } from './plan.mjs';
-import { findTranscript } from '../../../scripts/token-eval/records.mjs';
+import { listTranscripts } from '../../../scripts/token-eval/records.mjs';
 
 const GATED_TOOLS=new Set(['Edit','Write','MultiEdit','NotebookEdit','Bash','PowerShell','Read','Glob','Grep']);
-const MAIN_SOURCE='sdk';
 const rowsOf=file=>fs.readFileSync(file,'utf8').split(/\r?\n/).filter(line=>line.trim()).map(line=>JSON.parse(line));
 const promptText=content=>typeof content==='string' ? content :
   Array.isArray(content) ? content.filter(b=>b.type==='text').map(b=>b.text).join('') : null;
@@ -39,26 +38,64 @@ const pairOf=r=>r.request_id+'\n'+r.message_id;
 export const sourceKind=s=>typeof s!=='string' || !s ? null :
   s.startsWith('repl_main_thread') || s==='sdk' ? 'main' : s.startsWith('agent:') || s==='hook_agent' ? 'subagent' : 'auxiliary';
 const replayed=s=>['main','subagent'].includes(sourceKind(s));
-const jsonl=dir=>fs.existsSync(dir)?fs.readdirSync(dir).filter(f=>f.endsWith('.jsonl')).sort().map(f=>path.join(dir,f)):[];
-const ownSubagents=(transcript,sid)=>jsonl(path.join(path.dirname(transcript),sid,'subagents'));
-const anySubagents=(projects,sid)=>fs.existsSync(projects) ?
-  fs.readdirSync(projects).sort().flatMap(p=>jsonl(path.join(projects,p,sid,'subagents'))) : [];
-function callRows(main,subs,prompt) {
-  if(!main || !fs.existsSync(main)) return null;
-  const rows=rowsOf(main),start=promptStart(rows,prompt);
-  if(start<0) return null;
-  const since=rows[start].timestamp;
-  const later=r=>since===undefined || (typeof r.timestamp==='string' && r.timestamp>=since);
-  return {rows:rows.slice(start),sub:subs.flatMap(rowsOf).filter(later)};
+export function sessionInventory(projects,sid) {
+  const files=listTranscripts(projects).map(f=>path.resolve(f)).sort();
+  const parts=f=>path.relative(path.resolve(projects),f).split(path.sep);
+  const mains=files.filter(f=>{ const p=parts(f); return p.length===2 && p[1]===sid+'.jsonl'; });
+  const subs=files.filter(f=>{ const p=parts(f); return p.length===4 && p[1]===sid && p[2]==='subagents'; });
+  return {main:mains.length===1?mains[0]:null,subs,files};
 }
-function covers(have,need) {
-  const left=[...have];
-  return need.every(s=>{
-    const i=left.indexOf(s);
+const apiRows=rows=>rows.filter(r=>r.type==='api-request');
+function callRows(inventory,prompt) {
+  if(!inventory?.main) return null;
+  const rows=rowsOf(inventory.main),start=promptStart(rows,prompt);
+  if(start<0 || typeof rows[start].timestamp!=='string') return null;
+  const since=rows[start].timestamp,sub=apiRows(inventory.subs.flatMap(rowsOf));
+  if(sub.some(r=>typeof r.timestamp!=='string')) return null;
+  return {rows:rows.slice(start),sub:sub.filter(r=>r.timestamp>=since),chain:[...apiRows(rows),...sub]};
+}
+const canon=v=>v===null || typeof v!=='object' ? JSON.stringify(v)??'null' :
+  Array.isArray(v) ? '['+v.map(canon).join(',')+']' :
+  '{'+Object.keys(v).sort().filter(k=>v[k]!==undefined && k!=='cache_control').map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}';
+const billing=b=>typeof b?.text==='string' && b.text.startsWith('x-anthropic-billing-header:');
+export const shapeOf=body=>{
+  const system=Array.isArray(body.system)?body.system.filter(b=>!billing(b)):body.system;
+  return hash(canon({...(system!==undefined && {system}),...(body.tools!==undefined && {tools:body.tools})}));
+};
+const unredacted=m=>m.role==='assistant' && Array.isArray(m.content) ?
+  {...m,content:m.content.map(b=>b.type==='thinking' && b.thinking==='<REDACTED>' ? {...b,thinking:''} : b)} : m;
+export const messageHash=m=>hash(canon(typeof m.content==='string' ? {...m,content:[{type:'text',text:m.content}]} : unredacted(m)));
+const bodyKey=body=>shapeOf(body)+':'+body.messages.map(messageHash).join(',');
+function rowKeys(chain) {
+  const byId=new Map(chain.map(r=>[r.id,r])),memo=new Map();
+  const hashes=(r,seen=new Set())=>{
+    if(memo.has(r)) return memo.get(r);
+    if(seen.has(r) || !Array.isArray(r.tail)) return null;
+    seen.add(r);
+    const base=r.base!==undefined && byId.has(r.base) ? hashes(byId.get(r.base),seen) : [];
+    const all=base && [...base.slice(0,r.keep),...r.tail];
+    memo.set(r,all);
+    return all;
+  };
+  return r=>{
+    const all=typeof r.shapeHash==='string' ? hashes(r) : null;
+    return all && r.shapeHash+':'+all.join(',');
+  };
+}
+function bind(api,chain,bodies,source) {
+  const keyOf=rowKeys(chain),free=[...bodies].map(([name,body])=>({name,key:bodyKey(body)})),bound=new Set();
+  const take=(key,fits)=>{
+    const i=free.findIndex(b=>b.key===key && fits(b));
     if(i<0) return false;
-    left.splice(i,1);
+    bound.add(free[i].name);
+    free.splice(i,1);
     return true;
+  };
+  const all=api.every(r=>{
+    const key=keyOf(r);
+    return !!key && (take(key,b=>source.get(b.name)===r.querySource) || take(key,b=>!source.has(b.name)));
   });
+  return all && [...source].every(([name,s])=>!replayed(s) || bound.has(name));
 }
 const indexRows=dir=>{
   const index=path.join(dir,'index.jsonl');
@@ -70,14 +107,13 @@ const valid=b=>Array.isArray(b?.messages) && !!b.system && !b.not_recorded;
 function ledger(dir,sid,call) {
   const names=requestNames(dir),rows=indexRows(dir),files=new Set(names),indexed=rows.map(r=>r.request_file);
   const bodies=new Map(names.map(n=>[n,read(path.join(dir,n))]));
-  const api=call?[...call.rows,...call.sub].filter(r=>r.type==='api-request'):[];
-  const eligible=rows.filter(r=>replayed(r.query_source)).map(r=>r.query_source);
+  const api=call?[...apiRows(call.rows),...call.sub]:[];
   const ok=!!call && new Set(indexed).size===indexed.length &&
     rows.every(r=>r.session_id===sid && sourceKind(r.query_source) && ownFile(r.request_file) && ownFile(r.response_file) &&
       files.has(r.request_file) && fs.existsSync(path.join(dir,r.response_file))) &&
-    api.every(r=>r.sessionId===sid && replayed(r.querySource)) && covers(api.map(r=>r.querySource),eligible) &&
-    names.length-rows.length>=api.length-eligible.length && names.every(n=>valid(bodies.get(n)));
-  const main=rows.filter(r=>r.query_source===MAIN_SOURCE);
+    api.every(r=>r.sessionId===sid && replayed(r.querySource)) && names.every(n=>valid(bodies.get(n))) &&
+    bind(api,call.chain,bodies,new Map(rows.map(r=>[r.request_file,r.query_source])));
+  const main=rows.filter(r=>sourceKind(r.query_source)==='main');
   const ordered=[...main.map(r=>r.request_file),...names.filter(n=>!main.some(r=>r.request_file===n))];
   return {ok,rows,main,byName:bodies,bodies:ordered.filter(n=>bodies.has(n)).map(n=>bodies.get(n)),unanswered:names.length-rows.length};
 }
@@ -159,7 +195,8 @@ function finalMessageMatches(file,row,result) {
 }
 
 export function evidence(dir,result,notes,lesson,task={},transcript) {
-  const call=transcript && fs.existsSync(transcript) ? callRows(transcript,ownSubagents(transcript,result.session),task.prompt) : null;
+  const inventory=transcript && fs.existsSync(transcript) ? sessionInventory(path.dirname(path.dirname(transcript)),result.session) : null;
+  const call=inventory?.main===path.resolve(transcript ?? '') ? callRows(inventory,task.prompt) : null;
   const l=ledger(dir,result.session,call);
   const last=l.main.at(-1);
   const complete=l.ok && !!last && answered(dir,l.rows,last,r=>finalMessageMatches(transcript,r,result)) &&
@@ -184,8 +221,8 @@ function targetIn(surfaces,lesson,task) {
 
 function archivedAttempt(live,id,sid,prompt,lesson,task) {
   const operator=path.join(path.dirname(live),'operator'),dir=path.join(operator,'bodies',id);
-  const projects=path.join(live,'home/.claude/projects'),transcript=findTranscript(projects,sid);
-  const call=callRows(transcript,anySubagents(projects,sid),prompt),l=ledger(dir,sid,call);
+  const inventory=sessionInventory(path.join(live,'home/.claude/projects'),sid),transcript=inventory.main;
+  const call=callRows(inventory,prompt),l=ledger(dir,sid,call);
   const recordFile=path.join(operator,id+'.json'),record=fs.existsSync(recordFile)?read(recordFile):null;
   const own=record?.session===sid && record.call===id && record.promptSha256===hash(prompt) &&
     record.apparatus===APPARATUS && record.cutOff===true;

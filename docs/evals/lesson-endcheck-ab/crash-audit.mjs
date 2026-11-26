@@ -7,6 +7,7 @@ import { read } from './paths.mjs';
 export const STATUSES=['ran','crash','error','unverifiable'];
 export const auditFile=root=>path.join(root,'crash-audit.jsonl');
 export const AUDITED_GRADERS=[undefined,'crash-guard-1'];
+export const GUARDED_GRADERS=['crash-guard-2',GUARD];
 
 export function readAudits(file) {
   const audits=new Map();
@@ -35,7 +36,7 @@ export function armBinding(base,arm) {
 }
 
 export function audited(row,pair,arm,audits,binding) {
-  if(row===null || row.grader===GUARD) return row;
+  if(row===null || GUARDED_GRADERS.includes(row.grader)) return row;
   assert.ok(AUDITED_GRADERS.includes(row.grader),'Unknown grader stamp on the '+arm+' row of '+pair);
   const a=audits.get(pair+' '+arm);
   assert.ok(a,'The unguarded '+arm+' row of '+pair+' has no crash audit record');
