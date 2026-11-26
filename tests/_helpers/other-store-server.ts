@@ -11,11 +11,12 @@ export const requestLine = (key: string): string => key.replace(/:\w+/g, '1');
 // The folder groups, none of which the stub holds.
 const FOLDER_NEEDS: ReadonlySet<string> = new Set(FOLDER_GROUPS);
 
-/** The entries that need hippo.db's folder groups or hippo.db itself, which no store but hippo.db's has. */
 export function localFileRoutes(): string[] {
   return V1_ROWS.filter(
     ({ route }) =>
-      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) || route.hippoDbOnly !== undefined,
+      (route.storeReady !== undefined && FOLDER_NEEDS.has(route.storeReady)) ||
+      route.hippoDbOnly !== undefined ||
+      route.runsSleep === true,
   ).map(({ key }) => requestLine(key));
 }
 
@@ -43,7 +44,7 @@ export interface TestKey {
   record: ApiKeyRecord;
 }
 
-export function newKey(): TestKey {
+export function newKey(role: 'member' | 'admin' = 'member'): TestKey {
   const keyId = `hk_${base32(24)}`;
   const plaintext = `${keyId}.${base32(32)}`;
   const salt = randomBytes(16);
@@ -51,7 +52,7 @@ export function newKey(): TestKey {
   return {
     keyId,
     plaintext,
-    record: { keyHash, tenantId: 'default', revokedAt: null, role: 'member', scopes: [], expiresAt: null },
+    record: { keyHash, tenantId: 'default', revokedAt: null, role, scopes: [], expiresAt: null },
   };
 }
 
