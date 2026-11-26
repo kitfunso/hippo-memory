@@ -15,10 +15,12 @@ export const run = (file,args,cwd,env,opts={}) => execFileSync(file,args,{cwd,en
   encoding:'utf8',stdio:['pipe','pipe','pipe'],maxBuffer:32*1024*1024,...opts});
 export const runSetup = (setup,work,env) => run('cmd.exe',['/d','/s','/c','"'+setup+'"'],work,env,
   {timeout:1800000,windowsVerbatimArguments:true});
-export function poetryCache(dir) {
+function shortSlotDir(kind,dir) {
   const [pair,prep,slot]=path.resolve(dir).split(path.sep).slice(-3);
-  return path.join(root,'pc',pair.slice(0,8)+'-'+prep.slice(-6)+'-'+slot);
+  return path.join(root,kind,pair.slice(0,8)+'-'+prep.slice(-6)+'-'+slot);
 }
+export const poetryCache=dir=>shortSlotDir('pc',dir);
+export const pythonTemp=dir=>shortSlotDir('pt',dir);
 export function privateEnv(dir) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) =>
     /^(SystemRoot|windir|ComSpec|Path|PATHEXT|ProgramFiles(?:\(x86\))?|ProgramW6432|SystemDrive|NUMBER_OF_PROCESSORS|PROCESSOR_ARCHITECTURE)$/i.test(k)));

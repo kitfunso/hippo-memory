@@ -10,7 +10,7 @@ import { cleanPath } from '../../../scripts/token-eval/arms.mjs';
 import net from 'node:net';
 import { setTimeout as wait } from 'node:timers/promises';
 import { binary,boxCheck,corpus,digest,dist,freeze,json,loadPlan,read,revision,root,slice } from './paths.mjs';
-import { checkout,install,poetryCache,privateEnv,run,runSetup,seed } from './prepare.mjs';
+import { checkout,install,poetryCache,privateEnv,pythonTemp,run,runSetup,seed } from './prepare.mjs';
 import { schedule } from './design.mjs';
 import { GUARD,guardedRun } from '../checker-guard/lesson.mjs';
 import { AUDITED_GRADERS,armBinding,auditCalls,audited,auditFile,boundIntent,readAudits } from './crash-audit.mjs';
@@ -47,7 +47,8 @@ function toolEnv(u,dir,initial=true) {
   env.EVAL_SEED=String(u.seed);
   if(u.toolchain==='python') {
     env.POETRY_CACHE_DIR=poetryCache(dir);
-    fs.mkdirSync(env.POETRY_CACHE_DIR,{recursive:true});
+    env.TEMP=env.TMP=pythonTemp(dir);
+    for(const d of [env.POETRY_CACHE_DIR,env.TEMP]) fs.mkdirSync(d,{recursive:true});
   }
   if(initial && u.toolchain==='python') run('python',['-m','venv',path.join(dir,'venv')],dir,env);
   return env;

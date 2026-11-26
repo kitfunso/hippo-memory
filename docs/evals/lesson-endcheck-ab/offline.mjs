@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {poetryCache,privateEnv,run,runSetup} from './prepare.mjs';
-import {root} from './paths.mjs';
+import {poetryCache,privateEnv,pythonTemp,run,runSetup} from './prepare.mjs';
+import {root as abRoot} from './paths.mjs';
 import {upperNet} from './safety.mjs';
 import {verifyBoxCheck} from './pins.mjs';
 
@@ -114,4 +114,10 @@ export function checkSetup(root) {
   const artifact=path.join('artifacts','ef','37','56','47464454e2b8c4410c3a9c89fbc49886dc1150b292e5e42d303317bc59',
     'winrt_Windows.Devices.Bluetooth.GenericAttributeProfile-2.3.0-cp312-cp312-win_amd64.whl');
   assert.ok(path.join(poetryCache(slot),artifact).length<=230,'Poetry cache path too long for MAX_PATH');
+  const deep=path.join(abRoot,'trial','474001ee-2d3c-4db2-8c72-a1f2c6324fad-2','prep-jqHLmx','s1');
+  const built=path.join('pip-ephem-wheel-cache-kawc9mj4','wheels','37','5b','68','751360ba86b3619daf4e50db5206f6c7915762abadcbe36f08',
+    'tmpcl2htrsk','.tmp-75xu4jm_','haindy-0.8.1.dist-info','dependency_links.txt');
+  assert.ok(path.join(deep,'tmp',built).length>=260,'The fixture no longer reproduces the 26 Nov setup path');
+  assert.ok(path.join(pythonTemp(deep),built).length<=230,'Python temp path too long for MAX_PATH');
+  assert.notEqual(pythonTemp(deep),pythonTemp(path.join(path.dirname(deep),'s2')),'Python slots share a temp folder');
 }
