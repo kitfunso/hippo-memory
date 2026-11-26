@@ -463,6 +463,7 @@ server.d.ts: CallerSessionEndRequest re-export
 server.d.ts: CallerSessionEndResult re-export
 server.d.ts: CaptureContext re-export
 server.d.ts: ConflictError re-export
+server.d.ts: ConnectorCommandContext re-export
 server.d.ts: Context re-export
 server.d.ts: DetachedWork re-export
 server.d.ts: ForbiddenError re-export
@@ -509,6 +510,7 @@ server.d.ts: ownerOrSubject re-export
 server.d.ts: preCompactForCaller re-export
 server.d.ts: promptHookContext re-export
 server.d.ts: roleFromGroups re-export
+server.d.ts: runConnectorCommand function
 server.d.ts: saveCompactionItemsForCaller re-export
 server.d.ts: serve re-export
 server.d.ts: sessionEndHandoffForCaller re-export

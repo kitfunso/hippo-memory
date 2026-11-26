@@ -1,7 +1,14 @@
 import type { FullContext } from '../_helpers/api-ctx.js';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { parkInDlq, listDlq } from '../../src/surface/connectors/dlq.js';
-import { githubDlq, replayGithubDlqEntry, type DlqBucket } from '../../src/surface/connectors/github/dlq.js';
+import {
+  githubDlq,
+  replayGithubDlqEntry,
+  type DlqBucket,
+  type IngestHook,
+} from '../../src/surface/connectors/github/dlq.js';
+import type { ConnectorContext } from '../../src/surface/connectors/ingest.js';
+import type { RouteQuery, TenantRoute } from '../../src/base/ports/store/connectors.js';
 import { sqliteStore } from '../../src/store/sqlite/store.js';
 import { apiCtx } from '../_helpers/api-ctx.js';
 import { makeRoot } from '../_helpers/make-root.js';
@@ -238,5 +245,149 @@ describe('github DLQ', () => {
       retryCount: 0,
     });
     expect((await store.connectorEvents.deadLetters('github', 'acme', { id: acmes }))[0]?.retryCount).toBe(0);
+  });
+
+  const envelope = (installationId: number, repo: string): string =>
+    JSON.stringify({
+      action: 'opened',
+      repository: { full_name: repo },
+      installation: { id: installationId },
+    });
+
+  function parkEnvelope(
+    body: string,
+    columns: { installationId: string | null; repoFullName: string | null },
+  ): Promise<number> {
+    return parkInDlq(githubDlq, sqliteStore(root), {
+      tenantId: 'default',
+      rawPayload: body,
+      error: 'unroutable',
+      bucket: 'unroutable',
+      eventName: 'issues',
+      deliveryId: 'd-1',
+      ...columns,
+    });
+  }
+
+  function recordingHook() {
+    const seen: ConnectorContext[] = [];
+    const ingestHook: IngestHook = async (hookCtx) => {
+      seen.push(hookCtx);
+      return { memoryId: 'mem-1' };
+    };
+    return { ingestHook, seen };
+  }
+
+  function routedBy(answer: TenantRoute) {
+    const asked: RouteQuery[] = [];
+    const route = async (query: RouteQuery): Promise<TenantRoute> => {
+      asked.push(query);
+      return answer;
+    };
+    const store = { ...ctx.store, connectorEvents: { ...ctx.store.connectorEvents, route } };
+    return { routed: { ...ctx, store }, asked };
+  }
+
+  const ACME: TenantRoute = { tenantId: 'acme' };
+  const OTHER_INSTALLATION_ONLY: TenantRoute = { tenantId: null, routes: 1 };
+
+  const retryCountOf = async (id: number): Promise<number | undefined> =>
+    (await sqliteStore(root).connectorEvents.deadLetters('github', 'default', { id }))[0]?.retryCount;
+
+  it("replays into the tenant today's routes name for the payload's installation, under the caller's actor", async () => {
+    const { routed, asked } = routedBy(ACME);
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(routed, id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: true, status: 'replayed', memoryId: 'mem-1' });
+    expect(asked).toEqual([{ connector: 'github', installationId: '42', repoFullName: 'octo/repo' }]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.tenantId).toBe('acme');
+    expect(seen[0]?.actor).toBe(ctx.actor);
+  });
+
+  it('routes from the payload, not from the columns a raw park took by regex', async () => {
+    const { routed, asked } = routedBy(ACME);
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '7', repoFullName: 'fork/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    await replayGithubDlqEntry(routed, id, { ingestHook });
+
+    expect(asked).toEqual([{ connector: 'github', installationId: '42', repoFullName: 'octo/repo' }]);
+    expect(seen.map((c) => c.tenantId)).toEqual(['acme']);
+  });
+
+  it("leaves a row unroutable when routes exist and none match, naming the payload's installation and repository", async () => {
+    const { routed } = routedBy(OTHER_INSTALLATION_ONLY);
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(routed, id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: false, status: 'unroutable', retryCount: 1 });
+    expect(result.reason).toContain('42');
+    expect(result.reason).toContain('octo/repo');
+    expect(seen).toEqual([]);
+    expect(await retryCountOf(id)).toBe(1);
+  });
+
+  it("replays an unmatched row into the caller's tenant when the unknown-installation fallback is set", async () => {
+    const { routed } = routedBy(OTHER_INSTALLATION_ONLY);
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(routed, id, { ingestHook, allowUnknownInstallationFallback: true });
+
+    expect(result).toMatchObject({ ok: true, status: 'replayed' });
+    expect(seen.map((c) => c.tenantId)).toEqual(['default']);
+  });
+
+  it('answers unroutable on a dry run, not replayed, for a row no route matches', async () => {
+    const { routed } = routedBy(OTHER_INSTALLATION_ONLY);
+    const id = await parkEnvelope(envelope(42, 'octo/repo'), { installationId: '42', repoFullName: 'octo/repo' });
+
+    const result = await replayGithubDlqEntry(routed, id);
+
+    expect(result).toMatchObject({ ok: false, status: 'unroutable' });
+  });
+
+  it.each([
+    ['a boolean repository name', { repository: { full_name: true } }],
+    ['an empty repository name', { repository: { full_name: '' } }],
+    ['an installation id that is an object', { installation: { id: {} } }],
+    ['an empty installation id', { installation: { id: '' } }],
+  ] as const)(
+    'counts a replay of a payload with %s as unhandled, asks the store for no route and ingests nothing',
+    async (_label, part) => {
+      const { routed, asked } = routedBy(ACME);
+      const id = await parkEnvelope(JSON.stringify({ action: 'opened', ...part }), {
+        installationId: null,
+        repoFullName: null,
+      });
+      const { ingestHook, seen } = recordingHook();
+
+      const result = await replayGithubDlqEntry(routed, id, { ingestHook });
+
+      expect(result).toMatchObject({ ok: false, status: 'unhandled', retryCount: 1 });
+      expect(asked).toEqual([]);
+      expect(seen).toEqual([]);
+      expect(await retryCountOf(id)).toBe(1);
+    },
+  );
+
+  it('counts a replay of a payload with a non-string repository name as unhandled on the real store, and ingests nothing', async () => {
+    const id = await parkEnvelope(JSON.stringify({ action: 'opened', repository: { full_name: true } }), {
+      installationId: null,
+      repoFullName: null,
+    });
+    const { ingestHook, seen } = recordingHook();
+
+    const result = await replayGithubDlqEntry(ctx, id, { ingestHook });
+
+    expect(result).toMatchObject({ ok: false, status: 'unhandled', retryCount: 1 });
+    expect(seen).toEqual([]);
+    expect(await retryCountOf(id)).toBe(1);
   });
 });

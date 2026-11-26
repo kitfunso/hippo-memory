@@ -10,6 +10,7 @@ import {
   type GitHubPullRequestEvent,
   type GitHubPullRequestReviewCommentEvent,
 } from '../../src/surface/connectors/github/types.js';
+import type { JsonObject } from '../../src/base/util/json.js';
 
 const repo = {
   full_name: 'octo/hello',
@@ -29,6 +30,37 @@ describe('github envelope', () => {
     expect(isGitHubWebhookEnvelope(null)).toBe(false);
     expect(isGitHubWebhookEnvelope('opened')).toBe(false);
     expect(isGitHubWebhookEnvelope({})).toBe(false);
+  });
+
+  const withRouting = (part: JsonObject): JsonObject => ({ action: 'opened', ...part });
+
+  it.each<[string, JsonObject]>([
+    ['no installation and no repository', {}],
+    ['a null installation', { installation: null }],
+    ['an installation with no id', { installation: {} }],
+    ['an installation with a null id', { installation: { id: null } }],
+    ['a numeric installation id', { installation: { id: 42 } }],
+    ['a string installation id', { installation: { id: '42' } }],
+    ['a repository with a name', { repository: repo, installation: { id: 42 } }],
+  ])('accepts an action with %s', (_label, part) => {
+    expect(isGitHubWebhookEnvelope(withRouting(part))).toBe(true);
+  });
+
+  it.each<[string, JsonObject]>([
+    ['an installation that is a string', { installation: 'x' }],
+    ['an installation that is an array', { installation: [] }],
+    ['an installation id that is an object', { installation: { id: {} } }],
+    ['an installation id that is an array', { installation: { id: [] } }],
+    ['an installation id that is a boolean', { installation: { id: true } }],
+    ['an empty installation id', { installation: { id: '' } }],
+    ['a repository that is a string', { repository: 'octo/hello' }],
+    ['a null repository', { repository: null }],
+    ['a repository that is an array', { repository: [] }],
+    ['a repository with no name', { repository: {} }],
+    ['a repository name that is a boolean', { repository: { full_name: true } }],
+    ['an empty repository name', { repository: { full_name: '' } }],
+  ])('rejects an action with %s', (_label, part) => {
+    expect(isGitHubWebhookEnvelope(withRouting(part))).toBe(false);
   });
 });
 

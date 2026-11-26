@@ -38,6 +38,7 @@ import { NO_TRUSTED_USER_IDS } from './transform.js';
 import { handleCommentDeleted as handleGitHubCommentDeleted } from './deletion.js';
 import { parkInDlq } from '../dlq.js';
 import { githubDlq, type DlqBucket } from './dlq.js';
+import { routingOf, type DlqRouting } from './routing.js';
 import { resolveTenant } from '../tenant-route.js';
 import { computeDeletionKey as computeGitHubDeletionKey } from './signature.js';
 import { HttpError } from '../../../base/errors/http-errors.js';
@@ -234,11 +235,6 @@ interface SignedDelivery extends WebhookPorts {
   signature: string;
 }
 
-interface DlqRouting {
-  installationId: string | null;
-  repoFullName: string | null;
-}
-
 async function parkAndAck(
   d: SignedDelivery,
   park: DlqRouting & { tenantId: string | null; error: string; bucket: DlqBucket },
@@ -256,13 +252,6 @@ async function parkAndAck(
   };
   await parkInDlq(githubDlq, d.store, row);
   sendJson(d.res, 200, { ok: true, status: 'dlq' });
-}
-
-function routingOf(body: SignedEnvelope): DlqRouting {
-  return {
-    installationId: body.installation?.id != null ? String(body.installation.id) : null,
-    repoFullName: body.repository?.full_name ?? null,
-  };
 }
 
 let warnedEnterpriseUnset = false;

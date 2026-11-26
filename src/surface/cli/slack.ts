@@ -20,17 +20,17 @@ import { printError } from './output.js';
 import { printSlackBackfillUsage, printSlackWorkspacesUsage } from './usage.js';
 import { type CliFlags, stringFlag, type CommandContext } from './flag-values.js';
 import { runDlqReplay } from './dlq-replay.js';
-import { cliApiContext, cliStore } from './api-context.js';
+import { CLI_ACTOR } from '../../base/scope/actor.js';
+import { cliConnectorSource, type ConnectorSource } from './connector-source.js';
 import { CliExit, fail } from './exit.js';
 import { errorMessage } from '../../base/util/log.js';
 
-async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlags): Promise<void> {
+async function backfillSlack(source: ConnectorSource, flags: CliFlags): Promise<void> {
   const channel = stringFlag(flags, 'channel');
   if (!channel) {
     printSlackBackfillUsage();
     throw new CliExit(1);
   }
-  // Real fetcher requires SLACK_BOT_TOKEN with channels:history scope.
   const token = envSlackBotToken();
   if (!token) {
     printError(
@@ -38,16 +38,11 @@ async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlag
     );
     throw new CliExit(2);
   }
-  // The slack_cursors row drives resume, so the loop always continues where it left off (keeps
-  // idempotency clean).
   if (stringFlag(flags, 'since')) {
     printError('note: --since is ignored; the backfill resumes from the saved cursor.');
   }
   const fetcher = slackHistoryFetcher(token);
-  const ctx = {
-    ...cliApiContext(hippoRoot, tenantId),
-    actor: api.adminActor('cli:slack-backfill'),
-  };
+  const ctx = source.context(api.adminActor('cli:slack-backfill'));
   try {
     const r = await backfillChannel(ctx, {
       teamId: envSlackTeamId() ?? 'T_UNKNOWN',
@@ -61,20 +56,19 @@ async function backfillSlack(hippoRoot: string, tenantId: string, flags: CliFlag
   }
 }
 
-async function listSlackDlq(hippoRoot: string, tenantId: string, _flags: CliFlags): Promise<void> {
-  const items = await listDlq(slackDlq, cliStore(hippoRoot), { tenantId });
+async function listSlackDlq(source: ConnectorSource): Promise<void> {
+  const items = await listDlq(slackDlq, source.store(), { tenantId: source.tenantId });
   for (const it of items) {
     console.log(`${it.id}\t${it.receivedAt}\t${it.error}`);
   }
 }
 
 async function replaySlackDlq(
-  hippoRoot: string,
-  tenantId: string,
-  args: string[],
+  source: ConnectorSource,
+  args: readonly string[],
   flags: CliFlags,
 ): Promise<void> {
-  const ctx = cliApiContext(hippoRoot, tenantId);
+  const ctx = source.context(api.adminActor(CLI_ACTOR));
   await runDlqReplay('slack', args[2], flags, (id, force) =>
     replaySlackDlqEntry(ctx, id, {
       force,
@@ -84,18 +78,18 @@ async function replaySlackDlq(
   );
 }
 
-async function registerSlackWorkspace(hippoRoot: string, flags: CliFlags): Promise<void> {
+async function registerSlackWorkspace(source: ConnectorSource, flags: CliFlags): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   const tenantId = (stringFlag(flags, 'tenant') ?? '').trim();
   if (!teamId || !tenantId) {
     fail('Usage: hippo slack workspaces add --team <T> --tenant <t>');
   }
-  const ws = await addSlackWorkspace(cliStore(hippoRoot), { teamId, tenantId });
+  const ws = await addSlackWorkspace(source.store(), { teamId, tenantId });
   console.log(`added: ${ws.teamId} -> ${ws.tenantId} (${ws.addedAt})`);
 }
 
-async function printSlackWorkspaces(hippoRoot: string): Promise<void> {
-  const items = await listSlackWorkspaces(cliStore(hippoRoot));
+async function printSlackWorkspaces(source: ConnectorSource): Promise<void> {
+  const items = await listSlackWorkspaces(source.store());
   if (items.length === 0) {
     console.log('(no registered workspaces; routing via HIPPO_TENANT fallback)');
     return;
@@ -105,49 +99,48 @@ async function printSlackWorkspaces(hippoRoot: string): Promise<void> {
   }
 }
 
-async function unregisterSlackWorkspace(hippoRoot: string, flags: CliFlags): Promise<void> {
+async function unregisterSlackWorkspace(source: ConnectorSource, flags: CliFlags): Promise<void> {
   const teamId = (stringFlag(flags, 'team') ?? '').trim();
   if (!teamId) {
     fail('Usage: hippo slack workspaces remove --team <T>');
   }
-  const removed = await removeSlackWorkspace(cliStore(hippoRoot), teamId);
+  const removed = await removeSlackWorkspace(source.store(), teamId);
   if (!removed) {
     fail(`no workspace registered for team ${teamId}`);
   }
   console.log(`removed: ${teamId}`);
 }
 
-export async function handleSlack({
-  hippoRoot,
-  tenantId,
-  args,
-  flags,
-}: CommandContext): Promise<void> {
+export async function runSlack(
+  source: ConnectorSource,
+  args: readonly string[],
+  flags: CliFlags,
+): Promise<void> {
   const sub = args[0];
   if (sub === 'backfill') {
-    await backfillSlack(hippoRoot, tenantId, flags);
+    await backfillSlack(source, flags);
     return;
   }
   if (sub === 'dlq' && args[1] === 'list') {
-    await listSlackDlq(hippoRoot, tenantId, flags);
+    await listSlackDlq(source);
     return;
   }
   if (sub === 'dlq' && args[1] === 'replay') {
-    await replaySlackDlq(hippoRoot, tenantId, args, flags);
+    await replaySlackDlq(source, args, flags);
     return;
   }
   if (sub === 'workspaces') {
     const action = args[1];
     if (action === 'add') {
-      await registerSlackWorkspace(hippoRoot, flags);
+      await registerSlackWorkspace(source, flags);
       return;
     }
     if (action === 'list') {
-      await printSlackWorkspaces(hippoRoot);
+      await printSlackWorkspaces(source);
       return;
     }
     if (action === 'remove') {
-      await unregisterSlackWorkspace(hippoRoot, flags);
+      await unregisterSlackWorkspace(source, flags);
       return;
     }
     printSlackWorkspacesUsage();
@@ -156,4 +149,8 @@ export async function handleSlack({
   fail(
     'Usage: hippo slack <backfill|dlq list|dlq replay <id> [--force]|workspaces add|workspaces list|workspaces remove> [...]',
   );
+}
+
+export function handleSlack({ hippoRoot, tenantId, args, flags }: CommandContext): Promise<void> {
+  return runSlack(cliConnectorSource(hippoRoot, tenantId), args, flags);
 }
