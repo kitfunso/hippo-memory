@@ -2,6 +2,7 @@
     --budget <n>           Token budget for the whole printed block (default: 4000)
     --min-results <n>      Minimum results regardless of budget (default: 1)
     --json                 Output as JSON
+    --global               Search only the global store ($HIPPO_HOME or ~/.hippo/), never the project's
     --why                  Show match reasons and source annotations
     --include-superseded   Also return memories a newer version replaced
     --as-of <iso-date>     Return the memories that were current on that date

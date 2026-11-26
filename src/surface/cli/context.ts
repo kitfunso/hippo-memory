@@ -53,6 +53,7 @@ import {
   payloadCwdRoot,
   inPilotHoldout,
 } from './hook-runtime.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 
 type PrintContextOptions = Omit<RenderContextOptions, 'rec'>;
 
@@ -376,7 +377,8 @@ export async function handleContext({
   // Bounded, not a TTY guard: the hot stdin path and a manual run share this one command.
   const { text: stdinText } = await readHookStdin();
   const root = payloadCwdRoot(hippoRoot, stdinText, hookRuntime(flags));
+  const storeRoot = boolFlag(flags, 'global') ? hippoHomeDir() : hookStoreRoot(root);
   await cliHookRequest(() =>
-    printContext({ hippoRoot: hookStoreRoot(root), tenantId, args, flags, stdinText }),
+    printContext({ hippoRoot: storeRoot, tenantId, args, flags, stdinText }),
   );
 }

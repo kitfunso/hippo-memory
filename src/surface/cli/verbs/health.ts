@@ -138,13 +138,14 @@ export const HEALTH_VERBS = {
     readOnly: 'refuse',
     repairsCodexWrapper: true,
     scoped: true,
-    flags: { switches: ['bad', 'good'], values: ['id'] },
+    flags: { switches: ['bad', 'global', 'good'], lists: ['id'] },
     usage: [
       `
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
-    --id <id>              Target a specific memory`,
+    --id <id>              Target a specific memory (repeatable)
+    --global               Apply to the global store ($HIPPO_HOME or ~/.hippo/)`,
     ],
   }),
   conflicts: verb(() => import('../conflicts.js'), 'handleConflicts', {

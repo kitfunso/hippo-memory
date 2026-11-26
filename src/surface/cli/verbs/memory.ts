@@ -101,6 +101,7 @@ export const MEMORY_VERBS = {
         'equal-sources',
         'evc-adaptive',
         'filter-conflicts',
+        'global',
         'graph-stream',
         'include-superseded',
         'json',
@@ -134,6 +135,7 @@ export const MEMORY_VERBS = {
     --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_RECALL_BUDGET})
     --min-results <n>      Minimum results regardless of budget (default: ${DEFAULT_MIN_RESULTS})
     --json                 Output as JSON
+    --global               Search only the global store ($HIPPO_HOME or ~/.hippo/), never the project's
     --why                  Show match reasons and source annotations
     --include-superseded   Also return memories a newer version replaced
     --as-of <iso-date>     Return the memories that were current on that date
@@ -287,7 +289,7 @@ export const MEMORY_VERBS = {
   context: verb(() => import('../context.js'), 'handleContext', {
     repairsCodexWrapper: true,
     flags: {
-      switches: ['auto', 'cross-project', 'pinned-only'],
+      switches: ['auto', 'cross-project', 'global', 'pinned-only'],
       values: ['budget', 'format', 'framing', 'include-recent', 'runtime', 'scope'],
       numbers: ['limit'],
     },
@@ -297,6 +299,7 @@ export const MEMORY_VERBS = {
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_CONTEXT_BUDGET})
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --global               Read only the global store ($HIPPO_HOME or ~/.hippo/), never the project's
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
     --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),

@@ -2,6 +2,7 @@
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget for the whole printed block (default: 1500)
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --global               Read only the global store ($HIPPO_HOME or ~/.hippo/), never the project's
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)
     --format <fmt>         Output format: markdown (default), json, additional-context (Claude Code hook JSON),
