@@ -14,6 +14,7 @@ const BOM = '\uFEFF';
 
 export interface McpConfigHost {
   readonly key: 'mcpServers' | 'servers' | 'mcp_servers';
+  readonly altKey?: 'mcpServers';
   readonly subsetMatch?: true;
   seed?(): JsonObject;
   server(): JsonObject;
@@ -38,6 +39,7 @@ const MUSE_NEEDS_SCHEMA = 'has no "schema_version", which Muse Code needs; add "
 
 const MUSE_CODE_MCP: McpConfigHost = {
   key: 'mcp_servers',
+  altKey: 'mcpServers',
   seed: () => ({ schema_version: 1 }),
   server: () => ({ transport: 'stdio', command: hippoCommand(), args: ['mcp'], mode: 'optional' }),
   invalid: (config) => (config.schema_version === undefined ? MUSE_NEEDS_SCHEMA : null),
@@ -98,14 +100,19 @@ export function mcpServerSnippet(host: McpConfigHost): string {
 
 export interface McpConfig {
   readonly config: JsonObject;
+  readonly key: McpConfigHost['key'];
   readonly servers: JsonObject;
 }
 
 export function mcpConfigOf(config: JsonValue, host: McpConfigHost): McpConfig | null {
   if (!isJsonObjectLiteral(config)) return null;
-  if (config[host.key] === undefined) config[host.key] = {};
-  const servers = config[host.key];
-  return isJsonObjectLiteral(servers) ? { config, servers } : null;
+  const hasMain = config[host.key] !== undefined;
+  const hasAlt = host.altKey !== undefined && config[host.altKey] !== undefined;
+  if (hasMain && hasAlt) return null;
+  const key = hasAlt && host.altKey !== undefined ? host.altKey : host.key;
+  if (config[key] === undefined) config[key] = {};
+  const servers = config[key];
+  return isJsonObjectLiteral(servers) ? { config, key, servers } : null;
 }
 
 export interface McpMaybeHippo {
@@ -162,7 +169,7 @@ export function removeHippoServer(
     return entryMayRunHippo(existing) ? { maybeHippo: MCP_KEY } : 'user-owned';
   }
   delete read.servers[MCP_KEY];
-  if (Object.keys(read.servers).length === 0) delete read.config[host.key];
+  if (Object.keys(read.servers).length === 0) delete read.config[read.key];
   return 'removed';
 }
 

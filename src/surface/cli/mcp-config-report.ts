@@ -108,8 +108,9 @@ function maybeHippoInstallLines(
       `${head}; if it does not, run \`hippo hook install ${target.name}\` to see the entry to paste`,
     ];
   }
-  const [add, ...snippet] = addIfNoServer(target.format);
-  return [`${head}; if it does not, ${add}`, ...snippet];
+  const [fix, ...snippet] =
+    key === 'hippo' ? snippetLines(target.format, 'replace') : addIfNoServer(target.format);
+  return [`${head}; if it does not, ${fix}`, ...snippet];
 }
 
 export function mcpInstallLines(

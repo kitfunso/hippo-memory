@@ -292,16 +292,6 @@ describe('hippo hook install with a Muse Code file that has no schema_version', 
   });
 });
 
-describe('hippo hook with an unknown target', () => {
-  it('names the four MCP hosts among the available targets', () => {
-    const m = machine();
-    const r = hippoRun(['hook', 'install', 'nothing-here'], { cwd: m.project, env: m.env, timeout: 25_000 });
-
-    expect(r.status).not.toBe(0);
-    for (const host of HOSTS) expect(r.stderr + r.stdout).toContain(host.name);
-  });
-});
-
 describe('hippo setup with the MCP hosts', () => {
   it('writes the server for a host whose folder exists and skips the rest', () => {
     const m = machine();

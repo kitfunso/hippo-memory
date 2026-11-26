@@ -108,15 +108,18 @@ function expectMaybeHippo(host: string, key: string, text: string): void {
   const removed = uninstall(host);
   const row = rowNamed(host);
   const head = `A server named ${JSON.stringify(key)} in ${added.file} may already run hippo; the file is left as it is`;
-  expect(added.status).toEqual({ maybeHippo: key });
-  expect(removed.status).toEqual({ maybeHippo: key });
-  expect(isMcpMaybeHippo(added.status)).toBe(true);
-  expect(isMcpFailure(added.status)).toBe(false);
+  const verb = key === 'hippo' ? 'replace the entry with this ' : 'add ';
+  expect([added.status, removed.status, isMcpMaybeHippo(added.status), isMcpFailure(added.status)]).toEqual([
+    { maybeHippo: key },
+    { maybeHippo: key },
+    true,
+    false,
+  ]);
   expect(mcpInstallLines(added.file, added.status, row, 'none')).toEqual([head]);
   expect(mcpInstallLines(added.file, added.status, row, 'hint')).toEqual([
     `${head}; if it does not, run \`hippo hook install ${host}\` to see the entry to paste`,
   ]);
-  expect(mcpInstallLines(added.file, added.status, row, 'snippet')[0]).toContain(`${head}; if it does not, add `);
+  expect(mcpInstallLines(added.file, added.status, row, 'snippet')[0]).toContain(`${head}; if it does not, ${verb}`);
   expect(mcpRemoveLines(removed.file, removed.status, row)).toEqual([
     `Left ${JSON.stringify(key)} in ${removed.file}: it may run hippo via npx; ` +
       'check whether it starts hippo before removing it by hand',
@@ -144,20 +147,20 @@ describe('the host rows', () => {
     expect(fileOf('muse-code')).toBe(path.join(home, '.config', 'muse', 'settings.json'));
   });
 
-  it('read HOME before the profile folder', () => {
+  it('read HOME and XDG_CONFIG_HOME before default paths', () => {
     const elsewhere: Homes = { home: path.join(home, 'profile'), env: { HOME: home } };
     expect(rowNamed('junie').file(elsewhere)).toBe(fileOf('junie'));
-  });
-
-  it('put Muse Code under XDG_CONFIG_HOME when it is set', () => {
     const xdg = path.join(home, 'xdg');
     const withXdg: Homes = { home, env: { XDG_CONFIG_HOME: xdg } };
     expect(rowNamed('muse-code').file(withXdg)).toBe(path.join(xdg, 'muse', 'settings.json'));
     expect(rowNamed('muse-code').dirs(withXdg)).toEqual([path.join(xdg, 'muse')]);
   });
 
-  it('count a host as present only when one of its folders exists', () => {
+  it('count a host as present only when one of its folders exists, not a file', () => {
     for (const row of MCP_CONFIG_HOSTS) expect(isMcpConfigHostPresent(row, homes)).toBe(false);
+    write(path.join(home, '.junie'), 'not a folder');
+    expect(isMcpConfigHostPresent(rowNamed('junie'), homes)).toBe(false);
+    fs.rmSync(path.join(home, '.junie'));
     fs.mkdirSync(path.join(home, '.gemini'));
     expect(isMcpConfigHostPresent(rowNamed('antigravity'), homes)).toBe(false);
     fs.mkdirSync(path.join(home, '.gemini', 'antigravity-cli'));
@@ -170,12 +173,7 @@ describe('the host rows', () => {
     }
   });
 
-  it('count a file in place of the folder as absent', () => {
-    write(path.join(home, '.junie'), 'not a folder');
-    expect(isMcpConfigHostPresent(rowNamed('junie'), homes)).toBe(false);
-  });
-
-  it('put Grok Build under GROK_HOME when it is set and not blank', () => {
+  it('honor GROK_HOME when set and non-blank, checking and writing only there', () => {
     const grok = path.join(home, 'grok-elsewhere');
     const withGrok: Homes = { home, env: { GROK_HOME: grok } };
     expect(rowNamed('grok-build').file(withGrok)).toBe(path.join(grok, 'config.toml'));
@@ -185,18 +183,12 @@ describe('the host rows', () => {
       expect(rowNamed('grok-build').file(blankHome)).toBe(fileOf('grok-build'));
       expect(rowNamed('grok-build').dirs(blankHome)).toEqual([path.join(home, '.grok')]);
     }
-  });
-
-  it('check GROK_HOME and not ~/.grok for Grok Build when it is set, and write there', () => {
-    const grok = path.join(home, 'grok-elsewhere');
-    const withGrok: Homes = { home, env: { GROK_HOME: grok } };
     fs.mkdirSync(path.join(home, '.grok'));
     expect(isMcpConfigHostPresent(rowNamed('grok-build'), withGrok)).toBe(false);
     fs.mkdirSync(grok);
     expect(isMcpConfigHostPresent(rowNamed('grok-build'), withGrok)).toBe(true);
     expect(installMcpConfigHost(rowNamed('grok-build'), withGrok).status).toBe('added');
-    expect(read(path.join(grok, 'config.toml'))).toBe(TABLE);
-    expect(fs.existsSync(fileOf('grok-build'))).toBe(false);
+    expect([read(path.join(grok, 'config.toml')), fs.existsSync(fileOf('grok-build'))]).toEqual([TABLE, false]);
   });
 
   it('warn about a folder whose check fails, count it as absent and still check the other folders', () => {
@@ -405,8 +397,25 @@ describe('muse-code schema_version', () => {
 
   it('adds nothing when uninstall meets a blank file', () => {
     write(fileOf('muse-code'), '');
-    expect(uninstall('muse-code').status).toBe('absent');
-    expect(read(fileOf('muse-code'))).toBe('');
+    expect([uninstall('muse-code').status, read(fileOf('muse-code'))]).toEqual(['absent', '']);
+  });
+
+  it('reuses legacy mcpServers and refuses files carrying both spellings', () => {
+    const legacy = { schema_version: 1, mcpServers: { theirs: USER_SERVER } };
+    write(fileOf('muse-code'), JSON.stringify(legacy));
+    expect(install('muse-code').status).toBe('added');
+    expect(readJson(fileOf('muse-code'))).toEqual({
+      schema_version: 1,
+      mcpServers: { theirs: USER_SERVER, hippo: SERVER['muse-code'] },
+    });
+    expect([uninstall('muse-code').status, readJson(fileOf('muse-code'))]).toEqual(['removed', legacy]);
+    const both = JSON.stringify({ schema_version: 1, mcp_servers: {}, mcpServers: {} });
+    write(fileOf('muse-code'), both);
+    expect([install('muse-code').status, uninstall('muse-code').status, read(fileOf('muse-code'))]).toEqual([
+      'unreadable',
+      'unreadable',
+      both,
+    ]);
   });
 });
 
@@ -776,23 +785,15 @@ describe('runsHippoMcp and npxMentionsHippo', () => {
 });
 
 describe('a filesystem error on one host file', () => {
-  it.each(['junie', 'grok-build'])('on %s leaves the other hosts installed', (broken) => {
+  it.each(['junie', 'grok-build'])('on %s leaves other hosts installed and reports uninstall failure', (broken) => {
     fs.mkdirSync(fileOf(broken), { recursive: true });
-    const results = MCP_CONFIG_HOSTS.map((row) => installMcpConfigHost(row, homes));
-    for (const result of results) {
-      if (result.name === broken) {
-        expect(isMcpFailure(result.status)).toBe(true);
-        continue;
-      }
-      expect(result.status).toBe('added');
-      expect(fs.statSync(result.file).isFile()).toBe(true);
+    const added = MCP_CONFIG_HOSTS.map((row) => installMcpConfigHost(row, homes));
+    expect(added.filter((r) => isMcpFailure(r.status)).map((r) => r.name)).toEqual([broken]);
+    for (const r of added.filter((r) => r.name !== broken)) {
+      expect([r.status, fs.statSync(r.file).isFile()]).toEqual(['added', true]);
     }
+    const removed = MCP_CONFIG_HOSTS.map((row) => uninstallMcpConfigHost(row, homes));
+    expect(removed.filter((r) => isMcpFailure(r.status)).map((r) => r.name)).toEqual([broken]);
     expect(fs.statSync(fileOf(broken)).isDirectory()).toBe(true);
-  });
-
-  it.each(['junie', 'grok-build'])('on %s is reported by uninstall too', (broken) => {
-    fs.mkdirSync(fileOf(broken), { recursive: true });
-    const results = MCP_CONFIG_HOSTS.map((row) => uninstallMcpConfigHost(row, homes));
-    expect(results.filter((result) => isMcpFailure(result.status)).map((result) => result.name)).toEqual([broken]);
   });
 });
