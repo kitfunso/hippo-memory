@@ -22,7 +22,7 @@ export function sse(model,id,blocks,stop,input) {
   });
   return s+ev('message_delta',{delta:{stop_reason:stop,stop_sequence:null},usage:{output_tokens:5}})+ev('message_stop',{});
 }
-const lastUser=body=>(body.messages??[]).findLast(m=>m.role==='user')?.content;
+const lastUser=body=>Array.isArray(body?.messages) ? body.messages.findLast(m=>m?.role==='user')?.content : undefined;
 const lastText=body=>JSON.stringify(lastUser(body)??'');
 const toolResult=body=>{
   const c=lastUser(body);
@@ -44,7 +44,10 @@ export async function startScriptedApi(ca) {
       protocol:req.socket.alpnProtocol || null,stream:/"stream":true/.test(raw.toString('utf8'))});
     const json=(status,body,extra={})=>{ res.writeHead(status,{'content-type':'application/json','request-id':rid,...extra}); res.end(JSON.stringify(body)); };
     if(req.method!=='POST' || !req.url.startsWith('/v1/messages')) { record('other'); return json(404,{type:'error',error:{type:'not_found_error',message:'scripted'}}); }
-    const body=JSON.parse(raw.toString('utf8')),text=lastText(body),model=body.model;
+    let body=null;
+    try { body=JSON.parse(raw.toString('utf8')); } catch {}
+    if(!body || typeof body!=='object' || Array.isArray(body) || !Array.isArray(body.messages)) { record('malformed'); return json(400,{type:'error',error:{type:'invalid_request_error',message:'malformed'}}); }
+    const text=lastText(body),model=body.model;
     if(req.url.startsWith('/v1/messages/count_tokens')) { record('count'); return json(200,{input_tokens:10}); }
     const stream=(payload,kind,gzip=false)=>{
       record(kind);
