@@ -207,7 +207,8 @@ function hasRetryNote(text) {
 }
 const isRetryRequest=body=>{
   const last=body?.messages?.at(-1);
-  return last?.role==='user' && textBlocks(last.content).some(hasRetryNote);
+  const text=last?.role==='user' ? textBlocks(last.content).at(-1) : null;
+  return typeof text==='string' && hasRetryNote(text);
 };
 export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
   .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
@@ -261,7 +262,7 @@ function priorWords(exchanges,index) {
     if(doneBefore && x.route==='generate' && x.cls==='compaction') {
       const retry=isRetryRequest(x.body),raw=summaryBlock(x.reply,retry),reactiveRaw=reactiveBlock(x.reply);
       const alt=!x.reply?.sse && !retry && reactiveRaw && reactiveRaw!==raw ? reactiveRaw : null;
-      if(raw || reactiveRaw) done.push({at:x.end ?? j,cls:'compaction',raw,reactiveRaw,alt,retry});
+      if(raw || retry) done.push({at:x.end ?? j,cls:'compaction',raw,reactiveRaw,alt,retry});
     }
   }
   done.sort((a,b)=>a.at-b.at);
@@ -287,7 +288,7 @@ function priorWords(exchanges,index) {
   for(const item of done) {
     if(item.cls==='main') { finishRound(); continue; }
     if(item.retry) {
-      const cand=pending!==null ? (taggedSummary(item.reactiveRaw ?? '') ? item : reactiveOnly(pending)) : item;
+      const cand=pending!==null ? (item.raw && taggedSummary(item.reactiveRaw ?? '') ? item : reactiveOnly(pending)) : (item.raw ? item : null);
       pending=null;
       if(cand) applyCand(cand);
     } else {
@@ -302,8 +303,9 @@ function priorWords(exchanges,index) {
   const disputedOf=text=>prior.filter(p=>linePrefix(text,p)).sort((a,b)=>a.length-b.length)[0] ?? null;
   const summaries=[],seen=new Set();
   for(const entry of latest) {
-    const d=disputedOf(entry.text);
-    const item=d ? {text:d,prefix:null} : entry;
+    const top=disputedOf(entry.text) ?? entry.text;
+    const rawShort=entry.prefix ? (disputedOf(entry.prefix) ?? entry.prefix) : null;
+    const item=rawShort && linePrefix(top,rawShort) ? {text:top,prefix:rawShort} : {text:top,prefix:null};
     const key=item.text+'\0'+(item.prefix ?? '');
     if(!seen.has(key)) { seen.add(key); summaries.push(item); }
   }
@@ -402,7 +404,7 @@ export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]},firs
         const full=said.summaries.find(x=>atLine(x.text));
         if(full) {
           opening.push(head+rest.slice(full.text.length));
-          if(full.prefix) ambiguous.push(full.text.slice(full.prefix.length));
+          if(full.prefix) ambiguous.push(head+rest.slice(full.prefix.length));
         } else {
           const pre=said.summaries.find(x=>x.prefix && atLine(x.prefix));
           opening.push(pre ? head+rest.slice(pre.prefix.length) : s);
@@ -494,3 +496,4 @@ export function archivedAudit(archives,id,sid,prompt,lesson,task) {
     archivedTargetText:attempts.some(a=>a.target),archivedPermissions:attempts.every(a=>a.permissions)};
 }
 export const neutralClean=r=>r.targetText===false && r.ambiguous===false && r.archivedTargetText===false && r.archivedUnauditable===0;
+export const smokeClean=(r,arm=r.arm)=>r.requests===1 && r.complete===true && r.hookSeen===true && r.targetText===(arm==='T') && r.ambiguous===false;

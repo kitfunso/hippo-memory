@@ -5,7 +5,7 @@ import { slice,mod } from './slice.mjs';
 import { root,roster,read,pins,folder } from './plan.mjs';
 import { join,mkdir,contents,forkStore,save,inside,resetBuiltIn } from './state.mjs';
 import { launch,openCue } from './delivery.mjs';
-import { evidence } from './evidence.mjs';
+import { evidence,smokeClean } from './evidence.mjs';
 
 const u=roster()[0],unit=join(root,'smoke',u.id),pre=join(unit,'pre'),frozen=read(join(unit,'freeze.json'));
 const [transport='http',token='Z0_SUB_TOKEN']=process.argv.slice(2);
@@ -42,7 +42,7 @@ for(const arm of ['T','N']) {
   fs.renameSync(inside(live),inside(join(proof,arm)));
 }
 console.log(JSON.stringify({previous,results}));
-assert(results.every(r=>r.requests===1 && r.complete && r.hookSeen && r.targetText===(r.arm==='T') && !r.ambiguous),'Delivery gate failed');
+assert(results.every(r=>smokeClean(r)),'Delivery gate failed');
 
 async function productionHook() {
   const {HIPPO_PINNED_INJECT_COMMAND:command}=await mod('surface/hooks-install/rules/shared');

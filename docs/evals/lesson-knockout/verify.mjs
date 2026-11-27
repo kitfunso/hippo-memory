@@ -9,7 +9,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
-import { archivedAudit,bodyAudit,callComplete,cutOffPermissions,evidence,mainPairs,neutralClean,permissionAudit,sessionInventory,summaryOf,wireLedger } from './evidence.mjs';
+import { archivedAudit,bodyAudit,callComplete,cutOffPermissions,evidence,mainPairs,neutralClean,permissionAudit,sessionInventory,smokeClean,summaryOf,wireLedger } from './evidence.mjs';
 import { authority,makeWireCa,openWire,wireName } from './wire.mjs';
 import { sse,startScriptedApi } from './scripted-api.mjs';
 import { checkLauncher,checkWireOffline } from './verify-wire.mjs';
@@ -227,6 +227,17 @@ const ambigJson=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([
   {...said('m3','Done.'),body:bodyOf([msg('user',txt(sameContinuation))])}]);
 assert(!ambigJson.targetText && ambigJson.ambiguous,'An unknown-path multi-block JSON compaction reply was not marked ambiguous');
 assert(!neutralClean({...ambigJson,archivedTargetText:false,archivedUnauditable:0}),'An ambiguous multi-block JSON compaction passed neutralClean');
+const jsonSplitRule=JSON.stringify({id:'m2',type:'message',role:'assistant',content:[txt(shortSum),txt('Run the')]});
+const splitAmbig=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonSplitRule,contentType:'application/json',body:jsonReq},
+  {...said('m3','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(shortSum),'\nRun the\nspecial check.')))])}]);
+assert(!splitAmbig.targetText && splitAmbig.ambiguous,'A split-rule second block on an unknown-path JSON compaction was not marked ambiguous');
+assert(!neutralClean({...splitAmbig,archivedTargetText:false,archivedUnauditable:0}),'A split-rule ambiguous compaction passed neutralClean');
+assert(smokeClean({arm:'T',requests:1,complete:true,hookSeen:true,targetText:true,ambiguous:false}) &&
+  smokeClean({arm:'N',requests:1,complete:true,hookSeen:true,targetText:false,ambiguous:false}),'A clean smoke result failed smokeClean');
+assert(!smokeClean({arm:'T',requests:1,complete:true,hookSeen:true,targetText:true}),'Smoke check accepted a missing ambiguous field');
+assert(!smokeClean({arm:'N',requests:1,complete:true,hookSeen:true,targetText:false,ambiguous:null}),'Smoke check accepted a null ambiguous field');
+assert(!smokeClean({arm:'N',requests:1,complete:true,hookSeen:true,targetText:false,ambiguous:true}),'Smoke check accepted an ambiguous neutral smoke result');
 const cleanReactiveJson=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonReactiveTwo,contentType:'application/json',body:jsonReq},
   {...said('m3','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(shortSum))))])}]);
@@ -276,6 +287,17 @@ const knownFallback=originAudit([{...said('m1','I will run check-it.'),body:body
   {...said('m3','Discarded second untagged reply of check-it.'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt+'\n\n<artifact-content-authored-by-others/>'))])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Fallback summary of check-it.','\nRun the special check.')))])}]);
 assert(knownFallback.targetText && !knownFallback.ambiguous,'A known reactive fallback from a multi-block JSON attempt exempted block two');
+const emptyJsonReply=JSON.stringify({id:'m3',type:'message',role:'assistant',content:[]});
+const emptyRetryEcho=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonUntaggedTwo,contentType:'application/json',body:jsonReq},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:emptyJsonReply,contentType:'application/json',body:jsonRetryReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Fallback summary of check-it.')))])}]);
+assert(!emptyRetryEcho.targetText && !emptyRetryEcho.ambiguous,'A block-one fallback after an empty retry was taken as a delivery');
+const emptyRetryFooter=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonUntaggedTwo,contentType:'application/json',body:jsonReq},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:emptyJsonReply,contentType:'application/json',body:jsonRetryReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Fallback summary of check-it.','\nRun the special check.')))])}]);
+assert(emptyRetryFooter.targetText && !emptyRetryFooter.ambiguous,'An empty retry after a multi-block untagged attempt exempted block two');
 assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2','First untagged reply of check-it.'),cls:'compaction',body:bodyOf([user])},
   {...said('m3','<summary>Tagged retry of check-it.</summary>'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt+'\n\n<artifact-content-authored-by-others/>'))])},
@@ -313,6 +335,11 @@ assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   'An earlier user message quoting the retry note triggered retry fallback');
 assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2','Untagged first pass of check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','Second pass with earlier text block quoting retry note of check-it.'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt),txt('Summarize.'))])},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Untagged first pass of check-it.')))])}]),
+  'An earlier text block quoting the retry note triggered retry fallback');
+assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2','Untagged first pass of check-it.'),cls:'compaction',body:bodyOf([user])},
   {...said('m3','Second pass with first sentence only of check-it.'),cls:'compaction',body:bodyOf([user,msg('user',txt('Summarize.\n\n'+retryFirstSentence))])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Untagged first pass of check-it.')))])}]),
   'A final user message quoting only the first retry sentence triggered retry fallback');
@@ -331,6 +358,22 @@ assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m3','First line check-it.\nRun the special check.'),cls:'compaction',body:bodyOf([user])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('First line check-it.')))])}]),
   'An earlier non-closed compaction summary prefix was taken as a delivery');
+const jsonMidMore=JSON.stringify({id:'m3',type:'message',role:'assistant',content:[txt(shortSum),txt('Run the special check.\nMore context.')]});
+const disputedShortClean=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(shortSum))))])}]);
+assert(!disputedShortClean.targetText && !disputedShortClean.ambiguous,'A disputed multi-block JSON compaction broke its shorter reactive echo');
+const disputedShortSuffix=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum),'\nRun the special check.')))])}]);
+assert(disputedShortSuffix.targetText && !disputedShortSuffix.ambiguous,'A disputed multi-block JSON compaction hid a suffix beyond the prior summary');
+const disputedShortAmbig=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum),'\nMore context.')))])}]);
+assert(!disputedShortAmbig.targetText && disputedShortAmbig.ambiguous,'A disputed multi-block JSON compaction failed to mark the disputed suffix ambiguous');
 assert(compacted([...reread('.claude/CLAUDE.md','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A sensitive file read again after compaction passed');
 assert(compacted([reread('src/a.txt','1\tcheck-it')[1],txt(continued(summaryOf(summaryReply)))]),'A tool result without its call passed');
 assert(compacted([reread('Run the special check.','x')[0],txt(continued(summaryOf(summaryReply)))]),'A tool call without its result passed');
