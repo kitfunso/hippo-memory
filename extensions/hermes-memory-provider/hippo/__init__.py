@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from subprocess import Popen
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from agent.memory_provider import MemoryProvider, ctx_bound
 
@@ -148,18 +148,21 @@ def _ignore(_: subprocess.Popen) -> None:
     return None
 
 
-def _child_env() -> Optional[dict[str, str]]:
-    raw = os.environ.get("HIPPO_HOME", "").strip()
+def _child_env(base: Optional[Mapping[str, str]] = None) -> Optional[dict[str, str]]:
+    source = os.environ if base is None else base
+    raw = source.get("HIPPO_HOME", "").strip()
     if not raw:
-        return None
+        return None if base is None else dict(source)
     expanded = Path(raw).expanduser()
-    if expanded.is_absolute():
-        return None
-    return {**os.environ, "HIPPO_HOME": str(expanded.resolve())}
+    resolved = str(expanded if expanded.is_absolute() else expanded.resolve())
+    if resolved == source.get("HIPPO_HOME"):
+        return None if base is None else dict(source)
+    return {**source, "HIPPO_HOME": resolved}
 
 
 def run_hippo(verb: str, args: list[str], text: Optional[str] = None, stdin: Optional[str] = None,
-              on_start: Callable[[subprocess.Popen], None] = _ignore) -> Optional[Result]:
+              on_start: Callable[[subprocess.Popen], None] = _ignore,
+              env: Optional[Mapping[str, str]] = None) -> Optional[Result]:
     try:
         argv = [*launcher(), verb, *args, "--global"]
     except ValueError as exc:
@@ -169,7 +172,7 @@ def run_hippo(verb: str, args: list[str], text: Optional[str] = None, stdin: Opt
         argv += ["--", text]
     try:
         proc = Popen(
-            argv, cwd=str(Path.home()), env=_child_env(),
+            argv, cwd=str(Path.home()), env=_child_env(env),
             stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
@@ -209,8 +212,9 @@ def hook_context(out: Optional[str]) -> str:
     return text if isinstance(text, str) else ""
 
 
-def capture_tenant_ok() -> bool:
-    return os.environ.get("HIPPO_TENANT", "").strip() in ("", "default")
+def capture_tenant_ok(env: Optional[Mapping[str, str]] = None) -> bool:
+    source = os.environ if env is None else env
+    return source.get("HIPPO_TENANT", "").strip() in ("", "default")
 
 
 def opt_in_platforms() -> frozenset[str]:
@@ -532,6 +536,10 @@ class HippoProvider(MemoryProvider):
     def on_session_end(self, messages: list[dict[str, Any]]) -> None:
         if not self._capture_on or not self.allowed("capture"):
             return
+        if not capture_tenant_ok():
+            logger.warning("hippo: capture skipped: HIPPO_TENANT is %s, and capture --global writes the default "
+                           "tenant", os.environ.get("HIPPO_TENANT", "").strip())
+            return
         lines = chat_lines(messages or [])
         if lines:
             self._submit_capture(lines, self._session_id)
@@ -559,11 +567,18 @@ class HippoProvider(MemoryProvider):
     def _capture_job(self, lines: list[dict[str, str]], sid: str) -> None:
         if not self.allowed("capture"):
             return
+        child_env = _child_env(dict(os.environ))
+        if not capture_tenant_ok(child_env):
+            tenant = (child_env or {}).get("HIPPO_TENANT", "").strip()
+            logger.warning("hippo: capture skipped: HIPPO_TENANT is %s, and capture --global writes the default "
+                           "tenant", tenant)
+            return
         try:
             with tempfile.TemporaryDirectory(prefix="hippo-hermes-") as tmp:
                 path = Path(tmp) / f"{safe_sid(sid)}.jsonl"
                 write_chat_lines(lines, path)
-                res = run_hippo("capture", ["--transcript", str(path)], on_start=self._keep_capture_proc)
+                res = run_hippo("capture", ["--transcript", str(path)],
+                                on_start=self._keep_capture_proc, env=child_env)
         except OSError as exc:
             logger.warning("hippo capture of %s failed: %s", sid, exc)
             return

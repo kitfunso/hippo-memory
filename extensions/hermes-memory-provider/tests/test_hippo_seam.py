@@ -209,6 +209,17 @@ def test_absolute_hippo_home_keeps_default_child_env(fake, env, started):
     assert started[0].kwargs["env"] is None
 
 
+def test_tilde_hippo_home_expands_before_spawning_child(fake, env, monkeypatch, started):
+    monkeypatch.setenv("HIPPO_HOME", "~/some-store")
+    res = hippo.run_hippo("recall", [], text="hi")
+    assert res is not None and res.code == 0
+    [call] = fake.calls("recall")
+    assert call["hippoHome"] != "~/some-store"
+    assert same_path(call["hippoHome"], env.home / "some-store")
+    assert started[0].kwargs["env"] is not None
+    assert same_path(started[0].kwargs["env"]["HIPPO_HOME"], env.home / "some-store")
+
+
 def test_windows_refuses_symlink_resolving_to_disallowed_launcher(tmp_path, monkeypatch, started):
     target = tmp_path / "hippo.cmd"
     target.write_text("@echo off\n", encoding="utf-8")

@@ -80,10 +80,18 @@ describe('hermes adapter', () => {
     expect(keys).toEqual([`/${hash12('same')}`, `/${hash12('other')}`, `/${hash12('same')}~2`]);
   });
 
-  it('a missing file gives no container and no warning', () => {
+  it('a missing file gives an empty readable container when memories/ exists and none when absent', () => {
     const user = write(path.join(memoryDir(), 'USER.md'), 'likes tabs');
     const listing = hermesAdapter.list(ctxFor(env()), 'user');
-    expect(listing.containers.map((c) => c.path)).toEqual([user]);
+    expect(listing.containers).toEqual([
+      expect.objectContaining({
+        path: path.join(memoryDir(), 'MEMORY.md'),
+        readable: true,
+        items: [],
+        warnings: [],
+      }),
+      expect.objectContaining({ path: user, readable: true, warnings: [] }),
+    ]);
     expect(listing.warnings).toEqual([]);
     expect(hermesAdapter.list(ctxFor({ HERMES_HOME: at('nowhere') }), 'user').containers).toEqual([]);
   });
@@ -94,17 +102,22 @@ describe('hermes adapter', () => {
     const file = write(path.join(home(), 'profiles', 'work', 'memories', 'MEMORY.md'), 'the work memory');
     const listing = hermesAdapter.list(ctxFor(env()), 'user');
     expect(listing.home).toBe(path.join(home(), 'profiles', 'work'));
-    expect(listing.containers.map((c) => c.path)).toEqual([file]);
+    expect(listing.containers.map((c) => c.path)).toEqual([
+      file,
+      path.join(home(), 'profiles', 'work', 'memories', 'USER.md'),
+    ]);
     expect(listing.containers[0].items.map((i) => i.text)).toEqual(['the work memory']);
+    expect(listing.containers[1]).toMatchObject({ readable: true, items: [], warnings: [] });
   });
 
   it('never reads other files in the memories folder', () => {
     write(path.join(memoryDir(), 'MEMORY.md.lock'), 'a lock');
     write(path.join(memoryDir(), 'notes.md'), 'a note');
     write(path.join(memoryDir(), 'MEMORY.md'), 'the memory');
-    const [container, ...rest] = hermesAdapter.list(ctxFor(env()), 'user').containers;
+    const [memory, user, ...rest] = hermesAdapter.list(ctxFor(env()), 'user').containers;
     expect(rest).toEqual([]);
-    expect(container.items.map((i) => i.text)).toEqual(['the memory']);
+    expect(memory.items.map((i) => i.text)).toEqual(['the memory']);
+    expect(user).toMatchObject({ path: path.join(memoryDir(), 'USER.md'), readable: true, items: [], warnings: [] });
   });
 
   it('returns no container for project scope, even with a project root that holds the files', () => {
@@ -129,9 +142,59 @@ describe('hermes adapter', () => {
 
   it('a USER.md that is a folder is unreadable with one warning', () => {
     fs.mkdirSync(path.join(memoryDir(), 'USER.md'), { recursive: true });
-    const [container] = hermesAdapter.list(ctxFor(env()), 'user').containers;
-    expect(container.readable).toBe(false);
-    expect(container.warnings).toHaveLength(1);
+    const [memory, user] = hermesAdapter.list(ctxFor(env()), 'user').containers;
+    expect(memory).toMatchObject({
+      path: path.join(memoryDir(), 'MEMORY.md'),
+      readable: true,
+      items: [],
+      warnings: [],
+    });
+    expect(user.readable).toBe(false);
+    expect(user.warnings).toHaveLength(1);
+  });
+
+  it('treats an unreadable memories/ folder as one unreadable container with a warning', () => {
+    const folder = memoryDir();
+    const ctx = ctxFor(env(), {
+      files: {
+        ...REAL_IO.files,
+        listFiles: () => ({ status: 'unreadable', reason: `${folder}: EACCES` }),
+      },
+    });
+    const listing = hermesAdapter.list(ctx, 'user');
+    expect(listing.containers).toEqual([
+      {
+        scope: 'user',
+        path: folder,
+        readable: false,
+        items: [],
+        skipped: [],
+        warnings: [`${folder}: EACCES`],
+        textKeyed: true,
+      },
+    ]);
+  });
+
+  it('marks a missing file unreadable when readHead fails instead of confirming absence', () => {
+    fs.mkdirSync(memoryDir(), { recursive: true });
+    const memoryPath = path.join(memoryDir(), 'MEMORY.md');
+    const ctx = ctxFor(env(), {
+      files: {
+        ...REAL_IO.files,
+        readHead: (file, bytes) => {
+          if (file === memoryPath) throw new Error('EACCES: permission denied');
+          return REAL_IO.files.readHead(file, bytes);
+        },
+      },
+    });
+    const [memory, user] = hermesAdapter.list(ctx, 'user').containers;
+    expect(memory).toMatchObject({
+      path: memoryPath,
+      readable: false,
+      items: [],
+      warnings: [`${memoryPath}: EACCES: permission denied`],
+    });
+    expect(user).toMatchObject({ path: path.join(memoryDir(), 'USER.md'), readable: true, items: [], warnings: [] });
   });
 
   it('treats a zero-byte MEMORY.md as a readable empty container so the last removed note is set aside', () => {

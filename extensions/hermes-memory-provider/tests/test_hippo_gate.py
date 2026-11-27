@@ -254,3 +254,62 @@ def test_queued_capture_skips_when_platform_is_opted_out_before_worker_runs(fake
     assert len(calls) == 1
     assert len(written) == 1
     assert transcript_lines(calls[0])[0]["content"] == "first telegram turn"
+
+
+def test_switching_tenant_mid_session_skips_capture(fake, start, started, monkeypatch, caplog):
+    provider = start()
+    monkeypatch.setenv("HIPPO_TENANT", "work")
+    with caplog.at_level(logging.WARNING):
+        provider.on_session_end(session("work tenant turn"))
+        provider.shutdown()
+    assert started == []
+    assert fake.calls("capture") == []
+    assert any("HIPPO_TENANT is work" in r.getMessage() for r in caplog.records)
+
+
+def test_queued_capture_skips_when_tenant_changes_before_worker_runs(
+        fake, start, started, monkeypatch, caplog):
+    entered, release = threading.Event(), threading.Event()
+    real_write = hippo.write_chat_lines
+    written = []
+
+    def held_write(lines, path):
+        written.append(lines)
+        entered.set()
+        release.wait(timeout=15)
+        real_write(lines, path)
+
+    monkeypatch.setattr(hippo, "write_chat_lines", held_write)
+    provider = start()
+    provider.on_session_end(session("default tenant turn"))
+    assert entered.wait(timeout=15)
+    provider.on_session_end(session("queued turn before switch"))
+    monkeypatch.setenv("HIPPO_TENANT", "work")
+    with caplog.at_level(logging.WARNING):
+        release.set()
+        provider.shutdown()
+    assert len(started) == 1
+    assert len(written) == 1
+    calls = fake.calls("capture")
+    assert len(calls) == 1
+    assert transcript_lines(calls[0])[0]["content"] == "default tenant turn"
+    assert any("HIPPO_TENANT is work" in r.getMessage() for r in caplog.records)
+
+
+def test_capture_child_receives_checked_env_snapshot_without_toctou(fake, start, started, monkeypatch):
+    real_write = hippo.write_chat_lines
+
+    def switch_tenant_after_check(lines, path):
+        monkeypatch.setenv("HIPPO_TENANT", "work")
+        real_write(lines, path)
+
+    monkeypatch.setattr(hippo, "write_chat_lines", switch_tenant_after_check)
+    provider = start()
+    provider.on_session_end(session("checked snapshot turn"))
+    provider.shutdown()
+    assert len(started) == 1
+    child_env = started[0].kwargs["env"]
+    assert child_env is not None
+    assert child_env.get("HIPPO_TENANT", "") == ""
+    [call] = fake.calls("capture")
+    assert call["tenant"] is None
