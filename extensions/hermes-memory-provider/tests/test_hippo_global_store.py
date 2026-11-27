@@ -82,7 +82,9 @@ def test_opted_in_cron_reads_leave_the_global_store_untouched(env, tmp_path, sta
     hippo_cli("init", "--global", *INIT_FLAGS, cwd=env.home)
     hippo_cli("remember", RULE, "--global", cwd=env.home)
     hippo_cli("remember", second_rule, "--global", cwd=env.home)
-    (env.hermes_home / "config.yaml").write_text("memory:\n  hippo:\n    platforms: [cron]\n", encoding="utf-8")
+    (env.hermes_home / "config.yaml").write_text(
+        "memory:\n  hippo:\n    platforms: [cron, subagent]\n", encoding="utf-8"
+    )
 
     interactive = start(platform="cli", session_id="read-1")
     interactive.handle_tool_call("hippo_recall", {"query": RULE_WORDS})
@@ -97,6 +99,25 @@ def test_opted_in_cron_reads_leave_the_global_store_untouched(env, tmp_path, sta
     prefetched = cron.prefetch(second_words)
     assert second_words in prefetched
     assert store_state(env.hippo_home) == after_interactive
+
+    subagent = start(platform="subagent", agent_context="subagent", session_id="sub-1")
+    assert subagent.allowed("recall") and not subagent.allowed("prefetch")
+    sub_reply = json.loads(subagent.handle_tool_call("hippo_recall", {"query": second_words}))
+    assert sub_reply["total"] >= 1
+    assert any(second_words in row["content"] for row in sub_reply["results"])
+    assert store_state(env.hippo_home) == after_interactive
+
+
+def test_hippo_remember_stores_note_via_stdin_end_to_end(env, start, monkeypatch):
+    assert Path(REAL_HIPPO_BIN).is_file(), f"{REAL_HIPPO_BIN} is missing: run npm run build first"
+    monkeypatch.setenv("HIPPO_BIN", REAL_HIPPO_BIN)
+    hippo_cli("init", "--global", *INIT_FLAGS, cwd=env.home)
+    provider = start(session_id="rem-1")
+    note = f"- {RULE}"
+    reply = json.loads(provider.handle_tool_call("hippo_remember", {"text": note}))
+    assert "Remembered" in reply["result"]
+    found = rows(env.hippo_home)
+    assert any(RULE_WORDS in content for content, _ in found), found
 
 
 def test_relative_hippo_home_writes_to_cwd_store_not_home(env, tmp_path, start, monkeypatch):

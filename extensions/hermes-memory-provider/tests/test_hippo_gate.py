@@ -59,7 +59,7 @@ def test_every_tool_is_listed_before_initialize():
 GATE_CASES = [
     ("cli", None, [], {}, ALL),
     ("tui", None, [], {"HERMES_SESSION_SOURCE": "tui"}, ALL),
-    ("desktop", None, [], {"HERMES_SESSION_SOURCE": "desktop"}, ALL),
+    ("desktop", None, [], {"HERMES_SESSION_SOURCE": "desktop"}, NONE),
     ("cli", None, [], {"HERMES_SINGLE_QUERY_SESSION": "1"}, ALL),
     ("cli", "subagent", [], {}, only("recall")),
     ("cli", "flush", [], {}, NONE),
@@ -131,7 +131,8 @@ def test_the_default_tenant_keeps_capture_on(fake, start, monkeypatch):
     ("tool", "cli", [], NONE),
     ("tool", "cli", ["tool"], ALL),
     ("acp", "cli", [], NONE),
-    ("gui", "desktop", [], ALL),
+    ("gui", "desktop", [], NONE),
+    ("gui", "desktop", ["desktop"], ALL),
     ("oneshot", "cli", [], ALL),
 ])
 def test_gateway_session_policy_gates_global_memory(policy_source, platform, opt_in, expected, env, start, started):
@@ -315,17 +316,73 @@ def test_capture_child_receives_checked_env_snapshot_without_toctou(fake, start,
     assert call["tenant"] is None
 
 
-def test_opted_in_cron_reads_pass_hippo_read_only_in_child_env(fake, env, start, started):
+def test_non_primary_reads_pass_read_only_and_skip_auto_integrations(fake, env, start, started):
     fake.answer("context", out=hook_reply("Pinned"))
     fake.answer("recall", out=recall_reply("mem_a"))
-    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [cron]\n")
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [cron, subagent]\n")
 
     cron = start(platform="cron", agent_context="cron")
     assert cron.prefetch("deploy") == "Pinned"
     assert json.loads(cron.handle_tool_call("hippo_recall", {"query": "deploy"}))["total"] == 1
-    assert len(started) == 2
-    assert all(entry.kwargs["env"]["HIPPO_READ_ONLY"] == "1" for entry in started)
+    subagent = start(platform="subagent", agent_context="subagent")
+    assert json.loads(subagent.handle_tool_call("hippo_recall", {"query": "deploy"}))["total"] == 1
+    assert len(started) == 3
+    for entry in started:
+        assert entry.kwargs["env"]["HIPPO_READ_ONLY"] == "1"
+        assert entry.kwargs["env"]["HIPPO_SKIP_AUTO_INTEGRATIONS"] == "1"
 
     cli = start(platform="cli")
     cli.prefetch("deploy")
-    assert started[2].kwargs["env"] is None
+    assert started[3].kwargs["env"] is None
+
+
+def test_remote_and_unproven_desktop_require_opt_in_while_local_owner_is_allowed(env, start, monkeypatch):
+    from gateway import session_policy
+    from hermes_cli.process_identity import serving_local_desktop
+
+    monkeypatch.setenv("HERMES_SESSION_SOURCE", "desktop")
+    unproven = start(platform="desktop")
+    assert {op: unproven.allowed(op) for op in hippo.OPS} == NONE
+
+    with serving_local_desktop(True):
+        local_ctx = start(platform="desktop")
+        assert {op: local_ctx.allowed(op) for op in hippo.OPS} == ALL
+
+    monkeypatch.delenv("HERMES_SESSION_SOURCE")
+
+    def make_policy(config_json: str = "{}") -> session_policy.LocalSessionPolicy:
+        return session_policy.LocalSessionPolicy(
+            source="gui",
+            platform="desktop",
+            cwd=str(env.home),
+            model=None,
+            toolsets=(),
+            config_json=config_json,
+            request_json="{}",
+            terminal_json="{}",
+        )
+
+    token = session_policy._ACTIVE_POLICY.set(make_policy())
+    try:
+        remote = start(platform="desktop")
+        assert {op: remote.allowed(op) for op in hippo.OPS} == NONE
+        write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [desktop]\n")
+        assert {op: remote.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
+
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: []\n")
+    token = session_policy._ACTIVE_POLICY.set(make_policy(json.dumps({"desktop_local": True})))
+    try:
+        owner_policy = start(platform="desktop")
+        assert {op: owner_policy.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
+
+    token = session_policy._ACTIVE_POLICY.set(make_policy())
+    try:
+        with serving_local_desktop(True):
+            owner_ctx = start(platform="desktop")
+            assert {op: owner_ctx.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)

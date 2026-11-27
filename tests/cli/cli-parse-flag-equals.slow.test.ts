@@ -176,6 +176,17 @@ describe('init --no-hooks', () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it('skips codex wrapper repair for recall and context under HIPPO_READ_ONLY=1', () => {
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '');
+    vi.stubEnv('HIPPO_READ_ONLY', '1');
+    try {
+      expect(shouldAutoRepairCodexWrapper('recall', {})).toBe(false);
+      expect(shouldAutoRepairCodexWrapper('context', {})).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe('runCli: --flag=value end-to-end guards', () => {

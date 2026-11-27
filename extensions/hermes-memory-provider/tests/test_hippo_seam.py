@@ -37,14 +37,18 @@ def test_recall_puts_the_query_after_a_double_dash(fake, start, env, started):
     assert started[0].kwargs["stdin"] is subprocess.DEVNULL
 
 
-def test_remember_tags_the_text_and_puts_it_after_a_double_dash(fake, start, env):
+def test_remember_tags_the_text_and_sends_it_on_stdin(fake, start, env, started):
     fake.answer("remember", out=remember_reply("mem_x"))
     provider = start()
-    result = json.loads(provider.handle_tool_call("hippo_remember", {"text": f"-x {UNICODE}"}))
+    note = f"-x {UNICODE}"
+    result = json.loads(provider.handle_tool_call("hippo_remember", {"text": note}))
     assert result == {"result": "[global] Remembered [mem_x]"}
     [call] = fake.calls("remember")
-    assert call["args"] == [*hippo.REMEMBER_ARGS, "--global", "--", f"-x {UNICODE}"]
-    assert call["stdinKind"] == "devnull" and same_path(call["cwd"], env.home)
+    assert call["args"] == [*hippo.REMEMBER_ARGS, "-", "--global"]
+    assert note not in call["args"]
+    assert call["stdinKind"] == "pipe" and call["stdin"] == note
+    assert same_path(call["cwd"], env.home)
+    assert started[0].kwargs["stdin"] is subprocess.PIPE
 
 
 def test_outcome_marks_every_id_of_the_last_recall_in_one_call(fake, start, env):

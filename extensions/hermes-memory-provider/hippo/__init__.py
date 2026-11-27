@@ -275,6 +275,30 @@ def _in_plugin_host() -> bool:
     return callable(serving) and serving() is not None
 
 
+def _policy_is_local_desktop(policy: Any) -> bool:
+    if policy is None or getattr(policy, "source", None) != "gui":
+        return False
+    for field in ("config_json", "request_json"):
+        raw = getattr(policy, field, None)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(data, dict) and data.get("desktop_local") is True:
+            return True
+    return False
+
+
+def _serves_local_desktop_now() -> bool:
+    try:
+        from hermes_cli.process_identity import serves_local_desktop_now
+    except ImportError:
+        return False
+    return bool(serves_local_desktop_now())
+
+
 def _resolve_source(platform: str) -> str:
     source_for = _session_source()
     policy_helpers = _policy_helpers()
@@ -421,6 +445,7 @@ class HippoProvider(MemoryProvider):
         self._platform = ""
         self._source = ""
         self._agent_context = "primary"
+        self._desktop_local = False
         self._initialized = False
         self._capture_on = False
         self._last_recall_ids: list[str] = []
@@ -453,6 +478,9 @@ class HippoProvider(MemoryProvider):
         context = kwargs.get("agent_context")
         self._agent_context = context.strip() if isinstance(context, str) and context.strip() else "primary"
         self._source = _resolve_source(self._platform)
+        policy_helpers = _policy_helpers()
+        policy = policy_helpers[0]() if policy_helpers is not None else None
+        self._desktop_local = _serves_local_desktop_now() or _policy_is_local_desktop(policy)
         self._initialized = True
         self._capture_on = self.allowed("capture") and row_helpers() is not None
         if self._capture_on and not capture_tenant_ok():
@@ -462,19 +490,24 @@ class HippoProvider(MemoryProvider):
 
     def allowed(self, op: str) -> bool:
         local = self._platform in LOCAL_PLATFORMS and self._source in LOCAL_SOURCES
+        desktop = self._platform == "desktop" or self._source == "desktop"
+        if local and desktop:
+            local = self._desktop_local or _serves_local_desktop_now()
         if not local:
             opt_in = opt_in_platforms()
-            if self._platform not in LOCAL_PLATFORMS | opt_in:
+            allowed_platforms = (LOCAL_PLATFORMS - {"desktop"} if desktop else LOCAL_PLATFORMS) | opt_in
+            allowed_sources = (LOCAL_SOURCES - {"desktop"} if desktop else LOCAL_SOURCES) | opt_in
+            if self._platform not in allowed_platforms:
                 return False
-            if self._source not in LOCAL_SOURCES | opt_in:
+            if self._source not in allowed_sources:
                 return False
         row = CONTEXT_RULES.get(self._agent_context or "primary", CONTEXT_RULES["subagent"])
         return row[OPS.index(op)]
 
     def _read_env(self) -> Optional[dict[str, str]]:
-        if self._agent_context == "cron":
-            return {**os.environ, "HIPPO_READ_ONLY": "1"}
-        return None
+        if self._agent_context == "primary":
+            return None
+        return {**os.environ, "HIPPO_READ_ONLY": "1", "HIPPO_SKIP_AUTO_INTEGRATIONS": "1"}
 
     def prefetch(self, query: str, *, session_id: str = "") -> str:
         if not self.allowed("prefetch"):
@@ -519,7 +552,7 @@ class HippoProvider(MemoryProvider):
         text = _text_arg(args, "text")
         if not text:
             return _error("text is required")
-        out = _ok("remember", run_hippo("remember", list(REMEMBER_ARGS), text=text))
+        out = _ok("remember", run_hippo("remember", [*REMEMBER_ARGS, "-"], stdin=text))
         if out is None:
             return _error("hippo remember failed; the Hermes log says why")
         first_line = (out.strip().splitlines() or [""])[0]
