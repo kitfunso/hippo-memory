@@ -15,7 +15,13 @@ import { printError } from './surface/cli/output.js';
 import { errorFields, errorMessage, isLevelEnabled, log } from './base/util/log.js';
 import { hasGroup, isStoreBusy, OPTIONAL_GROUPS, STORE_BUSY_MESSAGE } from './base/ports/store.js';
 import type { InfraPorts } from './base/ports/infra.js';
-import { type CliFlags, boolFlag, isBooleanFlag, isStringFlag } from './surface/cli/flag-values.js';
+import {
+  type CliFlags,
+  boolFlag,
+  isBooleanFlag,
+  isStringFlag,
+  markValuelessFlag,
+} from './surface/cli/flag-values.js';
 import {
   USAGE_HEADER,
   USAGE_EXAMPLES,
@@ -67,18 +73,20 @@ function pushRepeatableFlag(flags: CliFlags, key: string, value: string): void {
 }
 
 function setGluedFlag(flags: CliFlags, key: string, value: string, kind: FlagKind): void {
-  // Glued form has no following token to swallow, so a switch gets its own branch here instead of
-  // the swallow-avoidance short-circuit in setSeparatedFlag.
   if (kind === 'switch') {
     flags[key] = value;
   } else if (kind === 'list') {
-    if (value !== '') pushRepeatableFlag(flags, key, value);
+    if (value !== '') {
+      pushRepeatableFlag(flags, key, value);
+    } else {
+      markValuelessFlag(flags, key);
+      if (!Array.isArray(flags[key])) flags[key] = true;
+    }
   } else {
     flags[key] = value === '' ? true : value;
   }
 }
 
-/** Returns how many tokens the flag consumed: its own, plus `next` when that is its value. */
 function setSeparatedFlag(
   flags: CliFlags,
   key: string,
@@ -86,12 +94,16 @@ function setSeparatedFlag(
   kind: FlagKind,
 ): number {
   if (kind === 'switch' && (next === 'true' || next === 'false')) {
-    // Kept as a value so main() rejects it, instead of `--pin true` pinning the text "... true".
     flags[key] = next;
     return 2;
   }
   if (!next || next.startsWith('--') || kind === 'switch') {
-    flags[key] = true;
+    if (kind === 'list') {
+      markValuelessFlag(flags, key);
+      if (!Array.isArray(flags[key])) flags[key] = true;
+    } else {
+      flags[key] = true;
+    }
     return 1;
   }
   if (kind === 'list') pushRepeatableFlag(flags, key, next);
@@ -136,7 +148,7 @@ export function parseArgs(argv: string[]) {
 }
 
 export function shouldAutoRepairCodexWrapper(currentCommand: string, flags: CliFlags): boolean {
-  if (envSkipAutoIntegrations()) return false;
+  if (envSkipAutoIntegrations() || envReadOnly()) return false;
   if (!COMMAND_INDEX.get(currentCommand)?.repairsCodexWrapper) return false;
   if (currentCommand === 'init' && boolFlag(flags, 'no-hooks')) return false;
   return true;

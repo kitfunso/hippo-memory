@@ -376,3 +376,35 @@ jobs:
         run: uv run --locked --extra test pytest tests -q -rs
         env:
           HIPPO_REQUIRE_SERVE: '1'
+
+  hermes-provider:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        hermes-python: ['3.11', '3.14']
+        include:
+          - { os: windows-latest, hermes-python: '3.14' }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Hermes provider tests (Python ${{ matrix.hermes-python }})
+        shell: bash
+        run: |
+          git init -q "$RUNNER_TEMP/hermes"
+          git -C "$RUNNER_TEMP/hermes" fetch -q --depth 1 \
+            https://github.com/NousResearch/hermes-agent f681186ea35e212c575a13d056ef241bfabe6190
+          git -C "$RUNNER_TEMP/hermes" checkout -q FETCH_HEAD
+          uv run --python ${{ matrix.hermes-python }} --no-project --with pytest --with ruamel.yaml==0.18.16 \
+            pytest extensions/hermes-memory-provider/tests -q
+        env:
+          PYTHONPATH: ${{ runner.temp }}/hermes
+          HIPPO_BIN: ${{ github.workspace }}/bin/hippo.js

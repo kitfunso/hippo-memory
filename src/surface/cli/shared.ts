@@ -3,7 +3,7 @@
 
 import { isSharedStore } from '../../host/config-file.js';
 import { markChurnStaleInReach, type ChurnStaleResult } from '../../api/sleep/churn.js';
-import { isInitialized } from '../../host/project-identity.js';
+import { isGlobalStoreRoot, isInitialized } from '../../host/project-identity.js';
 import { hippoHomeDir } from '../../host/agent-homes.js';
 import { learn, CLI_LEARN } from '../../api/index.js';
 import { cliApiContext, cliInitGlobal, type CliContext } from './api-context.js';
@@ -11,12 +11,14 @@ import { fail } from './exit.js';
 import { type CliFlags, boolFlag } from './flag-values.js';
 
 export function requireInit(hippoRoot: string): void {
-  if (!isInitialized(hippoRoot)) {
-    fail(
-      `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run ` +
-        `\`hippo init\` first.`,
-    );
+  if (isInitialized(hippoRoot)) return;
+  if (isGlobalStoreRoot(hippoRoot)) {
+    fail(`No global hippo store at ${hippoRoot}. Run \`hippo init --global\` first.`);
   }
+  fail(
+    `No hippo store at ${hippoRoot} (searched ${process.cwd()} and its parents up to your home directory). Run ` +
+      `\`hippo init\` first.`,
+  );
 }
 
 /** The folder a command runs in, as its context's machine names it. */

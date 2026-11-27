@@ -265,7 +265,7 @@ export const SESSION_VERBS = {
                              (Obsidian/Foam/Dendron). Requires --name <vault>.
                              [--scope <scope>]
     --agents               Sync every coding agent's own memories (Claude Code, Codex,
-                             Gemini CLI, Copilot, OpenClaw, Qwen Code) now; with
+                             Gemini CLI, Copilot, OpenClaw, Qwen Code, Hermes Agent) now; with
                              --dry-run, print each tool's folders and what would change.
                              HIPPO_AGENT_MEMORY_TOOLS=<ids> or config agentMemories.tools
                              picks the tools; "none" or [] turns the import off
@@ -308,9 +308,10 @@ export const SESSION_VERBS = {
       `
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 9 hooks in $CLAUDE_CONFIG_DIR/settings.json
-                           (~/.claude by default), opencode a plugin, codex 2 hooks in
-                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
-                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.claude by default), opencode a plugin, hermes the memory
+                           provider plugin in its active profile, codex 2 hooks in its
+                           hooks.json plus a launcher wrapper, copilot 4 hooks, the MCP
+                           server and an instructions block under $COPILOT_HOME
                            (~/.copilot by default); junie, antigravity, grok-build and
                            muse-code get the "hippo" MCP server in their own config file;
                            other tools get a hint. Then imports each agent's
@@ -443,10 +444,11 @@ export const SESSION_VERBS = {
       `
   hook <sub> [target]      Manage framework integrations
     hook list              Show available hooks
-    hook install <target>  Install hook (claude-code|codex|copilot|cursor|openclaw|opencode|pi|
-                           junie|antigravity|grok-build|muse-code)
+    hook install <target>  Install hook (claude-code|codex|copilot|cursor|hermes|openclaw|
+                           opencode|pi|junie|antigravity|grok-build|muse-code)
                            claude-code adds 9 hooks to $CLAUDE_CONFIG_DIR/settings.json
-                           (~/.claude by default); opencode installs a plugin; codex
+                           (~/.claude by default); opencode installs a plugin; hermes copies
+                           the memory provider plugin into the active Hermes profile; codex
                            adds 2 hooks to $CODEX_HOME/hooks.json (trust them once in /hooks) and
                            wraps the detected launcher in place; copilot writes
                            hooks/hippo.json, the "hippo" MCP server and an instructions
@@ -455,7 +457,7 @@ export const SESSION_VERBS = {
                            to their own config file; codex, cursor, openclaw, opencode
                            and pi also patch an existing AGENTS.md
     hook install <target> --force  Also replace an edited hippo block and add back hooks you removed
-    hook uninstall <target> Remove hook; for copilot and the MCP-config tools, only what hippo wrote`,
+    hook uninstall <target> Remove hook; for copilot, hermes and the MCP-config tools, only what hippo wrote`,
     ],
   }),
 } satisfies Record<string, VerbSpec>;

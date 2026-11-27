@@ -372,4 +372,45 @@ describe('agent memory sync: the Added list', () => {
     expect(toolTally(await sync(), 'codex')).toMatchObject({ unchanged: 1, setAside: 1 });
     expect(liveRows(w.global).map((e) => e.source)).toEqual([`${base}#${sha(text).slice(0, 16)}`]);
   });
+
+  it('hermes memory reset sets unlinked MEMORY.md aside while keeping unreadable USER.md and other profiles live', async () => {
+    const hermesRoot = join(w.dir, 'hermes');
+    const defaultMemDir = join(hermesRoot, 'memories');
+    const workProfile = join(hermesRoot, 'profiles', 'work');
+    const workMemDir = join(workProfile, 'memories');
+    mkdirSync(defaultMemDir, { recursive: true });
+    mkdirSync(workMemDir, { recursive: true });
+
+    const memoryText = 'Always run the schema check before deploying.';
+    const userText = 'Prefers concise commit titles.';
+    const workText = 'Work profile keeps staging on port 9000.';
+    const memoryFile = join(defaultMemDir, 'MEMORY.md');
+    const userFile = join(defaultMemDir, 'USER.md');
+    writeFileSync(memoryFile, memoryText, 'utf8');
+    writeFileSync(userFile, userText, 'utf8');
+    writeFileSync(join(workMemDir, 'MEMORY.md'), workText, 'utf8');
+
+    const syncHermes = (hermesHome: string): Promise<ImportReport> =>
+      importForStore(w.local, {
+        run: TEST_RUN,
+        configAt: loadConfig,
+        tenantId: 'default',
+        stores: sqliteImportStores({}),
+        machine: { ...w.machine, env: { HERMES_HOME: hermesHome } },
+      });
+
+    expect(toolTally(await syncHermes(hermesRoot), 'hermes')).toMatchObject({ imported: 2 });
+    expect(toolTally(await syncHermes(workProfile), 'hermes')).toMatchObject({ imported: 1 });
+    expect(liveTexts(w.global)).toEqual([memoryText, userText, workText].sort());
+
+    unlinkSync(memoryFile);
+    unlinkSync(userFile);
+    mkdirSync(userFile);
+
+    const afterReset = await syncHermes(hermesRoot);
+    expect(toolTally(afterReset, 'hermes')).toMatchObject({ setAside: 1, unreadable: 1, imported: 0, unchanged: 0 });
+    expect(afterReset.warnings).toHaveLength(1);
+    expect(dormantRows(w.global)).toEqual([expect.objectContaining({ content: memoryText, reason: 'source-deleted' })]);
+    expect(liveTexts(w.global)).toEqual([userText, workText].sort());
+  });
 });

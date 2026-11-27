@@ -137,12 +137,12 @@ describe('keyset cursor properties', () => {
   });
 });
 
-/** One flag or positional as typed, with what it must leave in the parse. */
 interface Item {
   readonly tokens: readonly string[];
   readonly positional?: string;
   readonly set?: readonly [string, string | boolean];
   readonly push?: readonly [string, string];
+  readonly mark?: string;
 }
 
 // parseArgs reads a number flag like a value flag: the entry point refuses a bad number later.
@@ -188,7 +188,7 @@ function namesOn(command: string, family: Family, own: boolean): string[] {
 function itemOf({ family, form, value }: FlagDraw, key: string): Item {
   if (form === 'bare') return { tokens: [`--${key}`], set: [key, true] };
   const tokens = form === 'glued' ? [`--${key}=${value}`] : [`--${key}`, value];
-  if (family === 'list') return value === '' ? { tokens } : { tokens, push: [key, value] };
+  if (family === 'list') return value === '' ? { tokens, mark: key } : { tokens, push: [key, value] };
   return { tokens, set: [key, family === 'plain' && value === '' ? true : value] };
 }
 
@@ -205,7 +205,6 @@ function drawn(family: Family, form: Form, value: Gen<string>): Gen<FlagDraw> {
 // A positional is never the literal a switch would take as its value, and neither it nor a separated value opens with two dashes.
 const WORD = pick(['list', 'show', 'x', 'a=b', '-5', '-x', '42', 'two words', 'café', '']);
 const VALUE = pick(['v', 'a=b', '-5', '0', 'true', 'false', 'two words', 'café']);
-// A glued value may be empty: a value flag then counts as set with no value, and a list takes nothing.
 const GLUED = pick(['v', 'a=b', '-5', 'true', 'false', '--x', '=', 'two words', '']);
 
 // Only a switch stands bare mid-argv: any other flag would take the next token as its value.
@@ -235,13 +234,14 @@ const BARE_LAST: Gen<FlagDraw[]> = oneOf<FlagDraw[]>([
 function parseOf(items: readonly Item[]) {
   const args: string[] = [];
   const flags: CliFlags = {};
-  for (const { positional, set, push } of items) {
+  for (const { positional, set, push, mark } of items) {
     if (positional !== undefined) args.push(positional);
     if (set) flags[set[0]] = set[1];
     if (push) {
       const sofar = flags[push[0]];
       flags[push[0]] = [...(Array.isArray(sofar) ? sofar : []), push[1]];
     }
+    if (mark !== undefined && !Array.isArray(flags[mark])) flags[mark] = true;
   }
   return { args, flags };
 }

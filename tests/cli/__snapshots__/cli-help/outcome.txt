@@ -1,4 +1,5 @@
   outcome                  Apply feedback to last recall
     --good                 Memories were helpful
     --bad                  Memories were irrelevant
-    --id <id>              Target a specific memory
+    --id <id>              Target a specific memory (repeatable)
+    --global               Apply to the global store ($HIPPO_HOME or ~/.hippo/)

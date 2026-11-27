@@ -401,6 +401,18 @@ function followCall(env, scope, call) {
     addRead(env, scope, callArgs[1], call, 'presence');
     return;
   }
+  if (
+    ts.isPropertyAccessExpression(call.expression) &&
+    call.expression.name.text === 'get' &&
+    callArgs.length === 1 &&
+    ts.isPropertyAccessExpression(call.parent) &&
+    call.parent.name.text === 'has' &&
+    ts.isCallExpression(call.parent.parent) &&
+    call.parent.parent.arguments.length === 1
+  ) {
+    addRead(env, scope, call.parent.parent.arguments[0], call.parent.parent, 'value');
+    return;
+  }
   if (WHOLE_OBJECT_CALLS.has(name)) {
     noteUnfollowed(env, call, 'whole object');
     return;
@@ -419,7 +431,6 @@ function followCall(env, scope, call) {
     scope.reads.push(...callee.reads);
     for (const [index, kinds] of callee.keyParams) {
       if (!callArgs[index]) noteUnfollowed(env, call, 'missing key argument');
-      // A helper that hands the value back is classed by what its caller does with it.
       else {
         for (const kind of kinds) {
           addRead(env, scope, callArgs[index], call, kind === 'returned' ? useKind(env, call) : kind);

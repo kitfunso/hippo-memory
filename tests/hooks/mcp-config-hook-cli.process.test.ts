@@ -126,7 +126,7 @@ describe('the home target table and the setup detection rows', () => {
     const detected = detectInstalledTools().filter((tool) => tool.kind === 'mcp-config');
 
     expect(detected.map((tool) => tool.name)).toEqual(HOSTS.map((host) => host.name));
-    expect(HOME_TARGETS.map((target) => target.name)).toEqual(['copilot', ...HOSTS.map((host) => host.name)]);
+    expect(HOME_TARGETS.map((target) => target.name)).toEqual(['copilot', ...HOSTS.map((host) => host.name), 'hermes']);
     for (const host of HOSTS) expect(homeTarget(host.name)?.name).toBe(host.name);
     expect(homeTarget('cursor')).toBeUndefined();
   });

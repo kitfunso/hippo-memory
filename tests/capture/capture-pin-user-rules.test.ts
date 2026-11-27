@@ -13,6 +13,7 @@ import { makeRoot } from '../_helpers/make-root.js';
 import { loadAllEntries } from '../_helpers/root-forms.js';
 import { initTestStore } from '../_helpers/store-template.js';
 import { CAPTURED_NOTE_TAG, USER_RULE_TAG } from '../../src/base/memory/entry.js';
+import type { ProjectRef } from '../../src/base/scope/project-identity.js';
 
 const TAUGHT =
   'No: Put each change note in its own new file under changelog.d/ and never edit CHANGELOG.md by hand, because the release script builds CHANGELOG.md from those files. Please fix it.';
@@ -234,6 +235,46 @@ describe('capture pins the rules a person states', () => {
     it('pins a lasting rule in the request', async () => {
       await capture([{ role: 'user', text: 'Always write the plan to a file before you start.' }]);
       expect(stored()).toEqual([['Always write the plan to a file before you start', true, false]]);
+    });
+  });
+
+  describe.each([
+    ['--global', true],
+    ['a session end', false],
+  ])('into the global store by %s', (_name, global) => {
+    const globalRoot = () => join(scratch, 'global');
+    const captureGlobal = (turns: SessionTurn[], originProject?: ProjectRef) =>
+      runCapture(captureTarget(globalRoot()), {
+        tenantId: 'default',
+        source: 'last-session',
+        sessionTurns: turns,
+        dryRun: false,
+        global,
+        originProject,
+      });
+    const injectedInto = async (currentProject: string) =>
+      (await contextGet(ctx, { pinnedOnly: true, includeRecent: 5, currentProject, prompt: LATER_PROMPT })).entries.map(
+        ({ entry }) => entry.content,
+      );
+
+    it.each([undefined, '', { name: '', legacyName: '' }])(
+      'a capture that names no project (%j) pins no rule',
+      async (originProject) => {
+        await captureGlobal([{ role: 'user', text: TAUGHT }], originProject);
+        expect(
+          loadAllEntries(globalRoot(), 'default').map((e) => [e.content, e.pinned, e.tags.includes(USER_RULE_TAG)]),
+        ).toEqual([[expect.stringContaining('never edit CHANGELOG.md'), false, false]]);
+        expect(await injectedInto('elsewhere')).toEqual([]);
+      },
+    );
+
+    it('a capture that names a project pins and tags the rule, stamped with that project', async () => {
+      await captureGlobal([{ role: 'user', text: TAUGHT }], 'project');
+      expect(
+        loadAllEntries(globalRoot(), 'default').map((e) => [e.pinned, e.tags.includes(USER_RULE_TAG), e.originProject]),
+      ).toEqual([[true, true, 'project']]);
+      expect(await injectedInto('project')).toEqual([expect.stringContaining('never edit CHANGELOG.md')]);
+      expect(await injectedInto('elsewhere')).toEqual([]);
     });
   });
 });

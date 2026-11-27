@@ -7,15 +7,17 @@ import { processGit } from '../../infra/git-runner.js';
 import * as api from '../../api/index.js';
 import { archiveRefusal, forgetRefusal, pickWrites } from './memory-writes.js';
 import { cliApiContext } from './api-context.js';
+import { hippoHomeDir } from '../../host/agent-homes.js';
 import { printError } from './output.js';
 import {
+  type CliFlags,
   type CommandContext,
   boolFlag,
   flagValueless,
   hasFlag,
   nonEmptyStringFlag,
+  repeatedFlag,
   stringFlag,
-  stringFlagOrExit,
 } from './flag-values.js';
 import { requireInit, runChurnStaleForRepo } from './shared.js';
 import { errorMessage } from '../../base/util/log.js';
@@ -23,8 +25,19 @@ import { CONTENT_PREVIEW_CHARS } from '../../base/util/token-text.js';
 import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
 
+function outcomeIds(flags: CliFlags): string[] {
+  if (flagValueless(flags, 'id')) fail('--id requires a value');
+  const raw = repeatedFlag(flags, 'id');
+  const ids = raw.map((id) => id.trim()).filter(Boolean);
+  if (hasFlag(flags, 'id') && (ids.length === 0 || ids.length !== raw.length)) {
+    fail('--id requires a value');
+  }
+  return [...new Set(ids)];
+}
+
 export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
-  requireInit(hippoRoot);
+  const root = boolFlag(flags, 'global') ? hippoHomeDir() : hippoRoot;
+  requireInit(root);
 
   const good = boolFlag(flags, 'good');
   const bad = boolFlag(flags, 'bad');
@@ -33,13 +46,12 @@ export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandConte
     fail('Specify --good or --bad');
   }
 
-  // Through api.outcome so every CLI outcome writes one audit_log row per id, as the MCP path does.
-  const ctx = cliApiContext(hippoRoot, tenantId);
-  const specificId = stringFlagOrExit(flags, 'id') || null;
+  const ctx = cliApiContext(root, tenantId);
+  const ids = outcomeIds(flags);
 
   let updated: number;
-  if (specificId) {
-    updated = (await api.outcome(ctx, [specificId], good)).applied;
+  if (ids.length > 0) {
+    updated = (await api.outcome(ctx, ids, good)).applied;
   } else {
     const r = await api.outcomeForLastRecall(ctx, good);
     if (r.ids.length === 0) {

@@ -107,7 +107,9 @@ const codexTree = (codexHome: string, label: string): void =>
 const openclawTree = (workspace: string, label: string): void =>
   plain(join(workspace, 'MEMORY.md'), `- CANARY ${label} openclaw memory.\n`);
 
-/** Canaries at every tool's home default and at every variable's folder; returns the variables. */
+const hermesTree = (hermesHome: string, label: string): void =>
+  plain(join(hermesHome, 'memories', 'MEMORY.md'), `CANARY ${label} hermes memory.\n`);
+
 function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessEnv {
   const home = join(root, 'home');
   const env = (name: string): string => join(root, 'env', name);
@@ -123,6 +125,8 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   }
   openclawTree(join(home, '.openclaw', 'workspace'), 'home');
   qwenTree(join(home, '.qwen'), 'home', projects);
+  hermesTree(join(home, '.hermes'), 'home');
+  hermesTree(join(home, 'AppData', 'Local', 'hermes'), 'home');
 
   claudeTree(env('claude'), 'env', projects, env('claude-user'));
   canary(join(env('claude'), 'projects', 'pinned-canary', 'memory'), 'env claude pinned');
@@ -137,6 +141,8 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
   openclawTree(env('openclaw-workspace'), 'env workspace');
   for (const name of ['qwen-home', 'qwen-runtime', 'qwen-base']) qwenTree(env(name), `env ${name}`, projects);
   for (const p of projects) canary(join(p, '.qwen', 'memory'), 'env qwen local');
+  hermesTree(env('hermes'), 'env');
+  hermesTree(join(env('localappdata'), 'hermes'), 'env localappdata');
   return {
     HOME: home,
     USERPROFILE: home,
@@ -156,6 +162,8 @@ function plantDecoys(root: string, projects: readonly string[]): NodeJS.ProcessE
     QWEN_RUNTIME_DIR: env('qwen-runtime'),
     QWEN_CODE_MEMORY_BASE_DIR: env('qwen-base'),
     QWEN_CODE_MEMORY_LOCAL: '1',
+    HERMES_HOME: env('hermes'),
+    LOCALAPPDATA: env('localappdata'),
   };
 }
 

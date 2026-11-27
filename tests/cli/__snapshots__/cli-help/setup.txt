@@ -1,8 +1,9 @@
   setup                    One-shot: detect installed AI tools and install their hooks:
                            claude-code gets 9 hooks in $CLAUDE_CONFIG_DIR/settings.json
-                           (~/.claude by default), opencode a plugin, codex 2 hooks in
-                           its hooks.json plus a launcher wrapper, copilot 4 hooks, the
-                           MCP server and an instructions block under $COPILOT_HOME
+                           (~/.claude by default), opencode a plugin, hermes the memory
+                           provider plugin in its active profile, codex 2 hooks in its
+                           hooks.json plus a launcher wrapper, copilot 4 hooks, the MCP
+                           server and an instructions block under $COPILOT_HOME
                            (~/.copilot by default); junie, antigravity, grok-build and
                            muse-code get the "hippo" MCP server in their own config file;
                            other tools get a hint. Then imports each agent's

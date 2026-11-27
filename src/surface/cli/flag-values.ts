@@ -173,9 +173,19 @@ export function boolFlag(flags: CliFlags, name: string): boolean {
   return Boolean(flags[name]);
 }
 
-// A flag that takes a value was typed with none (`--x` and nothing after it).
+const EMPTY_OCCURRENCES = new WeakMap<CliFlags, Set<string>>();
+
+export function markValuelessFlag(flags: CliFlags, name: string): void {
+  let set = EMPTY_OCCURRENCES.get(flags);
+  if (set === undefined) {
+    set = new Set();
+    EMPTY_OCCURRENCES.set(flags, set);
+  }
+  set.add(name);
+}
+
 export function flagValueless(flags: CliFlags, name: string): boolean {
-  return flags[name] === true;
+  return flags[name] === true || EMPTY_OCCURRENCES.get(flags)?.has(name) === true;
 }
 
 // Typed at all, bare or with a value.

@@ -33,10 +33,16 @@ for (const path of JSON_MANIFESTS) {
   writeFileSync(path, next);
 }
 
+const PLUGIN_YAML = 'extensions/hermes-memory-provider/hippo/plugin.yaml';
+const YAML_VERSION = /^(version:[ \t]*).*$/m;
+const yaml = readFileSync(PLUGIN_YAML, 'utf8');
+if (!YAML_VERSION.test(yaml)) throw new Error(`${PLUGIN_YAML}: top-level "version:" not found`);
+writeFileSync(PLUGIN_YAML, yaml.replace(YAML_VERSION, `$1${version}`));
+
 const VERSION_TS = 'src/base/util/version.ts';
 const PATTERN = /export const PACKAGE_VERSION = '[^']+'/;
 const ts = readFileSync(VERSION_TS, 'utf8');
 if (!PATTERN.test(ts)) throw new Error(`${VERSION_TS}: PACKAGE_VERSION not found`);
 writeFileSync(VERSION_TS, ts.replace(PATTERN, `export const PACKAGE_VERSION = '${version}'`));
 
-console.log(`Set ${JSON_MANIFESTS.length} manifests and ${VERSION_TS} to ${version}.`);
+console.log(`Set ${JSON_MANIFESTS.length} manifests, ${PLUGIN_YAML} and ${VERSION_TS} to ${version}.`);

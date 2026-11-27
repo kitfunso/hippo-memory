@@ -6,7 +6,7 @@ Run one file: `npx vitest run tests/store/memory-columns.test.ts`. Never run the
 
 `isolateTestEnvironment()` runs once at module load, before any worker starts. A test never touches your real data.
 
-- `HOME`, `USERPROFILE`, `APPDATA` and `HIPPO_HOME` point at fresh temp folders, so `hippo init` cannot import your own agent memories.
+- `HOME`, `USERPROFILE`, `APPDATA`, `LOCALAPPDATA` and `HIPPO_HOME` point at fresh temp folders, so `hippo init` cannot import your own agent memories.
 - `TMP`, `TEMP` and `TMPDIR` point at one run folder. `tests/_real-store-guard.ts` fails the run if a real `.hippo` changed, then removes the folder.
 - The agent-home variables (`CODEX_HOME`, `CLAUDE_CONFIG_DIR` and the rest) and every name in `scripts/lib/test-env-scrub.mjs` are blanked. A real key would bill you.
 - `HIPPO_SKIP_SCHEDULE=1` keeps tests away from `schtasks` and `crontab`.

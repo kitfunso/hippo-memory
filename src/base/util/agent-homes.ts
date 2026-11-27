@@ -59,6 +59,82 @@ export function claudeConfigDir(home: string, env: Env): string {
   return env.CLAUDE_CONFIG_DIR || path.join(home, '.claude');
 }
 
+export function expandHome(p: string, home: string): string {
+  return p === '~'
+    ? home
+    : p.startsWith('~/') || p.startsWith('~\\')
+      ? path.join(home, p.slice(2))
+      : p;
+}
+
+export interface HermesHome {
+  readonly home: string;
+  readonly profile: string | null;
+}
+
+const HERMES_PROFILE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+function hermesNativeHome(home: string, env: Env, platform: NodeJS.Platform): string {
+  const suffix = env.HERMES_DATA_DIR_SUFFIX ?? '';
+  if (platform !== 'win32') return path.join(home, `.hermes${suffix}`);
+  const localAppData = (env.LOCALAPPDATA ?? '').trim();
+  return path.join(localAppData || path.join(home, 'AppData', 'Local'), `hermes${suffix}`);
+}
+
+function isInside(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child);
+  return rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+function activeHermesProfile(files: Pick<AgentFiles, 'readText'>, root: string): string | null {
+  const read = files.readText(path.join(root, 'active_profile'));
+  if (!read.ok) return null;
+  const name = read.text.replace(/^﻿/, '').trim().toLowerCase();
+  return name !== 'default' && HERMES_PROFILE_ID.test(name) ? name : null;
+}
+
+function lookupEnv(env: Env, name: string, platform: NodeJS.Platform): string | undefined {
+  if (Object.hasOwn(env, name)) return env[name];
+  if (platform !== 'win32') return undefined;
+  const upper = name.toUpperCase();
+  for (const [key, val] of Object.entries(env)) {
+    if (key.toUpperCase() === upper) return val;
+  }
+  return undefined;
+}
+
+function expandEnvVars(raw: string, env: Env, platform: NodeJS.Platform): string {
+  const pattern =
+    platform === 'win32'
+      ? /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)|%([^%]+)%/g
+      : /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
+  return raw.replace(pattern, (match, braced?: string, bare?: string, pct?: string) => {
+    const name = braced ?? bare ?? pct ?? '';
+    return lookupEnv(env, name, platform) ?? match;
+  });
+}
+
+export function hermesHomeDir(
+  home: string,
+  env: Env,
+  platform: NodeJS.Platform,
+  files: Pick<AgentFiles, 'readText'> & Partial<Pick<AgentFiles, 'realPath'>>,
+): HermesHome {
+  const set = expandHome(expandEnvVars((env.HERMES_HOME ?? '').trim(), env, platform), home);
+  if (set !== '' && path.basename(path.dirname(set)) === 'profiles') {
+    return { home: set, profile: path.basename(set) };
+  }
+  const native = hermesNativeHome(home, env, platform);
+  const resolvedNative = set !== '' && files.realPath ? files.realPath(native) : native;
+  const resolvedSet = set !== '' && files.realPath ? files.realPath(set) : set;
+  const activeRoot = set === '' || isInside(resolvedNative, resolvedSet) ? native : set;
+  const profilesRoot = set === '' ? native : set;
+  const name = activeHermesProfile(files, activeRoot);
+  return name === null
+    ? { home: profilesRoot, profile: null }
+    : { home: path.join(profilesRoot, 'profiles', name), profile: name };
+}
+
 /** VS Code's user-data resolution: portable install first, then the app-data override, then the
  * platform default. */
 export function vscodeDataFolders(ctx: {

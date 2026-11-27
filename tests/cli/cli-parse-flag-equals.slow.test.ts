@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { collectVerbReads } from '../../scripts/cli-flag-reads.mjs';
 import { parseArgs, runCli as runCliEntry, shouldAutoRepairCodexWrapper } from '../../src/cli.js';
+import { flagValueless } from '../../src/surface/cli/flag-values.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../../src/surface/cli/flags.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
@@ -57,14 +58,18 @@ describe('parseArgs: --flag=value (glued form)', () => {
     expect(flags['reason']).toBe('--weird');
   });
 
-  it('case 9: --tag=a --tag= (empty glued value on a repeatable key) pushes nothing, keeps prior entries', () => {
-    const { flags } = parseArgs(argv('remember', '--tag=a', '--tag='));
-    expect(flags['tag']).toEqual(['a']);
+  it('case 9: --tag=a --tag= keeps prior entries while recording the empty occurrence', () => {
+    const trailing = parseArgs(argv('remember', '--tag=a', '--tag='));
+    expect(trailing.flags['tag']).toEqual(['a']);
+    expect(flagValueless(trailing.flags, 'tag')).toBe(true);
+    const leading = parseArgs(argv('remember', '--tag=', '--tag=a'));
+    expect(leading.flags['tag']).toEqual(['a']);
+    expect(flagValueless(leading.flags, 'tag')).toBe(true);
   });
 
-  it('case 10: --tag= alone leaves the flag unset, not an array holding an empty string', () => {
+  it('case 10: --tag= alone gives true, as --tag does, not an array holding an empty string', () => {
     const { flags, args } = parseArgs(argv('remember', '--tag='));
-    expect(flags['tag']).toBeUndefined();
+    expect(flags['tag']).toBe(true);
     expect(args).toEqual([]);
   });
 
@@ -167,6 +172,17 @@ describe('init --no-hooks', () => {
     try {
       expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init')).flags)).toBe(true);
       expect(shouldAutoRepairCodexWrapper('init', parseArgs(argv('init', '--no-hooks')).flags)).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('skips codex wrapper repair for recall and context under HIPPO_READ_ONLY=1', () => {
+    vi.stubEnv('HIPPO_SKIP_AUTO_INTEGRATIONS', '');
+    vi.stubEnv('HIPPO_READ_ONLY', '1');
+    try {
+      expect(shouldAutoRepairCodexWrapper('recall', {})).toBe(false);
+      expect(shouldAutoRepairCodexWrapper('context', {})).toBe(false);
     } finally {
       vi.unstubAllEnvs();
     }

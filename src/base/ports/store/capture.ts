@@ -48,14 +48,12 @@ export interface CaptureWriteOptions {
   readonly dedup: CaptureDedup;
 }
 
-/** Which rows count as holding a capture's text, as `textsHolding` takes them. */
 export interface CaptureDedup {
   readonly tenantId: TenantId;
   readonly project?: readonly string[];
   readonly everyScope?: boolean;
-  /** The names of the project a stated rule is written for: a held copy of one of them gives way
-   * to the rule. None replaces nothing. */
   readonly ruleProject?: readonly string[];
+  readonly noRuleHome?: boolean;
 }
 
 // The local compaction hooks' record work, as data: the spool and the transcript a replay reads

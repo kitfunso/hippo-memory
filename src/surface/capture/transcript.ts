@@ -7,6 +7,7 @@ import {
   isStringValue,
   readSessionEnd,
 } from '../../base/session/capture-contract.js';
+import { chatLineTurn } from './chat-line-transcript.js';
 import { copilotTurn } from './copilot-transcript.js';
 import { errorCode, errorFields, errorMessage, log } from '../../base/util/log.js';
 import { tryParseJson } from '../../base/util/json.js';
@@ -137,9 +138,13 @@ export function collectSessionTurns(
   let scriptedCodex = false;
 
   for (const line of lines) {
-    // A torn or partial transcript line carries no turn.
     const entry: unknown = tryParseJson(line);
-    if (!isObjectLike(entry) || !('type' in entry)) continue;
+    if (!isObjectLike(entry)) continue;
+    if (!('type' in entry)) {
+      const chat = chatLineTurn(entry);
+      if (chat) turns.push(chat);
+      continue;
+    }
     visit?.(entry);
     scriptedCodex ||= isScriptedCodexSession(entry);
 
