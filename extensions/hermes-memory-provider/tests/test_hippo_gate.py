@@ -198,3 +198,19 @@ def test_isolated_plugin_host_obeys_active_policy_when_bound(env, start, monkeyp
         assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
     finally:
         session_policy._ACTIVE_POLICY.reset(token)
+
+
+def test_opting_out_a_platform_revokes_access_and_changes_identity_signature(env, start, started):
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [telegram]\n")
+    provider = start(platform="telegram")
+    assert provider.identity_signature() == {"hippo_platforms": ["telegram"]}
+    assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
+
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: []\n")
+    assert provider.identity_signature() == {"hippo_platforms": []}
+    assert {op: provider.allowed(op) for op in hippo.OPS} == NONE
+    assert not names(provider.get_tool_schemas()) & TOOLS
+    assert provider.prefetch("deploy") == ""
+    provider.on_session_end(session("revoked telegram turn"))
+    provider.shutdown()
+    assert started == []

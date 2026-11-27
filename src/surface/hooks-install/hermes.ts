@@ -219,6 +219,49 @@ function upgradeDir(
   }
 }
 
+function hasManagedEntry(pluginDir: string): boolean {
+  return [...PLUGIN_FILES, LAUNCHER_NAME].some(
+    (name) => fs.lstatSync(path.join(pluginDir, name), { throwIfNoEntry: false }) !== undefined,
+  );
+}
+
+function removeManagedFiles(pluginDir: string): void {
+  const targets = [...PLUGIN_FILES, LAUNCHER_NAME]
+    .map((name) => path.join(pluginDir, name))
+    .filter((file) => fs.existsSync(file))
+    .map((file) => ({ file, content: fs.readFileSync(file) }));
+  const removed: { readonly file: string; readonly content: Buffer }[] = [];
+  try {
+    for (const item of targets) {
+      fs.unlinkSync(item.file);
+      removed.push(item);
+    }
+  } catch (err) {
+    for (const item of removed.reverse()) {
+      try {
+        writeFileAtomic(item.file, item.content);
+      } catch (rollbackErr) {
+        log.warn(
+          `hermes uninstall rollback failed for ${item.file}: ${errorMessage(rollbackErr)}`,
+          errorFields(rollbackErr),
+        );
+      }
+    }
+    throw err;
+  }
+}
+
+function removeHippoPycache(pluginDir: string): void {
+  const pycache = path.join(pluginDir, '__pycache__');
+  if (!fs.lstatSync(pycache, { throwIfNoEntry: false })?.isDirectory()) return;
+  for (const name of fs.readdirSync(pycache)) {
+    if (!/^__init__\..*\.pyc$/i.test(name)) continue;
+    const file = path.join(pycache, name);
+    if (fs.lstatSync(file, { throwIfNoEntry: false })?.isFile()) fs.unlinkSync(file);
+  }
+  if (fs.readdirSync(pycache).length === 0) fs.rmdirSync(pycache);
+}
+
 function installIntoDir(pluginDir: string): HermesInstallStatus {
   const state = pluginDirState(pluginDir);
   if (state === 'not-dir') return { failed: `${pluginDir} is not a directory` };
@@ -230,7 +273,11 @@ function installIntoDir(pluginDir: string): HermesInstallStatus {
   const badEntry = checkManagedEntries(pluginDir);
   if (badEntry !== null) return badEntry;
   const record = readLauncherRecord(path.join(pluginDir, LAUNCHER_NAME));
-  if (record === null) return 'user-owned';
+  if (record === null) {
+    if (hasManagedEntry(pluginDir)) return 'user-owned';
+    upgradeDir(pluginDir, sources.files, sources);
+    return 'installed';
+  }
   const onDisk = diskHashes(pluginDir);
   if (hasHandEdits(onDisk, record, sources)) return 'kept';
   const differing = sources.files.filter((file) => onDisk.get(file.name) !== file.hash);
@@ -259,14 +306,8 @@ function removeFromDir(pluginDir: string): HermesUninstallStatus {
   if (record === null) return 'user-owned';
   const sources = loadPackageSources();
   if (hasHandEdits(diskHashes(pluginDir), record, sources)) return 'kept';
-  for (const name of [...PLUGIN_FILES, LAUNCHER_NAME]) {
-    const file = path.join(pluginDir, name);
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  }
-  const pycache = path.join(pluginDir, '__pycache__');
-  if (fs.lstatSync(pycache, { throwIfNoEntry: false })?.isDirectory()) {
-    fs.rmSync(pycache, { recursive: true, force: true });
-  }
+  removeManagedFiles(pluginDir);
+  removeHippoPycache(pluginDir);
   if (fs.readdirSync(pluginDir).length === 0) fs.rmdirSync(pluginDir);
   return 'removed';
 }

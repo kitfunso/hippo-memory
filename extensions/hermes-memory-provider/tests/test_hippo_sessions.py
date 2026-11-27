@@ -215,12 +215,15 @@ def test_finished_capture_provider_is_released_for_gc(fake, env):
     import gc
     import weakref
 
-    provider = hippo.HippoProvider()
-    provider.initialize("gc-session", platform="cli", hermes_home=str(env.hermes_home))
-    ref = weakref.ref(provider)
-    provider.on_session_end(session("gc check"))
-    provider.shutdown()
-    assert provider not in hippo._ACTIVE_CAPTURE_PROVIDERS
-    del provider
+    def run_one() -> weakref.ReferenceType[hippo.HippoProvider]:
+        provider = hippo.HippoProvider()
+        provider.initialize("gc-session", platform="cli", hermes_home=str(env.hermes_home))
+        ref = weakref.ref(provider)
+        provider.on_session_end(session("gc check"))
+        provider.shutdown()
+        return ref
+
+    ref = run_one()
+    assert len(hippo._ACTIVE_CAPTURE_PROVIDERS) == 0
     gc.collect()
     assert ref() is None

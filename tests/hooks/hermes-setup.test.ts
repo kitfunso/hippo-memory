@@ -295,6 +295,29 @@ describe('installHermes and uninstallHermes', () => {
     expect(fs.existsSync(outsideFile)).toBe(true);
     expect(fs.lstatSync(pycache).isSymbolicLink()).toBe(true);
     expect(fs.readFileSync(extra, 'utf8')).toBe('keep me\n');
+
+    expect(installHermes(homes).status).toBe('installed');
+    expect(fs.readFileSync(extra, 'utf8')).toBe('keep me\n');
+    expect(fs.existsSync(path.join(first.pluginDir, 'launcher.json'))).toBe(true);
+  });
+
+  it('removes only hippo __init__ bytecode inside __pycache__ and keeps unrelated cache files', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const first = installHermes(homes);
+    const pycache = path.join(first.pluginDir, '__pycache__');
+    fs.mkdirSync(pycache, { recursive: true });
+    const hippoPyc = path.join(pycache, '__init__.cpython-314.pyc');
+    const otherPyc = path.join(pycache, 'custom.cpython-314.pyc');
+    fs.writeFileSync(hippoPyc, 'hippo');
+    fs.writeFileSync(otherPyc, 'user');
+
+    expect(uninstallHermes(homes).status).toBe('removed');
+    expect(fs.existsSync(hippoPyc)).toBe(false);
+    expect(fs.readFileSync(otherPyc, 'utf8')).toBe('user');
   });
 
   it('returns no-home and creates nothing when the Hermes home does not exist', () => {

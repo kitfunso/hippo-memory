@@ -125,6 +125,8 @@ def launcher() -> list[str]:
             if ("/" in override or "\\" in override or Path(override).is_file())
             else override
         )
+        if not _launcher_allowed(resolved):
+            raise ValueError("HIPPO_BIN must name hippo.js or a hippo .exe on Windows")
         return [node, resolved] if _launcher_name(resolved).endswith(".js") else [resolved]
     if rec and Path(rec["script"]).is_file():
         return [node, rec["script"]]
@@ -415,12 +417,14 @@ class HippoProvider(MemoryProvider):
     def unavailable_reason(self) -> str:
         return "hippo CLI not found: run `hippo hook install hermes`, or set HIPPO_BIN to hippo's bin/hippo.js"
 
+    def identity_signature(self) -> dict[str, Any]:
+        return {"hippo_platforms": sorted(opt_in_platforms())}
+
     def initialize(self, session_id: str, **kwargs: Any) -> None:
         self._session_id = str(session_id or "")
         self._platform = str(kwargs.get("platform") or "")
         context = kwargs.get("agent_context")
         self._agent_context = context.strip() if isinstance(context, str) and context.strip() else "primary"
-        self._opt_in_platforms = opt_in_platforms()
         self._source = _resolve_source(self._platform)
         self._initialized = True
         self._capture_on = self.allowed("capture") and row_helpers() is not None
@@ -430,11 +434,13 @@ class HippoProvider(MemoryProvider):
             self._capture_on = False
 
     def allowed(self, op: str) -> bool:
-        opt_in = self._opt_in_platforms
-        if self._platform not in LOCAL_PLATFORMS | opt_in:
-            return False
-        if self._source not in LOCAL_SOURCES | opt_in:
-            return False
+        local = self._platform in LOCAL_PLATFORMS and self._source in LOCAL_SOURCES
+        if not local:
+            opt_in = opt_in_platforms()
+            if self._platform not in LOCAL_PLATFORMS | opt_in:
+                return False
+            if self._source not in LOCAL_SOURCES | opt_in:
+                return False
         row = CONTEXT_RULES.get(self._agent_context or "primary", CONTEXT_RULES["subagent"])
         return row[OPS.index(op)]
 

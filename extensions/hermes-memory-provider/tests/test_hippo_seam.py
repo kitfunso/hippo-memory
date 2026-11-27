@@ -122,7 +122,7 @@ def test_windows_refuses_disallowed_launchers(name, tmp_path, monkeypatch, start
 @pytest.mark.parametrize(("name", "under_node"), [("hippo.js", True), ("HIPPO.JS", True),
                                                   ("hippo.exe", False), ("HIPPO.EXE", False)])
 def test_windows_allows_a_js_or_an_exe(name, under_node, tmp_path, monkeypatch):
-    path = str(tmp_path / name)
+    path = str((tmp_path / name).resolve())
     monkeypatch.setenv("HIPPO_BIN", path)
     monkeypatch.setattr(sys, "platform", "win32")
     assert hippo.launcher() == (["node", path] if under_node else [path])
