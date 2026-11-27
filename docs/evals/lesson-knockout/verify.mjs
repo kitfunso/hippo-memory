@@ -10,7 +10,7 @@ import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } 
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
 import { archivedAudit,bodyAudit,callComplete,cutOffPermissions,evidence,mainPairs,neutralClean,permissionAudit,sessionInventory,smokeClean,summaryOf,wireLedger } from './evidence.mjs';
-import { authority,makeWireCa,openWire,wireName } from './wire.mjs';
+import { authority,codeOf,makeWireCa,openWire,wireName } from './wire.mjs';
 import { sse,startScriptedApi } from './scripted-api.mjs';
 import { checkLauncher,checkWireOffline } from './verify-wire.mjs';
 import { commandLog } from '../../../scripts/token-eval/records.mjs';
@@ -374,6 +374,11 @@ const disputedShortAmbig=originAudit([{...said('m1','I will run check-it.'),body
   {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum),'\nMore context.')))])}]);
 assert(!disputedShortAmbig.targetText && disputedShortAmbig.ambiguous,'A disputed multi-block JSON compaction failed to mark the disputed suffix ambiguous');
+const disputedShortFull=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum),'\nMore context.\nRun the special check.')))])}]);
+assert(disputedShortFull.targetText && !disputedShortFull.ambiguous,'A disputed multi-block JSON compaction hid a footer after the full joined summary');
 const disputedShortDiverged=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
   {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
@@ -481,6 +486,7 @@ function checkCallWire() {
   const unstopped=streamed('msg-two').replace(/event: message_stop\ndata: [^\n]*\n\n$/,'');
   assert(!unstopped.includes('message_stop'));
   fails([one,{...two,reply:unstopped,contentType:'text/event-stream'}],'A reply without message_stop passed');
+  fails([one,two,{...two,reply:unstopped,contentType:'text/event-stream'}],'A trailing unfinished copy of the final turn passed as a success');
   fails([one,{...two,reply:streamed('msg-two')+sseEvent('error',{error:{type:'overloaded_error'}}),contentType:'text/event-stream'}],
     'A reply with an error event passed');
   fails([one,{...two,ended:'client-closed'}],'A reply the client abandoned passed');
@@ -491,7 +497,8 @@ function checkCallWire() {
   const moved=(kind,seq,from,to)=>d=>{ fs.mkdirSync(join(d,to,'..'),{recursive:true}); fs.copyFileSync(join(d,from),join(d,to)); point(kind,seq,to)(d); };
   for(const [name,change] of [['changed reply',d=>fs.appendFileSync(join(d,'00002.response'),' ')],
     ['changed request',d=>fs.appendFileSync(join(d,'00001.request.json'),' ')],
-    ['same-length reply',d=>flip(d,'00002.response')],['same-length request',d=>flip(d,'00002.request.json')],
+    ['same-length reply',d=>{ const f=join(d,'00002.response'),b=fs.readFileSync(f,'utf8'); assert(b.includes('"text":"ok"')); fs.writeFileSync(f,b.replace('"text":"ok"','"text":"OK"')); }],
+    ['same-length request',d=>flip(d,'00002.request.json')],
     ['request in another folder',moved('request',2,'00002.request.json','../other/00002.request.json')],
     ['reply in another folder',moved('response',2,'00002.response','../other/00002.response')],
     ['request under another number',moved('request',2,'00002.request.json','00003.request.json')],
@@ -534,7 +541,7 @@ function checkCallWire() {
   fails([one,{...two,route:'other',method:'POST'}],'An unknown model route passed');
   fails([{route:'other',method:'GET'},one,two],'An unknown side route passed');
   fails([one,{...two,method:'GET'}],'A model route with another method passed');
-  for(const cls of ['subagent','workflow','invalid',null]) fails([one,{...two,cls}],'A '+cls+' request class passed');
+  for(const cls of ['subagent','workflow','invalid',null]) fails([one,{requestId:'bad',id:'msg-bad',cls},two],'A '+cls+' request class passed');
   for(const cls of ['compaction','auxiliary']) {
     const aux=passes([one,{requestId:'aux',id:'msg-aux',cls,body:plainBody(lesson.rule)},{...two,body:plainBody('base')}],
       'A '+cls+' request outside the transcript stopped the call');
@@ -543,7 +550,7 @@ function checkCallWire() {
   fails([one,{requestId:'two',id:'msg-two',cls:'compaction'}],'A transcript turn answered by an auxiliary request passed');
   passes([one,two,{requestId:'aux-last',id:'msg-aux-last',cls:'auxiliary'}],'An auxiliary request after the final turn stopped the call');
   fails([one,{...two,body:'not json'}],'An undecodable request passed');
-  fails([one,{...two,body:JSON.stringify({messages:[user]})}],'A request without a system prompt passed');
+  fails([one,{...two,body:JSON.stringify({messages:[user],stream:true})}],'A request without a system prompt passed');
   const side=passes([{route:'settings'},{route:'policy'},one,{route:'count',body:plainBody(lesson.rule)},{...two,body:plainBody('base')}],
     'Settings, policy and count requests broke the match');
   assert(side.sideRequests===3 && side.requests===2 && side.targetText,'A count body was not audited');
@@ -1132,6 +1139,7 @@ fs.mkdirSync(join(records,'wire','apply'),{recursive:true});
 await assert.rejects(retryLimited(state,fork,()=>0,()=>ready,{delay:unexpectedWait,record}),/Stale wire record for apply/,'A stale wire record was reused');
 clearWire();
 await assert.rejects(retryLimited(state,fork,async()=>{ throw Error('invoke fixture'); },()=>ready,{delay:unexpectedWait,record}),/invoke fixture/);
+assert(fs.existsSync(join(records,'wire','apply','wire.jsonl')),'A failed invocation left its wire open');
 assert.deepEqual(wireRows('apply').map(r=>r.kind),['closed'],'A failed invocation left its wire open');
 clearWire();
 const shortCa=makeWireCa(join(dir,'short-ca'),1);
@@ -1210,6 +1218,9 @@ async function checkLiveWire() {
     rewireRows(order,all=>all.filter(r=>!(r.kind==='refused' && r.reason==='anthropic-host')));
     assert.deepEqual(wireLedger(order).exchanges.map(x=>[x.seq,x.complete]),[[1,true],[2,true]],'The ledger lost an overlapped exchange');
     const sealedLog=fs.readFileSync(join(order,'wire.jsonl'),'utf8');
+    const reclosed=await w.close(10);
+    assert.equal(fs.readFileSync(join(order,'wire.jsonl'),'utf8'),sealedLog,'A second close wrote to the sealed wire log');
+    assert(!reclosed.ok,'A second close of a sealed wire reported success');
     const replacement=join(base,'replacement'),next=await openWire(replacement,{ca:testCa,upstream:api.upstream,port:w.port});
     assert.equal(next.port,w.port,'The forced port reuse test did not reuse the closed port');
     assert.notEqual(next.token,w.token,'The replacement attempt reused the wire token');
@@ -1269,6 +1280,8 @@ async function checkLiveWire() {
     const text=fs.readFileSync(join(dirty,'wire.jsonl'),'utf8');
     assert(!text.includes('secret') && !text.includes('token=abc') && !text.includes(junk),'A refused request kept its URL or body');
     for(const r of dirtyRows.filter(r=>r.kind==='fault')) assert.match(r.error,/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
+    for(const e of ['disk full at C:\\secret\\path?token=abc',{code:'E BAD/'+'x'.repeat(80)},{name:'Weird Name: secret'}])
+      assert.match(codeOf(e),/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
     const oneShot=async (name,request)=>{
       const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port,one.token),got=reply(t);
       t.write(request);

@@ -156,6 +156,14 @@ try {
   $writes=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Write-CallRecord' },$true))
   if ($writes.Count -ne 1) { throw 'launch.ps1 must write one call record through Write-CallRecord' }
   if ($writes[0].Extent.StartOffset -gt $stopIf[0].Extent.StartOffset) { throw 'launch.ps1 exits before it writes the call record' }
+  $stopSets=@($launch.FindAll({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$stopped' },$true))
+  if ($stopSets.Count -ne 1) { throw 'launch.ps1 does not set the stop flag once' }
+  $stopRule=[scriptblock]::Create('param($p,$result,$capped) '+$stopSets[0].Right.Extent.Text)
+  foreach ($case in @(@('clean',0,$false,$false,$false),@('is-error',0,$true,$false,$true),@('exit-1',1,$false,$false,$true),@('capped',1,$true,$true,$false))) {
+    $got=[bool](& $stopRule ([pscustomobject]@{ExitCode=$case[1]}) ([pscustomobject]@{is_error=$case[2]}) $case[3])
+    if ($got -ne $case[4]) { throw "launch.ps1 stop rule is wrong for the $($case[0]) case" }
+  }
+  if (-not [bool](& $stopRule ([pscustomobject]@{ExitCode=0}) $null $false)) { throw 'launch.ps1 stop rule is wrong for the no-json case' }
   $named={ param($Name) @($launch.FindAll({ param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq $Name },$true)) }
   if ((& $named 'Get-WireEnv').Count -ne 1 -or (& $named 'Assert-WireOnly').Count -ne 1) { throw 'launch.ps1 does not take and check its wire settings once' }
   if ($launch.Extent.Text -match 'OTEL_|Get-DispatchEnv') { throw 'launch.ps1 still sets a telemetry or dispatch log setting' }

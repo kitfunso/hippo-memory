@@ -28,7 +28,7 @@ const waitEither=(res,a,b)=>new Promise(resolve=>{ const done=()=>{ res.off(a,do
 const flushed=res=>res.writableFinished || res.destroyed ? Promise.resolve() : waitEither(res,'finish','close');
 const label=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.:-]{1,128}$/i.test(v) ? v : 'invalid';
 const listed=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.,: -]{0,1024}$/i.test(v) ? v : 'invalid';
-const codeOf=e=>String(typeof e==='string' ? e : e?.code ?? e?.name ?? 'error').replace(/[^a-z0-9_.-]/gi,'').slice(0,48) || 'error';
+export const codeOf=e=>String(typeof e==='string' ? e : e?.code ?? e?.name ?? 'error').replace(/[^a-z0-9_.-]/gi,'').slice(0,48) || 'error';
 const pause=ms=>new Promise(r=>setTimeout(r,ms).unref());
 export const wireName=(n,suffix)=>String(n).padStart(5,'0')+suffix;
 export const hostOf=h=>String(h??'').toLowerCase().replace(/^\[|\]$/g,'').replace(/\.+$/,'');
