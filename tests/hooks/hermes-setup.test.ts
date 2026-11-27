@@ -373,6 +373,37 @@ describe('installHermes and uninstallHermes', () => {
     expect(fs.readdirSync(pluginsDir)).toEqual(['hippo']);
     expect(fs.existsSync(path.join(retried.pluginDir, 'launcher.json'))).toBe(true);
   });
+
+  it('rolls back replaced plugin files when writing launcher.json fails during an upgrade', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const first = installHermes(homes);
+    expect(first.status).toBe('installed');
+
+    const oldInit = Buffer.from('# previous release\n');
+    const launcherPath = path.join(first.pluginDir, 'launcher.json');
+    const initPath = path.join(first.pluginDir, '__init__.py');
+    const record = JSON.parse(fs.readFileSync(launcherPath, 'utf8'));
+    record.hashes['__init__.py'] = sha256(oldInit);
+    fs.writeFileSync(initPath, oldInit);
+    fs.writeFileSync(launcherPath, JSON.stringify(record, null, 2));
+    fs.chmodSync(launcherPath, 0o444);
+
+    try {
+      const failed = installHermes(homes);
+      expect(isHermesFailure(failed.status)).toBe(true);
+      expect(fs.readFileSync(initPath).equals(oldInit)).toBe(true);
+    } finally {
+      fs.chmodSync(launcherPath, 0o644);
+    }
+
+    const retried = installHermes(homes);
+    expect(retried.status).toBe('updated');
+    expect(fs.readFileSync(initPath).equals(fs.readFileSync(path.join(SOURCE_DIR, '__init__.py')))).toBe(true);
+  });
 });
 
 describe('hippo CLI wire-up with Hermes', () => {

@@ -5,6 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { collectVerbReads } from '../../scripts/cli-flag-reads.mjs';
 import { parseArgs, runCli as runCliEntry, shouldAutoRepairCodexWrapper } from '../../src/cli.js';
+import { flagValueless } from '../../src/surface/cli/flag-values.js';
 import { COMMANDS } from '../../src/surface/cli/verbs.js';
 import { undeclaredFlags, type VerbFlags } from '../../src/surface/cli/flags.js';
 import { ownStderr } from '../_helpers/own-stderr.js';
@@ -57,9 +58,13 @@ describe('parseArgs: --flag=value (glued form)', () => {
     expect(flags['reason']).toBe('--weird');
   });
 
-  it('case 9: --tag=a --tag= (empty glued value after a repeatable key) marks it valueless, as bare --tag does', () => {
-    const { flags } = parseArgs(argv('remember', '--tag=a', '--tag='));
-    expect(flags['tag']).toBe(true);
+  it('case 9: --tag=a --tag= keeps prior entries while recording the empty occurrence', () => {
+    const trailing = parseArgs(argv('remember', '--tag=a', '--tag='));
+    expect(trailing.flags['tag']).toEqual(['a']);
+    expect(flagValueless(trailing.flags, 'tag')).toBe(true);
+    const leading = parseArgs(argv('remember', '--tag=', '--tag=a'));
+    expect(leading.flags['tag']).toEqual(['a']);
+    expect(flagValueless(leading.flags, 'tag')).toBe(true);
   });
 
   it('case 10: --tag= alone gives true, as --tag does, not an array holding an empty string', () => {

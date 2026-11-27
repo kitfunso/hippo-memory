@@ -160,3 +160,41 @@ def test_gateway_session_policy_gates_global_memory(policy_source, platform, opt
             assert started == []
     finally:
         session_policy._ACTIVE_POLICY.reset(token)
+
+
+def test_isolated_plugin_host_fails_closed_without_session_policy(env, start, started, monkeypatch, caplog):
+    from hermes_cli import plugin_events
+
+    monkeypatch.setattr(plugin_events, "_session_event_forwarder", lambda *a: True)
+    with caplog.at_level(logging.WARNING):
+        provider = start(platform="cli")
+    assert {op: provider.allowed(op) for op in hippo.OPS} == NONE
+    assert not names(provider.get_tool_schemas()) & TOOLS
+    assert provider.prefetch("deploy") == ""
+    provider.on_session_end(session("hosted tool turn"))
+    provider.shutdown()
+    assert started == []
+    assert any("plugins.isolation: host" in r.getMessage() for r in caplog.records)
+
+
+def test_isolated_plugin_host_obeys_active_policy_when_bound(env, start, monkeypatch):
+    from gateway import session_policy
+    from hermes_cli import plugin_events
+
+    monkeypatch.setattr(plugin_events, "_session_event_forwarder", lambda *a: True)
+    policy = session_policy.LocalSessionPolicy(
+        source="cli",
+        platform="cli",
+        cwd=str(env.home),
+        model=None,
+        toolsets=(),
+        config_json="{}",
+        request_json=json.dumps({"source": "cli"}),
+        terminal_json="{}",
+    )
+    token = session_policy._ACTIVE_POLICY.set(policy)
+    try:
+        provider = start(platform="cli")
+        assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)

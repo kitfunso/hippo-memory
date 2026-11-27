@@ -227,6 +227,15 @@ def _policy_helpers() -> Optional[tuple[Callable[[], Any], Callable[[Any], Optio
     return active_policy, created_surface
 
 
+def _in_plugin_host() -> bool:
+    events = sys.modules.get("hermes_cli.plugin_events")
+    if getattr(events, "_session_event_forwarder", None) is not None:
+        return True
+    wire = sys.modules.get("hermes_cli.plugin_host_wire")
+    serving = getattr(wire, "serving_request", None)
+    return callable(serving) and serving() is not None
+
+
 def _resolve_source(platform: str) -> str:
     source_for = _session_source()
     policy_helpers = _policy_helpers()
@@ -236,9 +245,12 @@ def _resolve_source(platform: str) -> str:
     policy = active_policy()
     policy_source = getattr(policy, "source", None) if policy is not None else None
     if isinstance(policy_source, str) and policy_source.strip():
-        mapped = created_surface(policy_source.strip())
+        mapped = created_surface(policy_source.strip().lower())
         if mapped is not None:
             return mapped
+    if _in_plugin_host():
+        logger.warning("hippo is off in plugins.isolation: host mode: no session policy is bound")
+        return ""
     return source_for(platform)
 
 
@@ -333,6 +345,35 @@ def _log_capture_failure(future: Future) -> None:
 def _text_arg(args: dict[str, Any], key: str) -> str:
     value = args.get(key)
     return value.strip() if isinstance(value, str) else ""
+
+
+_ACTIVE_CAPTURE_LOCK = threading.Lock()
+_ACTIVE_CAPTURE_PROVIDERS: set[Any] = set()
+_EXIT_HOOK_REGISTERED = False
+
+
+def _shutdown_active_providers() -> None:
+    with _ACTIVE_CAPTURE_LOCK:
+        providers = list(_ACTIVE_CAPTURE_PROVIDERS)
+    for provider in providers:
+        provider.shutdown()
+
+
+def _track_capture_provider(provider: Any) -> None:
+    global _EXIT_HOOK_REGISTERED
+    with _ACTIVE_CAPTURE_LOCK:
+        _ACTIVE_CAPTURE_PROVIDERS.add(provider)
+        if not _EXIT_HOOK_REGISTERED:
+            try:
+                threading._register_atexit(_shutdown_active_providers)
+                _EXIT_HOOK_REGISTERED = True
+            except (AttributeError, RuntimeError) as exc:
+                logger.warning("hippo: no exit hook for queued captures: %s", exc)
+
+
+def _untrack_capture_provider(provider: Any) -> None:
+    with _ACTIVE_CAPTURE_LOCK:
+        _ACTIVE_CAPTURE_PROVIDERS.discard(provider)
 
 
 class HippoProvider(MemoryProvider):
@@ -472,16 +513,10 @@ class HippoProvider(MemoryProvider):
                 return
             if self._captures is None:
                 self._captures = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hippo-capture")
-                self._run_shutdown_at_exit()
+                _track_capture_provider(self)
             future = self._captures.submit(ctx_bound(self._capture_job), lines, sid)
             future.add_done_callback(_log_capture_failure)
             self._capture_futures = [f for f in self._capture_futures if not f.done()] + [future]
-
-    def _run_shutdown_at_exit(self) -> None:
-        try:
-            threading._register_atexit(self.shutdown)
-        except (AttributeError, RuntimeError) as exc:
-            logger.warning("hippo: no exit hook for queued captures: %s", exc)
 
     def _capture_job(self, lines: list[dict[str, str]], sid: str) -> None:
         try:
@@ -505,25 +540,30 @@ class HippoProvider(MemoryProvider):
                 self._capture_proc = proc
 
     def shutdown(self) -> None:
-        with self._lock:
-            if self._closed:
+        try:
+            with self._lock:
+                if self._closed:
+                    return
+                self._closed = True
+                executor, futures = self._captures, tuple(self._capture_futures)
+                self._captures = None
+                self._capture_futures = []
+            if executor is None:
                 return
-            self._closed = True
-            executor, futures = self._captures, tuple(self._capture_futures)
-        if executor is None:
-            return
-        executor.shutdown(wait=False, cancel_futures=False)
-        _, pending = wait(futures, timeout=capture_deadline_s())
-        if not pending:
-            return
-        dropped = sum(future.cancel() for future in pending)
-        with self._lock:
-            self._stopping = True
-            proc = self._capture_proc
-        if proc is not None and proc.poll() is None:
-            proc.kill()
-        logger.warning("hippo: shutdown stopped %d running and dropped %d queued capture(s)",
-                       len(pending) - dropped, dropped)
+            executor.shutdown(wait=False, cancel_futures=False)
+            _, pending = wait(futures, timeout=capture_deadline_s())
+            if not pending:
+                return
+            dropped = sum(future.cancel() for future in pending)
+            with self._lock:
+                self._stopping = True
+                proc = self._capture_proc
+            if proc is not None and proc.poll() is None:
+                proc.kill()
+            logger.warning("hippo: shutdown stopped %d running and dropped %d queued capture(s)",
+                           len(pending) - dropped, dropped)
+        finally:
+            _untrack_capture_provider(self)
 
 
 def register(ctx: Any) -> None:

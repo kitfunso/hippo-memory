@@ -26,6 +26,7 @@ import { CliExit, fail } from './exit.js';
 import { plural } from '../../base/util/format.js';
 
 function outcomeIds(flags: CliFlags): string[] {
+  if (flagValueless(flags, 'id')) fail('--id requires a value');
   const raw = repeatedFlag(flags, 'id');
   const ids = raw.map((id) => id.trim()).filter(Boolean);
   if (hasFlag(flags, 'id') && (ids.length === 0 || ids.length !== raw.length)) {

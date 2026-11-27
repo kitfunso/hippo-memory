@@ -71,7 +71,13 @@ describe('--global on recall, context and outcome (built CLI, project folder wit
     const [globalId] = idsOf(store.rows('global'));
     await hippo(store, ['recall', 'deploy', '--global']);
     const before = store.rows('global').map((row) => row['outcome_positive']);
-    for (const extra of [['--id='], ['--id', globalId!, '--id='], ['--id', globalId!, '--id']]) {
+    for (const extra of [
+      ['--id='],
+      ['--id', globalId!, '--id='],
+      ['--id=', '--id', globalId!],
+      ['--id', globalId!, '--id'],
+      ['--id', '--id', globalId!],
+    ]) {
       const ran = await hippoRunAsync(['outcome', '--global', '--good', ...extra], {
         cwd: store.cwd,
         env: store.env,

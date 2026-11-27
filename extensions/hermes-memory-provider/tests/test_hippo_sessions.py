@@ -209,3 +209,18 @@ def test_exit_without_shutdown_still_runs_the_deadline(fake, env):
     assert done.returncode == 0, done.stderr
     assert "stopped 1 running and dropped 1 queued" in done.stderr
     assert len(fake.calls("capture")) == 1
+
+
+def test_finished_capture_provider_is_released_for_gc(fake, env):
+    import gc
+    import weakref
+
+    provider = hippo.HippoProvider()
+    provider.initialize("gc-session", platform="cli", hermes_home=str(env.hermes_home))
+    ref = weakref.ref(provider)
+    provider.on_session_end(session("gc check"))
+    provider.shutdown()
+    assert provider not in hippo._ACTIVE_CAPTURE_PROVIDERS
+    del provider
+    gc.collect()
+    assert ref() is None

@@ -186,6 +186,33 @@ function stageFreshInstall(pluginDir: string, sources: PackageSources): void {
   }
 }
 
+function upgradeDir(
+  pluginDir: string,
+  differing: readonly SourceFile[],
+  sources: PackageSources,
+): void {
+  const backups = differing.map((file) => {
+    const dest = path.join(pluginDir, file.name);
+    return { dest, prev: fs.existsSync(dest) ? fs.readFileSync(dest) : null };
+  });
+  const written: { readonly dest: string; readonly prev: Buffer | null }[] = [];
+  try {
+    for (let i = 0; i < differing.length; i++) {
+      writeFileAtomic(backups[i].dest, differing[i].content);
+      written.push(backups[i]);
+    }
+    writeLauncher(pluginDir, sources);
+  } catch (err) {
+    for (const item of written.reverse()) {
+      try {
+        if (item.prev === null) fs.rmSync(item.dest, { force: true });
+        else writeFileAtomic(item.dest, item.prev);
+      } catch {}
+    }
+    throw err;
+  }
+}
+
 function installIntoDir(pluginDir: string): HermesInstallStatus {
   const state = pluginDirState(pluginDir);
   if (state === 'not-dir') return { failed: `${pluginDir} is not a directory` };
@@ -212,8 +239,7 @@ function installIntoDir(pluginDir: string): HermesInstallStatus {
   ) {
     return 'present';
   }
-  for (const file of differing) writeFileAtomic(path.join(pluginDir, file.name), file.content);
-  writeLauncher(pluginDir, sources);
+  upgradeDir(pluginDir, differing, sources);
   return 'updated';
 }
 
