@@ -23,7 +23,7 @@ import path from 'node:path';
 import { cutOff,launch,limitBound,openCallWire,openCue,retryLimited } from './delivery.mjs';
 import net from 'node:net';
 import { runSetupScript } from './setup.mjs';
-import { assertSameTree,continueUnit } from './continuation.mjs';
+import { assertSameTree,checkTeachReceipts,continueUnit } from './continuation.mjs';
 import { collectRemaining } from './collect.mjs';
 
 const INFRA_CODES=new Set(['EBUSY','EPERM','ENOSPC','ENOMEM','EMFILE','EADDRINUSE','ENOENT']);
@@ -1139,8 +1139,10 @@ fs.mkdirSync(join(records,'wire','apply'),{recursive:true});
 await assert.rejects(retryLimited(state,fork,()=>0,()=>ready,{delay:unexpectedWait,record}),/Stale wire record for apply/,'A stale wire record was reused');
 clearWire();
 await assert.rejects(retryLimited(state,fork,async()=>{ throw Error('invoke fixture'); },()=>ready,{delay:unexpectedWait,record}),/invoke fixture/);
-assert(fs.existsSync(join(records,'wire','apply','wire.jsonl')),'A failed invocation left its wire open');
-assert.deepEqual(wireRows('apply').map(r=>r.kind),['closed'],'A failed invocation left its wire open');
+let closedRows;
+try { closedRows=wireRows('apply'); }
+catch(e) { if(e?.code==='ENOENT') assert.fail('A failed invocation left its wire open'); throw e; }
+assert.deepEqual(closedRows.map(r=>r.kind),['closed'],'A failed invocation left its wire open');
 clearWire();
 const shortCa=makeWireCa(join(dir,'short-ca'),1);
 await assert.rejects(async()=>openCallWire(join(dir,'short-wire'),shortCa),/expires within a day/,'A wire certificate that expires within a day was used');
@@ -1280,8 +1282,10 @@ async function checkLiveWire() {
     const text=fs.readFileSync(join(dirty,'wire.jsonl'),'utf8');
     assert(!text.includes('secret') && !text.includes('token=abc') && !text.includes(junk),'A refused request kept its URL or body');
     for(const r of dirtyRows.filter(r=>r.kind==='fault')) assert.match(r.error,/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
-    for(const e of ['disk full at C:\\secret\\path?token=abc',{code:'E BAD/'+'x'.repeat(80)},{name:'Weird Name: secret'}])
-      assert.match(codeOf(e),/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
+    assert.equal(codeOf({code:'ENOSPC'}),'ENOSPC','A known error code was lost');
+    assert.equal(codeOf('unsanitizable'),'unsanitizable','A known error code was lost');
+    for(const e of ['disk full at C:\\SECRET_CANARY_99\\path?token=abc',{code:'E BAD/SECRET_CANARY_99'+'x'.repeat(60)},{name:'Weird Name: SECRET_CANARY_99'}])
+      assert.equal(codeOf(e),'error','A fault row kept free text');
     const oneShot=async (name,request)=>{
       const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port,one.token),got=reply(t);
       t.write(request);
@@ -1291,6 +1295,19 @@ async function checkLiveWire() {
     };
     const fields='Content-Type: application/json\r\nx-claude-code-request-class: main\r\nanthropic-version: 2023-06-01\r\n';
     const request=(payload,host='Host: api.anthropic.com\r\n')=>'POST /v1/messages?beta=true HTTP/1.1\r\n'+host+fields+'Content-Length: '+payload.length+'\r\n\r\n'+payload;
+    for(const [name,err,want] of [
+      ['fault-hostile',Object.assign(Error('SECRET_CANARY_99'),{code:'BAD SECRET_CANARY_99'}),'error'],
+      ['fault-known',Object.assign(Error('SECRET_CANARY_99'),{code:'ENOSPC'}),'ENOSPC'],
+    ]) {
+      const origWriteFile=fs.writeFileSync;
+      fs.writeFileSync=(p,...a)=>{ if(String(p).endsWith('00001.request.json')) throw err; return origWriteFile(p,...a); };
+      let r;
+      try { r=await oneShot(name,request(body('CASE:final '+name))); } finally { fs.writeFileSync=origWriteFile; }
+      const rawLog=fs.readFileSync(join(r.dir,'wire.jsonl'),'utf8');
+      assert(!rawLog.includes('SECRET_CANARY_99'),'A fault row kept free text');
+      const faultRow=r.rows.find(x=>x.kind==='fault');
+      assert.equal(faultRow?.error,want,want==='error' ? 'A fault row kept free text' : 'A known error code was lost');
+    }
     const ported=await oneShot('host-port',request(body('CASE:final ported'),'Host: api.anthropic.com:443\r\n'));
     assert(ported.state.ok && /message_stop/.test(ported.text) && ported.forwarded[0]?.headers.includes('api.anthropic.com:443'),
       'The wire refused or rewrote an explicit API port in Host');
@@ -1611,6 +1628,11 @@ for(const change of [{apparatus:2},{mode:'default'},{stopped:true},{record:{json
 }
 teachFixture(partial,first,{wires:false}); await refuse(/Unmatched frozen teach wire record: teach/);
 teachFixture(partial,first);
+try { checkTeachReceipts(partial,frozen,first); }
+catch(e) {
+  if(/Unmatched frozen teach wire record: teach/.test(e?.message ?? '')) assert.fail('Valid frozen teach wire record was refused');
+  throw e;
+}
 fs.rmSync(join(partial,'evidence/teach/operator/wire/feedback'),{recursive:true});
 await refuse(/Unmatched frozen teach wire record: feedback/);
 teachFixture(partial,first);

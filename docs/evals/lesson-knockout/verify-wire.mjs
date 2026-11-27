@@ -162,14 +162,18 @@ export async function checkWireOffline(parent) {
     fs.writeSync=(fd,...a)=>{ if(patch.fds.has(fd)) throw Object.assign(Error('ENOSPC: no space left on device, write'),{code:'ENOSPC'}); return patch.write(fd,...a); };
     try { await run('replyfull','CASE:final Reply done.',{killAfter:20000}); } finally { patch.restore(); }
     patch=replyFds();
-    let short=0;
+    let short=0,partial=false;
     fs.writeSync=(fd,buf,offset,length,...a)=>{
-      if(!patch.fds.has(fd) || typeof offset!=='number') return patch.write(fd,buf,offset,length,...a);
+      if(!patch.fds.has(fd) || !Buffer.isBuffer(buf)) return patch.write(fd,buf,offset,length,...a);
+      const at=typeof offset==='number' ? offset : 0;
+      const len=typeof length==='number' ? length : buf.length-at;
       short++;
-      return patch.write(fd,buf,offset,Math.min(length,7),...a);
+      const cap=Math.min(len,7);
+      if(cap<len) partial=true;
+      return patch.write(fd,buf,at,cap,...a);
     };
     try { await run('shortwrite','CASE:final Reply done.',{killAfter:20000}); } finally { patch.restore(); }
-    assert(short>1,'The short write patch never ran');
+    assert(short>0 && partial,'The short write patch never injected a partial write');
   } finally { await api.close(); }
   assert.deepEqual(outcomes['parity-wire'].seen.map(x=>x.kind).filter(k=>k!=='other'),['tool','final'],'The parity run did not take a tool turn');
   assert(outcomes['parity-wire'].offers.length>0,'The parity run recorded no protocol offer');
