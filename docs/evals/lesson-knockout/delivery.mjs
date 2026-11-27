@@ -70,7 +70,7 @@ async function invoke(live,token,env,boxChecked=false,onStderr) {
     path.join(folder,'launch.ps1'),'-Live',live,'-TokenVar',token,...(boxChecked?['-BoxChecked']:[])],
     {cwd:path.dirname(live),env,windowsHide:true,stdio:['inherit','inherit',onStderr ? 'pipe' : 'inherit']});
   if(onStderr) proc.stderr.on('data',d=>{ process.stderr.write(d); onStderr(String(d)); });
-  const [code]=await once(proc,'exit');
+  const [code]=await once(proc,onStderr ? 'close' : 'exit');
   return code;
 }
 

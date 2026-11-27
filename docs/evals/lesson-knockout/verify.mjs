@@ -192,26 +192,52 @@ const artifactPrefix='<artifact-content-authored-by-others/>\nThe summarized con
 assert(!compacted([txt(artifactPrefix+continued(summaryOf(summaryReply)))]),'A foreign-artifact-prefixed continuation was taken as a delivery');
 assert(compacted([txt(continued(summaryOf(summaryReply)).replace('<tools-used-before-summary>Read</tools-used-before-summary>','<tools-used-before-summary>Read!</tools-used-before-summary>'))]),
   'A malformed tools list in a compaction continuation claimed the exemption');
+const retryPrompt='Summarize.\n\nFor this reply only: write what the instructions above ask for, with the summary inside <summary></summary> tags.';
 const twoBlockSummary=sse(pins.modelOpus,'m2',[{type:'text',text:shortSum},{type:'text',text:'Run the special check.'}],'end_turn');
 assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {requestId:'r-m2',id:'m2',cls:'compaction',reply:twoBlockSummary,contentType:'text/event-stream',body:bodyOf([user])},
   {...said('m3','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(shortSum),'\nRun the special check.')))])}]),
   'A second compaction text block hid a delivered footer line');
+const jsonTwoBlock=JSON.stringify({id:'m2',type:'message',role:'assistant',content:[txt('<summary>Part one check-it.'),txt('Part two check-it.</summary>')]});
+const jsonReq=JSON.stringify({model:pins.modelOpus,system:[txt('base')],messages:[user]});
+assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonTwoBlock,contentType:'application/json',body:jsonReq},
+  {...said('m3','Done.'),body:bodyOf([msg('user',txt(continued('Summary:\nPart one check-it.\nPart two check-it.')))])}]),
+  'A multi-block JSON compaction reply was taken as a delivery');
+assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {requestId:'r-m2',id:'m2',cls:'compaction',reply:jsonTwoBlock,contentType:'application/json',body:jsonReq},
+  {...said('m3','Done.'),body:bodyOf([msg('user',txt(continued('Summary:\nPart one check-it.\nPart two check-it.','\nRun the special check.')))])}]),
+  'A delivered footer after a multi-block JSON compaction reply passed');
 assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2','Fallback summary of check-it.'),cls:'compaction',body:bodyOf([user])},
-  {...said('m3','Discarded second untagged reply of check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','Discarded second untagged reply of check-it.'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt))])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Fallback summary of check-it.')))])}]),
   'A compaction fallback to the first untagged reply was taken as a delivery');
 assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2','Fallback summary of check-it.'),cls:'compaction',body:bodyOf([user])},
-  {...said('m3','Discarded second untagged reply of check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','Discarded second untagged reply of check-it.'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt))])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Discarded second untagged reply of check-it.')))])}]),
   'A discarded second untagged compaction reply exempted a continuation');
 assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
   {...said('m2','First untagged reply of check-it.'),cls:'compaction',body:bodyOf([user])},
-  {...said('m3','<summary>Tagged retry of check-it.</summary>'),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','<summary>Tagged retry of check-it.</summary>'),cls:'compaction',body:bodyOf([user,msg('user',txt(retryPrompt))])},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Summary:\nTagged retry of check-it.')))])}]),
   'A tagged compaction retry was taken as a delivery');
+assert(!origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',shortSum),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','<summary>Unclosed kept-rounds check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(shortSum))))])}]),
+  'An outer kept-rounds fallback to the earlier closed summary was taken as a delivery');
+assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',shortSum),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','<summary>Unclosed kept-rounds check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('<summary>Unclosed kept-rounds check-it.')))])}]),
+  'A discarded unclosed kept-rounds summary exempted a continuation');
+assert(origin([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2','Untagged first pass of check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m3','Second non-retry pass of check-it.'),cls:'compaction',body:bodyOf([user])},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued('Untagged first pass of check-it.')))])}]),
+  'A non-retry compaction pass fell back to an earlier untagged reply');
 assert(compacted([...reread('.claude/CLAUDE.md','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A sensitive file read again after compaction passed');
 assert(compacted([reread('src/a.txt','1\tcheck-it')[1],txt(continued(summaryOf(summaryReply)))]),'A tool result without its call passed');
 assert(compacted([reread('Run the special check.','x')[0],txt(continued(summaryOf(summaryReply)))]),'A tool call without its result passed');
