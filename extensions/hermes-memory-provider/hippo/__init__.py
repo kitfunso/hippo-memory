@@ -148,6 +148,16 @@ def _ignore(_: subprocess.Popen) -> None:
     return None
 
 
+def _child_env() -> Optional[dict[str, str]]:
+    raw = os.environ.get("HIPPO_HOME", "").strip()
+    if not raw:
+        return None
+    expanded = Path(raw).expanduser()
+    if expanded.is_absolute():
+        return None
+    return {**os.environ, "HIPPO_HOME": str(expanded.resolve())}
+
+
 def run_hippo(verb: str, args: list[str], text: Optional[str] = None, stdin: Optional[str] = None,
               on_start: Callable[[subprocess.Popen], None] = _ignore) -> Optional[Result]:
     try:
@@ -159,7 +169,7 @@ def run_hippo(verb: str, args: list[str], text: Optional[str] = None, stdin: Opt
         argv += ["--", text]
     try:
         proc = Popen(
-            argv, cwd=str(Path.home()),
+            argv, cwd=str(Path.home()), env=_child_env(),
             stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
@@ -205,11 +215,25 @@ def capture_tenant_ok() -> bool:
 
 def opt_in_platforms() -> frozenset[str]:
     try:
-        from hermes_cli.config import load_config
-        memory = load_config().get("memory", {})
+        from hermes_constants import get_hermes_home
+        from hermes_yaml import safe_load
+        raw = (get_hermes_home() / "config.yaml").read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return frozenset()
     except Exception as exc:
         logger.warning("hippo: config.yaml was not read, so no platform is opted in: %s", exc)
         return frozenset()
+    try:
+        data = safe_load(raw)
+    except Exception as exc:
+        logger.warning("hippo: config.yaml could not be parsed, so no platform is opted in: %s", exc)
+        return frozenset()
+    if data is None:
+        return frozenset()
+    if not isinstance(data, dict):
+        logger.warning("hippo: config.yaml root must be a mapping, not %s", type(data).__name__)
+        return frozenset()
+    memory = data.get("memory")
     block = memory.get("hippo") if isinstance(memory, dict) else None
     platforms = block.get("platforms", []) if isinstance(block, dict) else []
     if not isinstance(platforms, list):
@@ -393,7 +417,6 @@ class HippoProvider(MemoryProvider):
         self._platform = ""
         self._source = ""
         self._agent_context = "primary"
-        self._opt_in_platforms: frozenset[str] = frozenset()
         self._initialized = False
         self._capture_on = False
         self._last_recall_ids: list[str] = []
@@ -534,6 +557,8 @@ class HippoProvider(MemoryProvider):
             self._capture_futures = [f for f in self._capture_futures if not f.done()] + [future]
 
     def _capture_job(self, lines: list[dict[str, str]], sid: str) -> None:
+        if not self.allowed("capture"):
+            return
         try:
             with tempfile.TemporaryDirectory(prefix="hippo-hermes-") as tmp:
                 path = Path(tmp) / f"{safe_sid(sid)}.jsonl"

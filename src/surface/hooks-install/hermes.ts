@@ -303,12 +303,19 @@ function removeFromDir(pluginDir: string): HermesUninstallStatus {
   const badEntry = checkManagedEntries(pluginDir);
   if (badEntry !== null) return badEntry;
   const record = readLauncherRecord(path.join(pluginDir, LAUNCHER_NAME));
-  if (record === null) return 'user-owned';
+  if (record === null) return hasManagedEntry(pluginDir) ? 'user-owned' : 'absent';
   const sources = loadPackageSources();
   if (hasHandEdits(diskHashes(pluginDir), record, sources)) return 'kept';
   removeManagedFiles(pluginDir);
-  removeHippoPycache(pluginDir);
-  if (fs.readdirSync(pluginDir).length === 0) fs.rmdirSync(pluginDir);
+  try {
+    removeHippoPycache(pluginDir);
+    if (fs.readdirSync(pluginDir).length === 0) fs.rmdirSync(pluginDir);
+  } catch (err) {
+    log.warn(
+      `hermes uninstall cleanup failed for ${pluginDir}: ${errorMessage(err)}`,
+      errorFields(err),
+    );
+  }
   return 'removed';
 }
 

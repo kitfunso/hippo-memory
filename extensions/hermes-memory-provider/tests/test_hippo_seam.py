@@ -189,3 +189,44 @@ def test_is_available_reads_paths_and_starts_no_process(fake, tmp_path, monkeypa
     monkeypatch.setenv("PATH", str(tmp_path / "empty"))
     assert not hippo.HippoProvider().is_available()
     assert started == []
+
+
+def test_relative_hippo_home_resolves_against_cwd_before_spawning(fake, tmp_path, monkeypatch, started):
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    monkeypatch.setenv("HIPPO_HOME", "./rel-store")
+    res = hippo.run_hippo("recall", [], text="hi")
+    assert res is not None and res.code == 0
+    [call] = fake.calls("recall")
+    assert same_path(call["hippoHome"], work / "rel-store")
+    assert started[0].kwargs["env"] is not None
+
+
+def test_absolute_hippo_home_keeps_default_child_env(fake, env, started):
+    res = hippo.run_hippo("recall", [], text="hi")
+    assert res is not None and res.code == 0
+    assert started[0].kwargs["env"] is None
+
+
+def test_windows_refuses_symlink_resolving_to_disallowed_launcher(tmp_path, monkeypatch, started):
+    target = tmp_path / "hippo.cmd"
+    target.write_text("@echo off\n", encoding="utf-8")
+    link = tmp_path / "hippo.exe"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        link.write_text("", encoding="utf-8")
+        real_resolve = Path.resolve
+
+        def fake_resolve(self, *args, **kwargs):
+            return target if self == link else real_resolve(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "resolve", fake_resolve)
+    monkeypatch.setenv("HIPPO_BIN", str(link))
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(ValueError):
+        hippo.launcher()
+    assert hippo.run_hippo("recall", [], text="x") is None
+    assert not hippo.HippoProvider().is_available()
+    assert started == []

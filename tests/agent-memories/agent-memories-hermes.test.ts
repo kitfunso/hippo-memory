@@ -302,4 +302,20 @@ describe('hermesHomeDir', () => {
     const texts = { [path.join(nativeWin, 'active_profile')]: 'work' };
     expect(resolve({}, 'win32', texts)).toEqual({ home: path.join(nativeWin, 'profiles', 'work'), profile: 'work' });
   });
+
+  it('compares resolved paths so a link inside the default home pointing outside reads its own active_profile', () => {
+    const linked = path.join(nativePosix, 'linked-custom');
+    const texts = {
+      [path.join(nativePosix, 'active_profile')]: 'decoy',
+      [path.join(linked, 'active_profile')]: 'work\n',
+    };
+    const files: Parameters<typeof hermesHomeDir>[3] = {
+      ...filesOf(texts),
+      realPath: (p) => (p === linked ? custom : p),
+    };
+    expect(hermesHomeDir(user, { HERMES_HOME: linked }, 'linux', files)).toEqual({
+      home: path.join(linked, 'profiles', 'work'),
+      profile: 'work',
+    });
+  });
 });

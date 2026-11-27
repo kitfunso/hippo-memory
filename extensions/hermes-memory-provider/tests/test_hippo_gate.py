@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 
 import pytest
 from agent.memory_manager import MemoryManager
 
 import hippo
-from hippo_cases import hook_reply, recall_reply, session, write_config
+from hippo_cases import hook_reply, recall_reply, session, transcript_lines, write_config
 
 ALL = dict.fromkeys(hippo.OPS, True)
 NONE = dict.fromkeys(hippo.OPS, False)
@@ -214,3 +215,42 @@ def test_opting_out_a_platform_revokes_access_and_changes_identity_signature(env
     provider.on_session_end(session("revoked telegram turn"))
     provider.shutdown()
     assert started == []
+
+
+def test_invalid_config_yaml_fails_closed_without_cached_fallback(env, start, caplog):
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [telegram]\n")
+    provider = start(platform="telegram")
+    assert provider.identity_signature() == {"hippo_platforms": ["telegram"]}
+    assert provider.allowed("recall")
+
+    write_config(env.hermes_home, "memory: [\n")
+    with caplog.at_level(logging.WARNING):
+        assert provider.identity_signature() == {"hippo_platforms": []}
+        assert not provider.allowed("recall")
+    assert any("could not be parsed" in r.getMessage() for r in caplog.records)
+
+
+def test_queued_capture_skips_when_platform_is_opted_out_before_worker_runs(fake, env, start, monkeypatch):
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [telegram]\n")
+    entered, release = threading.Event(), threading.Event()
+    real_write = hippo.write_chat_lines
+    written = []
+
+    def held_write(lines, path):
+        written.append(lines)
+        entered.set()
+        release.wait(timeout=15)
+        real_write(lines, path)
+
+    monkeypatch.setattr(hippo, "write_chat_lines", held_write)
+    provider = start(platform="telegram")
+    provider.on_session_end(session("first telegram turn"))
+    assert entered.wait(timeout=15)
+    provider.on_session_end(session("second telegram turn"))
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: []\n")
+    release.set()
+    provider.shutdown()
+    calls = fake.calls("capture")
+    assert len(calls) == 1
+    assert len(written) == 1
+    assert transcript_lines(calls[0])[0]["content"] == "first telegram turn"

@@ -118,14 +118,16 @@ export function hermesHomeDir(
   home: string,
   env: Env,
   platform: NodeJS.Platform,
-  files: Pick<AgentFiles, 'readText'>,
+  files: Pick<AgentFiles, 'readText'> & Partial<Pick<AgentFiles, 'realPath'>>,
 ): HermesHome {
   const set = expandHome(expandEnvVars((env.HERMES_HOME ?? '').trim(), env, platform), home);
   if (set !== '' && path.basename(path.dirname(set)) === 'profiles') {
     return { home: set, profile: path.basename(set) };
   }
   const native = hermesNativeHome(home, env, platform);
-  const activeRoot = set === '' || isInside(native, set) ? native : set;
+  const resolvedNative = set !== '' && files.realPath ? files.realPath(native) : native;
+  const resolvedSet = set !== '' && files.realPath ? files.realPath(set) : set;
+  const activeRoot = set === '' || isInside(resolvedNative, resolvedSet) ? native : set;
   const profilesRoot = set === '' ? native : set;
   const name = activeHermesProfile(files, activeRoot);
   return name === null

@@ -58,3 +58,19 @@ def test_one_session_captured_twice_keeps_each_text_once(project, env, start):
     found = rows(env.hippo_home)
     assert sum(RULE_WORDS in content for content, _ in found) == 1, found
     assert not any("summary body words" in content for content, _ in found)
+
+
+def test_relative_hippo_home_writes_to_cwd_store_not_home(env, tmp_path, start, monkeypatch):
+    assert Path(REAL_HIPPO_BIN).is_file(), f"{REAL_HIPPO_BIN} is missing: run npm run build first"
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    monkeypatch.setenv("HIPPO_BIN", REAL_HIPPO_BIN)
+    monkeypatch.setenv("HIPPO_HOME", "./rel-store")
+    hippo_cli("init", "--global", *INIT_FLAGS, cwd=work)
+    provider = start(session_id="rel-1")
+    provider.on_session_end(session(RULE, "I will run the linter first."))
+    provider.shutdown()
+    found = rows(work / "rel-store")
+    assert any(RULE_WORDS in content and sid == "rel-1" for content, sid in found), found
+    assert not (env.home / "rel-store").exists()

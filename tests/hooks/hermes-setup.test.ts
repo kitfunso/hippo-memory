@@ -1,11 +1,13 @@
 import * as crypto from 'node:crypto';
-import * as fs from 'node:fs';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Homes } from '../../src/base/util/agent-homes.js';
 import type { JsonValue } from '../../src/base/util/json.js';
+import { log } from '../../src/base/util/log.js';
 import { hermesInstallLines, hermesRemoveLines, hermesTurnOnCommand } from '../../src/surface/cli/hermes-report.js';
 import { detectInstalledTools } from '../../src/surface/hooks-install/detect.js';
 import {
@@ -26,6 +28,7 @@ const roots: string[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+  syncBuiltinESMExports();
   vi.unstubAllEnvs();
   for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -296,9 +299,41 @@ describe('installHermes and uninstallHermes', () => {
     expect(fs.lstatSync(pycache).isSymbolicLink()).toBe(true);
     expect(fs.readFileSync(extra, 'utf8')).toBe('keep me\n');
 
+    expect(uninstallHermes(homes).status).toBe('absent');
+    expect(fs.readFileSync(extra, 'utf8')).toBe('keep me\n');
+
     expect(installHermes(homes).status).toBe('installed');
     expect(fs.readFileSync(extra, 'utf8')).toBe('keep me\n');
     expect(fs.existsSync(path.join(first.pluginDir, 'launcher.json'))).toBe(true);
+  });
+
+  it('still reports removed when post-removal pycache cleanup hits a locked file', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const first = installHermes(homes);
+    const pycache = path.join(first.pluginDir, '__pycache__');
+    fs.mkdirSync(pycache, { recursive: true });
+    const pycFile = path.join(pycache, '__init__.cpython-314.pyc');
+    fs.writeFileSync(pycFile, 'pyc');
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, 'unlinkSync').mockImplementation((target) => {
+      if (String(target) === pycFile) throw Object.assign(new Error('EBUSY: file locked'), { code: 'EBUSY' });
+      realUnlink(target);
+    });
+    syncBuiltinESMExports();
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => undefined);
+
+    expect(uninstallHermes(homes).status).toBe('removed');
+    expect(fs.existsSync(path.join(first.pluginDir, 'launcher.json'))).toBe(false);
+    expect(fs.existsSync(path.join(first.pluginDir, '__init__.py'))).toBe(false);
+    expect(fs.existsSync(pycFile)).toBe(true);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('EBUSY: file locked'),
+      expect.objectContaining({ errorClass: 'Error' }),
+    );
   });
 
   it('removes only hippo __init__ bytecode inside __pycache__ and keeps unrelated cache files', () => {
