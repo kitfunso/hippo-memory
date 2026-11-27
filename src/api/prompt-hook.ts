@@ -50,12 +50,9 @@ import { hookPayloadString, isSubagentPayload } from '../base/util/hook-payload.
 import { blockHash, estimateTokens } from '../base/util/token-text.js';
 import { DEFAULT_CONTEXT_BUDGET } from './context/context.js';
 
-/** What one render needs once api.contextGet has answered. */
 export interface ContextView {
   readonly config: HippoConfig;
   readonly tenantId: string;
-  /** The reader's project, with every name capture may have stamped its rows with; a user rule
-   * belongs to this project alone. */
   readonly project: ProjectRef;
   readonly ledgerSessionId: string | undefined;
   readonly payloadSessionId: string | undefined;
@@ -63,18 +60,12 @@ export interface ContextView {
   readonly framing: string;
   readonly rec: DeliveryRecorder | null;
   readonly result: ContextResult;
-  /** Where the ledger rows go; a shared store's reach has no global store, see
-   * promptHookContext. */
   readonly reach: LedgerReach;
-  /** The static block's hash the caller says it printed last. Undefined keeps the ledger-only skip rule; a string or
-   *  null also needs that hash to match, because the ledger counts blocks a caller that prints elsewhere may never have
-   *  shown. */
   readonly printedHash?: string | null;
-  /** The reply's JSON wrapper; absent means Claude Code's UserPromptSubmit. */
   readonly envelope?: HookEnvelope;
-  /** The instant each confidence label is read at, and the model a printed strength scores by. */
   readonly now: Date;
   readonly strength: StrengthModel;
+  readonly skipUnchanged?: boolean;
 }
 
 /** `copilot-session-start` is the Copilot harness's top-level reply, `vscode-session-start` the
@@ -272,8 +263,6 @@ interface SkipUnchangedStaticOptions {
   readonly staticCount: number;
 }
 
-/** True, after booking the skip row, when the hook may omit a static block this session already
- * holds. */
 async function skipUnchangedStatic({
   view,
   surface,
@@ -283,21 +272,16 @@ async function skipUnchangedStatic({
 }: SkipUnchangedStaticOptions): Promise<boolean> {
   const { payloadSessionId, rec } = view;
   if (!view.pinnedOnly || payloadSessionId === undefined) return false;
-  // Session start is the only injection Copilot gets, so a resumed session needs the whole block
-  // again.
+  if (view.skipUnchanged === false) return false;
   if (view.envelope === 'copilot-session-start' || view.envelope === 'vscode-session-start') {
     return false;
   }
   const injectCfg = view.config.pinnedInject;
   if (injectCfg.skipUnchanged === false) return false;
-  // Hashed on the static text alone so an unchanged pin set still skips while recall varies.
   const staticHash = blockHash(staticBlock);
-  // Before the ledger read, so a caller that did not print this block books no skip row.
   if (view.printedHash !== undefined && view.printedHash !== staticHash) return false;
   const last = await ledgerLastSent(view.tenantId, payloadSessionId, surface, view.reach);
   if (!shouldSkipUnchanged(last, staticHash, injectCfg.refreshTurns)) return false;
-  // With no recall block this turn sends nothing more, so its delivery row says the static block
-  // was reused.
   if (!recallBlock.trim()) rec?.delivered({ state: 'reused', staticHash, staticReused: true });
   await bookLedgerTurn(
     {

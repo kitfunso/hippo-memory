@@ -166,13 +166,22 @@ async function renderContext(options: RenderContextOptions): Promise<void> {
   const { pinnedOnly, session, budget } = gate;
 
   const ctx = cliApiContext(hippoRoot, resolvedTenant);
-  // --auto shells out to git, so it stays CLI-side; api.contextGet stays host-agnostic and falls
-  // back to '*'.
   const query = contextQuery(args, flags, ctx);
   const format = stringFlagOrExit(flags, 'format') ?? 'markdown';
   const framing = stringFlagOrExit(flags, 'framing') ?? 'observe';
   const now = ctx.infra.clock();
-  const input: ContextOptsInput = { query, budget, pinnedOnly, format, framing, session, rec, now };
+  const skipUnchanged = boolFlag(flags, 'no-skip-unchanged') ? false : undefined;
+  const input: ContextOptsInput = {
+    query,
+    budget,
+    pinnedOnly,
+    format,
+    framing,
+    session,
+    rec,
+    now,
+    skipUnchanged,
+  };
 
   const opts = buildContextOpts(flags, input, ctx);
   const result = await api.contextGet(ctx, opts);
@@ -207,6 +216,7 @@ function contextView(
     envelope,
     now: input.now,
     strength: strengthOf(ctx),
+    skipUnchanged: input.skipUnchanged,
   };
 }
 
@@ -256,6 +266,7 @@ interface ContextOptsInput {
   readonly session: ContextSession;
   readonly rec: DeliveryRecorder | null;
   readonly now: Date;
+  readonly skipUnchanged?: boolean;
 }
 
 function buildContextOpts(

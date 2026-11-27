@@ -289,7 +289,7 @@ export const MEMORY_VERBS = {
   context: verb(() => import('../context.js'), 'handleContext', {
     repairsCodexWrapper: true,
     flags: {
-      switches: ['auto', 'cross-project', 'global', 'pinned-only'],
+      switches: ['auto', 'cross-project', 'global', 'no-skip-unchanged', 'pinned-only'],
       values: ['budget', 'format', 'framing', 'include-recent', 'runtime', 'scope'],
       numbers: ['limit'],
     },
@@ -299,6 +299,7 @@ export const MEMORY_VERBS = {
     --auto                 Auto-detect task from git state
     --budget <n>           Token budget for the whole printed block (default: ${DEFAULT_CONTEXT_BUDGET})
     --pinned-only          Only inject pinned memories (used by UserPromptSubmit hook)
+    --no-skip-unchanged    Always resend pinned rules even if unchanged this session
     --global               Read only the global store ($HIPPO_HOME or ~/.hippo/), never the project's
     --include-recent <n>   With --pinned-only, also inject the last N writes regardless of pinning
     (the hook payload's "prompt" drives prompt recall instead of --include-recent when pinnedInject.promptRecall is on, the default)

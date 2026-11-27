@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from types import SimpleNamespace
 
 import pytest
 from agent.memory_manager import MemoryManager
@@ -133,7 +134,7 @@ def test_the_default_tenant_keeps_capture_on(fake, start, monkeypatch):
     ("acp", "cli", [], NONE),
     ("gui", "desktop", [], NONE),
     ("gui", "desktop", ["desktop"], ALL),
-    ("oneshot", "cli", [], ALL),
+    ("oneshot", "cli", [], NONE),
 ])
 def test_gateway_session_policy_gates_global_memory(policy_source, platform, opt_in, expected, env, start, started):
     from gateway import session_policy
@@ -162,6 +163,44 @@ def test_gateway_session_policy_gates_global_memory(policy_source, platform, opt
             assert started == []
     finally:
         session_policy._ACTIVE_POLICY.reset(token)
+
+
+@pytest.mark.parametrize("source", ["cli", "tui"])
+def test_gateway_cli_and_tui_require_local_ownership_proof(source, env, start):
+    from gateway import session_policy
+
+    unproven_none = SimpleNamespace(source=source, client_env_json=None, client_env_remote=False)
+    token = session_policy._ACTIVE_POLICY.set(unproven_none)
+    try:
+        provider = start(platform=source)
+        assert {op: provider.allowed(op) for op in hippo.OPS} == NONE
+        write_config(env.hermes_home, f"memory:\n  hippo:\n    platforms: [{source}]\n")
+        assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
+
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: []\n")
+    remote_flag = SimpleNamespace(source=source, client_env_json="{}", client_env_remote=True)
+    token = session_policy._ACTIVE_POLICY.set(remote_flag)
+    try:
+        provider = start(platform=source)
+        assert {op: provider.allowed(op) for op in hippo.OPS} == NONE
+        write_config(env.hermes_home, f"memory:\n  hippo:\n    platforms: [{source}]\n")
+        assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
+
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: []\n")
+    local_proven = SimpleNamespace(source=source, client_env_json="{}", client_env_remote=False)
+    token = session_policy._ACTIVE_POLICY.set(local_proven)
+    try:
+        provider = start(platform=source)
+        assert {op: provider.allowed(op) for op in hippo.OPS} == ALL
+    finally:
+        session_policy._ACTIVE_POLICY.reset(token)
+
+    direct = start(platform=source)
+    assert {op: direct.allowed(op) for op in hippo.OPS} == ALL
 
 
 def test_isolated_plugin_host_fails_closed_without_session_policy(env, start, started, monkeypatch, caplog):
@@ -193,6 +232,7 @@ def test_isolated_plugin_host_obeys_active_policy_when_bound(env, start, monkeyp
         config_json="{}",
         request_json=json.dumps({"source": "cli"}),
         terminal_json="{}",
+        client_env_json="{}",
     )
     token = session_policy._ACTIVE_POLICY.set(policy)
     try:

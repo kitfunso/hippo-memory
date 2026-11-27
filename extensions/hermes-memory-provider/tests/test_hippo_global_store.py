@@ -134,3 +134,15 @@ def test_relative_hippo_home_writes_to_cwd_store_not_home(env, tmp_path, start, 
     found = rows(work / "rel-store")
     assert any(RULE_WORDS in content and sid == "rel-1" for content, sid in found), found
     assert not (env.home / "rel-store").exists()
+
+
+def test_pinned_rules_are_resent_on_consecutive_prefetch_calls(env, start, monkeypatch):
+    assert Path(REAL_HIPPO_BIN).is_file(), f"{REAL_HIPPO_BIN} is missing: run npm run build first"
+    monkeypatch.setenv("HIPPO_BIN", REAL_HIPPO_BIN)
+    hippo_cli("init", "--global", *INIT_FLAGS, cwd=env.home)
+    hippo_cli("remember", RULE, "--pin", "--global", cwd=env.home)
+    provider = start(platform="cli", session_id="hermes-s1")
+    first = provider.prefetch("first", session_id="hermes-s1")
+    assert RULE_WORDS in first
+    second = provider.prefetch("second", session_id="hermes-s1")
+    assert RULE_WORDS in second

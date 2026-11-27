@@ -30,7 +30,7 @@ NO_WATCHDOG_DEADLINE_S = 30.0
 HERMES_PRE_SHUTDOWN_S = 15.0
 SHUTDOWN_MARGIN_S = 3.0
 LAUNCHER_FILE = Path(__file__).with_name("launcher.json")
-CONTEXT_ARGS = ("--pinned-only", "--include-recent", "5", "--format", "additional-context")
+CONTEXT_ARGS = ("--pinned-only", "--include-recent", "5", "--format", "additional-context", "--no-skip-unchanged")
 RECALL_ARGS = ("--json", "--budget", "1500")
 REMEMBER_ARGS = ("--tag", "hermes")
 
@@ -275,6 +275,16 @@ def _in_plugin_host() -> bool:
     return callable(serving) and serving() is not None
 
 
+def _policy_is_local(policy: Any, platform: str = "") -> bool:
+    if policy is None:
+        if platform == "desktop":
+            return _serves_local_desktop_now()
+        return not _in_plugin_host()
+    if getattr(policy, "source", None) == "gui" or platform == "desktop":
+        return _serves_local_desktop_now() or _policy_is_local_desktop(policy)
+    return getattr(policy, "client_env_json", None) is not None and not getattr(policy, "client_env_remote", True)
+
+
 def _policy_is_local_desktop(policy: Any) -> bool:
     if policy is None or getattr(policy, "source", None) != "gui":
         return False
@@ -446,6 +456,7 @@ class HippoProvider(MemoryProvider):
         self._source = ""
         self._agent_context = "primary"
         self._desktop_local = False
+        self._gateway_local = False
         self._initialized = False
         self._capture_on = False
         self._last_recall_ids: list[str] = []
@@ -481,6 +492,7 @@ class HippoProvider(MemoryProvider):
         policy_helpers = _policy_helpers()
         policy = policy_helpers[0]() if policy_helpers is not None else None
         self._desktop_local = _serves_local_desktop_now() or _policy_is_local_desktop(policy)
+        self._gateway_local = _policy_is_local(policy, self._platform)
         self._initialized = True
         self._capture_on = self.allowed("capture") and row_helpers() is not None
         if self._capture_on and not capture_tenant_ok():
@@ -489,17 +501,20 @@ class HippoProvider(MemoryProvider):
             self._capture_on = False
 
     def allowed(self, op: str) -> bool:
-        local = self._platform in LOCAL_PLATFORMS and self._source in LOCAL_SOURCES
         desktop = self._platform == "desktop" or self._source == "desktop"
-        if local and desktop:
-            local = self._desktop_local or _serves_local_desktop_now()
+        local = (self._platform in LOCAL_PLATFORMS and self._source in LOCAL_SOURCES
+                 and (self._gateway_local or (desktop and _serves_local_desktop_now())))
         if not local:
             opt_in = opt_in_platforms()
-            allowed_platforms = (LOCAL_PLATFORMS - {"desktop"} if desktop else LOCAL_PLATFORMS) | opt_in
-            allowed_sources = (LOCAL_SOURCES - {"desktop"} if desktop else LOCAL_SOURCES) | opt_in
-            if self._platform not in allowed_platforms:
+            non_local_source = self._source not in LOCAL_SOURCES
+            base_platforms = LOCAL_PLATFORMS if (self._gateway_local or non_local_source) else frozenset()
+            base_sources = LOCAL_SOURCES if self._gateway_local else frozenset()
+            if desktop:
+                base_platforms = base_platforms - {"desktop"}
+                base_sources = base_sources - {"desktop"}
+            if self._platform not in (base_platforms | opt_in):
                 return False
-            if self._source not in allowed_sources:
+            if self._source not in (base_sources | opt_in):
                 return False
         row = CONTEXT_RULES.get(self._agent_context or "primary", CONTEXT_RULES["subagent"])
         return row[OPS.index(op)]
