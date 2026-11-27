@@ -313,3 +313,19 @@ def test_capture_child_receives_checked_env_snapshot_without_toctou(fake, start,
     assert child_env.get("HIPPO_TENANT", "") == ""
     [call] = fake.calls("capture")
     assert call["tenant"] is None
+
+
+def test_opted_in_cron_reads_pass_hippo_read_only_in_child_env(fake, env, start, started):
+    fake.answer("context", out=hook_reply("Pinned"))
+    fake.answer("recall", out=recall_reply("mem_a"))
+    write_config(env.hermes_home, "memory:\n  hippo:\n    platforms: [cron]\n")
+
+    cron = start(platform="cron", agent_context="cron")
+    assert cron.prefetch("deploy") == "Pinned"
+    assert json.loads(cron.handle_tool_call("hippo_recall", {"query": "deploy"}))["total"] == 1
+    assert len(started) == 2
+    assert all(entry.kwargs["env"]["HIPPO_READ_ONLY"] == "1" for entry in started)
+
+    cli = start(platform="cli")
+    cli.prefetch("deploy")
+    assert started[2].kwargs["env"] is None

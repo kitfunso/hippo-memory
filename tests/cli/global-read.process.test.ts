@@ -66,6 +66,20 @@ describe('--global on recall, context and outcome (built CLI, project folder wit
     expect(store.rows('local').map((row) => row['outcome_positive'])).toEqual([0]);
   });
 
+  it('outcome counts a repeated --id once', async () => {
+    const store = await seeded();
+    const [a] = idsOf(store.rows('global'));
+    expect(await hippo(store, ['outcome', '--global', '--good', '--id', a!, '--id', a!])).toBe(
+      'Applied positive outcome to 1 memory\n',
+    );
+    expect(
+      store
+        .rows('global')
+        .map((row) => row['outcome_positive'])
+        .sort(),
+    ).toEqual([0, 1]);
+  });
+
   it('outcome with an empty --id= or trailing --id= exits 1 and marks nothing, even after a recall', async () => {
     const store = await seeded();
     const [globalId] = idsOf(store.rows('global'));

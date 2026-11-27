@@ -15,6 +15,7 @@ type PluginFile = (typeof PLUGIN_FILES)[number];
 
 const LAUNCHER_NAME = 'launcher.json';
 const MANAGED_BY = 'hippo-memory';
+const NO_IN_PLACE = { inPlace: false } as const;
 
 export interface HermesPluginPaths {
   readonly home: string;
@@ -157,7 +158,11 @@ function writeLauncher(pluginDir: string, sources: PackageSources): void {
     script: sources.script,
     hashes: sources.hashes,
   };
-  writeFileAtomic(path.join(pluginDir, LAUNCHER_NAME), `${JSON.stringify(payload, null, 2)}\n`);
+  writeFileAtomic(
+    path.join(pluginDir, LAUNCHER_NAME),
+    `${JSON.stringify(payload, null, 2)}\n`,
+    NO_IN_PLACE,
+  );
 }
 
 function checkManagedEntries(pluginDir: string): HermesFailure | null {
@@ -177,7 +182,7 @@ function stageFreshInstall(pluginDir: string, sources: PackageSources): void {
   const stageDir = fs.mkdtempSync(path.join(parent, '.hippo-install-'));
   try {
     for (const file of sources.files) {
-      writeFileAtomic(path.join(stageDir, file.name), file.content);
+      writeFileAtomic(path.join(stageDir, file.name), file.content, NO_IN_PLACE);
     }
     writeLauncher(stageDir, sources);
     fs.renameSync(stageDir, pluginDir);
@@ -199,7 +204,7 @@ function upgradeDir(
   const written: { readonly dest: string; readonly prev: Buffer | null }[] = [];
   try {
     for (let i = 0; i < differing.length; i++) {
-      writeFileAtomic(backups[i].dest, differing[i].content);
+      writeFileAtomic(backups[i].dest, differing[i].content, NO_IN_PLACE);
       written.push(backups[i]);
     }
     writeLauncher(pluginDir, sources);
@@ -207,7 +212,7 @@ function upgradeDir(
     for (const item of written.reverse()) {
       try {
         if (item.prev === null) fs.rmSync(item.dest, { force: true });
-        else writeFileAtomic(item.dest, item.prev);
+        else writeFileAtomic(item.dest, item.prev, NO_IN_PLACE);
       } catch (rollbackErr) {
         log.warn(
           `hermes upgrade rollback failed for ${item.dest}: ${errorMessage(rollbackErr)}`,
@@ -239,7 +244,7 @@ function removeManagedFiles(pluginDir: string): void {
   } catch (err) {
     for (const item of removed.reverse()) {
       try {
-        writeFileAtomic(item.file, item.content);
+        writeFileAtomic(item.file, item.content, NO_IN_PLACE);
       } catch (rollbackErr) {
         log.warn(
           `hermes uninstall rollback failed for ${item.file}: ${errorMessage(rollbackErr)}`,

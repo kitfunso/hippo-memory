@@ -242,7 +242,7 @@
       "routes": {
         "promptContext": "prefetch runs hippo context before each local turn",
         "toolFailureCapture": null,
-        "preLossSave": "on_session_end runs hippo capture --global on the turns before compression: Hermes calls it with the pre-compression messages, before it rotates the session id",
+        "preLossSave": "best effort: on_session_end queues hippo capture --global on the turns before compression and returns; the transcript is held in memory until the background job runs, so an exit or shutdown can drop it, and no durable receipt is written before Hermes compacts",
         "postCompactExtract": null,
         "sessionEndCapture": "on_session_end runs hippo capture --global at the end of a session and at /new",
         "compactResume": null
@@ -255,14 +255,14 @@
       "modes": [
         {
           "name": "local CLI, TUI and desktop sessions",
-          "checkpointBeforeLoss": "shipped",
+          "checkpointBeforeLoss": "planned",
           "lessonsBeforeLoss": "planned",
           "fixtureEvidence": ["extensions/hermes-memory-provider/tests/test_hippo_sessions.py", "extensions/hermes-memory-provider/tests/test_hippo_global_store.py", "tests/hooks/hermes-setup.test.ts"],
           "liveEvidence": []
         }
       ],
       "owner": "maintainer",
-      "nextAction": "Record one live Hermes session as liveEvidence.",
+      "nextAction": "Persist a bounded pending capture before on_session_end returns so a dropped queue can be retried, then record one live Hermes session as liveEvidence.",
       "roadmap": "AZ4"
     },
     {

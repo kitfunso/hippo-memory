@@ -471,11 +471,17 @@ class HippoProvider(MemoryProvider):
         row = CONTEXT_RULES.get(self._agent_context or "primary", CONTEXT_RULES["subagent"])
         return row[OPS.index(op)]
 
+    def _read_env(self) -> Optional[dict[str, str]]:
+        if self._agent_context == "cron":
+            return {**os.environ, "HIPPO_READ_ONLY": "1"}
+        return None
+
     def prefetch(self, query: str, *, session_id: str = "") -> str:
         if not self.allowed("prefetch"):
             return ""
         payload = json.dumps({"session_id": session_id or self._session_id, "prompt": query}, ensure_ascii=False)
-        return hook_context(_ok("context", run_hippo("context", list(CONTEXT_ARGS), stdin=payload)))
+        res = run_hippo("context", list(CONTEXT_ARGS), stdin=payload, env=self._read_env())
+        return hook_context(_ok("context", res))
 
     def get_tool_schemas(self) -> list[dict[str, Any]]:
         schemas = [copy.deepcopy(s) for s in TOOL_SCHEMAS]
@@ -497,7 +503,7 @@ class HippoProvider(MemoryProvider):
         if not query:
             return _error("query is required")
         self._last_recall_ids = []
-        out = _ok("recall", run_hippo("recall", list(RECALL_ARGS), text=query))
+        out = _ok("recall", run_hippo("recall", list(RECALL_ARGS), text=query, env=self._read_env()))
         try:
             data = json.loads(out) if out is not None else None
         except ValueError:

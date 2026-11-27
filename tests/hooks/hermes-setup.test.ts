@@ -307,6 +307,37 @@ describe('installHermes and uninstallHermes', () => {
     expect(fs.existsSync(path.join(first.pluginDir, 'launcher.json'))).toBe(true);
   });
 
+  it('upgrades by rename so a hard link outside the plugin dir keeps its old bytes', () => {
+    const root = makeRoot();
+    const hermesHome = path.join(root, 'hermes');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    const homes: Homes = { home: root, env: { HERMES_HOME: hermesHome } };
+
+    const first = installHermes(homes);
+    const launcherPath = path.join(first.pluginDir, 'launcher.json');
+    const initPath = path.join(first.pluginDir, '__init__.py');
+    const oldInit = Buffer.from('# previous release\n');
+    const record = JSON.parse(fs.readFileSync(launcherPath, 'utf8'));
+    record.hashes['__init__.py'] = sha256(oldInit);
+    record.node = '/old/node';
+    fs.writeFileSync(initPath, oldInit);
+    fs.writeFileSync(launcherPath, JSON.stringify(record, null, 2));
+    const outsideLauncher = path.join(root, 'outside-launcher.json');
+    const outsideInit = path.join(root, 'outside-init.py');
+    fs.linkSync(launcherPath, outsideLauncher);
+    fs.linkSync(initPath, outsideInit);
+    const launcherBefore = fs.readFileSync(outsideLauncher);
+
+    expect(installHermes(homes).status).toBe('updated');
+
+    expect(fs.readFileSync(outsideLauncher).equals(launcherBefore)).toBe(true);
+    expect(fs.readFileSync(outsideInit).equals(oldInit)).toBe(true);
+    expect(fs.readFileSync(initPath).equals(fs.readFileSync(path.join(SOURCE_DIR, '__init__.py')))).toBe(true);
+    expect(readJson(launcherPath)).toMatchObject({ node: process.execPath, script: BIN_SCRIPT });
+    expect(fs.statSync(initPath).nlink).toBe(1);
+    expect(fs.statSync(launcherPath).nlink).toBe(1);
+  });
+
   it('still reports removed when post-removal pycache cleanup hits a locked file', () => {
     const root = makeRoot();
     const hermesHome = path.join(root, 'hermes');

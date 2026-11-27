@@ -32,7 +32,7 @@ function outcomeIds(flags: CliFlags): string[] {
   if (hasFlag(flags, 'id') && (ids.length === 0 || ids.length !== raw.length)) {
     fail('--id requires a value');
   }
-  return ids;
+  return [...new Set(ids)];
 }
 
 export async function handleOutcome({ hippoRoot, tenantId, flags }: CommandContext): Promise<void> {
