@@ -198,7 +198,10 @@ const REREAD_RESULT=/^<system-reminder>\nResult of calling the (\w+) tool:\n([\s
 const FIRST_LOOK_HEAD=/^((?:<tools-used-before-summary>(?:[A-Za-z0-9_.:-]{1,256}(?:, [A-Za-z0-9_.:-]{1,256})*)?<\/tools-used-before-summary>\n)?(?:<artifact-content-authored-by-others\/>\n)?(?:<remote-control-device-report\/>\n)?)<exchanges>\n/;
 const FIRST_LOOK_TAIL='\n</exchanges>\n\nAnswer with JSON only: {"write_likely": true} or {"write_likely": false}.';
 const RETRY_NOTE='For this reply only: write what the instructions above ask for, with the summary inside <summary></summary> tags.';
-const isRetryRequest=body=>(body?.messages ?? []).some(m=>m.role==='user' && textBlocks(m.content).some(t=>t.includes(RETRY_NOTE)));
+const isRetryRequest=body=>{
+  const last=body?.messages?.at(-1);
+  return last?.role==='user' && textBlocks(last.content).some(t=>t.includes(RETRY_NOTE));
+};
 export const summaryOf=text=>text.replaceAll(/<(?=\s*(?:\/\s*)?tools-used-before-summary\b)/gi,'&lt;').replace(/<analysis>[\s\S]*?<\/analysis>/,'')
   .replace(/<summary>([\s\S]*?)<\/summary>/,(m,s)=>'\nSummary:\n'+s.trim()).replace(/\n\n+/g,'\n\n').trim();
 function summaryBlock(reply,isRetry=false) {
@@ -208,9 +211,25 @@ function summaryBlock(reply,isRetry=false) {
   if(isRetry) return texts[0]?.trim() || null;
   return texts.filter(Boolean).join('\n').trim() || null;
 }
+function reactiveFirstBlock(reply,isRetry,raw) {
+  const texts=reply?.texts ?? [];
+  if(reply?.sse || isRetry || texts.length<2) return null;
+  const first=texts[0]?.trim() || null;
+  return first && first!==raw ? first : null;
+}
 const stripAnalysis=text=>text.replace(/<analysis>[\s\S]*?<\/analysis>/,'');
 const closedSummary=text=>/<summary>[\s\S]*?<\/summary>/.test(stripAnalysis(text));
 const taggedSummary=text=>closedSummary(text) || /^[ \t]*<summary>/m.test(stripAnalysis(text));
+const linePrefix=(full,part)=>full.startsWith(part) && full[part.length]==='\n';
+function summaryTexts(cand) {
+  if(!cand) return [];
+  const main=summaryOf(cand.raw),alt=cand.alt ? summaryOf(cand.alt) : '';
+  if(!main) return alt ? [alt] : [];
+  if(!alt || alt===main) return [main];
+  if(linePrefix(main,alt)) return [alt];
+  if(linePrefix(alt,main)) return [main];
+  return [main,alt];
+}
 function priorWords(exchanges,index) {
   const curr=exchanges[index],blocks=[],done=[];
   for(let j=0;j<exchanges.length;j++) {
@@ -231,42 +250,46 @@ function priorWords(exchanges,index) {
     }
     if(doneBefore && x.route==='generate' && x.cls==='compaction') {
       const retry=isRetryRequest(x.body),raw=summaryBlock(x.reply,retry);
-      if(raw) done.push({at:x.end ?? j,cls:'compaction',raw,retry});
+      if(raw) done.push({at:x.end ?? j,cls:'compaction',raw,alt:reactiveFirstBlock(x.reply,retry,raw),retry});
     }
   }
   done.sort((a,b)=>a.at-b.at);
   const selected=[],earlier=[];
   let pending=null,roundClosed=null,roundBest=null;
+  const setBest=cand=>{
+    if(roundBest!==null) earlier.push(...summaryTexts(roundBest));
+    roundBest=cand;
+  };
   const applyCand=cand=>{
     if(roundClosed!==null) {
-      if(closedSummary(cand)) { const prev=summaryOf(roundClosed); if(prev) earlier.push(prev); roundClosed=cand; roundBest=cand; }
+      if(closedSummary(cand.raw)) { setBest(cand); roundClosed=cand; }
     } else {
-      roundBest=cand;
-      if(closedSummary(cand)) roundClosed=cand;
+      setBest(cand);
+      if(closedSummary(cand.raw)) roundClosed=cand;
     }
   };
   const finishRound=()=>{
-    if(pending!==null) { if(roundClosed===null) roundBest=pending; pending=null; }
-    if(roundBest!==null) { const s=summaryOf(roundBest); if(s) selected.push(s); }
+    if(pending!==null) { if(roundClosed===null) setBest(pending); pending=null; }
+    if(roundBest!==null) { const vals=summaryTexts(roundBest); if(vals.length) selected.push(vals); }
     roundClosed=null; roundBest=null;
   };
   for(const item of done) {
     if(item.cls==='main') { finishRound(); continue; }
     if(item.retry) {
-      const cand=pending!==null ? (taggedSummary(item.raw) ? item.raw : pending) : item.raw;
+      const cand=pending!==null ? (taggedSummary(item.raw) ? item : pending) : item;
       pending=null;
       applyCand(cand);
     } else {
-      if(pending!==null) { if(roundClosed===null) roundBest=pending; pending=null; }
-      if(taggedSummary(item.raw)) applyCand(item.raw);
-      else pending=item.raw;
+      if(pending!==null) { if(roundClosed===null) setBest(pending); pending=null; }
+      if(taggedSummary(item.raw)) applyCand(item);
+      else pending=item;
     }
   }
   finishRound();
-  const latest=selected.at(-1) ?? null;
-  const prior=[...earlier,...selected.slice(0,-1)];
-  const disputed=latest ? prior.filter(p=>latest.startsWith(p) && latest[p.length]==='\n').sort((a,b)=>a.length-b.length)[0] : null;
-  const summaries=latest ? [disputed ?? latest] : [];
+  const latest=selected.at(-1) ?? [];
+  const prior=[...earlier,...selected.slice(0,-1).flat()];
+  const disputedOf=text=>prior.filter(p=>linePrefix(text,p)).sort((a,b)=>a.length-b.length)[0] ?? null;
+  const summaries=[...new Set(latest.map(text=>disputedOf(text) ?? text))];
   return {blocks:[...new Set(blocks)].sort((a,b)=>b.length-a.length),summaries};
 }
 function quotedHistory(text,task,said) {
