@@ -25,7 +25,7 @@ def verify() -> None:
                               teachId=unit, snapshotHash=unit, resetHash=unit, targetCount=1, storeVerified=True,
                               verdict="fail" if arm == "N" else "pass", hookSeen=True, complete=True,
                               pathAudit={"transcripts": 1, "hits": []}, apparatus=analyze.APPARATUS,
-                              targetText=arm != "N", flagged=(arm == "N") if unit in labels["variant"] else None,
+                              targetText=arm != "N", ambiguous=False, flagged=(arm == "N") if unit in labels["variant"] else None,
                               preTree="a" * 40, ignoredSetup="b" * 64, archivedTargetText=False, sideRequests=0,
                               auxiliaryRequests=0, archivedAttempts=0, archivedUnauditable=0, archivedPermissions=True)
                 path = analyze.ROOT / unit / "evidence" / f"apply-{index}" / "grade.json"
@@ -66,7 +66,10 @@ def verify() -> None:
         assert analyze.report()["status"] == "invalid"
         change(first, "N", targetText=False, archivedTargetText=True)
         assert analyze.report()["gates"]["neutralLeaks"] == 1
-        change(first, "N", archivedTargetText=False, archivedAttempts=1, archivedUnauditable=1)
+        change(first, "N", archivedTargetText=False, ambiguous=True)
+        ambig_report = analyze.report()
+        assert ambig_report["status"] == "invalid" and ambig_report["gates"]["neutralLeaks"] == 1, "Accepted an ambiguous neutral arm"
+        change(first, "N", ambiguous=False, archivedAttempts=1, archivedUnauditable=1)
         assert analyze.report()["status"] == "invalid"
         change(first, "N", archivedAttempts=0, archivedUnauditable=0, ignoredSetup="c" * 64)
         report = analyze.report()
@@ -75,6 +78,7 @@ def verify() -> None:
         assert analyze.report()["gates"]["treeErrors"] == 1
         change(first, "N", preTree="a" * 40)
         for field, value in (("preTree", "tree"), ("ignoredSetup", None), ("archivedTargetText", None),
+                             ("ambiguous", None), ("ambiguous", 1),
                              ("archivedUnauditable", -1), ("archivedPermissions", False), ("sideRequests", None),
                              ("auxiliaryRequests", None), ("auxiliaryRequests", -1), ("auxiliaryRequests", "1")):
             saved = json.loads(files[first, "N"].read_text(encoding="utf-8"))
@@ -86,13 +90,14 @@ def verify() -> None:
                 assert "audit fields" in str(error), error
             files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
         saved = json.loads(files[first, "N"].read_text(encoding="utf-8"))
-        files[first, "N"].write_text(json.dumps({k: v for k, v in saved.items() if k != "auxiliaryRequests"}), encoding="utf-8")
-        try:
-            analyze.report()
-            raise AssertionError("Accepted a receipt without auxiliaryRequests")
-        except ValueError as error:
-            assert "audit fields" in str(error), error
-        files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
+        for missing in ("auxiliaryRequests", "ambiguous"):
+            files[first, "N"].write_text(json.dumps({k: v for k, v in saved.items() if k != missing}), encoding="utf-8")
+            try:
+                analyze.report()
+                raise AssertionError(f"Accepted a receipt without {missing}")
+            except ValueError as error:
+                assert "audit fields" in str(error), error
+            files[first, "N"].write_text(json.dumps(saved), encoding="utf-8")
         change(first, "N", targetText=False, verdict="na", hookSeen=False)
         report = analyze.report()
         assert report["status"] == "audit-required" and report["excluded"]["pairs"] == len(plan["units"])-1

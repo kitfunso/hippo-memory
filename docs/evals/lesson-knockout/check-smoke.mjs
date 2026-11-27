@@ -42,7 +42,7 @@ for(const arm of ['T','N']) {
   fs.renameSync(inside(live),inside(join(proof,arm)));
 }
 console.log(JSON.stringify({previous,results}));
-assert(results.every(r=>r.requests===1 && r.complete && r.hookSeen && r.targetText===(r.arm==='T')),'Delivery gate failed');
+assert(results.every(r=>r.requests===1 && r.complete && r.hookSeen && r.targetText===(r.arm==='T') && !r.ambiguous),'Delivery gate failed');
 
 async function productionHook() {
   const {HIPPO_PINNED_INJECT_COMMAND:command}=await mod('surface/hooks-install/rules/shared');

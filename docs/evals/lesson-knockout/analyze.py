@@ -36,7 +36,7 @@ def is_hex(value: object, size: int) -> bool:
 
 
 def neutral_leak(r: dict) -> bool:
-    return r["targetText"] or r["archivedTargetText"] or r["archivedUnauditable"] > 0
+    return r["targetText"] or r["ambiguous"] or r["archivedTargetText"] or r["archivedUnauditable"] > 0
 
 
 def read_roster() -> tuple[dict, dict]:
@@ -66,7 +66,7 @@ def read_roster() -> tuple[dict, dict]:
                 or not isinstance(audit.get("hits"), list)):
             raise ValueError(f"Missing transcript path audit {f}")
         if not (is_hex(r.get("preTree"), 40) and is_hex(r.get("ignoredSetup"), 64)
-                and all(type(r.get(k)) is bool for k in ("targetText", "archivedTargetText", "hookSeen", "complete"))
+                and all(type(r.get(k)) is bool for k in ("targetText", "ambiguous", "archivedTargetText", "hookSeen", "complete"))
                 and all(type(r.get(k)) is int and r[k] >= 0
                         for k in ("sideRequests", "auxiliaryRequests", "archivedAttempts", "archivedUnauditable"))
                 and r.get("archivedPermissions") is True):

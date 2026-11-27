@@ -179,11 +179,11 @@ async function applyArm(arm,index,{expected,teachId,snapshotHash,preHash}) {
   const receipt={id:u.id,repo:u.repo,arm,session:sid,teachId,mode,verdict,flagged,apparatus:APPARATUS,preTree,ignoredSetup,installedSetup,
     resetHash,snapshotHash,targetCount:fork.targetCount,storeVerified:fork.storeVerified,pathAudit,...archived,...audit};
   const dest=archive('apply-'+index);
-  smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || !audit.targetText));
+  smokeChecks.push(audit.complete && audit.hookSeen && (arm!=='N' || (!audit.targetText && !audit.ambiguous)));
   if(!smoke && !(audit.complete && (arm!=='N' || neutralClean(receipt)))) {
     save(join(dest,'rejected.json'),receipt);
     throw Error('Apply request evidence failed: '+arm+' '+JSON.stringify({complete:audit.complete,targetText:audit.targetText,
-      archivedTargetText:archived.archivedTargetText,archivedUnauditable:archived.archivedUnauditable}));
+      ambiguous:audit.ambiguous,archivedTargetText:archived.archivedTargetText,archivedUnauditable:archived.archivedUnauditable}));
   }
   save(join(dest,'grade.json'),receipt);
 }

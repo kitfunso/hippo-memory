@@ -22,7 +22,7 @@ function complete(dir,u) {
       r.teachId===freeze.teachId && r.snapshotHash===freeze.snapshotHash && r.resetHash===freeze.preHash &&
       r.targetCount===freeze.targetRows.length && r.storeVerified===true && r.complete===true &&
       r.requests>0 && count(r.sideRequests) && typeof r.hookSeen==='boolean' && typeof r.targetText==='boolean' &&
-      typeof r.archivedTargetText==='boolean' && count(r.archivedAttempts) && count(r.auxiliaryRequests) &&
+      typeof r.ambiguous==='boolean' && typeof r.archivedTargetText==='boolean' && count(r.archivedAttempts) && count(r.auxiliaryRequests) &&
       count(r.archivedUnauditable) && r.archivedPermissions===true &&
       /^[0-9a-f]{40}$/.test(r.preTree) && /^[0-9a-f]{64}$/.test(r.ignoredSetup) &&
       (r.arm!=='N' || neutralClean(r)) && r.pathAudit?.transcripts>0 && Array.isArray(r.pathAudit.hits),

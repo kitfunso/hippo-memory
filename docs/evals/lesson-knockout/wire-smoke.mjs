@@ -32,5 +32,5 @@ for(const arm of ['T','N']) {
   fs.renameSync(inside(live),inside(join(proof,arm)));
 }
 console.log(JSON.stringify(results));
-assert(results.every(r=>r.requests===1 && r.complete && r.hookSeen && r.targetText===(r.arm==='T') && !r.wireHosts.length),
+assert(results.every(r=>r.requests===1 && r.complete && r.hookSeen && r.targetText===(r.arm==='T') && !r.ambiguous && !r.wireHosts.length),
   'Wire smoke failed');
