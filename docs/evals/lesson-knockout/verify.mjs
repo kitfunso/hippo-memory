@@ -374,6 +374,11 @@ const disputedShortAmbig=originAudit([{...said('m1','I will run check-it.'),body
   {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
   {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum),'\nMore context.')))])}]);
 assert(!disputedShortAmbig.targetText && disputedShortAmbig.ambiguous,'A disputed multi-block JSON compaction failed to mark the disputed suffix ambiguous');
+const disputedShortDiverged=originAudit([{...said('m1','I will run check-it.'),body:bodyOf([user])},
+  {...said('m2',longSum),cls:'compaction',body:bodyOf([user])},
+  {requestId:'r-m3',id:'m3',cls:'compaction',reply:jsonMidMore,contentType:'application/json',body:jsonReq},
+  {...said('m4','Done.'),body:bodyOf([msg('user',txt(continued(summaryOf(longSum))))])}]);
+assert(disputedShortDiverged.targetText && !disputedShortDiverged.ambiguous,'A disputed multi-block JSON compaction treated a diverged continuation as ambiguous');
 assert(compacted([...reread('.claude/CLAUDE.md','1\tcheck-it'),txt(continued(summaryOf(summaryReply)))]),'A sensitive file read again after compaction passed');
 assert(compacted([reread('src/a.txt','1\tcheck-it')[1],txt(continued(summaryOf(summaryReply)))]),'A tool result without its call passed');
 assert(compacted([reread('Run the special check.','x')[0],txt(continued(summaryOf(summaryReply)))]),'A tool call without its result passed');

@@ -305,8 +305,8 @@ function priorWords(exchanges,index) {
   for(const entry of latest) {
     const top=disputedOf(entry.text) ?? entry.text;
     const rawShort=entry.prefix ? (disputedOf(entry.prefix) ?? entry.prefix) : null;
-    const item=rawShort && linePrefix(top,rawShort) ? {text:top,prefix:rawShort} : {text:top,prefix:null};
-    const key=item.text+'\0'+(item.prefix ?? '');
+    const item=rawShort && linePrefix(top,rawShort) ? {match:entry.text,text:top,prefix:rawShort} : {match:top,text:top,prefix:null};
+    const key=item.match+'\0'+item.text+'\0'+(item.prefix ?? '');
     if(!seen.has(key)) { seen.add(key); summaries.push(item); }
   }
   return {blocks:[...new Set(blocks)].sort((a,b)=>b.length-a.length),summaries};
@@ -401,7 +401,7 @@ export function deliverySurfaces(body,task={},said={blocks:[],summaries:[]},firs
       if(cm) {
         const head=cm[0],rest=s.slice(head.length);
         const atLine=x=>rest.startsWith(x) && (rest.length===x.length || rest[x.length]==='\n');
-        const full=said.summaries.find(x=>atLine(x.text));
+        const full=said.summaries.find(x=>atLine(x.match));
         if(full) {
           opening.push(head+rest.slice(full.text.length));
           if(full.prefix) ambiguous.push(head+rest.slice(full.prefix.length));
