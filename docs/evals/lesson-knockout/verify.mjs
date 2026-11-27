@@ -816,7 +816,7 @@ function checkGrading() {
   const started=Date.now();
   assert.equal(grade('grandchild.mjs',"import {spawn,spawnSync} from 'node:child_process';"+
     "const r=spawnSync(process.execPath,['-e',\"try{require('fs').writeSync(3,'crash')}catch(e){process.exit(e.code==='EBADF'?7:8)}\"],{stdio:'inherit'});"+
-    "spawn(process.execPath,['-e','setTimeout(()=>{},9000)'],{detached:true,stdio:'ignore'}).unref();"+
+    "spawn(process.execPath,['-e','setTimeout(()=>{},9000)'],{cwd:"+JSON.stringify(path.dirname(dir))+",detached:true,stdio:'ignore'}).unref();"+
     "process.exit(r.status===7?1:0);",{deadlineMs:6000}),'fail','A grandchild wrote to the guard channel');
   assert(Date.now()-started<6000,'A detached grandchild held the guard channel open');
   assert.equal(stateOf(()=>grade('fd3-forge.mjs',"import fs from 'node:fs';fs.writeSync(3,'crash\\n');throw new Error('forged');")),
