@@ -35,6 +35,17 @@ function userContainers(files: AgentFiles, folder: string): Container[] {
 function fileContainer(files: AgentFiles, file: string): Container {
   const read = files.readText(file);
   if (!read.ok) {
+    if (read.reason === `${file}: empty`) {
+      return {
+        scope: 'user',
+        path: file,
+        readable: true,
+        items: [],
+        skipped: [],
+        warnings: [],
+        textKeyed: true,
+      };
+    }
     return {
       scope: 'user',
       path: file,

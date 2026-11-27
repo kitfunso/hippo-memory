@@ -133,6 +133,18 @@ describe('installHermes and uninstallHermes', () => {
     ]);
   });
 
+  it('expands ~/ in HERMES_HOME against USERPROFILE on Windows even when HOME differs', () => {
+    if (process.platform !== 'win32') return;
+    const root = makeRoot();
+    const userProfile = path.join(root, 'profile');
+    const otherHome = path.join(root, 'other-home');
+    const homes: Homes = {
+      home: otherHome,
+      env: { HOME: otherHome, USERPROFILE: userProfile, HERMES_HOME: '~/custom-hermes' },
+    };
+    expect(hermesPluginPaths(homes).home).toBe(path.join(userProfile, 'custom-hermes'));
+  });
+
   it('installs into a named active_profile and prints the -p turn-on command', () => {
     const root = makeRoot();
     const hermesRoot = path.join(root, 'hermes-root');

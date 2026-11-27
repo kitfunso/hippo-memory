@@ -102,8 +102,8 @@ def test_each_verb_stops_at_its_time_limit(verb, fake, monkeypatch):
     fake.answer(verb, sleep=30)
     procs = []
     assert hippo.run_hippo(verb, [], stdin="{}" if verb == "context" else None, on_start=procs.append) is None
-    assert procs[0].returncode is not None
-    assert len(fake.calls(verb)) == 1
+    assert len(procs) == 1 and procs[0].returncode is not None
+    assert verb in procs[0].args
 
 
 @pytest.mark.parametrize("name", ["hippo.cmd.", "hippo.cmd. .", "HIPPO.CMD", "hippo.bat", "hippo.com",
@@ -147,13 +147,28 @@ def test_the_spy_records_the_plugin_launches_and_no_other_process(fake, started)
 
 def test_a_js_bin_runs_under_node(tmp_path, monkeypatch):
     script = tmp_path / "hippo.js"
+    script.write_text("", encoding="utf-8")
     monkeypatch.setenv("HIPPO_BIN", str(script))
-    assert hippo.launcher() == ["node", str(script)]
+    assert hippo.launcher() == ["node", str(script.resolve())]
     hippo.LAUNCHER_FILE.write_text(json.dumps({"node": sys.executable, "script": str(script)}), encoding="utf-8")
-    assert hippo.launcher() == [sys.executable, str(script)]
+    assert hippo.launcher() == [sys.executable, str(script.resolve())]
     exe = tmp_path / "hippo.exe"
+    exe.write_text("", encoding="utf-8")
     monkeypatch.setenv("HIPPO_BIN", str(exe))
-    assert hippo.launcher() == [str(exe)]
+    assert hippo.launcher() == [str(exe.resolve())]
+
+
+def test_relative_hippo_bin_resolves_before_running_from_home(tmp_path, monkeypatch):
+    sub = tmp_path / "rel"
+    sub.mkdir()
+    script = sub / "hippo.js"
+    script.write_text("console.log(JSON.stringify({results: []}));\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HIPPO_BIN", "./rel/hippo.js")
+    assert hippo.HippoProvider().is_available()
+    assert hippo.launcher()[-1] == str(script.resolve())
+    res = hippo.run_hippo("recall", [], text="hi")
+    assert res is not None and res.code == 0
 
 
 def test_launcher_json_with_a_moved_node_falls_back_to_node_on_path(tmp_path):

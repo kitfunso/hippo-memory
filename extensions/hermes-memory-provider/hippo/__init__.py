@@ -116,20 +116,29 @@ def _launcher_allowed(path: str) -> bool:
 def launcher() -> list[str]:
     override = os.environ.get("HIPPO_BIN", "").strip()
     rec = _launcher_record()
-    node = rec["node"] if rec and Path(rec["node"]).exists() else "node"
+    node = rec["node"] if rec and Path(rec["node"]).is_file() else "node"
     if override:
         if not _launcher_allowed(override):
             raise ValueError("HIPPO_BIN must name hippo.js or a hippo .exe on Windows")
-        return [node, override] if _launcher_name(override).endswith(".js") else [override]
-    if rec and Path(rec["script"]).exists():
+        resolved = (
+            str(Path(override).resolve())
+            if ("/" in override or "\\" in override or Path(override).is_file())
+            else override
+        )
+        return [node, resolved] if _launcher_name(resolved).endswith(".js") else [resolved]
+    if rec and Path(rec["script"]).is_file():
         return [node, rec["script"]]
     return ["hippo"]
 
 
 def _runnable(argv: list[str]) -> bool:
-    if Path(argv[-1]).is_file():
+    if len(argv) == 2:
+        if not Path(argv[1]).is_file():
+            return False
+        return Path(argv[0]).is_file() or bool(shutil.which(argv[0]))
+    if Path(argv[0]).is_file():
         return True
-    found = shutil.which(argv[0]) if len(argv) == 1 else None
+    found = shutil.which(argv[0])
     return bool(found) and _launcher_allowed(found)
 
 
@@ -553,6 +562,7 @@ class HippoProvider(MemoryProvider):
             executor.shutdown(wait=False, cancel_futures=False)
             _, pending = wait(futures, timeout=capture_deadline_s())
             if not pending:
+                executor.shutdown(wait=True)
                 return
             dropped = sum(future.cancel() for future in pending)
             with self._lock:

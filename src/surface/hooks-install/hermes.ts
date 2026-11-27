@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { hermesHomeDir, userHome, type Homes } from '../../base/util/agent-homes.js';
 import { isFileSystemError } from '../../base/util/expected-errors.js';
 import { isJsonObject, isJsonString, tryParseJson } from '../../base/util/json.js';
+import { errorFields, errorMessage, log } from '../../base/util/log.js';
 import { processHomes } from '../../host/agent-homes.js';
 import { writeFileAtomic } from '../../host/atomic-write.js';
 import { diskAgentFiles } from '../../infra/agent-files.js';
@@ -207,7 +208,12 @@ function upgradeDir(
       try {
         if (item.prev === null) fs.rmSync(item.dest, { force: true });
         else writeFileAtomic(item.dest, item.prev);
-      } catch {}
+      } catch (rollbackErr) {
+        log.warn(
+          `hermes upgrade rollback failed for ${item.dest}: ${errorMessage(rollbackErr)}`,
+          errorFields(rollbackErr),
+        );
+      }
     }
     throw err;
   }
@@ -265,9 +271,13 @@ function removeFromDir(pluginDir: string): HermesUninstallStatus {
   return 'removed';
 }
 
+function hermesUserHome(homes: Homes): string {
+  return process.platform === 'win32' ? homes.env.USERPROFILE || homes.home : userHome(homes);
+}
+
 export function hermesPluginPaths(homes: Homes = processHomes()): HermesPluginPaths {
   const { home, profile } = hermesHomeDir(
-    userHome(homes),
+    hermesUserHome(homes),
     homes.env,
     process.platform,
     diskAgentFiles,

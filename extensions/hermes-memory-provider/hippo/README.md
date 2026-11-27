@@ -39,7 +39,7 @@ memory:
     platforms: [telegram, cron]
 ```
 
-A delegated sub-agent can only recall. A cron job can recall and gets context, but it writes nothing.
+A delegated sub-agent can only recall. A cron job can recall and gets context, but it writes nothing. Under `plugins.isolation: host`, the provider stays off when Hermes does not bind a session policy.
 
 ## Settings
 

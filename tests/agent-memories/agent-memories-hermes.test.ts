@@ -116,7 +116,6 @@ describe('hermes adapter', () => {
 
   it.each([
     ['a NUL byte', () => Buffer.from('a\0b')],
-    ['an empty file', () => Buffer.alloc(0)],
     ['a file over 256 KB', () => Buffer.from('x'.repeat(300 * 1024))],
   ])('%s makes that container unreadable with one warning, and the other file still reads', (_name, content) => {
     write(path.join(memoryDir(), 'MEMORY.md'), 'the memory');
@@ -133,6 +132,13 @@ describe('hermes adapter', () => {
     const [container] = hermesAdapter.list(ctxFor(env()), 'user').containers;
     expect(container.readable).toBe(false);
     expect(container.warnings).toHaveLength(1);
+  });
+
+  it('treats a zero-byte MEMORY.md as a readable empty container so the last removed note is set aside', () => {
+    const hermesHome = at('hermes-empty');
+    const file = write(path.join(hermesHome, 'memories', 'MEMORY.md'), '');
+    const [container] = hermesAdapter.list(ctxFor({ HERMES_HOME: hermesHome }), 'user').containers;
+    expect(container).toMatchObject({ path: file, readable: true, items: [], warnings: [] });
   });
 });
 
