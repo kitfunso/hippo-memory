@@ -932,24 +932,30 @@ function checkGrading() {
   const system=execFileSync('python',['-c','import sys;print(sys.executable)'],{env,encoding:'utf8'}).trim();
   const pyEnv={...env,CHECK_PYTHON:system},fake={id:'fake',lesson:{checkPath:join(base,'mods.mjs')}};
   put(base,'mods.mjs',"run(['-m', 'pip']);run([\"-m\", \"no_such_module_q1\"]);");
-  assert.throws(()=>assertCheckerTools(fake,pyEnv),/cannot run python -m no_such_module_q1/);
-  assert.throws(()=>assertCheckerTools(fake,env),/outside a Python toolchain/);
+  assert.throws(()=>assertCheckerTools(fake,pyEnv,live),/cannot run python -m no_such_module_q1/);
+  assert.throws(()=>assertCheckerTools(fake,env,live),/outside a Python toolchain/);
   const pkg=join(base,'pkg');
   put(pkg,'brokenmod_q1/__init__.py','raise ImportError("broken on import")');
   const found=execFileSync(system,['-c','import importlib.util as u;print(u.find_spec("brokenmod_q1") is not None)'],{cwd:pkg,env,encoding:'utf8'});
   assert.equal(found.trim(),'True','The broken package must be discoverable, as the old probe accepted it');
   put(base,'mods.mjs',"run(['-m', 'brokenmod_q1']);");
-  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PYTHONPATH:pkg}),/cannot run python -m brokenmod_q1/);
+  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PYTHONPATH:pkg},live),/cannot run python -m brokenmod_q1/);
+  const probeHome=join(base,'probe-home');
+  put(pkg,'homewrite_q1.py','import pathlib\np=pathlib.Path.home()/".probe"\np.mkdir(parents=True,exist_ok=True)\n(p/"x.txt").write_text("x")\n');
+  put(base,'mods.mjs',"run(['-m', 'homewrite_q1']);");
+  assert.deepEqual(assertCheckerTools(fake,{...pyEnv,PYTHONPATH:pkg,HOME:probeHome,USERPROFILE:probeHome},live),['homewrite_q1']);
+  assert(!fs.existsSync(probeHome),'A checker module probe wrote into the live home');
+  assert(fs.existsSync(join(live,'setup-home','.probe','x.txt')),'The checker module probe did not run in the setup profile');
   put(base,'mods.mjs',"run(['-m', 'pip']);");
   const shadow=join(base,'shadow');
   put(shadow,'pip.py','raise SystemExit(9)');
   const back=process.cwd();
   process.chdir(shadow);
-  try { assert.deepEqual(assertCheckerTools(fake,pyEnv),['pip'],'A module in the current folder shadowed the probe'); }
+  try { assert.deepEqual(assertCheckerTools(fake,pyEnv,live),['pip'],'A module in the current folder shadowed the probe'); }
   finally { process.chdir(back); }
-  assert.throws(()=>assertCheckerTools(fake,{...env,CHECK_PYTHON:join(base,'other','python.exe')}),/is not CHECK_PYTHON/);
-  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PATH:join(base,'empty-path')}),/is not CHECK_PYTHON/);
-  assert.deepEqual(assertCheckerTools(roster()[1],env),[]);
+  assert.throws(()=>assertCheckerTools(fake,{...env,CHECK_PYTHON:join(base,'other','python.exe')},live),/is not CHECK_PYTHON/);
+  assert.throws(()=>assertCheckerTools(fake,{...pyEnv,PATH:join(base,'empty-path')},live),/is not CHECK_PYTHON/);
+  assert.deepEqual(assertCheckerTools(roster()[1],env,live),[]);
 }
 checkGrading();
 console.log('Passed task grading environment, checker crash exit, checker log and checker module probe.');

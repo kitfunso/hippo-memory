@@ -117,8 +117,8 @@ function Copy-GradleProperties([string]$Chain,[string]$Live) {
 }
 $hippoLaunchers=@('hippo','hippo.cmd','hippo.ps1','hippo.exe','hippo.bat')
 $env:PATH=(@($env:PATH -split ';' | Where-Object {
-  $dir=[Environment]::ExpandEnvironmentVariables($_.Trim().Trim('"'))
-  $dir -and -not ($hippoLaunchers | Where-Object { Test-Path -LiteralPath (Join-Path $dir $_) })
+  $dir=$_.Trim().Trim('"')
+  $dir -and !$dir.Contains('%') -and -not ($hippoLaunchers | Where-Object { Test-Path -LiteralPath (Join-Path $dir $_) })
 }) -join ';')
 $toolKeys=@('MAVEN_ARGS','npm_config_cache','UV_CACHE_DIR','PIP_CACHE_DIR','PIP_CONSTRAINT',
   'GEM_PATH','PNPM_HOME','npm_config_store_dir','pnpm_config_store_dir','BUNDLE_USER_HOME',

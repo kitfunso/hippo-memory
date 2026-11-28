@@ -86,7 +86,7 @@ function prepare(task) {
   const ignored=ignoredListing(git),installed=installedPackages(live);
   if(!smoke) {
     checkProjectSettings(work);
-    assertCheckerTools(u,graderEnv());
+    assertCheckerTools(u,graderEnv(),live);
   }
   return {ignored,installed};
 }
@@ -123,7 +123,7 @@ function grade(before,commands) {
   const post=stateCommit(work,before);
   holdPre(work,post,FIRST_REF);
   const env=graderEnv();
-  assertCheckerTools(u,env);
+  assertCheckerTools(u,env,live);
   return guardedRun(runCheck,u.lesson,{work,env,preCommit:before,postCommit:post,commands,scratch:join(records,'grade')});
 }
 function archive(name) {

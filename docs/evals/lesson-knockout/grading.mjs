@@ -24,13 +24,14 @@ export const checkerModules=checkPath=>[...new Set([...fs.readFileSync(checkPath
 const same=(a,b)=>path.resolve(a).toLowerCase()===path.resolve(b).toLowerCase();
 const tail=r=>String(r.stderr||r.stdout||r.error?.message||'').trim().slice(-400);
 
-export function assertCheckerTools(u,env) {
+export function assertCheckerTools(u,env,live) {
   const modules=checkerModules(u.lesson.checkPath);
   if(!modules.length) return modules;
   if(!env.CHECK_PYTHON) throw Error('Checker for '+u.id+' runs Python modules outside a Python toolchain');
+  const probe={...env,...setupProfile(live)};
   const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'module-probe-'));
   try {
-    const run=(file,args)=>spawnSync(file,args,{env,cwd,encoding:'utf8',windowsHide:true,timeout:120_000});
+    const run=(file,args)=>spawnSync(file,args,{env:probe,cwd,encoding:'utf8',windowsHide:true,timeout:120_000});
     const where=run('python',['-c','import sys;print(sys.executable)']),found=(where.stdout??'').trim();
     if(where.status!==0 || !same(found,env.CHECK_PYTHON))
       throw Error('python on the grading PATH for '+u.id+' is not CHECK_PYTHON: '+(found||tail(where)));

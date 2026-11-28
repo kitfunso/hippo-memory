@@ -55,6 +55,13 @@ try {
     } elseif ($copied -or (Test-Path -LiteralPath "$live/cache/GRADLE_USER_HOME")) { throw "Unexpected Gradle home for $chain" }
     Restore-Env
   }
+  foreach ($target in @("$scratch\planted","$scratch\empty")) {
+    $env:KO_PATH_PROBE=$target
+    $env:PATH="%KO_PATH_PROBE%;$env:PATH"
+    . "$PSScriptRoot/toolchain.ps1" python $live
+    if (@($env:PATH -split ';' | Where-Object { $_.Contains('%') }).Count) { throw "A PATH entry with a variable survived the launcher filter ($target)" }
+    Restore-Env
+  }
   . "$PSScriptRoot/toolchain.ps1" python $live
   Assert-Throws { Assert-SessionPath "$scratch\shadow;$env:PATH" python $live } 'outside the python toolchain'
   Restore-Env
