@@ -29,8 +29,8 @@ const flushed=res=>res.writableFinished || res.destroyed ? Promise.resolve() : w
 const label=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.:-]{1,128}$/i.test(v) ? v : 'invalid';
 const listed=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.,: -]{0,1024}$/i.test(v) ? v : 'invalid';
 const SAFE_CODES=new Set([
-  'unexpected','request','response','unsanitizable',
-  'EBIG','ELOG','EACCES','EADDRINUSE','EADDRNOTAVAIL','EAGAIN','EBADF','EBUSY','ECONNABORTED',
+  'unexpected','request','response','unsanitizable','open-exchanges',
+  'EBIG','ELOG','ESHORT','EACCES','EADDRINUSE','EADDRNOTAVAIL','EAGAIN','EBADF','EBUSY','ECONNABORTED',
   'ECONNREFUSED','ECONNRESET','EDQUOT','EEXIST','EFAULT','EFBIG','EHOSTDOWN','EHOSTUNREACH',
   'EINTR','EINVAL','EIO','EISDIR','EMFILE','EMSGSIZE','ENETDOWN','ENETRESET','ENETUNREACH',
   'ENFILE','ENOBUFS','ENOENT','ENOMEM','ENOSPC','ENOTCONN','ENOTDIR','ENOTEMPTY','ENOTFOUND',

@@ -1286,6 +1286,10 @@ async function checkLiveWire() {
     assert.equal(codeOf('unsanitizable'),'unsanitizable','A known error code was lost');
     for(const e of ['disk full at C:\\SECRET_CANARY_99\\path?token=abc',{code:'SECRET_CANARY_99'},{code:'E BAD/SECRET_CANARY_99'+'x'.repeat(60)},{name:'Weird Name: SECRET_CANARY_99'}])
       assert.equal(codeOf(e),'error','A fault row kept free text');
+    const wireSource=fs.readFileSync(new URL('./wire.mjs',import.meta.url),'utf8');
+    const internalLabels=[...wireSource.matchAll(/fault\([^,()]+,'[^']+','([^']+)'\)|\{code:'([^']+)'\}/g)].map(m=>m[1]??m[2]);
+    assert(internalLabels.length>=9,'The fault label scan found only '+internalLabels.length+' labels in wire.mjs');
+    for(const l of internalLabels) assert.equal(codeOf(l),l,'An internal fault label was hidden: '+l);
     const oneShot=async (name,request)=>{
       const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port,one.token),got=reply(t);
       t.write(request);
@@ -1308,6 +1312,26 @@ async function checkLiveWire() {
       const faultRow=r.rows.find(x=>x.kind==='fault');
       assert.equal(faultRow?.error,want,want==='error' ? 'A fault row kept free text' : 'A known error code was lost');
     }
+    const shortDir=join(base,'fault-short'),shortWire=await openWire(shortDir,{ca:testCa,upstream:api.upstream});
+    const shortSock=await connectThrough(shortWire.port,shortWire.token),stBody=body('CASE:final fault-short'),stClosed=new Promise(r=>shortSock.once('close',r));
+    const origOpen=fs.openSync,origWrite=fs.writeSync;
+    let responseFd=null;
+    fs.openSync=(p,...a)=>{ const fd=origOpen(p,...a); if(String(p).endsWith('00001.response')) responseFd=fd; return fd; };
+    fs.writeSync=(fd,...a)=>fd===responseFd ? 0 : origWrite(fd,...a);
+    try { shortSock.write(head(stBody.length)+stBody); await Promise.race([stClosed,wait(5000)]); }
+    finally { fs.openSync=origOpen; fs.writeSync=origWrite; shortSock.destroy(); }
+    const shortState=await shortWire.close(1000);
+    assert(responseFd!==null && !shortState.ok,'A zero-byte response write left a valid wire');
+    assert.equal(rows(shortDir).find(x=>x.kind==='fault' && x.stage==='response-file')?.error,'ESHORT','An internal fault label was hidden: ESHORT');
+    const lateDir=join(base,'fault-open'),lateWire=await openWire(lateDir,{ca:testCa,upstream:api.upstream}),beforeLate=api.seen.length;
+    const lateSock=await connectThrough(lateWire.port,lateWire.token),lateBody=body('CASE:hold late');
+    lateSock.write(head(lateBody.length)+lateBody);
+    for(let i=0;i<100 && !api.seen.slice(beforeLate).some(x=>x.kind==='hold');i++) await wait(20);
+    assert(api.seen.slice(beforeLate).some(x=>x.kind==='hold'),'The late held request did not reach the upstream');
+    const lateState=await lateWire.close(200);
+    lateSock.destroy();
+    assert(!lateState.ok,'A close with an open exchange left a valid wire');
+    assert.equal(rows(lateDir).find(x=>x.kind==='fault' && x.stage==='close')?.error,'open-exchanges','An internal fault label was hidden: open-exchanges');
     const ported=await oneShot('host-port',request(body('CASE:final ported'),'Host: api.anthropic.com:443\r\n'));
     assert(ported.state.ok && /message_stop/.test(ported.text) && ported.forwarded[0]?.headers.includes('api.anthropic.com:443'),
       'The wire refused or rewrote an explicit API port in Host');
