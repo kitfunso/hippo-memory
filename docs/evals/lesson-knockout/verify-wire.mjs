@@ -169,11 +169,19 @@ export async function checkWireOffline(parent) {
       const len=typeof length==='number' ? length : buf.length-at;
       short++;
       const cap=Math.min(len,7);
-      if(cap<len) partial=true;
-      return patch.write(fd,buf,at,cap,...a);
+      const written=patch.write(fd,buf,at,cap,...a);
+      if(written<len) partial=true;
+      return written;
     };
     try { await run('shortwrite','CASE:final Reply done.',{killAfter:20000}); } finally { patch.restore(); }
     assert(short>0 && partial,'The short write patch never injected a partial write');
+    const swRows=wireRows(outcomes.shortwrite.dir);
+    const swSeq=swRows.find(r=>r.kind==='request' && r.route==='generate')?.seq;
+    const swResp=swRows.find(r=>r.kind==='response' && r.seq===swSeq);
+    const swEnd=swRows.find(r=>r.kind==='end' && r.seq===swSeq);
+    assert(swResp?.file && swEnd?.ended==='complete','The shortwrite response did not complete');
+    const swSaved=fs.readFileSync(path.join(outcomes.shortwrite.dir,swResp.file));
+    assert(swSaved.length===swEnd.bytes && sha(swSaved)===swEnd.sha256,'The saved shortwrite response was incomplete or mismatched');
   } finally { await api.close(); }
   assert.deepEqual(outcomes['parity-wire'].seen.map(x=>x.kind).filter(k=>k!=='other'),['tool','final'],'The parity run did not take a tool turn');
   assert(outcomes['parity-wire'].offers.length>0,'The parity run recorded no protocol offer');

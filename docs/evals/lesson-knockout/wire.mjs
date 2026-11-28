@@ -28,10 +28,22 @@ const waitEither=(res,a,b)=>new Promise(resolve=>{ const done=()=>{ res.off(a,do
 const flushed=res=>res.writableFinished || res.destroyed ? Promise.resolve() : waitEither(res,'finish','close');
 const label=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.:-]{1,128}$/i.test(v) ? v : 'invalid';
 const listed=v=>v===undefined ? null : typeof v==='string' && /^[a-z0-9_.,: -]{0,1024}$/i.test(v) ? v : 'invalid';
-const SAFE_CODE=/^(?:[A-Z][A-Z0-9_]{1,47}|(?:[A-Z][A-Za-z0-9]{0,31})?Error|[a-z][a-z0-9_-]{0,31})$/;
+const SAFE_CODES=new Set([
+  'unexpected','request','response','unsanitizable',
+  'EBIG','ELOG','EACCES','EADDRINUSE','EADDRNOTAVAIL','EAGAIN','EBADF','EBUSY','ECONNABORTED',
+  'ECONNREFUSED','ECONNRESET','EDQUOT','EEXIST','EFAULT','EFBIG','EHOSTDOWN','EHOSTUNREACH',
+  'EINTR','EINVAL','EIO','EISDIR','EMFILE','EMSGSIZE','ENETDOWN','ENETRESET','ENETUNREACH',
+  'ENFILE','ENOBUFS','ENOENT','ENOMEM','ENOSPC','ENOTCONN','ENOTDIR','ENOTEMPTY','ENOTFOUND',
+  'EPERM','EPIPE','EPROTO','EPROTONOSUPPORT','EROFS','ESHUTDOWN','ESPIPE','ETIMEDOUT','EXDEV',
+  'ABORT_ERR','DEPTH_ZERO_SELF_SIGNED_CERT','SELF_SIGNED_CERT_IN_CHAIN','UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'CERT_HAS_EXPIRED','CERT_NOT_YET_VALID','ERR_TLS_CERT_ALTNAME_INVALID','ERR_TLS_HANDSHAKE_TIMEOUT',
+  'ERR_STREAM_PREMATURE_CLOSE','ERR_STREAM_DESTROYED','ERR_SOCKET_CLOSED','ERR_HTTP_INVALID_HEADER_VALUE',
+  'HPE_INVALID_CONSTANT','HPE_INVALID_EOF_STATE','HPE_HEADER_OVERFLOW','HPE_CLOSED_CONNECTION',
+  'AbortError','Error','RangeError','SyntaxError','TypeError',
+]);
 export const codeOf=e=>{
   const raw=typeof e==='string' ? e : e?.code ?? e?.name;
-  return typeof raw==='string' && SAFE_CODE.test(raw) ? raw : 'error';
+  return typeof raw==='string' && SAFE_CODES.has(raw) ? raw : 'error';
 };
 const pause=ms=>new Promise(r=>setTimeout(r,ms).unref());
 export const wireName=(n,suffix)=>String(n).padStart(5,'0')+suffix;

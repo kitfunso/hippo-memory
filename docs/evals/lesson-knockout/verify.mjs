@@ -1284,7 +1284,7 @@ async function checkLiveWire() {
     for(const r of dirtyRows.filter(r=>r.kind==='fault')) assert.match(r.error,/^[A-Za-z0-9_.-]{1,48}$/,'A fault row kept free text');
     assert.equal(codeOf({code:'ENOSPC'}),'ENOSPC','A known error code was lost');
     assert.equal(codeOf('unsanitizable'),'unsanitizable','A known error code was lost');
-    for(const e of ['disk full at C:\\SECRET_CANARY_99\\path?token=abc',{code:'E BAD/SECRET_CANARY_99'+'x'.repeat(60)},{name:'Weird Name: SECRET_CANARY_99'}])
+    for(const e of ['disk full at C:\\SECRET_CANARY_99\\path?token=abc',{code:'SECRET_CANARY_99'},{code:'E BAD/SECRET_CANARY_99'+'x'.repeat(60)},{name:'Weird Name: SECRET_CANARY_99'}])
       assert.equal(codeOf(e),'error','A fault row kept free text');
     const oneShot=async (name,request)=>{
       const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port,one.token),got=reply(t);
@@ -1296,7 +1296,7 @@ async function checkLiveWire() {
     const fields='Content-Type: application/json\r\nx-claude-code-request-class: main\r\nanthropic-version: 2023-06-01\r\n';
     const request=(payload,host='Host: api.anthropic.com\r\n')=>'POST /v1/messages?beta=true HTTP/1.1\r\n'+host+fields+'Content-Length: '+payload.length+'\r\n\r\n'+payload;
     for(const [name,err,want] of [
-      ['fault-hostile',Object.assign(Error('SECRET_CANARY_99'),{code:'BAD SECRET_CANARY_99'}),'error'],
+      ['fault-hostile',Object.assign(Error('SECRET_CANARY_99'),{code:'SECRET_CANARY_99'}),'error'],
       ['fault-known',Object.assign(Error('SECRET_CANARY_99'),{code:'ENOSPC'}),'ENOSPC'],
     ]) {
       const origWriteFile=fs.writeFileSync;
