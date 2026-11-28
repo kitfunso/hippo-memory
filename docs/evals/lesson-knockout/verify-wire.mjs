@@ -264,7 +264,10 @@ export async function checkLauncher() {
       assert(api.seen.length===before && !fs.existsSync(earlyEnv) && !fs.existsSync(path.join(live,call.id+'.json')),
         'The launcher started Claude Code for the '+name+' call');
     };
-    await checkEarlyRefusal('wrong-mode',callOf('Reply OK.',{diagnostic:false}),parentEnv,/The dummy credential runs only a diagnostic smoke/);
+    const modeHome=path.join(parent,'wrong-mode','home');
+    await checkEarlyRefusal('wrong-mode',callOf('Reply OK.',{diagnostic:false}),{...parentEnv,HOME:modeHome,USERPROFILE:modeHome},/The dummy credential runs only a diagnostic smoke/);
+    assert(!fs.existsSync(path.join(modeHome,'AppData')),'The launcher wrote into the live home before Claude started');
+    assert(fs.existsSync(path.join(parent,'wrong-mode','setup-home','AppData','Roaming')),'The launcher did not start in the setup profile');
     const live=prepare('live',hook),call=callOf('Reply OK.'),beforeLive=api.seen.length;
     let liveErr='';
     try { await launch(live,'Z0_WIRE_DUMMY',parentEnv,call,{record,onStderr:s=>{ liveErr+=s; }}); }

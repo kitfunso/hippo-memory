@@ -16,7 +16,7 @@ import { STUB_CLAUDE_MD } from '../../../scripts/token-eval/workspace.mjs';
 import { openCue,launch } from './delivery.mjs';
 import { archivedAudit,callComplete,flagOf,evidence,neutralClean,permissionAudit,sessionInventory } from './evidence.mjs';
 import { auditApply } from './path-audit.mjs';
-import { runSetupScript } from './setup.mjs';
+import { operatorEnv,runSetupScript } from './setup.mjs';
 import { applyFrozen,assertSameTree,continueUnit } from './continuation.mjs';
 
 const [mode,id,token='Z0_SUB_TOKEN',attempt]=process.argv.slice(2);
@@ -44,7 +44,8 @@ if(reuse) {
     assert(r.complete && r.hookSeen && r.targetText===(arm==='T'),'HTTP qualification missing');
   }
 }
-const checkEnv=checkerEnv({TEMP:join(unit,'tmp'),TMP:join(unit,'tmp'),HOME:join(live,'home'),USERPROFILE:join(live,'home')});
+const gradeBase=checkerEnv({TEMP:join(unit,'tmp'),TMP:join(unit,'tmp'),HOME:join(live,'home'),USERPROFILE:join(live,'home')});
+const checkEnv=operatorEnv(gradeBase,live);
 const git=(...args)=>execFileSync('git',['-c','core.longpaths=true','-c','maintenance.auto=false',...args],
   {cwd:work,env:checkEnv,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}).trim();
 const binary='C:/z0-runs/scored/bin/claude.exe';
@@ -90,7 +91,7 @@ function prepare(task) {
   }
   return {ignored,installed};
 }
-const graderEnv=()=>gradeEnv(checkEnv,u,live,join(records,'grade','checker.log'));
+const graderEnv=()=>gradeEnv(gradeBase,u,live,join(records,'grade','checker.log'));
 async function session(task,prompt,session,id,resume=false,gate) {
   const call={id,session,resume,prompt,smoke,model:pins.modelOpus,effort:pins.effort,toolchain:u.toolchain,apparatus:APPARATUS};
   if(reuse) call.frozenSmoke=true;

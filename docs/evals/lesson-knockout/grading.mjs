@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync,spawnSync } from 'node:child_process';
 import { assertNodeStarts,folder } from './plan.mjs';
-import { setupProfile } from './setup.mjs';
+import { operatorEnv,setupProfile } from './setup.mjs';
 
 export function gradeEnv(base,u,live,log) {
   const tool=JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
@@ -12,7 +12,7 @@ export function gradeEnv(base,u,live,log) {
   const env=Object.fromEntries(Object.entries(base).filter(([key])=>key.toUpperCase()!=='PATH'));
   Object.assign(env,tool,{CHECK_LOG:log});
   if(u.toolchain==='python') env.CHECK_PYTHON=path.join(live,'venv','Scripts','python.exe');
-  assertNodeStarts(env,'Grading environment');
+  assertNodeStarts(operatorEnv(env,live),'Grading environment');
   return env;
 }
 

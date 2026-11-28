@@ -69,8 +69,11 @@ $paths=@($env:USERPROFILE,$env:HOME,$PWD.Path,$env:APPDATA,$roaming,$env:LOCALAP
 `);
 const profile=join(apply,'home');
 runSetupScript(apply,{...process.env,HOME:profile,USERPROFILE:profile},join(dir,'setup-probe.ps1'));
-gradeEnv(checkerEnv({HOME:profile,USERPROFILE:profile}),{toolchain:'python'},apply,join(dir,'probe-check.log'));
+put(dir,'home-probe.cjs',"require('fs').mkdirSync(require('path').join(require('os').homedir(),'.node-probe'),{recursive:true});\n");
+const probeBase=checkerEnv({HOME:profile,USERPROFILE:profile});
+gradeEnv({...probeBase,NODE_OPTIONS:probeBase.NODE_OPTIONS+' --require "'+join(dir,'home-probe.cjs').replaceAll('\\','/')+'"'},{toolchain:'python'},apply,join(dir,'probe-check.log'));
 assert(!fs.existsSync(profile),'The grading probe wrote into the live home');
+assert(fs.existsSync(join(apply,'setup-home','.node-probe')),'The grading node probe did not start in the setup profile');
 assert.equal(resetBuiltIn(apply,pre,manifest),hash(JSON.stringify(manifest)));
 assert.deepEqual(fs.readdirSync(apply).sort(),['home','setup-home','work']);
 const setupHome=join(apply,'setup-home');
@@ -1047,6 +1050,9 @@ assert.deepEqual([gateIntents,launchCalls,launchBoxes,unitState()],[0,0,0,gateBe
 
 assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function session(')[1].split('\n}\n')[0]
   .includes('await launch(live,token,checkEnv,call,{gate,onFirstCall});'),'The session does not pass its gate to the scored launch');
+const runSource=fs.readFileSync(join(folder,'run.mjs'),'utf8');
+assert(runSource.includes('const checkEnv=operatorEnv(gradeBase,live);') && runSource.includes('const graderEnv=()=>gradeEnv(gradeBase,u,live,'),
+  'The runner does not split the operator and checker profiles');
 assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function session(')[1].split('\n}\n')[0]
   .includes("assert(wire.complete,'Wire record does not match the call '"),'The session grades a call without its wire record');
 for(const name of ['check-smoke.mjs','wire-smoke.mjs'])

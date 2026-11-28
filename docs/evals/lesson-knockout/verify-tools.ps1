@@ -59,7 +59,7 @@ try {
     $env:KO_PATH_PROBE=$target
     $env:PATH="%KO_PATH_PROBE%;$env:PATH"
     . "$PSScriptRoot/toolchain.ps1" python $live
-    if (@($env:PATH -split ';' | Where-Object { $_.Contains('%') }).Count) { throw "A PATH entry with a variable survived the launcher filter ($target)" }
+    if (@($env:PATH -split ';' | Where-Object { $_.Contains('%') }).Count) { throw "A PATH entry with a variable survived the launcher filter" }
     Restore-Env
   }
   . "$PSScriptRoot/toolchain.ps1" python $live

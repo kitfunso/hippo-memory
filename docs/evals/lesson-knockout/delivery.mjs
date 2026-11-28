@@ -10,6 +10,7 @@ import { WIRE_CA,folder,hash,wireEnv } from './plan.mjs';
 import { openWire } from './wire.mjs';
 import { inside,copy,stateRoot } from './state.mjs';
 import { cutOffBound,cutOffPermissions } from './evidence.mjs';
+import { operatorEnv } from './setup.mjs';
 
 export const STOPPED=75;
 export const limitBound=(records,live,call)=>
@@ -68,7 +69,7 @@ async function recorded(records,call,invokeOnce,record) {
 async function invoke(live,token,env,boxChecked=false,onStderr) {
   const proc=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
     path.join(folder,'launch.ps1'),'-Live',live,'-TokenVar',token,...(boxChecked?['-BoxChecked']:[])],
-    {cwd:path.dirname(live),env,windowsHide:true,stdio:['inherit','inherit',onStderr ? 'pipe' : 'inherit']});
+    {cwd:path.dirname(live),env:operatorEnv(env,live),windowsHide:true,stdio:['inherit','inherit',onStderr ? 'pipe' : 'inherit']});
   if(onStderr) proc.stderr.on('data',d=>{ process.stderr.write(d); onStderr(String(d)); });
   const [code]=await once(proc,onStderr ? 'close' : 'exit');
   return code;
@@ -79,7 +80,7 @@ function runBoxCheck(live,env) {
   if(hash(fs.readFileSync(script))!=='4548084ad76f9eecc834a5eba5401dd1b32e0a91baec52fe2e9915c1c831cfb0')
     throw Error('box-check.sh differs from the registered script');
   return spawnSync('C:/Program Files/Git/bin/bash.exe',[script],{
-    cwd:path.dirname(live),env,windowsHide:true,encoding:'utf8',stdio:['ignore','pipe','inherit']});
+    cwd:path.dirname(live),env:operatorEnv(env,live),windowsHide:true,encoding:'utf8',stdio:['ignore','pipe','inherit']});
 }
 
 async function waitForBox(checkBox,delay) {
