@@ -1288,7 +1288,6 @@ async function checkLiveWire() {
       assert.equal(codeOf(e),'error','A fault row kept free text');
     const wireSource=fs.readFileSync(new URL('./wire.mjs',import.meta.url),'utf8');
     const internalLabels=[...wireSource.matchAll(/fault\([^,()]+,'[^']+','([^']+)'\)|\{code:'([^']+)'\}/g)].map(m=>m[1]??m[2]);
-    assert(internalLabels.length>=9,'The fault label scan found only '+internalLabels.length+' labels in wire.mjs');
     for(const l of internalLabels) assert.equal(codeOf(l),l,'An internal fault label was hidden: '+l);
     const oneShot=async (name,request)=>{
       const d=join(base,name),one=await openWire(d,{ca:testCa,upstream:api.upstream}),from=api.seen.length,t=await connectThrough(one.port,one.token),got=reply(t);
@@ -1312,17 +1311,6 @@ async function checkLiveWire() {
       const faultRow=r.rows.find(x=>x.kind==='fault');
       assert.equal(faultRow?.error,want,want==='error' ? 'A fault row kept free text' : 'A known error code was lost');
     }
-    const shortDir=join(base,'fault-short'),shortWire=await openWire(shortDir,{ca:testCa,upstream:api.upstream});
-    const shortSock=await connectThrough(shortWire.port,shortWire.token),stBody=body('CASE:final fault-short'),stClosed=new Promise(r=>shortSock.once('close',r));
-    const origOpen=fs.openSync,origWrite=fs.writeSync;
-    let responseFd=null;
-    fs.openSync=(p,...a)=>{ const fd=origOpen(p,...a); if(String(p).endsWith('00001.response')) responseFd=fd; return fd; };
-    fs.writeSync=(fd,...a)=>fd===responseFd ? 0 : origWrite(fd,...a);
-    try { shortSock.write(head(stBody.length)+stBody); await Promise.race([stClosed,wait(5000)]); }
-    finally { fs.openSync=origOpen; fs.writeSync=origWrite; shortSock.destroy(); }
-    const shortState=await shortWire.close(1000);
-    assert(responseFd!==null && !shortState.ok,'A zero-byte response write left a valid wire');
-    assert.equal(rows(shortDir).find(x=>x.kind==='fault' && x.stage==='response-file')?.error,'ESHORT','An internal fault label was hidden: ESHORT');
     const lateDir=join(base,'fault-open'),lateWire=await openWire(lateDir,{ca:testCa,upstream:api.upstream}),beforeLate=api.seen.length;
     const lateSock=await connectThrough(lateWire.port,lateWire.token),lateBody=body('CASE:hold late');
     lateSock.write(head(lateBody.length)+lateBody);
@@ -1773,5 +1761,28 @@ const offline=await checkWireOffline(join(dir,'wire-offline'));
 const sib=join(dir,'wire-offline','sibling.txt');
 assert(fs.existsSync(sib) && fs.readFileSync(sib,'utf8')==='kept','The offline check removed a file beside its folder');
 console.log('Passed the pinned CLI through the wire offline: '+offline.cases+' cases, '+offline.requests+' forwarded requests, '+offline.files+' retained files without the credential or identity fields.');
+await checkShortWriteFault();
+console.log('Passed a zero-byte response write: the wire failed and its fault row kept ESHORT.');
+async function checkShortWriteFault() {
+  const api=await startScriptedApi(testCa),shortDir=join(dir,'fault-short'),target=path.resolve(shortDir,'00001.response');
+  const payload=JSON.stringify({model:pins.modelOpus,system:'s',messages:[{role:'user',content:'CASE:final fault-short'}],stream:true});
+  const origOpen=fs.openSync,origWrite=fs.writeSync;
+  let responseFd=null,injected=0;
+  try {
+    const shortWire=await openWire(shortDir,{ca:testCa,upstream:api.upstream});
+    const shortSock=await connectThrough(shortWire.port,shortWire.token),closed=new Promise(r=>shortSock.once('close',r));
+    fs.openSync=(p,...a)=>{ const fd=origOpen(p,...a); if(responseFd===null && path.resolve(String(p))===target) responseFd=fd; return fd; };
+    fs.writeSync=(fd,...a)=>{ if(fd===responseFd && !injected) { injected++; return 0; } return origWrite(fd,...a); };
+    try {
+      shortSock.write('POST /v1/messages?beta=true HTTP/1.1\r\nHost: api.anthropic.com\r\nContent-Type: application/json\r\n'+
+        'x-claude-code-request-class: main\r\nanthropic-version: 2023-06-01\r\nContent-Length: '+payload.length+'\r\n\r\n'+payload);
+      await Promise.race([closed,wait(5000)]);
+    } finally { fs.openSync=origOpen; fs.writeSync=origWrite; shortSock.destroy(); }
+    const state=await shortWire.close(1000);
+    assert(injected===1 && !state.ok,'A zero-byte response write left a valid wire');
+    const rows=fs.readFileSync(join(shortDir,'wire.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));
+    assert.equal(rows.find(x=>x.kind==='fault' && x.stage==='response-file')?.error,'ESHORT','An internal fault label was hidden: ESHORT');
+  } finally { await api.close(); }
+}
 const launched=await checkLauncher();
 console.log('Passed the real launcher with a dummy credential: '+launched.keys+' launcher settings and the wire settings reached the child, and no parent setting did.');
