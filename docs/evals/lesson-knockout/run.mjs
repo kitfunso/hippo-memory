@@ -68,11 +68,11 @@ if(!continuing) {
 process.env.TMP=process.env.TEMP=checkEnv.TEMP;
 function checkout(task) {
   fs.mkdirSync(live); mkdir(work);
-  assertNodeStarts(checkEnv,'Checker environment');
   if(!smoke) {
     fs.mkdirSync(records);
     save(join(records,'owner.json'),{unit:u.id,task:task.id});
   }
+  assertNodeStarts(checkEnv,'Checker environment');
   git('init','-q'); git('config','core.autocrlf','false');
   execFileSync('python',[join(folder,'checkout.py'),u.source,task.baseRef],{cwd:work,env:checkEnv,stdio:'inherit'});
   assert.equal(git('rev-parse','HEAD'),task.baseRef);

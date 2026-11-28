@@ -1055,7 +1055,7 @@ assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function sess
 const runSource=fs.readFileSync(join(folder,'run.mjs'),'utf8');
 assert(runSource.includes('const checkEnv=operatorEnv(gradeBase,live);') && runSource.includes('const graderEnv=()=>gradeEnv(gradeBase,u,live,'),
   'The runner does not split the operator and checker profiles');
-assert(runSource.includes("  fs.mkdirSync(live); mkdir(work);\n  assertNodeStarts(checkEnv,'Checker environment');\n"),
+assert(runSource.includes("    save(join(records,'owner.json'),{unit:u.id,task:task.id});\n  }\n  assertNodeStarts(checkEnv,'Checker environment');\n  git('init','-q');"),
   'The runner checkout does not check that node starts in the operator profile');
 assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function session(')[1].split('\n}\n')[0]
   .includes("assert(wire.complete,'Wire record does not match the call '"),'The session grades a call without its wire record');
