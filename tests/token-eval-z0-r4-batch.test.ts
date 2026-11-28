@@ -436,6 +436,26 @@ const T = async () => {
   return { c, calls };
 };
 
+const F4 = async () => {
+  const c = track(new Case({ name: 'F4', keys1: ['fa', 'fb'] }));
+  const fa = KEY_FX(c, 'fa');
+  const fb = KEY_FX(c, 'fb');
+  for (const s of ['', '-a2', '-a3']) await c.plant(`fa-w1${s}`, fa, 1);
+  await c.plant('fa-w1-a4', fa);
+  for (const s of ['', '-a2', '-a3', '-a4']) await c.plant(`fb-w1${s}`, fb, 1);
+  const r = await c.run();
+  return { c, r };
+};
+
+const F4b = async () => {
+  const c = track(new Case({ name: 'F4b', keys1: ['fc'] }));
+  const fc = KEY_FX(c, 'fc');
+  for (const s of ['', '-a2', '-a3']) await c.plant(`fc-w1${s}`, fc, 1);
+  put(`${c.dir('fc-w1-a4')}/launch.txt`, 'box check failed: reboot before a scored session\n');
+  const r = await c.run();
+  return { c, r, launchTxt: read(`${c.dir('fc-w1-a4')}/launch.txt`) };
+};
+
 const D = async () => {
   const keys = ['d1', 'd2', 'df', 'dn', 'dl'];
   const c = track(new Case({ name: 'D', keys1: keys }));
@@ -755,7 +775,7 @@ function lazy<T>(fn: () => Promise<T>) {
     pending: (): Promise<unknown>[] => (started ? [started] : []),
   };
 }
-const runs = { A: lazy(A), B: lazy(B), H: lazy(H), HZ: lazy(HZ), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
+const runs = { A: lazy(A), B: lazy(B), H: lazy(H), HZ: lazy(HZ), BX: lazy(BX), K: lazy(K), L: lazy(L), G: lazy(G), G2: lazy(G2), T: lazy(T), F4: lazy(F4), F4b: lazy(F4b), D: lazy(D), Z: lazy(Z), R: lazy(R), RN: lazy(RN), Pq: lazy(Pq), Pf: lazy(Pf),
   W1: lazy(W1), W2: lazy(W2), W3: lazy(W3), W4: lazy(W4), W5a: lazy(W5a), W5b: lazy(W5b), S: lazy(S), Q: lazy(Q),
   E: lazy(E), Bx: lazy(Bx), Sl: lazy(Sl), Pt: lazy(Pt), Pb: lazy(Pb), Pr: lazy(Pr), Pd: lazy(Pd), Ql: lazy(Ql), Zr: lazy(Zr) };
 const only = process.env.Z0_BATCH_ONLY?.split(',');
@@ -1002,6 +1022,21 @@ describe.skipIf(!win)('s4-batch.sh over stub launchers and stub runners (needs W
       expect(calls.map((r) => r.code)).toEqual([3, 3, 1, 1]);
       expect(calls.map(last)).toEqual(['BATCH 1 FAILED: ta-w1 runner exit 2', 'BATCH 1 FAILED: ta-w1-a2 runner exit 2', 'BATCH 1 RETRIES SPENT: ta-w1-a3', 'BATCH 1 RETRIES SPENT: ta-w1-a3']);
       expect(c.launches()).toEqual(['ta-w1', 'ta-w1-a2', 'ta-w1-a3']);
+    });
+
+    it('a fourth attempt launched by hand under Amendment J: a done <k>-a4 after a failed -a3 writes done/<k> naming it, a failed -a4 is RETRIES SPENT, and the batch launches nothing', async () => {
+      const { c, r } = await runs.F4.get();
+      expect(c.marker('fa-w1')).toBe('fa-w1-a4\n');
+      expect(c.marker('fa')).toBe('fa-w1-a4\n');
+      expect(r).toMatchObject({ code: 1, out: 'BATCH 1 RETRIES SPENT: fb-w1-a4' });
+      expect(c.launches()).toEqual([]);
+    });
+
+    it('a fourth attempt folder with no run (its hand launch stopped at the box check) stops the batch with a hand-launch line and keeps its launch.txt [Amendment J]', async () => {
+      const { c, r, launchTxt } = await runs.F4b.get();
+      expect(r).toMatchObject({ code: 1, out: 'BATCH 1: fc-w1-a4 holds no run; launch it by hand (Amendment J)' });
+      expect(c.launches()).toEqual([]);
+      expect(launchTxt).toBe('box check failed: reboot before a scored session\n');
     });
   });
 

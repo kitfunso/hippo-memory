@@ -768,7 +768,8 @@ case $STEP in plans | founder-go | cause | stage-checks) ;; *) wait_quiet ;; esa
 
 COMMIT=$(git -C "$CHECKOUT" rev-parse HEAD 2> /dev/null)
 TAG=''
-if git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-3 > /dev/null 2>&1; then TAG=z0-r4-freeze-3
+if git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-4 > /dev/null 2>&1; then TAG=z0-r4-freeze-4
+elif git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-3 > /dev/null 2>&1; then TAG=z0-r4-freeze-3
 elif git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-2 > /dev/null 2>&1; then TAG=z0-r4-freeze-2
 elif git -C "$CHECKOUT" rev-parse -q --verify refs/tags/z0-r4-freeze-1 > /dev/null 2>&1; then TAG=z0-r4-freeze-1; fi
 

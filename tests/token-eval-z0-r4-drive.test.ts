@@ -399,6 +399,18 @@ describe.skipIf(!HAVE)('the driver: needs win32, PowerShell 5.1, Git Bash and th
     }
   }, 300_000);
 
+  it('11b. once z0-r4-freeze-4 exists it is the tag in force, ahead of freeze-3 (Amendment J)', async () => {
+    const four = mk('four', makeCheckout(w.base, 'four-co'));
+    git(four.checkout, 'commit', '--allow-empty', '-qm', 'freeze-3 commit');
+    git(four.checkout, 'tag', 'z0-r4-freeze-3');
+    git(four.checkout, 'commit', '--allow-empty', '-qm', 'freeze-4 commit');
+    git(four.checkout, 'tag', 'z0-r4-freeze-4');
+    git(four.checkout, 'checkout', '-q', '--detach', 'z0-r4-freeze-3');
+    const line5 = `DRIVE: smoke must run on z0-r4-freeze-4; HEAD is ${four.entry({ step: 'smoke', exit: 3 }).commit}`;
+    expect(outcome(await four.run('smoke'))).toEqual([3, line5]);
+    expect(four.entries()).toEqual([four.entry({ step: 'smoke', exit: 3, stopId: 'tag', tag: 'z0-r4-freeze-4', line: line5 })]);
+  }, 300_000);
+
   it('12. steps 3 and 5 log one admit before their batch\'s first unit folder and none after it exists; step 2 then refuses', async () => {
     const c = ready('admit-once', '2');
     const labels = 'BATCH 1 LABELS: fill the labels files';

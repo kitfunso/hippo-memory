@@ -57,7 +57,8 @@ if ($OnlySeed -and $batchOnly -notcontains $Batch) { Stop-Launch "-OnlySeed goes
 if ($OnlySeed -and $OnlySeed -notmatch '^[1-9][0-9]*$') { Stop-Launch "-OnlySeed must be a positive whole number, got $OnlySeed" }
 if ($TOOLCHAINS -notcontains $Toolchain) { Stop-Launch "-Toolchain $Toolchain is not one s3x-env.ps1 knows: $($TOOLCHAINS -join ', ')" }
 if ($Attempt -lt 1) { Stop-Launch "-Attempt $Attempt must be 1 or more" }
-if ($bound.ContainsKey('Retry') -and ($Retry -lt 2 -or $Retry -gt 3)) { Stop-Launch "-Retry $Retry must be 2 or 3; the first launch of a folder has no -a suffix, so a retry starts at 2" }
+if ($bound.ContainsKey('Retry') -and ($Retry -lt 2 -or $Retry -gt 4)) { Stop-Launch "-Retry $Retry must be 2, 3 or 4; the first launch of a folder has no -a suffix, so a retry starts at 2" }
+if ($Retry -eq 4 -and ($Batch -ne 'raise' -or $OnlySeed)) { Stop-Launch '-Retry 4 is for a raise first run only (Amendment J)' }
 if ($Batch -eq 'effort' -and $Effort -eq 'medium') { Stop-Launch 'the effort batch runs low or high; pass -Effort low or -Effort high' }
 
 # The folder is a function of the batch, so two launches never share one and a retry is named by its number.

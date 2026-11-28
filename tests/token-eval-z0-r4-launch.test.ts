@@ -252,7 +252,7 @@ describe.skipIf(!(HAVE_PS && HAVE_BOX))('the launchers: needs win32, PowerShell 
     const good: [string, string[], string][] = [
       ['pilot', ['-Attempt', '2'], `${d}/pilot/${k}-p2`], ['pilot', ['-Retry', '2'], `${d}/pilot/${k}-p1-a2`], ['pilot', ['-Attempt', '3', '-Retry', '3'], `${d}/pilot/${k}-p3-a3`],
       ['2', [], `${d}/batch2/${k}-w1`], ['raise', [], `${d}/raise/${k}-w2`], ['1', ['-OnlySeed', '2'], `${d}/batch1/${k}-e2`], ['raise', ['-OnlySeed', '5', '-Retry', '2'], `${d}/raise/${k}-e5-a2`],
-      ['1', ['-Retry', '2'], `${d}/batch1/${k}-w1-a2`],
+      ['1', ['-Retry', '2'], `${d}/batch1/${k}-w1-a2`], ['raise', ['-Retry', '4'], `${d}/raise/${k}-w2-a4`],
     ];
     for (const [batch, more, folder] of good) {
       const r = folderOf(batch, more, folder);
@@ -293,7 +293,7 @@ describe.skipIf(!(HAVE_PS && HAVE_BOX))('the launchers: needs win32, PowerShell 
     expect(run(args({ folder: `${d}/smoke/w8`, more: ['-Attempt', '8', '-DryRun'] })).code).toBe(1);
   }, 360_000);
 
-  it('refuses a toolchain s3x-env.ps1 does not know before the box check, and an -Attempt below 1 or a -Retry above 3, each as one stdout line with exit 1', () => {
+  it('refuses a toolchain s3x-env.ps1 does not know before the box check, and an -Attempt below 1 or a -Retry above 4, each as one stdout line with exit 1', () => {
     const d = world.dry.dir;
     const toolchain = run(args({ toolchain: 'pythn', more: ['-DryRun'] }));
     expect(toolchain.code).toBe(1);
@@ -304,10 +304,16 @@ describe.skipIf(!(HAVE_PS && HAVE_BOX))('the launchers: needs win32, PowerShell 
     const beforeBox = run(args({ toolchain: 'pythn', box: false, more: ['-BoxCheck', world.stubBox.bad] }));
     expect(beforeBox.code).toBe(1);
     expect(beforeBox.lines).toEqual(toolchain.lines);
-    const retry = run(args({ batch: 'pilot', folder: `${d}/pilot/${KEYS.npm}-p1-a4`, more: ['-Retry', '4', '-DryRun'] }));
+    const retry = run(args({ batch: 'pilot', folder: `${d}/pilot/${KEYS.npm}-p1-a5`, more: ['-Retry', '5', '-DryRun'] }));
     expect(retry.code).toBe(1);
     expect(retry.lines).toHaveLength(1);
-    expect(retry.lines[0]).toContain('-Retry 4 must be 2 or 3');
+    expect(retry.lines[0]).toContain('-Retry 5 must be 2, 3 or 4');
+    const fours: [string, string[], string][] = [['pilot', [], `${d}/pilot/${KEYS.npm}-p1-a4`], ['raise', ['-OnlySeed', '5'], `${d}/raise/${KEYS.npm}-e5-a4`]];
+    for (const [batch, more, folder] of fours) {
+      const four = run(args({ batch, folder, more: [...more, '-Retry', '4', '-DryRun'] }));
+      expect(four.code, `${batch} ${more.join(' ')}`).toBe(1);
+      expect(four.lines).toEqual(['-Retry 4 is for a raise first run only (Amendment J)']);
+    }
     const attempt = run(args({ folder: `${d}/smoke/w0`, more: ['-Attempt', '0', '-DryRun'] }));
     expect(attempt.code).toBe(1);
     expect(attempt.lines).toHaveLength(1);

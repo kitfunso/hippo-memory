@@ -97,8 +97,8 @@ end_cmd() {
   [ "$CMD_RC" = 0 ] || die "BATCH $N END FAILED: $1 exit $CMD_RC"
 }
 
-current_of() { if [ -d "$1-a3" ]; then CUR=$1-a3; elif [ -d "$1-a2" ]; then CUR=$1-a2; else CUR=$1; fi; }
-next_retry() { case $1 in *-a2) NEXT=${1%-a2}-a3 ;; *-a3) NEXT=$1 ;; *) NEXT=$1-a2 ;; esac; }
+current_of() { if [ -d "$1-a4" ]; then CUR=$1-a4; elif [ -d "$1-a3" ]; then CUR=$1-a3; elif [ -d "$1-a2" ]; then CUR=$1-a2; else CUR=$1; fi; }
+next_retry() { case $1 in *-a2) NEXT=${1%-a2}-a3 ;; *-a3 | *-a4) NEXT=$1 ;; *) NEXT=$1-a2 ;; esac; }
 state_of() {
   local out
   out=$(unit_state "$1") || die "BATCH $N: ${out#"state error $1 "}"
@@ -151,13 +151,12 @@ wait_quiet() {
   done
 }
 
-# Puts a unit that is not done into the queue (a failed one in its next retry folder), or into SPENT when -a3 failed.
 queue_unit() {
   local kind=$1 k=$2 seed=$3 cur=$4 target=$4
   case $5 in
-    none) ;;
+    none) if [[ $cur == *-a4 ]]; then HAND+=("${cur##*/}"); return 0; fi ;;
     failed)
-      if [[ $cur == *-a3 ]]; then SPENT+=("${cur##*/}"); return 0; fi
+      if [[ $cur == *-a3 || $cur == *-a4 ]]; then SPENT+=("${cur##*/}"); return 0; fi
       next_retry "$cur"
       target=$NEXT ;;
     *) return 0 ;;
@@ -193,10 +192,11 @@ phase_start() {
   local f k
   wait_quiet
   for f in "$BDIR"/*/run/runs.regraded.jsonl; do [ -e "$f" ] && die "BATCH $N: $f exists; round 4 never reads runs.regraded.jsonl"; done
-  FIRST_Q=() RERUN_Q=() SPENT=()
+  FIRST_Q=() RERUN_Q=() SPENT=() HAND=()
   for k in "${KEYS[@]}"; do settle_key "$k"; done
   for f in "${SPENT[@]}"; do echo "BATCH $N RETRIES SPENT: $f"; say "BATCH $N RETRIES SPENT: $f"; done
-  [ ${#SPENT[@]} -eq 0 ] || exit 1
+  for f in "${HAND[@]}"; do echo "BATCH $N: $f holds no run; launch it by hand (Amendment J)"; say "BATCH $N: $f holds no run; launch it by hand (Amendment J)"; done
+  [ ${#SPENT[@]} -eq 0 ] && [ ${#HAND[@]} -eq 0 ] || exit 1
   QUEUE=("${FIRST_Q[@]}" "${RERUN_Q[@]}")
   [ ${#QUEUE[@]} -eq 0 ] || return 0
   for k in "${KEYS[@]}"; do [ -f "$BDIR/done/$k" ] || die "BATCH $N: $k has no done/$k marker and nothing to launch"; done
@@ -314,7 +314,7 @@ after_phase() {
     name=${f##*/}
     case $STATE in
       failed)
-        if [[ $f == *-a3 ]]; then lines+=("BATCH $N RETRIES SPENT: $name"); rc=1; else
+        if [[ $f == *-a3 || $f == *-a4 ]]; then lines+=("BATCH $N RETRIES SPENT: $name"); rc=1; else
           code=$(tr -dc '0-9' < "$f/run/exit.txt" 2> /dev/null)
           lines+=("BATCH $N FAILED: $name runner exit ${code:-unknown}")
         fi ;;
