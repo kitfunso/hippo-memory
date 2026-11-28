@@ -5,7 +5,7 @@ import path from 'node:path';
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,read,pins,hash } from './plan.mjs';
+import { assertNodeStarts,checkedRoster,checkerEnv,APPARATUS,DENIED_TOOLS,background,folder,root,read,pins,hash } from './plan.mjs';
 import { assertCheckerTools,gradeEnv,guardedRun } from './grading.mjs';
 import { join,mkdir,save,inside,copy,freezeBuiltIn,resetBuiltIn,externalCheck,
   entry,createStore,contents,capture,forkStore,files,checkProjectSettings,treeOf,ignoredListing,installedPackages } from './state.mjs';
@@ -68,6 +68,7 @@ if(!continuing) {
 process.env.TMP=process.env.TEMP=checkEnv.TEMP;
 function checkout(task) {
   fs.mkdirSync(live); mkdir(work);
+  assertNodeStarts(checkEnv,'Checker environment');
   if(!smoke) {
     fs.mkdirSync(records);
     save(join(records,'owner.json'),{unit:u.id,task:task.id});

@@ -6,7 +6,7 @@ import tls from 'node:tls';
 import zlib from 'node:zlib';
 import { once } from 'node:events';
 import { setTimeout as wait } from 'node:timers/promises';
-import { APPARATUS,checkerEnv,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
+import { APPARATUS,checkerEnv,preload,folder,root,checkTaskPins,roster,hash,read,pins } from './plan.mjs';
 import { join,mkdir,entry,createStore,contents,forkStore,freezeBuiltIn,resetBuiltIn,stateRoot,copy,files,treeOf,ignoredListing,installedPackages } from './state.mjs';
 import { auditApply } from './path-audit.mjs';
 import { archivedAudit,bodyAudit,callComplete,cutOffPermissions,evidence,mainPairs,neutralClean,permissionAudit,sessionInventory,smokeClean,summaryOf,wireLedger } from './evidence.mjs';
@@ -70,8 +70,10 @@ $paths=@($env:USERPROFILE,$env:HOME,$PWD.Path,$env:APPDATA,$roaming,$env:LOCALAP
 const profile=join(apply,'home');
 runSetupScript(apply,{...process.env,HOME:profile,USERPROFILE:profile},join(dir,'setup-probe.ps1'));
 put(dir,'home-probe.cjs',"require('fs').mkdirSync(require('path').join(require('os').homedir(),'.node-probe'),{recursive:true});\n");
-const probeBase=checkerEnv({HOME:profile,USERPROFILE:profile});
-gradeEnv({...probeBase,NODE_OPTIONS:probeBase.NODE_OPTIONS+' --require "'+join(dir,'home-probe.cjs').replaceAll('\\','/')+'"'},{toolchain:'python'},apply,join(dir,'probe-check.log'));
+const probeBase=checkerEnv({HOME:profile,USERPROFILE:profile,
+  NODE_OPTIONS:preload('local-stdio.cjs')+' --require "'+join(dir,'home-probe.cjs').replaceAll('\\','/')+'"'});
+assert(!fs.existsSync(profile),'The checker environment started a process in the live home');
+gradeEnv(probeBase,{toolchain:'python'},apply,join(dir,'probe-check.log'));
 assert(!fs.existsSync(profile),'The grading probe wrote into the live home');
 assert(fs.existsSync(join(apply,'setup-home','.node-probe')),'The grading node probe did not start in the setup profile');
 assert.equal(resetBuiltIn(apply,pre,manifest),hash(JSON.stringify(manifest)));
@@ -1053,6 +1055,8 @@ assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function sess
 const runSource=fs.readFileSync(join(folder,'run.mjs'),'utf8');
 assert(runSource.includes('const checkEnv=operatorEnv(gradeBase,live);') && runSource.includes('const graderEnv=()=>gradeEnv(gradeBase,u,live,'),
   'The runner does not split the operator and checker profiles');
+assert(runSource.includes("  fs.mkdirSync(live); mkdir(work);\n  assertNodeStarts(checkEnv,'Checker environment');\n"),
+  'The runner checkout does not check that node starts in the operator profile');
 assert(fs.readFileSync(join(folder,'run.mjs'),'utf8').split('async function session(')[1].split('\n}\n')[0]
   .includes("assert(wire.complete,'Wire record does not match the call '"),'The session grades a call without its wire record');
 for(const name of ['check-smoke.mjs','wire-smoke.mjs'])

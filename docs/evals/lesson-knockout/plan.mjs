@@ -28,7 +28,6 @@ export function checkerEnv(extra) {
   for (const key of Object.keys(env)) if (/token|secret|key|proxy|^CLAUDE|^ANTHROPIC|^HIPPO|^AWS|^Z0_/i.test(key)) delete env[key];
   Object.assign(env, {GIT_CONFIG_NOSYSTEM:'1', GIT_CONFIG_GLOBAL:'NUL', GIT_TERMINAL_PROMPT:'0', GIT_OPTIONAL_LOCKS:'0',
     NODE_OPTIONS:preload('local-stdio.cjs'), LESSON_STDIO:stdioMode}, extra);
-  assertNodeStarts(env, 'Checker environment');
   return env;
 }
 const rank = (role, id) => hash(`lesson-knockout|1|${role}|${id}`);
