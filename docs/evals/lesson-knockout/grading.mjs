@@ -3,11 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync,spawnSync } from 'node:child_process';
 import { assertNodeStarts,folder } from './plan.mjs';
+import { setupProfile } from './setup.mjs';
 
 export function gradeEnv(base,u,live,log) {
   const tool=JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
     '-File',path.join(folder,'task-env.ps1'),'-Chain',u.toolchain,'-Live',live],
-    {env:base,encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','inherit']}));
+    {env:{...base,...setupProfile(live)},encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','inherit']}));
   const env=Object.fromEntries(Object.entries(base).filter(([key])=>key.toUpperCase()!=='PATH'));
   Object.assign(env,tool,{CHECK_LOG:log});
   if(u.toolchain==='python') env.CHECK_PYTHON=path.join(live,'venv','Scripts','python.exe');

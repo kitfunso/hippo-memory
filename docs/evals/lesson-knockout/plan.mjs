@@ -14,7 +14,7 @@ export const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 export const pins = read('C:/z0-runs/r4/pins-r4.json');
 export const folder = path.dirname(fileURLToPath(import.meta.url));
 export const arms = ['T', 'Tp', 'N'];
-export const APPARATUS = 4;
+export const APPARATUS = 5;
 export const DENIED_TOOLS = ['WebFetch', 'WebSearch', 'Agent', 'Task'];
 export const WIRE_CA = root+'/wire-ca';
 export const wireEnv = (port,token) => ({HTTPS_PROXY:'http://wire:'+token+'@127.0.0.1:'+port,NO_PROXY:'127.0.0.1,localhost',NODE_EXTRA_CA_CERTS:WIRE_CA+'/ca.pem'});

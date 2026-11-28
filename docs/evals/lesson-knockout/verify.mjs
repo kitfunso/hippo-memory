@@ -69,6 +69,8 @@ $paths=@($env:USERPROFILE,$env:HOME,$PWD.Path,$env:APPDATA,$roaming,$env:LOCALAP
 `);
 const profile=join(apply,'home');
 runSetupScript(apply,{...process.env,HOME:profile,USERPROFILE:profile},join(dir,'setup-probe.ps1'));
+gradeEnv(checkerEnv({HOME:profile,USERPROFILE:profile}),{toolchain:'python'},apply,join(dir,'probe-check.log'));
+assert(!fs.existsSync(profile),'The grading probe wrote into the live home');
 assert.equal(resetBuiltIn(apply,pre,manifest),hash(JSON.stringify(manifest)));
 assert.deepEqual(fs.readdirSync(apply).sort(),['home','setup-home','work']);
 const setupHome=join(apply,'setup-home');
@@ -77,7 +79,7 @@ assert.deepEqual(read(join(apply,'work/setup-paths.json')),
     .map(p=>join(setupHome,p)));
 assert.equal(fs.readFileSync(join(apply,'setup-home/setup-marker.txt'),'utf8').trim(),'setup');
 assert.throws(()=>resetBuiltIn(apply,pre,manifest),/Occupied destination/);
-console.log('Passed Windows setup before apply home reset.');
+console.log('Passed Windows setup and the grading probe before apply home reset.');
 for(const p of paths) assert.equal(fs.readFileSync(join(apply,p),'utf8'),'Before');
 assert(!fs.existsSync(join(apply,'work/pkg/.claude/rules/extra.md')));
 assert(!fs.existsSync(join(apply,'home/.claude/projects/unit/new.jsonl')));
